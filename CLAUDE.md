@@ -283,6 +283,57 @@ JWT_EXPIRES_IN=7d
 DATA_DIR=./data
 ```
 
+## Security Best Practices
+
+**CRITICAL: This application handles sensitive financial data. Security must be the top priority in all development decisions.**
+
+### Security Requirements
+1. **Data Protection**
+   - All financial data must be encrypted at rest (AES-256) and in transit (TLS 1.3+)
+   - Never store Plaid credentials, tokens must be encrypted and stored securely
+   - Implement secure deletion when data is no longer needed
+   - Follow the principle of least privilege for all data access
+
+2. **Authentication & Access Control**
+   - Multi-factor authentication (MFA) required for production access
+   - JWT tokens must expire and be properly validated
+   - Implement account lockout after failed login attempts
+   - Regular security key rotation (90 days maximum)
+
+3. **Code Security**
+   - Input validation on ALL user inputs to prevent injection attacks
+   - Parameterized queries only - no string concatenation for SQL
+   - Output encoding to prevent XSS attacks
+   - Regular dependency updates and vulnerability scanning
+   - No secrets or credentials in code - use environment variables
+   - Secure error handling - never expose system details to users
+
+4. **Compliance & Privacy**
+   - Follow PCI DSS guidelines even though we don't store card data
+   - Implement GDPR/CCPA privacy requirements
+   - Maintain audit logs for all data access
+   - Data retention policies with automatic deletion
+   - Customer data notification within 24 hours of any breach
+
+5. **Incident Response**
+   - Security incidents must be documented immediately
+   - Follow the Incident Response Plan in docs/information-security/
+   - Customer data breaches require notification within 24 hours
+   - Maintain evidence chain of custody for forensics
+
+6. **Development Security**
+   - Code reviews required for all changes touching authentication or financial data
+   - No production data in development/test environments
+   - Secure development environment with encrypted drives
+   - Regular security training and awareness
+   - Follow the security policies in docs/information-security/
+
+### Security Documentation
+- **Information Security Policy:** docs/information-security/info_security_policy.md
+- **Incident Response Plan:** docs/information-security/incident_response_plan.md
+- **Risk Assessment:** docs/information-security/risk_assessment_template.md
+- **Security Review Log:** docs/information-security/security_review_log.md
+
 ## Key Implementation Guidelines
 
 ### 1. Always Write Tests First
