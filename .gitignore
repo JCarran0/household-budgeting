@@ -53,6 +53,7 @@ pids/
 # Data files (for JSON storage)
 backend/data/*.json
 !backend/data/.gitkeep
+backend/test-data/
 
 # Temporary files
 tmp/
