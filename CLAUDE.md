@@ -1,7 +1,7 @@
 # Personal Budgeting App Development Guide
 
 ## Project Overview
-Building a personal budgeting app for 2 users with Plaid integration. Using Test-Driven Development (TDD) approach with MVP-first strategy.
+Building a personal budgeting app for 2 users with Plaid integration. Using Risk-Based Testing with TypeScript strict mode for rapid, type-safe development.
 
 ## Architecture
 - **Frontend**: React 18 + TypeScript + Vite + Tailwind CSS
@@ -10,19 +10,39 @@ Building a personal budgeting app for 2 users with Plaid integration. Using Test
 - **Testing**: Jest + React Testing Library
 - **Integration**: Plaid API for Bank of America (checking/savings) + Capital One (credit card)
 
-## Development Approach: Test-Driven Development (TDD)
+## Development Approach: Risk-Based Testing & Type-Safe Development
 
-### TDD Workflow
-1. **Write failing test** - Define expected behavior first
-2. **Write minimal code** - Make the test pass
-3. **Refactor** - Improve code while keeping tests green
-4. **Repeat** - Build functionality incrementally
+### Core Principles
+1. **Risk-Based Testing** - Test what could break the business or lose user money
+2. **TypeScript Strict Mode** - Zero `any` types, full type safety
+3. **Integration > Unit Tests** - Test real behavior with sandbox environments
+4. **Spike and Stabilize** - Build features fast, add tests for bugs/complexity
 
 ### Testing Strategy
-- **Unit Tests**: Business logic, utilities, data services
-- **Integration Tests**: API endpoints, Plaid service integration  
-- **Component Tests**: React components with React Testing Library
-- **E2E Tests**: Critical user flows (login, transaction sync, budget creation)
+- **Critical Path Testing**: Authentication, financial calculations, data integrity
+- **Sandbox Integration Tests**: Real Plaid API, not mocks
+- **Manual Test Checklists**: UI flows, exploratory testing
+- **Test on Demand**: Add tests when you find bugs or complex logic
+
+### TypeScript Configuration
+```json
+{
+  "compilerOptions": {
+    "strict": true,
+    "noImplicitAny": true,
+    "strictNullChecks": true,
+    "strictFunctionTypes": true,
+    "strictBindCallApply": true,
+    "strictPropertyInitialization": true,
+    "noImplicitThis": true,
+    "alwaysStrict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noImplicitReturns": true,
+    "noFallthroughCasesInSwitch": true
+  }
+}
+```
 
 ## Project Structure
 ```
@@ -180,18 +200,19 @@ interface MonthlyBudget {
 
 ## Development Phases
 
-### Phase 1: Foundation (Weeks 1-2)
+### Phase 1: Foundation ✅ COMPLETE
 **Goal**: Authentication, project setup, basic Plaid integration
 
-**TDD Focus**:
-1. Start with auth service tests (JWT creation, validation)
-2. Test Plaid service integration (mock Plaid API responses)
-3. Test basic data service (JSON file CRUD operations)
+**What We Built**:
+1. ✅ Auth service with JWT, rate limiting, account lockout (29 tests)
+2. ✅ Plaid service with sandbox integration (18 tests)
+3. ✅ Service singleton pattern for consistent state
+4. ✅ Direct sandbox testing scripts
 
-**Key Files to Create**:
-- `backend/src/services/__tests__/authService.test.ts`
-- `backend/src/services/__tests__/plaidService.test.ts`
-- `backend/src/services/__tests__/dataService.test.ts`
+**Lessons Learned**:
+- Integration tests with real Plaid sandbox > heavily mocked unit tests
+- Service singletons prevent auth token inconsistencies
+- Manual test scripts catch integration issues faster
 
 ### Phase 2: Core Features (Weeks 3-4)
 **Goal**: Transaction sync, categorization, basic budgeting
@@ -336,30 +357,46 @@ DATA_DIR=./data
 
 ## Key Implementation Guidelines
 
-### 1. Always Write Tests First
-- Define expected behavior in tests before writing implementation
-- Use descriptive test names: `should return error when invalid credentials provided`
-- Mock external dependencies (Plaid API, file system) in unit tests
+### 1. TypeScript Best Practices
+- **NO `any` TYPES** - Use `unknown`, generics, or proper types
+- **Strict null checks** - Handle `undefined` and `null` explicitly
+- **Type all function parameters and returns**
+- **Create domain types** for business entities
+- **Use discriminated unions** for complex state
 
-### 2. Keep Tests Fast and Isolated
-- Use in-memory data for tests (don't write to actual JSON files)
-- Mock network calls to Plaid API
-- Each test should be independent and not rely on other tests
+### 2. Risk-Based Testing Focus
+- **Test financial calculations** - Any bug here costs money
+- **Test authentication flows** - Security is critical
+- **Test data integrity** - Transaction sync, categorization
+- **Skip trivial tests** - Don't test getters/setters
 
-### 3. Focus on Business Logic Testing
-- Test calculations (budget vs actual, cash flow projections)
-- Test data transformations (Plaid transactions → internal format)
-- Test validation logic (budget amounts, category constraints)
+### 3. Integration Testing Strategy
+- **Use real sandbox environments** (Plaid, databases)
+- **Create test scripts** for manual verification
+- **Test the full stack** when it matters
+- **Mock only at boundaries** (network, filesystem)
 
-### 4. Component Testing Strategy
-- Test component behavior, not implementation details
-- Focus on user interactions and state changes
-- Use React Testing Library's user-centric approach
+### 4. Development Workflow
+- **Spike features quickly** with minimal tests
+- **Add tests when you find bugs**
+- **Refactor with confidence** when types guide you
+- **Document manual test procedures**
 
-### 5. Error Handling
-- Test error scenarios thoroughly (network failures, invalid data)
-- Ensure graceful degradation when Plaid API is unavailable
-- Validate all user inputs and API responses
+### 5. Type-Safe Error Handling
+```typescript
+// Good: Type-safe result pattern
+type Result<T, E = Error> = 
+  | { success: true; data: T }
+  | { success: false; error: E };
+
+// Bad: Using any
+function processData(data: any) { } // ❌ Never do this
+
+// Good: Using unknown with guards
+function processData(data: unknown) {
+  if (isValidData(data)) { /* ... */ }
+}
+```
 
 ## Git Commit Conventions
 
@@ -443,21 +480,30 @@ cd frontend && npm run test:watch
 npm run test
 ```
 
-## First Development Task
+## Development Priorities
 
-**Start with the most critical foundation: Authentication Service**
+### Current Status
+✅ **Phase 1 Complete**: Auth + Plaid integration working
+- JWT authentication with rate limiting
+- Plaid sandbox integration tested
+- Service singleton pattern implemented
 
-1. Create `backend/src/services/__tests__/authService.test.ts`
-2. Write failing tests for user registration, login, JWT creation
-3. Implement minimal `backend/src/services/authService.ts` to make tests pass
-4. Add validation and error handling
-5. Create auth routes and middleware
+### Next Priority: Transaction Management
+1. **Build Plaid Link UI** - Connect bank accounts
+2. **Sync transactions** - Pull from 2025-01-01
+3. **Store & categorize** - Persist with proper types
+4. **Test with real data** - Use sandbox credentials
 
-This TDD approach will ensure solid, tested foundation for the entire application.
+### Type Safety Checklist
+- [ ] Replace all `any` with proper types
+- [ ] Enable strict TypeScript config
+- [ ] Create shared type definitions
+- [ ] Add runtime validation with Zod
 
 ## Success Metrics
-- ✅ 90%+ test coverage on business logic
-- ✅ All user stories have corresponding test cases
-- ✅ Zero failing tests in CI/CD pipeline
-- ✅ Fast test suite (< 30 seconds total run time)
-- ✅ Comprehensive error handling and edge case coverage
+- ✅ **Zero runtime type errors** - TypeScript catches all
+- ✅ **Critical paths tested** - Auth, money, data integrity
+- ✅ **Fast feedback loops** - Direct testing > mocking
+- ✅ **No `any` types** in production code
+- ✅ **Sandbox integration working** end-to-end
+- ✅ **Manual test procedures documented**

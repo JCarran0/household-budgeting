@@ -236,7 +236,7 @@ router.get(
       const token = authHeader.substring(7);
       const validation = authService.validateToken(token);
       
-      if (validation.valid) {
+      if (validation.valid && validation.decoded) {
         res.json({
           success: true,
           valid: true,

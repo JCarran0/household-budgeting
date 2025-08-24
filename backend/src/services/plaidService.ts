@@ -359,7 +359,7 @@ export class PlaidService {
   /**
    * Verify webhook signature (for security)
    */
-  verifyWebhookSignature(_body: string, headers: any): boolean {
+  verifyWebhookSignature(_body: string, headers: Record<string, string | undefined>): boolean {
     // Note: Plaid webhook verification requires the JWT library
     // This is a placeholder - implement actual verification based on Plaid docs
     const signature = headers['plaid-verification'];
@@ -450,10 +450,18 @@ export class PlaidService {
   /**
    * Handle errors consistently
    */
-  private handleError(error: any): any {
+  private handleError(error: unknown): { success: false; error: string } {
     console.error('Plaid API error:', error);
     
-    if (error.response?.data) {
+    // Type guard for axios errors with response data
+    if (
+      error && 
+      typeof error === 'object' && 
+      'response' in error && 
+      error.response &&
+      typeof error.response === 'object' &&
+      'data' in error.response
+    ) {
       const plaidError = error.response.data as PlaidError;
       return {
         success: false,
@@ -461,17 +469,32 @@ export class PlaidService {
       };
     }
     
+    // Type guard for regular Error objects
+    if (error instanceof Error) {
+      return {
+        success: false,
+        error: error.message,
+      };
+    }
+    
     return {
       success: false,
-      error: error.message || 'An unexpected error occurred',
+      error: 'An unexpected error occurred',
     };
   }
 
   /**
    * Check if error is a reauth error
    */
-  private isReauthError(error: any): boolean {
-    if (error.response?.data) {
+  private isReauthError(error: unknown): boolean {
+    if (
+      error && 
+      typeof error === 'object' && 
+      'response' in error && 
+      error.response &&
+      typeof error.response === 'object' &&
+      'data' in error.response
+    ) {
       const plaidError = error.response.data as PlaidError;
       return this.requiresReauthentication(plaidError.error_code);
     }
@@ -481,8 +504,15 @@ export class PlaidService {
   /**
    * Get error code from error object
    */
-  private getErrorCode(error: any): string | undefined {
-    if (error.response?.data) {
+  private getErrorCode(error: unknown): string | undefined {
+    if (
+      error && 
+      typeof error === 'object' && 
+      'response' in error && 
+      error.response &&
+      typeof error.response === 'object' &&
+      'data' in error.response
+    ) {
       const plaidError = error.response.data as PlaidError;
       return plaidError.error_code;
     }

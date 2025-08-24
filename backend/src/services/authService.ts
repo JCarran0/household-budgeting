@@ -14,10 +14,18 @@ interface AuthResult {
   message?: string;
 }
 
+// JWT payload structure
+interface JWTPayload {
+  userId: string;
+  username: string;
+  iat?: number;
+  exp?: number;
+}
+
 interface TokenValidationResult {
   valid: boolean;
   error?: string;
-  decoded?: any;
+  decoded?: JWTPayload;
 }
 
 interface PasswordStrengthResult {
@@ -25,12 +33,20 @@ interface PasswordStrengthResult {
   errors?: string[];
 }
 
+interface SecurityEventDetails {
+  userId?: string;
+  attempts?: number;
+  reason?: string;
+  ip?: string;
+  userAgent?: string;
+}
+
 interface SecurityEvent {
   event: string;
   username?: string;
   userId?: string;
   timestamp: Date;
-  details: any;
+  details: SecurityEventDetails;
 }
 
 export class AuthService {
@@ -209,12 +225,21 @@ export class AuthService {
       }
 
       const decoded = jwt.verify(token, secret);
+      
+      // Ensure decoded is our expected JWTPayload structure
+      if (typeof decoded === 'object' && decoded !== null && 'userId' in decoded && 'username' in decoded) {
+        return {
+          valid: true,
+          decoded: decoded as JWTPayload,
+        };
+      }
+      
       return {
-        valid: true,
-        decoded,
+        valid: false,
+        error: 'Invalid token structure',
       };
-    } catch (error: any) {
-      if (error.name === 'TokenExpiredError') {
+    } catch (error) {
+      if (error instanceof Error && error.name === 'TokenExpiredError') {
         return {
           valid: false,
           error: 'Token expired',
@@ -231,7 +256,7 @@ export class AuthService {
     try {
       const validation = this.validateToken(oldToken);
       
-      if (!validation.valid) {
+      if (!validation.valid || !validation.decoded) {
         return {
           success: false,
           error: validation.error || 'Invalid token',

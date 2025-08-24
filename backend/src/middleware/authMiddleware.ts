@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { authService } from '../services';
+import { z, ZodError } from 'zod';
 
 // Extend Express Request type to include user
 declare global {
@@ -49,7 +50,7 @@ export const authenticate = (req: Request, res: Response, next: NextFunction): v
     // Validate token
     const validation = authService.validateToken(token);
     
-    if (!validation.valid) {
+    if (!validation.valid || !validation.decoded) {
       res.status(401).json({
         success: false,
         error: validation.error || 'Invalid token',
@@ -70,8 +71,7 @@ export const authenticate = (req: Request, res: Response, next: NextFunction): v
       username: validation.decoded.username,
       timestamp: new Date(),
       details: {
-        endpoint: req.path,
-        method: req.method,
+        userId: validation.decoded.userId,
       },
     });
 
@@ -107,7 +107,7 @@ export const optionalAuthenticate = (req: Request, _res: Response, next: NextFun
     const token = parts[1];
     const validation = authService.validateToken(token);
     
-    if (validation.valid) {
+    if (validation.valid && validation.decoded) {
       req.user = {
         userId: validation.decoded.userId,
         username: validation.decoded.username,
@@ -182,18 +182,26 @@ export const rateLimitAuth = (req: Request, res: Response, next: NextFunction): 
 /**
  * Middleware to validate request body with Zod schema
  */
-export const validateBody = (schema: any) => {
+export const validateBody = <T>(schema: z.ZodType<T>) => {
   return (req: Request, res: Response, next: NextFunction): void => {
     try {
       const validated = schema.parse(req.body);
       req.body = validated;
       next();
-    } catch (error: any) {
-      res.status(400).json({
-        success: false,
-        error: 'Validation failed',
-        details: error.errors || error.message,
-      });
+    } catch (error) {
+      if (error instanceof ZodError) {
+        res.status(400).json({
+          success: false,
+          error: 'Validation failed',
+          details: JSON.stringify(error.format()),
+        });
+      } else {
+        res.status(400).json({
+          success: false,
+          error: 'Validation failed',
+          details: error instanceof Error ? error.message : 'Unknown error',
+        });
+      }
     }
   };
 };

@@ -6,6 +6,13 @@
     "outDir": "./dist",
     "rootDir": "./src",
     "strict": true,
+    "noImplicitAny": true,                  // Explicitly forbid implicit any
+    "strictNullChecks": true,               // Explicit null/undefined checks
+    "strictFunctionTypes": true,            // Strict function type checking
+    "strictBindCallApply": true,            // Strict bind/call/apply
+    "strictPropertyInitialization": true,   // Class properties must be initialized
+    "noImplicitThis": true,                 // No implicit this
+    "alwaysStrict": true,                   // Use strict mode
     "esModuleInterop": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
