@@ -310,6 +310,50 @@ DATA_DIR=./data
 - Ensure graceful degradation when Plaid API is unavailable
 - Validate all user inputs and API responses
 
+## Git Commit Conventions
+
+### Conventional Commits Format
+We follow the [Conventional Commits](https://www.conventionalcommits.org/) specification for all commit messages:
+
+```
+<type>[optional scope]: <description>
+
+[optional body]
+
+[optional footer(s)]
+```
+
+### Commit Types
+- **feat**: New feature or functionality
+- **fix**: Bug fix
+- **docs**: Documentation changes only
+- **style**: Code style changes (formatting, missing semicolons, etc.)
+- **refactor**: Code refactoring without changing functionality
+- **test**: Adding or updating tests
+- **chore**: Maintenance tasks, dependency updates, build changes
+- **perf**: Performance improvements
+- **ci**: CI/CD configuration changes
+- **build**: Build system or external dependency changes
+
+### Examples
+```bash
+feat(auth): add JWT token generation for user login
+fix(transaction): correct date parsing for Plaid transactions
+test(auth): add tests for password validation
+docs: update README with setup instructions
+chore: update dependencies to latest versions
+refactor(budget): simplify monthly calculation logic
+```
+
+### Commit Guidelines
+- Keep the subject line under 50 characters
+- Use imperative mood ("add" not "added" or "adds")
+- Don't capitalize the first letter
+- No period at the end of subject line
+- Separate subject from body with blank line
+- Body should explain what and why, not how
+- Reference issues and PRs in the footer when applicable
+
 ## Getting Started Commands
 
 ### Initial Setup
