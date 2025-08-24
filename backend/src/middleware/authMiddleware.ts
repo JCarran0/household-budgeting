@@ -1,6 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
-import { AuthService } from '../services/authService';
-import { JSONDataService } from '../services/dataService';
+import { authService } from '../services';
 
 // Extend Express Request type to include user
 declare global {
@@ -14,13 +13,14 @@ declare global {
   }
 }
 
-// Create auth service instance
-const dataService = new JSONDataService();
-const authService = new AuthService(dataService);
-
 /**
  * Middleware to authenticate JWT tokens
  */
+// Main auth middleware for protected routes
+export const authMiddleware = (req: Request, res: Response, next: NextFunction): void => {
+  authenticate(req, res, next);
+};
+
 export const authenticate = (req: Request, res: Response, next: NextFunction): void => {
   try {
     // Extract token from Authorization header

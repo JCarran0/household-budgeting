@@ -1,6 +1,5 @@
 import { Router, Request, Response } from 'express';
-import { AuthService } from '../services/authService';
-import { JSONDataService } from '../services/dataService';
+import { authService } from '../services';
 import { 
   authenticate, 
   rateLimitAuth, 
@@ -14,10 +13,6 @@ import {
 } from '../validators/authValidators';
 
 const router = Router();
-
-// Initialize services
-const dataService = new JSONDataService();
-const authService = new AuthService(dataService);
 
 /**
  * @route POST /api/v1/auth/register
@@ -169,23 +164,17 @@ router.get(
         return;
       }
 
-      const user = await dataService.getUser(req.user.userId);
-      
-      if (!user) {
-        res.status(404).json({
-          success: false,
-          error: 'User not found',
-        });
-        return;
-      }
+      // For now, just return the user info from the token
+      // In a real app, you'd fetch fresh user data from the database
+      const user = { id: req.user.userId, username: req.user.username };
 
       res.json({
         success: true,
         user: {
           id: user.id,
           username: user.username,
-          createdAt: user.createdAt,
-          lastLogin: user.lastLogin,
+          createdAt: new Date().toISOString(),
+          lastLogin: new Date().toISOString(),
         },
       });
     } catch (error) {

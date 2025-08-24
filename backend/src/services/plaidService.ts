@@ -1,0 +1,491 @@
+import {
+  Configuration,
+  PlaidApi,
+  PlaidEnvironments,
+  Products,
+  CountryCode,
+  LinkTokenCreateRequest,
+  ItemPublicTokenExchangeRequest,
+  AccountsGetRequest,
+  TransactionsGetRequest,
+  Transaction as PlaidTransaction,
+  PlaidError,
+  ItemRemoveRequest,
+  InstitutionsGetByIdRequest,
+} from 'plaid';
+
+// Types for our application
+export interface LinkTokenResult {
+  success: boolean;
+  linkToken?: string;
+  expiration?: string;
+  error?: string;
+}
+
+export interface TokenExchangeResult {
+  success: boolean;
+  accessToken?: string;
+  itemId?: string;
+  error?: string;
+}
+
+export interface Account {
+  id: string;
+  plaidAccountId: string;
+  name: string;
+  officialName: string | null;
+  type: string;
+  subtype: string | null;
+  mask: string | null;
+  currentBalance: number | null;
+  availableBalance: number | null;
+  creditLimit?: number | null;
+  currency: string | null;
+}
+
+export interface AccountsResult {
+  success: boolean;
+  accounts?: Account[];
+  itemId?: string;
+  error?: string;
+  errorCode?: string;
+  requiresReauth?: boolean;
+}
+
+export interface Transaction {
+  id: string;
+  plaidTransactionId: string;
+  accountId: string;
+  amount: number;
+  date: string;
+  name: string;
+  merchantName: string | null;
+  category: string[] | null;
+  categoryId: string | null;
+  pending: boolean;
+  isoCurrencyCode: string | null;
+  location?: {
+    address: string | null;
+    city: string | null;
+    region: string | null;
+    postalCode: string | null;
+    country: string | null;
+  };
+}
+
+export interface TransactionsResult {
+  success: boolean;
+  transactions?: Transaction[];
+  totalTransactions?: number;
+  itemId?: string;
+  hasMore?: boolean;
+  error?: string;
+}
+
+export interface Institution {
+  id: string;
+  name: string;
+  url: string | null;
+  primaryColor: string | null;
+  logo: string | null;
+  products: Products[];
+}
+
+export interface InstitutionResult {
+  success: boolean;
+  institution?: Institution;
+  error?: string;
+}
+
+export interface RemoveItemResult {
+  success: boolean;
+  message?: string;
+  error?: string;
+}
+
+export interface TransactionOptions {
+  includePending?: boolean;
+  offset?: number;
+  count?: number;
+}
+
+export interface FormattedError {
+  type: string;
+  code: string;
+  message: string;
+  displayMessage: string | null;
+  suggestedAction: string | null;
+  requiresReauth: boolean;
+}
+
+export class PlaidService {
+  private client: PlaidApi;
+  private clientName: string;
+  private redirectUri?: string;
+
+  constructor() {
+    const configuration = new Configuration({
+      basePath: this.getPlaidEnvironment(),
+      baseOptions: {
+        headers: {
+          'PLAID-CLIENT-ID': process.env.PLAID_CLIENT_ID,
+          'PLAID-SECRET': process.env.PLAID_SECRET,
+        },
+      },
+    });
+
+    this.client = new PlaidApi(configuration);
+    this.clientName = process.env.APP_NAME || 'Personal Budgeting App';
+    this.redirectUri = process.env.PLAID_REDIRECT_URI;
+  }
+
+  private getPlaidEnvironment(): string {
+    const env = process.env.PLAID_ENV || 'sandbox';
+    switch (env) {
+      case 'production':
+        return PlaidEnvironments.production;
+      case 'development':
+        return PlaidEnvironments.development;
+      case 'sandbox':
+      default:
+        return PlaidEnvironments.sandbox;
+    }
+  }
+
+  /**
+   * Create a link token for Plaid Link initialization
+   */
+  async createLinkToken(userId: string): Promise<LinkTokenResult> {
+    try {
+      const products = (process.env.PLAID_PRODUCTS || 'accounts,transactions')
+        .split(',')
+        .map(p => p.trim() as Products);
+
+      const countryCodes = (process.env.PLAID_COUNTRY_CODES || 'US')
+        .split(',')
+        .map(c => c.trim() as CountryCode);
+
+      const request: LinkTokenCreateRequest = {
+        user: {
+          client_user_id: userId,
+        },
+        client_name: this.clientName,
+        products: products,
+        country_codes: countryCodes,
+        language: 'en',
+      };
+
+      // Add redirect URI if configured
+      if (this.redirectUri) {
+        request.redirect_uri = this.redirectUri;
+      }
+
+      // Add webhook URL in production
+      if (process.env.NODE_ENV === 'production' && process.env.PLAID_WEBHOOK_URL) {
+        request.webhook = process.env.PLAID_WEBHOOK_URL;
+      }
+
+      const response = await this.client.linkTokenCreate(request);
+
+      return {
+        success: true,
+        linkToken: response.data.link_token,
+        expiration: response.data.expiration,
+      };
+    } catch (error) {
+      return this.handleError(error);
+    }
+  }
+
+  /**
+   * Exchange a public token for an access token
+   */
+  async exchangePublicToken(publicToken: string): Promise<TokenExchangeResult> {
+    try {
+      const request: ItemPublicTokenExchangeRequest = {
+        public_token: publicToken,
+      };
+
+      const response = await this.client.itemPublicTokenExchange(request);
+
+      return {
+        success: true,
+        accessToken: response.data.access_token,
+        itemId: response.data.item_id,
+      };
+    } catch (error) {
+      return this.handleError(error);
+    }
+  }
+
+  /**
+   * Get all accounts associated with an access token
+   */
+  async getAccounts(accessToken: string): Promise<AccountsResult> {
+    try {
+      const request: AccountsGetRequest = {
+        access_token: accessToken,
+      };
+
+      const response = await this.client.accountsGet(request);
+      
+      const accounts: Account[] = response.data.accounts.map(account => ({
+        id: account.account_id,
+        plaidAccountId: account.account_id,
+        name: account.name,
+        officialName: account.official_name || null,
+        type: this.mapAccountType(account.type),
+        subtype: account.subtype || null,
+        mask: account.mask || null,
+        currentBalance: account.balances.current,
+        availableBalance: account.balances.available,
+        creditLimit: account.balances.limit || undefined,
+        currency: account.balances.iso_currency_code,
+      }));
+
+      return {
+        success: true,
+        accounts,
+        itemId: response.data.item.item_id,
+      };
+    } catch (error) {
+      const result = this.handleError(error);
+      
+      // Check if error requires reauthentication
+      if (result.error && this.isReauthError(error)) {
+        return {
+          ...result,
+          requiresReauth: true,
+          errorCode: this.getErrorCode(error),
+        };
+      }
+      
+      return result;
+    }
+  }
+
+  /**
+   * Get transactions for a date range
+   */
+  async getTransactions(
+    accessToken: string,
+    startDate: string,
+    endDate: string,
+    options: TransactionOptions = {}
+  ): Promise<TransactionsResult> {
+    try {
+      const request: TransactionsGetRequest = {
+        access_token: accessToken,
+        start_date: startDate,
+        end_date: endDate,
+        options: {
+          include_personal_finance_category: true,
+          offset: options.offset || 0,
+          count: options.count || 100,
+        },
+      };
+
+      const response = await this.client.transactionsGet(request);
+      
+      let transactions = this.mapTransactions(response.data.transactions);
+      
+      // Filter out pending transactions if requested
+      if (options.includePending === false) {
+        transactions = transactions.filter(t => !t.pending);
+      }
+
+      return {
+        success: true,
+        transactions,
+        totalTransactions: response.data.total_transactions,
+        itemId: response.data.item?.item_id,
+        hasMore: response.data.total_transactions > transactions.length,
+      };
+    } catch (error) {
+      return this.handleError(error);
+    }
+  }
+
+  /**
+   * Get institution information by ID
+   */
+  async getInstitution(institutionId: string): Promise<InstitutionResult> {
+    try {
+      const request: InstitutionsGetByIdRequest = {
+        institution_id: institutionId,
+        country_codes: [CountryCode.Us],
+      };
+
+      const response = await this.client.institutionsGetById(request);
+      
+      const institution: Institution = {
+        id: response.data.institution.institution_id,
+        name: response.data.institution.name,
+        url: response.data.institution.url || null,
+        primaryColor: response.data.institution.primary_color || null,
+        logo: response.data.institution.logo || null,
+        products: response.data.institution.products as Products[],
+      };
+
+      return {
+        success: true,
+        institution,
+      };
+    } catch (error) {
+      return this.handleError(error);
+    }
+  }
+
+  /**
+   * Remove an item (disconnect bank account)
+   */
+  async removeItem(accessToken: string): Promise<RemoveItemResult> {
+    try {
+      const request: ItemRemoveRequest = {
+        access_token: accessToken,
+      };
+
+      await this.client.itemRemove(request);
+
+      return {
+        success: true,
+        message: 'Item removed successfully',
+      };
+    } catch (error) {
+      return this.handleError(error);
+    }
+  }
+
+  /**
+   * Verify webhook signature (for security)
+   */
+  verifyWebhookSignature(_body: string, headers: any): boolean {
+    // Note: Plaid webhook verification requires the JWT library
+    // This is a placeholder - implement actual verification based on Plaid docs
+    const signature = headers['plaid-verification'];
+    if (!signature) {
+      return false;
+    }
+    
+    // In production, implement proper JWT verification
+    // See: https://plaid.com/docs/api/webhooks/webhook-verification/
+    return true;
+  }
+
+  /**
+   * Format Plaid error for consistent error handling
+   */
+  formatError(error: PlaidError): FormattedError {
+    return {
+      type: error.error_type,
+      code: error.error_code,
+      message: error.error_message,
+      displayMessage: error.display_message || null,
+      suggestedAction: error.suggested_action || null,
+      requiresReauth: this.requiresReauthentication(error.error_code),
+    };
+  }
+
+  /**
+   * Check if error code requires reauthentication
+   */
+  requiresReauthentication(errorCode: string): boolean {
+    const reauthCodes = [
+      'ITEM_LOGIN_REQUIRED',
+      'ITEM_LOCKED',
+      'USER_PERMISSION_REVOKED',
+      'INVALID_CREDENTIALS',
+      'ITEM_NOT_ACCESSIBLE',
+    ];
+    return reauthCodes.includes(errorCode);
+  }
+
+  /**
+   * Map Plaid transactions to our application format
+   */
+  private mapTransactions(plaidTransactions: PlaidTransaction[]): Transaction[] {
+    return plaidTransactions.map(txn => ({
+      id: txn.transaction_id,
+      plaidTransactionId: txn.transaction_id,
+      accountId: txn.account_id,
+      amount: txn.amount,
+      date: txn.date,
+      name: txn.name,
+      merchantName: txn.merchant_name || null,
+      category: txn.category || null,
+      categoryId: txn.category_id || null,
+      pending: txn.pending,
+      isoCurrencyCode: txn.iso_currency_code || null,
+      location: txn.location ? {
+        address: txn.location.address || null,
+        city: txn.location.city || null,
+        region: txn.location.region || null,
+        postalCode: txn.location.postal_code || null,
+        country: txn.location.country || null,
+      } : undefined,
+    }));
+  }
+
+  /**
+   * Map Plaid account type to simplified type
+   */
+  private mapAccountType(type: string | null): string {
+    if (!type) return 'unknown';
+    
+    // Map to simplified types for our app
+    switch (type) {
+      case 'depository':
+        return 'checking';
+      case 'credit':
+        return 'credit';
+      case 'loan':
+        return 'loan';
+      case 'investment':
+        return 'investment';
+      default:
+        return type;
+    }
+  }
+
+  /**
+   * Handle errors consistently
+   */
+  private handleError(error: any): any {
+    console.error('Plaid API error:', error);
+    
+    if (error.response?.data) {
+      const plaidError = error.response.data as PlaidError;
+      return {
+        success: false,
+        error: plaidError.error_message || 'An error occurred',
+      };
+    }
+    
+    return {
+      success: false,
+      error: error.message || 'An unexpected error occurred',
+    };
+  }
+
+  /**
+   * Check if error is a reauth error
+   */
+  private isReauthError(error: any): boolean {
+    if (error.response?.data) {
+      const plaidError = error.response.data as PlaidError;
+      return this.requiresReauthentication(plaidError.error_code);
+    }
+    return false;
+  }
+
+  /**
+   * Get error code from error object
+   */
+  private getErrorCode(error: any): string | undefined {
+    if (error.response?.data) {
+      const plaidError = error.response.data as PlaidError;
+      return plaidError.error_code;
+    }
+    return undefined;
+  }
+}
