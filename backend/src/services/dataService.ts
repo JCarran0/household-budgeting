@@ -13,11 +13,17 @@ export interface User {
 }
 
 export interface DataService {
+  // User-specific methods
   getUser(id: string): Promise<User | null>;
   getUserByUsername(username: string): Promise<User | null>;
   createUser(user: User): Promise<User>;
   updateUser(id: string, updates: Partial<User>): Promise<User | null>;
   getAllUsers(): Promise<User[]>;
+  
+  // Generic data storage methods
+  getData<T>(key: string): Promise<T | null>;
+  saveData<T>(key: string, data: T): Promise<void>;
+  deleteData(key: string): Promise<void>;
 }
 
 export class JSONDataService implements DataService {
@@ -84,6 +90,47 @@ export class JSONDataService implements DataService {
   async getAllUsers(): Promise<User[]> {
     return await this.readUsers();
   }
+
+  // Generic data storage implementation
+  async getData<T>(key: string): Promise<T | null> {
+    const filePath = path.join(this.dataDir, `${key}.json`);
+    
+    try {
+      if (await fs.pathExists(filePath)) {
+        const data = await fs.readJson(filePath);
+        return data as T;
+      }
+      return null;
+    } catch (error) {
+      console.error(`Error reading data for key ${key}:`, error);
+      return null;
+    }
+  }
+
+  async saveData<T>(key: string, data: T): Promise<void> {
+    const filePath = path.join(this.dataDir, `${key}.json`);
+    
+    try {
+      await fs.ensureDir(this.dataDir);
+      await fs.writeJson(filePath, data, { spaces: 2 });
+    } catch (error) {
+      console.error(`Error saving data for key ${key}:`, error);
+      throw error;
+    }
+  }
+
+  async deleteData(key: string): Promise<void> {
+    const filePath = path.join(this.dataDir, `${key}.json`);
+    
+    try {
+      if (await fs.pathExists(filePath)) {
+        await fs.remove(filePath);
+      }
+    } catch (error) {
+      console.error(`Error deleting data for key ${key}:`, error);
+      throw error;
+    }
+  }
 }
 
 // In-memory implementation for testing
@@ -123,8 +170,25 @@ export class InMemoryDataService implements DataService {
     return this.users;
   }
 
-  // Test helper method
+  // Generic data storage implementation
+  private dataStore: Map<string, unknown> = new Map();
+
+  async getData<T>(key: string): Promise<T | null> {
+    const data = this.dataStore.get(key);
+    return (data as T) || null;
+  }
+
+  async saveData<T>(key: string, data: T): Promise<void> {
+    this.dataStore.set(key, data);
+  }
+
+  async deleteData(key: string): Promise<void> {
+    this.dataStore.delete(key);
+  }
+
+  // Test helper methods
   clear(): void {
     this.users = [];
+    this.dataStore.clear();
   }
 }

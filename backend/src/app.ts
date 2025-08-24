@@ -3,6 +3,8 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import authRoutes from './routes/authRoutes';
 import plaidRoutes from './routes/plaid';
+import accountRoutes from './routes/accounts';
+import transactionRoutes from './routes/transactions';
 
 // Load environment variables
 dotenv.config();
@@ -52,6 +54,8 @@ app.get('/health', (_req: Request, res: Response) => {
 const apiPrefix = process.env.API_PREFIX || '/api/v1';
 app.use(`${apiPrefix}/auth`, authRoutes);
 app.use(`${apiPrefix}/plaid`, plaidRoutes);
+app.use(`${apiPrefix}/accounts`, accountRoutes);
+app.use(`${apiPrefix}/transactions`, transactionRoutes);
 
 // 404 handler
 app.use((req: Request, res: Response) => {

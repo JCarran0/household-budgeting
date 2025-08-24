@@ -1,0 +1,455 @@
+/**
+ * Transaction Management Service
+ * 
+ * Handles transaction syncing, categorization, and filtering
+ */
+
+import { v4 as uuidv4 } from 'uuid';
+import { PlaidService, Transaction as PlaidTransaction } from './plaidService';
+import { DataService } from './dataService';
+import { StoredAccount } from './accountService';
+
+// Transaction status
+export type TransactionStatus = 'posted' | 'pending' | 'removed';
+
+// Stored transaction structure
+export interface StoredTransaction {
+  id: string;                          // Our internal ID
+  userId: string;                      // User who owns this transaction
+  accountId: string;                   // Our account ID
+  plaidTransactionId: string | null;   // Plaid's transaction ID
+  plaidAccountId: string;              // Plaid's account ID
+  amount: number;                      // Amount (positive = debit, negative = credit)
+  date: string;                        // Transaction date (YYYY-MM-DD)
+  name: string;                        // Transaction name
+  merchantName: string | null;         // Merchant name if available
+  category: string[] | null;           // Plaid categories
+  categoryId: string | null;           // Our category ID
+  userCategoryId: string | null;       // User's custom category
+  status: TransactionStatus;           // Transaction status
+  pending: boolean;                    // Is transaction pending?
+  isoCurrencyCode: string | null;      // Currency code
+  tags: string[];                      // User tags
+  notes: string | null;                // User notes
+  isHidden: boolean;                   // Hidden from budgets
+  isSplit: boolean;                    // Is this a split transaction?
+  parentTransactionId: string | null;  // Parent if this is a split
+  splitTransactionIds: string[];       // Child transactions if split
+  location: {
+    address: string | null;
+    city: string | null;
+    region: string | null;
+    postalCode: string | null;
+    country: string | null;
+    lat: number | null;
+    lon: number | null;
+  } | null;
+  createdAt: Date;                     // When we first saw this
+  updatedAt: Date;                     // Last update
+}
+
+// Filter options
+export interface TransactionFilter {
+  startDate?: string;
+  endDate?: string;
+  accountIds?: string[];
+  categoryIds?: string[];
+  tags?: string[];
+  searchQuery?: string;
+  includePending?: boolean;
+  includeHidden?: boolean;
+  minAmount?: number;
+  maxAmount?: number;
+}
+
+// Result types
+export interface TransactionsResult {
+  success: boolean;
+  transactions?: StoredTransaction[];
+  totalCount?: number;
+  error?: string;
+}
+
+export interface SyncResult {
+  success: boolean;
+  added?: number;
+  modified?: number;
+  removed?: number;
+  error?: string;
+}
+
+export class TransactionService {
+  constructor(
+    private dataService: DataService,
+    private plaidService: PlaidService
+  ) {}
+
+  /**
+   * Sync transactions from Plaid for all user accounts
+   */
+  async syncTransactions(
+    userId: string,
+    accounts: StoredAccount[],
+    startDate: string = '2025-01-01'
+  ): Promise<SyncResult> {
+    try {
+      const endDate = new Date().toISOString().split('T')[0]; // Today
+      let totalAdded = 0;
+      let totalModified = 0;
+      let totalRemoved = 0;
+
+      // Group accounts by access token
+      const tokenGroups = new Map<string, StoredAccount[]>();
+      for (const account of accounts) {
+        const token = account.plaidAccessToken;
+        const group = tokenGroups.get(token) || [];
+        group.push(account);
+        tokenGroups.set(token, group);
+      }
+
+      // Sync each token's transactions
+      for (const [encryptedToken, tokenAccounts] of tokenGroups) {
+        const accessToken = this.decryptToken(encryptedToken);
+        
+        // Fetch from Plaid
+        const plaidResult = await this.plaidService.getTransactions(
+          accessToken,
+          startDate,
+          endDate,
+          { includePending: true }
+        );
+
+        if (!plaidResult.success || !plaidResult.transactions) {
+          console.error('Failed to sync transactions:', plaidResult.error);
+          continue;
+        }
+
+        // Process transactions
+        const result = await this.processPlaidTransactions(
+          userId,
+          tokenAccounts,
+          plaidResult.transactions
+        );
+
+        totalAdded += result.added;
+        totalModified += result.modified;
+        totalRemoved += result.removed;
+      }
+
+      return {
+        success: true,
+        added: totalAdded,
+        modified: totalModified,
+        removed: totalRemoved,
+      };
+    } catch (error) {
+      console.error('Error syncing transactions:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Sync failed',
+      };
+    }
+  }
+
+  /**
+   * Process Plaid transactions and update our store
+   */
+  private async processPlaidTransactions(
+    userId: string,
+    accounts: StoredAccount[],
+    plaidTransactions: PlaidTransaction[]
+  ): Promise<{ added: number; modified: number; removed: number }> {
+    // Load existing transactions
+    const existingTransactions = await this.dataService.getData<StoredTransaction[]>(
+      `transactions_${userId}`
+    ) || [];
+
+    // Create lookup maps
+    const existingByPlaidId = new Map<string, StoredTransaction>();
+    for (const txn of existingTransactions) {
+      if (txn.plaidTransactionId) {
+        existingByPlaidId.set(txn.plaidTransactionId, txn);
+      }
+    }
+
+    const accountLookup = new Map<string, StoredAccount>();
+    for (const account of accounts) {
+      accountLookup.set(account.plaidAccountId, account);
+    }
+
+    let added = 0;
+    let modified = 0;
+    const processedIds = new Set<string>();
+
+    // Process each Plaid transaction
+    for (const plaidTxn of plaidTransactions) {
+      processedIds.add(plaidTxn.plaidTransactionId);
+      
+      const account = accountLookup.get(plaidTxn.accountId);
+      if (!account) continue;
+
+      const existing = existingByPlaidId.get(plaidTxn.plaidTransactionId);
+      
+      if (existing) {
+        // Update existing transaction
+        const updated = this.updateTransaction(existing, plaidTxn);
+        if (updated) {
+          modified++;
+        }
+      } else {
+        // Add new transaction
+        const newTxn = this.createTransaction(userId, account.id, plaidTxn);
+        existingTransactions.push(newTxn);
+        added++;
+      }
+    }
+
+    // Mark removed transactions
+    let removed = 0;
+    for (const existing of existingTransactions) {
+      if (existing.plaidTransactionId && !processedIds.has(existing.plaidTransactionId)) {
+        if (existing.status !== 'removed') {
+          existing.status = 'removed';
+          existing.updatedAt = new Date();
+          removed++;
+        }
+      }
+    }
+
+    // Save all transactions
+    await this.dataService.saveData(`transactions_${userId}`, existingTransactions);
+
+    return { added, modified, removed };
+  }
+
+  /**
+   * Create a new transaction from Plaid data
+   */
+  private createTransaction(
+    userId: string,
+    accountId: string,
+    plaidTxn: PlaidTransaction
+  ): StoredTransaction {
+    return {
+      id: uuidv4(),
+      userId,
+      accountId,
+      plaidTransactionId: plaidTxn.plaidTransactionId,
+      plaidAccountId: plaidTxn.accountId,
+      amount: plaidTxn.amount,
+      date: plaidTxn.date,
+      name: plaidTxn.name,
+      merchantName: plaidTxn.merchantName,
+      category: plaidTxn.category,
+      categoryId: plaidTxn.categoryId,
+      userCategoryId: null,
+      status: plaidTxn.pending ? 'pending' : 'posted',
+      pending: plaidTxn.pending,
+      isoCurrencyCode: plaidTxn.isoCurrencyCode,
+      tags: [],
+      notes: null,
+      isHidden: false,
+      isSplit: false,
+      parentTransactionId: null,
+      splitTransactionIds: [],
+      location: plaidTxn.location ? {
+        address: plaidTxn.location.address || null,
+        city: plaidTxn.location.city || null,
+        region: plaidTxn.location.region || null,
+        postalCode: plaidTxn.location.postalCode || null,
+        country: plaidTxn.location.country || null,
+        lat: null,
+        lon: null,
+      } : null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+  }
+
+  /**
+   * Update an existing transaction with new Plaid data
+   */
+  private updateTransaction(
+    existing: StoredTransaction,
+    plaidTxn: PlaidTransaction
+  ): boolean {
+    let changed = false;
+
+    // Check for changes
+    if (existing.amount !== plaidTxn.amount) {
+      existing.amount = plaidTxn.amount;
+      changed = true;
+    }
+
+    if (existing.pending !== plaidTxn.pending) {
+      existing.pending = plaidTxn.pending;
+      existing.status = plaidTxn.pending ? 'pending' : 'posted';
+      changed = true;
+    }
+
+    if (existing.name !== plaidTxn.name) {
+      existing.name = plaidTxn.name;
+      changed = true;
+    }
+
+    if (existing.merchantName !== plaidTxn.merchantName) {
+      existing.merchantName = plaidTxn.merchantName;
+      changed = true;
+    }
+
+    if (changed) {
+      existing.updatedAt = new Date();
+    }
+
+    return changed;
+  }
+
+  /**
+   * Get transactions with filtering
+   */
+  async getTransactions(
+    userId: string,
+    filter: TransactionFilter = {}
+  ): Promise<TransactionsResult> {
+    try {
+      const allTransactions = await this.dataService.getData<StoredTransaction[]>(
+        `transactions_${userId}`
+      ) || [];
+
+      let filtered = allTransactions.filter((txn: StoredTransaction) => txn.status !== 'removed');
+
+      // Apply filters
+      if (filter.startDate) {
+        filtered = filtered.filter((txn: StoredTransaction) => txn.date >= filter.startDate!);
+      }
+
+      if (filter.endDate) {
+        filtered = filtered.filter((txn: StoredTransaction) => txn.date <= filter.endDate!);
+      }
+
+      if (filter.accountIds && filter.accountIds.length > 0) {
+        filtered = filtered.filter((txn: StoredTransaction) => filter.accountIds!.includes(txn.accountId));
+      }
+
+      if (filter.categoryIds && filter.categoryIds.length > 0) {
+        filtered = filtered.filter((txn: StoredTransaction) => 
+          txn.userCategoryId ? filter.categoryIds!.includes(txn.userCategoryId) : false
+        );
+      }
+
+      if (filter.tags && filter.tags.length > 0) {
+        filtered = filtered.filter((txn: StoredTransaction) => 
+          filter.tags!.some(tag => txn.tags.includes(tag))
+        );
+      }
+
+      if (!filter.includePending) {
+        filtered = filtered.filter((txn: StoredTransaction) => !txn.pending);
+      }
+
+      if (!filter.includeHidden) {
+        filtered = filtered.filter((txn: StoredTransaction) => !txn.isHidden);
+      }
+
+      if (filter.minAmount !== undefined) {
+        filtered = filtered.filter((txn: StoredTransaction) => Math.abs(txn.amount) >= filter.minAmount!);
+      }
+
+      if (filter.maxAmount !== undefined) {
+        filtered = filtered.filter((txn: StoredTransaction) => Math.abs(txn.amount) <= filter.maxAmount!);
+      }
+
+      if (filter.searchQuery) {
+        const query = filter.searchQuery.toLowerCase();
+        filtered = filtered.filter((txn: StoredTransaction) => 
+          txn.name.toLowerCase().includes(query) ||
+          (txn.merchantName && txn.merchantName.toLowerCase().includes(query)) ||
+          txn.tags.some(tag => tag.toLowerCase().includes(query)) ||
+          (txn.notes && txn.notes.toLowerCase().includes(query))
+        );
+      }
+
+      // Sort by date descending
+      filtered.sort((a: StoredTransaction, b: StoredTransaction) => b.date.localeCompare(a.date));
+
+      return {
+        success: true,
+        transactions: filtered,
+        totalCount: filtered.length,
+      };
+    } catch (error) {
+      console.error('Error fetching transactions:', error);
+      return {
+        success: false,
+        error: 'Failed to fetch transactions',
+      };
+    }
+  }
+
+  /**
+   * Update transaction category
+   */
+  async updateTransactionCategory(
+    userId: string,
+    transactionId: string,
+    categoryId: string
+  ): Promise<{ success: boolean; error?: string }> {
+    try {
+      const transactions = await this.dataService.getData<StoredTransaction[]>(
+        `transactions_${userId}`
+      ) || [];
+
+      const transaction = transactions.find(t => t.id === transactionId);
+      if (!transaction) {
+        return { success: false, error: 'Transaction not found' };
+      }
+
+      transaction.userCategoryId = categoryId;
+      transaction.updatedAt = new Date();
+
+      await this.dataService.saveData(`transactions_${userId}`, transactions);
+
+      return { success: true };
+    } catch (error) {
+      return { success: false, error: 'Failed to update category' };
+    }
+  }
+
+  /**
+   * Add tags to transaction
+   */
+  async addTransactionTags(
+    userId: string,
+    transactionId: string,
+    tags: string[]
+  ): Promise<{ success: boolean; error?: string }> {
+    try {
+      const transactions = await this.dataService.getData<StoredTransaction[]>(
+        `transactions_${userId}`
+      ) || [];
+
+      const transaction = transactions.find(t => t.id === transactionId);
+      if (!transaction) {
+        return { success: false, error: 'Transaction not found' };
+      }
+
+      // Add unique tags
+      const uniqueTags = new Set([...transaction.tags, ...tags]);
+      transaction.tags = Array.from(uniqueTags);
+      transaction.updatedAt = new Date();
+
+      await this.dataService.saveData(`transactions_${userId}`, transactions);
+
+      return { success: true };
+    } catch (error) {
+      return { success: false, error: 'Failed to add tags' };
+    }
+  }
+
+  /**
+   * TODO: Implement proper token decryption
+   */
+  private decryptToken(encryptedToken: string): string {
+    return Buffer.from(encryptedToken, 'base64').toString('utf-8');
+  }
+}
