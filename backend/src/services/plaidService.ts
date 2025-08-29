@@ -137,6 +137,13 @@ export class PlaidService {
     this.client = new PlaidApi(configuration);
     this.clientName = process.env.APP_NAME || 'Personal Budgeting App';
     this.redirectUri = process.env.PLAID_REDIRECT_URI;
+    
+    // Log initialization (for debugging)
+    console.log('PlaidService initialized with:', {
+      environment: process.env.PLAID_ENV || 'sandbox',
+      clientId: process.env.PLAID_CLIENT_ID?.substring(0, 10) + '...',
+      hasSecret: !!process.env.PLAID_SECRET,
+    });
   }
 
   private getPlaidEnvironment(): string {

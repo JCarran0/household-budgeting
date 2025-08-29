@@ -51,7 +51,7 @@ router.post('/link-token', authMiddleware, async (req: AuthenticatedRequest, res
     }
 
     res.json({
-      linkToken: result.linkToken,
+      link_token: result.linkToken,
       expiration: result.expiration,
     });
   } catch (error) {

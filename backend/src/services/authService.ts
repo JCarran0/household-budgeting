@@ -102,6 +102,9 @@ export class AuthService {
 
       const createdUser = await this.dataService.createUser(user);
 
+      // Generate JWT token for auto-login after registration
+      const token = this.generateToken(createdUser.id, createdUser.username);
+
       // Log security event
       this.logSecurityEvent({
         event: 'USER_REGISTERED',
@@ -112,6 +115,7 @@ export class AuthService {
 
       return {
         success: true,
+        token,
         user: {
           id: createdUser.id,
           username: createdUser.username,
