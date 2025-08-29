@@ -214,8 +214,24 @@ interface MonthlyBudget {
 - Service singletons prevent auth token inconsistencies
 - Manual test scripts catch integration issues faster
 
-### Phase 2: Core Features (Weeks 3-4)
-**Goal**: Transaction sync, categorization, basic budgeting
+### Phase 2: Frontend Development ✅ COMPLETE
+**Goal**: React frontend with authentication and Plaid Link integration
+
+**What We Built**:
+1. ✅ React 18 + TypeScript + Vite frontend with Tailwind CSS
+2. ✅ JWT authentication with Zustand state management
+3. ✅ Plaid Link integration with proper error handling
+4. ✅ Dashboard, Accounts, and Transactions pages
+5. ✅ Protected routes and API integration
+
+**Critical Lessons Learned**:
+- **Environment Variables**: Must load `dotenv.config()` BEFORE importing app to ensure env vars are available
+- **Plaid Link Integration**: Use conditional rendering to avoid null config errors
+- **React StrictMode**: Causes double-mounting in development, must handle carefully with Plaid
+- **API Response Format**: Use snake_case for Plaid responses (link_token not linkToken)
+- **Token on Registration**: Return JWT token on registration for auto-login UX
+
+### Phase 3: Core Features (Next)
 
 **TDD Focus**:
 1. Transaction categorization and tagging logic
@@ -228,8 +244,8 @@ interface MonthlyBudget {
 - `backend/src/services/__tests__/categoryService.test.ts`
 - `backend/src/services/__tests__/budgetService.test.ts`
 
-### Phase 3: Reports & Frontend (Weeks 5-6)
-**Goal**: Reporting, charts, complete UI
+### Phase 4: Reports & Analytics (Week 5)
+**Goal**: Reporting, charts, data visualization
 
 **TDD Focus**:
 1. Report calculation logic
@@ -444,24 +460,28 @@ refactor(budget): simplify monthly calculation logic
 
 ## Getting Started Commands
 
+### Prerequisites
+- Node.js 20+
+- npm or yarn
+- Plaid sandbox account (free at https://dashboard.plaid.com/signup)
+
 ### Initial Setup
 ```bash
-# Create project structure
-mkdir budgeting-app
-cd budgeting-app
-mkdir -p backend/src frontend/src shared/types
+# Clone the repository
+git clone <repository-url>
+cd household-budgeting
 
-# Backend setup
+# Install backend dependencies
 cd backend
-npm init -y
-npm install express jsonwebtoken bcryptjs fs-extra uuid date-fns zod plaid
-npm install -D @types/node @types/express @types/jsonwebtoken @types/bcryptjs typescript ts-node jest @types/jest ts-jest nodemon
+npm install
 
-# Frontend setup  
+# Install frontend dependencies
 cd ../frontend
-npm create vite@latest . -- --template react-ts
-npm install @tanstack/react-query zustand @headlessui/react @heroicons/react recharts
-npm install -D @testing-library/react @testing-library/jest-dom @testing-library/user-event jsdom
+npm install
+
+# Set up environment variables
+cp .env.example .env
+# Edit .env with your Plaid credentials
 ```
 
 ### Development Workflow
@@ -483,21 +503,22 @@ npm run test
 ## Development Priorities
 
 ### Current Status
-✅ **Phase 1 Complete**: Auth + Plaid integration working
+✅ **Phase 1 & 2 Complete**: Backend + Frontend with Plaid integration
 - JWT authentication with rate limiting
 - Plaid sandbox integration tested
-- Service singleton pattern implemented
+- React frontend with full authentication flow
+- Plaid Link UI working in sandbox mode
 
 ### Next Priority: Transaction Management
-1. **Build Plaid Link UI** - Connect bank accounts
-2. **Sync transactions** - Pull from 2025-01-01
-3. **Store & categorize** - Persist with proper types
-4. **Test with real data** - Use sandbox credentials
+1. **Sync transactions** - Pull from 2025-01-01
+2. **Store & categorize** - Persist with proper types
+3. **Build categorization UI** - Allow manual categorization
+4. **Implement transaction splits** - For shared expenses
 
 ### Type Safety Checklist
-- [ ] Replace all `any` with proper types
-- [ ] Enable strict TypeScript config
-- [ ] Create shared type definitions
+- [x] Replace all `any` with proper types
+- [x] Enable strict TypeScript config
+- [x] Create shared type definitions
 - [ ] Add runtime validation with Zod
 
 ## Success Metrics
@@ -507,3 +528,44 @@ npm run test
 - ✅ **No `any` types** in production code
 - ✅ **Sandbox integration working** end-to-end
 - ✅ **Manual test procedures documented**
+- ✅ **Frontend working with Plaid Link** - No duplicate script warnings
+- ✅ **JWT auth flow complete** - Login, register, protected routes
+
+## Troubleshooting Guide for AI Assistants
+
+### Common Issues and Solutions
+
+#### 1. Plaid Link Duplicate Script Warning
+**Problem**: "The Plaid link-initialize.js script was embedded more than once"
+**Solution**: 
+- Use conditional rendering - only mount PlaidLink component when token exists
+- Never pass null config to `usePlaidLink` hook
+- Avoid multiple instances of components using `usePlaidLink`
+
+#### 2. Environment Variables Not Loading
+**Problem**: "PLAID_CLIENT_ID and PLAID_SECRET must be set"
+**Solution**:
+```typescript
+// backend/src/index.ts
+import dotenv from 'dotenv';
+dotenv.config(); // MUST be before app import
+import app from './app';
+```
+
+#### 3. Frontend Can't Connect to Backend
+**Problem**: "ERR_CONNECTION_REFUSED" on API calls
+**Solution**:
+- Ensure backend is running: `cd backend && npm run dev`
+- Check backend is on port 3001
+- Verify CORS is configured for frontend origin
+
+#### 4. JWT Token Not Returned on Registration
+**Problem**: User can't auto-login after registration
+**Solution**: Return token from authService.register() method
+
+#### 5. React StrictMode Double-Mounting
+**Problem**: Components mount twice in development
+**Solution**: 
+- Use refs and global state for singleton behavior
+- Check `process.env.NODE_ENV` to detect development mode
+- Design components to be idempotent
