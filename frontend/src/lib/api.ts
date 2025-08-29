@@ -85,8 +85,12 @@ class ApiClient {
   }
 
   // Account endpoints
-  async connectAccount(publicToken: string): Promise<{ account: PlaidAccount }> {
-    const { data } = await this.client.post('/accounts/connect', { public_token: publicToken });
+  async connectAccount(params: {
+    publicToken: string;
+    institutionId: string;
+    institutionName: string;
+  }): Promise<{ account: PlaidAccount }> {
+    const { data } = await this.client.post('/accounts/connect', params);
     return data;
   }
 

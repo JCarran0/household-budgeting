@@ -138,6 +138,35 @@ DATA_DIR=./data
    - Connect bank accounts using Plaid Link
    - View accounts and transactions
 
+### 🏦 Plaid Sandbox Testing
+
+The app uses Plaid's sandbox environment for testing bank connections. No real bank credentials are needed.
+
+#### Test Credentials
+- **Username**: `user_good`
+- **Password**: `pass_good`
+- **Institutions**: Any sandbox institution (e.g., "Chase", "Bank of America", "Wells Fargo")
+
+#### Phone Verification (MFA)
+When prompted for phone verification in sandbox:
+
+**Test Phone Numbers**:
+- `415-555-0010` - New User (first-time connection)
+- `415-555-0011` - Verified Returning User (recommended for testing)
+
+**OTP Code**: Always use `123456`
+
+#### Complete Testing Flow
+1. Click "Connect Account" in the app
+2. Select any bank (e.g., "Chase" or "Bank of America")
+3. Enter credentials: `user_good` / `pass_good`
+4. If prompted for phone: use `415-555-0011`
+5. Enter OTP: `123456`
+6. Select accounts to connect
+7. Confirm connection
+
+**Note**: Real phone numbers won't work in sandbox. You must use Plaid's test phone numbers listed above.
+
 ### Testing
 
 **Backend Tests**:

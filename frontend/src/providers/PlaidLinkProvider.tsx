@@ -69,8 +69,13 @@ export function PlaidLinkProvider({ children }: { children: React.ReactNode }) {
 
   const handleSuccess = useCallback<PlaidLinkOnSuccess>((public_token, metadata) => {
     console.log('Plaid Link success, exchanging token...');
+    console.log('Institution:', metadata.institution);
     setIsLoading(true);
-    connectAccountMutation.mutate(public_token);
+    connectAccountMutation.mutate({
+      publicToken: public_token,
+      institutionId: metadata.institution?.institution_id || '',
+      institutionName: metadata.institution?.name || '',
+    });
   }, [connectAccountMutation]);
 
   const handleExit = useCallback<PlaidLinkOnExit>((error, metadata) => {
