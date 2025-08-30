@@ -211,12 +211,10 @@ interface MonthlyBudget {
 1. ✅ Auth service with JWT, rate limiting, account lockout (29 tests)
 2. ✅ Plaid service with sandbox integration (18 tests)
 3. ✅ Service singleton pattern for consistent state
-4. ✅ Direct sandbox testing scripts
 
 **Lessons Learned**:
 - Integration tests with real Plaid sandbox > heavily mocked unit tests
 - Service singletons prevent auth token inconsistencies
-- Manual test scripts catch integration issues faster
 
 ### Phase 2: Frontend Development ✅ COMPLETE
 **Goal**: React frontend with professional UI and Plaid Link integration
@@ -397,7 +395,6 @@ DATA_DIR=./data
 
 ### 3. Integration Testing Strategy
 - **Use real sandbox environments** (Plaid, databases)
-- **Create test scripts** for manual verification
 - **Test the full stack** when it matters
 - **Mock only at boundaries** (network, filesystem)
 
@@ -405,7 +402,6 @@ DATA_DIR=./data
 - **Spike features quickly** with minimal tests
 - **Add tests when you find bugs**
 - **Refactor with confidence** when types guide you
-- **Document manual test procedures**
 
 ### 5. Type-Safe Error Handling
 ```typescript
@@ -536,7 +532,6 @@ npm run test
 - ✅ **Fast feedback loops** - Direct testing > mocking
 - ✅ **No `any` types** in production code
 - ✅ **Sandbox integration working** end-to-end
-- ✅ **Manual test procedures documented**
 - ✅ **Frontend working with Plaid Link** - No duplicate script warnings
 - ✅ **JWT auth flow complete** - Login, register, protected routes
 - ✅ **Professional UI** - Mantine component library with dark theme
