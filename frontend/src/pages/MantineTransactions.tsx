@@ -109,14 +109,6 @@ export function MantineTransactions() {
     .filter(t => t.amount > 0)
     .reduce((sum, t) => sum + t.amount, 0);
 
-  if (isLoading) {
-    return (
-      <Center h={400}>
-        <Loader size="lg" />
-      </Center>
-    );
-  }
-
   const accountOptions = useMemo(() => {
     const options = [{ value: 'all', label: 'All Accounts' }];
     if (accounts && accounts.length > 0) {
@@ -128,6 +120,14 @@ export function MantineTransactions() {
     }
     return options;
   }, [accounts]);
+
+  if (isLoading) {
+    return (
+      <Center h={400}>
+        <Loader size="lg" />
+      </Center>
+    );
+  }
 
   return (
     <Stack gap="lg">
