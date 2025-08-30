@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import type { User, LoginCredentials, RegisterCredentials } from '../../../shared/types';
 import { api } from '../lib/api';
+import { queryClient } from '../lib/queryClient';
 
 interface AuthState {
   user: User | null;
@@ -28,6 +29,10 @@ export const useAuthStore = create<AuthState>()(
       login: async (credentials) => {
         set({ isLoading: true, error: null });
         try {
+          // Clear all cached data when logging in
+          await queryClient.cancelQueries();
+          queryClient.clear();
+          
           const response = await api.login(credentials);
           // Backend returns {success, token, user}
           if (response.token && response.user) {
@@ -54,6 +59,10 @@ export const useAuthStore = create<AuthState>()(
       register: async (credentials) => {
         set({ isLoading: true, error: null });
         try {
+          // Clear all cached data when registering a new user
+          await queryClient.cancelQueries();
+          queryClient.clear();
+          
           const response = await api.register(credentials);
           // Backend returns {success, token, user}
           if (response.token && response.user) {
@@ -79,6 +88,11 @@ export const useAuthStore = create<AuthState>()(
 
       logout: () => {
         localStorage.removeItem('token');
+        
+        // Clear all cached data when logging out
+        queryClient.cancelQueries();
+        queryClient.clear();
+        
         set({
           user: null,
           token: null,
