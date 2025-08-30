@@ -15,6 +15,8 @@ import { MantineLayout } from './components/MantineLayout';
 import { MantineDashboard } from './pages/MantineDashboard';
 import { MantineAccounts } from './pages/MantineAccounts';
 import { MantineTransactions } from './pages/MantineTransactions';
+import { Categories } from './pages/Categories';
+import { Budgets } from './pages/Budgets';
 import { PlaidLinkProvider } from './providers/PlaidLinkProvider';
 
 const queryClient = new QueryClient({
@@ -49,6 +51,8 @@ function App() {
                   <Route path="/dashboard" element={<MantineDashboard />} />
                   <Route path="/accounts" element={<MantineAccounts />} />
                   <Route path="/transactions" element={<MantineTransactions />} />
+                  <Route path="/categories" element={<Categories />} />
+                  <Route path="/budgets" element={<Budgets />} />
                 </Route>
               </Route>
               <Route path="/" element={<Navigate to="/dashboard" replace />} />

@@ -8,7 +8,8 @@ import {
   IconLogout,
   IconUser,
   IconPigMoney,
-  IconChevronRight
+  IconChevronRight,
+  IconCategory
 } from '@tabler/icons-react';
 import { useAuthStore } from '../stores/authStore';
 
@@ -27,6 +28,8 @@ export function MantineLayout() {
     { label: 'Dashboard', icon: IconHome, path: '/dashboard' },
     { label: 'Transactions', icon: IconReceipt, path: '/transactions' },
     { label: 'Accounts', icon: IconCreditCard, path: '/accounts' },
+    { label: 'Categories', icon: IconCategory, path: '/categories' },
+    { label: 'Budgets', icon: IconPigMoney, path: '/budgets' },
   ];
 
   return (
