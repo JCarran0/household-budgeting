@@ -90,9 +90,15 @@ router.get('/', authMiddleware, async (req: AuthRequest, res: Response): Promise
       return;
     }
 
+    // Map userCategoryId to categoryId for frontend compatibility
+    const mappedTransactions = result.transactions?.map(txn => ({
+      ...txn,
+      categoryId: txn.userCategoryId || txn.categoryId,
+    })) || [];
+
     res.json({
       success: true,
-      transactions: result.transactions,
+      transactions: mappedTransactions,
       totalCount: result.totalCount,
     });
   } catch (error) {

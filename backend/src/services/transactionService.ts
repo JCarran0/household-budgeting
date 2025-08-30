@@ -332,9 +332,11 @@ export class TransactionService {
       }
 
       if (filter.categoryIds && filter.categoryIds.length > 0) {
-        filtered = filtered.filter((txn: StoredTransaction) => 
-          txn.userCategoryId ? filter.categoryIds!.includes(txn.userCategoryId) : false
-        );
+        filtered = filtered.filter((txn: StoredTransaction) => {
+          // Check both userCategoryId (user's custom) and categoryId (Plaid's)
+          const categoryToCheck = txn.userCategoryId || txn.categoryId;
+          return categoryToCheck ? filter.categoryIds!.includes(categoryToCheck) : false;
+        });
       }
 
       if (filter.tags && filter.tags.length > 0) {
@@ -416,7 +418,7 @@ export class TransactionService {
   }
 
   /**
-   * Add tags to transaction
+   * Add tags to transaction (replaces existing tags)
    */
   async addTransactionTags(
     userId: string,
@@ -433,9 +435,8 @@ export class TransactionService {
         return { success: false, error: 'Transaction not found' };
       }
 
-      // Add unique tags
-      const uniqueTags = new Set([...transaction.tags, ...tags]);
-      transaction.tags = Array.from(uniqueTags);
+      // Replace tags entirely (frontend sends the complete list)
+      transaction.tags = tags;
       transaction.updatedAt = new Date();
 
       await this.dataService.saveData(`transactions_${userId}`, transactions);

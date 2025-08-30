@@ -99,35 +99,21 @@ class ApiClient {
     this.client.interceptors.request.use(
       (config) => {
         const token = localStorage.getItem('token');
-        console.log('[API] Request interceptor - token exists:', !!token);
         if (token) {
           config.headers.Authorization = `Bearer ${token}`;
-          console.log('[API] Added Authorization header');
         }
-        console.log('[API] Making request to:', config.url);
         return config;
       },
       (error) => {
-        console.error('[API] Request interceptor error:', error);
         return Promise.reject(error);
       }
     );
 
     // Response interceptor to handle errors
     this.client.interceptors.response.use(
-      (response) => {
-        console.log('[API] Response received from:', response.config.url, 'Status:', response.status);
-        return response;
-      },
+      (response) => response,
       (error: AxiosError) => {
-        console.error('[API] Response error:', {
-          url: error.config?.url,
-          status: error.response?.status,
-          data: error.response?.data,
-          message: error.message
-        });
         if (error.response?.status === 401) {
-          console.log('[API] 401 Unauthorized - removing token and redirecting to login');
           // Token expired or invalid
           localStorage.removeItem('token');
           window.location.href = '/login';
@@ -216,11 +202,17 @@ class ApiClient {
   }
 
   async updateTransactionCategory(transactionId: string, categoryId: string): Promise<void> {
-    await this.client.put(`/transactions/${transactionId}/category`, { categoryId });
+    const response = await this.client.put(`/transactions/${transactionId}/category`, { categoryId });
+    if (!response.data.success) {
+      throw new Error(response.data.error || 'Failed to update category');
+    }
   }
 
   async addTransactionTags(transactionId: string, tags: string[]): Promise<void> {
-    await this.client.post(`/transactions/${transactionId}/tags`, { tags });
+    const response = await this.client.post(`/transactions/${transactionId}/tags`, { tags });
+    if (!response.data.success) {
+      throw new Error(response.data.error || 'Failed to add tags');
+    }
   }
 
   async splitTransaction(transactionId: string, splits: {
@@ -234,16 +226,12 @@ class ApiClient {
 
   // Category endpoints
   async getCategories(): Promise<Category[]> {
-    console.log('[API] Fetching categories...');
     const { data } = await this.client.get<Category[]>('/categories');
-    console.log('[API] Categories received:', data);
     return data;
   }
 
   async getCategoryTree(): Promise<CategoryWithChildren[]> {
-    console.log('[API] Fetching category tree...');
     const { data } = await this.client.get<CategoryWithChildren[]>('/categories/tree');
-    console.log('[API] Category tree received:', data);
     return data;
   }
 
@@ -253,9 +241,7 @@ class ApiClient {
   }
 
   async getParentCategories(): Promise<Category[]> {
-    console.log('[API] Fetching parent categories...');
     const { data } = await this.client.get<Category[]>('/categories/parents');
-    console.log('[API] Parent categories received:', data);
     return data;
   }
 

@@ -5,7 +5,7 @@ import {
   Group,
   TextInput,
   Select,
-  MultiSelect,
+  TagsInput,
   Button,
   Text,
   Badge,
@@ -14,6 +14,7 @@ import {
   Switch,
   Divider,
   Alert,
+  Loader,
 } from '@mantine/core';
 import { useForm } from '@mantine/form';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -44,10 +45,11 @@ export function TransactionEditModal({
   const [availableTags, setAvailableTags] = useState<string[]>([]);
 
   // Fetch categories
-  const { data: categories } = useQuery({
+  const { data: categories, isLoading: categoriesLoading, error: categoriesError } = useQuery({
     queryKey: ['categories'],
-    queryFn: api.getCategories,
+    queryFn: () => api.getCategories(),
     enabled: opened,
+    staleTime: 5 * 60 * 1000, // Consider data fresh for 5 minutes
   });
 
   // Fetch all transactions to extract unique tags
@@ -131,40 +133,7 @@ export function TransactionEditModal({
     },
   });
 
-  const handleSubmit = async (values: EditFormValues) => {
-    if (!transaction) return;
-
-    try {
-      // Update category if changed
-      if (values.categoryId && values.categoryId !== transaction.categoryId) {
-        await updateCategoryMutation.mutateAsync({
-          transactionId: transaction.id,
-          categoryId: values.categoryId,
-        });
-      }
-
-      // Update tags if changed
-      const currentTags = transaction.tags || [];
-      const tagsChanged = 
-        values.tags.length !== currentTags.length ||
-        values.tags.some(tag => !currentTags.includes(tag));
-      
-      if (tagsChanged) {
-        await addTagsMutation.mutateAsync({
-          transactionId: transaction.id,
-          tags: values.tags,
-        });
-      }
-
-      onClose();
-    } catch (error) {
-      console.error('Error updating transaction:', error);
-    }
-  };
-
-  if (!transaction) return null;
-
-  // Build category options
+  // Build category options - MUST be before any conditional returns
   const categoryOptions = React.useMemo(() => {
     if (!categories || categories.length === 0) {
       return [];
@@ -186,17 +155,49 @@ export function TransactionEditModal({
       .filter(opt => opt.value && opt.label)
       .sort((a, b) => a.label.localeCompare(b.label));
     
-    console.log('[TransactionEditModal] Category options:', options);
     return options;
   }, [categories]);
 
-  // Build tag options (existing tags + ability to create new ones)
-  const tagOptions = availableTags.map(tag => ({
-    value: tag,
-    label: tag,
-  }));
+  // Build tag options (existing tags)
+  const tagOptions = availableTags.map(tag => tag);
 
   const isLoading = updateCategoryMutation.isPending || addTagsMutation.isPending;
+
+  const handleSubmit = async (values: EditFormValues) => {
+    if (!transaction) return;
+
+    try {
+      // Update category if changed (handle null/undefined properly)
+      const categoryChanged = values.categoryId !== (transaction.categoryId || '');
+      if (values.categoryId && categoryChanged) {
+        await updateCategoryMutation.mutateAsync({
+          transactionId: transaction.id,
+          categoryId: values.categoryId,
+        });
+      }
+
+      // Update tags if changed - check both directions for differences
+      const currentTags = transaction.tags || [];
+      const tagsChanged = 
+        values.tags.length !== currentTags.length ||
+        values.tags.some(tag => !currentTags.includes(tag)) ||
+        currentTags.some(tag => !values.tags.includes(tag));
+      
+      if (tagsChanged) {
+        await addTagsMutation.mutateAsync({
+          transactionId: transaction.id,
+          tags: values.tags,
+        });
+      }
+
+      onClose();
+    } catch (error) {
+      console.error('Error updating transaction:', error);
+    }
+  };
+
+  // Early return MUST be after all hooks
+  if (!transaction) return null;
 
   return (
     <Modal
@@ -237,33 +238,52 @@ export function TransactionEditModal({
           <Divider />
 
           {/* Editable Fields */}
+          {categoriesError && (
+            <Alert color="red" icon={<IconAlertCircle size={16} />}>
+              Failed to load categories: {(categoriesError as Error).message}
+            </Alert>
+          )}
+          
           <Select
             label="Category"
-            placeholder={categoryOptions.length > 0 ? "Select a category" : "No categories available"}
+            placeholder={
+              categoriesLoading 
+                ? "Loading categories..." 
+                : categoriesError
+                  ? "Failed to load categories"
+                : categoryOptions.length > 0 
+                  ? "Select a category" 
+                  : "No categories available"
+            }
             data={categoryOptions}
             searchable
             clearable
-            disabled={categoryOptions.length === 0}
-            leftSection={<IconCategory size={16} />}
+            disabled={categoriesLoading || !!categoriesError || categoryOptions.length === 0}
+            leftSection={categoriesLoading ? <Loader size={16} /> : <IconCategory size={16} />}
             {...form.getInputProps('categoryId')}
             description={
-              categoryOptions.length === 0 
-                ? "Please create categories first" 
-                : "Assign a budget category to this transaction"
+              categoriesLoading
+                ? "Loading categories..."
+                : categoriesError
+                  ? "Error loading categories"
+                : categoryOptions.length === 0 
+                  ? "Please create categories first" 
+                  : "Assign a budget category to this transaction"
             }
           />
 
-          <MultiSelect
+          <TagsInput
             label="Tags"
-            placeholder="Add tags"
+            placeholder="Type and press Enter to add tags"
             data={tagOptions}
-            searchable
-            creatable
             clearable
             leftSection={<IconTag size={16} />}
-            {...form.getInputProps('tags')}
-            description="Add tags for better organization"
-            getCreateLabel={(value) => `+ Create "${value}"`}
+            value={form.values.tags}
+            onChange={(value) => form.setFieldValue('tags', value)}
+            error={form.errors.tags}
+            description="Press Enter to add tags"
+            maxDropdownHeight={200}
+            allowDuplicates={false}
           />
 
           <Textarea
