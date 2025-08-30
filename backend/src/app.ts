@@ -7,6 +7,7 @@ import accountRoutes from './routes/accounts';
 import transactionRoutes from './routes/transactions';
 import categoryRoutes from './routes/categories';
 import budgetRoutes from './routes/budgets';
+import reportRoutes from './routes/reports';
 
 // Load environment variables
 dotenv.config();
@@ -84,6 +85,7 @@ app.use(`${apiPrefix}/accounts`, accountRoutes);
 app.use(`${apiPrefix}/transactions`, transactionRoutes);
 app.use(`${apiPrefix}/categories`, categoryRoutes);
 app.use(`${apiPrefix}/budgets`, budgetRoutes);
+app.use(`${apiPrefix}/reports`, reportRoutes);
 
 // 404 handler
 app.use((req: Request, res: Response) => {
