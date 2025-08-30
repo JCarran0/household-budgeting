@@ -93,7 +93,8 @@ export function CategoryForm({ opened, onClose, category, onSuccess }: CategoryF
         form.reset();
       }
     }
-  }, [opened, category, form]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [opened, category]); // Removed form from dependencies to prevent infinite loop
 
   // Create mutation
   const createMutation = useMutation({

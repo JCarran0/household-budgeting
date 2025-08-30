@@ -34,7 +34,6 @@ import { api, type CategoryWithChildren } from '../lib/api';
 import { CategoryTree } from '../components/categories/CategoryTree';
 import { CategoryForm } from '../components/categories/CategoryForm';
 import type { Category } from '../../../shared/types';
-import { useAuthStore } from '../stores/authStore';
 
 export function Categories() {
   const [isFormOpen, setIsFormOpen] = useState<boolean>(false);
@@ -42,14 +41,6 @@ export function Categories() {
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [showHidden, setShowHidden] = useState<boolean>(false);
   const queryClient = useQueryClient();
-  const { user, token, isAuthenticated } = useAuthStore();
-  
-  console.log('[Categories Page] Auth state:', {
-    isAuthenticated,
-    user: user?.username,
-    tokenExists: !!token,
-    tokenFromLocalStorage: !!localStorage.getItem('token')
-  });
 
   // Fetch categories
   const { data: categories, isLoading, error } = useQuery({
