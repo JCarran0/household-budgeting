@@ -290,49 +290,63 @@ export function Reports() {
               <Grid.Col span={12}>
                 <Paper withBorder p="md">
                   <Text size="lg" fw={600} mb="md">Income vs Expenses</Text>
-                  <ResponsiveContainer width="100%" height={300}>
-                    <AreaChart data={cashFlowChartData}>
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis dataKey="month" />
-                      <YAxis />
-                      <Tooltip formatter={(value: number) => `$${value.toFixed(0)}`} />
-                      <Legend />
-                      <Area 
-                        type="monotone" 
-                        dataKey="income" 
-                        stackId="1"
-                        stroke="#10b981" 
-                        fill="#10b981" 
-                        fillOpacity={0.6}
-                      />
-                      <Area 
-                        type="monotone" 
-                        dataKey="expenses" 
-                        stackId="2"
-                        stroke="#ef4444" 
-                        fill="#ef4444" 
-                        fillOpacity={0.6}
-                      />
-                    </AreaChart>
-                  </ResponsiveContainer>
+                  {cashFlowChartData.length > 0 ? (
+                    <ResponsiveContainer width="100%" height={300}>
+                      <AreaChart data={cashFlowChartData}>
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis dataKey="month" />
+                        <YAxis />
+                        <Tooltip formatter={(value: number) => `$${value.toFixed(0)}`} />
+                        <Legend />
+                        <Area 
+                          type="monotone" 
+                          dataKey="income" 
+                          stroke="#10b981" 
+                          fill="#10b981" 
+                          fillOpacity={0.6}
+                        />
+                        <Area 
+                          type="monotone" 
+                          dataKey="expenses" 
+                          stroke="#ef4444" 
+                          fill="#ef4444" 
+                          fillOpacity={0.6}
+                        />
+                      </AreaChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <Center h={300}>
+                      <Text c="dimmed">No data available for the selected period</Text>
+                    </Center>
+                  )}
                 </Paper>
               </Grid.Col>
 
               <Grid.Col span={12}>
                 <Paper withBorder p="md">
                   <Text size="lg" fw={600} mb="md">Net Cash Flow</Text>
-                  <ResponsiveContainer width="100%" height={200}>
-                    <BarChart data={cashFlowChartData}>
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis dataKey="month" />
-                      <YAxis />
-                      <Tooltip formatter={(value: number) => `$${value.toFixed(0)}`} />
-                      <Bar 
-                        dataKey="netFlow" 
-                        fill={(entry: any) => entry.netFlow >= 0 ? '#10b981' : '#ef4444'}
-                      />
-                    </BarChart>
-                  </ResponsiveContainer>
+                  {cashFlowChartData.length > 0 ? (
+                    <ResponsiveContainer width="100%" height={200}>
+                      <BarChart data={cashFlowChartData}>
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis dataKey="month" />
+                        <YAxis />
+                        <Tooltip formatter={(value: number) => `$${value.toFixed(0)}`} />
+                        <Bar 
+                          dataKey="netFlow" 
+                          fill="#4f46e5"
+                        >
+                          {cashFlowChartData.map((entry, index) => (
+                            <Cell key={`cell-${index}`} fill={entry.netFlow >= 0 ? '#10b981' : '#ef4444'} />
+                          ))}
+                        </Bar>
+                      </BarChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <Center h={200}>
+                      <Text c="dimmed">No data available for the selected period</Text>
+                    </Center>
+                  )}
                 </Paper>
               </Grid.Col>
             </Grid>
