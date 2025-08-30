@@ -36,6 +36,7 @@ import {
 import { api, type CategoryWithChildren } from '../lib/api';
 import { CategoryTree } from '../components/categories/CategoryTree';
 import { CategoryForm } from '../components/categories/CategoryForm';
+import { AutoCategorization } from '../components/categories/AutoCategorization';
 import type { Category } from '../../../shared/types';
 
 export function Categories() {
@@ -332,7 +333,7 @@ export function Categories() {
           </Tabs.Panel>
 
           <Tabs.Panel value="autocat" pt="lg">
-            <Text>Auto-categorization rules coming soon...</Text>
+            <AutoCategorization />
           </Tabs.Panel>
         </Tabs>
       </Stack>
