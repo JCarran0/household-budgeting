@@ -55,9 +55,7 @@ export function CategoryForm({ opened, onClose, category, onSuccess }: CategoryF
   const { data: parentCategories, isLoading: loadingParents } = useQuery({
     queryKey: ['categories', 'parents'],
     queryFn: async () => {
-      console.log('[CategoryForm] Fetching parent categories...');
       const result = await api.getParentCategories();
-      console.log('[CategoryForm] Parent categories received:', result);
       return result;
     },
     enabled: opened,
@@ -174,12 +172,8 @@ export function CategoryForm({ opened, onClose, category, onSuccess }: CategoryF
         label: cat.name,
       }));
     
-    console.log('[CategoryForm] Built parent options:', options);
     return options;
   }, [parentCategories, category]);
-
-  console.log('[CategoryForm] Parent options:', parentOptions);
-  console.log('[CategoryForm] Loading parents:', loadingParents);
 
   // Show parent selector only when creating a new category (not when editing)
   const showParentSelector = !isEdit;

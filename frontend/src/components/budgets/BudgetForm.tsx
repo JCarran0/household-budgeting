@@ -99,9 +99,6 @@ export function BudgetForm({
   };
 
   // Build category options with hierarchy
-  console.log('[BudgetForm] Categories prop:', categories);
-  console.log('[BudgetForm] Categories length:', categories?.length);
-  
   const categoryOptions = React.useMemo(() => {
     if (!categories || categories.length === 0) {
       return [];
@@ -127,16 +124,12 @@ export function BudgetForm({
           // Sort alphabetically by label
           return a.label.localeCompare(b.label);
         });
-      
-      console.log('[BudgetForm] Built category options:', options);
       return options;
     } catch (error) {
       console.error('[BudgetForm] Error building category options:', error);
       return [];
     }
   }, [categories]);
-    
-  console.log('[BudgetForm] Category options:', categoryOptions);
 
   const selectedCategory = categories?.find(c => c.id === form.values.categoryId);
 

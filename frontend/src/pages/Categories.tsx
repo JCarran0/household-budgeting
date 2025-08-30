@@ -56,10 +56,8 @@ export function Categories() {
   const { data: categories, isLoading, error, refetch } = useQuery({
     queryKey: ['categories', 'tree'],
     queryFn: async () => {
-      console.log('[Categories Page] Starting to fetch categories...');
       try {
         const result = await api.getCategoryTree();
-        console.log('[Categories Page] Categories fetched successfully:', result);
         return result;
       } catch (err) {
         console.error('[Categories Page] Error fetching categories:', err);

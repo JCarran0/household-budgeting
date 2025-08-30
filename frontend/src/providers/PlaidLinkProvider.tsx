@@ -32,7 +32,6 @@ function PlaidLinkComponent({
 
   useEffect(() => {
     if (ready && open) {
-      console.log('Plaid Link is ready');
       onReady(open);
       // Automatically open when ready
       open();
@@ -68,8 +67,6 @@ export function PlaidLinkProvider({ children }: { children: React.ReactNode }) {
   });
 
   const handleSuccess = useCallback<PlaidLinkOnSuccess>((public_token, metadata) => {
-    console.log('Plaid Link success, exchanging token...');
-    console.log('Institution:', metadata.institution);
     setIsLoading(true);
     connectAccountMutation.mutate({
       publicToken: public_token,
@@ -83,7 +80,6 @@ export function PlaidLinkProvider({ children }: { children: React.ReactNode }) {
       console.error('Plaid Link exit with error:', error);
       setError(error.error_message || 'Plaid Link error');
     }
-    console.log('Plaid Link exit, metadata:', metadata);
     setIsLoading(false);
     // Clear token on exit to allow retry
     setToken(null);
@@ -96,24 +92,19 @@ export function PlaidLinkProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const openPlaid = useCallback(async () => {
-    console.log('Open Plaid requested');
-    
     if (openRef.current) {
       // Plaid is already initialized and ready, just open it
-      console.log('Opening existing Plaid Link modal...');
       openRef.current();
       return;
     }
 
     if (!token) {
       // Fetch token which will trigger PlaidLinkComponent to render
-      console.log('Fetching link token...');
       setIsLoading(true);
       setError(null);
       
       try {
         const result = await api.createLinkToken();
-        console.log('Link token received');
         setToken(result.link_token);
         // PlaidLinkComponent will render and auto-open when ready
       } catch (err) {
