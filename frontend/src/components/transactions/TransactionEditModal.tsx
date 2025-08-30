@@ -165,20 +165,30 @@ export function TransactionEditModal({
   if (!transaction) return null;
 
   // Build category options
-  const categoryOptions = categories
-    ?.filter(cat => !cat.isHidden)
-    .map(cat => {
-      const parentCategory = cat.parentId
-        ? categories.find(p => p.id === cat.parentId)
-        : null;
-      return {
-        value: cat.id,
-        label: parentCategory 
-          ? `${parentCategory.name} → ${cat.name}` 
-          : cat.name,
-      };
-    })
-    .sort((a, b) => a.label.localeCompare(b.label)) || [];
+  const categoryOptions = React.useMemo(() => {
+    if (!categories || categories.length === 0) {
+      return [];
+    }
+    
+    const options = categories
+      .filter(cat => !cat.isHidden)
+      .map(cat => {
+        const parentCategory = cat.parentId
+          ? categories.find(p => p.id === cat.parentId)
+          : null;
+        return {
+          value: cat.id || '',
+          label: parentCategory 
+            ? `${parentCategory.name} → ${cat.name}` 
+            : cat.name || '',
+        };
+      })
+      .filter(opt => opt.value && opt.label)
+      .sort((a, b) => a.label.localeCompare(b.label));
+    
+    console.log('[TransactionEditModal] Category options:', options);
+    return options;
+  }, [categories]);
 
   // Build tag options (existing tags + ability to create new ones)
   const tagOptions = availableTags.map(tag => ({
@@ -229,13 +239,18 @@ export function TransactionEditModal({
           {/* Editable Fields */}
           <Select
             label="Category"
-            placeholder="Select a category"
+            placeholder={categoryOptions.length > 0 ? "Select a category" : "No categories available"}
             data={categoryOptions}
             searchable
             clearable
+            disabled={categoryOptions.length === 0}
             leftSection={<IconCategory size={16} />}
             {...form.getInputProps('categoryId')}
-            description="Assign a budget category to this transaction"
+            description={
+              categoryOptions.length === 0 
+                ? "Please create categories first" 
+                : "Assign a budget category to this transaction"
+            }
           />
 
           <MultiSelect

@@ -42,7 +42,7 @@ import {
   IconCategory,
   IconEye,
   IconEyeOff,
-  IconSplit,
+  IconScissors,
   IconDots,
   IconRefresh,
 } from '@tabler/icons-react';
@@ -420,7 +420,7 @@ export function EnhancedTransactions() {
                       {transaction.isSplit && (
                         <Tooltip label="Split transaction">
                           <ThemeIcon size="xs" variant="light" color="blue">
-                            <IconSplit size={12} />
+                            <IconScissors size={12} />
                           </ThemeIcon>
                         </Tooltip>
                       )}
@@ -444,7 +444,7 @@ export function EnhancedTransactions() {
                         </Menu.Item>
                         
                         <Menu.Item
-                          leftSection={<IconSplit style={{ width: rem(14), height: rem(14) }} />}
+                          leftSection={<IconScissors style={{ width: rem(14), height: rem(14) }} />}
                           disabled={transaction.isSplit}
                         >
                           Split Transaction

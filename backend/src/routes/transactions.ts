@@ -18,14 +18,33 @@ interface AuthRequest extends Request {
 const transactionFilterSchema = z.object({
   startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
   endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  accountId: z.string().optional(), // Single accountId for simple filtering
   accountIds: z.array(z.string()).optional(),
-  categoryIds: z.array(z.string()).optional(),
-  tags: z.array(z.string()).optional(),
+  categoryIds: z.union([z.array(z.string()), z.string()]).optional().transform(val => {
+    if (typeof val === 'string') return [val];
+    return val;
+  }),
+  tags: z.union([z.array(z.string()), z.string()]).optional().transform(val => {
+    if (typeof val === 'string') return [val];
+    return val;
+  }),
   searchQuery: z.string().optional(),
-  includePending: z.boolean().optional(),
-  includeHidden: z.boolean().optional(),
-  minAmount: z.number().optional(),
-  maxAmount: z.number().optional(),
+  includePending: z.union([z.boolean(), z.string()]).optional().transform(val => {
+    if (typeof val === 'string') return val === 'true';
+    return val;
+  }),
+  includeHidden: z.union([z.boolean(), z.string()]).optional().transform(val => {
+    if (typeof val === 'string') return val === 'true';
+    return val;
+  }),
+  minAmount: z.union([z.number(), z.string()]).optional().transform(val => {
+    if (typeof val === 'string') return parseFloat(val);
+    return val;
+  }),
+  maxAmount: z.union([z.number(), z.string()]).optional().transform(val => {
+    if (typeof val === 'string') return parseFloat(val);
+    return val;
+  }),
 });
 
 const updateCategorySchema = z.object({
