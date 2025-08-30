@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import React, { useEffect } from 'react';
 import {
   Modal,
   Select,
@@ -99,30 +99,46 @@ export function BudgetForm({
   };
 
   // Build category options with hierarchy
-  const categoryOptions = categories
-    .filter(cat => !cat.isHidden) // Don't show hidden categories
-    .map(cat => {
-      const parentCategory = cat.parentId ? 
-        categories.find(p => p.id === cat.parentId) : null;
+  console.log('[BudgetForm] Categories prop:', categories);
+  console.log('[BudgetForm] Categories length:', categories?.length);
+  
+  const categoryOptions = React.useMemo(() => {
+    if (!categories || categories.length === 0) {
+      return [];
+    }
+    
+    try {
+      const options = categories
+        .filter(cat => !cat.isHidden) // Don't show hidden categories
+        .map(cat => {
+          const parentCategory = cat.parentId ? 
+            categories.find(p => p.id === cat.parentId) : null;
+          
+          // Ensure we return a valid option object
+          return {
+            value: cat.id || '',
+            label: parentCategory ? `${parentCategory.name} → ${cat.name}` : cat.name || '',
+            // Note: Mantine Select doesn't support 'group' directly in option objects
+            // group: parentCategory?.name,
+          };
+        })
+        .filter(opt => opt.value && opt.label) // Filter out any invalid options
+        .sort((a, b) => {
+          // Sort alphabetically by label
+          return a.label.localeCompare(b.label);
+        });
       
-      return {
-        value: cat.id,
-        label: parentCategory ? `${parentCategory.name} → ${cat.name}` : cat.name,
-        group: parentCategory?.name,
-      };
-    })
-    .sort((a, b) => {
-      // Sort by group first, then by label
-      if (a.group && b.group) {
-        const groupCompare = a.group.localeCompare(b.group);
-        if (groupCompare !== 0) return groupCompare;
-      }
-      if (a.group && !b.group) return 1;
-      if (!a.group && b.group) return -1;
-      return a.label.localeCompare(b.label);
-    });
+      console.log('[BudgetForm] Built category options:', options);
+      return options;
+    } catch (error) {
+      console.error('[BudgetForm] Error building category options:', error);
+      return [];
+    }
+  }, [categories]);
+    
+  console.log('[BudgetForm] Category options:', categoryOptions);
 
-  const selectedCategory = categories.find(c => c.id === form.values.categoryId);
+  const selectedCategory = categories?.find(c => c.id === form.values.categoryId);
 
   return (
     <Modal
@@ -135,13 +151,16 @@ export function BudgetForm({
         <Stack>
           <Select
             label="Category"
-            placeholder="Select a category"
+            placeholder={categoryOptions.length > 0 ? "Select a category" : "No categories available"}
             data={categoryOptions}
             searchable
             required
-            disabled={isEdit}
+            disabled={isEdit || categoryOptions.length === 0}
             {...form.getInputProps('categoryId')}
-            description={isEdit ? 'Category cannot be changed when editing' : undefined}
+            description={
+              isEdit ? 'Category cannot be changed when editing' : 
+              categoryOptions.length === 0 ? 'Please create categories first' : undefined
+            }
           />
 
           {selectedCategory?.isSavings && (

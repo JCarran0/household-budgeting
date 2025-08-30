@@ -58,9 +58,14 @@ export function Budgets() {
   });
 
   // Fetch categories for budget creation
-  const { data: categories } = useQuery({
+  const { data: categories, isLoading: categoriesLoading } = useQuery({
     queryKey: ['categories'],
-    queryFn: api.getCategories,
+    queryFn: async () => {
+      console.log('[Budgets Page] Fetching categories...');
+      const result = await api.getCategories();
+      console.log('[Budgets Page] Categories received:', result);
+      return result;
+    },
   });
 
   // Fetch transactions for the month to calculate actuals

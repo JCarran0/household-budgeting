@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import React, { useEffect } from 'react';
 import {
   Modal,
   TextInput,
@@ -52,9 +52,14 @@ export function CategoryForm({ opened, onClose, category, onSuccess }: CategoryF
   const isEdit = !!category;
 
   // Fetch parent categories for dropdown
-  const { data: parentCategories } = useQuery({
+  const { data: parentCategories, isLoading: loadingParents } = useQuery({
     queryKey: ['categories', 'parents'],
-    queryFn: api.getParentCategories,
+    queryFn: async () => {
+      console.log('[CategoryForm] Fetching parent categories...');
+      const result = await api.getParentCategories();
+      console.log('[CategoryForm] Parent categories received:', result);
+      return result;
+    },
     enabled: opened,
   });
 
@@ -157,15 +162,27 @@ export function CategoryForm({ opened, onClose, category, onSuccess }: CategoryF
   const isLoading = createMutation.isPending || updateMutation.isPending;
 
   // Filter out the current category from parent options (to prevent circular reference)
-  const parentOptions = parentCategories
-    ?.filter(cat => !category || cat.id !== category.id)
-    .map(cat => ({
-      value: cat.id,
-      label: cat.name,
-    })) || [];
+  const parentOptions = React.useMemo(() => {
+    if (!parentCategories || parentCategories.length === 0) {
+      return [];
+    }
+    
+    const options = parentCategories
+      .filter(cat => !category || cat.id !== category.id)
+      .map(cat => ({
+        value: cat.id,
+        label: cat.name,
+      }));
+    
+    console.log('[CategoryForm] Built parent options:', options);
+    return options;
+  }, [parentCategories, category]);
 
-  // Don't show parent selector if editing a parent category that has children
-  const showParentSelector = !isEdit || !category.parentId;
+  console.log('[CategoryForm] Parent options:', parentOptions);
+  console.log('[CategoryForm] Loading parents:', loadingParents);
+
+  // Show parent selector only when creating a new category (not when editing)
+  const showParentSelector = !isEdit;
 
   return (
     <Modal
@@ -183,7 +200,7 @@ export function CategoryForm({ opened, onClose, category, onSuccess }: CategoryF
             {...form.getInputProps('name')}
           />
 
-          {showParentSelector && !isEdit && (
+          {showParentSelector && (
             <Select
               label="Parent Category"
               placeholder="Select parent category (optional)"
@@ -192,6 +209,7 @@ export function CategoryForm({ opened, onClose, category, onSuccess }: CategoryF
               searchable
               {...form.getInputProps('parentId')}
               description="Leave empty to create a top-level category"
+              disabled={loadingParents}
             />
           )}
 

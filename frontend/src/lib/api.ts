@@ -229,7 +229,9 @@ class ApiClient {
   }
 
   async getParentCategories(): Promise<Category[]> {
+    console.log('[API] Fetching parent categories...');
     const { data } = await this.client.get<Category[]>('/categories/parents');
+    console.log('[API] Parent categories received:', data);
     return data;
   }
 
