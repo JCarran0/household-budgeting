@@ -1,5 +1,6 @@
 import fs from 'fs-extra';
 import path from 'path';
+import { Category } from '../../../shared/types';
 
 export interface User {
   id: string;
@@ -20,6 +21,10 @@ export interface DataService {
   updateUser(id: string, updates: Partial<User>): Promise<User | null>;
   getAllUsers(): Promise<User[]>;
   
+  // Category methods
+  getCategories(): Promise<Category[]>;
+  saveCategories(categories: Category[]): Promise<void>;
+  
   // Generic data storage methods
   getData<T>(key: string): Promise<T | null>;
   saveData<T>(key: string, data: T): Promise<void>;
@@ -29,10 +34,12 @@ export interface DataService {
 export class JSONDataService implements DataService {
   private dataDir: string;
   private usersFile: string;
+  private categoriesFile: string;
 
   constructor(dataDir?: string) {
     this.dataDir = dataDir || process.env.DATA_DIR || path.join(__dirname, '../../data');
     this.usersFile = path.join(this.dataDir, 'users.json');
+    this.categoriesFile = path.join(this.dataDir, 'categories.json');
     this.ensureDataFile();
   }
 
@@ -40,6 +47,9 @@ export class JSONDataService implements DataService {
     await fs.ensureDir(this.dataDir);
     if (!(await fs.pathExists(this.usersFile))) {
       await fs.writeJson(this.usersFile, { users: [] });
+    }
+    if (!(await fs.pathExists(this.categoriesFile))) {
+      await fs.writeJson(this.categoriesFile, { categories: [] });
     }
   }
 
@@ -91,6 +101,16 @@ export class JSONDataService implements DataService {
     return await this.readUsers();
   }
 
+  // Category methods
+  async getCategories(): Promise<Category[]> {
+    const data = await fs.readJson(this.categoriesFile);
+    return data.categories || [];
+  }
+
+  async saveCategories(categories: Category[]): Promise<void> {
+    await fs.writeJson(this.categoriesFile, { categories }, { spaces: 2 });
+  }
+
   // Generic data storage implementation
   async getData<T>(key: string): Promise<T | null> {
     const filePath = path.join(this.dataDir, `${key}.json`);
@@ -136,6 +156,7 @@ export class JSONDataService implements DataService {
 // In-memory implementation for testing
 export class InMemoryDataService implements DataService {
   private users: User[] = [];
+  private categories: Category[] = [];
 
   async getUser(id: string): Promise<User | null> {
     return this.users.find(u => u.id === id) || null;
@@ -170,6 +191,15 @@ export class InMemoryDataService implements DataService {
     return this.users;
   }
 
+  // Category methods
+  async getCategories(): Promise<Category[]> {
+    return this.categories;
+  }
+
+  async saveCategories(categories: Category[]): Promise<void> {
+    this.categories = categories;
+  }
+
   // Generic data storage implementation
   private dataStore: Map<string, unknown> = new Map();
 
@@ -189,6 +219,7 @@ export class InMemoryDataService implements DataService {
   // Test helper methods
   clear(): void {
     this.users = [];
+    this.categories = [];
     this.dataStore.clear();
   }
 }

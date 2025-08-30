@@ -5,6 +5,7 @@ import authRoutes from './routes/authRoutes';
 import plaidRoutes from './routes/plaid';
 import accountRoutes from './routes/accounts';
 import transactionRoutes from './routes/transactions';
+import categoryRoutes from './routes/categories';
 
 // Load environment variables
 dotenv.config();
@@ -80,6 +81,7 @@ app.use(`${apiPrefix}/auth`, authRoutes);
 app.use(`${apiPrefix}/plaid`, plaidRoutes);
 app.use(`${apiPrefix}/accounts`, accountRoutes);
 app.use(`${apiPrefix}/transactions`, transactionRoutes);
+app.use(`${apiPrefix}/categories`, categoryRoutes);
 
 // 404 handler
 app.use((req: Request, res: Response) => {
