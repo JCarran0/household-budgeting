@@ -30,7 +30,7 @@ const budgetService = new BudgetService(dataService);
 router.use(authMiddleware);
 
 // GET /api/budgets - Get all budgets
-router.get('/', async (req: Request, res: Response) => {
+router.get('/', async (_req: Request, res: Response): Promise<void> => {
   try {
     const budgets = await budgetService.getAllBudgets();
     res.json(budgets);
@@ -41,7 +41,7 @@ router.get('/', async (req: Request, res: Response) => {
 });
 
 // GET /api/budgets/month/:month - Get budgets for a specific month
-router.get('/month/:month', async (req: Request, res: Response) => {
+router.get('/month/:month', async (req: Request, res: Response): Promise<void> => {
   try {
     const { month } = req.params;
     const budgets = await budgetService.getMonthlyBudgets(month);
@@ -54,7 +54,8 @@ router.get('/month/:month', async (req: Request, res: Response) => {
     });
   } catch (error) {
     if (error instanceof Error && error.message.includes('Invalid month format')) {
-      return res.status(400).json({ error: error.message });
+      res.status(400).json({ error: error.message });
+      return;
     }
     console.error('Error fetching monthly budgets:', error);
     res.status(500).json({ error: 'Failed to fetch monthly budgets' });
@@ -62,7 +63,7 @@ router.get('/month/:month', async (req: Request, res: Response) => {
 });
 
 // GET /api/budgets/category/:categoryId - Get all budgets for a category
-router.get('/category/:categoryId', async (req: Request, res: Response) => {
+router.get('/category/:categoryId', async (req: Request, res: Response): Promise<void> => {
   try {
     const { categoryId } = req.params;
     const budgets = await budgetService.getBudgetsByCategory(categoryId);
@@ -74,7 +75,7 @@ router.get('/category/:categoryId', async (req: Request, res: Response) => {
 });
 
 // GET /api/budgets/category/:categoryId/month/:month - Get specific budget
-router.get('/category/:categoryId/month/:month', async (req: Request, res: Response) => {
+router.get('/category/:categoryId/month/:month', async (req: Request, res: Response): Promise<void> => {
   try {
     const { categoryId, month } = req.params;
     const budget = await budgetService.getBudget(categoryId, month);
@@ -91,19 +92,21 @@ router.get('/category/:categoryId/month/:month', async (req: Request, res: Respo
 });
 
 // POST /api/budgets - Create or update a budget
-router.post('/', async (req: Request, res: Response) => {
+router.post('/', async (req: Request, res: Response): Promise<void> => {
   try {
     const validatedData = createBudgetSchema.parse(req.body);
     const budget = await budgetService.createOrUpdateBudget(validatedData);
     res.status(201).json(budget);
   } catch (error) {
     if (error instanceof z.ZodError) {
-      return res.status(400).json({ error: 'Invalid request data', details: error.errors });
+      res.status(400).json({ error: 'Invalid request data', details: error.format() });
+      return;
     }
     if (error instanceof Error && 
         (error.message.includes('Invalid month format') || 
          error.message.includes('must be positive'))) {
-      return res.status(400).json({ error: error.message });
+      res.status(400).json({ error: error.message });
+      return;
     }
     console.error('Error creating budget:', error);
     res.status(500).json({ error: 'Failed to create budget' });
@@ -111,7 +114,7 @@ router.post('/', async (req: Request, res: Response) => {
 });
 
 // POST /api/budgets/copy - Copy budgets from one month to another
-router.post('/copy', async (req: Request, res: Response) => {
+router.post('/copy', async (req: Request, res: Response): Promise<void> => {
   try {
     const validatedData = copyBudgetsSchema.parse(req.body);
     const copiedBudgets = await budgetService.copyBudgets(
@@ -125,10 +128,12 @@ router.post('/copy', async (req: Request, res: Response) => {
     });
   } catch (error) {
     if (error instanceof z.ZodError) {
-      return res.status(400).json({ error: 'Invalid request data', details: error.errors });
+      res.status(400).json({ error: 'Invalid request data', details: error.format() });
+      return;
     }
     if (error instanceof Error && error.message.includes('Invalid month format')) {
-      return res.status(400).json({ error: error.message });
+      res.status(400).json({ error: error.message });
+      return;
     }
     console.error('Error copying budgets:', error);
     res.status(500).json({ error: 'Failed to copy budgets' });
@@ -136,7 +141,7 @@ router.post('/copy', async (req: Request, res: Response) => {
 });
 
 // GET /api/budgets/comparison/:month - Get budget vs actual for a month
-router.post('/comparison/:month', async (req: Request, res: Response) => {
+router.post('/comparison/:month', async (req: Request, res: Response): Promise<void> => {
   try {
     const { month } = req.params;
     const validatedData = budgetVsActualSchema.parse(req.body);
@@ -162,7 +167,8 @@ router.post('/comparison/:month', async (req: Request, res: Response) => {
     });
   } catch (error) {
     if (error instanceof z.ZodError) {
-      return res.status(400).json({ error: 'Invalid request data', details: error.errors });
+      res.status(400).json({ error: 'Invalid request data', details: error.format() });
+      return;
     }
     console.error('Error calculating budget comparison:', error);
     res.status(500).json({ error: 'Failed to calculate budget comparison' });
@@ -201,7 +207,8 @@ router.get('/history/:categoryId', async (req: Request, res: Response) => {
     });
   } catch (error) {
     if (error instanceof Error && error.message.includes('Invalid month format')) {
-      return res.status(400).json({ error: error.message });
+      res.status(400).json({ error: error.message });
+      return;
     }
     console.error('Error fetching budget history:', error);
     res.status(500).json({ error: 'Failed to fetch budget history' });

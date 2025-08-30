@@ -6,8 +6,6 @@
 
 import { DataService } from './dataService';
 import { StoredTransaction } from './transactionService';
-import { StoredCategory } from './categoryService';
-import { StoredBudget } from './budgetService';
 import { format, startOfMonth, endOfMonth, subMonths, addMonths } from 'date-fns';
 
 // Report types

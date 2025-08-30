@@ -17,7 +17,7 @@ const app: Express = express();
 
 // CORS configuration
 const corsOptions = {
-  origin: (origin, callback) => {
+  origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
     // Allow requests from localhost on any port during development
     const allowedOrigins = [
       'http://localhost:5173',

@@ -30,7 +30,7 @@ const categoryService = new CategoryService(dataService);
 router.use(authMiddleware);
 
 // GET /api/categories - Get all categories
-router.get('/', async (req: Request, res: Response) => {
+router.get('/', async (_req: Request, res: Response) => {
   try {
     const categories = await categoryService.getAllCategories();
     res.json(categories);
@@ -41,7 +41,7 @@ router.get('/', async (req: Request, res: Response) => {
 });
 
 // GET /api/categories/tree - Get categories in tree structure
-router.get('/tree', async (req: Request, res: Response) => {
+router.get('/tree', async (_req: Request, res: Response) => {
   try {
     const tree = await categoryService.getCategoryTree();
     res.json(tree);
@@ -52,7 +52,7 @@ router.get('/tree', async (req: Request, res: Response) => {
 });
 
 // GET /api/categories/parents - Get all parent categories
-router.get('/parents', async (req: Request, res: Response) => {
+router.get('/parents', async (_req: Request, res: Response) => {
   try {
     const parents = await categoryService.getParentCategories();
     res.json(parents);
@@ -63,7 +63,7 @@ router.get('/parents', async (req: Request, res: Response) => {
 });
 
 // GET /api/categories/hidden - Get hidden categories
-router.get('/hidden', async (req: Request, res: Response) => {
+router.get('/hidden', async (_req: Request, res: Response) => {
   try {
     const hidden = await categoryService.getHiddenCategories();
     res.json(hidden);
@@ -74,7 +74,7 @@ router.get('/hidden', async (req: Request, res: Response) => {
 });
 
 // GET /api/categories/savings - Get savings categories
-router.get('/savings', async (req: Request, res: Response) => {
+router.get('/savings', async (_req: Request, res: Response) => {
   try {
     const savings = await categoryService.getSavingsCategories();
     res.json(savings);
@@ -117,7 +117,7 @@ router.post('/', async (req: Request, res: Response) => {
     res.status(201).json(category);
   } catch (error) {
     if (error instanceof z.ZodError) {
-      return res.status(400).json({ error: 'Invalid request data', details: error.errors });
+      return res.status(400).json({ error: 'Invalid request data', details: error.format() });
     }
     if (error instanceof Error) {
       if (error.message.includes('Parent category not found') || 
@@ -138,7 +138,7 @@ router.put('/:id', async (req: Request, res: Response) => {
     res.json(category);
   } catch (error) {
     if (error instanceof z.ZodError) {
-      return res.status(400).json({ error: 'Invalid request data', details: error.errors });
+      return res.status(400).json({ error: 'Invalid request data', details: error.format() });
     }
     if (error instanceof Error && error.message === 'Category not found') {
       return res.status(404).json({ error: 'Category not found' });
@@ -160,7 +160,7 @@ router.delete('/:id', async (req: Request, res: Response) => {
 });
 
 // POST /api/categories/initialize - Initialize default categories
-router.post('/initialize', async (req: Request, res: Response) => {
+router.post('/initialize', async (_req: Request, res: Response) => {
   try {
     await categoryService.initializeDefaultCategories();
     const categories = await categoryService.getAllCategories();
