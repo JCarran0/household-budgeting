@@ -18,13 +18,19 @@ interface AuthRequest extends Request {
 const spendingTrendsSchema = z.object({
   startMonth: z.string().regex(/^\d{4}-\d{2}$/),
   endMonth: z.string().regex(/^\d{4}-\d{2}$/),
-  categoryIds: z.array(z.string()).optional(),
+  categoryIds: z.union([z.array(z.string()), z.string()]).optional().transform(val => {
+    if (typeof val === 'string') return [val];
+    return val;
+  }),
 });
 
 const categoryBreakdownSchema = z.object({
   startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-  includeSubcategories: z.boolean().optional(),
+  includeSubcategories: z.union([z.boolean(), z.string()]).optional().transform(val => {
+    if (typeof val === 'string') return val === 'true';
+    return val;
+  }),
 });
 
 const cashFlowSchema = z.object({
@@ -33,7 +39,10 @@ const cashFlowSchema = z.object({
 });
 
 const projectionsSchema = z.object({
-  monthsToProject: z.number().min(1).max(12).optional(),
+  monthsToProject: z.union([z.number(), z.string()]).optional().transform(val => {
+    if (typeof val === 'string') return parseInt(val);
+    return val;
+  }),
 });
 
 /**

@@ -17,6 +17,7 @@ import { MantineAccounts } from './pages/MantineAccounts';
 import { EnhancedTransactions } from './pages/EnhancedTransactions';
 import { Categories } from './pages/Categories';
 import { Budgets } from './pages/Budgets';
+import { Reports } from './pages/Reports';
 import { PlaidLinkProvider } from './providers/PlaidLinkProvider';
 
 const queryClient = new QueryClient({
@@ -53,6 +54,7 @@ function App() {
                   <Route path="/transactions" element={<EnhancedTransactions />} />
                   <Route path="/categories" element={<Categories />} />
                   <Route path="/budgets" element={<Budgets />} />
+                  <Route path="/reports" element={<Reports />} />
                 </Route>
               </Route>
               <Route path="/" element={<Navigate to="/dashboard" replace />} />

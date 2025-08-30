@@ -339,6 +339,95 @@ class ApiClient {
     });
     return data;
   }
+
+  // Reporting endpoints
+  async getSpendingTrends(startMonth: string, endMonth: string, categoryIds?: string[]): Promise<{
+    trends: Array<{
+      month: string;
+      categoryId: string;
+      categoryName: string;
+      amount: number;
+      transactionCount: number;
+    }>;
+  }> {
+    const { data } = await this.client.get('/reports/spending-trends', {
+      params: { startMonth, endMonth, categoryIds }
+    });
+    return data;
+  }
+
+  async getCategoryBreakdown(startDate: string, endDate: string, includeSubcategories = true): Promise<{
+    breakdown: Array<{
+      categoryId: string;
+      categoryName: string;
+      amount: number;
+      percentage: number;
+      transactionCount: number;
+      subcategories?: Array<{
+        categoryId: string;
+        categoryName: string;
+        amount: number;
+        percentage: number;
+        transactionCount: number;
+      }>;
+    }>;
+    total: number;
+  }> {
+    const { data } = await this.client.get('/reports/category-breakdown', {
+      params: { startDate, endDate, includeSubcategories }
+    });
+    return data;
+  }
+
+  async getCashFlow(startMonth: string, endMonth: string): Promise<{
+    summary: Array<{
+      month: string;
+      income: number;
+      expenses: number;
+      netFlow: number;
+      savingsRate: number;
+    }>;
+  }> {
+    const { data } = await this.client.get('/reports/cash-flow', {
+      params: { startMonth, endMonth }
+    });
+    return data;
+  }
+
+  async getProjections(monthsToProject = 6): Promise<{
+    projections: Array<{
+      month: string;
+      projectedIncome: number;
+      projectedExpenses: number;
+      projectedNetFlow: number;
+      confidence: 'high' | 'medium' | 'low';
+    }>;
+  }> {
+    const { data } = await this.client.get('/reports/projections', {
+      params: { monthsToProject }
+    });
+    return data;
+  }
+
+  async getYearToDate(): Promise<{
+    summary: {
+      totalIncome: number;
+      totalExpenses: number;
+      netIncome: number;
+      averageMonthlyIncome: number;
+      averageMonthlyExpenses: number;
+      savingsRate: number;
+      topCategories: Array<{
+        categoryId: string;
+        categoryName: string;
+        amount: number;
+        percentage: number;
+      }>;
+    };
+  }> {
+    const { data } = await this.client.get('/reports/year-to-date');
+    return data;
+  }
 }
 
 export const api = new ApiClient();
