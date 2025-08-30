@@ -81,7 +81,8 @@ router.get('/category/:categoryId/month/:month', async (req: Request, res: Respo
     const budget = await budgetService.getBudget(categoryId, month);
     
     if (!budget) {
-      return res.status(404).json({ error: 'Budget not found' });
+      res.status(404).json({ error: 'Budget not found' });
+      return;
     }
     
     res.json(budget);
@@ -176,13 +177,14 @@ router.post('/comparison/:month', async (req: Request, res: Response): Promise<v
 });
 
 // GET /api/budgets/history/:categoryId - Get budget history for a category
-router.get('/history/:categoryId', async (req: Request, res: Response) => {
+router.get('/history/:categoryId', async (req: Request, res: Response): Promise<void> => {
   try {
     const { categoryId } = req.params;
     const { startMonth, endMonth } = req.query;
     
     if (!startMonth || !endMonth) {
-      return res.status(400).json({ error: 'startMonth and endMonth query parameters are required' });
+      res.status(400).json({ error: 'startMonth and endMonth query parameters are required' });
+      return;
     }
     
     const history = await budgetService.getCategoryBudgetHistory(
@@ -205,6 +207,7 @@ router.get('/history/:categoryId', async (req: Request, res: Response) => {
       average,
       count: history.length
     });
+    return;
   } catch (error) {
     if (error instanceof Error && error.message.includes('Invalid month format')) {
       res.status(400).json({ error: error.message });
@@ -212,6 +215,7 @@ router.get('/history/:categoryId', async (req: Request, res: Response) => {
     }
     console.error('Error fetching budget history:', error);
     res.status(500).json({ error: 'Failed to fetch budget history' });
+    return;
   }
 });
 
@@ -238,14 +242,15 @@ router.delete('/category/:categoryId', async (req: Request, res: Response) => {
 });
 
 // POST /api/budgets/rollover - Calculate and apply rollover
-router.post('/rollover', async (req: Request, res: Response) => {
+router.post('/rollover', async (req: Request, res: Response): Promise<void> => {
   try {
     const { categoryId, fromMonth, toMonth, actualSpent } = req.body;
     
     if (!categoryId || !fromMonth || !toMonth || actualSpent === undefined) {
-      return res.status(400).json({ 
+      res.status(400).json({ 
         error: 'categoryId, fromMonth, toMonth, and actualSpent are required' 
       });
+      return;
     }
     
     // Calculate rollover from previous month
@@ -273,7 +278,8 @@ router.post('/rollover', async (req: Request, res: Response) => {
     }
   } catch (error) {
     if (error instanceof Error && error.message.includes('Budget not found')) {
-      return res.status(404).json({ error: error.message });
+      res.status(404).json({ error: error.message });
+      return;
     }
     console.error('Error applying rollover:', error);
     res.status(500).json({ error: 'Failed to apply rollover' });

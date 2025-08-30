@@ -68,7 +68,7 @@ export function BudgetForm({
         form.reset();
       }
     }
-  }, [opened, budget]);
+  }, [opened, budget, form]);
 
   // Create/Update mutation
   const saveMutation = useMutation({

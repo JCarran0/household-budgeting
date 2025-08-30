@@ -85,11 +85,12 @@ router.get('/savings', async (_req: Request, res: Response) => {
 });
 
 // GET /api/categories/:id - Get a specific category
-router.get('/:id', async (req: Request, res: Response) => {
+router.get('/:id', async (req: Request, res: Response): Promise<void> => {
   try {
     const category = await categoryService.getCategoryById(req.params.id);
     if (!category) {
-      return res.status(404).json({ error: 'Category not found' });
+      res.status(404).json({ error: 'Category not found' });
+      return;
     }
     res.json(category);
   } catch (error) {
@@ -99,7 +100,7 @@ router.get('/:id', async (req: Request, res: Response) => {
 });
 
 // GET /api/categories/:id/subcategories - Get subcategories of a parent
-router.get('/:id/subcategories', async (req: Request, res: Response) => {
+router.get('/:id/subcategories', async (req: Request, res: Response): Promise<void> => {
   try {
     const subcategories = await categoryService.getSubcategories(req.params.id);
     res.json(subcategories);
@@ -110,19 +111,21 @@ router.get('/:id/subcategories', async (req: Request, res: Response) => {
 });
 
 // POST /api/categories - Create a new category
-router.post('/', async (req: Request, res: Response) => {
+router.post('/', async (req: Request, res: Response): Promise<void> => {
   try {
     const validatedData = createCategorySchema.parse(req.body);
     const category = await categoryService.createCategory(validatedData);
     res.status(201).json(category);
   } catch (error) {
     if (error instanceof z.ZodError) {
-      return res.status(400).json({ error: 'Invalid request data', details: error.format() });
+      res.status(400).json({ error: 'Invalid request data', details: error.format() });
+      return;
     }
     if (error instanceof Error) {
       if (error.message.includes('Parent category not found') || 
           error.message.includes('Cannot create subcategory')) {
-        return res.status(400).json({ error: error.message });
+        res.status(400).json({ error: error.message });
+        return;
       }
     }
     console.error('Error creating category:', error);
@@ -138,10 +141,12 @@ router.put('/:id', async (req: Request, res: Response) => {
     res.json(category);
   } catch (error) {
     if (error instanceof z.ZodError) {
-      return res.status(400).json({ error: 'Invalid request data', details: error.format() });
+      res.status(400).json({ error: 'Invalid request data', details: error.format() });
+      return;
     }
     if (error instanceof Error && error.message === 'Category not found') {
-      return res.status(404).json({ error: 'Category not found' });
+      res.status(404).json({ error: 'Category not found' });
+      return;
     }
     console.error('Error updating category:', error);
     res.status(500).json({ error: 'Failed to update category' });

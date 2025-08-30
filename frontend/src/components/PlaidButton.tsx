@@ -1,6 +1,6 @@
 import { Button } from '@mantine/core';
 import { IconCreditCard } from '@tabler/icons-react';
-import { usePlaid } from '../providers/PlaidLinkProvider';
+import { usePlaid } from '../hooks/usePlaidLink';
 import { notifications } from '@mantine/notifications';
 import { useEffect } from 'react';
 

@@ -93,7 +93,7 @@ export function CategoryForm({ opened, onClose, category, onSuccess }: CategoryF
         form.reset();
       }
     }
-  }, [opened, category]);
+  }, [opened, category, form]);
 
   // Create mutation
   const createMutation = useMutation({

@@ -7,7 +7,6 @@ import {
   Button,
   TextInput,
   Stack,
-  Badge,
   ActionIcon,
   Loader,
   Center,
@@ -53,7 +52,7 @@ export function Categories() {
   });
 
   // Fetch categories
-  const { data: categories, isLoading, error, refetch } = useQuery({
+  const { data: categories, isLoading, error } = useQuery({
     queryKey: ['categories', 'tree'],
     queryFn: async () => {
       try {

@@ -1,16 +1,9 @@
-import React, { createContext, useContext, useState, useCallback, useEffect, useRef } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { usePlaidLink } from 'react-plaid-link';
 import type { PlaidLinkOnSuccess, PlaidLinkOnExit } from 'react-plaid-link';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../lib/api';
-
-interface PlaidLinkContextType {
-  openPlaid: () => void;
-  isLoading: boolean;
-  error: string | null;
-}
-
-const PlaidLinkContext = createContext<PlaidLinkContextType | undefined>(undefined);
+import { PlaidLinkContext } from '../contexts/PlaidLinkContext';
 
 // Component that actually uses usePlaidLink - only rendered when token exists
 function PlaidLinkComponent({ 
@@ -32,7 +25,7 @@ function PlaidLinkComponent({
 
   useEffect(() => {
     if (ready && open) {
-      onReady(open);
+      onReady(() => open);
       // Automatically open when ready
       open();
     }
@@ -75,7 +68,7 @@ export function PlaidLinkProvider({ children }: { children: React.ReactNode }) {
     });
   }, [connectAccountMutation]);
 
-  const handleExit = useCallback<PlaidLinkOnExit>((error, metadata) => {
+  const handleExit = useCallback<PlaidLinkOnExit>((error) => {
     if (error) {
       console.error('Plaid Link exit with error:', error);
       setError(error.error_message || 'Plaid Link error');
@@ -131,10 +124,3 @@ export function PlaidLinkProvider({ children }: { children: React.ReactNode }) {
   );
 }
 
-export function usePlaid() {
-  const context = useContext(PlaidLinkContext);
-  if (context === undefined) {
-    throw new Error('usePlaid must be used within a PlaidLinkProvider');
-  }
-  return context;
-}
