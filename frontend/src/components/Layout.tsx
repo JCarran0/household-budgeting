@@ -1,10 +1,11 @@
-import { Link, Outlet, useNavigate } from 'react-router-dom';
+import { Link, Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { useAuthStore } from '../stores/authStore';
-import { Home, Receipt, CreditCard, LogOut, Menu, X } from 'lucide-react';
+import { Home, Receipt, CreditCard, LogOut, Menu, X, TrendingUp, PiggyBank } from 'lucide-react';
 import { useState } from 'react';
 
 export function Layout() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { user, logout } = useAuthStore();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
@@ -19,97 +20,166 @@ export function Layout() {
     { to: '/accounts', label: 'Accounts', icon: CreditCard },
   ];
 
+  const isActive = (path: string) => location.pathname === path;
+
   return (
-    <div className="min-h-screen bg-gray-50">
-      <nav className="bg-white shadow">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between h-16">
-            <div className="flex">
-              <div className="flex-shrink-0 flex items-center">
-                <h1 className="text-xl font-bold text-blue-600">Budget Tracker</h1>
-              </div>
-              <div className="hidden sm:ml-6 sm:flex sm:space-x-8">
-                {navLinks.map(({ to, label, icon: Icon }) => (
-                  <Link
-                    key={to}
-                    to={to}
-                    className="inline-flex items-center px-1 pt-1 text-sm font-medium text-gray-900 hover:text-blue-600"
-                  >
-                    <Icon className="h-4 w-4 mr-2" />
-                    {label}
-                  </Link>
-                ))}
-              </div>
+    <div className="min-h-screen bg-bg-primary">
+      {/* Desktop Sidebar */}
+      <div className="hidden lg:fixed lg:inset-y-0 lg:flex lg:w-72 lg:flex-col">
+        <div className="flex flex-col flex-grow bg-bg-secondary border-r border-border">
+          {/* Logo */}
+          <div className="flex items-center h-20 px-8">
+            <div className="flex items-center">
+              <PiggyBank className="h-8 w-8 text-pastel-yellow mr-3" />
+              <h1 className="text-2xl font-bold bg-gradient-to-r from-pastel-yellow via-pastel-blue to-pastel-pink bg-clip-text text-transparent">
+                Budget Tracker
+              </h1>
             </div>
-            
-            <div className="hidden sm:ml-6 sm:flex sm:items-center">
-              <div className="flex items-center space-x-4">
-                <span className="text-sm text-gray-700">
-                  Welcome, <span className="font-medium">{user?.username}</span>
-                </span>
+          </div>
+
+          {/* Navigation */}
+          <nav className="flex-1 px-4 pb-4 space-y-2">
+            {navLinks.map(({ to, label, icon: Icon }) => (
+              <Link
+                key={to}
+                to={to}
+                className={`
+                  group flex items-center px-4 py-3 text-sm font-medium rounded-xl transition-all duration-200
+                  ${isActive(to)
+                    ? 'bg-bg-elevated text-pastel-blue shadow-lg shadow-black/20'
+                    : 'text-text-secondary hover:bg-bg-elevated hover:text-text-primary'
+                  }
+                `}
+              >
+                <Icon className={`
+                  mr-3 h-5 w-5 transition-colors
+                  ${isActive(to) ? 'text-pastel-blue' : 'text-text-muted group-hover:text-pastel-blue'}
+                `} />
+                {label}
+                {isActive(to) && (
+                  <div className="ml-auto w-1 h-6 bg-pastel-blue rounded-full" />
+                )}
+              </Link>
+            ))}
+          </nav>
+
+          {/* User Section */}
+          <div className="flex-shrink-0 border-t border-border">
+            <div className="p-4">
+              <div className="flex items-center px-4 py-3 rounded-xl bg-bg-elevated">
+                <div className="flex-1">
+                  <p className="text-sm font-medium text-text-primary">
+                    {user?.username}
+                  </p>
+                  <p className="text-xs text-text-muted">
+                    Personal Account
+                  </p>
+                </div>
                 <button
                   onClick={handleLogout}
-                  className="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+                  className="ml-3 p-2 rounded-lg hover:bg-bg-primary transition-colors group"
+                  title="Sign out"
                 >
-                  <LogOut className="h-4 w-4 mr-2" />
-                  Logout
+                  <LogOut className="h-4 w-4 text-text-muted group-hover:text-pastel-pink transition-colors" />
                 </button>
               </div>
             </div>
-            
-            <div className="-mr-2 flex items-center sm:hidden">
-              <button
-                onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-                className="inline-flex items-center justify-center p-2 rounded-md text-gray-400 hover:text-gray-500 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-500"
-              >
-                {isMobileMenuOpen ? (
-                  <X className="block h-6 w-6" />
-                ) : (
-                  <Menu className="block h-6 w-6" />
-                )}
-              </button>
-            </div>
           </div>
         </div>
+      </div>
 
-        {/* Mobile menu */}
-        {isMobileMenuOpen && (
-          <div className="sm:hidden">
-            <div className="pt-2 pb-3 space-y-1">
+      {/* Mobile Header */}
+      <div className="lg:hidden sticky top-0 z-40 flex h-16 shrink-0 items-center gap-x-4 border-b border-border bg-bg-secondary px-4 shadow-sm">
+        <button
+          onClick={() => setIsMobileMenuOpen(true)}
+          className="p-2.5 text-text-muted hover:text-text-primary"
+        >
+          <Menu className="h-6 w-6" />
+        </button>
+        <div className="flex flex-1 items-center justify-between">
+          <h1 className="text-lg font-semibold text-text-primary">
+            Budget Tracker
+          </h1>
+          <PiggyBank className="h-6 w-6 text-pastel-yellow" />
+        </div>
+      </div>
+
+      {/* Mobile Sidebar */}
+      {isMobileMenuOpen && (
+        <div className="relative z-50 lg:hidden">
+          {/* Backdrop */}
+          <div 
+            className="fixed inset-0 bg-black/50 backdrop-blur-sm"
+            onClick={() => setIsMobileMenuOpen(false)}
+          />
+          
+          {/* Sidebar */}
+          <div className="fixed inset-y-0 left-0 flex w-full max-w-xs flex-col bg-bg-secondary">
+            {/* Close button */}
+            <div className="flex items-center justify-between h-16 px-6">
+              <h2 className="text-lg font-semibold text-text-primary">
+                Menu
+              </h2>
+              <button
+                onClick={() => setIsMobileMenuOpen(false)}
+                className="p-2 rounded-lg hover:bg-bg-elevated transition-colors"
+              >
+                <X className="h-5 w-5 text-text-muted" />
+              </button>
+            </div>
+
+            {/* Navigation */}
+            <nav className="flex-1 px-4 pb-4 space-y-2">
               {navLinks.map(({ to, label, icon: Icon }) => (
                 <Link
                   key={to}
                   to={to}
-                  className="flex items-center pl-3 pr-4 py-2 border-l-4 border-transparent text-base font-medium text-gray-700 hover:bg-gray-50 hover:border-gray-300 hover:text-gray-800"
                   onClick={() => setIsMobileMenuOpen(false)}
+                  className={`
+                    flex items-center px-4 py-3 text-base font-medium rounded-xl transition-all
+                    ${isActive(to)
+                      ? 'bg-bg-elevated text-pastel-blue'
+                      : 'text-text-secondary hover:bg-bg-elevated hover:text-text-primary'
+                    }
+                  `}
                 >
-                  <Icon className="h-4 w-4 mr-3" />
+                  <Icon className={`
+                    mr-3 h-6 w-6
+                    ${isActive(to) ? 'text-pastel-blue' : 'text-text-muted'}
+                  `} />
                   {label}
                 </Link>
               ))}
-            </div>
-            <div className="pt-4 pb-3 border-t border-gray-200">
-              <div className="flex items-center px-4">
-                <div className="flex-shrink-0">
-                  <span className="text-sm font-medium text-gray-800">{user?.username}</span>
+            </nav>
+
+            {/* User Section */}
+            <div className="border-t border-border p-4">
+              <div className="flex items-center px-4 py-3 rounded-xl bg-bg-elevated">
+                <div className="flex-1">
+                  <p className="text-sm font-medium text-text-primary">
+                    {user?.username}
+                  </p>
+                  <button
+                    onClick={handleLogout}
+                    className="text-xs text-text-muted hover:text-pastel-pink transition-colors"
+                  >
+                    Sign out
+                  </button>
                 </div>
-              </div>
-              <div className="mt-3 space-y-1">
-                <button
-                  onClick={handleLogout}
-                  className="block w-full text-left px-4 py-2 text-base font-medium text-gray-500 hover:text-gray-800 hover:bg-gray-100"
-                >
-                  Sign out
-                </button>
               </div>
             </div>
           </div>
-        )}
-      </nav>
+        </div>
+      )}
 
-      <main className="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
-        <Outlet />
-      </main>
+      {/* Main Content */}
+      <div className="lg:pl-72">
+        <main className="py-8">
+          <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+            <Outlet />
+          </div>
+        </main>
+      </div>
     </div>
   );
 }

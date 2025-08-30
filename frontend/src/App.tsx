@@ -1,11 +1,18 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
+import { MantineProvider, createTheme } from '@mantine/core';
+import { Notifications } from '@mantine/notifications';
+import '@mantine/core/styles.css';
+import '@mantine/dates/styles.css';
+import '@mantine/charts/styles.css';
+import '@mantine/notifications/styles.css';
+
 import { LoginForm } from './components/auth/LoginForm';
 import { RegisterForm } from './components/auth/RegisterForm';
 import { ProtectedRoute } from './components/ProtectedRoute';
-import { Layout } from './components/Layout';
-import { Dashboard } from './pages/Dashboard';
+import { MantineLayout } from './components/MantineLayout';
+import { MantineDashboard } from './pages/MantineDashboard';
 import { Accounts } from './pages/Accounts';
 import { Transactions } from './pages/Transactions';
 import { PlaidLinkProvider } from './providers/PlaidLinkProvider';
@@ -20,27 +27,37 @@ const queryClient = new QueryClient({
   },
 });
 
+// Mantine theme configuration
+const theme = createTheme({
+  primaryColor: 'yellow',
+  defaultRadius: 'md',
+  cursorType: 'pointer',
+});
+
 function App() {
   return (
-    <QueryClientProvider client={queryClient}>
-      <PlaidLinkProvider>
-        <BrowserRouter>
-          <Routes>
-            <Route path="/login" element={<LoginForm />} />
-            <Route path="/register" element={<RegisterForm />} />
-            <Route element={<ProtectedRoute />}>
-              <Route element={<Layout />}>
-                <Route path="/dashboard" element={<Dashboard />} />
-                <Route path="/accounts" element={<Accounts />} />
-                <Route path="/transactions" element={<Transactions />} />
+    <MantineProvider theme={theme} defaultColorScheme="dark">
+      <Notifications position="top-right" />
+      <QueryClientProvider client={queryClient}>
+        <PlaidLinkProvider>
+          <BrowserRouter>
+            <Routes>
+              <Route path="/login" element={<LoginForm />} />
+              <Route path="/register" element={<RegisterForm />} />
+              <Route element={<ProtectedRoute />}>
+                <Route element={<MantineLayout />}>
+                  <Route path="/dashboard" element={<MantineDashboard />} />
+                  <Route path="/accounts" element={<Accounts />} />
+                  <Route path="/transactions" element={<Transactions />} />
+                </Route>
               </Route>
-            </Route>
-            <Route path="/" element={<Navigate to="/dashboard" replace />} />
-          </Routes>
-        </BrowserRouter>
-      </PlaidLinkProvider>
-      <ReactQueryDevtools initialIsOpen={false} />
-    </QueryClientProvider>
+              <Route path="/" element={<Navigate to="/dashboard" replace />} />
+            </Routes>
+          </BrowserRouter>
+        </PlaidLinkProvider>
+        <ReactQueryDevtools initialIsOpen={false} />
+      </QueryClientProvider>
+    </MantineProvider>
   );
 }
 
