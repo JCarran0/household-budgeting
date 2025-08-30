@@ -55,6 +55,10 @@ const addTagsSchema = z.object({
   tags: z.array(z.string().min(1)),
 });
 
+const updateDescriptionSchema = z.object({
+  description: z.string().nullable(),
+});
+
 const splitTransactionSchema = z.object({
   splits: z.array(z.object({
     amount: z.number().positive(),
@@ -212,6 +216,48 @@ router.put('/:transactionId/category', authMiddleware, async (req: AuthRequest, 
   } catch (error) {
     console.error('Error updating category:', error);
     res.status(500).json({ success: false, error: 'Failed to update category' });
+  }
+});
+
+/**
+ * PUT /api/v1/transactions/:transactionId/description
+ * Update transaction description
+ */
+router.put('/:transactionId/description', authMiddleware, async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    if (!req.user) {
+      res.status(401).json({ success: false, error: 'Unauthorized' });
+      return;
+    }
+
+    const validation = updateDescriptionSchema.safeParse(req.body);
+    if (!validation.success) {
+      res.status(400).json({ 
+        success: false, 
+        error: 'Invalid request data',
+        details: validation.error.format(),
+      });
+      return;
+    }
+
+    const { transactionId } = req.params;
+    const { description } = validation.data;
+
+    const result = await transactionService.updateTransactionDescription(
+      req.user.userId,
+      transactionId,
+      description
+    );
+
+    if (!result.success) {
+      res.status(404).json({ success: false, error: result.error });
+      return;
+    }
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error updating description:', error);
+    res.status(500).json({ success: false, error: 'Failed to update description' });
   }
 });
 

@@ -9,7 +9,6 @@ import {
   Button,
   Text,
   Badge,
-  NumberInput,
   Textarea,
   Switch,
   Divider,
@@ -30,6 +29,7 @@ interface TransactionEditModalProps {
 }
 
 interface EditFormValues {
+  description: string;
   categoryId: string;
   tags: string[];
   notes: string;
@@ -72,6 +72,7 @@ export function TransactionEditModal({
 
   const form = useForm<EditFormValues>({
     initialValues: {
+      description: '',
       categoryId: '',
       tags: [],
       notes: '',
@@ -83,6 +84,7 @@ export function TransactionEditModal({
   useEffect(() => {
     if (transaction && opened) {
       form.setValues({
+        description: transaction.userDescription || transaction.name || '',
         categoryId: transaction.categoryId || '',
         tags: transaction.tags || [],
         notes: transaction.notes || '',
@@ -133,6 +135,27 @@ export function TransactionEditModal({
     },
   });
 
+  // Update description mutation
+  const updateDescriptionMutation = useMutation({
+    mutationFn: ({ transactionId, description }: { transactionId: string; description: string | null }) =>
+      api.updateTransactionDescription(transactionId, description),
+    onSuccess: () => {
+      notifications.show({
+        title: 'Description Updated',
+        message: 'Transaction description has been updated',
+        color: 'green',
+      });
+      queryClient.invalidateQueries({ queryKey: ['transactions'] });
+    },
+    onError: () => {
+      notifications.show({
+        title: 'Error',
+        message: 'Failed to update description',
+        color: 'red',
+      });
+    },
+  });
+
   // Build category options - MUST be before any conditional returns
   const categoryOptions = React.useMemo(() => {
     if (!categories || categories.length === 0) {
@@ -161,12 +184,24 @@ export function TransactionEditModal({
   // Build tag options (existing tags)
   const tagOptions = availableTags.map(tag => tag);
 
-  const isLoading = updateCategoryMutation.isPending || addTagsMutation.isPending;
+  const isLoading = updateCategoryMutation.isPending || addTagsMutation.isPending || updateDescriptionMutation.isPending;
 
   const handleSubmit = async (values: EditFormValues) => {
     if (!transaction) return;
 
     try {
+      // Update description if changed
+      const currentDescription = transaction.userDescription || transaction.name || '';
+      const descriptionChanged = values.description !== currentDescription;
+      if (descriptionChanged) {
+        // If description matches original name, clear userDescription
+        const newDescription = values.description === transaction.name ? null : values.description;
+        await updateDescriptionMutation.mutateAsync({
+          transactionId: transaction.id,
+          description: newDescription,
+        });
+      }
+
       // Update category if changed (handle null/undefined properly)
       const categoryChanged = values.categoryId !== (transaction.categoryId || '');
       if (values.categoryId && categoryChanged) {
@@ -238,6 +273,17 @@ export function TransactionEditModal({
           <Divider />
 
           {/* Editable Fields */}
+          <TextInput
+            label="Description"
+            placeholder={transaction.name}
+            {...form.getInputProps('description')}
+            description={
+              transaction.userDescription 
+                ? "Custom description (clear to use original)" 
+                : "Leave blank to use original description"
+            }
+          />
+
           {categoriesError && (
             <Alert color="red" icon={<IconAlertCircle size={16} />}>
               Failed to load categories: {(categoriesError as Error).message}

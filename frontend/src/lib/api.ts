@@ -8,7 +8,8 @@ import type {
   LinkTokenResponse, 
   ExchangeTokenRequest,
   Category,
-  MonthlyBudget
+  MonthlyBudget,
+  AutoCategorizeRule
 } from '../../../shared/types';
 
 const API_BASE_URL = 'http://localhost:3001/api/v1';
@@ -224,6 +225,13 @@ class ApiClient {
     await this.client.post(`/transactions/${transactionId}/split`, { splits });
   }
 
+  async updateTransactionDescription(transactionId: string, description: string | null): Promise<void> {
+    const response = await this.client.put(`/transactions/${transactionId}/description`, { description });
+    if (!response.data.success) {
+      throw new Error(response.data.error || 'Failed to update description');
+    }
+  }
+
   // Category endpoints
   async getCategories(): Promise<Category[]> {
     const { data } = await this.client.get<Category[]>('/categories');
@@ -427,6 +435,67 @@ class ApiClient {
   }> {
     const { data } = await this.client.get('/reports/year-to-date');
     return data;
+  }
+
+  // Auto-categorization endpoints
+  async getAutoCategorizeRules(): Promise<AutoCategorizeRule[]> {
+    const { data } = await this.client.get<{ success: boolean; rules: AutoCategorizeRule[] }>('/autocategorize/rules');
+    return data.rules;
+  }
+
+  async createAutoCategorizeRule(rule: {
+    description: string;
+    pattern: string;
+    categoryId: string;
+    categoryName?: string;
+    isActive?: boolean;
+  }): Promise<AutoCategorizeRule> {
+    const { data } = await this.client.post<{ success: boolean; rule: AutoCategorizeRule }>('/autocategorize/rules', rule);
+    return data.rule;
+  }
+
+  async updateAutoCategorizeRule(ruleId: string, updates: {
+    description?: string;
+    pattern?: string;
+    categoryId?: string;
+    categoryName?: string;
+    isActive?: boolean;
+  }): Promise<void> {
+    const response = await this.client.put(`/autocategorize/rules/${ruleId}`, updates);
+    if (!response.data.success) {
+      throw new Error(response.data.error || 'Failed to update rule');
+    }
+  }
+
+  async deleteAutoCategorizeRule(ruleId: string): Promise<void> {
+    const response = await this.client.delete(`/autocategorize/rules/${ruleId}`);
+    if (!response.data.success) {
+      throw new Error(response.data.error || 'Failed to delete rule');
+    }
+  }
+
+  async moveAutoCategorizeRuleUp(ruleId: string): Promise<void> {
+    const response = await this.client.put(`/autocategorize/rules/${ruleId}/move-up`);
+    if (!response.data.success) {
+      throw new Error(response.data.error || 'Failed to move rule');
+    }
+  }
+
+  async moveAutoCategorizeRuleDown(ruleId: string): Promise<void> {
+    const response = await this.client.put(`/autocategorize/rules/${ruleId}/move-down`);
+    if (!response.data.success) {
+      throw new Error(response.data.error || 'Failed to move rule');
+    }
+  }
+
+  async applyAutoCategorizeRules(): Promise<{ categorized: number; total: number }> {
+    const { data } = await this.client.post<{ 
+      success: boolean; 
+      categorized: number; 
+      total: number; 
+      message: string 
+    }>('/autocategorize/apply');
+    return { categorized: data.categorized, total: data.total };
   }
 }
 

@@ -17,6 +17,7 @@ import {
   ThemeIcon,
   Tooltip,
   Divider,
+  Tabs,
 } from '@mantine/core';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { notifications } from '@mantine/notifications';
@@ -29,6 +30,8 @@ import {
   IconPigMoney,
   IconRefresh,
   IconAlertCircle,
+  IconRobot,
+  IconList,
 } from '@tabler/icons-react';
 import { api, type CategoryWithChildren } from '../lib/api';
 import { CategoryTree } from '../components/categories/CategoryTree';
@@ -173,26 +176,40 @@ export function Categories() {
   return (
     <Container size="lg" py="xl">
       <Stack gap="lg">
-        <Group justify="space-between">
-          <Title order={2}>Categories</Title>
-          <Group>
-            {!hasCategories && (
-              <Button
-                leftSection={<IconRefresh size={16} />}
-                onClick={() => initializeMutation.mutate()}
-                loading={initializeMutation.isPending}
-              >
-                Initialize Default Categories
-              </Button>
-            )}
-            <Button
-              leftSection={<IconPlus size={16} />}
-              onClick={() => setIsFormOpen(true)}
-            >
-              Add Category
-            </Button>
-          </Group>
-        </Group>
+        <Title order={2}>Categories</Title>
+
+        <Tabs defaultValue="categories">
+          <Tabs.List>
+            <Tabs.Tab value="categories" leftSection={<IconList size={16} />}>
+              Categories
+            </Tabs.Tab>
+            <Tabs.Tab value="autocat" leftSection={<IconRobot size={16} />}>
+              Auto-Categorization
+            </Tabs.Tab>
+          </Tabs.List>
+
+          <Tabs.Panel value="categories" pt="lg">
+            <Stack gap="lg">
+              <Group justify="space-between">
+                <Text size="lg" fw={500}>Manage Categories</Text>
+                <Group>
+                  {!hasCategories && (
+                    <Button
+                      leftSection={<IconRefresh size={16} />}
+                      onClick={() => initializeMutation.mutate()}
+                      loading={initializeMutation.isPending}
+                    >
+                      Initialize Default Categories
+                    </Button>
+                  )}
+                  <Button
+                    leftSection={<IconPlus size={16} />}
+                    onClick={() => setIsFormOpen(true)}
+                  >
+                    Add Category
+                  </Button>
+                </Group>
+              </Group>
 
         {hasCategories && (
           <>
@@ -305,12 +322,19 @@ export function Categories() {
           </Paper>
         )}
 
-        <CategoryForm
-          opened={isFormOpen}
-          onClose={handleFormClose}
-          category={editingCategory}
-          onSuccess={handleFormSuccess}
-        />
+              <CategoryForm
+                opened={isFormOpen}
+                onClose={handleFormClose}
+                category={editingCategory}
+                onSuccess={handleFormSuccess}
+              />
+            </Stack>
+          </Tabs.Panel>
+
+          <Tabs.Panel value="autocat" pt="lg">
+            <Text>Auto-categorization rules coming soon...</Text>
+          </Tabs.Panel>
+        </Tabs>
       </Stack>
     </Container>
   );

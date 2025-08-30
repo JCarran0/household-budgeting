@@ -364,7 +364,7 @@ export function EnhancedTransactions() {
                   
                   <Table.Td>
                     <Stack gap={2}>
-                      <Text fw={500}>{transaction.merchantName || transaction.name}</Text>
+                      <Text fw={500}>{transaction.userDescription || transaction.merchantName || transaction.name}</Text>
                       {transaction.notes && (
                         <Text size="xs" c="dimmed">{transaction.notes}</Text>
                       )}

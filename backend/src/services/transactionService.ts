@@ -21,7 +21,8 @@ export interface StoredTransaction {
   plaidAccountId: string;              // Plaid's account ID
   amount: number;                      // Amount (positive = debit, negative = credit)
   date: string;                        // Transaction date (YYYY-MM-DD)
-  name: string;                        // Transaction name
+  name: string;                        // Original transaction name from Plaid
+  userDescription: string | null;      // User-edited description (overrides name for display)
   merchantName: string | null;         // Merchant name if available
   category: string[] | null;           // Plaid categories
   categoryId: string | null;           // Our category ID
@@ -239,6 +240,7 @@ export class TransactionService {
       amount: plaidTxn.amount,
       date: plaidTxn.date,
       name: plaidTxn.name,
+      userDescription: null, // User hasn't edited description yet
       merchantName: plaidTxn.merchantName,
       category: plaidTxn.category,
       categoryId: plaidTxn.categoryId,
@@ -495,6 +497,7 @@ export class TransactionService {
           amount: originalTransaction.amount > 0 ? split.amount : -split.amount, // Maintain sign
           date: originalTransaction.date,
           name: split.description || `${originalTransaction.name} (Split ${i + 1})`,
+          userDescription: split.description || null,
           merchantName: originalTransaction.merchantName,
           category: originalTransaction.category,
           categoryId: split.categoryId || null,
@@ -530,6 +533,35 @@ export class TransactionService {
     } catch (error) {
       console.error('Error splitting transaction:', error);
       return { success: false, error: 'Failed to split transaction' };
+    }
+  }
+
+  /**
+   * Update transaction description
+   */
+  async updateTransactionDescription(
+    userId: string,
+    transactionId: string,
+    description: string | null
+  ): Promise<{ success: boolean; error?: string }> {
+    try {
+      const transactions = await this.dataService.getData<StoredTransaction[]>(
+        `transactions_${userId}`
+      ) || [];
+
+      const transaction = transactions.find(t => t.id === transactionId);
+      if (!transaction) {
+        return { success: false, error: 'Transaction not found' };
+      }
+
+      transaction.userDescription = description;
+      transaction.updatedAt = new Date();
+
+      await this.dataService.saveData(`transactions_${userId}`, transactions);
+      return { success: true };
+    } catch (error) {
+      console.error('Error updating transaction description:', error);
+      return { success: false, error: 'Failed to update description' };
     }
   }
 

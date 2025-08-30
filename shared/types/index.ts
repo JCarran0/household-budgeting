@@ -45,7 +45,8 @@ export interface Transaction {
   accountName?: string; // Added for display
   amount: number; // negative = expense, positive = income
   date: string;
-  name: string;
+  name: string; // Original Plaid description
+  userDescription: string | null; // User-edited description
   merchantName: string | null;
   category: string[];
   categoryId: string | null;
@@ -89,4 +90,17 @@ export interface ApiError {
   error: string;
   message?: string;
   statusCode?: number;
+}
+
+export interface AutoCategorizeRule {
+  id: string;
+  description: string; // Rule description for UI
+  pattern: string; // The text to search for
+  matchType: 'contains'; // For now just contains, can add 'exact', 'regex' later
+  categoryId: string;
+  categoryName?: string; // For display purposes
+  priority: number; // Lower number = higher priority (applied first)
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
 }

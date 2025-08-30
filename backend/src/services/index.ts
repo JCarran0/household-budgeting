@@ -27,6 +27,9 @@ export const categoryService = new CategoryService(dataService);
 export const budgetService = new BudgetService(dataService);
 export const reportService = new ReportService(dataService);
 
+// Export dataService for other services that need it
+export { dataService };
+
 // Export types
 export { 
   AuthService, 
