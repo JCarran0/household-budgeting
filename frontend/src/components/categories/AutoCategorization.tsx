@@ -17,7 +17,6 @@ import {
   Center,
   Tooltip,
   Card,
-  Title,
 } from '@mantine/core';
 import { useForm } from '@mantine/form';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -29,13 +28,11 @@ import {
   IconArrowUp,
   IconArrowDown,
   IconRobot,
-  IconCheck,
-  IconX,
   IconAlertCircle,
   IconSearch,
 } from '@tabler/icons-react';
 import { api } from '../../lib/api';
-import type { AutoCategorizeRule, Category } from '../../../../shared/types';
+import type { AutoCategorizeRule } from '../../../../shared/types';
 
 interface RuleFormValues {
   description: string;
@@ -102,6 +99,7 @@ export function AutoCategorization() {
         form.reset();
       }
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isFormOpen, editingRule]);
 
   // Create rule mutation
