@@ -239,20 +239,117 @@ This document outlines the implementation plan for a personal budgeting app with
 - [x] Fix chart rendering issues with empty data
 - [x] Implement proper category data access
 
-### 6.2 Polish & Optimization
-- [ ] Add comprehensive error handling
-- [ ] Implement optimistic updates
-- [ ] Add data export functionality
-- [ ] Performance optimization (React.memo, useMemo)
-- [ ] Accessibility improvements
+### ~~6.2 Polish & Optimization~~ (DEFERRED - Not critical for 2-user MVP)
+- ~~Add comprehensive error handling~~
+- ~~Implement optimistic updates~~
+- ~~Add data export functionality~~
+- ~~Performance optimization (React.memo, useMemo)~~
+- ~~Accessibility improvements~~
 
-### 6.3 Deployment Preparation
-- [ ] Environment configuration
-- [ ] Build optimization
-- [ ] Security review
-- [ ] Documentation updates
+### ~~6.3 Deployment Preparation~~ (REPLACED - See Phase 7)
+
+## Phase 7: Production Architecture Setup (Week 7)
+
+**Reference**: See `docs/AI-Architecture-Plan.md` for complete architecture details
+
+### 7.1 GitHub Repository Configuration
+- [ ] Enable branch protection on main branch
+- [ ] Configure GitHub Secrets (EC2_SSH_KEY, EC2_HOST, JWT_SECRET, PLAID credentials)
+- [ ] Create `.github/workflows/test.yml` for PR validation
+- [ ] Create `.github/workflows/deploy.yml` for manual production deployment
+- [ ] Test GitHub Actions workflows with feature branch
+
+### 7.2 AWS Infrastructure Setup
+- [ ] Create AWS account and configure free tier
+- [ ] Generate SSH key pair for EC2 access
+- [ ] Create Terraform configuration files
+- [ ] Provision EC2 t4g.micro instance with Terraform
+- [ ] Configure Security Group with proper ingress rules
+- [ ] Allocate and associate Elastic IP
+- [ ] Create S3 bucket for backups
+- [ ] Set up AWS Budget alert at $10/month
+
+### 7.3 Environment Configuration
+- [ ] Create production `.env` file with strong secrets
+- [ ] Update backend for production data directory path
+- [ ] Configure CORS for production domain/IP
+- [ ] Update frontend API URL for production
+- [ ] Test Plaid in production environment mode
+
+## Phase 8: Production Deployment (Week 8)
+
+### 8.1 Server Setup
+- [ ] SSH into EC2 and run initial updates
+- [ ] Install Node.js 20, nginx, PM2, git
+- [ ] Configure Ubuntu firewall (ufw) and fail2ban
+- [ ] Set up application directories structure
+- [ ] Clone repository to production server
+- [ ] Install and build both backend and frontend
+
+### 8.2 Application Configuration
+- [ ] Configure nginx as reverse proxy (see `docs/AI-Architecture-Plan.md`)
+- [ ] Set up PM2 ecosystem file for process management
+- [ ] Configure PM2 startup script for auto-restart
+- [ ] Set up Let's Encrypt SSL certificates
+- [ ] Test application is accessible via HTTPS
+
+### 8.3 Operational Setup
+- [ ] Create and test backup script to S3
+- [ ] Configure cron job for daily backups
+- [ ] Set up log rotation with logrotate
+- [ ] Configure UptimeRobot for external monitoring
+- [ ] Document restore procedure
+- [ ] Test full backup and restore process
+
+## Phase 9: Production Stabilization (Week 9-10)
+
+### 9.1 Migration & Testing
+- [ ] Migrate existing local data to production
+- [ ] Complete end-to-end testing in production
+- [ ] Test Plaid account linking in production
+- [ ] Verify transaction sync is working
+- [ ] Test all CRUD operations
+- [ ] Verify backup automation is working
+
+### 9.2 Monitoring & Optimization
+- [ ] Monitor AWS costs (should be $0 in free tier)
+- [ ] Review CloudWatch metrics
+- [ ] Check PM2 logs for any errors
+- [ ] Optimize nginx configuration if needed
+- [ ] Document any production-specific issues
+- [ ] Create runbook for common operations
+
+### 9.3 Documentation & Handoff
+- [ ] Update README with production access info
+- [ ] Document deployment process
+- [ ] Create troubleshooting guide
+- [ ] Document backup/restore procedures
+- [ ] Update CLAUDE.md with production learnings
+
+## Phase 10: Future Enhancements (Optional)
+
+### 10.1 Cost-Effective Improvements
+- [ ] Add custom domain with Route 53 ($12/year)
+- [ ] Implement CloudWatch detailed monitoring ($3/month)
+- [ ] Set up AWS Backup automation ($1/month)
+- [ ] Add more comprehensive health checks
+
+### 10.2 Database Migration (When Needed)
+- [ ] Install PostgreSQL on same EC2 instance
+- [ ] Design optimized schema for relational data
+- [ ] Create migration scripts from JSON to PostgreSQL
+- [ ] Test thoroughly before switching over
+- [ ] Keep JSON export capability as backup
+
+### 10.3 Performance Enhancements (If Required)
+- [ ] Implement Redis for session caching
+- [ ] Add nginx caching for static assets
+- [ ] Optimize frontend bundle size
+- [ ] Consider upgrading to t4g.small if needed ($12/month)
 
 ## Success Criteria
+
+### Application Features ✅
 - [x] 90%+ test coverage on business logic (69 backend tests passing)
 - [x] All user stories have passing tests
 - [x] Authentication system fully functional
@@ -261,6 +358,16 @@ This document outlines the implementation plan for a personal budgeting app with
 - [x] Budget creation and tracking functional
 - [x] Basic reporting available
 - [x] Frontend responsive and accessible
+
+### Production Deployment (Phases 7-9)
+- [ ] Application deployed to AWS EC2 instance
+- [ ] SSL certificates configured and working
+- [ ] Automated backups to S3 functioning
+- [ ] GitHub Actions CI/CD pipeline operational
+- [ ] Production costs under $10/month
+- [ ] Monitoring and alerting configured
+- [ ] Full documentation completed
+- [ ] Successful end-to-end testing in production
 
 ## Risk Mitigation
 - **Plaid API Limits**: Use sandbox mode initially, implement caching
@@ -306,9 +413,17 @@ This document outlines the implementation plan for a personal budgeting app with
 ## Next Priority Actions
 1. ~~Enhance transaction features (categorization, splitting, tagging)~~ ✅ COMPLETE
 2. ~~Implement reporting dashboard with charts~~ ✅ COMPLETE
-3. Polish & Optimization (error handling, optimistic updates, exports)
-4. Performance optimization (React.memo, useMemo, pagination)
-5. Prepare for production deployment (environment config, security review)
+3. **Configure GitHub repository for production** (Phase 7.1)
+4. **Set up AWS infrastructure with Terraform** (Phase 7.2)
+5. **Deploy to production EC2 instance** (Phase 8)
+6. **Stabilize and monitor production** (Phase 9)
+
+## Production Architecture
+- **Architecture Plan**: See `docs/AI-Architecture-Plan.md` for complete details
+- **Target Cost**: FREE (Year 1), <$10/month (Year 2+)
+- **Infrastructure**: Single EC2 t4g.micro with nginx + PM2
+- **Storage**: Local JSON files with S3 backups
+- **CI/CD**: GitHub Actions with manual deploy trigger
 
 ## Notes
 - Focus on rapid feature delivery with critical path testing
