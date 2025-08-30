@@ -5,11 +5,14 @@ A modern personal budgeting application with bank account integration via Plaid,
 ## 🎯 Features
 
 ### Current Features
+- **Modern Dashboard**: Professional UI with Mantine component library
 - **Secure Authentication**: JWT-based auth with bcrypt password hashing
 - **Bank Integration**: Connect bank accounts via Plaid (sandbox mode)
 - **Account Management**: View and sync connected bank accounts
 - **Transaction Tracking**: Automatic transaction import from connected accounts
-- **Responsive UI**: Mobile-friendly React interface with Tailwind CSS
+- **Dark Theme**: Built-in dark mode with professional styling
+- **Responsive Design**: Mobile-friendly interface with collapsible sidebar
+- **Real-time Updates**: Live data refresh with React Query
 
 ### Planned Features
 - Transaction categorization and tagging
@@ -32,11 +35,14 @@ A modern personal budgeting application with bank account integration via Plaid,
 ### Frontend
 - **Framework**: React 18 with TypeScript
 - **Build Tool**: Vite
-- **Styling**: Tailwind CSS
+- **UI Library**: Mantine v8 (Component library with dark theme)
+- **Icons**: Tabler Icons
+- **Styling**: Mantine theme system + CSS modules
 - **State Management**: Zustand with persist middleware
 - **Data Fetching**: TanStack Query (React Query)
 - **Routing**: React Router v6
 - **Banking UI**: react-plaid-link
+- **Notifications**: Mantine Notifications
 
 ## 📁 Project Structure
 

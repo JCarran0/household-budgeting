@@ -1,35 +1,37 @@
-import { CreditCard, Loader2 } from 'lucide-react';
+import { Button } from '@mantine/core';
+import { IconCreditCard } from '@tabler/icons-react';
 import { usePlaid } from '../providers/PlaidLinkProvider';
+import { notifications } from '@mantine/notifications';
+import { useEffect } from 'react';
 
 interface PlaidButtonProps {
-  className?: string;
+  variant?: 'filled' | 'light' | 'outline' | 'default';
+  size?: 'xs' | 'sm' | 'md' | 'lg' | 'xl';
 }
 
-export function PlaidButton({ className = '' }: PlaidButtonProps) {
+export function PlaidButton({ variant = 'filled', size = 'sm' }: PlaidButtonProps) {
   const { openPlaid, isLoading, error } = usePlaid();
 
+  useEffect(() => {
+    if (error) {
+      notifications.show({
+        title: 'Connection Error',
+        message: error,
+        color: 'red',
+      });
+    }
+  }, [error]);
+
   return (
-    <>
-      <button
-        onClick={openPlaid}
-        disabled={isLoading}
-        className={`inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed ${className}`}
-      >
-        {isLoading ? (
-          <>
-            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-            Loading...
-          </>
-        ) : (
-          <>
-            <CreditCard className="h-4 w-4 mr-2" />
-            Connect Bank Account
-          </>
-        )}
-      </button>
-      {error && (
-        <p className="mt-2 text-sm text-red-600">{error}</p>
-      )}
-    </>
+    <Button
+      onClick={openPlaid}
+      loading={isLoading}
+      leftSection={<IconCreditCard size={16} />}
+      variant={variant}
+      size={size}
+      gradient={{ from: 'blue', to: 'cyan' }}
+    >
+      Connect Bank Account
+    </Button>
   );
 }

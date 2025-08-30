@@ -1,7 +1,21 @@
 import { useState, FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../../stores/authStore';
-import { Eye, EyeOff, Loader2 } from 'lucide-react';
+import {
+  Paper,
+  TextInput,
+  PasswordInput,
+  Button,
+  Title,
+  Text,
+  Container,
+  Group,
+  Stack,
+  Alert,
+  Anchor,
+  Center,
+} from '@mantine/core';
+import { IconAlertCircle, IconLogin } from '@tabler/icons-react';
 
 export function LoginForm() {
   const navigate = useNavigate();
@@ -9,7 +23,6 @@ export function LoginForm() {
   
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -24,92 +37,62 @@ export function LoginForm() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-md w-full space-y-8">
-        <div>
-          <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
-            Sign in to your account
-          </h2>
-          <p className="mt-2 text-center text-sm text-gray-600">
-            Or{' '}
-            <Link to="/register" className="font-medium text-blue-600 hover:text-blue-500">
-              create a new account
-            </Link>
-          </p>
-        </div>
-        
-        <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
-          <div className="rounded-md shadow-sm -space-y-px">
-            <div>
-              <label htmlFor="username" className="sr-only">
-                Username
-              </label>
-              <input
-                id="username"
-                name="username"
-                type="text"
-                autoComplete="username"
-                required
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-t-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm"
-                placeholder="Username"
-              />
-            </div>
-            <div className="relative">
-              <label htmlFor="password" className="sr-only">
-                Password
-              </label>
-              <input
-                id="password"
-                name="password"
-                type={showPassword ? 'text' : 'password'}
-                autoComplete="current-password"
-                required
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="appearance-none rounded-none relative block w-full px-3 py-2 pr-10 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-b-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm"
-                placeholder="Password"
-              />
-              <button
-                type="button"
-                onClick={() => setShowPassword(!showPassword)}
-                className="absolute inset-y-0 right-0 pr-3 flex items-center"
-              >
-                {showPassword ? (
-                  <EyeOff className="h-4 w-4 text-gray-400" />
-                ) : (
-                  <Eye className="h-4 w-4 text-gray-400" />
-                )}
-              </button>
-            </div>
-          </div>
+    <Container size={420} my={40} style={{ minHeight: '100vh', display: 'flex', alignItems: 'center' }}>
+      <Paper radius="md" p="xl" withBorder style={{ width: '100%' }}>
+        <Title order={2} ta="center" mb={5}>
+          Welcome back!
+        </Title>
+        <Text c="dimmed" size="sm" ta="center" mb={20}>
+          Sign in to your account to continue
+        </Text>
 
-          {error && (
-            <div className="rounded-md bg-red-50 p-4">
-              <div className="flex">
-                <div className="ml-3">
-                  <h3 className="text-sm font-medium text-red-800">{error}</h3>
-                </div>
-              </div>
-            </div>
-          )}
+        <form onSubmit={handleSubmit}>
+          <Stack>
+            {error && (
+              <Alert icon={<IconAlertCircle size={16} />} color="red" variant="light">
+                {error}
+              </Alert>
+            )}
 
-          <div>
-            <button
+            <TextInput
+              label="Username"
+              placeholder="Enter your username"
+              value={username}
+              onChange={(e) => setUsername(e.currentTarget.value)}
+              required
+              autoFocus
+            />
+
+            <PasswordInput
+              label="Password"
+              placeholder="Enter your password"
+              value={password}
+              onChange={(e) => setPassword(e.currentTarget.value)}
+              required
+            />
+
+            <Button
               type="submit"
-              disabled={isLoading}
-              className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+              fullWidth
+              loading={isLoading}
+              leftSection={<IconLogin size={16} />}
+              gradient={{ from: 'yellow', to: 'orange' }}
+              variant="gradient"
             >
-              {isLoading ? (
-                <Loader2 className="h-5 w-5 animate-spin" />
-              ) : (
-                'Sign in'
-              )}
-            </button>
-          </div>
+              Sign in
+            </Button>
+          </Stack>
         </form>
-      </div>
-    </div>
+
+        <Center mt="xl">
+          <Text c="dimmed" size="sm">
+            Don't have an account?{' '}
+            <Anchor component={Link} to="/register" size="sm" fw={500}>
+              Create account
+            </Anchor>
+          </Text>
+        </Center>
+      </Paper>
+    </Container>
   );
 }

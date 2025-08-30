@@ -1,7 +1,24 @@
 import { useState, FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../../stores/authStore';
-import { Eye, EyeOff, Loader2 } from 'lucide-react';
+import {
+  Paper,
+  TextInput,
+  PasswordInput,
+  Button,
+  Title,
+  Text,
+  Container,
+  Stack,
+  Alert,
+  Anchor,
+  Center,
+  Progress,
+  Box,
+  List,
+  ThemeIcon,
+} from '@mantine/core';
+import { IconAlertCircle, IconUserPlus, IconCheck, IconX } from '@tabler/icons-react';
 
 export function RegisterForm() {
   const navigate = useNavigate();
@@ -10,24 +27,18 @@ export function RegisterForm() {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
   const [validationError, setValidationError] = useState('');
 
-  const validatePassword = (password: string): string | null => {
-    if (password.length < 8) {
-      return 'Password must be at least 8 characters long';
-    }
-    if (!/[a-z]/.test(password)) {
-      return 'Password must contain at least one lowercase letter';
-    }
-    if (!/[A-Z]/.test(password)) {
-      return 'Password must contain at least one uppercase letter';
-    }
-    if (!/[0-9]/.test(password)) {
-      return 'Password must contain at least one number';
-    }
-    return null;
-  };
+  const passwordRequirements = [
+    { label: 'At least 8 characters', met: password.length >= 8 },
+    { label: 'Contains uppercase letter', met: /[A-Z]/.test(password) },
+    { label: 'Contains lowercase letter', met: /[a-z]/.test(password) },
+    { label: 'Contains number', met: /\d/.test(password) },
+    { label: 'Contains special character', met: /[!@#$%^&*]/.test(password) },
+  ];
+
+  const allRequirementsMet = passwordRequirements.every(req => req.met);
+  const passwordStrength = (passwordRequirements.filter(req => req.met).length / passwordRequirements.length) * 100;
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -38,15 +49,13 @@ export function RegisterForm() {
       setValidationError('Passwords do not match');
       return;
     }
-    
-    const passwordError = validatePassword(password);
-    if (passwordError) {
-      setValidationError(passwordError);
+
+    if (!allRequirementsMet) {
+      setValidationError('Password does not meet all requirements');
       return;
     }
     
     try {
-      // Only send username and password to backend
       await register({ username, password });
       navigate('/dashboard');
     } catch (error) {
@@ -55,114 +64,100 @@ export function RegisterForm() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-md w-full space-y-8">
-        <div>
-          <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
-            Create your account
-          </h2>
-          <p className="mt-2 text-center text-sm text-gray-600">
-            Or{' '}
-            <Link to="/login" className="font-medium text-blue-600 hover:text-blue-500">
-              sign in to existing account
-            </Link>
-          </p>
-        </div>
-        
-        <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
-          <div className="space-y-4">
-            <div>
-              <label htmlFor="username" className="block text-sm font-medium text-gray-700">
-                Username
-              </label>
-              <input
-                id="username"
-                name="username"
-                type="text"
-                autoComplete="username"
-                required
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                className="mt-1 appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm"
-                placeholder="Choose a username"
-              />
-            </div>
-            
-            <div>
-              <label htmlFor="password" className="block text-sm font-medium text-gray-700">
-                Password
-              </label>
-              <div className="mt-1 relative">
-                <input
-                  id="password"
-                  name="password"
-                  type={showPassword ? 'text' : 'password'}
-                  autoComplete="new-password"
-                  required
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="appearance-none relative block w-full px-3 py-2 pr-10 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm"
-                  placeholder="Min 8 chars, 1 uppercase, 1 lowercase, 1 number"
+    <Container size={420} my={40} style={{ minHeight: '100vh', display: 'flex', alignItems: 'center' }}>
+      <Paper radius="md" p="xl" withBorder style={{ width: '100%' }}>
+        <Title order={2} ta="center" mb={5}>
+          Create Account
+        </Title>
+        <Text c="dimmed" size="sm" ta="center" mb={20}>
+          Start managing your finances today
+        </Text>
+
+        <form onSubmit={handleSubmit}>
+          <Stack>
+            {(error || validationError) && (
+              <Alert icon={<IconAlertCircle size={16} />} color="red" variant="light">
+                {error || validationError}
+              </Alert>
+            )}
+
+            <TextInput
+              label="Username"
+              placeholder="Choose a username"
+              value={username}
+              onChange={(e) => setUsername(e.currentTarget.value)}
+              required
+              autoFocus
+            />
+
+            <PasswordInput
+              label="Password"
+              placeholder="Create a strong password"
+              value={password}
+              onChange={(e) => setPassword(e.currentTarget.value)}
+              required
+            />
+
+            {password && (
+              <Box>
+                <Text size="xs" c="dimmed" mb={5}>Password strength</Text>
+                <Progress 
+                  value={passwordStrength} 
+                  color={passwordStrength < 40 ? 'red' : passwordStrength < 80 ? 'yellow' : 'green'}
+                  size="sm"
+                  mb="xs"
                 />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute inset-y-0 right-0 pr-3 flex items-center"
-                >
-                  {showPassword ? (
-                    <EyeOff className="h-4 w-4 text-gray-400" />
-                  ) : (
-                    <Eye className="h-4 w-4 text-gray-400" />
-                  )}
-                </button>
-              </div>
-            </div>
-            
-            <div>
-              <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700">
-                Confirm Password
-              </label>
-              <input
-                id="confirmPassword"
-                name="confirmPassword"
-                type={showPassword ? 'text' : 'password'}
-                autoComplete="new-password"
-                required
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                className="mt-1 appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm"
-                placeholder="Confirm your password"
-              />
-            </div>
-          </div>
+                <List size="xs" spacing={4}>
+                  {passwordRequirements.map((req, index) => (
+                    <List.Item
+                      key={index}
+                      icon={
+                        <ThemeIcon color={req.met ? 'green' : 'gray'} size={16} radius="xl">
+                          {req.met ? <IconCheck size={12} /> : <IconX size={12} />}
+                        </ThemeIcon>
+                      }
+                    >
+                      <Text size="xs" c={req.met ? 'dimmed' : 'red'}>
+                        {req.label}
+                      </Text>
+                    </List.Item>
+                  ))}
+                </List>
+              </Box>
+            )}
 
-          {(error || validationError) && (
-            <div className="rounded-md bg-red-50 p-4">
-              <div className="flex">
-                <div className="ml-3">
-                  <h3 className="text-sm font-medium text-red-800">
-                    {error || validationError}
-                  </h3>
-                </div>
-              </div>
-            </div>
-          )}
+            <PasswordInput
+              label="Confirm Password"
+              placeholder="Re-enter your password"
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.currentTarget.value)}
+              required
+              error={confirmPassword && password !== confirmPassword ? 'Passwords do not match' : ''}
+            />
 
-          <div>
-            <button
+            <Button
               type="submit"
-              disabled={isLoading}
-              className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+              fullWidth
+              loading={isLoading}
+              disabled={!allRequirementsMet || password !== confirmPassword}
+              leftSection={<IconUserPlus size={16} />}
+              gradient={{ from: 'yellow', to: 'orange' }}
+              variant="gradient"
             >
-              {isLoading ? (
-                <Loader2 className="h-5 w-5 animate-spin" />
-              ) : (
-                'Create account'
-              )}
-            </button>
-          </div>
+              Create account
+            </Button>
+          </Stack>
         </form>
-      </div>
-    </div>
+
+        <Center mt="xl">
+          <Text c="dimmed" size="sm">
+            Already have an account?{' '}
+            <Anchor component={Link} to="/login" size="sm" fw={500}>
+              Sign in
+            </Anchor>
+          </Text>
+        </Center>
+      </Paper>
+    </Container>
   );
 }

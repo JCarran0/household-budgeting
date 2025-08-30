@@ -4,7 +4,11 @@
 Building a personal budgeting app for 2 users with Plaid integration. Using Risk-Based Testing with TypeScript strict mode for rapid, type-safe development.
 
 ## Architecture
-- **Frontend**: React 18 + TypeScript + Vite + Tailwind CSS
+- **Frontend**: React 18 + TypeScript + Vite + Mantine UI
+  - **UI Framework**: Mantine v8 with built-in dark theme
+  - **Icons**: Tabler Icons for consistent iconography
+  - **State**: Zustand for global state management
+  - **Data Fetching**: TanStack Query (React Query)
 - **Backend**: Node.js + Express + TypeScript  
 - **Storage**: JSON files (MVP) → S3 → PostgreSQL (future)
 - **Testing**: Jest + React Testing Library
@@ -215,21 +219,26 @@ interface MonthlyBudget {
 - Manual test scripts catch integration issues faster
 
 ### Phase 2: Frontend Development ✅ COMPLETE
-**Goal**: React frontend with authentication and Plaid Link integration
+**Goal**: React frontend with professional UI and Plaid Link integration
 
 **What We Built**:
-1. ✅ React 18 + TypeScript + Vite frontend with Tailwind CSS
-2. ✅ JWT authentication with Zustand state management
-3. ✅ Plaid Link integration with proper error handling
-4. ✅ Dashboard, Accounts, and Transactions pages
-5. ✅ Protected routes and API integration
+1. ✅ React 18 + TypeScript + Vite frontend
+2. ✅ Mantine UI framework with dark theme
+3. ✅ Professional dashboard with stats cards and progress indicators
+4. ✅ JWT authentication with Zustand state management
+5. ✅ Plaid Link integration with proper error handling
+6. ✅ Dashboard, Accounts, and Transactions pages
+7. ✅ Protected routes and API integration
+8. ✅ Responsive AppShell layout with collapsible sidebar
 
 **Critical Lessons Learned**:
+- **UI Framework Choice**: Mantine provides better out-of-box experience than Tailwind for dashboards
 - **Environment Variables**: Must load `dotenv.config()` BEFORE importing app to ensure env vars are available
 - **Plaid Link Integration**: Use conditional rendering to avoid null config errors
 - **React StrictMode**: Causes double-mounting in development, must handle carefully with Plaid
 - **API Response Format**: Use snake_case for Plaid responses (link_token not linkToken)
 - **Token on Registration**: Return JWT token on registration for auto-login UX
+- **CORS in Development**: Allow any localhost port for flexibility
 
 ### Phase 3: Core Features (Next)
 
@@ -530,6 +539,8 @@ npm run test
 - ✅ **Manual test procedures documented**
 - ✅ **Frontend working with Plaid Link** - No duplicate script warnings
 - ✅ **JWT auth flow complete** - Login, register, protected routes
+- ✅ **Professional UI** - Mantine component library with dark theme
+- ✅ **Responsive design** - Mobile-friendly with collapsible sidebar
 
 ## Troubleshooting Guide for AI Assistants
 

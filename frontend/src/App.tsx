@@ -13,8 +13,8 @@ import { RegisterForm } from './components/auth/RegisterForm';
 import { ProtectedRoute } from './components/ProtectedRoute';
 import { MantineLayout } from './components/MantineLayout';
 import { MantineDashboard } from './pages/MantineDashboard';
-import { Accounts } from './pages/Accounts';
-import { Transactions } from './pages/Transactions';
+import { MantineAccounts } from './pages/MantineAccounts';
+import { MantineTransactions } from './pages/MantineTransactions';
 import { PlaidLinkProvider } from './providers/PlaidLinkProvider';
 
 const queryClient = new QueryClient({
@@ -47,8 +47,8 @@ function App() {
               <Route element={<ProtectedRoute />}>
                 <Route element={<MantineLayout />}>
                   <Route path="/dashboard" element={<MantineDashboard />} />
-                  <Route path="/accounts" element={<Accounts />} />
-                  <Route path="/transactions" element={<Transactions />} />
+                  <Route path="/accounts" element={<MantineAccounts />} />
+                  <Route path="/transactions" element={<MantineTransactions />} />
                 </Route>
               </Route>
               <Route path="/" element={<Navigate to="/dashboard" replace />} />
