@@ -1,6 +1,6 @@
 import fs from 'fs-extra';
 import path from 'path';
-import { Category } from '../../../shared/types';
+import { Category, MonthlyBudget } from '../../../shared/types';
 
 export interface User {
   id: string;
@@ -25,6 +25,10 @@ export interface DataService {
   getCategories(): Promise<Category[]>;
   saveCategories(categories: Category[]): Promise<void>;
   
+  // Budget methods
+  getBudgets(): Promise<MonthlyBudget[]>;
+  saveBudgets(budgets: MonthlyBudget[]): Promise<void>;
+  
   // Generic data storage methods
   getData<T>(key: string): Promise<T | null>;
   saveData<T>(key: string, data: T): Promise<void>;
@@ -35,11 +39,13 @@ export class JSONDataService implements DataService {
   private dataDir: string;
   private usersFile: string;
   private categoriesFile: string;
+  private budgetsFile: string;
 
   constructor(dataDir?: string) {
     this.dataDir = dataDir || process.env.DATA_DIR || path.join(__dirname, '../../data');
     this.usersFile = path.join(this.dataDir, 'users.json');
     this.categoriesFile = path.join(this.dataDir, 'categories.json');
+    this.budgetsFile = path.join(this.dataDir, 'budgets.json');
     this.ensureDataFile();
   }
 
@@ -50,6 +56,9 @@ export class JSONDataService implements DataService {
     }
     if (!(await fs.pathExists(this.categoriesFile))) {
       await fs.writeJson(this.categoriesFile, { categories: [] });
+    }
+    if (!(await fs.pathExists(this.budgetsFile))) {
+      await fs.writeJson(this.budgetsFile, { budgets: [] });
     }
   }
 
@@ -111,6 +120,16 @@ export class JSONDataService implements DataService {
     await fs.writeJson(this.categoriesFile, { categories }, { spaces: 2 });
   }
 
+  // Budget methods
+  async getBudgets(): Promise<MonthlyBudget[]> {
+    const data = await fs.readJson(this.budgetsFile);
+    return data.budgets || [];
+  }
+
+  async saveBudgets(budgets: MonthlyBudget[]): Promise<void> {
+    await fs.writeJson(this.budgetsFile, { budgets }, { spaces: 2 });
+  }
+
   // Generic data storage implementation
   async getData<T>(key: string): Promise<T | null> {
     const filePath = path.join(this.dataDir, `${key}.json`);
@@ -157,6 +176,7 @@ export class JSONDataService implements DataService {
 export class InMemoryDataService implements DataService {
   private users: User[] = [];
   private categories: Category[] = [];
+  private budgets: MonthlyBudget[] = [];
 
   async getUser(id: string): Promise<User | null> {
     return this.users.find(u => u.id === id) || null;
@@ -200,6 +220,15 @@ export class InMemoryDataService implements DataService {
     this.categories = categories;
   }
 
+  // Budget methods
+  async getBudgets(): Promise<MonthlyBudget[]> {
+    return this.budgets;
+  }
+
+  async saveBudgets(budgets: MonthlyBudget[]): Promise<void> {
+    this.budgets = budgets;
+  }
+
   // Generic data storage implementation
   private dataStore: Map<string, unknown> = new Map();
 
@@ -220,6 +249,7 @@ export class InMemoryDataService implements DataService {
   clear(): void {
     this.users = [];
     this.categories = [];
+    this.budgets = [];
     this.dataStore.clear();
   }
 }
