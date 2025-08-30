@@ -24,17 +24,17 @@ export interface UpdateCategoryDto {
 export class CategoryService {
   constructor(private dataService: DataService) {}
 
-  async getAllCategories(): Promise<Category[]> {
-    return this.dataService.getCategories();
+  async getAllCategories(userId: string): Promise<Category[]> {
+    return this.dataService.getCategories(userId);
   }
 
-  async getCategoryById(id: string): Promise<Category | null> {
-    const categories = await this.dataService.getCategories();
+  async getCategoryById(id: string, userId: string): Promise<Category | null> {
+    const categories = await this.dataService.getCategories(userId);
     return categories.find(cat => cat.id === id) || null;
   }
 
-  async createCategory(data: CreateCategoryDto): Promise<Category> {
-    const categories = await this.dataService.getCategories();
+  async createCategory(data: CreateCategoryDto, userId: string): Promise<Category> {
+    const categories = await this.dataService.getCategories(userId);
 
     // Validate parent exists if parentId is provided
     if (data.parentId) {
@@ -58,12 +58,12 @@ export class CategoryService {
     };
 
     categories.push(newCategory);
-    await this.dataService.saveCategories(categories);
+    await this.dataService.saveCategories(categories, userId);
     return newCategory;
   }
 
-  async updateCategory(id: string, updates: UpdateCategoryDto): Promise<Category> {
-    const categories = await this.dataService.getCategories();
+  async updateCategory(id: string, updates: UpdateCategoryDto, userId: string): Promise<Category> {
+    const categories = await this.dataService.getCategories(userId);
     const index = categories.findIndex(cat => cat.id === id);
 
     if (index === -1) {
@@ -76,33 +76,33 @@ export class CategoryService {
     };
 
     categories[index] = updatedCategory;
-    await this.dataService.saveCategories(categories);
+    await this.dataService.saveCategories(categories, userId);
     return updatedCategory;
   }
 
-  async deleteCategory(id: string): Promise<void> {
-    const categories = await this.dataService.getCategories();
+  async deleteCategory(id: string, userId: string): Promise<void> {
+    const categories = await this.dataService.getCategories(userId);
     
     // Remove the category and any subcategories
     const filteredCategories = categories.filter(cat => {
       return cat.id !== id && cat.parentId !== id;
     });
 
-    await this.dataService.saveCategories(filteredCategories);
+    await this.dataService.saveCategories(filteredCategories, userId);
   }
 
-  async getParentCategories(): Promise<Category[]> {
-    const categories = await this.dataService.getCategories();
+  async getParentCategories(userId: string): Promise<Category[]> {
+    const categories = await this.dataService.getCategories(userId);
     return categories.filter(cat => cat.parentId === null);
   }
 
-  async getSubcategories(parentId: string): Promise<Category[]> {
-    const categories = await this.dataService.getCategories();
+  async getSubcategories(parentId: string, userId: string): Promise<Category[]> {
+    const categories = await this.dataService.getCategories(userId);
     return categories.filter(cat => cat.parentId === parentId);
   }
 
-  async getCategoryTree(): Promise<CategoryWithChildren[]> {
-    const categories = await this.dataService.getCategories();
+  async getCategoryTree(userId: string): Promise<CategoryWithChildren[]> {
+    const categories = await this.dataService.getCategories(userId);
     const parents = categories.filter(cat => cat.parentId === null);
     
     return parents.map(parent => ({
@@ -111,13 +111,13 @@ export class CategoryService {
     }));
   }
 
-  async findByPlaidCategory(plaidCategory: string): Promise<Category | null> {
-    const categories = await this.dataService.getCategories();
+  async findByPlaidCategory(plaidCategory: string, userId: string): Promise<Category | null> {
+    const categories = await this.dataService.getCategories(userId);
     return categories.find(cat => cat.plaidCategory === plaidCategory) || null;
   }
 
-  async getPlaidCategoryMapping(): Promise<Record<string, string>> {
-    const categories = await this.dataService.getCategories();
+  async getPlaidCategoryMapping(userId: string): Promise<Record<string, string>> {
+    const categories = await this.dataService.getCategories(userId);
     const mapping: Record<string, string> = {};
     
     categories.forEach(cat => {
@@ -129,18 +129,18 @@ export class CategoryService {
     return mapping;
   }
 
-  async getHiddenCategories(): Promise<Category[]> {
-    const categories = await this.dataService.getCategories();
+  async getHiddenCategories(userId: string): Promise<Category[]> {
+    const categories = await this.dataService.getCategories(userId);
     return categories.filter(cat => cat.isHidden);
   }
 
-  async getSavingsCategories(): Promise<Category[]> {
-    const categories = await this.dataService.getCategories();
+  async getSavingsCategories(userId: string): Promise<Category[]> {
+    const categories = await this.dataService.getCategories(userId);
     return categories.filter(cat => cat.isSavings);
   }
 
-  async initializeDefaultCategories(): Promise<void> {
-    const categories = await this.dataService.getCategories();
+  async initializeDefaultCategories(userId: string): Promise<void> {
+    const categories = await this.dataService.getCategories(userId);
     
     // Only initialize if no categories exist
     if (categories.length > 0) {
@@ -174,7 +174,7 @@ export class CategoryService {
       ...cat
     }));
 
-    await this.dataService.saveCategories(newCategories);
+    await this.dataService.saveCategories(newCategories, userId);
   }
 }
 
