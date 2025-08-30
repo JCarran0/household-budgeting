@@ -42,6 +42,7 @@ export interface Transaction {
   id: string;
   plaidTransactionId: string | null;
   accountId: string;
+  accountName?: string; // Added for display
   amount: number; // negative = expense, positive = income
   date: string;
   name: string;
@@ -50,6 +51,7 @@ export interface Transaction {
   categoryId: string | null;
   pending: boolean;
   tags: string[];
+  notes: string | null;
   isHidden: boolean;
   isManual: boolean;
   isSplit: boolean;

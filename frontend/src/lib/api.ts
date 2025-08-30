@@ -193,6 +193,13 @@ class ApiClient {
     endDate?: string;
     limit?: number;
     offset?: number;
+    categoryIds?: string[];
+    tags?: string[];
+    searchQuery?: string;
+    includePending?: boolean;
+    includeHidden?: boolean;
+    minAmount?: number;
+    maxAmount?: number;
   }): Promise<{ transactions: Transaction[]; total: number }> {
     const { data } = await this.client.get('/transactions', { params });
     return data;
@@ -206,6 +213,23 @@ class ApiClient {
   }> {
     const { data } = await this.client.post('/transactions/sync', { accountId });
     return data;
+  }
+
+  async updateTransactionCategory(transactionId: string, categoryId: string): Promise<void> {
+    await this.client.put(`/transactions/${transactionId}/category`, { categoryId });
+  }
+
+  async addTransactionTags(transactionId: string, tags: string[]): Promise<void> {
+    await this.client.post(`/transactions/${transactionId}/tags`, { tags });
+  }
+
+  async splitTransaction(transactionId: string, splits: {
+    amount: number;
+    categoryId?: string;
+    description?: string;
+    tags?: string[];
+  }[]): Promise<void> {
+    await this.client.post(`/transactions/${transactionId}/split`, { splits });
   }
 
   // Category endpoints

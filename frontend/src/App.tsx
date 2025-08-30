@@ -14,7 +14,7 @@ import { ProtectedRoute } from './components/ProtectedRoute';
 import { MantineLayout } from './components/MantineLayout';
 import { MantineDashboard } from './pages/MantineDashboard';
 import { MantineAccounts } from './pages/MantineAccounts';
-import { MantineTransactions } from './pages/MantineTransactions';
+import { EnhancedTransactions } from './pages/EnhancedTransactions';
 import { Categories } from './pages/Categories';
 import { Budgets } from './pages/Budgets';
 import { PlaidLinkProvider } from './providers/PlaidLinkProvider';
@@ -50,7 +50,7 @@ function App() {
                 <Route element={<MantineLayout />}>
                   <Route path="/dashboard" element={<MantineDashboard />} />
                   <Route path="/accounts" element={<MantineAccounts />} />
-                  <Route path="/transactions" element={<MantineTransactions />} />
+                  <Route path="/transactions" element={<EnhancedTransactions />} />
                   <Route path="/categories" element={<Categories />} />
                   <Route path="/budgets" element={<Budgets />} />
                 </Route>
