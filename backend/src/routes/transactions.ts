@@ -55,6 +55,15 @@ const addTagsSchema = z.object({
   tags: z.array(z.string().min(1)),
 });
 
+const splitTransactionSchema = z.object({
+  splits: z.array(z.object({
+    amount: z.number().positive(),
+    categoryId: z.string().optional(),
+    description: z.string().optional(),
+    tags: z.array(z.string()).optional(),
+  })).min(2),
+});
+
 const syncAllSchema = z.object({
   startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
 });
@@ -245,6 +254,48 @@ router.post('/:transactionId/tags', authMiddleware, async (req: AuthRequest, res
   } catch (error) {
     console.error('Error adding tags:', error);
     res.status(500).json({ success: false, error: 'Failed to add tags' });
+  }
+});
+
+/**
+ * POST /api/v1/transactions/:transactionId/split
+ * Split a transaction into multiple parts
+ */
+router.post('/:transactionId/split', authMiddleware, async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    if (!req.user) {
+      res.status(401).json({ success: false, error: 'Unauthorized' });
+      return;
+    }
+
+    const validation = splitTransactionSchema.safeParse(req.body);
+    if (!validation.success) {
+      res.status(400).json({ 
+        success: false, 
+        error: 'Invalid request data',
+        details: validation.error.format(),
+      });
+      return;
+    }
+
+    const { transactionId } = req.params;
+    const { splits } = validation.data;
+
+    const result = await transactionService.splitTransaction(
+      req.user.userId,
+      transactionId,
+      splits
+    );
+
+    if (!result.success) {
+      res.status(400).json({ success: false, error: result.error });
+      return;
+    }
+
+    res.json({ success: true, splitTransactions: result.splitTransactions });
+  } catch (error) {
+    console.error('Error splitting transaction:', error);
+    res.status(500).json({ success: false, error: 'Failed to split transaction' });
   }
 });
 

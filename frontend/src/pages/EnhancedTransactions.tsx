@@ -47,6 +47,7 @@ import {
   IconRefresh,
 } from '@tabler/icons-react';
 import { TransactionEditModal } from '../components/transactions/TransactionEditModal';
+import { TransactionSplitModal } from '../components/transactions/TransactionSplitModal';
 
 export function EnhancedTransactions() {
   const [searchTerm, setSearchTerm] = useState('');
@@ -63,6 +64,8 @@ export function EnhancedTransactions() {
   
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [splittingTransaction, setSplittingTransaction] = useState<Transaction | null>(null);
+  const [isSplitModalOpen, setIsSplitModalOpen] = useState(false);
   
   const queryClient = useQueryClient();
 
@@ -180,6 +183,16 @@ export function EnhancedTransactions() {
   const handleEditModalClose = () => {
     setIsEditModalOpen(false);
     setEditingTransaction(null);
+  };
+
+  const handleSplitClick = (transaction: Transaction) => {
+    setSplittingTransaction(transaction);
+    setIsSplitModalOpen(true);
+  };
+
+  const handleSplitModalClose = () => {
+    setIsSplitModalOpen(false);
+    setSplittingTransaction(null);
   };
 
   const getCategoryDisplay = (transaction: Transaction) => {
@@ -446,6 +459,7 @@ export function EnhancedTransactions() {
                         <Menu.Item
                           leftSection={<IconScissors style={{ width: rem(14), height: rem(14) }} />}
                           disabled={transaction.isSplit}
+                          onClick={() => handleSplitClick(transaction)}
                         >
                           Split Transaction
                         </Menu.Item>
@@ -482,6 +496,13 @@ export function EnhancedTransactions() {
         opened={isEditModalOpen}
         onClose={handleEditModalClose}
         transaction={editingTransaction}
+      />
+
+      {/* Split Modal */}
+      <TransactionSplitModal
+        opened={isSplitModalOpen}
+        onClose={handleSplitModalClose}
+        transaction={splittingTransaction}
       />
     </Container>
   );

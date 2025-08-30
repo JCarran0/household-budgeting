@@ -448,6 +448,92 @@ export class TransactionService {
   }
 
   /**
+   * Split a transaction into multiple parts
+   */
+  async splitTransaction(
+    userId: string,
+    transactionId: string,
+    splits: Array<{
+      amount: number;
+      categoryId?: string;
+      description?: string;
+      tags?: string[];
+    }>
+  ): Promise<{ success: boolean; error?: string; splitTransactions?: StoredTransaction[] }> {
+    try {
+      const transactions = await this.dataService.getData<StoredTransaction[]>(
+        `transactions_${userId}`
+      ) || [];
+
+      const originalTransaction = transactions.find(t => t.id === transactionId);
+      if (!originalTransaction) {
+        return { success: false, error: 'Transaction not found' };
+      }
+
+      if (originalTransaction.isSplit) {
+        return { success: false, error: 'Transaction is already split' };
+      }
+
+      // Validate split amounts equal original
+      const totalSplitAmount = splits.reduce((sum, split) => sum + split.amount, 0);
+      if (Math.abs(totalSplitAmount - Math.abs(originalTransaction.amount)) > 0.01) {
+        return { success: false, error: 'Split amounts must equal original transaction amount' };
+      }
+
+      // Create split transactions
+      const splitTransactions: StoredTransaction[] = [];
+      const now = new Date();
+
+      for (let i = 0; i < splits.length; i++) {
+        const split = splits[i];
+        const splitTxn: StoredTransaction = {
+          id: uuidv4(),
+          userId,
+          accountId: originalTransaction.accountId,
+          plaidTransactionId: null, // Split transactions don't have Plaid IDs
+          plaidAccountId: originalTransaction.plaidAccountId,
+          amount: originalTransaction.amount > 0 ? split.amount : -split.amount, // Maintain sign
+          date: originalTransaction.date,
+          name: split.description || `${originalTransaction.name} (Split ${i + 1})`,
+          merchantName: originalTransaction.merchantName,
+          category: originalTransaction.category,
+          categoryId: split.categoryId || null,
+          userCategoryId: split.categoryId || null,
+          status: originalTransaction.status,
+          pending: originalTransaction.pending,
+          isoCurrencyCode: originalTransaction.isoCurrencyCode,
+          tags: split.tags || [],
+          notes: split.description || null,
+          isHidden: false,
+          isSplit: false,
+          parentTransactionId: originalTransaction.id,
+          splitTransactionIds: [],
+          location: originalTransaction.location,
+          createdAt: now,
+          updatedAt: now,
+        };
+        
+        splitTransactions.push(splitTxn);
+        transactions.push(splitTxn);
+      }
+
+      // Update original transaction
+      originalTransaction.isSplit = true;
+      originalTransaction.splitTransactionIds = splitTransactions.map(t => t.id);
+      originalTransaction.isHidden = true; // Hide original from budgets
+      originalTransaction.updatedAt = now;
+
+      // Save all transactions
+      await this.dataService.saveData(`transactions_${userId}`, transactions);
+
+      return { success: true, splitTransactions };
+    } catch (error) {
+      console.error('Error splitting transaction:', error);
+      return { success: false, error: 'Failed to split transaction' };
+    }
+  }
+
+  /**
    * TODO: Implement proper token decryption
    */
   private decryptToken(encryptedToken: string): string {
