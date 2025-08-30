@@ -108,8 +108,14 @@ This document outlines the implementation plan for a personal budgeting app with
   - Transaction filtering (date range, pending)
   - Manual transaction management
   - Transaction splitting
-- [x] Implement transaction service
-- [x] Create transaction routes (`/api/transactions`)
+- [x] Implement transaction service with full CRUD operations
+- [x] Create transaction routes:
+  - GET `/api/v1/transactions` - List with advanced filtering
+  - POST `/api/v1/transactions/sync` - Sync from Plaid
+  - PUT `/api/v1/transactions/:id/category` - Update category
+  - POST `/api/v1/transactions/:id/tags` - Update tags
+  - POST `/api/v1/transactions/:id/split` - Split transaction
+  - GET `/api/v1/transactions/summary` - Get summary stats
 
 ## Phase 5: Budget & Category Management (Week 5) ✅ COMPLETE
 
@@ -182,10 +188,14 @@ This document outlines the implementation plan for a personal budgeting app with
 
 ### 4.1 Transaction Management UI ✅
 - [x] Implement transaction sync from Plaid
-- [x] Create transaction list display
-- [x] Add date filtering
-- [x] Display transaction details (amount, merchant, date)
-- [x] Show account association
+- [x] Create enhanced transaction page with advanced filtering
+- [x] Add date range, amount range, and status filtering
+- [x] Display transaction details (amount, merchant, date, category, tags)
+- [x] Show account association with badges
+- [x] Implement transaction edit modal for categorization
+- [x] Add tag management with TagsInput component
+- [x] Implement transaction splitting functionality
+- [x] Add visual indicators for pending, hidden, and split transactions
 
 ### 4.2 Category Management UI ✅
 - [x] Create Categories page with tree view
@@ -206,9 +216,9 @@ This document outlines the implementation plan for a personal budgeting app with
 - [x] Add CSV export for budget comparisons
 - [x] Fix category selector issues in forms
 
-## Phase 6: Reports & Polish (Week 6)
+## Phase 6: Reports & Polish (Week 6) 🚧 IN PROGRESS
 
-### 6.1 Reporting Dashboard
+### 6.1 Reporting Dashboard 🚧
 - [ ] Create test file: `frontend/src/components/__tests__/Dashboard.test.tsx`
 - [ ] Implement spending trends charts (Recharts)
 - [ ] Add budget progress indicators
@@ -249,7 +259,8 @@ This document outlines the implementation plan for a personal budgeting app with
 ### Backend (69 tests passing)
 - ✅ Complete authentication system with JWT, rate limiting, account lockout
 - ✅ Plaid service integration with sandbox testing
-- ✅ Account and transaction management
+- ✅ Account and transaction management with full CRUD operations
+- ✅ Transaction splitting functionality with parent-child relationships
 - ✅ Category service with hierarchy and Plaid mapping (17 tests)
 - ✅ Budget service with monthly management and comparisons (23 tests)
 - ✅ Data persistence with JSON storage
@@ -259,14 +270,16 @@ This document outlines the implementation plan for a personal budgeting app with
 - ✅ Complete authentication flow (login, register, protected routes)
 - ✅ Plaid Link integration for account connection
 - ✅ Account management with sync functionality
-- ✅ Transaction display with filtering
+- ✅ Enhanced transaction page with advanced filtering and search
+- ✅ Transaction edit modal with category and tag management
+- ✅ Transaction splitting modal for dividing transactions
 - ✅ Category management with tree view and CRUD operations
 - ✅ Budget management with month navigation and comparisons
 - ✅ Budget vs actual analysis with visual indicators
 
 ## Next Priority Actions
-1. Enhance transaction features (categorization, splitting, tagging)
-2. Implement reporting dashboard with charts
+1. ~~Enhance transaction features (categorization, splitting, tagging)~~ ✅ COMPLETE
+2. Implement reporting dashboard with charts 🚧 IN PROGRESS
 3. Add cash flow projections
 4. Performance optimization
 5. Prepare for production deployment

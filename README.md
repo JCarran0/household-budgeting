@@ -4,23 +4,43 @@ A modern personal budgeting application with bank account integration via Plaid,
 
 ## 🎯 Features
 
-### Current Features
+### ✅ Completed Features
 - **Modern Dashboard**: Professional UI with Mantine component library
 - **Secure Authentication**: JWT-based auth with bcrypt password hashing
 - **Bank Integration**: Connect bank accounts via Plaid (sandbox mode)
 - **Account Management**: View and sync connected bank accounts
-- **Transaction Tracking**: Automatic transaction import from connected accounts
+- **Transaction Management**: 
+  - Automatic transaction import from connected accounts
+  - Advanced filtering (date range, amount, categories, tags, search)
+  - Transaction categorization with hierarchical categories
+  - Tag management for better organization
+  - Transaction splitting for shared expenses
+  - Visual indicators for pending, hidden, and split transactions
+- **Category System**:
+  - Two-level hierarchy (Parent → Subcategory)
+  - Plaid category mapping
+  - Default category initialization
+  - Hidden categories for exclusion from budgets
+- **Budget Management**:
+  - Monthly budget creation and tracking
+  - Budget vs actual comparison with visual progress bars
+  - Copy budgets between months
+  - CSV export for budget comparisons
+  - Rollover support for savings categories
 - **Dark Theme**: Built-in dark mode with professional styling
 - **Responsive Design**: Mobile-friendly interface with collapsible sidebar
 - **Real-time Updates**: Live data refresh with React Query
 
-### Planned Features
-- Transaction categorization and tagging
-- Monthly budget creation and tracking
-- Spending analytics and trends
+### 🚧 In Progress
+- Reporting dashboard with spending trends
+- Cash flow projections
+- Category-based spending charts
+
+### 📅 Planned Features
 - Bill reminders and recurring transactions
 - Multi-user household support
-- Data export capabilities
+- Mobile app
+- PostgreSQL migration from JSON storage
 
 ## 🛠 Tech Stack
 
@@ -30,7 +50,7 @@ A modern personal budgeting application with bank account integration via Plaid,
 - **Authentication**: JWT with bcrypt
 - **Banking API**: Plaid (sandbox environment)
 - **Data Storage**: JSON files (MVP) → PostgreSQL (planned)
-- **Testing**: Jest with 47+ integration tests
+- **Testing**: Jest with 69+ tests (auth, categories, budgets)
 
 ### Frontend
 - **Framework**: React 18 with TypeScript
