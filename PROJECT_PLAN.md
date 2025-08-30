@@ -1,10 +1,10 @@
 # Personal Budgeting App - Project Plan
 
 ## Overview
-This document outlines the implementation plan for a personal budgeting app with Plaid integration, following Test-Driven Development (TDD) principles.
+This document outlines the implementation plan for a personal budgeting app with Plaid integration.
 
 ## Development Approach
-- **Methodology**: Test-Driven Development (TDD)
+- **Methodology**: Risk-Based Testing with rapid feature development
 - **Strategy**: MVP-first, incremental feature development
 - **Tech Stack**: 
   - Backend: Node.js + Express + TypeScript
@@ -38,7 +38,7 @@ This document outlines the implementation plan for a personal budgeting app with
 - [x] Set up test utilities and mocks directory
 - [x] Create NPM scripts for dev, test, build
 
-### 1.3 Authentication Service (TDD) ✅
+### 1.3 Authentication Service ✅
 - [x] Create test file: `backend/src/services/__tests__/authService.test.ts`
 - [x] Write failing tests for:
   - User registration with username/password
@@ -235,8 +235,8 @@ This document outlines the implementation plan for a personal budgeting app with
 5. Implement minimal auth service to pass test
 
 ## Notes
-- Maintain TDD discipline throughout - no code without tests
-- Commit after each passing test
+- Focus on rapid feature delivery with critical path testing
+- Commit after meaningful feature completion
 - Keep PRs small and focused
 - Document API endpoints as they're created
 - Regular security reviews for auth and data handling

@@ -242,7 +242,7 @@ interface MonthlyBudget {
 
 ### Phase 3: Core Features (Next)
 
-**TDD Focus**:
+**Focus Areas**:
 1. Transaction categorization and tagging logic
 2. Category hierarchy management
 3. Monthly budget calculations
@@ -256,7 +256,7 @@ interface MonthlyBudget {
 ### Phase 4: Reports & Analytics (Week 5)
 **Goal**: Reporting, charts, data visualization
 
-**TDD Focus**:
+**Focus Areas**:
 1. Report calculation logic
 2. React component testing
 3. API integration testing
