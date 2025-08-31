@@ -11,7 +11,9 @@
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
     "lint": "tsc --noEmit",
-    "clean": "rm -rf dist coverage"
+    "clean": "rm -rf dist coverage",
+    "reset": "node reset-app.js",
+    "reset:force": "node reset-app.js --force"
   },
   "keywords": [],
   "author": "",
