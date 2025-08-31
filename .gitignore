@@ -112,3 +112,6 @@ $RECYCLE.BIN/
 # Plaid secrets (extra safety)
 *plaid*secret*
 *plaid*key*
+
+# Temporary files
+/tmp

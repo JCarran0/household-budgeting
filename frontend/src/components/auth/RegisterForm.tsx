@@ -29,16 +29,17 @@ export function RegisterForm() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [validationError, setValidationError] = useState('');
 
+  // Simplified password requirements - focus on length for security
   const passwordRequirements = [
-    { label: 'At least 8 characters', met: password.length >= 8 },
-    { label: 'Contains uppercase letter', met: /[A-Z]/.test(password) },
-    { label: 'Contains lowercase letter', met: /[a-z]/.test(password) },
-    { label: 'Contains number', met: /\d/.test(password) },
-    { label: 'Contains special character', met: /[!@#$%^&*]/.test(password) },
+    { label: 'At least 15 characters (spaces allowed!)', met: password.length >= 15 },
+    { label: 'Not a common password', met: !['password123456', '123456789012345', 'aaaaaaaaaaaaaaa'].includes(password.toLowerCase()) },
+    { label: 'Has some variety', met: new Set(password).size >= 3 },
   ];
 
   const allRequirementsMet = passwordRequirements.every(req => req.met);
-  const passwordStrength = (passwordRequirements.filter(req => req.met).length / passwordRequirements.length) * 100;
+  
+  // Calculate strength based on length (longer is better)
+  const passwordStrength = Math.min(100, (password.length / 30) * 100);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -92,7 +93,8 @@ export function RegisterForm() {
 
             <PasswordInput
               label="Password"
-              placeholder="Create a strong password"
+              placeholder="Try a passphrase like: sunny days make happy memories"
+              description="Tip: Use a memorable phrase with spaces - it's more secure than complex passwords!"
               value={password}
               onChange={(e) => setPassword(e.currentTarget.value)}
               required

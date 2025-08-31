@@ -22,9 +22,20 @@ export function PlaidButton({ variant = 'filled', size = 'sm' }: PlaidButtonProp
     }
   }, [error]);
 
+  const handleClick = () => {
+    // Show helpful notification about guest mode
+    notifications.show({
+      title: 'Connecting to Bank',
+      message: 'Tip: Click "Continue as guest" at the bottom if you don\'t have a Plaid account',
+      color: 'blue',
+      autoClose: 8000,
+    });
+    openPlaid();
+  };
+
   return (
     <Button
-      onClick={openPlaid}
+      onClick={handleClick}
       loading={isLoading}
       leftSection={<IconCreditCard size={16} />}
       variant={variant}

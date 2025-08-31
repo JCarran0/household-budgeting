@@ -354,26 +354,29 @@ export class AuthService {
   validatePasswordStrength(password: string): PasswordStrengthResult {
     const errors: string[] = [];
 
-    if (!password || password.length < 8) {
-      errors.push('Password must be at least 8 characters long');
+    // Require minimum length of 15 characters for passphrase security
+    if (!password || password.length < 15) {
+      errors.push('Password must be at least 15 characters long');
     }
 
-    if (!/[a-z]/.test(password)) {
-      errors.push('Password must contain at least one lowercase letter');
-    }
-
-    if (!/[A-Z]/.test(password)) {
-      errors.push('Password must contain at least one uppercase letter');
-    }
-
-    if (!/[0-9]/.test(password)) {
-      errors.push('Password must contain at least one number');
-    }
-
-    // Check for common passwords (exact match, not substring)
-    const commonPasswords = ['password123', '12345678', 'qwerty123', 'abc12345', 'password'];
+    // Check for extremely common/weak passwords
+    const commonPasswords = [
+      'password123456',
+      '123456789012345',
+      'qwertyuiopasdfg',
+      'aaaaaaaaaaaaaaa',
+      '111111111111111'
+    ];
     if (commonPasswords.includes(password.toLowerCase())) {
-      errors.push('Password is too common');
+      errors.push('Password is too common or weak');
+    }
+
+    // Warn if password is just repeated characters
+    if (password && password.length >= 15) {
+      const uniqueChars = new Set(password).size;
+      if (uniqueChars < 3) {
+        errors.push('Password must contain more variety');
+      }
     }
 
     return {

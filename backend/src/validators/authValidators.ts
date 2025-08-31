@@ -1,16 +1,25 @@
 import { z } from 'zod';
 
-// Custom password validation
+// Custom password validation - passphrases are more secure!
 const passwordSchema = z.string()
-  .min(8, 'Password must be at least 8 characters long')
-  .max(100, 'Password must be less than 100 characters')
-  .regex(/[a-z]/, 'Password must contain at least one lowercase letter')
-  .regex(/[A-Z]/, 'Password must contain at least one uppercase letter')
-  .regex(/[0-9]/, 'Password must contain at least one number')
+  .min(15, 'Password must be at least 15 characters long')
+  .max(200, 'Password must be less than 200 characters')
   .refine((password) => {
-    const commonPasswords = ['password123', '12345678', 'qwerty123', 'abc12345', 'password'];
+    // Check for extremely common/weak passwords
+    const commonPasswords = [
+      'password123456',
+      '123456789012345',
+      'qwertyuiopasdfg',
+      'aaaaaaaaaaaaaaa',
+      '111111111111111'
+    ];
     return !commonPasswords.includes(password.toLowerCase());
-  }, 'Password is too common');
+  }, 'Password is too common or weak')
+  .refine((password) => {
+    // Ensure password has some variety (at least 3 unique characters)
+    const uniqueChars = new Set(password).size;
+    return uniqueChars >= 3;
+  }, 'Password must contain more variety');
 
 // Username validation
 const usernameSchema = z.string()

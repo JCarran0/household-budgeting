@@ -386,10 +386,10 @@ describe('AuthService', () => {
 
     it('should validate password strength requirements', () => {
       const weakPasswords = [
-        'short',           // Too short
-        '12345678',        // No letters
-        'abcdefgh',        // No numbers
-        'password123',     // Too common
+        'short',                    // Too short (< 15 chars)
+        'tooshort12345',           // Still too short (14 chars)
+        'aaaaaaaaaaaaaaa',         // 15 chars but all same character
+        '111111111111111',         // Common weak password
       ];
 
       weakPasswords.forEach(password => {
@@ -399,10 +399,18 @@ describe('AuthService', () => {
         expect(result.errors!.length).toBeGreaterThan(0);
       });
 
-      const strongPassword = 'SecurePass123!@#';
-      const result = authService.validatePasswordStrength(strongPassword);
-      expect(result.isValid).toBe(true);
-      expect(result.errors).toBeUndefined();
+      const strongPasswords = [
+        'frog songs puddle jumps dog piles',  // Your example passphrase
+        'sunny days make happy memories',     // Another good passphrase
+        'coffee tastes better on weekends',   // 30+ chars passphrase
+        'my2dogslovepizza',                   // 17 chars, mixed
+      ];
+
+      strongPasswords.forEach(password => {
+        const result = authService.validatePasswordStrength(password);
+        expect(result.isValid).toBe(true);
+        expect(result.errors).toBeUndefined();
+      });
     });
   });
 

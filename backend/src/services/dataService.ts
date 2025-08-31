@@ -63,8 +63,16 @@ export class JSONDataService implements DataService {
   }
 
   private async readUsers(): Promise<User[]> {
-    const data = await fs.readJson(this.usersFile);
-    return data.users || [];
+    try {
+      const data = await fs.readJson(this.usersFile);
+      return data.users || [];
+    } catch (error: any) {
+      // If file doesn't exist, return empty array (allows first user registration)
+      if (error.code === 'ENOENT') {
+        return [];
+      }
+      throw error;
+    }
   }
 
   private async writeUsers(users: User[]): Promise<void> {
