@@ -73,6 +73,41 @@ const syncAllSchema = z.object({
 });
 
 /**
+ * GET /api/v1/transactions/uncategorized/count
+ * Get count of uncategorized transactions
+ */
+router.get('/uncategorized/count', authMiddleware, async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    if (!req.user) {
+      res.status(401).json({ success: false, error: 'Unauthorized' });
+      return;
+    }
+
+    const result = await transactionService.getTransactions(req.user.userId);
+    
+    if (!result.success || !result.transactions) {
+      res.status(500).json({ success: false, error: 'Failed to fetch transactions' });
+      return;
+    }
+
+    // Count transactions without a user-assigned category
+    // Exclude hidden transactions and split child transactions
+    const uncategorizedCount = result.transactions.filter(
+      t => !t.userCategoryId && !t.isHidden && !t.parentTransactionId
+    ).length;
+
+    res.json({ 
+      success: true,
+      count: uncategorizedCount,
+      total: result.transactions.filter(t => !t.isHidden && !t.parentTransactionId).length
+    });
+  } catch (error) {
+    console.error('Error fetching uncategorized count:', error);
+    res.status(500).json({ success: false, error: 'Failed to fetch uncategorized count' });
+  }
+});
+
+/**
  * GET /api/v1/transactions
  * Get transactions with filtering
  */

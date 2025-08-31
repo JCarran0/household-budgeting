@@ -94,6 +94,7 @@ class ApiClient {
     this.connectAccount = this.connectAccount.bind(this);
     this.getAccounts = this.getAccounts.bind(this);
     this.getTransactions = this.getTransactions.bind(this);
+    this.getUncategorizedCount = this.getUncategorizedCount.bind(this);
     this.syncTransactions = this.syncTransactions.bind(this);
     
     // Category methods
@@ -200,6 +201,11 @@ class ApiClient {
     maxAmount?: number;
   }): Promise<{ transactions: Transaction[]; total: number }> {
     const { data } = await this.client.get('/transactions', { params });
+    return data;
+  }
+
+  async getUncategorizedCount(): Promise<{ success: boolean; count: number; total: number }> {
+    const { data } = await this.client.get<{ success: boolean; count: number; total: number }>('/transactions/uncategorized/count');
     return data;
   }
 

@@ -514,11 +514,35 @@ npm run test
 - React frontend with full authentication flow
 - Plaid Link UI working in sandbox mode
 
-### Next Priority: Transaction Management
-1. **Sync transactions** - Pull from 2025-01-01
-2. **Store & categorize** - Persist with proper types
-3. **Build categorization UI** - Allow manual categorization
-4. **Implement transaction splits** - For shared expenses
+### Completed Features (August 31, 2025)
+1. **Enhanced Transaction Sync**:
+   - Implemented pagination to fetch ALL available transactions (not just first 100)
+   - Extended history request to 730 days (2 years) instead of default 90 days
+   - Note: Banks may limit actual history (e.g., Bank of America ~90 days)
+   - Users must reconnect accounts to benefit from extended history request
+
+2. **Passphrase Authentication**:
+   - Switched from complex 8-char passwords to 15+ char passphrases
+   - Removed uppercase/lowercase/number requirements
+   - Encourages memorable phrases with spaces
+   - More secure and user-friendly
+
+3. **Dashboard Improvements**:
+   - Added uncategorized transaction count display
+   - Warning (orange) styling for 1-10 uncategorized transactions
+   - Error (red) styling for >10 uncategorized transactions
+   - Interactive alert that links to transactions/categories pages
+
+4. **Category Initialization Fix**:
+   - Fixed "Cannot read properties of undefined" error
+   - Added proper method binding for all API client methods
+   - Improved error logging and display
+
+### Next Priority: Advanced Features
+1. **Savings categories with rollover**
+2. **Bill reminders and recurring transactions**
+3. **Enhanced reporting and visualizations**
+4. **Mobile app development**
 
 ### Type Safety Checklist
 - [x] Replace all `any` with proper types

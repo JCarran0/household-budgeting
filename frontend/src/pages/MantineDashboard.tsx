@@ -13,7 +13,8 @@ import {
   ThemeIcon,
   Center,
   RingProgress,
-  Loader
+  Loader,
+  Alert
 } from '@mantine/core';
 import { 
   IconCash, 
@@ -23,14 +24,18 @@ import {
   IconCreditCard,
   IconPlus,
   IconArrowUpRight,
-  IconArrowDownRight
+  IconArrowDownRight,
+  IconAlertCircle,
+  IconCategory
 } from '@tabler/icons-react';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../lib/api';
 import { formatDistanceToNow } from 'date-fns';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 
 export function MantineDashboard() {
+  const navigate = useNavigate();
+  
   const { data: accounts, isLoading: accountsLoading } = useQuery({
     queryKey: ['accounts'],
     queryFn: api.getAccounts,
@@ -39,6 +44,18 @@ export function MantineDashboard() {
   const { data: transactionData, isLoading: transactionsLoading } = useQuery({
     queryKey: ['transactions', 'recent'],
     queryFn: () => api.getTransactions({ limit: 10 }),
+  });
+
+  const { data: uncategorizedData } = useQuery({
+    queryKey: ['transactions', 'uncategorized', 'count'],
+    queryFn: api.getUncategorizedCount,
+  });
+
+  // Fetch current month's budgets to show actual budget vs spending
+  const currentMonth = new Date().toISOString().slice(0, 7); // YYYY-MM format
+  const { data: budgetData } = useQuery({
+    queryKey: ['budgets', 'month', currentMonth],
+    queryFn: () => api.getMonthlyBudgets(currentMonth),
   });
 
   const isLoading = accountsLoading || transactionsLoading;
@@ -63,7 +80,13 @@ export function MantineDashboard() {
     .filter(t => t.amount > 0)
     .reduce((sum, t) => sum + t.amount, 0);
 
-  const spendingProgress = monthlyIncome > 0 ? (monthlySpending / monthlyIncome) * 100 : 0;
+  // Calculate budget progress - compare spending against actual budget, not income
+  const totalBudget = budgetData?.total || 0;
+  const hasBudget = totalBudget > 0;
+  const budgetProgress = hasBudget ? (monthlySpending / totalBudget) * 100 : 0;
+  
+  // For income vs spending comparison (when no budget exists)
+  const spendingVsIncomeProgress = monthlyIncome > 0 ? (monthlySpending / monthlyIncome) * 100 : 0;
 
   if (isLoading) {
     return (
@@ -125,6 +148,40 @@ export function MantineDashboard() {
         )}
       </Group>
 
+      {/* Uncategorized Transactions Alert */}
+      {uncategorizedData && uncategorizedData.count > 0 && (
+        <Alert
+          icon={<IconAlertCircle size={20} />}
+          title="Uncategorized Transactions"
+          color={uncategorizedData.count > 10 ? 'red' : 'orange'}
+          variant="filled"
+          styles={{
+            root: { cursor: 'pointer' },
+          }}
+          onClick={() => navigate('/transactions')}
+        >
+          <Group justify="space-between">
+            <Text size="sm">
+              You have {uncategorizedData.count} uncategorized transaction{uncategorizedData.count !== 1 ? 's' : ''} 
+              {' '}({Math.round((uncategorizedData.count / uncategorizedData.total) * 100)}% of total).
+              Click here to categorize them.
+            </Text>
+            <Button
+              size="xs"
+              variant="white"
+              color={uncategorizedData.count > 10 ? 'red' : 'orange'}
+              leftSection={<IconCategory size={14} />}
+              onClick={(e) => {
+                e.stopPropagation();
+                navigate('/categories');
+              }}
+            >
+              Manage Categories
+            </Button>
+          </Group>
+        </Alert>
+      )}
+
       {/* Stats Cards */}
       <SimpleGrid cols={{ base: 1, sm: 2, lg: 4 }} spacing="lg">
         {stats.map((stat) => (
@@ -147,25 +204,46 @@ export function MantineDashboard() {
         ))}
       </SimpleGrid>
 
-      {/* Spending Progress */}
-      {monthlyIncome > 0 && (
+      {/* Budget Status - Show actual budget vs spending when budget exists */}
+      {hasBudget ? (
         <Card padding="lg" radius="md" withBorder>
           <Text size="sm" fw={500} mb="md">Monthly Budget Status</Text>
           <Progress.Root size="xl" mb="md">
-            <Progress.Section value={spendingProgress} color={spendingProgress > 80 ? 'red' : 'yellow'}>
-              <Progress.Label>{spendingProgress.toFixed(0)}%</Progress.Label>
+            <Progress.Section value={budgetProgress} color={budgetProgress > 100 ? 'red' : budgetProgress > 80 ? 'orange' : 'green'}>
+              <Progress.Label>{budgetProgress.toFixed(0)}%</Progress.Label>
+            </Progress.Section>
+          </Progress.Root>
+          <Group justify="space-between">
+            <Text size="sm" c="dimmed">
+              Spent ${monthlySpending.toFixed(2)} of ${totalBudget.toFixed(2)} budgeted
+            </Text>
+            <Badge color={budgetProgress > 100 ? 'red' : budgetProgress > 80 ? 'orange' : 'green'}>
+              {budgetProgress > 100 ? 'Over Budget' : budgetProgress > 80 ? 'Near Limit' : 'On Track'}
+            </Badge>
+          </Group>
+        </Card>
+      ) : monthlyIncome > 0 ? (
+        // Show income vs spending when no budget exists
+        <Card padding="lg" radius="md" withBorder>
+          <Text size="sm" fw={500} mb="md">Income vs Spending</Text>
+          <Progress.Root size="xl" mb="md">
+            <Progress.Section value={spendingVsIncomeProgress} color={spendingVsIncomeProgress > 100 ? 'red' : spendingVsIncomeProgress > 80 ? 'orange' : 'green'}>
+              <Progress.Label>{spendingVsIncomeProgress.toFixed(0)}%</Progress.Label>
             </Progress.Section>
           </Progress.Root>
           <Group justify="space-between">
             <Text size="sm" c="dimmed">
               Spent ${monthlySpending.toFixed(2)} of ${monthlyIncome.toFixed(2)} income
             </Text>
-            <Badge color={spendingProgress > 80 ? 'red' : 'green'}>
-              {spendingProgress > 80 ? 'Over Budget' : 'On Track'}
+            <Badge color={spendingVsIncomeProgress > 100 ? 'red' : spendingVsIncomeProgress > 80 ? 'orange' : 'green'}>
+              {spendingVsIncomeProgress > 100 ? 'Overspending' : spendingVsIncomeProgress > 80 ? 'High Spending' : 'Within Income'}
             </Badge>
           </Group>
+          <Text size="xs" c="dimmed" mt="xs">
+            <Link to="/budgets" style={{ color: 'inherit' }}>Create a budget</Link> to track spending against targets
+          </Text>
         </Card>
-      )}
+      ) : null}
 
       <Grid gutter="lg">
         {/* Accounts Section */}

@@ -13,13 +13,11 @@ import {
   Grid,
   Card,
   ThemeIcon,
-  Select,
   ActionIcon,
   Tooltip,
-  Badge,
   Tabs,
 } from '@mantine/core';
-import { MonthPickerInput } from '@mantine/dates';
+import { MonthPickerInput, type DatePickerValue } from '@mantine/dates';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { notifications } from '@mantine/notifications';
 import {
@@ -35,7 +33,7 @@ import {
   IconRefresh,
 } from '@tabler/icons-react';
 import { format, addMonths, subMonths, startOfMonth } from 'date-fns';
-import { api, type MonthlyBudgetResponse, type BudgetComparisonResponse } from '../lib/api';
+import { api } from '../lib/api';
 import { BudgetGrid } from '../components/budgets/BudgetGrid';
 import { BudgetForm } from '../components/budgets/BudgetForm';
 import { BudgetComparison } from '../components/budgets/BudgetComparison';
@@ -58,12 +56,10 @@ export function Budgets() {
   });
 
   // Fetch categories for budget creation
-  const { data: categories, isLoading: categoriesLoading } = useQuery({
+  const { data: categories } = useQuery({
     queryKey: ['categories'],
     queryFn: async () => {
-      console.log('[Budgets Page] Fetching categories...');
       const result = await api.getCategories();
-      console.log('[Budgets Page] Categories received:', result);
       return result;
     },
   });
@@ -189,7 +185,7 @@ export function Budgets() {
               
               <MonthPickerInput
                 value={selectedDate}
-                onChange={(date) => date && setSelectedDate(date)}
+                onChange={(date: DatePickerValue) => date && setSelectedDate(date)}
                 size="md"
                 styles={{ input: { width: 200, textAlign: 'center' } }}
               />
