@@ -4,6 +4,9 @@
 
 ### Registration & Login
 - A user should be able to register with a unique username and password
+- A user should be able to use a passphrase with spaces (15+ characters) for better security
+- A user should be able to see simplified password requirements (length-focused, not complexity)
+- A user should be able to see helpful suggestions for creating memorable passphrases
 - A user should be able to see password requirements during registration
 - A user should be able to login with their username and password
 - A user should be able to see error messages for invalid credentials
@@ -22,12 +25,14 @@
 
 ### Plaid Integration
 - A user should be able to connect their bank accounts via Plaid Link
+- A user should be able to see a helpful notification about "Continue as guest" option for Plaid
 - A user should be able to connect multiple financial institutions
 - A user should be able to see a list of all connected accounts
 - A user should be able to view account details (name, type, balance, institution)
 - A user should be able to see when an account was last synced
 - A user should be able to disconnect/remove linked accounts
 - A user should be able to see account balances update after syncing
+- A user should be able to reconnect accounts to get extended transaction history
 
 ### Account Types
 - A user should be able to connect checking accounts
@@ -41,6 +46,8 @@
 ### Transaction Syncing
 - A user should be able to sync transactions from all connected accounts
 - A user should be able to sync transactions starting from January 1, 2025
+- A user should be able to request up to 2 years of transaction history (730 days)
+- A user should be able to sync all available transactions, not just the first 100
 - A user should be able to see pending transactions marked appropriately
 - A user should be able to see transaction sync status and results
 - A user should be able to manually trigger transaction sync

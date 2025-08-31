@@ -71,10 +71,12 @@ export function Categories() {
       });
       queryClient.invalidateQueries({ queryKey: ['categories'] });
     },
-    onError: () => {
+    onError: (error: any) => {
+      console.error('Initialize categories error:', error);
+      const message = error?.response?.data?.error || error?.message || 'Failed to initialize categories';
       notifications.show({
         title: 'Error',
-        message: 'Failed to initialize categories',
+        message: message,
         color: 'red',
       });
     },

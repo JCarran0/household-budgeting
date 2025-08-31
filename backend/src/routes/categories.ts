@@ -107,20 +107,25 @@ router.get('/savings', async (req: Request, res: Response) => {
 // POST /api/categories/initialize - Initialize default categories
 router.post('/initialize', async (req: Request, res: Response) => {
   try {
-    console.log('Initialize categories called, user:', req.user);
+    console.log('=== INITIALIZE CATEGORIES ENDPOINT CALLED ===');
+    console.log('Request headers:', req.headers);
+    console.log('Request user object:', req.user);
+    
     const userId = req.user?.userId;
     if (!userId) {
-      console.error('No userId found in request');
+      console.error('ERROR: No userId found in request. req.user is:', req.user);
       res.status(401).json({ error: 'User not authenticated' });
       return;
     }
+    
     console.log('Initializing categories for user:', userId);
     await categoryService.initializeDefaultCategories(userId);
     const categories = await categoryService.getAllCategories(userId);
     console.log('Categories initialized successfully:', categories.length);
     res.json({ message: 'Default categories initialized', categories });
   } catch (error) {
-    console.error('Error initializing default categories:', error);
+    console.error('ERROR in /categories/initialize:', error);
+    console.error('Error stack:', error instanceof Error ? error.stack : 'No stack trace');
     res.status(500).json({ error: 'Failed to initialize default categories' });
   }
 });

@@ -95,6 +95,17 @@ class ApiClient {
     this.getAccounts = this.getAccounts.bind(this);
     this.getTransactions = this.getTransactions.bind(this);
     this.syncTransactions = this.syncTransactions.bind(this);
+    
+    // Category methods
+    this.getCategories = this.getCategories.bind(this);
+    this.getCategoryTree = this.getCategoryTree.bind(this);
+    this.getCategoryById = this.getCategoryById.bind(this);
+    this.getParentCategories = this.getParentCategories.bind(this);
+    this.getSubcategories = this.getSubcategories.bind(this);
+    this.createCategory = this.createCategory.bind(this);
+    this.updateCategory = this.updateCategory.bind(this);
+    this.deleteCategory = this.deleteCategory.bind(this);
+    this.initializeDefaultCategories = this.initializeDefaultCategories.bind(this);
 
     // Request interceptor to add auth token
     this.client.interceptors.request.use(
