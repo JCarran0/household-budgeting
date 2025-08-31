@@ -203,6 +203,7 @@ class ApiClient {
     tags?: string[];
     searchQuery?: string;
     includeHidden?: boolean;
+    onlyUncategorized?: boolean;
     minAmount?: number;
     maxAmount?: number;
   }): Promise<{ transactions: Transaction[]; total: number }> {

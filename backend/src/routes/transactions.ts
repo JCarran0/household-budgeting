@@ -37,6 +37,10 @@ const transactionFilterSchema = z.object({
     if (typeof val === 'string') return val === 'true';
     return val;
   }),
+  onlyUncategorized: z.union([z.boolean(), z.string()]).optional().transform(val => {
+    if (typeof val === 'string') return val === 'true';
+    return val;
+  }),
   minAmount: z.union([z.number(), z.string()]).optional().transform(val => {
     if (typeof val === 'string') return parseFloat(val);
     return val;
@@ -156,6 +160,7 @@ router.get('/', authMiddleware, async (req: AuthRequest, res: Response): Promise
       success: true,
       transactions: mappedTransactions,
       totalCount: result.totalCount,
+      total: result.unfilteredTotal || result.totalCount,
     });
   } catch (error) {
     console.error('Error fetching transactions:', error);

@@ -59,6 +59,7 @@ export interface TransactionFilter {
   searchQuery?: string;
   includePending?: boolean;
   includeHidden?: boolean;
+  onlyUncategorized?: boolean;
   minAmount?: number;
   maxAmount?: number;
 }
@@ -68,6 +69,7 @@ export interface TransactionsResult {
   success: boolean;
   transactions?: StoredTransaction[];
   totalCount?: number;
+  unfilteredTotal?: number;
   error?: string;
 }
 
@@ -324,9 +326,17 @@ export class TransactionService {
         `transactions_${userId}`
       ) || [];
 
-      let filtered = allTransactions.filter((txn: StoredTransaction) => txn.status !== 'removed');
+      // Get base transactions (excluding removed and pending if not included)
+      let baseTransactions = allTransactions.filter((txn: StoredTransaction) => txn.status !== 'removed');
+      
+      // Apply base filters that affect the total count
+      if (!filter.includePending) {
+        baseTransactions = baseTransactions.filter((txn: StoredTransaction) => !txn.pending);
+      }
 
-      // Apply filters
+      let filtered = baseTransactions;
+
+      // Apply date and account filters (these are part of the base query)
       if (filter.startDate) {
         filtered = filtered.filter((txn: StoredTransaction) => txn.date >= filter.startDate!);
       }
@@ -338,6 +348,12 @@ export class TransactionService {
       if (filter.accountIds && filter.accountIds.length > 0) {
         filtered = filtered.filter((txn: StoredTransaction) => filter.accountIds!.includes(txn.accountId));
       }
+      
+      // Calculate total after date/account filters but before search/category/tag filters
+      // This gives us the denominator for "Showing X of Y transactions"
+      const totalBeforeSearchFilters = filter.includeHidden 
+        ? filtered.length
+        : filtered.filter((txn: StoredTransaction) => !txn.isHidden).length;
 
       if (filter.categoryIds && filter.categoryIds.length > 0) {
         filtered = filtered.filter((txn: StoredTransaction) => {
@@ -359,6 +375,10 @@ export class TransactionService {
 
       if (!filter.includeHidden) {
         filtered = filtered.filter((txn: StoredTransaction) => !txn.isHidden);
+      }
+
+      if (filter.onlyUncategorized) {
+        filtered = filtered.filter((txn: StoredTransaction) => !txn.userCategoryId);
       }
 
       if (filter.minAmount !== undefined) {
@@ -386,6 +406,7 @@ export class TransactionService {
         success: true,
         transactions: filtered,
         totalCount: filtered.length,
+        unfilteredTotal: totalBeforeSearchFilters,
       };
     } catch (error) {
       console.error('Error fetching transactions:', error);

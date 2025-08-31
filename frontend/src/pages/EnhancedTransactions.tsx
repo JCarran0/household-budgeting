@@ -65,6 +65,7 @@ export function EnhancedTransactions() {
   const [dateFilterOption, setDateFilterOption] = useState<DateFilterOption>('this-month');
   const [customDateRange, setCustomDateRange] = useState<[Date | null, Date | null]>([null, null]);
   const [includeHidden, setIncludeHidden] = useState(false);
+  const [onlyUncategorized, setOnlyUncategorized] = useState(false);
   const [amountRange, setAmountRange] = useState({ min: null as number | null, max: null as number | null });
   
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
@@ -138,6 +139,7 @@ export function EnhancedTransactions() {
       tags: selectedTags.length > 0 ? selectedTags : undefined,
       searchQuery: debouncedSearchTerm || undefined,
       includeHidden,
+      onlyUncategorized,
       minAmount: amountRange.min || undefined,
       maxAmount: amountRange.max || undefined,
     };
@@ -157,6 +159,7 @@ export function EnhancedTransactions() {
     selectedTags,
     debouncedSearchTerm,
     includeHidden,
+    onlyUncategorized,
     amountRange,
   ]);
 
@@ -436,6 +439,11 @@ export function EnhancedTransactions() {
                     label="Include hidden transactions"
                     checked={includeHidden}
                     onChange={(e) => setIncludeHidden(e.currentTarget.checked)}
+                  />
+                  <Checkbox
+                    label="Only uncategorized"
+                    checked={onlyUncategorized}
+                    onChange={(e) => setOnlyUncategorized(e.currentTarget.checked)}
                   />
                 </Stack>
               </Grid.Col>

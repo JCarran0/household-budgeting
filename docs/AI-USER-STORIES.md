@@ -72,6 +72,8 @@
 - A user should be able to filter their transactions by tags they've created
 - A user should NOT see a filter for pending transactions (since we don't sync them)
 - A user should be able to filter to show/hide hidden transactions
+- A user should be able to filter to show only uncategorized transactions
+- A user should be able to combine the uncategorized filter with other filters
 - A user should be able to see transaction details (amount, date, merchant, account)
 - A user should see the correct total count of transactions (not 0)
 - A user should not see transactions from other users' accounts
