@@ -285,6 +285,7 @@ export class InMemoryDataService implements DataService {
   clear(): void {
     this.users = [];
     this.categories = [];
+    this.userCategories.clear();
     this.budgets = [];
     this.dataStore.clear();
   }

@@ -433,6 +433,16 @@ export class AuthService {
     return this.failedAttempts.get(username) || 0;
   }
 
+  /**
+   * Reset all rate limiting state - FOR TESTING ONLY
+   */
+  resetRateLimiting(): void {
+    if (process.env.NODE_ENV === 'test') {
+      this.failedAttempts.clear();
+      this.lockoutTime.clear();
+    }
+  }
+
   logSecurityEvent(event: SecurityEvent): void {
     this.securityLogs.push(event);
     // In production, this would write to a secure log file or service
