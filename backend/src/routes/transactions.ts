@@ -128,9 +128,17 @@ router.get('/', authMiddleware, async (req: AuthRequest, res: Response): Promise
       return;
     }
 
+    // Transform single accountId to accountIds array for the service
+    const filterData = {
+      ...validation.data,
+      accountIds: validation.data.accountId 
+        ? [validation.data.accountId] 
+        : validation.data.accountIds
+    };
+    
     const result = await transactionService.getTransactions(
       req.user.userId,
-      validation.data
+      filterData
     );
 
     if (!result.success) {

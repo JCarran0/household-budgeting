@@ -29,8 +29,9 @@
 - A user should be able to connect multiple financial institutions
 - A user should be able to see a list of all connected accounts
 - A user should be able to view account details (name, type, balance, institution)
+- A user should be able to see the official account name from the bank
 - A user should be able to see when an account was last synced
-- A user should be able to disconnect/remove linked accounts
+- A user should be able to disconnect/remove linked accounts (not yet implemented)
 - A user should be able to see account balances update after syncing
 - A user should be able to reconnect accounts to get extended transaction history
 
@@ -57,11 +58,13 @@
 - A user should be able to view all their transactions in a table/list format
 - A user should be able to search their transactions by description/merchant name
 - A user should be able to filter their transactions by date range
-- A user should be able to filter their transactions by account
+- A user should be able to filter their transactions by specific account
+- A user should be able to select "All Accounts" or individual accounts from a dropdown
+- A user should be able to see account names with institution in the filter dropdown
 - A user should be able to filter their transactions by category
 - A user should be able to filter their transactions by amount range
 - A user should be able to filter their transactions by tags they've created
-- A user should be able to filter to show/hide pending transactions
+- A user should NOT see a filter for pending transactions (since we don't sync them)
 - A user should be able to filter to show/hide hidden transactions
 - A user should be able to see transaction details (amount, date, merchant, account)
 - A user should not see transactions from other users' accounts
@@ -136,6 +139,8 @@
 - A user should have rules applied only to uncategorized transactions
 - A user should have rules match on "contains" pattern in descriptions
 - A user should have pattern matching be case-insensitive
+- A user should be warned if auto-categorization will override existing manual categorizations
+- A user should be able to confirm or cancel when rules would change existing categories
 
 ## Budget Management
 
@@ -173,9 +178,14 @@
 - A user should be able to see total income for the current month
 - A user should be able to see total expenses for the current month
 - A user should be able to see net income/loss
-- A user should be able to see connected accounts summary
+- A user should be able to see connected accounts summary with proper account names
 - A user should be able to see recent transactions
-- A user should be able to see budget overview
+- A user should be able to see the count of uncategorized transactions as a warning
+- A user should be able to click the uncategorized transaction alert to go to the transactions page
+- A user should be able to see "Income vs Spending" when no budget exists
+- A user should be able to see "Monthly Budget Status" only when budgets are created
+- A user should NOT see "Over Budget" status when no budget has been created
+- A user should be able to see a link to create budgets when none exist
 
 ### Year-to-Date Summary
 - A user should be able to see YTD total income

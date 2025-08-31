@@ -59,7 +59,6 @@ export function EnhancedTransactions() {
     return [startOfMonth(subMonths(now, 1)), endOfMonth(now)];
   });
   const [includeHidden, setIncludeHidden] = useState(false);
-  const [includePending, setIncludePending] = useState(false);
   const [amountRange, setAmountRange] = useState({ min: null as number | null, max: null as number | null });
   
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
@@ -91,7 +90,6 @@ export function EnhancedTransactions() {
       tags: selectedTags.length > 0 ? selectedTags : undefined,
       searchQuery: searchTerm || undefined,
       includeHidden,
-      includePending,
       minAmount: amountRange.min || undefined,
       maxAmount: amountRange.max || undefined,
     };
@@ -111,7 +109,6 @@ export function EnhancedTransactions() {
     selectedTags,
     searchTerm,
     includeHidden,
-    includePending,
     amountRange,
   ]);
 
@@ -171,7 +168,7 @@ export function EnhancedTransactions() {
     { value: 'all', label: 'All Accounts' },
     ...(accounts?.map(acc => ({
       value: acc.id,
-      label: `${acc.name} (${acc.institution})`,
+      label: `${acc.officialName || acc.accountName} (${acc.institutionName})`,
     })) || []),
   ];
 
@@ -319,11 +316,6 @@ export function EnhancedTransactions() {
                     label="Include hidden transactions"
                     checked={includeHidden}
                     onChange={(e) => setIncludeHidden(e.currentTarget.checked)}
-                  />
-                  <Checkbox
-                    label="Include pending transactions"
-                    checked={includePending}
-                    onChange={(e) => setIncludePending(e.currentTarget.checked)}
                   />
                 </Stack>
               </Grid.Col>

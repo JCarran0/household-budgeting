@@ -195,7 +195,6 @@ class ApiClient {
     categoryIds?: string[];
     tags?: string[];
     searchQuery?: string;
-    includePending?: boolean;
     includeHidden?: boolean;
     minAmount?: number;
     maxAmount?: number;

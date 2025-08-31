@@ -271,7 +271,7 @@ export function MantineDashboard() {
                           <IconCreditCard size={18} />
                         </ThemeIcon>
                         <div>
-                          <Text size="sm" fw={500}>{account.name}</Text>
+                          <Text size="sm" fw={500}>{account.officialName || account.accountName}</Text>
                           <Text size="xs" c="dimmed">
                             {account.institutionName} • ••{account.mask}
                           </Text>
