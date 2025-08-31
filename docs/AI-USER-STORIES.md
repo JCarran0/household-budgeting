@@ -57,7 +57,13 @@
 ### Transaction Viewing & Filtering
 - A user should be able to view all their transactions in a table/list format
 - A user should be able to search their transactions by description/merchant name
+- A user should be able to type continuously in search without losing focus
+- A user should have search queries debounced (300ms) to prevent excessive API calls
 - A user should be able to filter their transactions by date range
+- A user should be able to quickly filter by "This Month" (default selection)
+- A user should be able to quickly filter by "Year to Date"
+- A user should be able to select any past month of the current year from a dropdown
+- A user should be able to use custom date ranges when needed
 - A user should be able to filter their transactions by specific account
 - A user should be able to select "All Accounts" or individual accounts from a dropdown
 - A user should be able to see account names with institution in the filter dropdown
@@ -67,7 +73,19 @@
 - A user should NOT see a filter for pending transactions (since we don't sync them)
 - A user should be able to filter to show/hide hidden transactions
 - A user should be able to see transaction details (amount, date, merchant, account)
+- A user should see the correct total count of transactions (not 0)
 - A user should not see transactions from other users' accounts
+
+### Transaction Display
+- A user should see rounded dollar amounts in the table for cleaner display
+- A user should be able to hover to see exact amounts (to the cent) in tooltips
+- A user should see user descriptions when available, with original names in tooltips
+- A user should be able to hover over categories to see full category names
+- A user should be able to hover over account icons to see institution details
+- A user should see hidden/split transaction indicators next to action menu
+- A user should NOT see a "Status" column for pending transactions
+- A user should experience 1-second tooltip delays to avoid distraction
+- A user should see tooltips that include account name, institution, and mask when available
 
 ### Transaction Editing
 - A user should be able to edit a transaction's description

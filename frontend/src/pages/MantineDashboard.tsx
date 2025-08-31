@@ -14,7 +14,8 @@ import {
   Center,
   RingProgress,
   Loader,
-  Alert
+  Alert,
+  Tooltip
 } from '@mantine/core';
 import { 
   IconCash, 
@@ -32,6 +33,7 @@ import { useQuery } from '@tanstack/react-query';
 import { api } from '../lib/api';
 import { formatDistanceToNow } from 'date-fns';
 import { Link, useNavigate } from 'react-router-dom';
+import { formatCurrency } from '../utils/formatters';
 
 export function MantineDashboard() {
   const navigate = useNavigate();
@@ -99,28 +101,32 @@ export function MantineDashboard() {
   const stats = [
     {
       title: 'Total Balance',
-      value: `$${totalBalance.toFixed(2)}`,
+      value: formatCurrency(totalBalance),
+      exactValue: formatCurrency(totalBalance, true),
       icon: IconWallet,
       color: 'yellow',
       description: 'All accounts combined',
     },
     {
       title: 'Available',
-      value: `$${totalAvailable.toFixed(2)}`,
+      value: formatCurrency(totalAvailable),
+      exactValue: formatCurrency(totalAvailable, true),
       icon: IconCash,
       color: 'green',
       description: 'Ready to spend',
     },
     {
       title: 'Monthly Spending',
-      value: `$${monthlySpending.toFixed(2)}`,
+      value: formatCurrency(monthlySpending),
+      exactValue: formatCurrency(monthlySpending, true),
       icon: IconTrendingDown,
       color: 'red',
       description: 'This month',
     },
     {
       title: 'Monthly Income',
-      value: `$${monthlyIncome.toFixed(2)}`,
+      value: formatCurrency(monthlyIncome),
+      exactValue: formatCurrency(monthlyIncome, true),
       icon: IconTrendingUp,
       color: 'blue',
       description: 'This month',
@@ -194,9 +200,15 @@ export function MantineDashboard() {
                 <stat.icon size={18} />
               </ThemeIcon>
             </Group>
-            <Text size="xl" fw={700} mb={5}>
-              {stat.value}
-            </Text>
+            <Tooltip 
+              label={stat.exactValue} 
+              openDelay={500}
+              closeDelay={200}
+            >
+              <Text size="xl" fw={700} mb={5} style={{ cursor: 'help' }}>
+                {stat.value}
+              </Text>
+            </Tooltip>
             <Text size="xs" c="dimmed">
               {stat.description}
             </Text>
@@ -214,9 +226,11 @@ export function MantineDashboard() {
             </Progress.Section>
           </Progress.Root>
           <Group justify="space-between">
-            <Text size="sm" c="dimmed">
-              Spent ${monthlySpending.toFixed(2)} of ${totalBudget.toFixed(2)} budgeted
-            </Text>
+            <Tooltip label={`Spent ${formatCurrency(monthlySpending, true)} of ${formatCurrency(totalBudget, true)} budgeted`} openDelay={500}>
+              <Text size="sm" c="dimmed" style={{ cursor: 'help' }}>
+                Spent {formatCurrency(monthlySpending)} of {formatCurrency(totalBudget)} budgeted
+              </Text>
+            </Tooltip>
             <Badge color={budgetProgress > 100 ? 'red' : budgetProgress > 80 ? 'orange' : 'green'}>
               {budgetProgress > 100 ? 'Over Budget' : budgetProgress > 80 ? 'Near Limit' : 'On Track'}
             </Badge>
@@ -232,9 +246,11 @@ export function MantineDashboard() {
             </Progress.Section>
           </Progress.Root>
           <Group justify="space-between">
-            <Text size="sm" c="dimmed">
-              Spent ${monthlySpending.toFixed(2)} of ${monthlyIncome.toFixed(2)} income
-            </Text>
+            <Tooltip label={`Spent ${formatCurrency(monthlySpending, true)} of ${formatCurrency(monthlyIncome, true)} income`} openDelay={500}>
+              <Text size="sm" c="dimmed" style={{ cursor: 'help' }}>
+                Spent {formatCurrency(monthlySpending)} of {formatCurrency(monthlyIncome)} income
+              </Text>
+            </Tooltip>
             <Badge color={spendingVsIncomeProgress > 100 ? 'red' : spendingVsIncomeProgress > 80 ? 'orange' : 'green'}>
               {spendingVsIncomeProgress > 100 ? 'Overspending' : spendingVsIncomeProgress > 80 ? 'High Spending' : 'Within Income'}
             </Badge>
@@ -278,9 +294,11 @@ export function MantineDashboard() {
                         </div>
                       </Group>
                       <div style={{ textAlign: 'right' }}>
-                        <Text size="sm" fw={600}>
-                          ${account.currentBalance?.toFixed(2) || '0.00'}
-                        </Text>
+                        <Tooltip label={formatCurrency(account.currentBalance || 0, true)} openDelay={500}>
+                          <Text size="sm" fw={600} style={{ cursor: 'help' }}>
+                            {formatCurrency(account.currentBalance || 0)}
+                          </Text>
+                        </Tooltip>
                         <Badge size="xs" variant="dot">
                           {account.type}
                         </Badge>
@@ -351,14 +369,17 @@ export function MantineDashboard() {
                         </Text>
                       </div>
                     </Group>
-                    <Text
-                      size="sm"
-                      fw={600}
-                      c={transaction.amount < 0 ? 'red' : 'green'}
-                    >
-                      {transaction.amount < 0 ? '-' : '+'}$
-                      {Math.abs(transaction.amount).toFixed(2)}
-                    </Text>
+                    <Tooltip label={formatCurrency(Math.abs(transaction.amount), true)} openDelay={500}>
+                      <Text
+                        size="sm"
+                        fw={600}
+                        c={transaction.amount < 0 ? 'red' : 'green'}
+                        style={{ cursor: 'help' }}
+                      >
+                        {transaction.amount < 0 ? '-' : '+'}
+                        {formatCurrency(Math.abs(transaction.amount)).replace('$', '')}
+                      </Text>
+                    </Tooltip>
                   </Group>
                 ))}
               </Stack>
