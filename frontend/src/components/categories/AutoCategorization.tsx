@@ -325,14 +325,20 @@ export function AutoCategorization() {
           </Text>
         </div>
         <Group>
-          <Button
-            leftSection={<IconRobot size={16} />}
-            onClick={() => applyRulesMutation.mutate()}
-            loading={applyRulesMutation.isPending}
-            variant="light"
+          <Tooltip 
+            label="Applies your custom rules first, then uses Plaid categories as fallback for remaining uncategorized transactions"
+            width={300}
+            multiline
           >
-            Apply Rules to Transactions
-          </Button>
+            <Button
+              leftSection={<IconRobot size={16} />}
+              onClick={() => applyRulesMutation.mutate()}
+              loading={applyRulesMutation.isPending}
+              variant="light"
+            >
+              Apply Categorization
+            </Button>
+          </Tooltip>
           <Button
             leftSection={<IconPlus size={16} />}
             onClick={() => setIsFormOpen(true)}
@@ -370,8 +376,13 @@ export function AutoCategorization() {
             <Stack align="center" gap="md">
               <IconRobot size={48} stroke={1.5} color="var(--mantine-color-gray-5)" />
               <Text c="dimmed">
-                {searchQuery ? 'No rules match your search' : 'No auto-categorization rules yet'}
+                {searchQuery ? 'No rules match your search' : 'No custom rules created yet'}
               </Text>
+              {!searchQuery && (
+                <Text size="sm" c="dimmed">
+                  Plaid categories will be used automatically for uncategorized transactions
+                </Text>
+              )}
               {!searchQuery && (
                 <Button
                   leftSection={<IconPlus size={16} />}

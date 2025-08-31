@@ -449,26 +449,45 @@ export class PlaidService {
    * Map Plaid transactions to our application format
    */
   private mapTransactions(plaidTransactions: PlaidTransaction[]): Transaction[] {
-    return plaidTransactions.map(txn => ({
-      id: txn.transaction_id,
-      plaidTransactionId: txn.transaction_id,
-      accountId: txn.account_id,
-      amount: txn.amount,
-      date: txn.date,
-      name: txn.name,
-      merchantName: txn.merchant_name || null,
-      category: txn.category || null,
-      categoryId: txn.category_id || null,
-      pending: txn.pending,
-      isoCurrencyCode: txn.iso_currency_code || null,
-      location: txn.location ? {
-        address: txn.location.address || null,
-        city: txn.location.city || null,
-        region: txn.location.region || null,
-        postalCode: txn.location.postal_code || null,
-        country: txn.location.country || null,
-      } : undefined,
-    }));
+    return plaidTransactions.map(txn => {
+      // Use personal_finance_category if available (new), fall back to category (old)
+      let category = txn.category || null;
+      
+      // Check if personal_finance_category exists (Plaid's new categorization)
+      if ((txn as any).personal_finance_category) {
+        const pfc = (txn as any).personal_finance_category;
+        // Convert to old category format for compatibility
+        // Primary category is what we want
+        if (pfc.primary) {
+          category = [pfc.primary];
+          if (pfc.detailed) {
+            category.push(pfc.detailed);
+          }
+        }
+        console.log(`Transaction "${txn.name}" has PFC:`, pfc.primary);
+      }
+      
+      return {
+        id: txn.transaction_id,
+        plaidTransactionId: txn.transaction_id,
+        accountId: txn.account_id,
+        amount: txn.amount,
+        date: txn.date,
+        name: txn.name,
+        merchantName: txn.merchant_name || null,
+        category: category,
+        categoryId: txn.category_id || null,
+        pending: txn.pending,
+        isoCurrencyCode: txn.iso_currency_code || null,
+        location: txn.location ? {
+          address: txn.location.address || null,
+          city: txn.location.city || null,
+          region: txn.location.region || null,
+          postalCode: txn.location.postal_code || null,
+          country: txn.location.country || null,
+        } : undefined,
+      };
+    });
   }
 
   /**

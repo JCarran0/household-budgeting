@@ -265,11 +265,14 @@ router.put('/rules/:ruleId/move-down', authMiddleware, async (req: AuthRequest, 
  */
 router.post('/apply', authMiddleware, async (req: AuthRequest, res: Response): Promise<void> => {
   try {
+    console.log('=== APPLY AUTO-CATEGORIZATION ROUTE ===');
+    
     if (!req.user) {
       res.status(401).json({ success: false, error: 'Unauthorized' });
       return;
     }
 
+    console.log('Applying rules for user:', req.user.userId);
     const result = await autoCategorizeService.applyRulesToAllTransactions(req.user.userId);
 
     if (!result.success) {

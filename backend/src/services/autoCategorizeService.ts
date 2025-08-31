@@ -7,7 +7,7 @@
 import { v4 as uuidv4 } from 'uuid';
 import { DataService } from './dataService';
 import { StoredTransaction } from './transactionService';
-import { AutoCategorizeRule } from '../../../shared/types';
+import { AutoCategorizeRule, Category } from '../../../shared/types';
 
 export interface StoredAutoCategorizeRule extends AutoCategorizeRule {
   userId: string;
@@ -187,6 +187,7 @@ export class AutoCategorizeService {
 
   /**
    * Apply auto-categorization rules to transactions
+   * Priority: 1. User rules, 2. Plaid category mappings, 3. Uncategorized
    */
   async applyRules(
     userId: string,
@@ -195,17 +196,44 @@ export class AutoCategorizeService {
     const rules = await this.getRules(userId);
     const activeRules = rules.filter(r => r.isActive);
     
+    // Get user's categories for Plaid mapping
+    const categoriesData = await this.dataService.getData<{ categories: Category[] }>(`categories_${userId}`);
+    const categories = categoriesData?.categories || [];
+    
+    // Create a map of Plaid categories to our category IDs
+    const plaidCategoryMap = new Map<string, string>();
+    for (const category of categories) {
+      if (category.plaidCategory) {
+        plaidCategoryMap.set(category.plaidCategory.toUpperCase(), category.id);
+      }
+    }
+    
+    console.log('=== AUTO-CATEGORIZATION DEBUG ===');
+    console.log(`Found ${categories.length} categories`);
+    console.log(`Plaid mappings available:`, Array.from(plaidCategoryMap.entries()));
+    console.log(`Processing ${transactions.length} uncategorized transactions`);
+    
+    // Debug: Show first transaction structure
+    if (transactions.length > 0) {
+      console.log('First transaction structure:', {
+        name: transactions[0].name,
+        category: transactions[0].category,
+        userCategoryId: transactions[0].userCategoryId
+      });
+    }
+    
     let categorized = 0;
     const errors: string[] = [];
+    let debugCount = 0;
 
     for (const transaction of transactions) {
       // Skip if already has user-defined category
       if (transaction.userCategoryId) continue;
 
-      // Get the description to match against (prefer user description over original)
+      let matched = false;
+      
+      // PRIORITY 1: Try user-defined rules first
       const description = (transaction.userDescription || transaction.name).toLowerCase();
-
-      // Apply rules in priority order
       for (const rule of activeRules) {
         const pattern = rule.pattern.toLowerCase();
         
@@ -214,7 +242,34 @@ export class AutoCategorizeService {
           transaction.userCategoryId = rule.categoryId;
           transaction.updatedAt = new Date();
           categorized++;
+          matched = true;
           break; // Stop after first match
+        }
+      }
+      
+      // PRIORITY 2: If no user rule matched, try Plaid category mapping
+      if (!matched && transaction.category && transaction.category.length > 0) {
+        // Plaid categories come as an array like ["Food and Drink", "Restaurants"]
+        // We need to convert to our format like "FOOD_AND_DRINK"
+        const plaidPrimaryCategory = transaction.category[0]
+          .toUpperCase()
+          .replace(/ AND /g, '_AND_')
+          .replace(/ /g, '_');
+        
+        // Limit debug logging to first 3 transactions
+        if (debugCount < 3) {
+          console.log(`Transaction: ${transaction.name}`);
+          console.log(`  Plaid category array:`, transaction.category);
+          console.log(`  Converted to:`, plaidPrimaryCategory);
+          debugCount++;
+        }
+        
+        const mappedCategoryId = plaidCategoryMap.get(plaidPrimaryCategory);
+        if (mappedCategoryId) {
+          transaction.categoryId = mappedCategoryId;
+          transaction.userCategoryId = mappedCategoryId;
+          transaction.updatedAt = new Date();
+          categorized++;
         }
       }
     }
