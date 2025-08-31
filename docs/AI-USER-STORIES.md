@@ -137,6 +137,7 @@
 - A user should be able to set a description for each of their rules
 - A user should be able to define a text pattern for matching
 - A user should be able to assign one of their categories to each rule
+- A user should be able to optionally set a custom user description for matching transactions
 - A user should be able to enable/disable their individual rules
 - A user should be able to edit their existing rules
 - A user should be able to delete their rules
@@ -157,6 +158,9 @@
 - A user should have rules applied only to uncategorized transactions
 - A user should have rules match on "contains" pattern in descriptions
 - A user should have pattern matching be case-insensitive
+- A user should have matching transactions' descriptions replaced with custom text when specified
+- A user should see the custom description applied immediately when rules are run
+- A user should be able to see which transactions have custom descriptions in the UI
 - A user should be warned if auto-categorization will override existing manual categorizations
 - A user should be able to confirm or cancel when rules would change existing categories
 

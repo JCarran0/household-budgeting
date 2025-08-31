@@ -99,6 +99,7 @@ export interface AutoCategorizeRule {
   matchType: 'contains'; // For now just contains, can add 'exact', 'regex' later
   categoryId: string;
   categoryName?: string; // For display purposes
+  userDescription?: string; // Optional user description to apply to matching transactions
   priority: number; // Lower number = higher priority (applied first)
   isActive: boolean;
   createdAt: string;

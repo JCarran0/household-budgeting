@@ -22,6 +22,7 @@ const createRuleSchema = z.object({
   pattern: z.string().min(1).max(100),
   categoryId: z.string().min(1),
   categoryName: z.string().optional(),
+  userDescription: z.string().max(200).optional(),
   isActive: z.boolean().optional(),
 });
 
@@ -30,6 +31,7 @@ const updateRuleSchema = z.object({
   pattern: z.string().min(1).max(100).optional(),
   categoryId: z.string().min(1).optional(),
   categoryName: z.string().optional(),
+  userDescription: z.string().max(200).optional(),
   isActive: z.boolean().optional(),
 });
 

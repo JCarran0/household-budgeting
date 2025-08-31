@@ -38,6 +38,7 @@ interface RuleFormValues {
   description: string;
   pattern: string;
   categoryId: string;
+  userDescription: string;
   isActive: boolean;
 }
 
@@ -65,6 +66,7 @@ export function AutoCategorization() {
       description: '',
       pattern: '',
       categoryId: '',
+      userDescription: '',
       isActive: true,
     },
     validate: {
@@ -82,6 +84,10 @@ export function AutoCategorization() {
         if (!value) return 'Category is required';
         return null;
       },
+      userDescription: (value) => {
+        if (value && value.length > 200) return 'User description must be less than 200 characters';
+        return null;
+      },
     },
   });
 
@@ -93,6 +99,7 @@ export function AutoCategorization() {
           description: editingRule.description,
           pattern: editingRule.pattern,
           categoryId: editingRule.categoryId,
+          userDescription: editingRule.userDescription || '',
           isActive: editingRule.isActive,
         });
       } else {
@@ -357,7 +364,8 @@ export function AutoCategorization() {
         <Text size="sm" c="dimmed">
           Rules are applied in priority order. Each rule checks if a transaction's description 
           contains the specified pattern (case-insensitive). The first matching rule assigns 
-          its category to the transaction. Use the arrow buttons to adjust rule priority.
+          its category to the transaction and optionally replaces the description with a custom one. 
+          Use the arrow buttons to adjust rule priority.
         </Text>
       </Card>
 
@@ -404,6 +412,7 @@ export function AutoCategorization() {
                 <Table.Th>Rule Description</Table.Th>
                 <Table.Th>Pattern</Table.Th>
                 <Table.Th>Category</Table.Th>
+                <Table.Th>User Description</Table.Th>
                 <Table.Th>Actions</Table.Th>
               </Table.Tr>
             </Table.Thead>
@@ -459,6 +468,17 @@ export function AutoCategorization() {
                     <Badge variant="dot" color="green">
                       {rule.categoryName || 'Unknown'}
                     </Badge>
+                  </Table.Td>
+                  <Table.Td>
+                    {rule.userDescription ? (
+                      <Text size="sm" c="blue">
+                        "{rule.userDescription}"
+                      </Text>
+                    ) : (
+                      <Text size="sm" c="dimmed" fs="italic">
+                        None
+                      </Text>
+                    )}
                   </Table.Td>
                   <Table.Td>
                     <Group gap="xs">
@@ -524,6 +544,13 @@ export function AutoCategorization() {
               required
               disabled={categoriesLoading}
               {...form.getInputProps('categoryId')}
+            />
+
+            <TextInput
+              label="User Description (Optional)"
+              placeholder="e.g., Grocery Shopping"
+              description="Replace transaction description with this text when pattern matches"
+              {...form.getInputProps('userDescription')}
             />
 
             <Switch

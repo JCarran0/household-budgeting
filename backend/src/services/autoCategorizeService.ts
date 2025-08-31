@@ -38,6 +38,7 @@ export class AutoCategorizeService {
       pattern: string;
       categoryId: string;
       categoryName?: string;
+      userDescription?: string;
       isActive?: boolean;
     }
   ): Promise<{ success: boolean; rule?: StoredAutoCategorizeRule; error?: string }> {
@@ -66,6 +67,7 @@ export class AutoCategorizeService {
         matchType: 'contains',
         categoryId: data.categoryId,
         categoryName: data.categoryName,
+        userDescription: data.userDescription,
         priority: maxPriority + 1,
         isActive: data.isActive ?? true,
         createdAt: now,
@@ -93,6 +95,7 @@ export class AutoCategorizeService {
       pattern: string;
       categoryId: string;
       categoryName: string;
+      userDescription: string;
       isActive: boolean;
     }>
   ): Promise<{ success: boolean; error?: string }> {
@@ -225,6 +228,10 @@ export class AutoCategorizeService {
         if (rule.matchType === 'contains' && description.includes(pattern)) {
           transaction.categoryId = rule.categoryId;
           transaction.userCategoryId = rule.categoryId;
+          // Apply user description if provided by the rule
+          if (rule.userDescription) {
+            transaction.userDescription = rule.userDescription;
+          }
           transaction.updatedAt = new Date();
           categorized++;
           matched = true;

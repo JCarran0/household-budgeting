@@ -471,6 +471,7 @@ class ApiClient {
     pattern: string;
     categoryId: string;
     categoryName?: string;
+    userDescription?: string;
     isActive?: boolean;
   }): Promise<AutoCategorizeRule> {
     const { data } = await this.client.post<{ success: boolean; rule: AutoCategorizeRule }>('/autocategorize/rules', rule);
@@ -482,6 +483,7 @@ class ApiClient {
     pattern?: string;
     categoryId?: string;
     categoryName?: string;
+    userDescription?: string;
     isActive?: boolean;
   }): Promise<void> {
     const response = await this.client.put(`/autocategorize/rules/${ruleId}`, updates);
