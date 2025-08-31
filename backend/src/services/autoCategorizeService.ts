@@ -208,23 +208,8 @@ export class AutoCategorizeService {
       }
     }
     
-    console.log('=== AUTO-CATEGORIZATION DEBUG ===');
-    console.log(`Found ${categories.length} categories`);
-    console.log(`Plaid mappings available:`, Array.from(plaidCategoryMap.entries()));
-    console.log(`Processing ${transactions.length} uncategorized transactions`);
-    
-    // Debug: Show first transaction structure
-    if (transactions.length > 0) {
-      console.log('First transaction structure:', {
-        name: transactions[0].name,
-        category: transactions[0].category,
-        userCategoryId: transactions[0].userCategoryId
-      });
-    }
-    
     let categorized = 0;
     const errors: string[] = [];
-    let debugCount = 0;
 
     for (const transaction of transactions) {
       // Skip if already has user-defined category
@@ -255,14 +240,6 @@ export class AutoCategorizeService {
           .toUpperCase()
           .replace(/ AND /g, '_AND_')
           .replace(/ /g, '_');
-        
-        // Limit debug logging to first 3 transactions
-        if (debugCount < 3) {
-          console.log(`Transaction: ${transaction.name}`);
-          console.log(`  Plaid category array:`, transaction.category);
-          console.log(`  Converted to:`, plaidPrimaryCategory);
-          debugCount++;
-        }
         
         const mappedCategoryId = plaidCategoryMap.get(plaidPrimaryCategory);
         if (mappedCategoryId) {

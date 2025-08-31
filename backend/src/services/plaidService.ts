@@ -464,7 +464,6 @@ export class PlaidService {
             category.push(pfc.detailed);
           }
         }
-        console.log(`Transaction "${txn.name}" has PFC:`, pfc.primary);
       }
       
       return {
