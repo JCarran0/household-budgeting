@@ -180,6 +180,11 @@ export class PlaidService {
         products: products,
         country_codes: countryCodes,
         language: 'en',
+        // Request 2 years of transaction history (730 days)
+        // Default is only 90 days if not specified
+        transactions: {
+          days_requested: 730
+        }
       };
 
       // Add redirect URI if configured
@@ -272,7 +277,7 @@ export class PlaidService {
   }
 
   /**
-   * Get transactions for a date range
+   * Get transactions for a date range with automatic pagination
    */
   async getTransactions(
     accessToken: string,
@@ -281,32 +286,65 @@ export class PlaidService {
     options: TransactionOptions = {}
   ): Promise<TransactionsResult> {
     try {
-      const request: TransactionsGetRequest = {
-        access_token: accessToken,
-        start_date: startDate,
-        end_date: endDate,
-        options: {
-          include_personal_finance_category: true,
-          offset: options.offset || 0,
-          count: options.count || 100,
-        },
-      };
+      const allTransactions: Transaction[] = [];
+      let offset = 0;
+      const countPerPage = 500; // Plaid max is 500 per request
+      let totalTransactions = 0;
+      let itemId: string | undefined;
 
-      const response = await this.client.transactionsGet(request);
-      
-      let transactions = this.mapTransactions(response.data.transactions);
+      // Keep fetching until we have all transactions
+      while (true) {
+        const request: TransactionsGetRequest = {
+          access_token: accessToken,
+          start_date: startDate,
+          end_date: endDate,
+          options: {
+            include_personal_finance_category: true,
+            offset: offset,
+            count: countPerPage,
+          },
+        };
+
+        console.log(`Fetching transactions: offset=${offset}, count=${countPerPage}, dates=${startDate} to ${endDate}`);
+        const response = await this.client.transactionsGet(request);
+        
+        // Map and add transactions to our collection
+        const batchTransactions = this.mapTransactions(response.data.transactions);
+        allTransactions.push(...batchTransactions);
+        
+        // Update totals
+        totalTransactions = response.data.total_transactions;
+        itemId = response.data.item?.item_id;
+        
+        console.log(`Fetched ${batchTransactions.length} transactions (${allTransactions.length}/${totalTransactions} total)`);
+        
+        // Check if we have all transactions
+        if (allTransactions.length >= totalTransactions) {
+          break;
+        }
+        
+        // Move to next page
+        offset += countPerPage;
+        
+        // Safety check to prevent infinite loops
+        if (offset > 10000) {
+          console.warn('Stopping pagination at 10,000 transactions to prevent infinite loop');
+          break;
+        }
+      }
       
       // Filter out pending transactions if requested
+      let finalTransactions = allTransactions;
       if (options.includePending === false) {
-        transactions = transactions.filter(t => !t.pending);
+        finalTransactions = allTransactions.filter(t => !t.pending);
       }
 
       return {
         success: true,
-        transactions,
-        totalTransactions: response.data.total_transactions,
-        itemId: response.data.item?.item_id,
-        hasMore: response.data.total_transactions > transactions.length,
+        transactions: finalTransactions,
+        totalTransactions: totalTransactions,
+        itemId: itemId,
+        hasMore: false, // We fetched everything
       };
     } catch (error) {
       return this.handleError(error);

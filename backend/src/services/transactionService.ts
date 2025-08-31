@@ -112,7 +112,9 @@ export class TransactionService {
       for (const [encryptedToken, tokenAccounts] of tokenGroups) {
         const accessToken = this.decryptToken(encryptedToken);
         
-        // Fetch from Plaid
+        console.log(`Syncing transactions for ${tokenAccounts.length} accounts from ${startDate} to ${endDate}`);
+        
+        // Fetch from Plaid (now with automatic pagination)
         const plaidResult = await this.plaidService.getTransactions(
           accessToken,
           startDate,
@@ -125,6 +127,8 @@ export class TransactionService {
           continue;
         }
 
+        console.log(`Received ${plaidResult.transactions.length} transactions from Plaid (total available: ${plaidResult.totalTransactions})`);
+
         // Process transactions
         const result = await this.processPlaidTransactions(
           userId,
@@ -135,6 +139,8 @@ export class TransactionService {
         totalAdded += result.added;
         totalModified += result.modified;
         totalRemoved += result.removed;
+        
+        console.log(`Sync complete: ${result.added} added, ${result.modified} modified, ${result.removed} removed`);
       }
 
       return {
