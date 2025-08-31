@@ -1,8 +1,9 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { api } from '../lib/api';
-import { format, startOfMonth, endOfMonth, subMonths } from 'date-fns';
+import { api, type ExtendedPlaidAccount } from '../lib/api';
+import { format, startOfMonth, endOfMonth, startOfYear, endOfYear, subMonths } from 'date-fns';
 import type { Transaction, Category } from '../../../shared/types';
+import { useDebouncedValue } from '@mantine/hooks';
 import {
   Container,
   Stack,
@@ -28,6 +29,8 @@ import {
   Checkbox,
   Menu,
   rem,
+  SegmentedControl,
+  Collapse,
 } from '@mantine/core';
 import { DatePickerInput } from '@mantine/dates';
 import { notifications } from '@mantine/notifications';
@@ -45,19 +48,22 @@ import {
   IconScissors,
   IconDots,
   IconRefresh,
+  IconBuilding,
+  IconCoin,
 } from '@tabler/icons-react';
 import { TransactionEditModal } from '../components/transactions/TransactionEditModal';
 import { TransactionSplitModal } from '../components/transactions/TransactionSplitModal';
 
+type DateFilterOption = 'this-month' | 'ytd' | 'custom' | string; // string for specific month like '2025-01'
+
 export function EnhancedTransactions() {
-  const [searchTerm, setSearchTerm] = useState('');
+  const [searchInput, setSearchInput] = useState('');
+  const [debouncedSearchTerm] = useDebouncedValue(searchInput, 300);
   const [selectedAccount, setSelectedAccount] = useState<string>('all');
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
-  const [dateRange, setDateRange] = useState<[Date | null, Date | null]>(() => {
-    const now = new Date();
-    return [startOfMonth(subMonths(now, 1)), endOfMonth(now)];
-  });
+  const [dateFilterOption, setDateFilterOption] = useState<DateFilterOption>('this-month');
+  const [customDateRange, setCustomDateRange] = useState<[Date | null, Date | null]>([null, null]);
   const [includeHidden, setIncludeHidden] = useState(false);
   const [amountRange, setAmountRange] = useState({ min: null as number | null, max: null as number | null });
   
@@ -65,11 +71,53 @@ export function EnhancedTransactions() {
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [splittingTransaction, setSplittingTransaction] = useState<Transaction | null>(null);
   const [isSplitModalOpen, setIsSplitModalOpen] = useState(false);
+  const [showCustomDatePicker, setShowCustomDatePicker] = useState(false);
   
   const queryClient = useQueryClient();
+  
+  // Callback for search input change
+  const handleSearchChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    setSearchInput(e.currentTarget.value);
+  }, []);
+  
+  // Calculate date range based on selected filter option
+  const dateRange = useMemo<[Date | null, Date | null]>(() => {
+    const now = new Date();
+    
+    if (dateFilterOption === 'this-month') {
+      return [startOfMonth(now), endOfMonth(now)];
+    } else if (dateFilterOption === 'ytd') {
+      return [startOfYear(now), endOfMonth(now)];
+    } else if (dateFilterOption === 'custom') {
+      return customDateRange;
+    } else if (dateFilterOption.match(/^\d{4}-\d{2}$/)) {
+      // Specific month selected (e.g., '2025-01')
+      const [year, month] = dateFilterOption.split('-').map(Number);
+      const monthDate = new Date(year, month - 1, 1);
+      return [startOfMonth(monthDate), endOfMonth(monthDate)];
+    }
+    return [startOfMonth(now), endOfMonth(now)];
+  }, [dateFilterOption, customDateRange]);
+  
+  // Generate month options for current year
+  const monthOptions = useMemo(() => {
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    const currentMonth = now.getMonth();
+    const months = [];
+    
+    for (let i = 0; i < currentMonth; i++) {
+      const monthDate = new Date(currentYear, i, 1);
+      const value = format(monthDate, 'yyyy-MM');
+      const label = format(monthDate, 'MMMM');
+      months.push({ value, label });
+    }
+    
+    return months.reverse(); // Most recent first
+  }, []);
 
   // Fetch accounts
-  const { data: accounts } = useQuery({
+  const { data: accounts } = useQuery<ExtendedPlaidAccount[]>({
     queryKey: ['accounts'],
     queryFn: api.getAccounts,
   });
@@ -88,7 +136,7 @@ export function EnhancedTransactions() {
       endDate: dateRange[1] ? format(dateRange[1], 'yyyy-MM-dd') : undefined,
       categoryIds: selectedCategories.length > 0 ? selectedCategories : undefined,
       tags: selectedTags.length > 0 ? selectedTags : undefined,
-      searchQuery: searchTerm || undefined,
+      searchQuery: debouncedSearchTerm || undefined,
       includeHidden,
       minAmount: amountRange.min || undefined,
       maxAmount: amountRange.max || undefined,
@@ -107,7 +155,7 @@ export function EnhancedTransactions() {
     dateRange,
     selectedCategories,
     selectedTags,
-    searchTerm,
+    debouncedSearchTerm,
     includeHidden,
     amountRange,
   ]);
@@ -116,7 +164,23 @@ export function EnhancedTransactions() {
   const { data: transactionData, isLoading, refetch } = useQuery({
     queryKey: ['transactions', queryParams],
     queryFn: () => api.getTransactions(queryParams),
+    placeholderData: (previousData) => previousData,
+    refetchOnWindowFocus: false,
+    staleTime: 1000, // Keep data fresh for 1 second to prevent refetching
   });
+  
+  // Create account lookup map for tooltips
+  const accountLookup = useMemo(() => {
+    const map = new Map<string, { name: string; institution: string; mask: string | null }>();
+    accounts?.forEach(acc => {
+      map.set(acc.id, {
+        name: acc.officialName || acc.accountName || acc.name,
+        institution: acc.institutionName || acc.institution,
+        mask: acc.mask
+      });
+    });
+    return map;
+  }, [accounts]);
 
   // Sync transactions mutation
   const syncMutation = useMutation({
@@ -215,6 +279,7 @@ export function EnhancedTransactions() {
   }
 
   const transactions = transactionData?.transactions || [];
+  const totalTransactions = transactionData?.total ?? transactions.length;
 
   return (
     <Container size="xl" py="xl">
@@ -233,13 +298,79 @@ export function EnhancedTransactions() {
         {/* Filters */}
         <Paper p="md" withBorder>
           <Stack gap="md">
+            {/* Date Filter */}
+            <Stack gap="xs">
+              <Text size="sm" fw={500}>Date Range</Text>
+              <Group gap="xs">
+                <SegmentedControl
+                  value={dateFilterOption === 'custom' || monthOptions.some(m => m.value === dateFilterOption) ? 'custom' : dateFilterOption}
+                  onChange={(value) => {
+                    if (value !== 'custom') {
+                      setDateFilterOption(value as DateFilterOption);
+                      setShowCustomDatePicker(false);
+                    }
+                  }}
+                  data={[
+                    { label: 'This Month', value: 'this-month' },
+                    { label: 'Year to Date', value: 'ytd' },
+                    { label: 'Custom', value: 'custom' },
+                  ]}
+                />
+                
+                {monthOptions.length > 0 && (
+                  <Select
+                    placeholder="Select month"
+                    data={monthOptions}
+                    value={monthOptions.some(m => m.value === dateFilterOption) ? dateFilterOption : null}
+                    onChange={(value) => {
+                      if (value) {
+                        setDateFilterOption(value);
+                        setShowCustomDatePicker(false);
+                      }
+                    }}
+                    clearable
+                    searchable
+                    size="sm"
+                    w={150}
+                  />
+                )}
+                
+                {(dateFilterOption === 'custom' || showCustomDatePicker) && (
+                  <Button
+                    variant="light"
+                    size="sm"
+                    onClick={() => setShowCustomDatePicker(!showCustomDatePicker)}
+                    leftSection={<IconCalendar size={14} />}
+                  >
+                    {dateRange[0] && dateRange[1]
+                      ? `${format(dateRange[0], 'MMM d')} - ${format(dateRange[1], 'MMM d, yyyy')}`
+                      : 'Select dates'}
+                  </Button>
+                )}
+              </Group>
+              
+              <Collapse in={showCustomDatePicker}>
+                <DatePickerInput
+                  type="range"
+                  placeholder="Select custom date range"
+                  value={customDateRange}
+                  onChange={(value) => {
+                    setCustomDateRange(value);
+                    setDateFilterOption('custom');
+                  }}
+                  leftSection={<IconCalendar size={16} />}
+                  mt="xs"
+                />
+              </Collapse>
+            </Stack>
+            
             <Grid>
               <Grid.Col span={{ base: 12, sm: 6, md: 3 }}>
                 <TextInput
                   placeholder="Search transactions..."
                   leftSection={<IconSearch size={16} />}
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.currentTarget.value)}
+                  value={searchInput}
+                  onChange={handleSearchChange}
                 />
               </Grid.Col>
               
@@ -277,18 +408,7 @@ export function EnhancedTransactions() {
             </Grid>
 
             <Grid>
-              <Grid.Col span={{ base: 12, sm: 6, md: 4 }}>
-                <DatePickerInput
-                  type="range"
-                  label="Date Range"
-                  placeholder="Select dates"
-                  value={dateRange}
-                  onChange={setDateRange}
-                  leftSection={<IconCalendar size={16} />}
-                />
-              </Grid.Col>
-              
-              <Grid.Col span={{ base: 12, sm: 6, md: 2 }}>
+              <Grid.Col span={{ base: 12, sm: 6, md: 3 }}>
                 <NumberInput
                   label="Min Amount"
                   placeholder="0.00"
@@ -299,7 +419,7 @@ export function EnhancedTransactions() {
                 />
               </Grid.Col>
               
-              <Grid.Col span={{ base: 12, sm: 6, md: 2 }}>
+              <Grid.Col span={{ base: 12, sm: 6, md: 3 }}>
                 <NumberInput
                   label="Max Amount"
                   placeholder="999.99"
@@ -310,7 +430,7 @@ export function EnhancedTransactions() {
                 />
               </Grid.Col>
               
-              <Grid.Col span={{ base: 12, sm: 6, md: 4 }}>
+              <Grid.Col span={{ base: 12, sm: 6, md: 3 }}>
                 <Stack gap="xs" mt="md">
                   <Checkbox
                     label="Include hidden transactions"
@@ -323,7 +443,7 @@ export function EnhancedTransactions() {
 
             <Group justify="space-between">
               <Text size="sm" c="dimmed">
-                Showing {transactions.length} of {transactionData?.total || 0} transactions
+                Showing {transactions.length} of {totalTransactions} transactions
               </Text>
               <Button variant="subtle" size="sm" onClick={() => refetch()}>
                 Refresh
@@ -343,7 +463,6 @@ export function EnhancedTransactions() {
                 <Table.Th>Tags</Table.Th>
                 <Table.Th>Account</Table.Th>
                 <Table.Th>Amount</Table.Th>
-                <Table.Th>Status</Table.Th>
                 <Table.Th width={60}>Actions</Table.Th>
               </Table.Tr>
             </Table.Thead>
@@ -356,7 +475,18 @@ export function EnhancedTransactions() {
                   
                   <Table.Td>
                     <Stack gap={2}>
-                      <Text fw={500}>{transaction.userDescription || transaction.merchantName || transaction.name}</Text>
+                      {transaction.userDescription ? (
+                        <Tooltip
+                          label={`Original: ${transaction.name}`}
+                          openDelay={1000}
+                          closeDelay={200}
+                          disabled={!transaction.userDescription}
+                        >
+                          <Text fw={500}>{transaction.userDescription}</Text>
+                        </Tooltip>
+                      ) : (
+                        <Text fw={500}>{transaction.merchantName || transaction.name}</Text>
+                      )}
                       {transaction.notes && (
                         <Text size="xs" c="dimmed">{transaction.notes}</Text>
                       )}
@@ -365,9 +495,20 @@ export function EnhancedTransactions() {
                   
                   <Table.Td>
                     {getCategoryDisplay(transaction) ? (
-                      <Badge variant="light" leftSection={<IconCategory size={12} />}>
-                        {getCategoryDisplay(transaction)}
-                      </Badge>
+                      <Tooltip
+                        label={getCategoryDisplay(transaction)}
+                        openDelay={1000}
+                        closeDelay={200}
+                      >
+                        <Badge 
+                          variant="light" 
+                          leftSection={<IconCategory size={12} />}
+                          maw={200}
+                          style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}
+                        >
+                          {getCategoryDisplay(transaction)}
+                        </Badge>
+                      </Tooltip>
                     ) : (
                       <Badge variant="default" color="gray">
                         Uncategorized
@@ -386,89 +527,104 @@ export function EnhancedTransactions() {
                   </Table.Td>
                   
                   <Table.Td>
-                    <Badge variant="outline">
-                      {transaction.accountName}
-                    </Badge>
+                    {(() => {
+                      const accountInfo = accountLookup.get(transaction.accountId);
+                      return accountInfo ? (
+                        <Tooltip
+                          label={`${accountInfo.name} - ${accountInfo.institution}${accountInfo.mask ? ` ••${accountInfo.mask}` : ''}`}
+                          openDelay={1000}
+                          closeDelay={200}
+                        >
+                          <ThemeIcon variant="light" size="md">
+                            <IconBuilding size={16} />
+                          </ThemeIcon>
+                        </Tooltip>
+                      ) : (
+                        <Badge variant="outline">
+                          {transaction.accountName || 'Unknown'}
+                        </Badge>
+                      );
+                    })()}
+                  </Table.Td>
+                  
+                  <Table.Td>
+                    <Tooltip
+                      label={`$${Math.abs(transaction.amount).toFixed(2)}`}
+                      openDelay={1000}
+                      closeDelay={200}
+                    >
+                      <Group gap={4}>
+                        <ThemeIcon
+                          size="sm"
+                          variant="light"
+                          color={transaction.amount > 0 ? 'red' : 'green'}
+                        >
+                          {transaction.amount > 0 ? (
+                            <IconArrowUpRight size={14} />
+                          ) : (
+                            <IconArrowDownRight size={14} />
+                          )}
+                        </ThemeIcon>
+                        <Text fw={500} c={transaction.amount > 0 ? 'red' : 'green'}>
+                          ${Math.round(Math.abs(transaction.amount))}
+                        </Text>
+                      </Group>
+                    </Tooltip>
                   </Table.Td>
                   
                   <Table.Td>
                     <Group gap={4}>
-                      <ThemeIcon
-                        size="sm"
-                        variant="light"
-                        color={transaction.amount > 0 ? 'red' : 'green'}
-                      >
-                        {transaction.amount > 0 ? (
-                          <IconArrowUpRight size={14} />
-                        ) : (
-                          <IconArrowDownRight size={14} />
-                        )}
-                      </ThemeIcon>
-                      <Text fw={500} c={transaction.amount > 0 ? 'red' : 'green'}>
-                        ${Math.abs(transaction.amount).toFixed(2)}
-                      </Text>
-                    </Group>
-                  </Table.Td>
-                  
-                  <Table.Td>
-                    <Group gap={4}>
-                      {transaction.pending && (
-                        <Badge size="xs" color="yellow">Pending</Badge>
-                      )}
                       {transaction.isHidden && (
-                        <Tooltip label="Hidden from budgets">
+                        <Tooltip label="Hidden from budgets" openDelay={1000} closeDelay={200}>
                           <ThemeIcon size="xs" variant="light" color="gray">
                             <IconEyeOff size={12} />
                           </ThemeIcon>
                         </Tooltip>
                       )}
                       {transaction.isSplit && (
-                        <Tooltip label="Split transaction">
+                        <Tooltip label="Split transaction" openDelay={1000} closeDelay={200}>
                           <ThemeIcon size="xs" variant="light" color="blue">
                             <IconScissors size={12} />
                           </ThemeIcon>
                         </Tooltip>
                       )}
-                    </Group>
-                  </Table.Td>
-                  
-                  <Table.Td>
-                    <Menu shadow="md" width={200}>
-                      <Menu.Target>
-                        <ActionIcon variant="subtle">
-                          <IconDots size={16} />
-                        </ActionIcon>
-                      </Menu.Target>
+                      <Menu shadow="md" width={200}>
+                        <Menu.Target>
+                          <ActionIcon variant="subtle">
+                            <IconDots size={16} />
+                          </ActionIcon>
+                        </Menu.Target>
 
-                      <Menu.Dropdown>
-                        <Menu.Item
-                          leftSection={<IconEdit style={{ width: rem(14), height: rem(14) }} />}
-                          onClick={() => handleEditClick(transaction)}
-                        >
-                          Edit
-                        </Menu.Item>
-                        
-                        <Menu.Item
-                          leftSection={<IconScissors style={{ width: rem(14), height: rem(14) }} />}
-                          disabled={transaction.isSplit}
-                          onClick={() => handleSplitClick(transaction)}
-                        >
-                          Split Transaction
-                        </Menu.Item>
-                        
-                        <Menu.Item
-                          leftSection={
-                            transaction.isHidden ? (
-                              <IconEye style={{ width: rem(14), height: rem(14) }} />
-                            ) : (
-                              <IconEyeOff style={{ width: rem(14), height: rem(14) }} />
-                            )
-                          }
-                        >
-                          {transaction.isHidden ? 'Show' : 'Hide'} from Budget
-                        </Menu.Item>
-                      </Menu.Dropdown>
-                    </Menu>
+                        <Menu.Dropdown>
+                          <Menu.Item
+                            leftSection={<IconEdit style={{ width: rem(14), height: rem(14) }} />}
+                            onClick={() => handleEditClick(transaction)}
+                          >
+                            Edit
+                          </Menu.Item>
+                          
+                          <Menu.Item
+                            leftSection={<IconScissors style={{ width: rem(14), height: rem(14) }} />}
+                            disabled={transaction.isSplit}
+                            onClick={() => handleSplitClick(transaction)}
+                          >
+                            Split Transaction
+                          </Menu.Item>
+                          
+                          <Menu.Item
+                            leftSection={
+                              transaction.isHidden ? (
+                                <IconEye style={{ width: rem(14), height: rem(14) }} />
+                              ) : (
+                                <IconEyeOff style={{ width: rem(14), height: rem(14) }} />
+                              )
+                            }
+                          >
+                            {transaction.isHidden ? 'Show' : 'Hide'} from Budget
+                          </Menu.Item>
+                        </Menu.Dropdown>
+                      </Menu>
+                    </Group>
                   </Table.Td>
                 </Table.Tr>
               ))}

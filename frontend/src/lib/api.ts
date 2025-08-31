@@ -14,6 +14,13 @@ import type {
 
 const API_BASE_URL = 'http://localhost:3001/api/v1';
 
+// Extended PlaidAccount with backend fields
+export interface ExtendedPlaidAccount extends PlaidAccount {
+  accountName?: string;
+  officialName?: string | null;
+  institutionName?: string;
+}
+
 // Additional type definitions for API responses
 export interface CategoryWithChildren extends Category {
   children?: Category[];
@@ -180,8 +187,8 @@ class ApiClient {
     return data;
   }
 
-  async getAccounts(): Promise<PlaidAccount[]> {
-    const { data } = await this.client.get<{ accounts: PlaidAccount[] }>('/accounts');
+  async getAccounts(): Promise<ExtendedPlaidAccount[]> {
+    const { data } = await this.client.get<{ accounts: ExtendedPlaidAccount[] }>('/accounts');
     return data.accounts;
   }
 
