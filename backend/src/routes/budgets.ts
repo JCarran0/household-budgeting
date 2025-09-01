@@ -1,7 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { z } from 'zod';
-import { BudgetService } from '../services/budgetService';
-import { JSONDataService } from '../services/dataService';
+import { budgetService } from '../services';
 import { authMiddleware } from '../middleware/authMiddleware';
 
 const router = Router();
@@ -22,17 +21,18 @@ const budgetVsActualSchema = z.object({
   actuals: z.record(z.string(), z.number())
 });
 
-// Initialize service
-const dataService = new JSONDataService();
-const budgetService = new BudgetService(dataService);
-
 // All routes require authentication
 router.use(authMiddleware);
 
 // GET /api/budgets - Get all budgets
-router.get('/', async (_req: Request, res: Response): Promise<void> => {
+router.get('/', async (req: Request, res: Response): Promise<void> => {
   try {
-    const budgets = await budgetService.getAllBudgets();
+    const userId = req.user?.userId;
+    if (!userId) {
+      res.status(401).json({ error: 'User not authenticated' });
+      return;
+    }
+    const budgets = await budgetService.getAllBudgets(userId);
     res.json(budgets);
   } catch (error) {
     console.error('Error fetching budgets:', error);
@@ -43,9 +43,14 @@ router.get('/', async (_req: Request, res: Response): Promise<void> => {
 // GET /api/budgets/month/:month - Get budgets for a specific month
 router.get('/month/:month', async (req: Request, res: Response): Promise<void> => {
   try {
+    const userId = req.user?.userId;
+    if (!userId) {
+      res.status(401).json({ error: 'User not authenticated' });
+      return;
+    }
     const { month } = req.params;
-    const budgets = await budgetService.getMonthlyBudgets(month);
-    const total = await budgetService.getTotalMonthlyBudget(month);
+    const budgets = await budgetService.getMonthlyBudgets(month, userId);
+    const total = await budgetService.getTotalMonthlyBudget(month, userId);
     
     res.json({
       month,
@@ -65,8 +70,13 @@ router.get('/month/:month', async (req: Request, res: Response): Promise<void> =
 // GET /api/budgets/category/:categoryId - Get all budgets for a category
 router.get('/category/:categoryId', async (req: Request, res: Response): Promise<void> => {
   try {
+    const userId = req.user?.userId;
+    if (!userId) {
+      res.status(401).json({ error: 'User not authenticated' });
+      return;
+    }
     const { categoryId } = req.params;
-    const budgets = await budgetService.getBudgetsByCategory(categoryId);
+    const budgets = await budgetService.getBudgetsByCategory(categoryId, userId);
     res.json(budgets);
   } catch (error) {
     console.error('Error fetching category budgets:', error);
@@ -77,8 +87,13 @@ router.get('/category/:categoryId', async (req: Request, res: Response): Promise
 // GET /api/budgets/category/:categoryId/month/:month - Get specific budget
 router.get('/category/:categoryId/month/:month', async (req: Request, res: Response): Promise<void> => {
   try {
+    const userId = req.user?.userId;
+    if (!userId) {
+      res.status(401).json({ error: 'User not authenticated' });
+      return;
+    }
     const { categoryId, month } = req.params;
-    const budget = await budgetService.getBudget(categoryId, month);
+    const budget = await budgetService.getBudget(categoryId, month, userId);
     
     if (!budget) {
       res.status(404).json({ error: 'Budget not found' });
@@ -95,8 +110,13 @@ router.get('/category/:categoryId/month/:month', async (req: Request, res: Respo
 // POST /api/budgets - Create or update a budget
 router.post('/', async (req: Request, res: Response): Promise<void> => {
   try {
+    const userId = req.user?.userId;
+    if (!userId) {
+      res.status(401).json({ error: 'User not authenticated' });
+      return;
+    }
     const validatedData = createBudgetSchema.parse(req.body);
-    const budget = await budgetService.createOrUpdateBudget(validatedData);
+    const budget = await budgetService.createOrUpdateBudget(validatedData, userId);
     res.status(201).json(budget);
   } catch (error) {
     if (error instanceof z.ZodError) {
@@ -117,10 +137,16 @@ router.post('/', async (req: Request, res: Response): Promise<void> => {
 // POST /api/budgets/copy - Copy budgets from one month to another
 router.post('/copy', async (req: Request, res: Response): Promise<void> => {
   try {
+    const userId = req.user?.userId;
+    if (!userId) {
+      res.status(401).json({ error: 'User not authenticated' });
+      return;
+    }
     const validatedData = copyBudgetsSchema.parse(req.body);
     const copiedBudgets = await budgetService.copyBudgets(
       validatedData.fromMonth,
-      validatedData.toMonth
+      validatedData.toMonth,
+      userId
     );
     
     res.json({
@@ -144,11 +170,16 @@ router.post('/copy', async (req: Request, res: Response): Promise<void> => {
 // GET /api/budgets/comparison/:month - Get budget vs actual for a month
 router.post('/comparison/:month', async (req: Request, res: Response): Promise<void> => {
   try {
+    const userId = req.user?.userId;
+    if (!userId) {
+      res.status(401).json({ error: 'User not authenticated' });
+      return;
+    }
     const { month } = req.params;
     const validatedData = budgetVsActualSchema.parse(req.body);
     
     const actuals = new Map(Object.entries(validatedData.actuals));
-    const comparisons = await budgetService.getMonthlyBudgetVsActual(month, actuals);
+    const comparisons = await budgetService.getMonthlyBudgetVsActual(month, actuals, userId);
     
     // Calculate totals
     const totals = comparisons.reduce((acc, comp) => ({
@@ -179,6 +210,11 @@ router.post('/comparison/:month', async (req: Request, res: Response): Promise<v
 // GET /api/budgets/history/:categoryId - Get budget history for a category
 router.get('/history/:categoryId', async (req: Request, res: Response): Promise<void> => {
   try {
+    const userId = req.user?.userId;
+    if (!userId) {
+      res.status(401).json({ error: 'User not authenticated' });
+      return;
+    }
     const { categoryId } = req.params;
     const { startMonth, endMonth } = req.query;
     
@@ -190,13 +226,15 @@ router.get('/history/:categoryId', async (req: Request, res: Response): Promise<
     const history = await budgetService.getCategoryBudgetHistory(
       categoryId,
       startMonth as string,
-      endMonth as string
+      endMonth as string,
+      userId
     );
     
     const average = await budgetService.getAverageBudget(
       categoryId,
       startMonth as string,
-      endMonth as string
+      endMonth as string,
+      userId
     );
     
     res.json({
@@ -222,7 +260,12 @@ router.get('/history/:categoryId', async (req: Request, res: Response): Promise<
 // DELETE /api/budgets/:id - Delete a specific budget
 router.delete('/:id', async (req: Request, res: Response) => {
   try {
-    await budgetService.deleteBudget(req.params.id);
+    const userId = req.user?.userId;
+    if (!userId) {
+      res.status(401).json({ error: 'User not authenticated' });
+      return;
+    }
+    await budgetService.deleteBudget(req.params.id, userId);
     res.status(204).send();
   } catch (error) {
     console.error('Error deleting budget:', error);
@@ -233,7 +276,12 @@ router.delete('/:id', async (req: Request, res: Response) => {
 // DELETE /api/budgets/category/:categoryId - Delete all budgets for a category
 router.delete('/category/:categoryId', async (req: Request, res: Response) => {
   try {
-    await budgetService.deleteBudgetsByCategory(req.params.categoryId);
+    const userId = req.user?.userId;
+    if (!userId) {
+      res.status(401).json({ error: 'User not authenticated' });
+      return;
+    }
+    await budgetService.deleteBudgetsByCategory(req.params.categoryId, userId);
     res.status(204).send();
   } catch (error) {
     console.error('Error deleting category budgets:', error);
@@ -244,6 +292,11 @@ router.delete('/category/:categoryId', async (req: Request, res: Response) => {
 // POST /api/budgets/rollover - Calculate and apply rollover
 router.post('/rollover', async (req: Request, res: Response): Promise<void> => {
   try {
+    const userId = req.user?.userId;
+    if (!userId) {
+      res.status(401).json({ error: 'User not authenticated' });
+      return;
+    }
     const { categoryId, fromMonth, toMonth, actualSpent } = req.body;
     
     if (!categoryId || !fromMonth || !toMonth || actualSpent === undefined) {
@@ -254,11 +307,11 @@ router.post('/rollover', async (req: Request, res: Response): Promise<void> => {
     }
     
     // Calculate rollover from previous month
-    const rollover = await budgetService.calculateRollover(categoryId, fromMonth, actualSpent);
+    const rollover = await budgetService.calculateRollover(categoryId, fromMonth, actualSpent, userId);
     
     if (rollover > 0) {
       // Apply rollover to next month
-      const updatedBudget = await budgetService.applyRollover(categoryId, toMonth, rollover);
+      const updatedBudget = await budgetService.applyRollover(categoryId, toMonth, rollover, userId);
       
       res.json({
         categoryId,

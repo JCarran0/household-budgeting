@@ -26,8 +26,8 @@ export interface DataService {
   saveCategories(categories: Category[], userId?: string): Promise<void>;
   
   // Budget methods
-  getBudgets(): Promise<MonthlyBudget[]>;
-  saveBudgets(budgets: MonthlyBudget[]): Promise<void>;
+  getBudgets(userId?: string): Promise<MonthlyBudget[]>;
+  saveBudgets(budgets: MonthlyBudget[], userId?: string): Promise<void>;
   
   // Generic data storage methods
   getData<T>(key: string): Promise<T | null>;
@@ -149,13 +149,35 @@ export class JSONDataService implements DataService {
   }
 
   // Budget methods
-  async getBudgets(): Promise<MonthlyBudget[]> {
-    const data = await fs.readJson(this.budgetsFile);
-    return data.budgets || [];
+  async getBudgets(userId?: string): Promise<MonthlyBudget[]> {
+    if (userId) {
+      // Get user-specific budgets
+      const userBudgetsFile = path.join(this.dataDir, `budgets_${userId}.json`);
+      try {
+        if (await fs.pathExists(userBudgetsFile)) {
+          const data = await fs.readJson(userBudgetsFile);
+          return data.budgets || [];
+        }
+      } catch {
+        // File doesn't exist or error reading
+      }
+      return [];
+    } else {
+      // Legacy: get global budgets
+      const data = await fs.readJson(this.budgetsFile);
+      return data.budgets || [];
+    }
   }
 
-  async saveBudgets(budgets: MonthlyBudget[]): Promise<void> {
-    await fs.writeJson(this.budgetsFile, { budgets }, { spaces: 2 });
+  async saveBudgets(budgets: MonthlyBudget[], userId?: string): Promise<void> {
+    if (userId) {
+      // Save user-specific budgets
+      const userBudgetsFile = path.join(this.dataDir, `budgets_${userId}.json`);
+      await fs.writeJson(userBudgetsFile, { budgets }, { spaces: 2 });
+    } else {
+      // Legacy: save global budgets
+      await fs.writeJson(this.budgetsFile, { budgets }, { spaces: 2 });
+    }
   }
 
   // Generic data storage implementation
@@ -206,6 +228,7 @@ export class InMemoryDataService implements DataService {
   private categories: Category[] = [];
   private userCategories: Map<string, Category[]> = new Map();
   private budgets: MonthlyBudget[] = [];
+  private userBudgets: Map<string, MonthlyBudget[]> = new Map();
 
   async getUser(id: string): Promise<User | null> {
     return this.users.find(u => u.id === id) || null;
@@ -257,12 +280,19 @@ export class InMemoryDataService implements DataService {
   }
 
   // Budget methods
-  async getBudgets(): Promise<MonthlyBudget[]> {
+  async getBudgets(userId?: string): Promise<MonthlyBudget[]> {
+    if (userId) {
+      return this.userBudgets.get(userId) || [];
+    }
     return this.budgets;
   }
 
-  async saveBudgets(budgets: MonthlyBudget[]): Promise<void> {
-    this.budgets = budgets;
+  async saveBudgets(budgets: MonthlyBudget[], userId?: string): Promise<void> {
+    if (userId) {
+      this.userBudgets.set(userId, budgets);
+    } else {
+      this.budgets = budgets;
+    }
   }
 
   // Generic data storage implementation
@@ -287,6 +317,7 @@ export class InMemoryDataService implements DataService {
     this.categories = [];
     this.userCategories.clear();
     this.budgets = [];
+    this.userBudgets.clear();
     this.dataStore.clear();
   }
 }
