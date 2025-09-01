@@ -221,6 +221,19 @@ router.post('/sync', authMiddleware, async (req: AuthRequest, res: Response): Pr
     });
   } catch (error) {
     console.error('Error syncing transactions:', error);
+    
+    // Check for specific error types and provide helpful messages
+    if (error instanceof Error) {
+      if (error.message.includes('reconnect your bank account')) {
+        res.status(400).json({ 
+          success: false, 
+          error: error.message,
+          requiresReconnect: true 
+        });
+        return;
+      }
+    }
+    
     res.status(500).json({ success: false, error: 'Failed to sync transactions' });
   }
 });

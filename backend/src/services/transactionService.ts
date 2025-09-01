@@ -597,6 +597,15 @@ export class TransactionService {
    * Decrypt access token for use
    */
   private decryptToken(encryptedToken: string): string {
-    return encryptionService.decrypt(encryptedToken);
+    try {
+      return encryptionService.decrypt(encryptedToken);
+    } catch (error) {
+      // If this is a plain text token from before encryption was implemented,
+      // throw a clear error message
+      if (encryptedToken && encryptedToken.startsWith('access-')) {
+        throw new Error('Invalid access token format. Please reconnect your bank account.');
+      }
+      throw new Error('Failed to decrypt access token. Please reconnect your bank account.');
+    }
   }
 }

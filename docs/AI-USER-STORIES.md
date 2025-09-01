@@ -16,7 +16,7 @@
 - A user should be protected from brute force attacks (rate limiting after 5 failed attempts)
 
 ### Security
-- A user should be automatically logged out after 7 days (JWT expiration)
+- A user should be automatically logged out after 60 minutes (JWT expiration)
 - A user should have their password securely hashed (bcrypt)
 - A user should be unable to access protected routes without authentication
 - A user should receive clear error messages when their session expires
