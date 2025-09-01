@@ -129,10 +129,16 @@ export async function createCategory(
     {
       name,
       parentId: parentId || null,
+      plaidCategory: null,
       isHidden: false,
       isSavings: false,
     }
   );
+  
+  if (response.status !== 201) {
+    console.error('Failed to create category:', response.status, response.body);
+    throw new Error(`Failed to create category: ${response.body?.error || 'Unknown error'}`);
+  }
   
   return response.body;
 }
@@ -155,6 +161,11 @@ export async function createBudget(
       amount,
     }
   );
+  
+  if (response.status !== 201) {
+    console.error('Failed to create budget:', response.status, response.body);
+    throw new Error(`Failed to create budget: ${response.body?.error || 'Unknown error'}`);
+  }
   
   return response.body;
 }

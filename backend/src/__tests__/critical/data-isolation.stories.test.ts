@@ -37,12 +37,16 @@ describe('User Story: Data Privacy and Isolation', () => {
   describe('As a user, my data is completely isolated from other users', () => {
     test('My categories are separate from other users', async () => {
       // User1 creates categories
-      await createCategory(user1.token, 'User1 Groceries');
+      const cat1 = await createCategory(user1.token, 'User1 Groceries');
       await createCategory(user1.token, 'User1 Entertainment');
       
       // User2 creates categories
       await createCategory(user2.token, 'User2 Travel');
       await createCategory(user2.token, 'User2 Dining');
+      
+      // Verify categories were created
+      expect(cat1).toBeDefined();
+      expect(cat1.id).toBeDefined();
       
       // User1 should only see their categories
       const user1Categories = await authenticatedGet(
