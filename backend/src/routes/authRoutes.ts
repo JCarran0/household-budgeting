@@ -62,7 +62,12 @@ router.post(
       if (result.success) {
         res.json(result);
       } else {
-        res.status(401).json(result);
+        // Check if it's a rate limit error
+        if (result.error && result.error.includes('Too many failed attempts')) {
+          res.status(429).json(result);
+        } else {
+          res.status(401).json(result);
+        }
       }
     } catch (error) {
       console.error('Login error:', error);

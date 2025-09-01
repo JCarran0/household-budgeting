@@ -148,6 +148,12 @@ const MAX_ATTEMPTS = 10;
 const WINDOW_MS = 15 * 60 * 1000; // 15 minutes
 
 export const rateLimitAuth = (req: Request, res: Response, next: NextFunction): void => {
+  // Skip rate limiting in test environment to allow tests to control rate limiting via authService
+  if (process.env.NODE_ENV === 'test') {
+    next();
+    return;
+  }
+
   const identifier = req.ip || 'unknown';
   const now = new Date();
   
@@ -177,6 +183,15 @@ export const rateLimitAuth = (req: Request, res: Response, next: NextFunction): 
   }
   
   next();
+};
+
+/**
+ * Reset rate limiting - FOR TESTING ONLY
+ */
+export const resetRateLimiting = (): void => {
+  if (process.env.NODE_ENV === 'test') {
+    attemptCounts.clear();
+  }
 };
 
 /**
