@@ -184,7 +184,9 @@ router.post('/', async (req: Request, res: Response): Promise<void> => {
     }
     if (error instanceof Error) {
       if (error.message.includes('Parent category not found') || 
-          error.message.includes('Cannot create subcategory')) {
+          error.message.includes('Cannot create subcategory') ||
+          error.message.includes('already exists') ||
+          error.message.includes('name is required')) {
         res.status(400).json({ error: error.message });
         return;
       }
@@ -230,6 +232,17 @@ router.delete('/:id', async (req: Request, res: Response) => {
     await categoryService.deleteCategory(req.params.id, userId);
     res.status(204).send();
   } catch (error) {
+    if (error instanceof Error) {
+      if (error.message.includes('not found')) {
+        res.status(404).json({ error: error.message });
+        return;
+      }
+      if (error.message.includes('subcategories') || 
+          error.message.includes('transactions')) {
+        res.status(400).json({ error: error.message });
+        return;
+      }
+    }
     console.error('Error deleting category:', error);
     res.status(500).json({ error: 'Failed to delete category' });
   }

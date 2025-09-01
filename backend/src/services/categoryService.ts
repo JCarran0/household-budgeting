@@ -36,13 +36,26 @@ export class CategoryService {
   async createCategory(data: CreateCategoryDto, userId: string): Promise<Category> {
     const categories = await this.dataService.getCategories(userId);
 
+    // Validate name is not empty
+    if (!data.name || data.name.trim().length === 0) {
+      throw new Error('Category name is required');
+    }
+
+    // Check for duplicate names at the same level
+    const duplicateExists = categories.some(cat => 
+      cat.name === data.name && cat.parentId === data.parentId
+    );
+    if (duplicateExists) {
+      throw new Error('Category name already exists at this level');
+    }
+
     // Validate parent exists if parentId is provided
     if (data.parentId) {
       const parent = categories.find(cat => cat.id === data.parentId);
       if (!parent) {
         throw new Error('Parent category not found');
       }
-      // Ensure parent is not a subcategory
+      // Ensure parent is not a subcategory (enforce two-level hierarchy)
       if (parent.parentId !== null) {
         throw new Error('Cannot create subcategory under another subcategory');
       }
@@ -83,11 +96,23 @@ export class CategoryService {
   async deleteCategory(id: string, userId: string): Promise<void> {
     const categories = await this.dataService.getCategories(userId);
     
-    // Remove the category and any subcategories
-    const filteredCategories = categories.filter(cat => {
-      return cat.id !== id && cat.parentId !== id;
-    });
-
+    // Find the category to delete
+    const categoryToDelete = categories.find(cat => cat.id === id);
+    if (!categoryToDelete) {
+      throw new Error('Category not found');
+    }
+    
+    // Check if category has subcategories
+    const hasSubcategories = categories.some(cat => cat.parentId === id);
+    if (hasSubcategories) {
+      throw new Error('Cannot delete category with subcategories');
+    }
+    
+    // TODO: Check for associated transactions once transaction service is implemented
+    // This would require checking if any transactions are using this categoryId
+    
+    // Remove the category
+    const filteredCategories = categories.filter(cat => cat.id !== id);
     await this.dataService.saveCategories(filteredCategories, userId);
   }
 
