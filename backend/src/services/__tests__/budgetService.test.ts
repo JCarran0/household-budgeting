@@ -4,6 +4,7 @@ import { InMemoryDataService } from '../dataService';
 describe('BudgetService', () => {
   let budgetService: BudgetService;
   let dataService: InMemoryDataService;
+  const testUserId = 'test-user-123';
 
   beforeEach(() => {
     dataService = new InMemoryDataService();
@@ -18,11 +19,12 @@ describe('BudgetService', () => {
         amount: 500
       };
 
-      const budget = await budgetService.createOrUpdateBudget(budgetData);
+      const budget = await budgetService.createOrUpdateBudget(budgetData, testUserId);
 
       expect(budget).toMatchObject({
         ...budgetData,
-        id: expect.any(String)
+        id: expect.any(String),
+        userId: testUserId
       });
     });
 
@@ -33,14 +35,14 @@ describe('BudgetService', () => {
         amount: 500
       };
 
-      const firstBudget = await budgetService.createOrUpdateBudget(budgetData);
+      const firstBudget = await budgetService.createOrUpdateBudget(budgetData, testUserId);
       
       const updatedData = {
         ...budgetData,
         amount: 750
       };
 
-      const updatedBudget = await budgetService.createOrUpdateBudget(updatedData);
+      const updatedBudget = await budgetService.createOrUpdateBudget(updatedData, testUserId);
 
       expect(updatedBudget.id).toBe(firstBudget.id);
       expect(updatedBudget.amount).toBe(750);
@@ -53,15 +55,15 @@ describe('BudgetService', () => {
         amount: 500
       };
 
-      await budgetService.createOrUpdateBudget(budgetData);
+      await budgetService.createOrUpdateBudget(budgetData, testUserId);
 
-      const budget = await budgetService.getBudget('cat-1', '2025-01');
+      const budget = await budgetService.getBudget('cat-1', '2025-01', testUserId);
 
       expect(budget).toMatchObject(budgetData);
     });
 
     it('should return null when budget does not exist', async () => {
-      const budget = await budgetService.getBudget('non-existent', '2025-01');
+      const budget = await budgetService.getBudget('non-existent', '2025-01', testUserId);
       expect(budget).toBeNull();
     });
 
@@ -70,11 +72,11 @@ describe('BudgetService', () => {
         categoryId: 'cat-1',
         month: '2025-01',
         amount: 500
-      });
+      }, testUserId);
 
-      await budgetService.deleteBudget(budget.id);
+      await budgetService.deleteBudget(budget.id, testUserId);
 
-      const deletedBudget = await budgetService.getBudget('cat-1', '2025-01');
+      const deletedBudget = await budgetService.getBudget('cat-1', '2025-01', testUserId);
       expect(deletedBudget).toBeNull();
     });
   });
@@ -85,21 +87,21 @@ describe('BudgetService', () => {
         categoryId: 'cat-1',
         month: '2025-01',
         amount: 500
-      });
+      }, testUserId);
 
       await budgetService.createOrUpdateBudget({
         categoryId: 'cat-2',
         month: '2025-01',
         amount: 300
-      });
+      }, testUserId);
 
       await budgetService.createOrUpdateBudget({
         categoryId: 'cat-3',
         month: '2025-02',
         amount: 400
-      });
+      }, testUserId);
 
-      const januaryBudgets = await budgetService.getMonthlyBudgets('2025-01');
+      const januaryBudgets = await budgetService.getMonthlyBudgets('2025-01', testUserId);
 
       expect(januaryBudgets).toHaveLength(2);
       expect(januaryBudgets.map(b => b.categoryId)).toEqual(['cat-1', 'cat-2']);
@@ -110,27 +112,27 @@ describe('BudgetService', () => {
         categoryId: 'cat-1',
         month: '2025-01',
         amount: 500
-      });
+      }, testUserId);
 
       await budgetService.createOrUpdateBudget({
         categoryId: 'cat-2',
         month: '2025-01',
         amount: 300
-      });
+      }, testUserId);
 
       await budgetService.createOrUpdateBudget({
         categoryId: 'cat-3',
         month: '2025-01',
         amount: 200
-      });
+      }, testUserId);
 
-      const total = await budgetService.getTotalMonthlyBudget('2025-01');
+      const total = await budgetService.getTotalMonthlyBudget('2025-01', testUserId);
 
       expect(total).toBe(1000);
     });
 
     it('should return 0 for month with no budgets', async () => {
-      const total = await budgetService.getTotalMonthlyBudget('2025-01');
+      const total = await budgetService.getTotalMonthlyBudget('2025-01', testUserId);
       expect(total).toBe(0);
     });
   });
@@ -142,21 +144,21 @@ describe('BudgetService', () => {
         categoryId: 'cat-1',
         month: '2025-01',
         amount: 500
-      });
+      }, testUserId);
 
       await budgetService.createOrUpdateBudget({
         categoryId: 'cat-2',
         month: '2025-01',
         amount: 300
-      });
+      }, testUserId);
 
       // Copy to February
-      const copiedBudgets = await budgetService.copyBudgets('2025-01', '2025-02');
+      const copiedBudgets = await budgetService.copyBudgets('2025-01', '2025-02', testUserId);
 
       expect(copiedBudgets).toHaveLength(2);
       
       // Verify February budgets exist
-      const februaryBudgets = await budgetService.getMonthlyBudgets('2025-02');
+      const februaryBudgets = await budgetService.getMonthlyBudgets('2025-02', testUserId);
       expect(februaryBudgets).toHaveLength(2);
       expect(februaryBudgets.map(b => b.amount)).toEqual([500, 300]);
     });
@@ -167,24 +169,24 @@ describe('BudgetService', () => {
         categoryId: 'cat-1',
         month: '2025-01',
         amount: 500
-      });
+      }, testUserId);
 
       // Create February budget with different amount
       await budgetService.createOrUpdateBudget({
         categoryId: 'cat-1',
         month: '2025-02',
         amount: 200
-      });
+      }, testUserId);
 
       // Copy from January to February (should overwrite)
-      await budgetService.copyBudgets('2025-01', '2025-02');
+      await budgetService.copyBudgets('2025-01', '2025-02', testUserId);
 
-      const februaryBudget = await budgetService.getBudget('cat-1', '2025-02');
+      const februaryBudget = await budgetService.getBudget('cat-1', '2025-02', testUserId);
       expect(februaryBudget?.amount).toBe(500);
     });
 
     it('should handle copying from empty month', async () => {
-      const copiedBudgets = await budgetService.copyBudgets('2025-01', '2025-02');
+      const copiedBudgets = await budgetService.copyBudgets('2025-01', '2025-02', testUserId);
       expect(copiedBudgets).toHaveLength(0);
     });
   });
@@ -195,9 +197,9 @@ describe('BudgetService', () => {
         categoryId: 'cat-1',
         month: '2025-01',
         amount: 500
-      });
+      }, testUserId);
 
-      const comparison = await budgetService.getBudgetVsActual('cat-1', '2025-01', 350);
+      const comparison = await budgetService.getBudgetVsActual('cat-1', '2025-01', 350, testUserId);
 
       expect(comparison).toEqual({
         categoryId: 'cat-1',
@@ -215,9 +217,9 @@ describe('BudgetService', () => {
         categoryId: 'cat-1',
         month: '2025-01',
         amount: 500
-      });
+      }, testUserId);
 
-      const comparison = await budgetService.getBudgetVsActual('cat-1', '2025-01', 600);
+      const comparison = await budgetService.getBudgetVsActual('cat-1', '2025-01', 600, testUserId);
 
       expect(comparison).toEqual({
         categoryId: 'cat-1',
@@ -231,7 +233,7 @@ describe('BudgetService', () => {
     });
 
     it('should handle no budget scenario', async () => {
-      const comparison = await budgetService.getBudgetVsActual('cat-1', '2025-01', 350);
+      const comparison = await budgetService.getBudgetVsActual('cat-1', '2025-01', 350, testUserId);
 
       expect(comparison).toEqual({
         categoryId: 'cat-1',
@@ -250,13 +252,13 @@ describe('BudgetService', () => {
         categoryId: 'cat-1',
         month: '2025-01',
         amount: 500
-      });
+      }, testUserId);
 
       await budgetService.createOrUpdateBudget({
         categoryId: 'cat-2',
         month: '2025-01',
         amount: 300
-      });
+      }, testUserId);
 
       // Provide actuals map
       const actuals = new Map([
@@ -265,7 +267,7 @@ describe('BudgetService', () => {
         ['cat-3', 100] // No budget for this category
       ]);
 
-      const comparisons = await budgetService.getMonthlyBudgetVsActual('2025-01', actuals);
+      const comparisons = await budgetService.getMonthlyBudgetVsActual('2025-01', actuals, testUserId);
 
       expect(comparisons).toHaveLength(3);
       
@@ -301,21 +303,21 @@ describe('BudgetService', () => {
         categoryId: 'cat-1',
         month: '2025-01',
         amount: 500
-      });
+      }, testUserId);
 
       await budgetService.createOrUpdateBudget({
         categoryId: 'cat-1',
         month: '2025-02',
         amount: 550
-      });
+      }, testUserId);
 
       await budgetService.createOrUpdateBudget({
         categoryId: 'cat-1',
         month: '2025-03',
         amount: 600
-      });
+      }, testUserId);
 
-      const history = await budgetService.getCategoryBudgetHistory('cat-1', '2025-01', '2025-03');
+      const history = await budgetService.getCategoryBudgetHistory('cat-1', '2025-01', '2025-03', testUserId);
 
       expect(history).toHaveLength(3);
       expect(history.map(b => b.amount)).toEqual([500, 550, 600]);
@@ -326,27 +328,27 @@ describe('BudgetService', () => {
         categoryId: 'cat-1',
         month: '2025-01',
         amount: 400
-      });
+      }, testUserId);
 
       await budgetService.createOrUpdateBudget({
         categoryId: 'cat-1',
         month: '2025-02',
         amount: 500
-      });
+      }, testUserId);
 
       await budgetService.createOrUpdateBudget({
         categoryId: 'cat-1',
         month: '2025-03',
         amount: 600
-      });
+      }, testUserId);
 
-      const average = await budgetService.getAverageBudget('cat-1', '2025-01', '2025-03');
+      const average = await budgetService.getAverageBudget('cat-1', '2025-01', '2025-03', testUserId);
 
       expect(average).toBe(500);
     });
 
     it('should return 0 for average when no budgets exist', async () => {
-      const average = await budgetService.getAverageBudget('cat-1', '2025-01', '2025-03');
+      const average = await budgetService.getAverageBudget('cat-1', '2025-01', '2025-03', testUserId);
       expect(average).toBe(0);
     });
   });
@@ -357,13 +359,13 @@ describe('BudgetService', () => {
         categoryId: 'cat-1',
         month: '2025-13', // Invalid month
         amount: 500
-      })).rejects.toThrow('Invalid month format');
+      }, testUserId)).rejects.toThrow('Invalid month format');
 
       await expect(budgetService.createOrUpdateBudget({
         categoryId: 'cat-1',
         month: '2025', // Missing month
         amount: 500
-      })).rejects.toThrow('Invalid month format');
+      }, testUserId)).rejects.toThrow('Invalid month format');
     });
 
     it('should validate amount is positive', async () => {
@@ -371,13 +373,13 @@ describe('BudgetService', () => {
         categoryId: 'cat-1',
         month: '2025-01',
         amount: -100
-      })).rejects.toThrow('Budget amount must be positive');
+      }, testUserId)).rejects.toThrow('Budget amount must be positive');
 
       await expect(budgetService.createOrUpdateBudget({
         categoryId: 'cat-1',
         month: '2025-01',
         amount: 0
-      })).rejects.toThrow('Budget amount must be positive');
+      }, testUserId)).rejects.toThrow('Budget amount must be positive');
     });
   });
 
@@ -387,9 +389,9 @@ describe('BudgetService', () => {
         categoryId: 'cat-1',
         month: '2025-01',
         amount: 500
-      });
+      }, testUserId);
 
-      const rollover = await budgetService.calculateRollover('cat-1', '2025-01', 400);
+      const rollover = await budgetService.calculateRollover('cat-1', '2025-01', 400, testUserId);
 
       expect(rollover).toBe(100); // 500 - 400 = 100 unused
     });
@@ -399,9 +401,9 @@ describe('BudgetService', () => {
         categoryId: 'cat-1',
         month: '2025-01',
         amount: 500
-      });
+      }, testUserId);
 
-      const rollover = await budgetService.calculateRollover('cat-1', '2025-01', 600);
+      const rollover = await budgetService.calculateRollover('cat-1', '2025-01', 600, testUserId);
 
       expect(rollover).toBe(0); // Overspent, no rollover
     });
@@ -411,16 +413,16 @@ describe('BudgetService', () => {
         categoryId: 'cat-1',
         month: '2025-01',
         amount: 500
-      });
+      }, testUserId);
 
       await budgetService.createOrUpdateBudget({
         categoryId: 'cat-1',
         month: '2025-02',
         amount: 500
-      });
+      }, testUserId);
 
       const rollover = 100; // Assuming 100 unused from January
-      const adjustedBudget = await budgetService.applyRollover('cat-1', '2025-02', rollover);
+      const adjustedBudget = await budgetService.applyRollover('cat-1', '2025-02', rollover, testUserId);
 
       expect(adjustedBudget.amount).toBe(600); // 500 + 100 rollover
     });
