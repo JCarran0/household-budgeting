@@ -80,6 +80,7 @@ export interface SyncResult {
   modified?: number;
   removed?: number;
   error?: string;
+  warning?: string;  // For partial success when some accounts fail
 }
 
 export class TransactionService {
@@ -101,6 +102,7 @@ export class TransactionService {
       let totalAdded = 0;
       let totalModified = 0;
       let totalRemoved = 0;
+      const failedAccounts: string[] = [];
 
       // Group accounts by access token
       const tokenGroups = new Map<string, StoredAccount[]>();
@@ -113,7 +115,20 @@ export class TransactionService {
 
       // Sync each token's transactions
       for (const [encryptedToken, tokenAccounts] of tokenGroups) {
-        const accessToken = this.decryptToken(encryptedToken);
+        let accessToken: string;
+        try {
+          accessToken = this.decryptToken(encryptedToken);
+        } catch (error) {
+          console.error('Failed to decrypt access token:', error);
+          // If we can't decrypt the token, skip these accounts
+          // and continue with others
+          if (error instanceof Error && error.message.includes('reconnect')) {
+            console.warn(`Skipping ${tokenAccounts.length} accounts - token needs reconnection`);
+            // Track failed accounts
+            tokenAccounts.forEach(account => failedAccounts.push(account.name));
+          }
+          continue;
+        }
         
         console.log(`Syncing transactions for ${tokenAccounts.length} accounts from ${startDate} to ${endDate}`);
         
@@ -146,6 +161,25 @@ export class TransactionService {
         console.log(`Sync complete: ${result.added} added, ${result.modified} modified, ${result.removed} removed`);
       }
 
+      // If some accounts failed but others succeeded, return partial success
+      if (failedAccounts.length > 0 && (totalAdded > 0 || totalModified > 0)) {
+        return {
+          success: true,
+          added: totalAdded,
+          modified: totalModified,
+          removed: totalRemoved,
+          warning: `Some accounts need reconnection: ${failedAccounts.join(', ')}`,
+        };
+      }
+      
+      // If all accounts failed, return an error
+      if (failedAccounts.length > 0 && totalAdded === 0 && totalModified === 0) {
+        return {
+          success: false,
+          error: 'All accounts need reconnection. Please reconnect your bank accounts.',
+        };
+      }
+      
       return {
         success: true,
         added: totalAdded,

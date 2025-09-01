@@ -218,6 +218,7 @@ router.post('/sync', authMiddleware, async (req: AuthRequest, res: Response): Pr
       added: result.added,
       modified: result.modified,
       removed: result.removed,
+      warning: result.warning,  // Include warning if some accounts failed
     });
   } catch (error) {
     console.error('Error syncing transactions:', error);
