@@ -2,6 +2,13 @@ import { v4 as uuidv4 } from 'uuid';
 import { MonthlyBudget } from '../../../shared/types';
 import { DataService } from './dataService';
 
+// Stored budget structure with user isolation
+export interface StoredBudget extends MonthlyBudget {
+  userId: string; // User who owns this budget
+  createdAt: Date;
+  updatedAt: Date;
+}
+
 export interface CreateBudgetDto {
   categoryId: string;
   month: string; // YYYY-MM format
@@ -34,71 +41,82 @@ export class BudgetService {
     }
   }
 
-  async getAllBudgets(userId?: string): Promise<MonthlyBudget[]> {
-    return this.dataService.getBudgets(userId);
+  async getAllBudgets(userId: string): Promise<StoredBudget[]> {
+    const budgets = await this.dataService.getData<StoredBudget[]>(
+      `budgets_${userId}`
+    ) || [];
+    
+    // Return all budgets for this user
+    return budgets;
   }
 
-  async getBudget(categoryId: string, month: string, userId?: string): Promise<MonthlyBudget | null> {
-    const budgets = await this.dataService.getBudgets(userId);
+  async getBudget(categoryId: string, month: string, userId: string): Promise<StoredBudget | null> {
+    const budgets = await this.getAllBudgets(userId);
     return budgets.find(b => b.categoryId === categoryId && b.month === month) || null;
   }
 
-  async createOrUpdateBudget(data: CreateBudgetDto, userId?: string): Promise<MonthlyBudget> {
+  async createOrUpdateBudget(data: CreateBudgetDto, userId: string): Promise<StoredBudget> {
     this.validateMonth(data.month);
     this.validateAmount(data.amount);
 
-    const budgets = await this.dataService.getBudgets(userId);
+    const budgets = await this.getAllBudgets(userId);
     
     // Check if budget already exists for this category and month
     const existingIndex = budgets.findIndex(
       b => b.categoryId === data.categoryId && b.month === data.month
     );
 
+    const now = new Date();
+    
     if (existingIndex !== -1) {
       // Update existing budget
       budgets[existingIndex] = {
         ...budgets[existingIndex],
-        amount: data.amount
+        amount: data.amount,
+        updatedAt: now
       };
-      await this.dataService.saveBudgets(budgets, userId);
+      await this.dataService.saveData(`budgets_${userId}`, budgets);
       return budgets[existingIndex];
     } else {
       // Create new budget
-      const newBudget: MonthlyBudget = {
+      const newBudget: StoredBudget = {
         id: uuidv4(),
+        userId,
         categoryId: data.categoryId,
         month: data.month,
-        amount: data.amount
+        amount: data.amount,
+        createdAt: now,
+        updatedAt: now
       };
       budgets.push(newBudget);
-      await this.dataService.saveBudgets(budgets, userId);
+      await this.dataService.saveData(`budgets_${userId}`, budgets);
       return newBudget;
     }
   }
 
-  async deleteBudget(id: string, userId?: string): Promise<void> {
-    const budgets = await this.dataService.getBudgets(userId);
+  async deleteBudget(id: string, userId: string): Promise<void> {
+    const budgets = await this.getAllBudgets(userId);
     const filteredBudgets = budgets.filter(b => b.id !== id);
-    await this.dataService.saveBudgets(filteredBudgets, userId);
+    await this.dataService.saveData(`budgets_${userId}`, filteredBudgets);
   }
 
-  async getMonthlyBudgets(month: string, userId?: string): Promise<MonthlyBudget[]> {
+  async getMonthlyBudgets(month: string, userId: string): Promise<StoredBudget[]> {
     this.validateMonth(month);
-    const budgets = await this.dataService.getBudgets(userId);
+    const budgets = await this.getAllBudgets(userId);
     return budgets.filter(b => b.month === month);
   }
 
-  async getTotalMonthlyBudget(month: string, userId?: string): Promise<number> {
+  async getTotalMonthlyBudget(month: string, userId: string): Promise<number> {
     const monthlyBudgets = await this.getMonthlyBudgets(month, userId);
     return monthlyBudgets.reduce((total, budget) => total + budget.amount, 0);
   }
 
-  async copyBudgets(fromMonth: string, toMonth: string, userId?: string): Promise<MonthlyBudget[]> {
+  async copyBudgets(fromMonth: string, toMonth: string, userId: string): Promise<StoredBudget[]> {
     this.validateMonth(fromMonth);
     this.validateMonth(toMonth);
 
     const sourceBudgets = await this.getMonthlyBudgets(fromMonth, userId);
-    const copiedBudgets: MonthlyBudget[] = [];
+    const copiedBudgets: StoredBudget[] = [];
 
     for (const sourceBudget of sourceBudgets) {
       const copiedBudget = await this.createOrUpdateBudget({
@@ -116,7 +134,7 @@ export class BudgetService {
     categoryId: string,
     month: string,
     actualAmount: number,
-    userId?: string
+    userId: string
   ): Promise<BudgetComparison> {
     const budget = await this.getBudget(categoryId, month, userId);
     const budgeted = budget?.amount || 0;
@@ -137,7 +155,7 @@ export class BudgetService {
   async getMonthlyBudgetVsActual(
     month: string,
     actuals: Map<string, number>,
-    userId?: string
+    userId: string
   ): Promise<BudgetComparison[]> {
     const budgets = await this.getMonthlyBudgets(month, userId);
     const comparisons: BudgetComparison[] = [];
@@ -165,12 +183,12 @@ export class BudgetService {
     categoryId: string,
     startMonth: string,
     endMonth: string,
-    userId?: string
-  ): Promise<MonthlyBudget[]> {
+    userId: string
+  ): Promise<StoredBudget[]> {
     this.validateMonth(startMonth);
     this.validateMonth(endMonth);
 
-    const budgets = await this.dataService.getBudgets(userId);
+    const budgets = await this.getAllBudgets(userId);
     return budgets
       .filter(b => 
         b.categoryId === categoryId &&
@@ -184,7 +202,7 @@ export class BudgetService {
     categoryId: string,
     startMonth: string,
     endMonth: string,
-    userId?: string
+    userId: string
   ): Promise<number> {
     const history = await this.getCategoryBudgetHistory(categoryId, startMonth, endMonth, userId);
     
@@ -200,7 +218,7 @@ export class BudgetService {
     categoryId: string,
     month: string,
     actualAmount: number,
-    userId?: string
+    userId: string
   ): Promise<number> {
     const budget = await this.getBudget(categoryId, month, userId);
     
@@ -216,8 +234,8 @@ export class BudgetService {
     categoryId: string,
     month: string,
     rolloverAmount: number,
-    userId?: string
-  ): Promise<MonthlyBudget> {
+    userId: string
+  ): Promise<StoredBudget> {
     const budget = await this.getBudget(categoryId, month, userId);
     
     if (!budget) {
@@ -231,17 +249,17 @@ export class BudgetService {
     }, userId);
   }
 
-  async getBudgetsByCategory(categoryId: string, userId?: string): Promise<MonthlyBudget[]> {
-    const budgets = await this.dataService.getBudgets(userId);
+  async getBudgetsByCategory(categoryId: string, userId: string): Promise<StoredBudget[]> {
+    const budgets = await this.getAllBudgets(userId);
     return budgets
       .filter(b => b.categoryId === categoryId)
       .sort((a, b) => a.month.localeCompare(b.month));
   }
 
-  async deleteBudgetsByCategory(categoryId: string, userId?: string): Promise<void> {
-    const budgets = await this.dataService.getBudgets(userId);
+  async deleteBudgetsByCategory(categoryId: string, userId: string): Promise<void> {
+    const budgets = await this.getAllBudgets(userId);
     const filteredBudgets = budgets.filter(b => b.categoryId !== categoryId);
-    await this.dataService.saveBudgets(filteredBudgets, userId);
+    await this.dataService.saveData(`budgets_${userId}`, filteredBudgets);
   }
 }
 
