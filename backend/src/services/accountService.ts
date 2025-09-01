@@ -7,6 +7,7 @@
 import { v4 as uuidv4 } from 'uuid';
 import { PlaidService } from './plaidService';
 import { DataService } from './dataService';
+import { encryptionService } from '../utils/encryption';
 
 // Account status types
 export type AccountStatus = 'active' | 'inactive' | 'requires_reauth' | 'error';
@@ -99,7 +100,7 @@ export class AccountService {
           userId,
           plaidItemId: tokenResult.itemId,
           plaidAccountId: plaidAccount.plaidAccountId,
-          plaidAccessToken: this.encryptToken(tokenResult.accessToken), // TODO: Implement encryption
+          plaidAccessToken: this.encryptToken(tokenResult.accessToken),
           institutionId,
           institutionName,
           accountName: plaidAccount.name,
@@ -196,7 +197,7 @@ export class AccountService {
 
       // Sync each item's accounts
       for (const [encryptedToken, accounts] of itemGroups) {
-        const accessToken = this.decryptToken(encryptedToken); // TODO: Implement decryption
+        const accessToken = this.decryptToken(encryptedToken);
         
         const plaidResult = await this.plaidService.getAccounts(accessToken);
         
@@ -298,20 +299,16 @@ export class AccountService {
   }
 
   /**
-   * Encrypt access token for storage
-   * TODO: Implement proper encryption
+   * Encrypt access token for storage using AES-256-GCM
    */
   private encryptToken(token: string): string {
-    // In production, use proper encryption (e.g., AES-256)
-    return Buffer.from(token).toString('base64');
+    return encryptionService.encrypt(token);
   }
 
   /**
    * Decrypt access token for use
-   * TODO: Implement proper decryption
    */
   private decryptToken(encryptedToken: string): string {
-    // In production, use proper decryption
-    return Buffer.from(encryptedToken, 'base64').toString('utf-8');
+    return encryptionService.decrypt(encryptedToken);
   }
 }

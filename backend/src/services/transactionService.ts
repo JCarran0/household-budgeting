@@ -8,6 +8,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { PlaidService, Transaction as PlaidTransaction } from './plaidService';
 import { DataService } from './dataService';
 import { StoredAccount } from './accountService';
+import { encryptionService } from '../utils/encryption';
 
 // Transaction status
 export type TransactionStatus = 'posted' | 'pending' | 'removed';
@@ -593,9 +594,9 @@ export class TransactionService {
   }
 
   /**
-   * TODO: Implement proper token decryption
+   * Decrypt access token for use
    */
   private decryptToken(encryptedToken: string): string {
-    return Buffer.from(encryptedToken, 'base64').toString('utf-8');
+    return encryptionService.decrypt(encryptedToken);
   }
 }
