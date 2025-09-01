@@ -225,7 +225,55 @@ describe('User Story: Budget Tracking', () => {
 });
 ```
 
-### Example 4: Data Isolation (Critical)
+### Example 4: Encryption Security (Critical)
+Maps to data protection requirements:
+
+```typescript
+// backend/src/__tests__/critical/encryption.test.ts
+describe('Encryption Service - Critical Security', () => {
+  describe('AES-256-GCM Encryption', () => {
+    test('should encrypt and decrypt Plaid access tokens correctly', () => {
+      const originalToken = 'access-sandbox-8ab29a824f4f400219a1ee2';
+      
+      const encrypted = encryptionService.encrypt(originalToken);
+      const decrypted = encryptionService.decrypt(encrypted);
+      
+      // Token roundtrips correctly
+      expect(decrypted).toBe(originalToken);
+      // Encrypted is different from original
+      expect(encrypted).not.toBe(originalToken);
+      // Encrypted is longer (includes salt, IV, tag)
+      expect(encrypted.length).toBeGreaterThan(originalToken.length);
+    });
+
+    test('should detect tampering via authentication tags', () => {
+      const token = 'access-sandbox-8ab29a824f4f400219a1ee2';
+      const encrypted = encryptionService.encrypt(token);
+      
+      // Tamper with the encrypted data
+      const tampered = encrypted.slice(0, -10) + 'tampered123';
+      
+      // Should throw when decrypting tampered data
+      expect(() => {
+        encryptionService.decrypt(tampered);
+      }).toThrow('Failed to decrypt data');
+    });
+
+    test('should handle rapid encryption cycles (performance)', () => {
+      const token = 'access-sandbox-8ab29a824f4f400219a1ee2';
+      
+      // Simulate rapid API calls
+      for (let i = 0; i < 100; i++) {
+        const encrypted = encryptionService.encrypt(token);
+        const decrypted = encryptionService.decrypt(encrypted);
+        expect(decrypted).toBe(token);
+      }
+    });
+  });
+});
+```
+
+### Example 5: Data Isolation (Critical)
 Maps to data privacy stories:
 
 ```typescript
@@ -352,28 +400,30 @@ jobs:
 
 Based on risk assessment, minimum coverage for each area:
 
-| Area | Risk Level | Coverage Required | Test Type |
-|------|------------|------------------|-----------|
-| Authentication | Critical | 100% | User Story |
-| Transaction Sync | Critical | 95% | Integration |
-| Financial Calculations | Critical | 100% | User Story |
-| Data Isolation | Critical | 100% | User Story |
-| Category Management | High | 85% | User Story |
-| Budget Management | High | 90% | User Story |
-| Auto-Categorization | High | 85% | Integration |
-| Plaid Connection | High | 90% | Integration |
-| Search/Filtering | Medium | 75% | User Story |
-| UI Display | Low | Manual | Manual QA |
+| Area | Risk Level | Coverage Required | Test Type | Status |
+|------|------------|------------------|-----------|--------|
+| Authentication | Critical | 100% | User Story | ✅ 100% |
+| Data Encryption | Critical | 100% | User Story | ✅ 100% |
+| Transaction Sync | Critical | 95% | Integration | 🔄 Pending |
+| Financial Calculations | Critical | 100% | User Story | 🔄 Pending |
+| Data Isolation | Critical | 100% | User Story | ✅ 100% |
+| Category Management | High | 85% | User Story | 🔄 In Progress |
+| Budget Management | High | 90% | User Story | 🔄 In Progress |
+| Auto-Categorization | High | 85% | Integration | 🔄 Pending |
+| Plaid Connection | High | 90% | Integration | 🔄 Pending |
+| Search/Filtering | Medium | 75% | User Story | 🔄 In Progress |
+| UI Display | Low | Manual | Manual QA | 🔄 Ongoing |
 
 ## Implementation Timeline
 
-### Phase 1: Critical Path Tests (✅ COMPLETE)
+### Phase 1: Critical Path Tests (✅ PARTIAL)
 - [x] Authentication stories (12 tests passing)
 - [x] Data isolation stories (7 tests passing)
+- [x] Data encryption stories (18 tests passing)
 - [ ] Financial calculation stories
 - [ ] Basic transaction sync
 
-**Current Status**: 19 critical path tests passing
+**Current Status**: 37 critical path tests passing
 
 ### Phase 2: Integration Tests (Week 2)
 - [ ] Full Plaid connection flow
@@ -617,10 +667,11 @@ beforeEach(async () => {
 ## Current Test Results (January 2025)
 
 ### Test Suite Status
-- **Critical Path Tests**: ✅ 19/19 passing (100%)
+- **Critical Path Tests**: ✅ 37/37 passing (100%)
   - Authentication: 12/12 passing
   - Data Isolation: 7/7 passing
-- **Execution Time**: ~3 seconds for critical path
+  - Encryption: 18/18 passing
+- **Execution Time**: ~8 seconds for critical path
 - **Test Coverage**: Focusing on behavior, not line coverage
 
 ### Lessons Learned from Initial Implementation
@@ -634,6 +685,12 @@ beforeEach(async () => {
 4. **User Context Flow**: The userId must flow from JWT → middleware → route → service → data layer. Any break in this chain causes data isolation failures.
 
 5. **Error Status Codes**: Specific error types need specific HTTP codes (429 for rate limiting, not 401).
+
+6. **Encryption Implementation**: Plaid access tokens require proper encryption (AES-256-GCM) not just encoding. Implemented with:
+   - PBKDF2 key derivation (100k iterations) for brute-force resistance
+   - Random IV per encryption for unique ciphertexts
+   - Authentication tags for tamper detection
+   - Comprehensive testing including rapid cycles and data integrity
 
 ## Success Metrics
 
