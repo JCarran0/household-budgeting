@@ -447,12 +447,12 @@ Based on risk assessment, minimum coverage for each area:
 | Transaction Sync | Critical | 95% | User Story | ✅ 100% |
 | Financial Calculations | Critical | 100% | User Story | ✅ 100% |
 | Data Isolation | Critical | 100% | User Story | ✅ 100% |
-| Category Management | High | 85% | User Story | 🔄 In Progress |
+| Category Management | High | 85% | User Story | ⚠️ Tests Failing |
 | Budget Management | High | 90% | User Story | ✅ 100% |
-| Auto-Categorization | High | 85% | Integration | 🔄 Pending |
-| Plaid Connection | High | 90% | Integration | 🔄 Pending |
-| Search/Filtering | Medium | 75% | User Story | 🔄 In Progress |
-| UI Display | Low | Manual | Manual QA | 🔄 Ongoing |
+| Auto-Categorization | High | 85% | Integration | 🔄 Partial (isolation only) |
+| Plaid Connection | High | 90% | Integration | ✅ 100% |
+| Search/Filtering | Medium | 75% | User Story | ❌ Not Started |
+| UI Display | Low | Manual | Manual QA | ❌ No Frontend Tests |
 
 ## Implementation Timeline
 
