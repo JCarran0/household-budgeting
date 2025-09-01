@@ -97,77 +97,9 @@ router.post('/rules', authMiddleware, async (req: AuthRequest, res: Response): P
 });
 
 /**
- * PUT /api/v1/autocategorize/rules/:ruleId
- * Update an existing rule
- */
-router.put('/rules/:ruleId', authMiddleware, async (req: AuthRequest, res: Response): Promise<void> => {
-  try {
-    if (!req.user) {
-      res.status(401).json({ success: false, error: 'Unauthorized' });
-      return;
-    }
-
-    const validation = updateRuleSchema.safeParse(req.body);
-    if (!validation.success) {
-      res.status(400).json({ 
-        success: false, 
-        error: 'Invalid request data',
-        details: validation.error.format(),
-      });
-      return;
-    }
-
-    const { ruleId } = req.params;
-    const result = await autoCategorizeService.updateRule(
-      req.user.userId,
-      ruleId,
-      validation.data
-    );
-
-    if (!result.success) {
-      res.status(404).json({ success: false, error: result.error });
-      return;
-    }
-
-    res.json({ success: true });
-  } catch (error) {
-    console.error('Error updating auto-categorize rule:', error);
-    res.status(500).json({ success: false, error: 'Failed to update rule' });
-  }
-});
-
-/**
- * DELETE /api/v1/autocategorize/rules/:ruleId
- * Delete a rule
- */
-router.delete('/rules/:ruleId', authMiddleware, async (req: AuthRequest, res: Response): Promise<void> => {
-  try {
-    if (!req.user) {
-      res.status(401).json({ success: false, error: 'Unauthorized' });
-      return;
-    }
-
-    const { ruleId } = req.params;
-    const result = await autoCategorizeService.deleteRule(
-      req.user.userId,
-      ruleId
-    );
-
-    if (!result.success) {
-      res.status(404).json({ success: false, error: result.error });
-      return;
-    }
-
-    res.json({ success: true });
-  } catch (error) {
-    console.error('Error deleting auto-categorize rule:', error);
-    res.status(500).json({ success: false, error: 'Failed to delete rule' });
-  }
-});
-
-/**
  * PUT /api/v1/autocategorize/rules/reorder
  * Reorder rules by priority
+ * NOTE: This route must come before /rules/:ruleId to avoid being caught by the param route
  */
 router.put('/rules/reorder', authMiddleware, async (req: AuthRequest, res: Response): Promise<void> => {
   try {
@@ -258,6 +190,76 @@ router.put('/rules/:ruleId/move-down', authMiddleware, async (req: AuthRequest, 
   } catch (error) {
     console.error('Error moving rule down:', error);
     res.status(500).json({ success: false, error: 'Failed to move rule' });
+  }
+});
+
+/**
+ * PUT /api/v1/autocategorize/rules/:ruleId
+ * Update an existing rule
+ * NOTE: This route must come after specific routes like /rules/reorder to avoid catching them
+ */
+router.put('/rules/:ruleId', authMiddleware, async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    if (!req.user) {
+      res.status(401).json({ success: false, error: 'Unauthorized' });
+      return;
+    }
+
+    const validation = updateRuleSchema.safeParse(req.body);
+    if (!validation.success) {
+      res.status(400).json({ 
+        success: false, 
+        error: 'Invalid request data',
+        details: validation.error.format(),
+      });
+      return;
+    }
+
+    const { ruleId } = req.params;
+    const result = await autoCategorizeService.updateRule(
+      req.user.userId,
+      ruleId,
+      validation.data
+    );
+
+    if (!result.success) {
+      res.status(404).json({ success: false, error: result.error });
+      return;
+    }
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error updating auto-categorize rule:', error);
+    res.status(500).json({ success: false, error: 'Failed to update rule' });
+  }
+});
+
+/**
+ * DELETE /api/v1/autocategorize/rules/:ruleId
+ * Delete a rule
+ */
+router.delete('/rules/:ruleId', authMiddleware, async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    if (!req.user) {
+      res.status(401).json({ success: false, error: 'Unauthorized' });
+      return;
+    }
+
+    const { ruleId } = req.params;
+    const result = await autoCategorizeService.deleteRule(
+      req.user.userId,
+      ruleId
+    );
+
+    if (!result.success) {
+      res.status(404).json({ success: false, error: result.error });
+      return;
+    }
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error deleting auto-categorize rule:', error);
+    res.status(500).json({ success: false, error: 'Failed to delete rule' });
   }
 });
 

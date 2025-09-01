@@ -307,7 +307,7 @@ export class AutoCategorizeService {
       }
       
       if (ruleIndex === 0) {
-        return { success: false, error: 'Rule is already at highest priority' };
+        return { success: false, error: 'Cannot move rule up - already at highest priority' };
       }
 
       // Swap priorities with previous rule
@@ -342,7 +342,7 @@ export class AutoCategorizeService {
       }
       
       if (ruleIndex === rules.length - 1) {
-        return { success: false, error: 'Rule is already at lowest priority' };
+        return { success: false, error: 'Cannot move rule down - already at lowest priority' };
       }
 
       // Swap priorities with next rule
