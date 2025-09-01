@@ -373,6 +373,92 @@ Based on risk assessment, minimum coverage for each area:
 - [ ] Create edge case fixtures
 - [ ] Document test data scenarios
 
+## Troubleshooting Common Test Failures
+
+### Known Issues and Solutions
+
+#### 1. Rate Limiting Conflicts Between Tests
+**Problem**: Tests fail with "Too many requests" (429) errors when multiple tests register users.
+
+**Root Cause**: The authentication service's rate limiting persists across tests, causing subsequent registrations to be blocked after the brute force test runs.
+
+**Solutions**:
+1. **Use unique usernames**: Add timestamps or random suffixes to prevent username conflicts
+2. **Reset rate limiting**: Call `authService.resetRateLimiting()` in `beforeEach`
+3. **Isolate rate limit tests**: Run brute force tests in a separate suite or last
+4. **Clear data between tests**: Call `dataService.clear()` if using InMemoryDataService
+
+#### 2. Data Not Persisting in Tests
+**Problem**: Created entities (categories, budgets, rules) return empty arrays when fetched.
+
+**Root Cause**: InMemoryDataService may not properly handle user-scoped data or services aren't passing userId correctly.
+
+**Solutions**:
+1. **Verify userId flow**: Ensure JWT userId is extracted and passed through the service chain
+2. **Check data scoping**: Confirm InMemoryDataService methods handle user-specific storage
+3. **Add debug logging**: Temporarily log data storage/retrieval to identify issues
+4. **Use consistent test users**: Ensure test users are properly created before data operations
+
+#### 3. Test Isolation Issues
+**Problem**: Tests affect each other, causing intermittent failures.
+
+**Root Cause**: Shared state between tests in services or data storage.
+
+**Solutions**:
+1. **Clear all state**: Reset both data and service state in `beforeEach`
+2. **Use unique test data**: Generate unique IDs/names for each test
+3. **Run tests serially**: Use `--runInBand` flag to prevent parallel execution
+4. **Separate test suites**: Isolate critical, integration, and story tests
+
+### Debugging Strategies
+
+#### Enable Verbose Logging
+```typescript
+// Temporarily add to failing tests
+console.log('User ID:', userId);
+console.log('Token decoded:', jwt.decode(token));
+console.log('Data stored:', await dataService.getData(`categories_${userId}`));
+```
+
+#### Check Service State
+```typescript
+// Verify service is using correct data
+console.log('Auth service users:', authService.getAllUsers());
+console.log('Rate limit state:', authService.getFailedAttempts(username));
+```
+
+#### Validate API Responses
+```typescript
+// Log full response on failure
+if (response.status !== expected) {
+  console.log('Response:', response.status, response.body);
+}
+```
+
+### Test Environment Configuration
+
+#### Required Setup in `beforeEach`
+```typescript
+beforeEach(async () => {
+  // 1. Clear all data
+  if ('clear' in dataService) {
+    (dataService as any).clear();
+  }
+  
+  // 2. Reset rate limiting
+  authService.resetRateLimiting();
+  
+  // 3. Reset any other stateful services
+  // Add as needed
+});
+```
+
+#### Test Data Best Practices
+1. **Use unique identifiers**: `const username = \`testuser_\${Date.now()}_\${Math.random()}\`;`
+2. **Create fresh test users**: Don't reuse users across tests
+3. **Clean up after tests**: Remove test data in `afterEach` if using persistent storage
+4. **Use fixtures sparingly**: Only for complex, read-only test data
+
 ## Key Decisions
 
 ### Why User Story Tests Over Unit Tests?

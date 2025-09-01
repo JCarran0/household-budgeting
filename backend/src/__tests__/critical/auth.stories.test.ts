@@ -23,10 +23,11 @@ describe('User Story: Authentication and Security', () => {
   
   describe('As a user, I can securely register and login', () => {
     test('I can register with a 15+ character passphrase', async () => {
+      const username = `tu${Math.random().toString(36).substring(2, 8)}`; // Short unique username
       const response = await request(app)
         .post('/api/v1/auth/register')
         .send({
-          username: 'testuser',
+          username,
           password: 'this is my secure passphrase for banking',
         });
       
@@ -34,7 +35,7 @@ describe('User Story: Authentication and Security', () => {
       expect(response.body.success).toBe(true);
       expect(response.body.token).toBeDefined();
       expect(response.body.user).toMatchObject({
-        username: 'testuser',
+        username,
         id: expect.any(String),
       });
       
@@ -44,10 +45,11 @@ describe('User Story: Authentication and Security', () => {
     });
     
     test('I can see helpful suggestions for creating memorable passphrases', async () => {
+      const username = `tu${Math.random().toString(36).substring(2, 8)}`; // Short unique username
       const response = await request(app)
         .post('/api/v1/auth/register')
         .send({
-          username: 'testuser2',
+          username,
           password: 'short', // Too short
         });
       
@@ -56,30 +58,32 @@ describe('User Story: Authentication and Security', () => {
     });
     
     test('I can login with my username and password', async () => {
-      // First register
-      await registerUser('logintest', 'this is my test passphrase');
+      // First register with unique username
+      const username = `lg${Math.random().toString(36).substring(2, 8)}`; // Short unique username
+      await registerUser(username, 'this is my test passphrase');
       
       // Then login
       const response = await request(app)
         .post('/api/v1/auth/login')
         .send({
-          username: 'logintest',
+          username,
           password: 'this is my test passphrase',
         });
       
       expect(response.status).toBe(200);
       expect(response.body.success).toBe(true);
       expect(response.body.token).toBeDefined();
-      expect(response.body.user.username).toBe('logintest');
+      expect(response.body.user.username).toBe(username);
     });
     
     test('I see error messages for invalid credentials', async () => {
-      await registerUser('errortest', 'this is my test passphrase');
+      const username = `er${Math.random().toString(36).substring(2, 8)}`; // Short unique username
+      await registerUser(username, 'this is my test passphrase');
       
       const response = await request(app)
         .post('/api/v1/auth/login')
         .send({
-          username: 'errortest',
+          username,
           password: 'wrong passphrase here',
         });
       
@@ -89,7 +93,8 @@ describe('User Story: Authentication and Security', () => {
     });
     
     test('I can stay logged in across browser sessions (JWT persistence)', async () => {
-      const { token } = await registerUser('jwttest', 'this is my test passphrase');
+      const username = `jw${Math.random().toString(36).substring(2, 8)}`; // Short unique username
+      const { token } = await registerUser(username, 'this is my test passphrase');
       
       // Verify token works for protected route
       const response = await request(app)
@@ -111,15 +116,16 @@ describe('User Story: Authentication and Security', () => {
   
   describe('As a user, I am protected from security threats', () => {
     test('I am protected from brute force attacks after 5 failed attempts', async () => {
-      // Register a user
-      await registerUser('bruteforce', 'this is my secure passphrase');
+      // Register a user with unique username
+      const username = `bf${Math.random().toString(36).substring(2, 8)}`; // Short unique username
+      await registerUser(username, 'this is my secure passphrase');
       
       // Attempt 5 failed logins
       for (let i = 0; i < 5; i++) {
         const response = await request(app)
           .post('/api/v1/auth/login')
           .send({
-            username: 'bruteforce',
+            username,
             password: 'wrong password',
           });
         expect(response.status).toBe(401);
@@ -129,7 +135,7 @@ describe('User Story: Authentication and Security', () => {
       const response = await request(app)
         .post('/api/v1/auth/login')
         .send({
-          username: 'bruteforce',
+          username,
           password: 'this is my secure passphrase', // Even with correct password
         });
       
@@ -155,13 +161,14 @@ describe('User Story: Authentication and Security', () => {
     });
     
     test('My password is securely hashed (never stored in plain text)', async () => {
-      await registerUser('hashtest', 'this is my secure passphrase');
+      const username = `ht${Math.random().toString(36).substring(2, 8)}`; // Short unique username
+      await registerUser(username, 'this is my secure passphrase');
       
       // Verify the password is hashed by trying to login
       const correctLogin = await request(app)
         .post('/api/v1/auth/login')
         .send({
-          username: 'hashtest',
+          username,
           password: 'this is my secure passphrase'
         });
       
@@ -171,7 +178,7 @@ describe('User Story: Authentication and Security', () => {
       const wrongLogin = await request(app)
         .post('/api/v1/auth/login')
         .send({
-          username: 'hashtest',
+          username,
           password: 'THIS IS MY SECURE PASSPHRASE' // Different case
         });
       
@@ -179,12 +186,13 @@ describe('User Story: Authentication and Security', () => {
     });
     
     test('I cannot register with a username that already exists', async () => {
-      await registerUser('duplicate', 'first user passphrase here');
+      const username = `dp${Math.random().toString(36).substring(2, 8)}`; // Short unique username
+      await registerUser(username, 'first user passphrase here');
       
       const response = await request(app)
         .post('/api/v1/auth/register')
         .send({
-          username: 'duplicate',
+          username,
           password: 'second user passphrase here',
         });
       
@@ -195,7 +203,8 @@ describe('User Story: Authentication and Security', () => {
   
   describe('As a user, I can manage my authentication state', () => {
     test('I can logout and have my session cleared', async () => {
-      const { token } = await registerUser('logouttest', 'this is my test passphrase');
+      const username = `lo${Math.random().toString(36).substring(2, 8)}`; // Short unique username
+      const { token } = await registerUser(username, 'this is my test passphrase');
       
       // Verify token works
       const beforeLogout = await request(app)
@@ -209,8 +218,9 @@ describe('User Story: Authentication and Security', () => {
     });
     
     test('JWT tokens are properly formatted and contain user info', async () => {
+      const testUsername = `tk${Math.random().toString(36).substring(2, 8)}`; // Short unique username
       const { token, userId, username } = await registerUser(
-        'tokentest',
+        testUsername,
         'this is my test passphrase'
       );
       

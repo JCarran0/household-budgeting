@@ -28,9 +28,10 @@ describe('User Story: Data Privacy and Isolation', () => {
     // Reset rate limiting between tests
     authService.resetRateLimiting();
     
-    // Create two test users
-    user1 = await registerUser('isolation_user1', 'user one secure passphrase');
-    user2 = await registerUser('isolation_user2', 'user two secure passphrase');
+    // Create two test users with unique usernames (short to fit validation)
+    const rand = Math.random().toString(36).substring(2, 8);
+    user1 = await registerUser(`u1${rand}`, 'user one secure passphrase');
+    user2 = await registerUser(`u2${rand}`, 'user two secure passphrase');
   });
   
   describe('As a user, my data is completely isolated from other users', () => {
