@@ -10,8 +10,10 @@ import budgetRoutes from './routes/budgets';
 import reportRoutes from './routes/reports';
 import autoCategorizeRoutes from './routes/autoCategorize';
 
-// Load environment variables
-dotenv.config();
+// Load environment variables (skip in test mode as it's loaded in setup.ts)
+if (process.env.NODE_ENV !== 'test') {
+  dotenv.config();
+}
 
 // Create Express app
 const app: Express = express();

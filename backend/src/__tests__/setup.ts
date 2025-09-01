@@ -1,8 +1,11 @@
 import dotenv from 'dotenv';
 import path from 'path';
 
-// Load test environment variables
-dotenv.config({ path: path.join(__dirname, '../../.env.test') });
+// Load test environment variables with quiet mode to suppress tips
+dotenv.config({ 
+  path: path.join(__dirname, '../../.env.test'),
+  quiet: true  // Suppress dotenv tips and warnings
+});
 
 // Set test environment
 process.env.NODE_ENV = 'test';
