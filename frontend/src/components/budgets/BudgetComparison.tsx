@@ -157,11 +157,11 @@ export function BudgetComparison({ comparison, categories }: BudgetComparisonPro
         <Table.Thead>
           <Table.Tr>
             <Table.Th>Category</Table.Th>
-            <Table.Th width={120}>Budgeted</Table.Th>
-            <Table.Th width={120}>Actual</Table.Th>
-            <Table.Th width={120}>Remaining</Table.Th>
-            <Table.Th width={200}>Progress</Table.Th>
-            <Table.Th width={100}>Status</Table.Th>
+            <Table.Th>Budgeted</Table.Th>
+            <Table.Th>Actual</Table.Th>
+            <Table.Th>Remaining</Table.Th>
+            <Table.Th>Progress</Table.Th>
+            <Table.Th>Status</Table.Th>
           </Table.Tr>
         </Table.Thead>
         <Table.Tbody>

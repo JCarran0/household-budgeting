@@ -219,8 +219,8 @@ export function BudgetGrid({ budgets, categories, month, onEdit }: BudgetGridPro
       <Table.Thead>
         <Table.Tr>
           <Table.Th>Category</Table.Th>
-          <Table.Th width={200}>Budget Amount</Table.Th>
-          <Table.Th width={100}>Actions</Table.Th>
+          <Table.Th>Budget Amount</Table.Th>
+          <Table.Th>Actions</Table.Th>
         </Table.Tr>
       </Table.Thead>
       <Table.Tbody>

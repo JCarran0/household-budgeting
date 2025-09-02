@@ -334,7 +334,6 @@ export function AutoCategorization() {
         <Group>
           <Tooltip 
             label="Applies your custom rules first, then uses Plaid categories as fallback for remaining uncategorized transactions"
-            width={300}
             multiline
           >
             <Button
