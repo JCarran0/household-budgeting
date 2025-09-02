@@ -15,7 +15,7 @@ This directory contains the CI/CD pipeline for the Budget Tracker application.
   - Bundle size check for frontend
 
 ### 2. Production Deployment (`deploy-production.yml`)
-- **Trigger**: On push to `main` branch or manual dispatch
+- **Trigger**: Manual dispatch only (button in GitHub Actions)
 - **Purpose**: Deploy application to production server
 - **Actions**:
   - Build and package application
@@ -69,13 +69,11 @@ Copy the entire output (including `-----BEGIN` and `-----END` lines) and paste a
 
 ## Deployment Process
 
-### Automatic Deployment
+### Standard Deployment Process
 1. Create a pull request with your changes
 2. PR validation workflow runs automatically
 3. After PR is approved and merged to `main`
-4. Deployment workflow triggers automatically
-5. Review the deployment in the Actions tab
-6. Application deploys with zero downtime
+4. Go to Actions tab and manually deploy when ready
 
 ### Manual Deployment
 1. Go to Actions tab in GitHub

@@ -1,14 +1,13 @@
 name: Deploy to Production
 
 on:
-  push:
-    branches: [main]
-    paths-ignore:
-      - '**.md'
-      - 'docs/**'
-      - '.github/ISSUE_TEMPLATE/**'
-      - '.github/PULL_REQUEST_TEMPLATE/**'
-  workflow_dispatch:  # Allow manual trigger
+  workflow_dispatch:  # Manual trigger only
+    inputs:
+      deployment_message:
+        description: 'Deployment message (optional)'
+        required: false
+        default: 'Manual production deployment'
+        type: string
 
 jobs:
   build-and-test:
@@ -249,6 +248,8 @@ jobs:
         if: success()
         run: |
           echo "🎉 Production deployment successful!"
+          echo "📝 Deployment message: ${{ github.event.inputs.deployment_message }}"
           echo "🌐 Application URL: https://budget.jaredcarrano.com"
           echo "📦 Version: $(git rev-parse --short HEAD)"
           echo "🕐 Deployed at: $(date -u +%Y-%m-%d' '%H:%M:%S' UTC')"
+          echo "👤 Deployed by: ${{ github.actor }}"
