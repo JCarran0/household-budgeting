@@ -21,10 +21,10 @@ if [ -n "$BACKEND_FILES" ]; then
     echo "📦 Checking backend TypeScript..."
     cd backend && npm run lint
     if [ $? -ne 0 ]; then
-        echo "❌ Backend linting failed. Please fix the errors before committing."
+        echo "❌ Backend type checking failed. Please fix the errors before committing."
         FAILED=1
     else
-        echo "✅ Backend linting passed"
+        echo "✅ Backend type checking passed"
     fi
     cd ..
 fi
@@ -32,12 +32,12 @@ fi
 # Run frontend linting if frontend files are staged
 if [ -n "$FRONTEND_FILES" ]; then
     echo "🎨 Checking frontend code..."
-    cd frontend && npm run lint
+    cd frontend && npm run lint:all
     if [ $? -ne 0 ]; then
-        echo "❌ Frontend linting failed. Please fix the errors before committing."
+        echo "❌ Frontend checks failed. Please fix the errors before committing."
         FAILED=1
     else
-        echo "✅ Frontend linting passed"
+        echo "✅ Frontend checks passed"
     fi
     cd ..
 fi
@@ -45,8 +45,11 @@ fi
 # Exit with error if any checks failed
 if [ $FAILED -ne 0 ]; then
     echo ""
-    echo "💡 Tip: You can run 'npm run lint' in the respective directories to see the errors."
-    echo "💡 Some errors might be auto-fixable with 'npm run lint -- --fix'"
+    echo "💡 Tip: Run these commands to see the errors:"
+    echo "   Backend: cd backend && npm run lint"
+    echo "   Frontend: cd frontend && npm run lint:all"
+    echo "💡 ESLint errors might be auto-fixable with 'npm run lint -- --fix'"
+    echo "💡 TypeScript errors need manual fixes"
     exit 1
 fi
 
