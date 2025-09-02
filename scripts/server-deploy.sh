@@ -66,7 +66,7 @@ mv "$DEPLOYMENT_DIR/frontend" "$APP_DIR/frontend"
 # Start application
 echo "▶️  Starting application..."
 cd "$APP_DIR/backend"
-pm2 start dist/index.js --name budget-backend --time || pm2 restart budget-backend
+pm2 start dist/backend/src/index.js --name budget-backend --time || pm2 restart budget-backend
 pm2 save
 
 # Health check
