@@ -3,18 +3,10 @@
 ## Project Overview
 Building a personal budgeting app for 2 users with Plaid integration. Using Risk-Based Testing with TypeScript strict mode for rapid, type-safe development.
 
-## Architecture
-- **Frontend**: React 18 + TypeScript + Vite + Mantine UI
-  - **UI Framework**: Mantine v8 with built-in dark theme
-  - **Icons**: Tabler Icons for consistent iconography
-  - **State**: Zustand for global state management
-  - **Data Fetching**: TanStack Query (React Query)
-- **Backend**: Node.js + Express + TypeScript  
-- **Storage**: JSON files (MVP) → S3 → PostgreSQL (future)
-- **Testing**: Jest + React Testing Library
-- **Integration**: Plaid API for Bank of America (checking/savings) + Capital One (credit card)
+## Technical Architecture
+For detailed technical architecture, service descriptions, data flows, and implementation details, see **[docs/AI-APPLICATION-ARCHITECTURE.md](docs/AI-APPLICATION-ARCHITECTURE.md)**. This document provides comprehensive guidance for AI agents on the codebase structure, API patterns, common tasks, and troubleshooting.
 
-## Development Approach: Risk-Based Testing & Type-Safe Development
+## Development Philosophy
 
 ### Core Principles
 1. **Risk-Based Testing** - Test what could break the business or lose user money
@@ -48,329 +40,70 @@ Building a personal budgeting app for 2 users with Plaid integration. Using Risk
 }
 ```
 
-## Project Structure
-```
-budgeting-app/
-├── backend/
-│   ├── src/
-│   │   ├── __tests__/          # Test files
-│   │   ├── routes/
-│   │   ├── services/
-│   │   ├── models/
-│   │   ├── middleware/
-│   │   └── utils/
-│   ├── data/                   # JSON storage
-│   └── jest.config.js
-├── frontend/
-│   ├── src/
-│   │   ├── __tests__/          # Test files
-│   │   ├── components/
-│   │   ├── hooks/
-│   │   ├── services/
-│   │   └── utils/
-│   └── jest.config.js
-├── shared/
-│   └── types/
-└── CLAUDE.md
-```
-
-## Core Data Models
-
-### Key Entities
-```typescript
-interface User {
-  id: string;
-  username: string;
-  passwordHash: string;
-  createdAt: Date;
-}
-
-interface Account {
-  id: string;
-  plaidAccountId: string;
-  plaidItemId: string;
-  name: string;
-  type: 'checking' | 'savings' | 'credit';
-  institution: string;
-  isActive: boolean;
-}
-
-interface Category {
-  id: string;
-  name: string;
-  parentId: string | null;  // Two-level hierarchy: Category → Subcategory
-  plaidCategory: string | null;
-  isHidden: boolean;
-  isSavings: boolean;       // For future savings rollover feature
-}
-
-interface Transaction {
-  id: string;
-  plaidTransactionId: string | null;
-  accountId: string;
-  amount: number;           // negative = expense, positive = income
-  date: Date;
-  description: string;
-  categoryId: string;
-  tags: string[];
-  isHidden: boolean;
-  isManual: boolean;        // For transaction splits
-  isSplit: boolean;
-  parentTransactionId: string | null;
-  splitTransactionIds: string[];
-}
-
-interface MonthlyBudget {
-  id: string;
-  categoryId: string;
-  month: string;           // YYYY-MM format
-  amount: number;
-}
-```
-
-## MVP User Stories & Test Cases
+## MVP User Stories
 
 ### 1. Authentication System
 **User Story**: As a user, I can log in with username/password to access the budgeting app
+- ✅ User can register with 15+ character passphrase
+- ✅ JWT authentication with rate limiting
+- ✅ Account lockout after failed attempts
 
-**Test Cases**:
-- ✅ User can register with valid username/password
-- ✅ User can login with correct credentials
-- ✅ User cannot login with incorrect credentials  
-- ✅ JWT token is generated and validated correctly
-- ✅ Protected routes require valid JWT token
-
-### 2. Plaid Account Linking
+### 2. Plaid Account Linking  
 **User Story**: As a user, I can connect my Bank of America and Capital One accounts
-
-**Test Cases**:
-- ✅ Can initiate Plaid Link flow and get link token
-- ✅ Can exchange public token for access token
-- ✅ Can retrieve account information from Plaid
-- ✅ Can store account data locally
-- ✅ Handle Plaid API errors gracefully
+- ✅ Plaid Link integration
+- ✅ Account connection and disconnection
+- ✅ Encrypted token storage
 
 ### 3. Transaction Management
 **User Story**: As a user, I can sync and view my transactions from connected accounts
-
-**Test Cases**:
-- ✅ Can sync transactions from 2025-01-01 onwards
-- ✅ Can filter out pending transactions
-- ✅ Can categorize transactions using Plaid categories
-- ✅ Can manually recategorize transactions
-- ✅ Can add tags to transactions
-- ✅ Can hide transactions from budget calculations
-- ✅ Can split transactions into manual sub-transactions
+- ✅ Automatic transaction sync with pagination
+- ✅ Transaction categorization and tagging
+- ✅ Transaction splitting support
 
 ### 4. Budget Categories
-**User Story**: As a user, I can create and manage budget categories with subcategories
-
-**Test Cases**:
-- ✅ Can create top-level categories
-- ✅ Can create subcategories under parent categories
-- ✅ Can mark categories as "hidden"
-- ✅ Can mark categories as "savings" (for future use)
-- ✅ Can edit category names and properties
-- ✅ Can delete categories (with transaction reassignment)
+**User Story**: As a user, I can create and manage budget categories
+- ✅ Two-level hierarchy (Category → Subcategory)
+- ✅ Default category initialization
+- ✅ Savings categories for future rollover
 
 ### 5. Monthly Budgeting
-**User Story**: As a user, I can set monthly budgets and track spending vs budget
-
-**Test Cases**:
-- ✅ Can set budget amounts for subcategories by month
-- ✅ Can copy budgets from previous month
-- ✅ Can view budget vs actual spending
-- ✅ Can see variance (over/under budget) by category
-- ✅ Budget calculations exclude hidden transactions
+**User Story**: As a user, I can set monthly budgets and track spending
+- ✅ Budget vs actual comparison
+- ✅ Copy budgets from previous month
+- ✅ Variance tracking
 
 ### 6. Reporting & Trends
-**User Story**: As a user, I can view spending trends and generate reports
+**User Story**: As a user, I can view spending trends and reports
+- ✅ Category spending trends
+- ✅ Income vs expense analysis
+- ✅ Budget performance reports
 
-**Test Cases**:
-- ✅ Can view spending trends by category over time
-- ✅ Can view spending trends by tags
-- ✅ Can generate budget vs actual reports by month/quarter/year
-- ✅ Can view income vs expense trends
-- ✅ Reports can be filtered by category, tags, date range
+## Development Status
 
-### 7. Cash Flow Forecasting
-**User Story**: As a user, I can forecast future cash flow based on budget vs actual
+### ✅ Completed Features (December 2025)
+1. **Backend Infrastructure**: JWT auth, Plaid integration, service architecture
+2. **Frontend Foundation**: React + Mantine UI, responsive design
+3. **Account Management**: Connect, sync, and disconnect bank accounts
+4. **Transaction Sync**: Full pagination, 730-day history request
+5. **Budget Tracking**: Monthly budgets with comparison views
+6. **Security**: AES-256 encryption, rate limiting, passphrase auth
 
-**Test Cases**:
-- ✅ Can calculate YTD actual spending vs budget
-- ✅ Can project future cash flow based on remaining budget
-- ✅ Can see monthly cash flow projections
-- ✅ Can identify potential cash flow issues
-
-## Development Phases
-
-### Phase 1: Foundation ✅ COMPLETE
-**Goal**: Authentication, project setup, basic Plaid integration
-
-**What We Built**:
-1. ✅ Auth service with JWT, rate limiting, account lockout (29 tests)
-2. ✅ Plaid service with sandbox integration (18 tests)
-3. ✅ Service singleton pattern for consistent state
-
-**Lessons Learned**:
-- Integration tests with real Plaid sandbox > heavily mocked unit tests
-- Service singletons prevent auth token inconsistencies
-
-### Phase 2: Frontend Development ✅ COMPLETE
-**Goal**: React frontend with professional UI and Plaid Link integration
-
-**What We Built**:
-1. ✅ React 18 + TypeScript + Vite frontend
-2. ✅ Mantine UI framework with dark theme
-3. ✅ Professional dashboard with stats cards and progress indicators
-4. ✅ JWT authentication with Zustand state management
-5. ✅ Plaid Link integration with proper error handling
-6. ✅ Dashboard, Accounts, and Transactions pages
-7. ✅ Protected routes and API integration
-8. ✅ Responsive AppShell layout with collapsible sidebar
-
-**Critical Lessons Learned**:
-- **UI Framework Choice**: Mantine provides better out-of-box experience than Tailwind for dashboards
-- **Environment Variables**: Must load `dotenv.config()` BEFORE importing app to ensure env vars are available
-- **Plaid Link Integration**: Use conditional rendering to avoid null config errors
-- **React StrictMode**: Causes double-mounting in development, must handle carefully with Plaid
-- **API Response Format**: Use snake_case for Plaid responses (link_token not linkToken)
-- **Token on Registration**: Return JWT token on registration for auto-login UX
-- **CORS in Development**: Allow any localhost port for flexibility
-
-### Phase 3: Core Features (Next)
-
-**Focus Areas**:
-1. Transaction categorization and tagging logic
-2. Category hierarchy management
-3. Monthly budget calculations
-4. Transaction splitting functionality
-
-**Key Files to Create**:
-- `backend/src/services/__tests__/transactionService.test.ts`
-- `backend/src/services/__tests__/categoryService.test.ts`
-- `backend/src/services/__tests__/budgetService.test.ts`
-
-### Phase 4: Reports & Analytics (Week 5)
-**Goal**: Reporting, charts, data visualization
-
-**Focus Areas**:
-1. Report calculation logic
-2. React component testing
-3. API integration testing
-4. User workflow testing
-
-**Key Files to Create**:
-- `backend/src/services/__tests__/reportService.test.ts`
-- `frontend/src/components/__tests__/Dashboard.test.tsx`
-- `frontend/src/components/__tests__/TransactionList.test.tsx`
-
-## Testing Configuration
-
-### Backend Jest Config
-```javascript
-// backend/jest.config.js
-module.exports = {
-  preset: 'ts-jest',
-  testEnvironment: 'node',
-  roots: ['<rootDir>/src'],
-  testMatch: ['**/__tests__/**/*.test.ts'],
-  transform: {
-    '^.+\\.ts$': 'ts-jest',
-  },
-  coverageDirectory: 'coverage',
-  collectCoverageFrom: [
-    'src/**/*.ts',
-    '!src/**/__tests__/**',
-    '!src/types/**',
-  ],
-  setupFilesAfterEnv: ['<rootDir>/src/__tests__/setup.ts'],
-};
-```
-
-### Frontend Jest Config  
-```javascript
-// frontend/jest.config.js
-module.exports = {
-  preset: 'ts-jest',
-  testEnvironment: 'jsdom',
-  roots: ['<rootDir>/src'],
-  testMatch: ['**/__tests__/**/*.test.{ts,tsx}'],
-  transform: {
-    '^.+\\.(ts|tsx)$': 'ts-jest',
-  },
-  moduleNameMapping: {
-    '\\.(css|less|scss|sass)$': 'identity-obj-proxy',
-  },
-  setupFilesAfterEnv: ['<rootDir>/src/__tests__/setup.ts'],
-};
-```
-
-## Environment Setup
-
-### Required Environment Variables
-```bash
-# .env.development
-NODE_ENV=development
-PORT=3001
-
-# Plaid (start with sandbox)
-PLAID_CLIENT_ID=your_sandbox_client_id
-PLAID_SECRET=your_sandbox_secret  
-PLAID_ENV=sandbox
-
-# JWT
-JWT_SECRET=your_development_jwt_secret
-JWT_EXPIRES_IN=7d
-
-# Data
-DATA_DIR=./data
-```
+### 🚧 Next Priorities
+1. **Savings categories with rollover**
+2. **Bill reminders and recurring transactions**
+3. **Enhanced reporting and visualizations**
+4. **Mobile app development**
 
 ## Security Best Practices
 
-**CRITICAL: This application handles sensitive financial data. Security must be the top priority in all development decisions.**
+**CRITICAL: This application handles sensitive financial data. Security must be the top priority.**
 
-### Security Requirements
-1. **Data Protection**
-   - All financial data must be encrypted at rest (AES-256) and in transit (TLS 1.3+)
-   - Never store Plaid credentials, tokens must be encrypted and stored securely
-   - Implement secure deletion when data is no longer needed
-   - Follow the principle of least privilege for all data access
-
-2. **Authentication & Access Control**
-   - Multi-factor authentication (MFA) required for production access
-   - JWT tokens must expire and be properly validated
-   - Implement account lockout after failed login attempts
-   - Regular security key rotation (90 days maximum)
-
-3. **Code Security**
-   - Input validation on ALL user inputs to prevent injection attacks
-   - Parameterized queries only - no string concatenation for SQL
-   - Output encoding to prevent XSS attacks
-   - Regular dependency updates and vulnerability scanning
-   - No secrets or credentials in code - use environment variables
-   - Secure error handling - never expose system details to users
-
-4. **Compliance & Privacy**
-   - Follow PCI DSS guidelines even though we don't store card data
-   - Implement GDPR/CCPA privacy requirements
-   - Maintain audit logs for all data access
-   - Data retention policies with automatic deletion
-   - Customer data notification within 24 hours of any breach
-
-5. **Incident Response**
-   - Security incidents must be documented immediately
-   - Follow the Incident Response Plan in docs/information-security/
-   - Customer data breaches require notification within 24 hours
-   - Maintain evidence chain of custody for forensics
-
-6. **Development Security**
-   - Code reviews required for all changes touching authentication or financial data
-   - No production data in development/test environments
-   - Secure development environment with encrypted drives
-   - Regular security training and awareness
-   - Follow the security policies in docs/information-security/
+### Core Security Requirements
+1. **Data Protection**: AES-256 encryption at rest, TLS 1.3+ in transit
+2. **Authentication**: JWT with expiration, rate limiting, account lockout
+3. **Input Validation**: Zod schemas, parameterized queries, XSS prevention
+4. **Compliance**: PCI DSS guidelines, GDPR/CCPA privacy requirements
+5. **Incident Response**: 24-hour breach notification, audit logging
 
 ### Security Documentation
 - **Information Security Policy:** docs/information-security/info_security_policy.md
@@ -380,30 +113,14 @@ DATA_DIR=./data
 
 ## Key Implementation Guidelines
 
-### 1. TypeScript Best Practices
+### TypeScript Best Practices
 - **NO `any` TYPES** - Use `unknown`, generics, or proper types
 - **Strict null checks** - Handle `undefined` and `null` explicitly
 - **Type all function parameters and returns**
 - **Create domain types** for business entities
 - **Use discriminated unions** for complex state
 
-### 2. Risk-Based Testing Focus
-- **Test financial calculations** - Any bug here costs money
-- **Test authentication flows** - Security is critical
-- **Test data integrity** - Transaction sync, categorization
-- **Skip trivial tests** - Don't test getters/setters
-
-### 3. Integration Testing Strategy
-- **Use real sandbox environments** (Plaid, databases)
-- **Test the full stack** when it matters
-- **Mock only at boundaries** (network, filesystem)
-
-### 4. Development Workflow
-- **Spike features quickly** with minimal tests
-- **Add tests when you find bugs**
-- **Refactor with confidence** when types guide you
-
-### 5. Type-Safe Error Handling
+### Type-Safe Error Handling
 ```typescript
 // Good: Type-safe result pattern
 type Result<T, E = Error> = 
@@ -422,8 +139,6 @@ function processData(data: unknown) {
 ## Git Commit Conventions
 
 ### Conventional Commits Format
-We follow the [Conventional Commits](https://www.conventionalcommits.org/) specification for all commit messages:
-
 ```
 <type>[optional scope]: <description>
 
@@ -436,13 +151,11 @@ We follow the [Conventional Commits](https://www.conventionalcommits.org/) speci
 - **feat**: New feature or functionality
 - **fix**: Bug fix
 - **docs**: Documentation changes only
-- **style**: Code style changes (formatting, missing semicolons, etc.)
-- **refactor**: Code refactoring without changing functionality
+- **style**: Code style changes
+- **refactor**: Code refactoring
 - **test**: Adding or updating tests
-- **chore**: Maintenance tasks, dependency updates, build changes
+- **chore**: Maintenance tasks
 - **perf**: Performance improvements
-- **ci**: CI/CD configuration changes
-- **build**: Build system or external dependency changes
 
 ### Examples
 ```bash
@@ -450,20 +163,10 @@ feat(auth): add JWT token generation for user login
 fix(transaction): correct date parsing for Plaid transactions
 test(auth): add tests for password validation
 docs: update README with setup instructions
-chore: update dependencies to latest versions
 refactor(budget): simplify monthly calculation logic
 ```
 
-### Commit Guidelines
-- Keep the subject line under 50 characters
-- Use imperative mood ("add" not "added" or "adds")
-- Don't capitalize the first letter
-- No period at the end of subject line
-- Separate subject from body with blank line
-- Body should explain what and why, not how
-- Reference issues and PRs in the footer when applicable
-
-## Getting Started Commands
+## Getting Started
 
 ### Prerequisites
 - Node.js 20+
@@ -476,20 +179,16 @@ refactor(budget): simplify monthly calculation logic
 git clone <repository-url>
 cd household-budgeting
 
-# Install backend dependencies
-cd backend
-npm install
-
-# Install frontend dependencies
-cd ../frontend
-npm install
+# Install dependencies
+cd backend && npm install
+cd ../frontend && npm install
 
 # Set up environment variables
 cp .env.example .env
 # Edit .env with your Plaid credentials
 ```
 
-### Development Workflow
+### Development Commands
 ```bash
 # Start backend in watch mode
 cd backend && npm run dev
@@ -497,58 +196,26 @@ cd backend && npm run dev
 # Start frontend in development mode  
 cd frontend && npm run dev
 
-# Run tests in watch mode
-cd backend && npm run test:watch
-cd frontend && npm run test:watch
-
-# Run all tests
+# Run tests
 npm run test
+
+# Build for production
+npm run build
 ```
 
-## Development Priorities
-
-### Current Status
-✅ **Phase 1 & 2 Complete**: Backend + Frontend with Plaid integration
-- JWT authentication with rate limiting
-- Plaid sandbox integration tested
-- React frontend with full authentication flow
-- Plaid Link UI working in sandbox mode
-
-### Completed Features (August 31, 2025)
-1. **Enhanced Transaction Sync**:
-   - Implemented pagination to fetch ALL available transactions (not just first 100)
-   - Extended history request to 730 days (2 years) instead of default 90 days
-   - Note: Banks may limit actual history (e.g., Bank of America ~90 days)
-   - Users must reconnect accounts to benefit from extended history request
-
-2. **Passphrase Authentication**:
-   - Switched from complex 8-char passwords to 15+ char passphrases
-   - Removed uppercase/lowercase/number requirements
-   - Encourages memorable phrases with spaces
-   - More secure and user-friendly
-
-3. **Dashboard Improvements**:
-   - Added uncategorized transaction count display
-   - Warning (orange) styling for 1-10 uncategorized transactions
-   - Error (red) styling for >10 uncategorized transactions
-   - Interactive alert that links to transactions/categories pages
-
-4. **Category Initialization Fix**:
-   - Fixed "Cannot read properties of undefined" error
-   - Added proper method binding for all API client methods
-   - Improved error logging and display
-
-### Next Priority: Advanced Features
-1. **Savings categories with rollover**
-2. **Bill reminders and recurring transactions**
-3. **Enhanced reporting and visualizations**
-4. **Mobile app development**
-
-### Type Safety Checklist
-- [x] Replace all `any` with proper types
-- [x] Enable strict TypeScript config
-- [x] Create shared type definitions
-- [ ] Add runtime validation with Zod
+### Required Environment Variables
+```bash
+# Backend (.env)
+NODE_ENV=development
+PORT=3001
+PLAID_CLIENT_ID=your_sandbox_client_id
+PLAID_SECRET=your_sandbox_secret  
+PLAID_ENV=sandbox
+JWT_SECRET=your_development_jwt_secret
+JWT_EXPIRES_IN=7d
+DATA_DIR=./data
+ENCRYPTION_KEY=32_byte_hex_string
+```
 
 ## Success Metrics
 - ✅ **Zero runtime type errors** - TypeScript catches all
@@ -556,46 +223,57 @@ npm run test
 - ✅ **Fast feedback loops** - Direct testing > mocking
 - ✅ **No `any` types** in production code
 - ✅ **Sandbox integration working** end-to-end
-- ✅ **Frontend working with Plaid Link** - No duplicate script warnings
-- ✅ **JWT auth flow complete** - Login, register, protected routes
 - ✅ **Professional UI** - Mantine component library with dark theme
 - ✅ **Responsive design** - Mobile-friendly with collapsible sidebar
 
-## Troubleshooting Guide for AI Assistants
+## Development Workflow Recommendations
 
-### Common Issues and Solutions
+### For AI Agents
+1. **Start Here**: Review this file for project philosophy and guidelines
+2. **Technical Details**: Consult `docs/AI-APPLICATION-ARCHITECTURE.md` for implementation
+3. **Security First**: Always consider security implications
+4. **Type Safety**: Never use `any` types
+5. **Test Critical Paths**: Focus on auth, money, and data integrity
 
-#### 1. Plaid Link Duplicate Script Warning
-**Problem**: "The Plaid link-initialize.js script was embedded more than once"
-**Solution**: 
-- Use conditional rendering - only mount PlaidLink component when token exists
-- Never pass null config to `usePlaidLink` hook
-- Avoid multiple instances of components using `usePlaidLink`
+### Risk-Based Development
+- **Spike features quickly** with minimal tests
+- **Add tests when you find bugs**
+- **Refactor with confidence** when types guide you
+- **Integration test** critical financial flows
+- **Skip trivial tests** like getters/setters
 
-#### 2. Environment Variables Not Loading
-**Problem**: "PLAID_CLIENT_ID and PLAID_SECRET must be set"
-**Solution**:
-```typescript
-// backend/src/index.ts
-import dotenv from 'dotenv';
-dotenv.config(); // MUST be before app import
-import app from './app';
-```
+## Quick References
 
-#### 3. Frontend Can't Connect to Backend
-**Problem**: "ERR_CONNECTION_REFUSED" on API calls
-**Solution**:
-- Ensure backend is running: `cd backend && npm run dev`
-- Check backend is on port 3001
-- Verify CORS is configured for frontend origin
+### Critical Files
+- **Architecture Guide**: `docs/AI-APPLICATION-ARCHITECTURE.md`
+- **Auth Service**: `backend/src/services/authService.ts`
+- **Account Management**: `backend/src/services/accountService.ts`
+- **Frontend Entry**: `frontend/src/App.tsx`
+- **API Client**: `frontend/src/lib/api.ts`
 
-#### 4. JWT Token Not Returned on Registration
-**Problem**: User can't auto-login after registration
-**Solution**: Return token from authService.register() method
+### Testing
+- **Backend Tests**: `backend/src/__tests__/`
+- **Run Tests**: `npm test`
+- **Coverage**: `npm run test:coverage`
 
-#### 5. React StrictMode Double-Mounting
-**Problem**: Components mount twice in development
-**Solution**: 
-- Use refs and global state for singleton behavior
-- Check `process.env.NODE_ENV` to detect development mode
-- Design components to be idempotent
+### Common Tasks
+- **Add new API endpoint**: See architecture guide section "To Add a New API Endpoint"
+- **Create new page**: See architecture guide section "To Add a New Page"
+- **Debug Plaid issues**: Check troubleshooting in architecture guide
+- **Handle auth errors**: Review JWT middleware patterns
+
+## Notes for Future Development
+
+### Lessons Learned
+- Integration tests with real Plaid sandbox > heavily mocked unit tests
+- Service singletons prevent auth token inconsistencies
+- Mantine provides better out-of-box experience than Tailwind for dashboards
+- Conditional rendering prevents Plaid Link duplicate script errors
+- Return JWT token on registration for auto-login UX
+- Method binding in API client prevents context loss
+
+### Technical Debt
+- Frontend has some TypeScript errors to clean up
+- Some components use `any` type that need proper typing
+- Test coverage could be improved for UI components
+- Need better error recovery for expired Plaid tokens
