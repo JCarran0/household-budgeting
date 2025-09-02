@@ -27,7 +27,7 @@ jobs:
       - name: Install and build backend
         working-directory: ./backend
         run: |
-          npm ci --production
+          npm ci  # Need all dependencies for building
           npm run build
           
       - name: Install and build frontend
@@ -128,10 +128,10 @@ jobs:
             sudo -u appuser tar -czf "$BACKUP_DIR/backup-$(date +%Y%m%d-%H%M%S).tar.gz" -C "$APP_DIR" .
           fi
           
-          # Install backend dependencies
+          # Install backend dependencies (production only)
           echo "📥 Installing backend dependencies..."
           cd "$DEPLOYMENT_DIR/backend"
-          sudo -u appuser npm ci --production
+          sudo -u appuser npm ci --omit=dev
           
           # Update environment variables
           echo "🔧 Updating environment configuration..."
