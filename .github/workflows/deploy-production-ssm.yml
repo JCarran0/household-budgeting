@@ -112,7 +112,7 @@ jobs:
           S3_PATH="${{ needs.build-and-test.outputs.s3_deployment_path }}"
           
           # Create deployment script
-          cat > deploy-commands.json << 'EOF'
+          cat > deploy-commands.json << EOF
           {
             "commands": [
               "#!/bin/bash",
@@ -123,7 +123,7 @@ jobs:
               "DEPLOYMENT_DIR=\"/home/appuser/deployments/$(date +%Y%m%d-%H%M%S)\"",
               "APP_DIR=\"/home/appuser/app\"",
               "BACKUP_DIR=\"/home/appuser/backups\"",
-              "S3_DEPLOYMENT=\"PLACEHOLDER_S3_PATH\"",
+              "S3_DEPLOYMENT=\"${S3_PATH}\"",
               "",
               "# Create directories",
               "sudo -u appuser mkdir -p \"$DEPLOYMENT_DIR\"",
@@ -220,9 +220,6 @@ jobs:
             ]
           }
           EOF
-          
-          # Replace the S3 path placeholder
-          sed -i "s|PLACEHOLDER_S3_PATH|${S3_PATH}|g" deploy-commands.json
           
           # Execute deployment via SSM
           echo "Executing deployment on instance ${{ secrets.EC2_INSTANCE_ID }}..."
