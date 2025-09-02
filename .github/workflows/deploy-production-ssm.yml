@@ -112,112 +112,99 @@ jobs:
           S3_PATH=$(cat s3-deployment-path.txt)
           echo "Using S3 deployment path: $S3_PATH"
           
-          # Create deployment script
+          # Create deployment script as a single bash script
+          # Using echo to write script then execute it to avoid variable scope issues
           cat > deploy-commands.json << EOF
           {
             "commands": [
-              "#!/bin/bash",
-              "set -e",
-              "echo '🚀 Starting SSM-based deployment...'",
-              "",
-              "# Variables",
-              "DEPLOYMENT_DIR=\"/home/appuser/deployments/$(date +%Y%m%d-%H%M%S)\"",
-              "APP_DIR=\"/home/appuser/app\"",
-              "BACKUP_DIR=\"/home/appuser/backups\"",
-              "S3_DEPLOYMENT=\"${S3_PATH}\"",
-              "",
-              "# Create directories",
-              "sudo -u appuser mkdir -p \"$DEPLOYMENT_DIR\"",
-              "sudo -u appuser mkdir -p \"$BACKUP_DIR\"",
-              "",
-              "# Download deployment package from S3",
-              "echo '📥 Downloading deployment package from S3...'",
-              "aws s3 cp \"$S3_DEPLOYMENT\" /tmp/deployment-package.tar.gz",
-              "",
-              "# Extract deployment package",
-              "cd /tmp",
-              "tar -xzf deployment-package.tar.gz",
-              "sudo -u appuser cp -r deployment/* \"$DEPLOYMENT_DIR/\"",
-              "",
-              "# Backup current deployment",
-              "if [ -d \"$APP_DIR/backend\" ]; then",
-              "  echo '📦 Creating backup of current deployment...'",
-              "  sudo -u appuser tar -czf \"$BACKUP_DIR/backup-$(date +%Y%m%d-%H%M%S).tar.gz\" -C \"$APP_DIR\" .",
-              "fi",
-              "",
-              "# Install backend dependencies",
-              "echo '📥 Installing backend dependencies...'",
-              "cd \"$DEPLOYMENT_DIR/backend\"",
-              "sudo -u appuser npm ci --omit=dev",
-              "",
-              "# Update environment variables",
-              "echo '🔧 Updating environment configuration...'",
-              "if [ -f \"$APP_DIR/backend/.env\" ]; then",
-              "  sudo -u appuser cp \"$APP_DIR/backend/.env\" \"$DEPLOYMENT_DIR/backend/.env\"",
-              "else",
-              "  echo 'Warning: No existing .env file found'",
-              "fi",
-              "",
-              "# Update S3 storage configuration",
-              "sudo -u appuser tee -a \"$DEPLOYMENT_DIR/backend/.env\" > /dev/null << 'ENVEOF'",
-              "",
-              "# Storage Configuration (Updated by deployment)",
-              "STORAGE_TYPE=s3",
-              "S3_BUCKET_NAME=budget-app-data-f5b52f89",
-              "S3_PREFIX=data/",
-              "AWS_REGION=us-east-1",
-              "USE_UNIFIED_STORAGE=true",
-              "ENVEOF",
-              "",
-              "# Stop current application",
-              "echo '⏸️  Stopping current application...'",
-              "sudo -u appuser pm2 stop budget-backend || true",
-              "",
-              "# Deploy new version",
-              "echo '🔄 Deploying new version...'",
-              "sudo -u appuser rm -rf \"$APP_DIR/backend.old\"",
-              "[ -d \"$APP_DIR/backend\" ] && sudo -u appuser mv \"$APP_DIR/backend\" \"$APP_DIR/backend.old\"",
-              "sudo -u appuser mv \"$DEPLOYMENT_DIR/backend\" \"$APP_DIR/backend\"",
-              "",
-              "# Deploy frontend",
-              "echo '🎨 Deploying frontend...'",
-              "sudo -u appuser rm -rf \"$APP_DIR/frontend.old\"",
-              "[ -d \"$APP_DIR/frontend\" ] && sudo -u appuser mv \"$APP_DIR/frontend\" \"$APP_DIR/frontend.old\"",
-              "sudo -u appuser mv \"$DEPLOYMENT_DIR/frontend\" \"$APP_DIR/frontend\"",
-              "",
-              "# Start application",
-              "echo '▶️  Starting application...'",
-              "cd \"$APP_DIR/backend\"",
-              "sudo -u appuser pm2 start dist/index.js --name budget-backend --time || sudo -u appuser pm2 restart budget-backend",
-              "sudo -u appuser pm2 save",
-              "",
-              "# Health check",
-              "echo '🏥 Running health check...'",
-              "sleep 5",
-              "for i in {1..10}; do",
-              "  if curl -f http://localhost:3001/health 2>/dev/null; then",
-              "    echo ''",
-              "    echo '✅ Health check passed!'",
-              "    break",
-              "  fi",
-              "  echo 'Waiting for application to start... ('$i'/10)'",
-              "  sleep 2",
-              "done",
-              "",
-              "# Cleanup",
-              "echo '🧹 Cleaning up...'",
-              "rm -f /tmp/deployment-package.tar.gz",
-              "rm -rf /tmp/deployment",
-              "ls -t \"$BACKUP_DIR\"/*.tar.gz 2>/dev/null | tail -n +6 | xargs rm -f 2>/dev/null || true",
-              "",
-              "# Save deployment info",
-              "echo '📝 Saving deployment info...'",
-              "[ -f /tmp/deployment/REVISION ] && sudo -u appuser cp /tmp/deployment/REVISION \"$APP_DIR/REVISION\"",
-              "[ -f /tmp/deployment/TIMESTAMP ] && sudo -u appuser cp /tmp/deployment/TIMESTAMP \"$APP_DIR/TIMESTAMP\"",
-              "",
-              "echo '✅ Deployment completed successfully!'",
-              "echo '📍 Revision: '$(cat $APP_DIR/REVISION 2>/dev/null || echo 'unknown')",
-              "echo '🕐 Timestamp: '$(cat $APP_DIR/TIMESTAMP 2>/dev/null || echo 'unknown')"
+              "cat > /tmp/deploy.sh << 'DEPLOY_SCRIPT'
+#!/bin/bash
+set -e
+
+echo '🚀 Starting SSM-based deployment...'
+
+# Variables
+DEPLOYMENT_DIR=\"/home/appuser/deployments/\$(date +%Y%m%d-%H%M%S)\"
+APP_DIR=\"/home/appuser/app\"
+BACKUP_DIR=\"/home/appuser/backups\"
+S3_DEPLOYMENT=\"${S3_PATH}\"
+
+# Create directories
+sudo -u appuser mkdir -p \"\\\$DEPLOYMENT_DIR\"
+sudo -u appuser mkdir -p \"\\\$BACKUP_DIR\"
+
+# Download deployment package from S3
+echo '📥 Downloading deployment package from S3...'
+aws s3 cp \"\\\$S3_DEPLOYMENT\" /tmp/deployment-package.tar.gz
+
+# Extract deployment package
+cd /tmp
+tar -xzf deployment-package.tar.gz
+sudo -u appuser cp -r deployment/* \"\\\$DEPLOYMENT_DIR/\"
+
+# Backup current deployment
+if [ -d \"\\\$APP_DIR/backend\" ]; then
+  echo '📦 Creating backup of current deployment...'
+  sudo -u appuser tar -czf \"\\\$BACKUP_DIR/backup-\$(date +%Y%m%d-%H%M%S).tar.gz\" -C \"\\\$APP_DIR\" .
+fi
+
+# Install backend dependencies
+echo '📥 Installing backend dependencies...'
+cd \"\\\$DEPLOYMENT_DIR/backend\"
+sudo -u appuser npm ci --omit=dev
+
+# Update environment variables
+echo '🔧 Updating environment configuration...'
+if [ -f \"\\\$APP_DIR/backend/.env\" ]; then
+  sudo -u appuser cp \"\\\$APP_DIR/backend/.env\" \"\\\$DEPLOYMENT_DIR/backend/.env\"
+else
+  echo 'Warning: No existing .env file found'
+fi
+
+# Stop current application
+echo '⏸️  Stopping current application...'
+sudo -u appuser pm2 stop budget-backend || true
+
+# Deploy new version
+echo '🔄 Deploying new version...'
+sudo -u appuser rm -rf \"\\\$APP_DIR/backend.old\"
+[ -d \"\\\$APP_DIR/backend\" ] && sudo -u appuser mv \"\\\$APP_DIR/backend\" \"\\\$APP_DIR/backend.old\"
+sudo -u appuser mv \"\\\$DEPLOYMENT_DIR/backend\" \"\\\$APP_DIR/backend\"
+
+# Deploy frontend
+echo '🎨 Deploying frontend...'
+sudo -u appuser rm -rf \"\\\$APP_DIR/frontend.old\"
+[ -d \"\\\$APP_DIR/frontend\" ] && sudo -u appuser mv \"\\\$APP_DIR/frontend\" \"\\\$APP_DIR/frontend.old\"
+sudo -u appuser mv \"\\\$DEPLOYMENT_DIR/frontend\" \"\\\$APP_DIR/frontend\"
+
+# Start application
+echo '▶️  Starting application...'
+cd \"\\\$APP_DIR/backend\"
+sudo -u appuser pm2 start dist/index.js --name budget-backend --time || sudo -u appuser pm2 restart budget-backend
+sudo -u appuser pm2 save
+
+# Health check
+echo '🏥 Running health check...'
+sleep 5
+for i in {1..10}; do
+  if curl -f http://localhost:3001/health 2>/dev/null; then
+    echo ''
+    echo '✅ Health check passed!'
+    break
+  fi
+  echo \"Waiting for application to start... (\\\$i/10)\"
+  sleep 2
+done
+
+# Cleanup
+echo '🧹 Cleaning up...'
+rm -f /tmp/deployment-package.tar.gz
+rm -rf /tmp/deployment
+
+echo '✅ Deployment completed successfully!'
+DEPLOY_SCRIPT",
+              "chmod +x /tmp/deploy.sh",
+              "/tmp/deploy.sh"
             ]
           }
           EOF
