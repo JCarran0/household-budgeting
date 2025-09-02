@@ -13,8 +13,6 @@ jobs:
   build-and-test:
     runs-on: ubuntu-latest
     name: Build & Test
-    outputs:
-      s3_deployment_path: ${{ steps.upload-s3.outputs.deployment_path }}
     
     steps:
       - name: Checkout code
@@ -70,15 +68,17 @@ jobs:
           S3_PATH="s3://${{ secrets.S3_BACKUP_BUCKET }}/deployments/deployment-${TIMESTAMP}.tar.gz"
           aws s3 cp deployment-package.tar.gz "$S3_PATH"
           
-          # Save the S3 path for the deploy job
-          echo "deployment_path=$S3_PATH" >> $GITHUB_OUTPUT
+          # Save the S3 path to a file for the deploy job
+          echo "$S3_PATH" > s3-deployment-path.txt
           echo "Deployment package uploaded to: $S3_PATH"
           
       - name: Upload deployment artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: deployment-package
-          path: deployment-package.tar.gz
+          name: deployment-info
+          path: |
+            deployment-package.tar.gz
+            s3-deployment-path.txt
           retention-days: 30
 
   deploy-production:
@@ -93,6 +93,11 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
         
+      - name: Download deployment info
+        uses: actions/download-artifact@v4
+        with:
+          name: deployment-info
+          
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -100,16 +105,12 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ secrets.AWS_REGION }}
           
-      - name: Get deployment package from previous job
-        run: |
-          # The S3 path was saved in the previous job
-          echo "Deployment will use package from S3"
-          
       - name: Deploy via SSM
         id: deploy
         run: |
-          # Get the deployment S3 path from the build job
-          S3_PATH="${{ needs.build-and-test.outputs.s3_deployment_path }}"
+          # Read the S3 path from the artifact file
+          S3_PATH=$(cat s3-deployment-path.txt)
+          echo "Using S3 deployment path: $S3_PATH"
           
           # Create deployment script
           cat > deploy-commands.json << EOF
