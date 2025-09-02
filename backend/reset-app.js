@@ -12,7 +12,15 @@ const fs = require('fs');
 const path = require('path');
 const readline = require('readline');
 
-const DATA_DIR = path.join(__dirname, 'data');
+// Load environment variables if .env exists
+try {
+  require('dotenv').config();
+} catch (e) {
+  // dotenv not available or .env doesn't exist - that's OK
+}
+
+// Use DATA_DIR from environment or default to ./data
+const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, 'data');
 
 // Colors for console output
 const colors = {
@@ -59,6 +67,13 @@ async function confirmReset() {
 }
 
 async function resetApp() {
+  // Extra safety check for production environment
+  if (process.env.NODE_ENV === 'production' && !forceReset) {
+    console.log(colors.red + '\n⚠️  Production environment detected!' + colors.reset);
+    console.log('Use --force flag to reset production data.');
+    process.exit(1);
+  }
+
   const confirmed = await confirmReset();
   
   if (!confirmed) {
@@ -67,6 +82,7 @@ async function resetApp() {
   }
 
   console.log('\n' + colors.blue + 'Resetting application data...' + colors.reset);
+  console.log('Data directory: ' + DATA_DIR);
 
   // Ensure data directory exists
   if (!fs.existsSync(DATA_DIR)) {
@@ -77,51 +93,80 @@ async function resetApp() {
   // Get all JSON files in the data directory
   const files = fs.readdirSync(DATA_DIR).filter(file => file.endsWith('.json'));
   
-  // Remove each file
+  // UUID pattern for user-scoped files
+  const uuidPattern = /_[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}\.json$/;
+  
+  // File type patterns for logging
   const fileTypes = {
     'users.json': 'user accounts',
     'accounts_': 'connected bank accounts',
     'transactions_': 'transactions',
     'categories_': 'categories',
-    'categories.json': 'legacy categories',
     'budgets_': 'budgets',
-    'budgets.json': 'legacy budgets',
-    'autocategorize_rules_': 'auto-categorization rules'
+    'autocategorize_rules_': 'auto-categorization rules',
+    'tags_': 'tags'
   };
 
+  // Separate files into categories
+  const userScopedFiles = [];
+  const systemFiles = [];
+  const obsoleteFiles = ['categories.json', 'budgets.json']; // Legacy files to remove
+  
   files.forEach(file => {
-    const filePath = path.join(DATA_DIR, file);
-    
-    // Determine what type of file this is
-    let fileType = 'data';
-    for (const [pattern, description] of Object.entries(fileTypes)) {
-      if (file.startsWith(pattern) || file === pattern) {
-        fileType = description;
-        break;
-      }
+    if (uuidPattern.test(file)) {
+      userScopedFiles.push(file);
+    } else if (file === 'users.json') {
+      systemFiles.push(file);
+    } else if (obsoleteFiles.includes(file)) {
+      // Will be removed but not recreated
     }
-    
-    console.log(`→ Removing ${fileType}: ${file}`);
-    fs.unlinkSync(filePath);
   });
 
-  // Create fresh data files
-  console.log(colors.blue + '\n→ Creating fresh data files...' + colors.reset);
-
-  const freshFiles = {
-    'users.json': { users: [] },
-    'categories.json': { categories: [] },
-    'budgets.json': { budgets: [] }
-  };
-
-  for (const [filename, content] of Object.entries(freshFiles)) {
-    const filePath = path.join(DATA_DIR, filename);
-    fs.writeFileSync(filePath, JSON.stringify(content, null, 2));
-    console.log(`  ✓ Created ${filename}`);
+  // Remove user-scoped files
+  if (userScopedFiles.length > 0) {
+    console.log(colors.blue + '\n→ Removing user-scoped data files...' + colors.reset);
+    userScopedFiles.forEach(file => {
+      const filePath = path.join(DATA_DIR, file);
+      
+      // Determine what type of file this is
+      let fileType = 'data';
+      for (const [pattern, description] of Object.entries(fileTypes)) {
+        if (file.startsWith(pattern)) {
+          fileType = description;
+          break;
+        }
+      }
+      
+      console.log(`  → Removing ${fileType}: ${file}`);
+      fs.unlinkSync(filePath);
+    });
   }
 
+  // Remove obsolete files if they exist
+  obsoleteFiles.forEach(file => {
+    const filePath = path.join(DATA_DIR, file);
+    if (fs.existsSync(filePath)) {
+      console.log(colors.yellow + `  → Removing obsolete file: ${file}` + colors.reset);
+      fs.unlinkSync(filePath);
+    }
+  });
+
+  // Reset users.json to empty array
+  console.log(colors.blue + '\n→ Resetting system files...' + colors.reset);
+  const usersPath = path.join(DATA_DIR, 'users.json');
+  fs.writeFileSync(usersPath, JSON.stringify({ users: [] }, null, 2));
+  console.log(`  ✓ Reset users.json to empty state`)
+
+  // Summary
   console.log('');
   console.log(colors.green + '✅ Application reset complete!' + colors.reset);
+  console.log('');
+  console.log('Summary:');
+  console.log(`  • Removed ${userScopedFiles.length} user-scoped data file(s)`);
+  console.log(`  • Reset users.json to empty state`);
+  if (obsoleteFiles.some(f => fs.existsSync(path.join(DATA_DIR, f)))) {
+    console.log(`  • Removed obsolete legacy files`);
+  }
   console.log('');
   console.log('The app is now in its initial state:');
   console.log('  • No user accounts exist');
