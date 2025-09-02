@@ -32,15 +32,25 @@ jobs:
           mkdir -p ~/.ssh
           echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
-          ssh-keyscan -H ${{ secrets.PRODUCTION_HOST }} >> ~/.ssh/known_hosts 2>/dev/null || \
-          ssh-keyscan -H 67.202.9.86 >> ~/.ssh/known_hosts 2>/dev/null
+          
+          # Add host to known_hosts with better error handling
+          echo "Adding host to known_hosts..."
+          ssh-keyscan -H ${{ secrets.PRODUCTION_HOST }} >> ~/.ssh/known_hosts 2>&1 || {
+            echo "Failed to scan ${{ secrets.PRODUCTION_HOST }}, trying IP directly..."
+            ssh-keyscan -H 67.202.9.86 >> ~/.ssh/known_hosts 2>&1 || {
+              echo "Warning: Could not add host to known_hosts automatically"
+              # Use StrictHostKeyChecking=no as fallback
+              echo "Will use StrictHostKeyChecking=no for this connection"
+            }
+          }
           
       - name: Execute rollback
         env:
           HOST: ${{ secrets.PRODUCTION_HOST }}
           USER: ${{ secrets.SSH_USER }}
         run: |
-          ssh -i ~/.ssh/deploy_key ${USER}@${HOST} << 'ROLLBACK_SCRIPT'
+          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no -o ConnectTimeout=10 \
+            ${USER}@${HOST} << 'ROLLBACK_SCRIPT'
           set -e
           
           echo "🔄 Starting rollback process..."

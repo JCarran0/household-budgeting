@@ -85,8 +85,42 @@ jobs:
           mkdir -p ~/.ssh
           echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
-          ssh-keyscan -H ${{ secrets.PRODUCTION_HOST }} >> ~/.ssh/known_hosts 2>/dev/null || \
-          ssh-keyscan -H 67.202.9.86 >> ~/.ssh/known_hosts 2>/dev/null
+          
+          # Add host to known_hosts with better error handling
+          echo "Adding host to known_hosts..."
+          ssh-keyscan -H ${{ secrets.PRODUCTION_HOST }} >> ~/.ssh/known_hosts 2>&1 || {
+            echo "Failed to scan ${{ secrets.PRODUCTION_HOST }}, trying IP directly..."
+            ssh-keyscan -H 67.202.9.86 >> ~/.ssh/known_hosts 2>&1 || {
+              echo "Warning: Could not add host to known_hosts automatically"
+              # Add host key manually to avoid prompt
+              echo "Adding host key manually..."
+              ssh-keyscan -t rsa 67.202.9.86 2>/dev/null >> ~/.ssh/known_hosts || true
+            }
+          }
+          
+          # Verify key file was created
+          if [ ! -f ~/.ssh/deploy_key ]; then
+            echo "Error: SSH key file was not created"
+            exit 1
+          fi
+          
+          echo "SSH setup completed"
+          
+      - name: Test SSH connection
+        env:
+          HOST: ${{ secrets.PRODUCTION_HOST }}
+          USER: ${{ secrets.SSH_USER }}
+        run: |
+          echo "Testing SSH connection to ${USER}@${HOST}..."
+          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no -o ConnectTimeout=10 \
+            ${USER}@${HOST} "echo 'SSH connection successful'" || {
+            echo "SSH connection failed. Please check:"
+            echo "1. SSH_PRIVATE_KEY secret is correctly set"
+            echo "2. PRODUCTION_HOST is correct (currently: ${HOST})"
+            echo "3. SSH_USER is correct (currently: ${USER})"
+            echo "4. The EC2 instance is running and accessible"
+            exit 1
+          }
           
       - name: Get S3 bucket name from Terraform
         id: terraform_outputs
@@ -209,10 +243,12 @@ jobs:
           SCRIPT
           
           # Upload deployment package and script
-          scp -i ~/.ssh/deploy_key deployment-package.tar.gz deploy.sh ${USER}@${HOST}:/tmp/
+          scp -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no \
+            deployment-package.tar.gz deploy.sh ${USER}@${HOST}:/tmp/
           
           # Execute deployment
-          ssh -i ~/.ssh/deploy_key ${USER}@${HOST} "chmod +x /tmp/deploy.sh && sudo /tmp/deploy.sh"
+          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no \
+            ${USER}@${HOST} "chmod +x /tmp/deploy.sh && sudo /tmp/deploy.sh"
           
       - name: Verify deployment
         env:
