@@ -1,0 +1,254 @@
+name: Deploy to Production
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - '.github/ISSUE_TEMPLATE/**'
+      - '.github/PULL_REQUEST_TEMPLATE/**'
+  workflow_dispatch:  # Allow manual trigger
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    name: Build & Test
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          
+      - name: Install and build backend
+        working-directory: ./backend
+        run: |
+          npm ci --production
+          npm run build
+          
+      - name: Install and build frontend
+        working-directory: ./frontend
+        run: |
+          npm ci
+          npm run build
+          
+      - name: Create deployment package
+        run: |
+          # Create deployment structure
+          mkdir -p deployment/backend
+          mkdir -p deployment/frontend
+          
+          # Copy backend files (dist only, dependencies will be installed on server)
+          cp -r backend/dist deployment/backend/
+          cp backend/package*.json deployment/backend/
+          
+          # Copy frontend build
+          cp -r frontend/dist/* deployment/frontend/
+          
+          # Create deployment info
+          echo "$(git rev-parse --short HEAD)" > deployment/REVISION
+          echo "$(date -u +%Y%m%d-%H%M%S)" > deployment/TIMESTAMP
+          
+          # Create tarball
+          tar -czf deployment-package.tar.gz deployment/
+          
+      - name: Upload deployment package
+        uses: actions/upload-artifact@v4
+        with:
+          name: deployment-package
+          path: deployment-package.tar.gz
+          retention-days: 30
+
+  deploy-production:
+    runs-on: ubuntu-latest
+    needs: build-and-test
+    name: Deploy to Production
+    environment:
+      name: production
+      url: https://budget.jaredcarrano.com
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Download deployment package
+        uses: actions/download-artifact@v4
+        with:
+          name: deployment-package
+          
+      - name: Setup SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H ${{ secrets.PRODUCTION_HOST }} >> ~/.ssh/known_hosts 2>/dev/null || \
+          ssh-keyscan -H 67.202.9.86 >> ~/.ssh/known_hosts 2>/dev/null
+          
+      - name: Get S3 bucket name from Terraform
+        id: terraform_outputs
+        run: |
+          # For now, use the hardcoded bucket name from terraform output
+          # In the future, this could query terraform state
+          echo "S3_DATA_BUCKET=budget-app-data-f5b52f89" >> $GITHUB_OUTPUT
+          echo "S3_BACKUP_BUCKET=budget-app-backups-f5b52f89" >> $GITHUB_OUTPUT
+          
+      - name: Deploy to production server
+        env:
+          HOST: ${{ secrets.PRODUCTION_HOST }}
+          USER: ${{ secrets.SSH_USER }}
+        run: |
+          # Create deployment script
+          cat > deploy.sh << 'SCRIPT'
+          #!/bin/bash
+          set -e
+          
+          echo "🚀 Starting deployment..."
+          
+          # Variables
+          DEPLOYMENT_DIR="/home/appuser/deployments/$(date +%Y%m%d-%H%M%S)"
+          APP_DIR="/home/appuser/app"
+          BACKUP_DIR="/home/appuser/backups"
+          
+          # Create deployment directory
+          sudo -u appuser mkdir -p "$DEPLOYMENT_DIR"
+          sudo -u appuser mkdir -p "$BACKUP_DIR"
+          
+          # Extract deployment package
+          cd /tmp
+          tar -xzf deployment-package.tar.gz
+          sudo -u appuser cp -r deployment/* "$DEPLOYMENT_DIR/"
+          
+          # Backup current deployment
+          if [ -d "$APP_DIR/backend" ]; then
+            echo "📦 Creating backup of current deployment..."
+            sudo -u appuser tar -czf "$BACKUP_DIR/backup-$(date +%Y%m%d-%H%M%S).tar.gz" -C "$APP_DIR" .
+          fi
+          
+          # Install backend dependencies
+          echo "📥 Installing backend dependencies..."
+          cd "$DEPLOYMENT_DIR/backend"
+          sudo -u appuser npm ci --production
+          
+          # Update environment variables
+          echo "🔧 Updating environment configuration..."
+          sudo -u appuser tee "$DEPLOYMENT_DIR/backend/.env" > /dev/null << EOF
+          NODE_ENV=production
+          PORT=3001
+          
+          # Storage Configuration
+          STORAGE_TYPE=s3
+          S3_BUCKET_NAME=${{ steps.terraform_outputs.outputs.S3_DATA_BUCKET }}
+          S3_PREFIX=data/
+          AWS_REGION=us-east-1
+          USE_UNIFIED_STORAGE=true
+          
+          # Existing configuration from current deployment
+          $(sudo -u appuser grep -E "^(PLAID_|JWT_|ENCRYPTION_|FRONTEND_URL)" "$APP_DIR/backend/.env" 2>/dev/null || true)
+          
+          # API Configuration
+          API_PREFIX=/api/v1
+          LOG_LEVEL=info
+          EOF
+          
+          # Stop current application
+          echo "⏸️  Stopping current application..."
+          sudo -u appuser pm2 stop budget-backend || true
+          
+          # Deploy new version
+          echo "🔄 Deploying new version..."
+          sudo -u appuser rm -rf "$APP_DIR/backend.old"
+          [ -d "$APP_DIR/backend" ] && sudo -u appuser mv "$APP_DIR/backend" "$APP_DIR/backend.old"
+          sudo -u appuser mv "$DEPLOYMENT_DIR/backend" "$APP_DIR/backend"
+          
+          # Deploy frontend
+          echo "🎨 Deploying frontend..."
+          sudo -u appuser rm -rf "$APP_DIR/frontend.old"
+          [ -d "$APP_DIR/frontend" ] && sudo -u appuser mv "$APP_DIR/frontend" "$APP_DIR/frontend.old"
+          sudo -u appuser mv "$DEPLOYMENT_DIR/frontend" "$APP_DIR/frontend"
+          
+          # Start application
+          echo "▶️  Starting application..."
+          cd "$APP_DIR/backend"
+          sudo -u appuser pm2 start dist/index.js --name budget-backend --time
+          sudo -u appuser pm2 save
+          
+          # Health check
+          echo "🏥 Running health check..."
+          sleep 5
+          for i in {1..10}; do
+            if curl -f http://localhost:3001/health 2>/dev/null; then
+              echo ""
+              echo "✅ Health check passed!"
+              break
+            fi
+            echo "Waiting for application to start... ($i/10)"
+            sleep 2
+          done
+          
+          # Verify frontend is accessible
+          curl -f https://budget.jaredcarrano.com/ -o /dev/null -s -w "%{http_code}" | grep -q "200" || {
+            echo "⚠️  Frontend may not be accessible"
+          }
+          
+          # Cleanup old deployments (keep last 5)
+          echo "🧹 Cleaning up old deployments..."
+          ls -t "$BACKUP_DIR"/*.tar.gz 2>/dev/null | tail -n +6 | xargs rm -f 2>/dev/null || true
+          
+          # Save deployment info
+          echo "📝 Saving deployment info..."
+          sudo -u appuser cp /tmp/deployment/REVISION "$APP_DIR/REVISION"
+          sudo -u appuser cp /tmp/deployment/TIMESTAMP "$APP_DIR/TIMESTAMP"
+          
+          echo "✅ Deployment completed successfully!"
+          echo "📍 Revision: $(cat $APP_DIR/REVISION)"
+          echo "🕐 Timestamp: $(cat $APP_DIR/TIMESTAMP)"
+          SCRIPT
+          
+          # Upload deployment package and script
+          scp -i ~/.ssh/deploy_key deployment-package.tar.gz deploy.sh ${USER}@${HOST}:/tmp/
+          
+          # Execute deployment
+          ssh -i ~/.ssh/deploy_key ${USER}@${HOST} "chmod +x /tmp/deploy.sh && sudo /tmp/deploy.sh"
+          
+      - name: Verify deployment
+        env:
+          HOST: ${{ secrets.PRODUCTION_HOST }}
+        run: |
+          echo "🔍 Verifying deployment..."
+          
+          # Check health endpoint
+          response=$(curl -s -o /dev/null -w "%{http_code}" https://budget.jaredcarrano.com/health)
+          if [ "$response" = "200" ]; then
+            echo "✅ Application is healthy!"
+          else
+            echo "❌ Health check failed with status: $response"
+            exit 1
+          fi
+          
+          # Check frontend
+          response=$(curl -s -o /dev/null -w "%{http_code}" https://budget.jaredcarrano.com/)
+          if [ "$response" = "200" ]; then
+            echo "✅ Frontend is accessible!"
+          else
+            echo "⚠️  Frontend returned status: $response"
+          fi
+          
+      - name: Cleanup
+        if: always()
+        run: |
+          rm -f ~/.ssh/deploy_key
+          rm -f deployment-package.tar.gz
+          rm -f deploy.sh
+          
+      - name: Notify deployment success
+        if: success()
+        run: |
+          echo "🎉 Production deployment successful!"
+          echo "🌐 Application URL: https://budget.jaredcarrano.com"
+          echo "📦 Version: $(git rev-parse --short HEAD)"
+          echo "🕐 Deployed at: $(date -u +%Y-%m-%d' '%H:%M:%S' UTC')"
