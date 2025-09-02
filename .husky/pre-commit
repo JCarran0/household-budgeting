@@ -1,0 +1,59 @@
+#!/bin/sh
+
+# Pre-commit hook to run linting checks on both backend and frontend
+# This prevents committing code with linting errors
+
+echo "🔍 Running pre-commit linting checks..."
+
+# Get the list of staged files
+STAGED_FILES=$(git diff --cached --name-only --diff-filter=ACM)
+
+# Check if there are any backend TypeScript files
+BACKEND_FILES=$(echo "$STAGED_FILES" | grep "^backend/.*\.\(ts\|tsx\)$" || true)
+# Check if there are any frontend TypeScript/JavaScript files  
+FRONTEND_FILES=$(echo "$STAGED_FILES" | grep "^frontend/.*\.\(ts\|tsx\|js\|jsx\)$" || true)
+
+# Track if any checks fail
+FAILED=0
+
+# Run backend linting if backend files are staged
+if [ -n "$BACKEND_FILES" ]; then
+    echo "📦 Checking backend TypeScript..."
+    cd backend && npm run lint
+    if [ $? -ne 0 ]; then
+        echo "❌ Backend linting failed. Please fix the errors before committing."
+        FAILED=1
+    else
+        echo "✅ Backend linting passed"
+    fi
+    cd ..
+fi
+
+# Run frontend linting if frontend files are staged
+if [ -n "$FRONTEND_FILES" ]; then
+    echo "🎨 Checking frontend code..."
+    cd frontend && npm run lint
+    if [ $? -ne 0 ]; then
+        echo "❌ Frontend linting failed. Please fix the errors before committing."
+        FAILED=1
+    else
+        echo "✅ Frontend linting passed"
+    fi
+    cd ..
+fi
+
+# Exit with error if any checks failed
+if [ $FAILED -ne 0 ]; then
+    echo ""
+    echo "💡 Tip: You can run 'npm run lint' in the respective directories to see the errors."
+    echo "💡 Some errors might be auto-fixable with 'npm run lint -- --fix'"
+    exit 1
+fi
+
+# If no relevant files were changed, just pass
+if [ -z "$BACKEND_FILES" ] && [ -z "$FRONTEND_FILES" ]; then
+    echo "ℹ️  No TypeScript/JavaScript files to lint in this commit"
+fi
+
+echo "✨ All linting checks passed!"
+exit 0
