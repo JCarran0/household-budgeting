@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api, type ExtendedPlaidAccount } from '../lib/api';
 import { format, startOfMonth, endOfMonth, startOfYear, endOfYear, subMonths } from 'date-fns';
@@ -62,11 +62,12 @@ export function EnhancedTransactions() {
   const [selectedAccount, setSelectedAccount] = useState<string>('all');
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
-  const [dateFilterOption, setDateFilterOption] = useState<DateFilterOption>('this-month');
+  const [dateFilterOption, setDateFilterOption] = useState<DateFilterOption>('ytd'); // Start with YTD as default
   const [customDateRange, setCustomDateRange] = useState<[Date | null, Date | null]>([null, null]);
   const [includeHidden, setIncludeHidden] = useState(false);
   const [onlyUncategorized, setOnlyUncategorized] = useState(false);
   const [amountRange, setAmountRange] = useState({ min: null as number | null, max: null as number | null });
+  const [hasInitialized, setHasInitialized] = useState(false);
   
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -171,6 +172,43 @@ export function EnhancedTransactions() {
     refetchOnWindowFocus: false,
     staleTime: 1000, // Keep data fresh for 1 second to prevent refetching
   });
+  
+  // Smart default selection: Set date filter to most recent month with transactions
+  useEffect(() => {
+    if (!hasInitialized && transactionData?.transactions && transactionData.transactions.length > 0) {
+      const now = new Date();
+      const currentMonth = format(now, 'yyyy-MM');
+      
+      // Check if current month has transactions
+      const currentMonthTransactions = transactionData.transactions.filter(
+        t => t.date.startsWith(currentMonth)
+      );
+      
+      if (currentMonthTransactions.length > 0) {
+        // Current month has transactions, use it
+        setDateFilterOption('this-month');
+      } else {
+        // Find the most recent month with transactions
+        const transactionMonths = new Set(
+          transactionData.transactions.map(t => t.date.substring(0, 7))
+        );
+        const sortedMonths = Array.from(transactionMonths).sort().reverse();
+        
+        if (sortedMonths.length > 0) {
+          const mostRecentMonth = sortedMonths[0];
+          // Check if it's in the current year
+          if (mostRecentMonth.startsWith(String(now.getFullYear()))) {
+            // Set to the specific month
+            setDateFilterOption(mostRecentMonth);
+          } else {
+            // Different year, keep YTD
+            setDateFilterOption('ytd');
+          }
+        }
+      }
+      setHasInitialized(true);
+    }
+  }, [transactionData, hasInitialized]);
   
   // Create account lookup map for tooltips
   const accountLookup = useMemo(() => {

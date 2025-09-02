@@ -89,6 +89,14 @@
 - A user should experience 1-second tooltip delays to avoid distraction
 - A user should see tooltips that include account name, institution, and mask when available
 
+### Smart Date Filtering
+- A user should see transactions from the most recent month with data by default
+- A user should see the current month selected if it contains transactions
+- A user should see the most recent month with transactions if current month is empty
+- A user should see "Year to Date" view if no transactions exist in the current year
+- A user should see the date filter automatically adjust to show their data
+- A user should not see an empty transaction list on first load due to date filters
+
 ### Transaction Editing
 - A user should be able to edit a transaction's description
 - A user should be able to revert to the original Plaid description
