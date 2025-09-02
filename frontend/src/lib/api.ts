@@ -13,7 +13,10 @@ import type {
   User
 } from '../../../shared/types';
 
-const API_BASE_URL = 'http://localhost:3001/api/v1';
+// Use relative URL in production, localhost in development
+const API_BASE_URL = import.meta.env.PROD 
+  ? '/api/v1'  // In production, use relative path (nginx will proxy)
+  : 'http://localhost:3001/api/v1';
 
 // Extended PlaidAccount with backend fields
 export interface ExtendedPlaidAccount extends PlaidAccount {
