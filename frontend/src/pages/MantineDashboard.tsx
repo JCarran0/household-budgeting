@@ -12,7 +12,6 @@ import {
   Paper,
   ThemeIcon,
   Center,
-  RingProgress,
   Loader,
   Alert,
   Tooltip

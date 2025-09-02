@@ -82,10 +82,12 @@ export function BudgetForm({
       });
       onSuccess();
     },
-    onError: (error: any) => {
+    onError: (error: unknown) => {
+      const errorMessage = error instanceof Error ? error.message : 
+        (error as { response?: { data?: { error?: string } } })?.response?.data?.error || 'Failed to save budget';
       notifications.show({
         title: 'Error',
-        message: error.response?.data?.error || 'Failed to save budget',
+        message: errorMessage,
         color: 'red',
       });
     },

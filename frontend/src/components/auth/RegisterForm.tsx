@@ -1,4 +1,4 @@
-import { useState, FormEvent } from 'react';
+import { useState, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../../stores/authStore';
 import {
@@ -59,7 +59,7 @@ export function RegisterForm() {
     try {
       await register({ username, password });
       navigate('/dashboard');
-    } catch (error) {
+    } catch {
       // Error is handled in the store
     }
   };

@@ -20,7 +20,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { notifications } from '@mantine/notifications';
 import { IconAlertCircle, IconTag, IconCategory } from '@tabler/icons-react';
 import { api } from '../../lib/api';
-import type { Transaction, Category } from '../../../../shared/types';
+import type { Transaction } from '../../../../shared/types';
 
 interface TransactionEditModalProps {
   opened: boolean;
@@ -91,7 +91,7 @@ export function TransactionEditModal({
         isHidden: transaction.isHidden || false,
       });
     }
-  }, [transaction, opened]);
+  }, [transaction, opened, form]);
 
   // Update category mutation
   const updateCategoryMutation = useMutation({

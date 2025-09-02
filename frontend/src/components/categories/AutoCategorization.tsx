@@ -127,10 +127,10 @@ export function AutoCategorization() {
       queryClient.invalidateQueries({ queryKey: ['autocategorize-rules'] });
       handleCloseForm();
     },
-    onError: (error: any) => {
+    onError: (error: unknown) => {
       notifications.show({
         title: 'Error',
-        message: error.message || 'Failed to create rule',
+        message: error instanceof Error ? error.message : 'Failed to create rule',
         color: 'red',
       });
     },
@@ -154,10 +154,10 @@ export function AutoCategorization() {
       queryClient.invalidateQueries({ queryKey: ['autocategorize-rules'] });
       handleCloseForm();
     },
-    onError: (error: any) => {
+    onError: (error: unknown) => {
       notifications.show({
         title: 'Error',
-        message: error.message || 'Failed to update rule',
+        message: error instanceof Error ? error.message : 'Failed to update rule',
         color: 'red',
       });
     },
@@ -174,10 +174,10 @@ export function AutoCategorization() {
       });
       queryClient.invalidateQueries({ queryKey: ['autocategorize-rules'] });
     },
-    onError: (error: any) => {
+    onError: (error: unknown) => {
       notifications.show({
         title: 'Error',
-        message: error.message || 'Failed to delete rule',
+        message: error instanceof Error ? error.message : 'Failed to delete rule',
         color: 'red',
       });
     },
@@ -189,10 +189,10 @@ export function AutoCategorization() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['autocategorize-rules'] });
     },
-    onError: (error: any) => {
+    onError: (error: unknown) => {
       notifications.show({
         title: 'Error',
-        message: error.message || 'Failed to move rule',
+        message: error instanceof Error ? error.message : 'Failed to move rule',
         color: 'red',
       });
     },
@@ -204,10 +204,10 @@ export function AutoCategorization() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['autocategorize-rules'] });
     },
-    onError: (error: any) => {
+    onError: (error: unknown) => {
       notifications.show({
         title: 'Error',
-        message: error.message || 'Failed to move rule',
+        message: error instanceof Error ? error.message : 'Failed to move rule',
         color: 'red',
       });
     },
@@ -224,10 +224,10 @@ export function AutoCategorization() {
       });
       queryClient.invalidateQueries({ queryKey: ['transactions'] });
     },
-    onError: (error: any) => {
+    onError: (error: unknown) => {
       notifications.show({
         title: 'Error',
-        message: error.message || 'Failed to apply rules',
+        message: error instanceof Error ? error.message : 'Failed to apply rules',
         color: 'red',
       });
     },
@@ -240,10 +240,10 @@ export function AutoCategorization() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['autocategorize-rules'] });
     },
-    onError: (error: any) => {
+    onError: (error: unknown) => {
       notifications.show({
         title: 'Error',
-        message: error.message || 'Failed to update rule status',
+        message: error instanceof Error ? error.message : 'Failed to update rule status',
         color: 'red',
       });
     },

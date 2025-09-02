@@ -107,10 +107,10 @@ export function CategoryForm({ opened, onClose, category, onSuccess }: CategoryF
       });
       onSuccess();
     },
-    onError: (error: any) => {
+    onError: (error: unknown) => {
       notifications.show({
         title: 'Error',
-        message: error.response?.data?.error || 'Failed to create category',
+        message: (error as { response?: { data?: { error?: string } } })?.response?.data?.error || 'Failed to create category',
         color: 'red',
       });
     },
@@ -130,10 +130,10 @@ export function CategoryForm({ opened, onClose, category, onSuccess }: CategoryF
       });
       onSuccess();
     },
-    onError: (error: any) => {
+    onError: (error: unknown) => {
       notifications.show({
         title: 'Error',
-        message: error.response?.data?.error || 'Failed to update category',
+        message: (error as { response?: { data?: { error?: string } } })?.response?.data?.error || 'Failed to update category',
         color: 'red',
       });
     },

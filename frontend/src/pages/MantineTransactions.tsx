@@ -19,8 +19,6 @@ import {
   Collapse,
   Grid,
   NumberInput,
-  Table,
-  ScrollArea,
   ThemeIcon,
   Box,
 } from '@mantine/core';

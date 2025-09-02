@@ -16,7 +16,6 @@ import {
   IconChevronRight,
   IconEdit,
   IconTrash,
-  IconEye,
   IconEyeOff,
   IconPigMoney,
   IconCategory,

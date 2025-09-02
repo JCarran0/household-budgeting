@@ -143,7 +143,7 @@ export function EnhancedTransactions() {
 
   // Build query parameters
   const queryParams = useMemo(() => {
-    const params: any = {
+    const params: Record<string, unknown> = {
       accountId: selectedAccount === 'all' ? undefined : selectedAccount,
       startDate: dateRange[0] ? format(dateRange[0], 'yyyy-MM-dd') : undefined,
       endDate: dateRange[1] ? format(dateRange[1], 'yyyy-MM-dd') : undefined,

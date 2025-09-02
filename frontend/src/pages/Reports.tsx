@@ -1,4 +1,3 @@
-import React from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useReportsFilters } from '../hooks/usePersistedFilters';
 import { notifications } from '@mantine/notifications';
@@ -15,7 +14,6 @@ import {
   Badge,
   RingProgress,
   Progress,
-  Alert,
   Loader,
   Center,
   ThemeIcon,
@@ -44,13 +42,9 @@ import {
 } from 'recharts';
 import { 
   IconTrendingUp, 
-  IconTrendingDown, 
   IconCash,
-  IconPigMoney,
   IconChartBar,
   IconChartPie,
-  IconCalendar,
-  IconAlertCircle,
   IconArrowUpRight,
   IconArrowDownRight,
   IconFilterOff,

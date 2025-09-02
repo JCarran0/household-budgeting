@@ -5,6 +5,7 @@ import { Category } from '../../../../shared/types';
 describe('CategoryService', () => {
   let categoryService: CategoryService;
   let dataService: InMemoryDataService;
+  const testUserId = 'test-user-123';
 
   beforeEach(() => {
     // Create in-memory data service for testing
@@ -24,7 +25,7 @@ describe('CategoryService', () => {
         isSavings: false
       };
 
-      const category = await categoryService.createCategory(newCategory);
+      const category = await categoryService.createCategory(newCategory, testUserId);
 
       expect(category).toMatchObject({
         ...newCategory,
@@ -32,7 +33,7 @@ describe('CategoryService', () => {
       });
       
       // Verify category was saved
-      const savedCategories = await dataService.getCategories();
+      const savedCategories = await dataService.getCategories(testUserId);
       expect(savedCategories).toHaveLength(1);
       expect(savedCategories[0]).toMatchObject(newCategory);
     });
@@ -55,9 +56,9 @@ describe('CategoryService', () => {
         isSavings: false
       };
 
-      await dataService.saveCategories([parentCategory]);
+      await dataService.saveCategories([parentCategory], testUserId);
 
-      const subcategory = await categoryService.createCategory(newSubcategory);
+      const subcategory = await categoryService.createCategory(newSubcategory, testUserId);
 
       expect(subcategory).toMatchObject({
         ...newSubcategory,
@@ -65,7 +66,7 @@ describe('CategoryService', () => {
       });
       
       // Verify both categories were saved
-      const savedCategories = await dataService.getCategories();
+      const savedCategories = await dataService.getCategories(testUserId);
       expect(savedCategories).toHaveLength(2);
       expect(savedCategories[1]).toMatchObject(newSubcategory);
     });
@@ -79,7 +80,7 @@ describe('CategoryService', () => {
         isSavings: false
       };
 
-      await expect(categoryService.createCategory(newSubcategory))
+      await expect(categoryService.createCategory(newSubcategory, testUserId))
         .rejects.toThrow('Parent category not found');
     });
 
@@ -102,7 +103,7 @@ describe('CategoryService', () => {
         isSavings: false
       };
 
-      await dataService.saveCategories([parentCategory, subcategory]);
+      await dataService.saveCategories([parentCategory, subcategory], testUserId);
 
       const newSubSubcategory = {
         name: 'Premium Gas',
@@ -112,7 +113,7 @@ describe('CategoryService', () => {
         isSavings: false
       };
 
-      await expect(categoryService.createCategory(newSubSubcategory))
+      await expect(categoryService.createCategory(newSubSubcategory, testUserId))
         .rejects.toThrow('Cannot create subcategory under another subcategory');
     });
 
@@ -131,9 +132,9 @@ describe('CategoryService', () => {
         isHidden: true
       };
 
-      await dataService.saveCategories([existingCategory]);
+      await dataService.saveCategories([existingCategory], testUserId);
 
-      const updated = await categoryService.updateCategory('cat-1', updates);
+      const updated = await categoryService.updateCategory('cat-1', updates, testUserId);
 
       expect(updated).toMatchObject({
         ...existingCategory,
@@ -141,7 +142,7 @@ describe('CategoryService', () => {
       });
       
       // Verify category was updated
-      const savedCategories = await dataService.getCategories();
+      const savedCategories = await dataService.getCategories(testUserId);
       expect(savedCategories).toHaveLength(1);
       expect(savedCategories[0]).toMatchObject({
         ...existingCategory,
@@ -169,12 +170,12 @@ describe('CategoryService', () => {
         }
       ];
 
-      await dataService.saveCategories(categories);
+      await dataService.saveCategories(categories, testUserId);
 
-      await categoryService.deleteCategory('cat-1');
+      await categoryService.deleteCategory('cat-1', testUserId);
 
       // Verify only Food category remains
-      const remainingCategories = await dataService.getCategories();
+      const remainingCategories = await dataService.getCategories(testUserId);
       expect(remainingCategories).toHaveLength(1);
       expect(remainingCategories[0]).toEqual(categories[1]);
     });
@@ -215,12 +216,12 @@ describe('CategoryService', () => {
         }
       ];
 
-      await dataService.saveCategories(categories);
+      await dataService.saveCategories(categories, testUserId);
 
-      await categoryService.deleteCategory('parent-1');
+      await categoryService.deleteCategory('parent-1', testUserId);
 
       // Verify only Food category remains
-      const remainingCategories = await dataService.getCategories();
+      const remainingCategories = await dataService.getCategories(testUserId);
       expect(remainingCategories).toHaveLength(1);
       expect(remainingCategories[0]).toEqual(categories[3]);
     });
@@ -255,9 +256,9 @@ describe('CategoryService', () => {
         }
       ];
 
-      await dataService.saveCategories(categories);
+      await dataService.saveCategories(categories, testUserId);
 
-      const parents = await categoryService.getParentCategories();
+      const parents = await categoryService.getParentCategories(testUserId);
 
       expect(parents).toHaveLength(2);
       expect(parents).toEqual([categories[0], categories[2]]);
@@ -299,9 +300,9 @@ describe('CategoryService', () => {
         }
       ];
 
-      await dataService.saveCategories(categories);
+      await dataService.saveCategories(categories, testUserId);
 
-      const subcategories = await categoryService.getSubcategories('parent-1');
+      const subcategories = await categoryService.getSubcategories('parent-1', testUserId);
 
       expect(subcategories).toHaveLength(2);
       expect(subcategories).toEqual([categories[1], categories[2]]);
@@ -327,9 +328,9 @@ describe('CategoryService', () => {
         }
       ];
 
-      await dataService.saveCategories(categories);
+      await dataService.saveCategories(categories, testUserId);
 
-      const tree = await categoryService.getCategoryTree();
+      const tree = await categoryService.getCategoryTree(testUserId);
 
       expect(tree).toEqual([
         {
@@ -361,15 +362,15 @@ describe('CategoryService', () => {
         }
       ];
 
-      await dataService.saveCategories(categories);
+      await dataService.saveCategories(categories, testUserId);
 
-      const category = await categoryService.findByPlaidCategory('TRANSPORTATION_GAS');
+      const category = await categoryService.findByPlaidCategory('TRANSPORTATION_GAS', testUserId);
 
       expect(category).toEqual(categories[1]);
     });
 
     it('should return null when Plaid category not found', async () => {
-      const category = await categoryService.findByPlaidCategory('NON_EXISTENT');
+      const category = await categoryService.findByPlaidCategory('NON_EXISTENT', testUserId);
 
       expect(category).toBeNull();
     });
@@ -386,9 +387,9 @@ describe('CategoryService', () => {
         }
       ];
 
-      await dataService.saveCategories(categories);
+      await dataService.saveCategories(categories, testUserId);
 
-      const mapping = await categoryService.getPlaidCategoryMapping();
+      const mapping = await categoryService.getPlaidCategoryMapping(testUserId);
 
       expect(mapping).toEqual({
         'TRANSPORTATION': 'cat-1'
@@ -425,9 +426,9 @@ describe('CategoryService', () => {
         }
       ];
 
-      await dataService.saveCategories(categories);
+      await dataService.saveCategories(categories, testUserId);
 
-      const hidden = await categoryService.getHiddenCategories();
+      const hidden = await categoryService.getHiddenCategories(testUserId);
 
       expect(hidden).toHaveLength(2);
       expect(hidden).toEqual([categories[0], categories[2]]);
@@ -461,9 +462,9 @@ describe('CategoryService', () => {
         }
       ];
 
-      await dataService.saveCategories(categories);
+      await dataService.saveCategories(categories, testUserId);
 
-      const savings = await categoryService.getSavingsCategories();
+      const savings = await categoryService.getSavingsCategories(testUserId);
 
       expect(savings).toHaveLength(2);
       expect(savings).toEqual([categories[0], categories[1]]);
@@ -472,10 +473,10 @@ describe('CategoryService', () => {
 
   describe('Default Categories', () => {
     it('should initialize default categories if none exist', async () => {
-      await categoryService.initializeDefaultCategories();
+      await categoryService.initializeDefaultCategories(testUserId);
 
       // Verify default categories were created
-      const savedCategories = await dataService.getCategories();
+      const savedCategories = await dataService.getCategories(testUserId);
       expect(savedCategories).toHaveLength(12);
       expect(savedCategories).toEqual(
         expect.arrayContaining([
@@ -505,12 +506,12 @@ describe('CategoryService', () => {
         isSavings: false
       };
 
-      await dataService.saveCategories([existingCategory]);
+      await dataService.saveCategories([existingCategory], testUserId);
 
-      await categoryService.initializeDefaultCategories();
+      await categoryService.initializeDefaultCategories(testUserId);
 
       // Verify no additional categories were created
-      const categories = await dataService.getCategories();
+      const categories = await dataService.getCategories(testUserId);
       expect(categories).toHaveLength(1);
       expect(categories[0]).toEqual(existingCategory);
     });

@@ -79,12 +79,17 @@ const defaultReportsFilters: ReportsFilters = {
 };
 
 // Helper to validate and migrate stored data
-const validateStoredFilters = (stored: any): Partial<FilterStore> => {
+const validateStoredFilters = (stored: unknown): Partial<FilterStore> => {
+  if (typeof stored !== 'object' || stored === null) {
+    return {};
+  }
+  
+  const storedData = stored as Record<string, unknown>;
   const validated: Partial<FilterStore> = {};
   
   // Validate transaction filters
-  if (stored?.transactions) {
-    const t = stored.transactions;
+  if (storedData?.transactions && typeof storedData.transactions === 'object') {
+    const t = storedData.transactions as Record<string, unknown>;
     validated.transactions = {
       searchInput: typeof t.searchInput === 'string' ? t.searchInput : defaultTransactionFilters.searchInput,
       selectedAccount: typeof t.selectedAccount === 'string' ? t.selectedAccount : defaultTransactionFilters.selectedAccount,
@@ -106,8 +111,8 @@ const validateStoredFilters = (stored: any): Partial<FilterStore> => {
   }
   
   // Validate budget filters
-  if (stored?.budgets) {
-    const b = stored.budgets;
+  if (storedData?.budgets && typeof storedData.budgets === 'object') {
+    const b = storedData.budgets as Record<string, unknown>;
     validated.budgets = {
       selectedDate: typeof b.selectedDate === 'string' ? b.selectedDate : defaultBudgetFilters.selectedDate,
       activeTab: typeof b.activeTab === 'string' ? b.activeTab : defaultBudgetFilters.activeTab,
@@ -115,16 +120,16 @@ const validateStoredFilters = (stored: any): Partial<FilterStore> => {
   }
   
   // Validate dashboard filters
-  if (stored?.dashboard) {
-    const d = stored.dashboard;
+  if (storedData?.dashboard && typeof storedData.dashboard === 'object') {
+    const d = storedData.dashboard as Record<string, unknown>;
     validated.dashboard = {
       dateRange: typeof d.dateRange === 'string' ? d.dateRange : defaultDashboardFilters.dateRange,
     };
   }
   
   // Validate reports filters
-  if (stored?.reports) {
-    const r = stored.reports;
+  if (storedData?.reports && typeof storedData.reports === 'object') {
+    const r = storedData.reports as Record<string, unknown>;
     validated.reports = {
       timeRange: typeof r.timeRange === 'string' ? r.timeRange : defaultReportsFilters.timeRange,
     };

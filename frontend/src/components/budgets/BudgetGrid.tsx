@@ -5,7 +5,6 @@ import {
   NumberInput,
   ActionIcon,
   Group,
-  Progress,
   Badge,
   Tooltip,
 } from '@mantine/core';
@@ -32,7 +31,7 @@ interface BudgetRowProps {
   onUpdate: (budgetId: string, amount: number) => void;
 }
 
-function BudgetRow({ budget, category, month, onEdit, onDelete, onUpdate }: BudgetRowProps) {
+function BudgetRow({ budget, category, onDelete, onUpdate }: BudgetRowProps) {
   const [isEditing, setIsEditing] = useState<boolean>(false);
   const [editAmount, setEditAmount] = useState<number>(budget.amount);
 

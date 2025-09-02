@@ -1,4 +1,4 @@
-import { useState, FormEvent } from 'react';
+import { useState, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../../stores/authStore';
 import {
@@ -9,7 +9,6 @@ import {
   Title,
   Text,
   Container,
-  Group,
   Stack,
   Alert,
   Anchor,
@@ -31,7 +30,7 @@ export function LoginForm() {
     try {
       await login({ username, password });
       navigate('/dashboard');
-    } catch (error) {
+    } catch {
       // Error is handled in the store
     }
   };

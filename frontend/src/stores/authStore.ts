@@ -48,10 +48,10 @@ export const useAuthStore = create<AuthState>()(
           } else {
             throw new Error('Invalid response from server');
           }
-        } catch (error: any) {
+        } catch (error: unknown) {
           set({
             isLoading: false,
-            error: error.response?.data?.error || 'Login failed. Please try again.',
+            error: (error as { response?: { data?: { error?: string } } })?.response?.data?.error || 'Login failed. Please try again.',
           });
           throw error;
         }
@@ -78,10 +78,10 @@ export const useAuthStore = create<AuthState>()(
           } else {
             throw new Error('Invalid response from server');
           }
-        } catch (error: any) {
+        } catch (error: unknown) {
           set({
             isLoading: false,
-            error: error.response?.data?.error || 'Registration failed. Please try again.',
+            error: (error as { response?: { data?: { error?: string } } })?.response?.data?.error || 'Registration failed. Please try again.',
           });
           throw error;
         }

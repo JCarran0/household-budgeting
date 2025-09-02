@@ -26,7 +26,7 @@ import {
   IconScissors 
 } from '@tabler/icons-react';
 import { api } from '../../lib/api';
-import type { Transaction, Category } from '../../../../shared/types';
+import type { Transaction } from '../../../../shared/types';
 
 interface TransactionSplitModalProps {
   opened: boolean;
@@ -119,7 +119,7 @@ export function TransactionSplitModal({
         ]
       });
     }
-  }, [transaction, opened]);
+  }, [transaction, opened, form]);
 
   // Update remaining amount when splits change
   useEffect(() => {

@@ -195,13 +195,13 @@ export function useDashboardFilters(): DashboardFilterState & DashboardFilterAct
   const setDateRange = useCallback((range: string) => {
     setDateRangeLocal(range);
     store.setDashboardFilters({ dateRange: range });
-  }, []);
+  }, [store]);
   
   const resetFilters = useCallback(() => {
     store.resetDashboardFilters();
     const defaults = store.dashboard;
     setDateRangeLocal(defaults.dateRange);
-  }, []);
+  }, [store]);
   
   return {
     dateRange,
