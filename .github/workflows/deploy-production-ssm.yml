@@ -13,6 +13,8 @@ jobs:
   build-and-test:
     runs-on: ubuntu-latest
     name: Build & Test
+    outputs:
+      s3_deployment_path: ${{ steps.upload-s3.outputs.deployment_path }}
     
     steps:
       - name: Checkout code
@@ -57,6 +59,7 @@ jobs:
           tar -czf deployment-package.tar.gz deployment/
           
       - name: Upload deployment package to S3
+        id: upload-s3
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
@@ -64,11 +67,12 @@ jobs:
         run: |
           # Upload deployment package to S3 for retrieval by EC2
           TIMESTAMP=$(date +%Y%m%d-%H%M%S)
-          aws s3 cp deployment-package.tar.gz \
-            s3://${{ secrets.S3_BACKUP_BUCKET }}/deployments/deployment-${TIMESTAMP}.tar.gz
+          S3_PATH="s3://${{ secrets.S3_BACKUP_BUCKET }}/deployments/deployment-${TIMESTAMP}.tar.gz"
+          aws s3 cp deployment-package.tar.gz "$S3_PATH"
           
-          # Save the S3 path for later use
-          echo "DEPLOYMENT_S3_PATH=s3://${{ secrets.S3_BACKUP_BUCKET }}/deployments/deployment-${TIMESTAMP}.tar.gz" >> $GITHUB_ENV
+          # Save the S3 path for the deploy job
+          echo "deployment_path=$S3_PATH" >> $GITHUB_OUTPUT
+          echo "Deployment package uploaded to: $S3_PATH"
           
       - name: Upload deployment artifacts
         uses: actions/upload-artifact@v4
@@ -105,8 +109,7 @@ jobs:
         id: deploy
         run: |
           # Get the deployment S3 path from the build job
-          TIMESTAMP=$(date +%Y%m%d-%H%M%S)
-          S3_PATH="s3://${{ secrets.S3_BACKUP_BUCKET }}/deployments/deployment-${TIMESTAMP}.tar.gz"
+          S3_PATH="${{ needs.build-and-test.outputs.s3_deployment_path }}"
           
           # Create deployment script
           cat > deploy-commands.json << 'EOF'
@@ -236,10 +239,10 @@ jobs:
           
           # Wait for command to complete
           echo "Waiting for deployment to complete..."
+          # Note: aws ssm wait doesn't support timeout, it has built-in timeout
           aws ssm wait command-executed \
             --command-id "$COMMAND_ID" \
-            --instance-id "${{ secrets.EC2_INSTANCE_ID }}" \
-            --timeout 300 || true
+            --instance-id "${{ secrets.EC2_INSTANCE_ID }}" || true
           
           # Get command status
           STATUS=$(aws ssm get-command-invocation \
