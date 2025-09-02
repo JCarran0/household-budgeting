@@ -1,7 +1,7 @@
-application_url = "https://budget.jaredcarrano.com"
-application_http_url = "http://67.202.9.86"  # Redirects to HTTPS
+application_url = "http://67.202.9.86"
 instance_id = "i-05cd17258cce207a3"
 public_dns = "ec2-67-202-9-86.compute-1.amazonaws.com"
 public_ip = "67.202.9.86"
 s3_backup_bucket = "budget-app-backups-f5b52f89"
+s3_data_bucket = "budget-app-data-f5b52f89"
 ssh_connection_command = "ssh -i ~/.ssh/budget-app-key.pem ubuntu@67.202.9.86"
