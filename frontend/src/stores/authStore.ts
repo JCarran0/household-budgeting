@@ -3,6 +3,7 @@ import { persist } from 'zustand/middleware';
 import type { User, LoginCredentials, RegisterCredentials } from '../../../shared/types';
 import { api } from '../lib/api';
 import { queryClient } from '../lib/queryClient';
+import { useFilterStore } from './filterStore';
 
 interface AuthState {
   user: User | null;
@@ -92,6 +93,9 @@ export const useAuthStore = create<AuthState>()(
         // Clear all cached data when logging out
         queryClient.cancelQueries();
         queryClient.clear();
+        
+        // Clear user filter preferences on logout
+        useFilterStore.getState().clearUserFilters();
         
         set({
           user: null,

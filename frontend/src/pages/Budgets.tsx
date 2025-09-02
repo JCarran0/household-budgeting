@@ -1,4 +1,5 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
+import { useBudgetFilters } from '../hooks/usePersistedFilters';
 import {
   Container,
   Title,
@@ -17,7 +18,7 @@ import {
   Tooltip,
   Tabs,
 } from '@mantine/core';
-import { MonthPickerInput, type DatePickerValue } from '@mantine/dates';
+import { MonthPickerInput } from '@mantine/dates';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { notifications } from '@mantine/notifications';
 import {
@@ -31,6 +32,7 @@ import {
   IconChevronLeft,
   IconChevronRight,
   IconRefresh,
+  IconFilterOff,
 } from '@tabler/icons-react';
 import { format, addMonths, subMonths, startOfMonth } from 'date-fns';
 import { api } from '../lib/api';
@@ -40,10 +42,42 @@ import { BudgetComparison } from '../components/budgets/BudgetComparison';
 import type { MonthlyBudget } from '../../../shared/types';
 
 export function Budgets() {
-  const [selectedDate, setSelectedDate] = useState<Date>(startOfMonth(new Date()));
+  // Use persisted filters from localStorage
+  const {
+    selectedDate: storedDate,
+    activeTab,
+    setSelectedDate: setStoredDate,
+    setActiveTab,
+    resetFilters: resetStoredFilters,
+  } = useBudgetFilters();
+  
+  // Use local state that syncs with store
+  const [selectedDate, setSelectedDate] = useState<Date>(storedDate);
+  
+  // Sync local state with store when store changes
+  useEffect(() => {
+    setSelectedDate(storedDate);
+  }, [storedDate]);
+  
+  // Update both local state and store when date changes
+  const handleDateChange = useCallback((date: Date | string) => {
+    let dateObj: Date;
+    if (typeof date === 'string') {
+      // Parse the date string properly to avoid timezone issues
+      // MonthPickerInput returns 'YYYY-MM-DD' format
+      const [year, month, day] = date.split('-').map(Number);
+      // Create date using local timezone (month is 0-indexed in JS Date)
+      dateObj = new Date(year, month - 1, day || 1);
+    } else {
+      dateObj = date;
+    }
+    
+    setSelectedDate(dateObj);
+    setStoredDate(dateObj);
+  }, [setStoredDate]);
+  
   const [isFormOpen, setIsFormOpen] = useState<boolean>(false);
   const [editingBudget, setEditingBudget] = useState<MonthlyBudget | null>(null);
-  const [activeTab, setActiveTab] = useState<string | null>('budget');
   const queryClient = useQueryClient();
 
   const selectedMonth = format(selectedDate, 'yyyy-MM');
@@ -119,11 +153,11 @@ export function Budgets() {
   });
 
   const handlePreviousMonth = (): void => {
-    setSelectedDate(subMonths(selectedDate, 1));
+    handleDateChange(subMonths(selectedDate, 1));
   };
 
   const handleNextMonth = (): void => {
-    setSelectedDate(addMonths(selectedDate, 1));
+    handleDateChange(addMonths(selectedDate, 1));
   };
 
   const handleCopyFromPreviousMonth = (): void => {
@@ -185,9 +219,15 @@ export function Budgets() {
               
               <MonthPickerInput
                 value={selectedDate}
-                onChange={(date: DatePickerValue) => date && setSelectedDate(date)}
+                onChange={(date) => {
+                  if (date) {
+                    handleDateChange(date);
+                  }
+                }}
                 size="md"
                 styles={{ input: { width: 200, textAlign: 'center' } }}
+                clearable={false}
+                popoverProps={{ withinPortal: true }}
               />
               
               <ActionIcon onClick={handleNextMonth} size="lg" variant="default">
@@ -210,6 +250,25 @@ export function Budgets() {
               <Tooltip label="Refresh data">
                 <ActionIcon onClick={() => refetchBudgets()} size="lg" variant="default">
                   <IconRefresh size={16} />
+                </ActionIcon>
+              </Tooltip>
+              
+              <Tooltip label="Reset to current month">
+                <ActionIcon
+                  onClick={() => {
+                    const currentMonth = startOfMonth(new Date());
+                    handleDateChange(currentMonth);
+                    resetStoredFilters();
+                    notifications.show({
+                      title: 'View Reset',
+                      message: 'Reset to current month view',
+                      color: 'blue',
+                    });
+                  }}
+                  size="lg"
+                  variant="default"
+                >
+                  <IconFilterOff size={16} />
                 </ActionIcon>
               </Tooltip>
             </Group>
@@ -281,7 +340,7 @@ export function Budgets() {
             )}
           </Grid>
 
-          <Tabs value={activeTab} onChange={setActiveTab}>
+          <Tabs value={activeTab} onChange={(value) => setActiveTab(value || 'budget')}>
             <Tabs.List>
               <Tabs.Tab value="budget" leftSection={<IconCurrencyDollar size={16} />}>
                 Budget Setup

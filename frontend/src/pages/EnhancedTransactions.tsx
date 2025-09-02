@@ -1,16 +1,15 @@
 import { useState, useMemo, useCallback, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api, type ExtendedPlaidAccount } from '../lib/api';
-import { format, startOfMonth, endOfMonth, startOfYear, endOfYear, subMonths } from 'date-fns';
-import type { Transaction, Category } from '../../../shared/types';
-import { useDebouncedValue } from '@mantine/hooks';
+import { format, startOfMonth, endOfMonth, startOfYear } from 'date-fns';
+import type { Transaction } from '../../../shared/types';
+import { useTransactionFilters } from '../hooks/usePersistedFilters';
 import {
   Container,
   Stack,
   Group,
   Title,
   Text,
-  Card,
   TextInput,
   Select,
   MultiSelect,
@@ -36,12 +35,10 @@ import { DatePickerInput } from '@mantine/dates';
 import { notifications } from '@mantine/notifications';
 import {
   IconSearch,
-  IconFilter,
   IconCalendar,
   IconArrowUpRight,
   IconArrowDownRight,
   IconEdit,
-  IconTag,
   IconCategory,
   IconEye,
   IconEyeOff,
@@ -49,7 +46,7 @@ import {
   IconDots,
   IconRefresh,
   IconBuilding,
-  IconCoin,
+  IconFilterOff,
 } from '@tabler/icons-react';
 import { TransactionEditModal } from '../components/transactions/TransactionEditModal';
 import { TransactionSplitModal } from '../components/transactions/TransactionSplitModal';
@@ -57,16 +54,30 @@ import { TransactionSplitModal } from '../components/transactions/TransactionSpl
 type DateFilterOption = 'this-month' | 'ytd' | 'custom' | string; // string for specific month like '2025-01'
 
 export function EnhancedTransactions() {
-  const [searchInput, setSearchInput] = useState('');
-  const [debouncedSearchTerm] = useDebouncedValue(searchInput, 300);
-  const [selectedAccount, setSelectedAccount] = useState<string>('all');
-  const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
-  const [selectedTags, setSelectedTags] = useState<string[]>([]);
-  const [dateFilterOption, setDateFilterOption] = useState<DateFilterOption>('ytd'); // Start with YTD as default
-  const [customDateRange, setCustomDateRange] = useState<[Date | null, Date | null]>([null, null]);
-  const [includeHidden, setIncludeHidden] = useState(false);
-  const [onlyUncategorized, setOnlyUncategorized] = useState(false);
-  const [amountRange, setAmountRange] = useState({ min: null as number | null, max: null as number | null });
+  // Use persisted filters from localStorage
+  const {
+    searchInput,
+    selectedAccount,
+    selectedCategories,
+    selectedTags,
+    dateFilterOption,
+    customDateRange,
+    includeHidden,
+    onlyUncategorized,
+    amountRange,
+    setSearchInput,
+    setSelectedAccount,
+    setSelectedCategories,
+    setSelectedTags,
+    setDateFilterOption,
+    setCustomDateRange,
+    setIncludeHidden,
+    setOnlyUncategorized,
+    setAmountRange,
+    resetFilters,
+    debouncedSearchTerm,
+  } = useTransactionFilters();
+  
   const [hasInitialized, setHasInitialized] = useState(false);
   
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
@@ -80,7 +91,7 @@ export function EnhancedTransactions() {
   // Callback for search input change
   const handleSearchChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     setSearchInput(e.currentTarget.value);
-  }, []);
+  }, [setSearchInput]);
   
   // Calculate date range based on selected filter option
   const dateRange = useMemo<[Date | null, Date | null]>(() => {
@@ -173,39 +184,11 @@ export function EnhancedTransactions() {
     staleTime: 1000, // Keep data fresh for 1 second to prevent refetching
   });
   
-  // Smart default selection: Set date filter to most recent month with transactions
+  // Removed smart default selection to respect user's persisted filter choice
+  // The persisted filters from localStorage should take precedence
   useEffect(() => {
-    if (!hasInitialized && transactionData?.transactions && transactionData.transactions.length > 0) {
-      const now = new Date();
-      const currentMonth = format(now, 'yyyy-MM');
-      
-      // Check if current month has transactions
-      const currentMonthTransactions = transactionData.transactions.filter(
-        t => t.date.startsWith(currentMonth)
-      );
-      
-      if (currentMonthTransactions.length > 0) {
-        // Current month has transactions, use it
-        setDateFilterOption('this-month');
-      } else {
-        // Find the most recent month with transactions
-        const transactionMonths = new Set(
-          transactionData.transactions.map(t => t.date.substring(0, 7))
-        );
-        const sortedMonths = Array.from(transactionMonths).sort().reverse();
-        
-        if (sortedMonths.length > 0) {
-          const mostRecentMonth = sortedMonths[0];
-          // Check if it's in the current year
-          if (mostRecentMonth.startsWith(String(now.getFullYear()))) {
-            // Set to the specific month
-            setDateFilterOption(mostRecentMonth);
-          } else {
-            // Different year, keep YTD
-            setDateFilterOption('ytd');
-          }
-        }
-      }
+    if (!hasInitialized && transactionData?.transactions) {
+      // Just mark as initialized without changing the user's filter
       setHasInitialized(true);
     }
   }, [transactionData, hasInitialized]);
@@ -396,7 +379,7 @@ export function EnhancedTransactions() {
                   placeholder="Select custom date range"
                   value={customDateRange}
                   onChange={(value) => {
-                    setCustomDateRange(value);
+                    setCustomDateRange(value as [Date | null, Date | null]);
                     setDateFilterOption('custom');
                   }}
                   leftSection={<IconCalendar size={16} />}
@@ -454,8 +437,8 @@ export function EnhancedTransactions() {
                   label="Min Amount"
                   placeholder="0.00"
                   prefix="$"
-                  value={amountRange.min}
-                  onChange={(value) => setAmountRange({ ...amountRange, min: Number(value) })}
+                  value={amountRange.min || undefined}
+                  onChange={(value) => setAmountRange({ ...amountRange, min: value !== undefined ? Number(value) : null })}
                   min={0}
                 />
               </Grid.Col>
@@ -465,8 +448,8 @@ export function EnhancedTransactions() {
                   label="Max Amount"
                   placeholder="999.99"
                   prefix="$"
-                  value={amountRange.max}
-                  onChange={(value) => setAmountRange({ ...amountRange, max: Number(value) })}
+                  value={amountRange.max || undefined}
+                  onChange={(value) => setAmountRange({ ...amountRange, max: value !== undefined ? Number(value) : null })}
                   min={0}
                 />
               </Grid.Col>
@@ -491,9 +474,26 @@ export function EnhancedTransactions() {
               <Text size="sm" c="dimmed">
                 Showing {transactions.length} of {totalTransactions} transactions
               </Text>
-              <Button variant="subtle" size="sm" onClick={() => refetch()}>
-                Refresh
-              </Button>
+              <Group gap="xs">
+                <Button 
+                  variant="subtle" 
+                  size="sm" 
+                  leftSection={<IconFilterOff size={14} />}
+                  onClick={() => {
+                    resetFilters();
+                    notifications.show({
+                      title: 'Filters Reset',
+                      message: 'All filters have been reset to defaults',
+                      color: 'blue',
+                    });
+                  }}
+                >
+                  Reset Filters
+                </Button>
+                <Button variant="subtle" size="sm" onClick={() => refetch()}>
+                  Refresh
+                </Button>
+              </Group>
             </Group>
           </Stack>
         </Paper>

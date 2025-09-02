@@ -1,5 +1,7 @@
-import { useState } from 'react';
+import React from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { useReportsFilters } from '../hooks/usePersistedFilters';
+import { notifications } from '@mantine/notifications';
 import { 
   Container, 
   Title, 
@@ -20,6 +22,8 @@ import {
   SimpleGrid,
   Table,
   Tabs,
+  ActionIcon,
+  Tooltip,
 } from '@mantine/core';
 import { 
   LineChart, 
@@ -32,7 +36,7 @@ import {
   XAxis, 
   YAxis, 
   CartesianGrid, 
-  Tooltip, 
+  Tooltip as RechartsTooltip, 
   Legend,
   ResponsiveContainer,
   Area,
@@ -49,6 +53,7 @@ import {
   IconAlertCircle,
   IconArrowUpRight,
   IconArrowDownRight,
+  IconFilterOff,
 } from '@tabler/icons-react';
 import { format, subMonths } from 'date-fns';
 import { api } from '../lib/api';
@@ -66,7 +71,8 @@ const COLORS = [
 ];
 
 export function Reports() {
-  const [timeRange, setTimeRange] = useState('6'); // months
+  // Use persisted filters from localStorage
+  const { timeRange, setTimeRange, resetFilters } = useReportsFilters();
   
   // Calculate date ranges
   const endMonth = format(new Date(), 'yyyy-MM');
@@ -168,16 +174,34 @@ export function Reports() {
       <Stack gap="lg">
         <Group justify="space-between">
           <Title order={2}>Financial Reports</Title>
-          <Select
-            value={timeRange}
-            onChange={(value) => setTimeRange(value || '6')}
-            data={[
-              { value: '3', label: 'Last 3 months' },
-              { value: '6', label: 'Last 6 months' },
-              { value: '12', label: 'Last 12 months' },
-            ]}
-            w={200}
-          />
+          <Group gap="xs">
+            <Select
+              value={timeRange}
+              onChange={(value) => setTimeRange(value || '6')}
+              data={[
+                { value: '3', label: 'Last 3 months' },
+                { value: '6', label: 'Last 6 months' },
+                { value: '12', label: 'Last 12 months' },
+              ]}
+              w={200}
+            />
+            <Tooltip label="Reset to default (6 months)">
+              <ActionIcon
+                variant="subtle"
+                onClick={() => {
+                  resetFilters();
+                  notifications.show({
+                    title: 'View Reset',
+                    message: 'Reset to 6 months view',
+                    color: 'blue',
+                  });
+                }}
+                size="lg"
+              >
+                <IconFilterOff size={20} />
+              </ActionIcon>
+            </Tooltip>
+          </Group>
         </Group>
 
         {/* YTD Summary Cards */}
@@ -296,7 +320,7 @@ export function Reports() {
                         <CartesianGrid strokeDasharray="3 3" />
                         <XAxis dataKey="month" />
                         <YAxis />
-                        <Tooltip formatter={(value: number) => `$${value.toFixed(0)}`} />
+                        <RechartsTooltip formatter={(value: number) => `$${value.toFixed(0)}`} />
                         <Legend />
                         <Area 
                           type="monotone" 
@@ -331,7 +355,7 @@ export function Reports() {
                         <CartesianGrid strokeDasharray="3 3" />
                         <XAxis dataKey="month" />
                         <YAxis />
-                        <Tooltip formatter={(value: number) => `$${value.toFixed(0)}`} />
+                        <RechartsTooltip formatter={(value: number) => `$${value.toFixed(0)}`} />
                         <Bar 
                           dataKey="netFlow" 
                           fill="#4f46e5"
@@ -360,7 +384,7 @@ export function Reports() {
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis dataKey="month" />
                   <YAxis />
-                  <Tooltip formatter={(value: number) => `$${value.toFixed(0)}`} />
+                  <RechartsTooltip formatter={(value: number) => `$${value.toFixed(0)}`} />
                   <Legend />
                   {categoryNames.map((category, index) => (
                     <Line
@@ -397,7 +421,7 @@ export function Reports() {
                           <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                         ))}
                       </Pie>
-                      <Tooltip formatter={(value: number) => `$${value.toFixed(0)}`} />
+                      <RechartsTooltip formatter={(value: number) => `$${value.toFixed(0)}`} />
                     </PieChart>
                   </ResponsiveContainer>
                   
@@ -457,7 +481,7 @@ export function Reports() {
                       <CartesianGrid strokeDasharray="3 3" />
                       <XAxis dataKey="month" />
                       <YAxis />
-                      <Tooltip formatter={(value: number) => `$${value.toFixed(0)}`} />
+                      <RechartsTooltip formatter={(value: number) => `$${value.toFixed(0)}`} />
                       <Legend />
                       <Area
                         type="monotone"

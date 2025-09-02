@@ -125,7 +125,7 @@ export class TransactionService {
           if (error instanceof Error && error.message.includes('reconnect')) {
             console.warn(`Skipping ${tokenAccounts.length} accounts - token needs reconnection`);
             // Track failed accounts
-            tokenAccounts.forEach(account => failedAccounts.push(account.name));
+            tokenAccounts.forEach(account => failedAccounts.push(account.accountName));
           }
           continue;
         }
