@@ -1,0 +1,18 @@
+# AWS Configuration
+aws_region = "us-east-1"  # Use us-east-1 for maximum free tier availability
+
+# SSH Configuration
+# Generate SSH key pair:
+# ssh-keygen -t ed25519 -f ~/.ssh/budget-app-key -C "budget-app"
+# Then copy the public key:
+# cat ~/.ssh/budget-app-key.pub
+ssh_public_key = "ssh-ed25519 AAAAC3... your-email@example.com"
+
+# Network Security
+# To get your current IP:
+# curl ifconfig.me
+# Add /32 for single IP
+admin_ip_cidr = "YOUR_IP_ADDRESS/32"
+
+# Alerting
+alert_email = "your-email@example.com"
