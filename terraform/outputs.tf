@@ -27,3 +27,8 @@ output "application_url" {
   description = "Application URL (after nginx setup)"
   value       = "http://${aws_eip.app_ip.public_ip}"
 }
+
+output "security_group_id" {
+  description = "Security group ID for the EC2 instance"
+  value       = aws_security_group.app_sg.id
+}

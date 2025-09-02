@@ -93,6 +93,7 @@ resource "aws_security_group" "app_sg" {
     cidr_blocks = [var.admin_ip_cidr]
   }
   
+  
   # Allow all outbound traffic
   egress {
     description = "Allow all outbound traffic"
