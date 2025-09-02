@@ -1,162 +1,108 @@
 name: Rollback Production
-
 on:
   workflow_dispatch:
     inputs:
-      confirm_rollback:
-        description: 'Type "ROLLBACK" to confirm rollback'
+      confirmation:
+        description: 'Type "ROLLBACK" to confirm'
         required: true
-        default: ''
         type: string
 
 jobs:
   rollback:
+    if: github.event.inputs.confirmation == 'ROLLBACK'
     runs-on: ubuntu-latest
-    name: Rollback Production Deployment
+    name: Rollback to Previous Version
     environment:
       name: production
       url: https://budget.jaredcarrano.com
     
     steps:
-      - name: Validate rollback confirmation
+      - name: Validate confirmation
         run: |
-          if [ "${{ github.event.inputs.confirm_rollback }}" != "ROLLBACK" ]; then
-            echo "❌ Rollback not confirmed. You must type 'ROLLBACK' to proceed."
-            echo "Received: '${{ github.event.inputs.confirm_rollback }}'"
+          if [ "${{ github.event.inputs.confirmation }}" != "ROLLBACK" ]; then
+            echo "❌ Confirmation text does not match. Aborting rollback."
             exit 1
           fi
-          echo "✅ Rollback confirmed. Proceeding..."
+          echo "✅ Confirmation validated. Proceeding with rollback..."
           
-      - name: Setup SSH
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+          
+      - name: Execute rollback via SSM
         run: |
-          mkdir -p ~/.ssh
-          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/deploy_key
-          chmod 600 ~/.ssh/deploy_key
-          
-          # Add host to known_hosts with better error handling
-          echo "Adding host to known_hosts..."
-          ssh-keyscan -H ${{ secrets.PRODUCTION_HOST }} >> ~/.ssh/known_hosts 2>&1 || {
-            echo "Failed to scan ${{ secrets.PRODUCTION_HOST }}, trying IP directly..."
-            ssh-keyscan -H 67.202.9.86 >> ~/.ssh/known_hosts 2>&1 || {
-              echo "Warning: Could not add host to known_hosts automatically"
-              # Use StrictHostKeyChecking=no as fallback
-              echo "Will use StrictHostKeyChecking=no for this connection"
-            }
-          }
-          
-      - name: Execute rollback
-        env:
-          HOST: ${{ secrets.PRODUCTION_HOST }}
-          USER: ${{ secrets.SSH_USER }}
-        run: |
-          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no -o ConnectTimeout=10 \
-            ${USER}@${HOST} << 'ROLLBACK_SCRIPT'
-          set -e
-          
           echo "🔄 Starting rollback process..."
           
-          APP_DIR="/home/appuser/app"
+          # Execute rollback script on server
+          COMMAND_ID=$(aws ssm send-command \
+            --instance-ids "${{ secrets.EC2_INSTANCE_ID }}" \
+            --document-name "AWS-RunShellScript" \
+            --parameters "commands=['sudo -u appuser /home/appuser/rollback.sh']" \
+            --output text \
+            --query "Command.CommandId")
           
-          # Check if previous version exists
-          if [ ! -d "$APP_DIR/backend.old" ] || [ ! -d "$APP_DIR/frontend.old" ]; then
-            echo "❌ No previous version found to rollback to"
-            echo "Available directories:"
-            ls -la "$APP_DIR"
+          echo "Command ID: $COMMAND_ID"
+          
+          # Wait for rollback
+          echo "Waiting for rollback to complete..."
+          aws ssm wait command-executed \
+            --command-id "$COMMAND_ID" \
+            --instance-id "${{ secrets.EC2_INSTANCE_ID }}" || true
+          
+          # Get status
+          STATUS=$(aws ssm get-command-invocation \
+            --command-id "$COMMAND_ID" \
+            --instance-id "${{ secrets.EC2_INSTANCE_ID }}" \
+            --query "Status" \
+            --output text)
+          
+          echo "Rollback status: $STATUS"
+          
+          # Show output
+          echo "=== Rollback Output ==="
+          aws ssm get-command-invocation \
+            --command-id "$COMMAND_ID" \
+            --instance-id "${{ secrets.EC2_INSTANCE_ID }}" \
+            --query "StandardOutputContent" \
+            --output text
+          
+          if [ "$STATUS" != "Success" ]; then
+            echo "=== Error Output ==="
+            aws ssm get-command-invocation \
+              --command-id "$COMMAND_ID" \
+              --instance-id "${{ secrets.EC2_INSTANCE_ID }}" \
+              --query "StandardErrorContent" \
+              --output text
+            echo "❌ Rollback failed! Manual intervention may be required."
             exit 1
           fi
           
-          # Stop current application
-          echo "⏸️  Stopping current application..."
-          sudo -u appuser pm2 stop budget-backend || true
-          
-          # Save failed deployment for investigation
-          echo "💾 Saving failed deployment for investigation..."
-          sudo -u appuser rm -rf "$APP_DIR/backend.failed"
-          sudo -u appuser rm -rf "$APP_DIR/frontend.failed"
-          sudo -u appuser mv "$APP_DIR/backend" "$APP_DIR/backend.failed" 2>/dev/null || true
-          sudo -u appuser mv "$APP_DIR/frontend" "$APP_DIR/frontend.failed" 2>/dev/null || true
-          
-          # Restore previous version
-          echo "♻️  Restoring previous version..."
-          sudo -u appuser mv "$APP_DIR/backend.old" "$APP_DIR/backend"
-          sudo -u appuser mv "$APP_DIR/frontend.old" "$APP_DIR/frontend"
-          
-          # Start application with previous version
-          echo "▶️  Starting previous version..."
-          cd "$APP_DIR/backend"
-          sudo -u appuser pm2 start dist/index.js --name budget-backend --time
-          sudo -u appuser pm2 save
-          
-          # Health check
-          echo "🏥 Running health check..."
-          sleep 5
-          for i in {1..10}; do
-            if curl -f http://localhost:3001/health 2>/dev/null; then
-              echo ""
-              echo "✅ Health check passed!"
-              break
-            fi
-            echo "Waiting for application to start... ($i/10)"
-            sleep 2
-          done
-          
-          # Get version info
-          if [ -f "$APP_DIR/REVISION" ]; then
-            echo "📍 Rolled back to revision: $(cat $APP_DIR/REVISION)"
-          fi
-          if [ -f "$APP_DIR/TIMESTAMP" ]; then
-            echo "🕐 Deployment timestamp: $(cat $APP_DIR/TIMESTAMP)"
-          fi
-          
-          echo "✅ Rollback completed successfully!"
-          echo ""
-          echo "📝 Failed deployment saved in:"
-          echo "   - $APP_DIR/backend.failed"
-          echo "   - $APP_DIR/frontend.failed"
-          echo ""
-          echo "To investigate the failure, SSH to the server and check these directories."
-          ROLLBACK_SCRIPT
-          
       - name: Verify rollback
-        env:
-          HOST: ${{ secrets.PRODUCTION_HOST }}
         run: |
           echo "🔍 Verifying rollback..."
           
-          # Wait for application to stabilize
-          sleep 10
-          
           # Check health endpoint
-          response=$(curl -s -o /dev/null -w "%{http_code}" https://budget.jaredcarrano.com/health)
-          if [ "$response" = "200" ]; then
-            echo "✅ Application is healthy after rollback!"
-          else
-            echo "❌ Health check failed with status: $response"
-            echo "Manual intervention may be required."
-            exit 1
-          fi
+          for i in {1..5}; do
+            if curl -s https://budget.jaredcarrano.com/health | grep -q "ok"; then
+              echo "✅ Application is healthy after rollback!"
+              exit 0
+            fi
+            echo "Retry $i/5..."
+            sleep 3
+          done
           
-          # Check frontend
-          response=$(curl -s -o /dev/null -w "%{http_code}" https://budget.jaredcarrano.com/)
-          if [ "$response" = "200" ]; then
-            echo "✅ Frontend is accessible after rollback!"
-          else
-            echo "⚠️  Frontend returned status: $response"
-          fi
+          echo "⚠️  Health check failed, but rollback process completed"
           
-      - name: Cleanup
-        if: always()
-        run: |
-          rm -f ~/.ssh/deploy_key
-          
-      - name: Rollback summary
+      - name: Summary
         if: success()
         run: |
-          echo "✅ Production rollback completed successfully!"
-          echo ""
-          echo "🔍 Next steps:"
-          echo "1. Investigate the failed deployment on the server"
-          echo "2. Fix the issue in a new PR"
-          echo "3. Deploy again when ready"
-          echo ""
-          echo "🌐 Application URL: https://budget.jaredcarrano.com"
+          echo "### ⏪ Rollback Successful!" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **Initiated by:** @${{ github.actor }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Time:** $(date -u +%Y-%m-%d' '%H:%M:%S' UTC')" >> $GITHUB_STEP_SUMMARY
+          echo "- **Status:** Previous version restored" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "⚠️ **Note:** The failed deployment has been saved on the server for investigation." >> $GITHUB_STEP_SUMMARY

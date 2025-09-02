@@ -245,27 +245,51 @@ sudo systemctl status nginx
 sudo tail -f /var/log/nginx/error.log
 ```
 
-### Deployment Commands
+### Deployment
 
-```bash
-# Build for production (local)
-cd backend && npm run build
-cd ../frontend && npm run build
+The application uses GitHub Actions for automated deployment via AWS Systems Manager (SSM):
 
-# Deploy to server (from project root)
-tar -czf backend.tar.gz backend/dist backend/package*.json backend/.env.production
-tar -czf frontend.tar.gz frontend/dist
-scp -i ~/.ssh/budget-app-key *.tar.gz ubuntu@67.202.9.86:/tmp/
+1. **Via GitHub Actions** (Recommended):
+   ```bash
+   # Go to GitHub repository
+   # Click Actions tab
+   # Select "Deploy to Production" workflow
+   # Click "Run workflow"
+   # Add optional deployment message
+   # Click green "Run workflow" button
+   ```
 
-# Extract and deploy on server
-ssh -i ~/.ssh/budget-app-key ubuntu@67.202.9.86
-cd /tmp && tar -xzf backend.tar.gz && tar -xzf frontend.tar.gz
-sudo mv backend/* /home/appuser/app/backend/
-sudo mv frontend/dist/* /home/appuser/app/frontend/
-sudo chown -R appuser:appuser /home/appuser/app/
-sudo -u appuser bash -c 'cd /home/appuser/app/backend && npm ci --production'
-sudo -u appuser pm2 restart budget-backend
-```
+2. **Manual Deployment** (if needed):
+   ```bash
+   # Build locally
+   cd backend && npm run build && cd ..
+   cd frontend && npm run build && cd ..
+   
+   # Create deployment package
+   tar -czf deployment.tar.gz \
+     backend/dist backend/package*.json \
+     frontend/dist
+   
+   # Upload to S3
+   aws s3 cp deployment.tar.gz \
+     s3://budget-app-backups-f5b52f89/deployments/manual-$(date +%Y%m%d-%H%M%S).tar.gz
+   
+   # Trigger deployment on server
+   aws ssm send-command \
+     --instance-ids "i-05cd17258cce207a3" \
+     --document-name "AWS-RunShellScript" \
+     --parameters "commands=['sudo -u appuser /home/appuser/deploy.sh s3://budget-app-backups-f5b52f89/deployments/manual-TIMESTAMP.tar.gz']" \
+     --region us-east-1
+   ```
+
+**Note**: The deployment script (`/home/appuser/deploy.sh`) handles:
+- Downloading the package from S3
+- Creating backups of current deployment
+- Installing dependencies
+- Preserving environment configuration
+- Zero-downtime deployment with PM2
+- Health checks
+- Automatic cleanup
 
 ### Terraform Infrastructure Management
 

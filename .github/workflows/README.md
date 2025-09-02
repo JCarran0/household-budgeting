@@ -18,12 +18,13 @@ This directory contains the CI/CD pipeline for the Budget Tracker application.
 - **Trigger**: Manual dispatch only (button in GitHub Actions)
 - **Purpose**: Deploy application to production server
 - **Actions**:
-  - Build and package application
-  - Deploy to EC2 instance via SSH
-  - Update S3 storage configuration
+  - Build and test application
+  - Create deployment package
+  - Upload package to S3
+  - Deploy via AWS Systems Manager (SSM)
   - Zero-downtime deployment with PM2
   - Health checks and verification
-- **Environment**: Requires manual approval for production
+- **Method**: Uses SSM for agentless deployment (no SSH required)
 
 ### 3. Rollback (`rollback.yml`)
 - **Trigger**: Manual workflow dispatch
@@ -39,17 +40,17 @@ This directory contains the CI/CD pipeline for the Budget Tracker application.
 Configure these secrets in your repository settings:
 
 ```bash
-# Server Access
-PRODUCTION_HOST         # EC2 Elastic IP or domain (e.g., 67.202.9.86)
-SSH_PRIVATE_KEY        # Private SSH key for EC2 access
-SSH_USER               # SSH username (default: ubuntu)
+# AWS Credentials (for SSM and S3)
+AWS_ACCESS_KEY_ID        # IAM user access key
+AWS_SECRET_ACCESS_KEY    # IAM user secret key
+AWS_REGION              # us-east-1 (or your region)
 
-# Optional (if not using default values)
-NODE_ENV              # production
-PORT                  # 3001
+# Infrastructure
+EC2_INSTANCE_ID         # EC2 instance ID (e.g., i-05cd17258cce207a3)
+S3_BACKUP_BUCKET        # S3 bucket name (e.g., budget-app-backups-f5b52f89)
 ```
 
-Note: Other configuration like Plaid keys and JWT secrets are already on the server and will be preserved during deployments.
+Note: Environment configuration (.env file) is preserved on the server during deployments.
 
 ## Setting Up Secrets
 
@@ -58,36 +59,47 @@ Note: Other configuration like Plaid keys and JWT secrets are already on the ser
 3. Click "New repository secret"
 4. Add each required secret
 
-### Getting Your SSH Private Key
+### Getting Your AWS Credentials
 
-```bash
-# If your key is at ~/.ssh/budget-app-key
-cat ~/.ssh/budget-app-key
-```
+If you haven't created an IAM user yet:
 
-Copy the entire output (including `-----BEGIN` and `-----END` lines) and paste as `SSH_PRIVATE_KEY` secret.
+1. Go to AWS Console → IAM → Users
+2. Create a new user with programmatic access
+3. Attach the policy from `iam-policy-github-actions.json`
+4. Save the access key and secret key
 
 ## Deployment Process
 
-### Standard Deployment Process
+### How It Works
+
+1. **GitHub Actions** builds and tests the application
+2. **Package Upload** to S3 bucket for deployment
+3. **SSM Command** triggers the deployment script on EC2
+4. **Deployment Script** (`/home/appuser/deploy.sh`) handles:
+   - Downloading package from S3
+   - Creating backup of current version
+   - Installing dependencies
+   - Preserving environment configuration
+   - Zero-downtime deployment with PM2
+   - Health checks
+   - Automatic cleanup
+
+### Standard Deployment
+
 1. Create a pull request with your changes
 2. PR validation workflow runs automatically
 3. After PR is approved and merged to `main`
-4. Go to Actions tab and manually deploy when ready
+4. Go to Actions tab → "Deploy to Production"
+5. Click "Run workflow"
+6. Add optional deployment message
+7. Click green "Run workflow" button
 
-### Manual Deployment
-1. Go to Actions tab in GitHub
-2. Select "Deploy to Production" workflow
-3. Click "Run workflow"
-4. Select `main` branch
-5. Click "Run workflow" button
+### Emergency Rollback
 
-### Rollback Process
-1. Go to Actions tab in GitHub
-2. Select "Rollback Production" workflow
-3. Click "Run workflow"
-4. Type `ROLLBACK` in the confirmation field
-5. Click "Run workflow" button
+1. Go to Actions tab → "Rollback Production"
+2. Click "Run workflow"
+3. Type `ROLLBACK` in confirmation field
+4. Click "Run workflow" button
 
 ## Environment URLs
 
@@ -96,15 +108,30 @@ Copy the entire output (including `-----BEGIN` and `-----END` lines) and paste a
 
 ## Monitoring Deployments
 
-### Check Deployment Status
+### Via AWS Systems Manager
+
 ```bash
-# SSH to server
-ssh -i ~/.ssh/budget-app-key ubuntu@67.202.9.86
+# View deployment logs
+aws ssm get-command-invocation \
+  --command-id "COMMAND_ID_FROM_GITHUB_ACTIONS" \
+  --instance-id "i-05cd17258cce207a3" \
+  --region us-east-1 \
+  --query "StandardOutputContent" \
+  --output text
+```
+
+### Direct Server Access (if needed)
+
+```bash
+# Connect via SSM Session Manager (no SSH needed)
+aws ssm start-session \
+  --target i-05cd17258cce207a3 \
+  --region us-east-1
 
 # Check PM2 status
 sudo -u appuser pm2 status
 
-# View logs
+# View application logs
 sudo -u appuser pm2 logs budget-backend --lines 50
 
 # Check deployment info
@@ -113,6 +140,7 @@ cat /home/appuser/app/TIMESTAMP
 ```
 
 ### Health Check
+
 ```bash
 curl https://budget.jaredcarrano.com/health
 ```
@@ -120,50 +148,63 @@ curl https://budget.jaredcarrano.com/health
 ## Troubleshooting
 
 ### Deployment Fails
-1. Check the GitHub Actions logs
-2. SSH to server and check PM2 logs
-3. Verify environment variables are set
-4. Check nginx configuration
 
-### Rollback Fails
-1. SSH to server manually
-2. Check if `.old` directories exist:
-   ```bash
-   ls -la /home/appuser/app/
-   ```
-3. Manually restore if needed:
-   ```bash
-   sudo -u appuser pm2 stop budget-backend
-   sudo -u appuser mv /home/appuser/app/backend.old /home/appuser/app/backend
-   sudo -u appuser mv /home/appuser/app/frontend.old /home/appuser/app/frontend
-   sudo -u appuser pm2 start /home/appuser/app/backend/dist/index.js --name budget-backend
-   ```
+1. Check GitHub Actions logs for the error
+2. Common issues:
+   - **S3 Access Denied**: Check IAM permissions
+   - **SSM Command Failed**: Verify instance ID and IAM role
+   - **Health Check Failed**: Check PM2 logs on server
 
-### Health Check Fails
-1. Check if backend is running:
-   ```bash
-   sudo -u appuser pm2 status
-   ```
-2. Check backend logs:
-   ```bash
-   sudo -u appuser pm2 logs budget-backend --err
-   ```
-3. Test locally:
-   ```bash
-   curl http://localhost:3001/health
-   ```
+### Manual Deployment (if GitHub Actions is down)
+
+```bash
+# Build locally
+cd backend && npm run build && cd ..
+cd frontend && npm run build && cd ..
+
+# Create package
+mkdir -p deployment/backend deployment/frontend
+cp -r backend/dist backend/package*.json deployment/backend/
+cp -r frontend/dist/* deployment/frontend/
+tar -czf deployment.tar.gz deployment/
+
+# Upload to S3
+aws s3 cp deployment.tar.gz \
+  s3://budget-app-backups-f5b52f89/deployments/manual-$(date +%Y%m%d-%H%M%S).tar.gz
+
+# Deploy via SSM
+aws ssm send-command \
+  --instance-ids "i-05cd17258cce207a3" \
+  --document-name "AWS-RunShellScript" \
+  --parameters "commands=['sudo -u appuser /home/appuser/deploy.sh s3://budget-app-backups-f5b52f89/deployments/manual-TIMESTAMP.tar.gz']" \
+  --region us-east-1
+```
 
 ## Cost Optimization
 
 This CI/CD setup is designed to be cost-effective:
-- Uses GitHub Actions free tier (2000 minutes/month for private repos)
-- Minimal artifact storage (7-30 day retention)
-- Direct SSH deployment (no additional services)
+- Uses GitHub Actions free tier (2000 minutes/month)
+- Leverages existing S3 bucket (dual-purpose: backups + deployments)
+- SSM deployment (no bastion host or VPN needed)
 - Single EC2 instance deployment
+- Automatic cleanup of old deployment packages
 
-## Security Notes
+## Security Benefits
 
-- SSH keys are stored encrypted in GitHub Secrets
-- Deployments require environment approval for production
-- Server access is restricted to GitHub Actions IPs
-- Environment variables with secrets remain on server (not in git)
+- **No SSH Keys**: Uses AWS IAM for authentication
+- **No Open Ports**: SSM doesn't require port 22
+- **Audit Trail**: All SSM commands logged in CloudTrail
+- **Least Privilege**: IAM policies restrict to specific resources
+- **Environment Isolation**: Secrets stay on server, not in Git
+
+## Architecture
+
+```
+GitHub Actions → AWS S3 → AWS SSM → EC2 Instance
+     ↓            ↓         ↓           ↓
+   Build      Upload    Command    Deploy.sh
+   Test       Package   Trigger    Execute
+   Package                          PM2 Restart
+```
+
+The deployment is intentionally simple and reliable, using AWS native services for secure, agentless deployment.
