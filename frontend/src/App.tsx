@@ -20,6 +20,8 @@ import { Budgets } from './pages/Budgets';
 import { Reports } from './pages/Reports';
 import { PlaidLinkProvider } from './providers/PlaidLinkProvider';
 import { queryClient } from './lib/queryClient';
+import { ErrorBoundary } from './components/ErrorBoundary';
+import { RouteErrorBoundary } from './components/RouteErrorBoundary';
 
 // Mantine theme configuration
 const theme = createTheme({
@@ -30,31 +32,57 @@ const theme = createTheme({
 
 function App() {
   return (
-    <MantineProvider theme={theme} defaultColorScheme="dark">
-      <Notifications position="top-right" />
-      <QueryClientProvider client={queryClient}>
-        <PlaidLinkProvider>
-          <BrowserRouter>
-            <Routes>
-              <Route path="/login" element={<LoginForm />} />
-              <Route path="/register" element={<RegisterForm />} />
-              <Route element={<ProtectedRoute />}>
-                <Route element={<MantineLayout />}>
-                  <Route path="/dashboard" element={<MantineDashboard />} />
-                  <Route path="/accounts" element={<MantineAccounts />} />
-                  <Route path="/transactions" element={<EnhancedTransactions />} />
-                  <Route path="/categories" element={<Categories />} />
-                  <Route path="/budgets" element={<Budgets />} />
-                  <Route path="/reports" element={<Reports />} />
+    <ErrorBoundary level="app">
+      <MantineProvider theme={theme} defaultColorScheme="dark">
+        <Notifications position="top-right" />
+        <QueryClientProvider client={queryClient}>
+          <PlaidLinkProvider>
+            <BrowserRouter>
+              <Routes>
+                <Route path="/login" element={<LoginForm />} />
+                <Route path="/register" element={<RegisterForm />} />
+                <Route element={<ProtectedRoute />}>
+                  <Route element={<MantineLayout />}>
+                    <Route path="/dashboard" element={
+                      <RouteErrorBoundary routeName="Dashboard">
+                        <MantineDashboard />
+                      </RouteErrorBoundary>
+                    } />
+                    <Route path="/accounts" element={
+                      <RouteErrorBoundary routeName="Accounts">
+                        <MantineAccounts />
+                      </RouteErrorBoundary>
+                    } />
+                    <Route path="/transactions" element={
+                      <RouteErrorBoundary routeName="Transactions">
+                        <EnhancedTransactions />
+                      </RouteErrorBoundary>
+                    } />
+                    <Route path="/categories" element={
+                      <RouteErrorBoundary routeName="Categories">
+                        <Categories />
+                      </RouteErrorBoundary>
+                    } />
+                    <Route path="/budgets" element={
+                      <RouteErrorBoundary routeName="Budgets">
+                        <Budgets />
+                      </RouteErrorBoundary>
+                    } />
+                    <Route path="/reports" element={
+                      <RouteErrorBoundary routeName="Reports">
+                        <Reports />
+                      </RouteErrorBoundary>
+                    } />
+                  </Route>
                 </Route>
-              </Route>
-              <Route path="/" element={<Navigate to="/dashboard" replace />} />
-            </Routes>
-          </BrowserRouter>
-        </PlaidLinkProvider>
-        <ReactQueryDevtools initialIsOpen={false} />
-      </QueryClientProvider>
-    </MantineProvider>
+                <Route path="/" element={<Navigate to="/dashboard" replace />} />
+              </Routes>
+            </BrowserRouter>
+          </PlaidLinkProvider>
+          <ReactQueryDevtools initialIsOpen={false} />
+        </QueryClientProvider>
+      </MantineProvider>
+    </ErrorBoundary>
   );
 }
 

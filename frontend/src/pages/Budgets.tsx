@@ -39,6 +39,8 @@ import { api } from '../lib/api';
 import { BudgetGrid } from '../components/budgets/BudgetGrid';
 import { BudgetForm } from '../components/budgets/BudgetForm';
 import { BudgetComparison } from '../components/budgets/BudgetComparison';
+// Error boundaries available for use when needed
+// import { FinancialErrorBoundary, FormErrorBoundary, AsyncErrorBoundary } from '../components/ErrorBoundary';
 import type { MonthlyBudget } from '../../../shared/types';
 
 export function Budgets() {
