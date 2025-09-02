@@ -37,7 +37,7 @@ export function ErrorBoundaryTest() {
   const [resetKey, setResetKey] = useState(0);
 
   return (
-    <Stack spacing="xl">
+    <Stack gap="xl">
       <Paper p="md" withBorder>
         <Title order={3} mb="md">Error Boundary Test Suite</Title>
         <Text c="dimmed" size="sm">
@@ -48,7 +48,7 @@ export function ErrorBoundaryTest() {
       {/* Component-level error test */}
       <Paper p="md" withBorder>
         <Title order={4} mb="sm">Component Error Boundary</Title>
-        <Stack>
+        <Stack gap="sm">
           <ErrorBoundary 
             level="component" 
             resetKeys={[resetKey]}
@@ -78,7 +78,7 @@ export function ErrorBoundaryTest() {
       {/* Async error test */}
       <Paper p="md" withBorder>
         <Title order={4} mb="sm">Async Error Boundary</Title>
-        <Stack>
+        <Stack gap="sm">
           <AsyncErrorBoundary>
             <AsyncBuggyComponent shouldError={asyncError} />
           </AsyncErrorBoundary>
@@ -95,7 +95,7 @@ export function ErrorBoundaryTest() {
       {/* Form error test */}
       <Paper p="md" withBorder>
         <Title order={4} mb="sm">Form Error Boundary</Title>
-        <Stack>
+        <Stack gap="sm">
           <FormErrorBoundary>
             <BuggyComponent shouldError={formError} />
           </FormErrorBoundary>
@@ -112,7 +112,7 @@ export function ErrorBoundaryTest() {
       {/* Isolated vs Non-isolated test */}
       <Paper p="md" withBorder>
         <Title order={4} mb="sm">Isolated Error Boundary</Title>
-        <Stack>
+        <Stack gap="sm">
           <ErrorBoundary level="component" isolate={true}>
             <BuggyComponent shouldError={isolatedError} />
           </ErrorBoundary>

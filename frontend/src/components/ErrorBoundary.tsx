@@ -1,4 +1,5 @@
-import { Component, ErrorInfo, ReactNode } from 'react';
+import { Component } from 'react';
+import type { ErrorInfo, ReactNode } from 'react';
 import { 
   Container, 
   Paper, 
@@ -83,7 +84,7 @@ export class ErrorBoundary extends Component<Props, State> {
     }
 
     // Log to external service in production
-    if (process.env.NODE_ENV === 'production') {
+    if (import.meta.env.PROD) {
       this.logErrorToService(error, errorInfo);
     }
   }
@@ -165,7 +166,7 @@ export class ErrorBoundary extends Component<Props, State> {
         return (
           <Container size="sm" py="xl">
             <Paper p="xl" shadow="lg" radius="md" style={{ backgroundColor: 'var(--mantine-color-red-light)' }}>
-              <Stack spacing="md" align="center">
+              <Stack gap="md" align="center">
                 <IconAlertTriangle size={64} color="var(--mantine-color-red-6)" />
                 <Title order={2} ta="center">Application Error</Title>
                 <Text ta="center" size="lg" c="dimmed">
@@ -191,7 +192,7 @@ export class ErrorBoundary extends Component<Props, State> {
                     </Button>
                     <Collapse in={showDetails} style={{ width: '100%' }}>
                       <Alert color="red" title="Error Details" icon={<IconBug />}>
-                        <Stack spacing="xs">
+                        <Stack gap="xs">
                           <Text fw={600}>{error.message}</Text>
                           <Code block style={{ maxHeight: 200, overflow: 'auto' }}>
                             {error.stack}
@@ -212,7 +213,7 @@ export class ErrorBoundary extends Component<Props, State> {
         return (
           <Container size="sm" py="xl">
             <Paper p="lg" shadow="md" radius="md">
-              <Stack spacing="md" align="center">
+              <Stack gap="md" align="center">
                 <IconAlertTriangle size={48} color="var(--mantine-color-yellow-6)" />
                 <Title order={3} ta="center">Page Error</Title>
                 <Text ta="center" c="dimmed">
@@ -239,7 +240,7 @@ export class ErrorBoundary extends Component<Props, State> {
                     This error has occurred {errorCount} times. Consider refreshing the page or contacting support.
                   </Alert>
                 )}
-                {showDetailsProp && process.env.NODE_ENV === 'development' && (
+                {showDetailsProp && import.meta.env.DEV && (
                   <>
                     <Button
                       size="xs"
@@ -272,11 +273,11 @@ export class ErrorBoundary extends Component<Props, State> {
             withCloseButton
             onClose={this.handleReset}
           >
-            <Stack spacing="xs">
+            <Stack gap="xs">
               <Text size="sm">
                 {customMessage || 'This component encountered an error and cannot be displayed.'}
               </Text>
-              <Button size="xs" compact onClick={this.handleReset} variant="light">
+              <Button size="xs" onClick={this.handleReset} variant="light">
                 Retry
               </Button>
             </Stack>

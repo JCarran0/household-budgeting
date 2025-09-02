@@ -1,6 +1,7 @@
 import { useLocation } from 'react-router-dom';
 import { ErrorBoundary } from './ErrorBoundary';
-import { ReactNode, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
+import type { ReactNode } from 'react';
 
 interface RouteErrorBoundaryProps {
   children: ReactNode;
