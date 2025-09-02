@@ -7,7 +7,7 @@ Building a personal budgeting app for 2 users with Plaid integration. Using Risk
 For detailed technical architecture, service descriptions, data flows, and implementation details, see **[docs/AI-APPLICATION-ARCHITECTURE.md](docs/AI-APPLICATION-ARCHITECTURE.md)**. This document provides comprehensive guidance for AI agents on the codebase structure, API patterns, common tasks, and troubleshooting.
 
 ## Testing Strategy
-For comprehensive testing guidance, see **[docs/AI-TESTING-STRATEGY.md](docs/AI-TESTING-STRATEGY.md)**. This document covers user story testing, risk-based prioritization, test examples with real code, lessons learned from overmocking, and troubleshooting common test failures.
+For comprehensive testing guidance, see **[docs/AI-TESTING-STRATEGY.md](docs/AI-TESTING-STRATEGY.md)**. This document covers user story testing, risk-based prioritization, test examples with real code, lessons learned from overmocking, and troubleshooting common test failures. The test strategy references **[docs/AI-USER-STORIES.md](docs/AI-USER-STORIES.md)** which contains the complete product requirements as user stories.
 
 ## Development Philosophy
 
