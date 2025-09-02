@@ -2,9 +2,11 @@
 
 ## 🎉 Deployment Status: LIVE IN PRODUCTION
 
-**Application URL**: http://67.202.9.86  
+**Application URL**: https://budget.jaredcarrano.com  
+**Previous URL**: http://67.202.9.86 (now redirects to HTTPS)  
 **Deployment Date**: September 2, 2025  
-**Infrastructure Status**: ✅ Fully Operational
+**SSL Enabled**: September 2, 2025  
+**Infrastructure Status**: ✅ Fully Operational with HTTPS
 
 ## Executive Summary
 This document outlines a minimal-cost production architecture for a personal household budgeting application serving 2 users. The focus is on simplicity, security, and keeping costs under $10/month while maintaining a reliable production environment.
@@ -21,11 +23,18 @@ This document outlines a minimal-cost production architecture for a personal hou
   - Backend and frontend successfully deployed
   - PM2 process management configured with auto-restart
   - nginx reverse proxy configured
-  - Application accessible at http://67.202.9.86
+  - Application accessible at https://budget.jaredcarrano.com
   - Health monitoring endpoint active
 
+- **Milestone 3**: SSL Setup & Domain Configuration (September 2, 2025)
+  - DNS A record configured for budget.jaredcarrano.com
+  - Let's Encrypt SSL certificate obtained and installed
+  - HTTPS enabled with automatic HTTP → HTTPS redirect
+  - Certificate auto-renewal configured via systemd timer
+  - nginx updated with SSL configuration and security headers
+
 ### 🚧 Remaining Milestones
-- **Milestone 3**: SSL Setup & Backup Configuration (Pending)
+- **Milestone 3b**: Backup Configuration (Pending)
 - **Milestone 4**: CI/CD Pipeline with GitHub Actions (Pending)
 - **Milestone 5**: Monitoring & Production Hardening (Pending)
 

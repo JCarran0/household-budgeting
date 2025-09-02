@@ -4,13 +4,13 @@ A modern personal budgeting application with bank account integration via Plaid,
 
 ## 🚀 Production Deployment Status
 
-**Live Application**: http://67.202.9.86
+**Live Application**: https://budget.jaredcarrano.com
 
 The application is successfully deployed on AWS infrastructure:
 - **EC2 Instance**: t4g.micro (ARM-based, Ubuntu 22.04)
 - **Web Server**: nginx with reverse proxy
 - **Process Manager**: PM2 with auto-restart
-- **SSL**: Ready for Let's Encrypt setup
+- **SSL**: ✅ HTTPS enabled with Let's Encrypt certificate
 - **Backup**: S3 bucket configured for automated backups
 - **Cost**: $0/month (AWS Free Tier Year 1), ~$8.65/month after
 
@@ -227,7 +227,7 @@ npm test
 
 ```bash
 # SSH to production server
-ssh -i ~/.ssh/budget-app-key ubuntu@67.202.9.86
+ssh -i ~/.ssh/budget-app-key ubuntu@budget.jaredcarrano.com  # or ubuntu@67.202.9.86
 
 # Check application status
 sudo -u appuser pm2 status
@@ -291,7 +291,7 @@ terraform destroy
 
 ```bash
 # Check application health
-curl http://67.202.9.86/health
+curl https://budget.jaredcarrano.com/health
 
 # Check PM2 process details
 sudo -u appuser pm2 describe budget-backend
@@ -321,17 +321,20 @@ aws s3 cp s3://budget-app-backups-f5b52f89/backups/data-YYYYMMDD.tar.gz .
 tar -xzf data-YYYYMMDD.tar.gz -C /home/appuser/budget-data/
 ```
 
-### SSL Certificate Setup (Future)
+### SSL Certificate Management
 
 ```bash
-# Install Certbot
-sudo snap install --classic certbot
+# Certificate Status
+sudo certbot certificates
 
-# Get SSL certificate
-sudo certbot --nginx -d yourdomain.com
-
-# Test auto-renewal
+# Test auto-renewal (runs twice daily via systemd timer)
 sudo certbot renew --dry-run
+
+# Manual renewal if needed
+sudo certbot renew
+
+# Check renewal timer
+sudo systemctl status snap.certbot.renew.timer
 ```
 
 ## 🔐 Security

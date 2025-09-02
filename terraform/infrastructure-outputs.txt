@@ -1,4 +1,5 @@
-application_url = "http://67.202.9.86"
+application_url = "https://budget.jaredcarrano.com"
+application_http_url = "http://67.202.9.86"  # Redirects to HTTPS
 instance_id = "i-05cd17258cce207a3"
 public_dns = "ec2-67-202-9-86.compute-1.amazonaws.com"
 public_ip = "67.202.9.86"
