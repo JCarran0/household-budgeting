@@ -26,8 +26,10 @@ mkdir -p "$BACKUP_DIR"
 
 # Download and extract package
 echo "📥 Downloading deployment package..."
-aws s3 cp "$S3_PACKAGE" /tmp/deployment.tar.gz
-cd /tmp
+TEMP_DIR="/home/appuser/temp-deploy"
+mkdir -p "$TEMP_DIR"
+aws s3 cp "$S3_PACKAGE" "$TEMP_DIR/deployment.tar.gz"
+cd "$TEMP_DIR"
 tar -xzf deployment.tar.gz
 cp -r deployment/* "$DEPLOYMENT_DIR/"
 
@@ -83,8 +85,7 @@ done
 
 # Cleanup
 echo "🧹 Cleaning up..."
-rm -f /tmp/deployment.tar.gz
-rm -rf /tmp/deployment
+rm -rf "$TEMP_DIR"
 rm -rf "$DEPLOYMENT_DIR"
 
 # Keep only last 5 backups
