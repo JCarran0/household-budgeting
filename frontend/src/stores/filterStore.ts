@@ -97,14 +97,14 @@ const validateStoredFilters = (stored: unknown): Partial<FilterStore> => {
       selectedTags: Array.isArray(t.selectedTags) ? t.selectedTags : defaultTransactionFilters.selectedTags,
       dateFilterOption: typeof t.dateFilterOption === 'string' ? t.dateFilterOption : defaultTransactionFilters.dateFilterOption,
       customDateRange: Array.isArray(t.customDateRange) && t.customDateRange.length === 2 
-        ? t.customDateRange 
+        ? [t.customDateRange[0], t.customDateRange[1]] as [string | null, string | null]
         : defaultTransactionFilters.customDateRange,
       includeHidden: typeof t.includeHidden === 'boolean' ? t.includeHidden : defaultTransactionFilters.includeHidden,
       onlyUncategorized: typeof t.onlyUncategorized === 'boolean' ? t.onlyUncategorized : defaultTransactionFilters.onlyUncategorized,
       amountRange: t.amountRange && typeof t.amountRange === 'object' 
         ? {
-            min: typeof t.amountRange.min === 'number' || t.amountRange.min === null ? t.amountRange.min : null,
-            max: typeof t.amountRange.max === 'number' || t.amountRange.max === null ? t.amountRange.max : null,
+            min: typeof (t.amountRange as Record<string, unknown>).min === 'number' || (t.amountRange as Record<string, unknown>).min === null ? (t.amountRange as Record<string, unknown>).min as number | null : null,
+            max: typeof (t.amountRange as Record<string, unknown>).max === 'number' || (t.amountRange as Record<string, unknown>).max === null ? (t.amountRange as Record<string, unknown>).max as number | null : null,
           }
         : defaultTransactionFilters.amountRange,
     };

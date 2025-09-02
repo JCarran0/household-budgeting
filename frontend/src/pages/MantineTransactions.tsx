@@ -171,7 +171,11 @@ export function MantineTransactions() {
                 label="Start Date"
                 placeholder="Select start date"
                 value={dateRange.startDate}
-                onChange={(date) => date && setDateRange(prev => ({ ...prev, startDate: date }))}
+                onChange={(value: string | Date | null) => {
+                  if (value && value instanceof Date) {
+                    setDateRange(prev => ({ ...prev, startDate: value }));
+                  }
+                }}
                 leftSection={<IconCalendar size={16} />}
               />
             </Grid.Col>
@@ -180,7 +184,11 @@ export function MantineTransactions() {
                 label="End Date"
                 placeholder="Select end date"
                 value={dateRange.endDate}
-                onChange={(date) => date && setDateRange(prev => ({ ...prev, endDate: date }))}
+                onChange={(value: string | Date | null) => {
+                  if (value && value instanceof Date) {
+                    setDateRange(prev => ({ ...prev, endDate: value }));
+                  }
+                }}
                 leftSection={<IconCalendar size={16} />}
               />
             </Grid.Col>

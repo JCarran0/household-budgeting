@@ -509,7 +509,7 @@ export function EnhancedTransactions() {
                 <Table.Th>Tags</Table.Th>
                 <Table.Th>Account</Table.Th>
                 <Table.Th>Amount</Table.Th>
-                <Table.Th width={60}>Actions</Table.Th>
+                <Table.Th>Actions</Table.Th>
               </Table.Tr>
             </Table.Thead>
             <Table.Tbody>
