@@ -33,9 +33,21 @@ This document outlines a minimal-cost production architecture for a personal hou
   - Certificate auto-renewal configured via systemd timer
   - nginx updated with SSL configuration and security headers
 
+- **Milestone 3b**: S3 Data Storage (September 2, 2025)
+  - Created flexible storage adapter system
+  - Implemented S3 storage for production data
+  - Filesystem storage for local development
+  - Automatic switching based on environment
+  - S3 bucket with versioning and encryption
+
+- **Milestone 4**: CI/CD Pipeline with GitHub Actions (September 2, 2025)
+  - PR validation workflow for automated testing
+  - Production deployment workflow with zero downtime
+  - Rollback capability for quick recovery
+  - Integration with S3 storage configuration
+  - Comprehensive deployment documentation
+
 ### 🚧 Remaining Milestones
-- **Milestone 3b**: Backup Configuration (Pending)
-- **Milestone 4**: CI/CD Pipeline with GitHub Actions (Pending)
 - **Milestone 5**: Monitoring & Production Hardening (Pending)
 
 ## Architecture Overview
