@@ -51,6 +51,24 @@ jobs:
           # Copy frontend
           cp -r frontend/dist/* deployment/frontend/
           
+          # Generate .env file with secrets
+          cat > deployment/backend/.env << EOF
+          NODE_ENV=${{ secrets.PRODUCTION_NODE_ENV }}
+          PORT=${{ secrets.PRODUCTION_PORT }}
+          JWT_SECRET=${{ secrets.PRODUCTION_JWT_SECRET }}
+          JWT_EXPIRES_IN=${{ secrets.PRODUCTION_JWT_EXPIRES_IN }}
+          PLAID_CLIENT_ID=${{ secrets.PRODUCTION_PLAID_CLIENT_ID }}
+          PLAID_SECRET=${{ secrets.PRODUCTION_PLAID_SECRET }}
+          PLAID_ENV=${{ secrets.PRODUCTION_PLAID_ENV }}
+          PLAID_PRODUCTS=${{ secrets.PRODUCTION_PLAID_PRODUCTS }}
+          PLAID_COUNTRY_CODES=${{ secrets.PRODUCTION_PLAID_COUNTRY_CODES }}
+          DATA_DIR=${{ secrets.PRODUCTION_DATA_DIR }}
+          ENCRYPTION_KEY=${{ secrets.PRODUCTION_ENCRYPTION_KEY }}
+          FRONTEND_URL=${{ secrets.PRODUCTION_FRONTEND_URL }}
+          API_PREFIX=${{ secrets.PRODUCTION_API_PREFIX }}
+          LOG_LEVEL=${{ secrets.PRODUCTION_LOG_LEVEL }}
+          EOF
+          
           # Add metadata
           echo "$GITHUB_SHA" > deployment/REVISION
           echo "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > deployment/TIMESTAMP
