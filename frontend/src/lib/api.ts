@@ -9,7 +9,8 @@ import type {
   ExchangeTokenRequest,
   Category,
   MonthlyBudget,
-  AutoCategorizeRule
+  AutoCategorizeRule,
+  User
 } from '../../../shared/types';
 
 const API_BASE_URL = 'http://localhost:3001/api/v1';
@@ -32,6 +33,15 @@ export interface CreateCategoryDto {
   plaidCategory: string | null;
   isHidden: boolean;
   isSavings: boolean;
+}
+
+// Type guard functions
+function isValidApiResponse(data: unknown): data is { success: boolean; error?: string } {
+  return typeof data === 'object' && data !== null && 'success' in data && typeof (data as { success: unknown }).success === 'boolean';
+}
+
+function hasTokenAndUser(data: unknown): data is { success: boolean; token: string; user: User } {
+  return isValidApiResponse(data) && 'token' in data && 'user' in data && typeof (data as { token: unknown }).token === 'string';
 }
 
 export interface UpdateCategoryDto {
@@ -100,6 +110,7 @@ class ApiClient {
     this.exchangePublicToken = this.exchangePublicToken.bind(this);
     this.connectAccount = this.connectAccount.bind(this);
     this.getAccounts = this.getAccounts.bind(this);
+    this.disconnectAccount = this.disconnectAccount.bind(this);
     this.getTransactions = this.getTransactions.bind(this);
     this.getUncategorizedCount = this.getUncategorizedCount.bind(this);
     this.syncTransactions = this.syncTransactions.bind(this);
@@ -145,9 +156,12 @@ class ApiClient {
 
   // Auth endpoints
   async login(credentials: LoginCredentials): Promise<AuthResponse> {
-    const { data } = await this.client.post<any>('/auth/login', credentials);
-    if (!data.success) {
-      throw new Error(data.error || 'Login failed');
+    const { data } = await this.client.post<unknown>('/auth/login', credentials);
+    if (!isValidApiResponse(data) || !data.success) {
+      throw new Error((data as { error?: string })?.error || 'Login failed');
+    }
+    if (!hasTokenAndUser(data)) {
+      throw new Error('Invalid response format from server');
     }
     return {
       token: data.token,
@@ -156,9 +170,12 @@ class ApiClient {
   }
 
   async register(credentials: RegisterCredentials): Promise<AuthResponse> {
-    const { data } = await this.client.post<any>('/auth/register', credentials);
-    if (!data.success) {
-      throw new Error(data.error || 'Registration failed');
+    const { data } = await this.client.post<unknown>('/auth/register', credentials);
+    if (!isValidApiResponse(data) || !data.success) {
+      throw new Error((data as { error?: string })?.error || 'Registration failed');
+    }
+    if (!hasTokenAndUser(data)) {
+      throw new Error('Invalid response format from server');
     }
     return {
       token: data.token,
@@ -190,6 +207,13 @@ class ApiClient {
   async getAccounts(): Promise<ExtendedPlaidAccount[]> {
     const { data } = await this.client.get<{ accounts: ExtendedPlaidAccount[] }>('/accounts');
     return data.accounts;
+  }
+
+  async disconnectAccount(accountId: string): Promise<void> {
+    const { data } = await this.client.delete(`/accounts/${accountId}`);
+    if (!data.success) {
+      throw new Error(data.error || 'Failed to disconnect account');
+    }
   }
 
   // Transaction endpoints

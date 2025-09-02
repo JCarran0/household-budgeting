@@ -18,18 +18,30 @@ import {
   Paper,
   ActionIcon,
   Tooltip,
+  Menu,
+  Modal,
 } from '@mantine/core';
+import { useDisclosure } from '@mantine/hooks';
 import { notifications } from '@mantine/notifications';
 import {
   IconRefresh,
   IconCreditCard,
   IconCheck,
   IconX,
+  IconDots,
+  IconTrash,
+  IconAlertCircle,
 } from '@tabler/icons-react';
 
 export function MantineAccounts() {
   const queryClient = useQueryClient();
   const [syncingAccount, setSyncingAccount] = useState<string | null>(null);
+  const [accountToDisconnect, setAccountToDisconnect] = useState<{
+    id: string;
+    name: string;
+    institution: string;
+  } | null>(null);
+  const [opened, { open, close }] = useDisclosure(false);
 
   const { data: accounts, isLoading } = useQuery({
     queryKey: ['accounts'],
@@ -49,11 +61,34 @@ export function MantineAccounts() {
         icon: <IconCheck size={16} />,
       });
     },
-    onError: (error: any) => {
+    onError: (error: unknown) => {
       setSyncingAccount(null);
       notifications.show({
         title: 'Sync Failed',
-        message: error.message || 'Failed to sync transactions',
+        message: (error as { message?: string })?.message || 'Failed to sync transactions',
+        color: 'red',
+        icon: <IconX size={16} />,
+      });
+    },
+  });
+
+  const disconnectMutation = useMutation({
+    mutationFn: (accountId: string) => api.disconnectAccount(accountId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['accounts'] });
+      queryClient.invalidateQueries({ queryKey: ['transactions'] });
+      close();
+      notifications.show({
+        title: 'Account Disconnected',
+        message: 'The account has been successfully disconnected',
+        color: 'green',
+        icon: <IconCheck size={16} />,
+      });
+    },
+    onError: (error: unknown) => {
+      notifications.show({
+        title: 'Disconnect Failed',
+        message: (error as { message?: string })?.message || 'Failed to disconnect account',
         color: 'red',
         icon: <IconX size={16} />,
       });
@@ -67,7 +102,22 @@ export function MantineAccounts() {
 
   const handleSyncAll = () => {
     setSyncingAccount('all');
-    syncMutation.mutate(undefined as any);
+    syncMutation.mutate(undefined as unknown as string);
+  };
+
+  const handleDisconnectClick = (account: { id: string; name: string; institution: string }) => {
+    setAccountToDisconnect({
+      id: account.id,
+      name: account.name,
+      institution: account.institution,
+    });
+    open();
+  };
+
+  const handleConfirmDisconnect = () => {
+    if (accountToDisconnect) {
+      disconnectMutation.mutate(accountToDisconnect.id);
+    }
   };
 
   if (isLoading) {
@@ -125,17 +175,35 @@ export function MantineAccounts() {
                     </Group>
                   </div>
                 </Group>
-                <Tooltip label="Sync transactions">
-                  <ActionIcon
-                    variant="light"
-                    color="blue"
-                    size="lg"
-                    onClick={() => handleSync(account.id)}
-                    loading={syncingAccount === account.id}
-                  >
-                    <IconRefresh size={18} />
-                  </ActionIcon>
-                </Tooltip>
+                <Group gap="xs">
+                  <Tooltip label="Sync transactions">
+                    <ActionIcon
+                      variant="light"
+                      color="blue"
+                      size="lg"
+                      onClick={() => handleSync(account.id)}
+                      loading={syncingAccount === account.id}
+                    >
+                      <IconRefresh size={18} />
+                    </ActionIcon>
+                  </Tooltip>
+                  <Menu position="bottom-end" withinPortal>
+                    <Menu.Target>
+                      <ActionIcon variant="subtle" color="gray" size="lg">
+                        <IconDots size={18} />
+                      </ActionIcon>
+                    </Menu.Target>
+                    <Menu.Dropdown>
+                      <Menu.Item
+                        color="red"
+                        leftSection={<IconTrash size={16} />}
+                        onClick={() => handleDisconnectClick(account)}
+                      >
+                        Disconnect Account
+                      </Menu.Item>
+                    </Menu.Dropdown>
+                  </Menu>
+                </Group>
               </Group>
 
               <Paper p="md" radius="md" withBorder>
@@ -187,6 +255,50 @@ export function MantineAccounts() {
           </Card>
         </Center>
       )}
+      <Modal
+        opened={opened}
+        onClose={close}
+        title="Disconnect Account"
+        centered
+      >
+        <Stack gap="md">
+          <Group>
+            <ThemeIcon color="red" variant="light" size="xl" radius="xl">
+              <IconAlertCircle size={24} />
+            </ThemeIcon>
+            <div style={{ flex: 1 }}>
+              <Text size="sm" fw={600}>
+                Are you sure you want to disconnect this account?
+              </Text>
+              {accountToDisconnect && (
+                <Text size="sm" c="dimmed">
+                  {accountToDisconnect.name} from {accountToDisconnect.institution}
+                </Text>
+              )}
+            </div>
+          </Group>
+          
+          <Text size="sm" c="dimmed">
+            This will stop syncing transactions from this account. Your existing
+            transaction history will be preserved, but you won't receive new
+            transactions unless you reconnect the account.
+          </Text>
+
+          <Group justify="flex-end" gap="sm">
+            <Button variant="default" onClick={close}>
+              Cancel
+            </Button>
+            <Button
+              color="red"
+              onClick={handleConfirmDisconnect}
+              loading={disconnectMutation.isPending}
+              leftSection={<IconTrash size={16} />}
+            >
+              Disconnect Account
+            </Button>
+          </Group>
+        </Stack>
+      </Modal>
     </Stack>
   );
 }
