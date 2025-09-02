@@ -1,0 +1,49 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "SSMSendCommand",
+      "Effect": "Allow",
+      "Action": "ssm:SendCommand",
+      "Resource": [
+        "arn:aws:ec2:us-east-1:903733335979:instance/i-05cd17258cce207a3",
+        "arn:aws:ssm:us-east-1:903733335979:document/AWS-RunShellScript"
+      ]
+    },
+    {
+      "Sid": "SSMCommandTracking",
+      "Effect": "Allow",
+      "Action": [
+        "ssm:GetCommandInvocation",
+        "ssm:ListCommands",
+        "ssm:ListCommandInvocations",
+        "ssm:DescribeInstanceInformation",
+        "ssm:DescribeDocumentParameters",
+        "ssm:DescribeDocument"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "EC2Permissions",
+      "Effect": "Allow",
+      "Action": [
+        "ec2:DescribeInstances"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "S3BackupAndDeploymentBucket",
+      "Effect": "Allow",
+      "Action": [
+        "s3:PutObject",
+        "s3:GetObject",
+        "s3:DeleteObject",
+        "s3:ListBucket"
+      ],
+      "Resource": [
+        "arn:aws:s3:::budget-app-backups-f5b52f89/*",
+        "arn:aws:s3:::budget-app-backups-f5b52f89"
+      ]
+    }
+  ]
+}

@@ -159,8 +159,17 @@ resource "random_id" "bucket_suffix" {
 resource "aws_s3_bucket" "backups" {
   bucket = "budget-app-backups-${random_id.bucket_suffix.hex}"
   
+  # Note: This bucket serves dual purpose to minimize costs:
+  # 1. Application data backups (original purpose)
+  # 2. CI/CD deployment packages from GitHub Actions
+  # Structure:
+  #   /backups/     - Daily application backups
+  #   /deployments/ - GitHub Actions deployment artifacts
+  #   /session-logs/ - SSM session logs (optional)
+  
   tags = {
     Name = "budget-app-backups"
+    Purpose = "Backups and CI/CD artifacts"
   }
 }
 

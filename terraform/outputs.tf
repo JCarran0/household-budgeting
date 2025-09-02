@@ -14,7 +14,7 @@ output "public_dns" {
 }
 
 output "s3_backup_bucket" {
-  description = "Name of the S3 backup bucket"
+  description = "Name of the S3 bucket for backups and CI/CD deployments"
   value       = aws_s3_bucket.backups.id
 }
 

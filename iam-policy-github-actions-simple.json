@@ -1,0 +1,42 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "SSMFullAccess",
+      "Effect": "Allow",
+      "Action": [
+        "ssm:SendCommand",
+        "ssm:ListCommands",
+        "ssm:ListCommandInvocations",
+        "ssm:GetCommandInvocation",
+        "ssm:DescribeInstanceInformation",
+        "ssm:DescribeDocumentParameters",
+        "ssm:DescribeDocument",
+        "ssm:GetDocument"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "S3DeploymentBucket",
+      "Effect": "Allow",
+      "Action": [
+        "s3:PutObject",
+        "s3:GetObject",
+        "s3:DeleteObject",
+        "s3:ListBucket"
+      ],
+      "Resource": [
+        "arn:aws:s3:::budget-app-backups-f5b52f89/*",
+        "arn:aws:s3:::budget-app-backups-f5b52f89"
+      ]
+    },
+    {
+      "Sid": "EC2Describe",
+      "Effect": "Allow",
+      "Action": [
+        "ec2:DescribeInstances"
+      ],
+      "Resource": "*"
+    }
+  ]
+}
