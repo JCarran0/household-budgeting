@@ -239,27 +239,74 @@ This document outlines the implementation plan for a personal budgeting app with
 - [x] Fix chart rendering issues with empty data
 - [x] Implement proper category data access
 
-### ~~6.2 Polish & Optimization~~ (DEFERRED - Not critical for 2-user MVP)
-- ~~Add comprehensive error handling~~
+### 6.2 Error Boundaries & Resilience ✅ COMPLETE
+- [x] Implement comprehensive error boundary system
+- [x] Create hierarchical error boundaries (app → route → component)
+- [x] Add specialized boundaries for async operations and financial data
+- [x] Enhance React Query with smart retry logic
+- [x] Add user-friendly error messages and recovery options
+- [x] Create development testing component for error scenarios
+
+### 6.3 Auto-Categorization ✅ COMPLETE
+- [x] Implement auto-categorization rules engine
+- [x] Create UI for managing categorization rules
+- [x] Add pattern matching for merchant names
+- [x] Support amount-based rule conditions
+- [x] Implement rule priority ordering
+- [x] Add bulk categorization for existing transactions
+
+### ~~6.4 Polish & Optimization~~ (DEFERRED - Not critical for 2-user MVP)
 - ~~Implement optimistic updates~~
 - ~~Add data export functionality~~
 - ~~Performance optimization (React.memo, useMemo)~~
 - ~~Accessibility improvements~~
 
-### ~~6.3 Deployment Preparation~~ (REPLACED - See Phase 7)
+## Phase 7: Multi-User Family Collaboration (Week 7) 🆕
 
-## Phase 7: Production Architecture Setup (Week 7)
+### 7.1 Phase 1: Shared Family Account (Quick Implementation)
+- [ ] Add `primaryAccountId` and `role` fields to User model
+- [ ] Implement family invite code generation
+- [ ] Create registration flow for secondary users with invite code
+- [ ] Update data service to use `primaryAccountId || userId` for file paths
+- [ ] Add UI indicator showing shared account status
+- [ ] Test concurrent access patterns
+
+### 7.2 Phase 2: Optimistic Locking (When Needed)
+- [ ] Add version tracking to data files
+- [ ] Implement version checking before writes
+- [ ] Add retry logic with exponential backoff
+- [ ] Create UI for conflict resolution
+- [ ] Add "last modified by" tracking
+- [ ] Implement audit trail for changes
+
+### 7.3 Security & Permissions
+- [ ] Implement secure invite code generation (cryptographically random)
+- [ ] Add invite code expiration (24-48 hours)
+- [ ] Create permission levels (view-only vs edit)
+- [ ] Add family member management UI
+- [ ] Implement removal of family members
+- [ ] Ensure data isolation between families
+
+### 7.4 Testing & Risk Mitigation
+- [ ] Test concurrent write scenarios
+- [ ] Verify data integrity with multiple users
+- [ ] Test invite code security
+- [ ] Ensure no cross-family data leakage
+- [ ] Add integration tests for family workflows
+- [ ] Document known limitations
+
+## Phase 8: Production Architecture Setup (Week 8-9)
 
 **Reference**: See `docs/AI-Architecture-Plan.md` for complete architecture details
 
-### 7.1 GitHub Repository Configuration
+### 8.1 GitHub Repository Configuration
 - [ ] Enable branch protection on main branch
 - [ ] Configure GitHub Secrets (EC2_SSH_KEY, EC2_HOST, JWT_SECRET, PLAID credentials)
 - [ ] Create `.github/workflows/test.yml` for PR validation
 - [ ] Create `.github/workflows/deploy.yml` for manual production deployment
 - [ ] Test GitHub Actions workflows with feature branch
 
-### 7.2 AWS Infrastructure Setup
+### 8.2 AWS Infrastructure Setup
 - [ ] Create AWS account and configure free tier
 - [ ] Generate SSH key pair for EC2 access
 - [ ] Create Terraform configuration files
@@ -269,16 +316,16 @@ This document outlines the implementation plan for a personal budgeting app with
 - [ ] Create S3 bucket for backups
 - [ ] Set up AWS Budget alert at $10/month
 
-### 7.3 Environment Configuration
+### 8.3 Environment Configuration
 - [ ] Create production `.env` file with strong secrets
 - [ ] Update backend for production data directory path
 - [ ] Configure CORS for production domain/IP
 - [ ] Update frontend API URL for production
 - [ ] Test Plaid in production environment mode
 
-## Phase 8: Production Deployment (Week 8)
+## Phase 9: Production Deployment (Week 9-10)
 
-### 8.1 Server Setup
+### 9.1 Server Setup
 - [ ] SSH into EC2 and run initial updates
 - [ ] Install Node.js 20, nginx, PM2, git
 - [ ] Configure Ubuntu firewall (ufw) and fail2ban
@@ -286,14 +333,14 @@ This document outlines the implementation plan for a personal budgeting app with
 - [ ] Clone repository to production server
 - [ ] Install and build both backend and frontend
 
-### 8.2 Application Configuration
+### 9.2 Application Configuration
 - [ ] Configure nginx as reverse proxy (see `docs/AI-Architecture-Plan.md`)
 - [ ] Set up PM2 ecosystem file for process management
 - [ ] Configure PM2 startup script for auto-restart
 - [ ] Set up Let's Encrypt SSL certificates
 - [ ] Test application is accessible via HTTPS
 
-### 8.3 Operational Setup
+### 9.3 Operational Setup
 - [ ] Create and test backup script to S3
 - [ ] Configure cron job for daily backups
 - [ ] Set up log rotation with logrotate
@@ -301,9 +348,9 @@ This document outlines the implementation plan for a personal budgeting app with
 - [ ] Document restore procedure
 - [ ] Test full backup and restore process
 
-## Phase 9: Production Stabilization (Week 9-10)
+## Phase 10: Production Stabilization (Week 10-11)
 
-### 9.1 Migration & Testing
+### 10.1 Migration & Testing
 - [ ] Migrate existing local data to production
 - [ ] Complete end-to-end testing in production
 - [ ] Test Plaid account linking in production
@@ -311,7 +358,7 @@ This document outlines the implementation plan for a personal budgeting app with
 - [ ] Test all CRUD operations
 - [ ] Verify backup automation is working
 
-### 9.2 Monitoring & Optimization
+### 10.2 Monitoring & Optimization
 - [ ] Monitor AWS costs (should be $0 in free tier)
 - [ ] Review CloudWatch metrics
 - [ ] Check PM2 logs for any errors
@@ -319,29 +366,29 @@ This document outlines the implementation plan for a personal budgeting app with
 - [ ] Document any production-specific issues
 - [ ] Create runbook for common operations
 
-### 9.3 Documentation & Handoff
+### 10.3 Documentation & Handoff
 - [ ] Update README with production access info
 - [ ] Document deployment process
 - [ ] Create troubleshooting guide
 - [ ] Document backup/restore procedures
 - [ ] Update CLAUDE.md with production learnings
 
-## Phase 10: Future Enhancements (Optional)
+## Phase 11: Future Enhancements (Optional)
 
-### 10.1 Cost-Effective Improvements
+### 11.1 Cost-Effective Improvements
 - [ ] Add custom domain with Route 53 ($12/year)
 - [ ] Implement CloudWatch detailed monitoring ($3/month)
 - [ ] Set up AWS Backup automation ($1/month)
 - [ ] Add more comprehensive health checks
 
-### 10.2 Database Migration (When Needed)
+### 11.2 Database Migration (When Needed)
 - [ ] Install PostgreSQL on same EC2 instance
 - [ ] Design optimized schema for relational data
 - [ ] Create migration scripts from JSON to PostgreSQL
 - [ ] Test thoroughly before switching over
 - [ ] Keep JSON export capability as backup
 
-### 10.3 Performance Enhancements (If Required)
+### 11.3 Performance Enhancements (If Required)
 - [ ] Implement Redis for session caching
 - [ ] Add nginx caching for static assets
 - [ ] Optimize frontend bundle size
@@ -359,7 +406,7 @@ This document outlines the implementation plan for a personal budgeting app with
 - [x] Basic reporting available
 - [x] Frontend responsive and accessible
 
-### Production Deployment (Phases 7-9)
+### Production Deployment (Phases 8-10)
 - [ ] Application deployed to AWS EC2 instance
 - [ ] SSL certificates configured and working
 - [ ] Automated backups to S3 functioning
@@ -384,13 +431,15 @@ This document outlines the implementation plan for a personal budgeting app with
 - ✅ Transaction splitting functionality with parent-child relationships
 - ✅ Category service with hierarchy and Plaid mapping (17 tests)
 - ✅ Budget service with monthly management and comparisons (23 tests)
+- ✅ Auto-categorization rules engine with pattern matching
 - ✅ Reporting service with comprehensive analytics:
   - Spending trends by category over time
   - Category breakdown with hierarchy support
   - Cash flow summary and analysis
   - Future projections with confidence levels
   - Year-to-date performance metrics
-- ✅ Data persistence with JSON storage
+- ✅ Data persistence with JSON storage and S3 backup support
+- ✅ Reset script updated for user-scoped data architecture
 
 ### Frontend
 - ✅ Mantine UI with professional dark theme
@@ -403,6 +452,8 @@ This document outlines the implementation plan for a personal budgeting app with
 - ✅ Category management with tree view and CRUD operations
 - ✅ Budget management with month navigation and comparisons
 - ✅ Budget vs actual analysis with visual indicators
+- ✅ Auto-categorization rules UI with rule management
+- ✅ Comprehensive error boundary system with hierarchical protection
 - ✅ Comprehensive Reports page with multiple visualizations:
   - Year-to-date summary with key metrics
   - Cash flow analysis with income vs expenses charts
@@ -413,10 +464,13 @@ This document outlines the implementation plan for a personal budgeting app with
 ## Next Priority Actions
 1. ~~Enhance transaction features (categorization, splitting, tagging)~~ ✅ COMPLETE
 2. ~~Implement reporting dashboard with charts~~ ✅ COMPLETE
-3. **Configure GitHub repository for production** (Phase 7.1)
-4. **Set up AWS infrastructure with Terraform** (Phase 7.2)
-5. **Deploy to production EC2 instance** (Phase 8)
-6. **Stabilize and monitor production** (Phase 9)
+3. ~~Implement error boundaries for resilience~~ ✅ COMPLETE
+4. ~~Add auto-categorization rules~~ ✅ COMPLETE
+5. **Implement multi-user family collaboration** (Phase 7) 🆕
+6. **Configure GitHub repository for production** (Phase 8.1)
+7. **Set up AWS infrastructure with Terraform** (Phase 8.2)
+8. **Deploy to production EC2 instance** (Phase 9)
+9. **Stabilize and monitor production** (Phase 10)
 
 ## Production Architecture
 - **Architecture Plan**: See `docs/AI-Architecture-Plan.md` for complete details
