@@ -21,12 +21,14 @@ const app: Express = express();
 // CORS configuration
 const corsOptions = {
   origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
-    // Allow requests from localhost on any port during development
+    // Allowed origins for CORS
     const allowedOrigins = [
       'http://localhost:5173',
       'http://localhost:5174',
       'http://localhost:3000',
       'http://localhost:3001',
+      'https://budget.jaredcarrano.com',
+      'http://budget.jaredcarrano.com',
     ];
     
     // In development, allow any localhost origin
@@ -37,10 +39,11 @@ const corsOptions = {
         callback(new Error('Not allowed by CORS'));
       }
     } else {
-      // In production, use specific allowed origins
+      // In production, allow configured origins or same-origin (no origin header = same origin via proxy)
       if (!origin || allowedOrigins.includes(origin)) {
         callback(null, true);
       } else {
+        console.error(`CORS rejected origin: ${origin}`);
         callback(new Error('Not allowed by CORS'));
       }
     }
