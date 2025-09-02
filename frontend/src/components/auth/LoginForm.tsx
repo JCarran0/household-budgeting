@@ -39,7 +39,7 @@ export function LoginForm() {
     <Container size={420} my={40} style={{ minHeight: '100vh', display: 'flex', alignItems: 'center' }}>
       <Paper radius="md" p="xl" withBorder style={{ width: '100%' }}>
         <Title order={2} ta="center" mb={5}>
-          Welcome back!
+          Who goes there?!
         </Title>
         <Text c="dimmed" size="sm" ta="center" mb={20}>
           Sign in to your account to continue
