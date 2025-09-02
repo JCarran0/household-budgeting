@@ -1,3 +1,4 @@
+import React from 'react';
 import {
   Table,
   Text,
@@ -7,7 +8,6 @@ import {
   Progress,
   Badge,
   Tooltip,
-  Stack,
 } from '@mantine/core';
 import { IconEdit, IconTrash, IconDeviceFloppy, IconX } from '@tabler/icons-react';
 import { useState } from 'react';
@@ -226,7 +226,7 @@ export function BudgetGrid({ budgets, categories, month, onEdit }: BudgetGridPro
       </Table.Thead>
       <Table.Tbody>
         {parentCategories.map(parent => (
-          <Stack key={parent.id} gap={0}>
+          <React.Fragment key={parent.id}>
             {/* Parent category budgets */}
             {budgetsByParent[parent.id]
               .filter(b => b.categoryId === parent.id)
@@ -259,7 +259,7 @@ export function BudgetGrid({ budgets, categories, month, onEdit }: BudgetGridPro
                   />
                 );
               })}
-          </Stack>
+          </React.Fragment>
         ))}
         
         {/* Budgets without parent categories */}
