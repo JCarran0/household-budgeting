@@ -35,14 +35,11 @@ export interface DataService {
 export class JSONDataService implements DataService {
   private dataDir: string;
   private usersFile: string;
-  private categoriesFile: string;
-  private budgetsFile: string;
 
   constructor(dataDir?: string) {
     this.dataDir = dataDir || process.env.DATA_DIR || path.join(__dirname, '../../data');
     this.usersFile = path.join(this.dataDir, 'users.json');
-    this.categoriesFile = path.join(this.dataDir, 'categories.json');
-    this.budgetsFile = path.join(this.dataDir, 'budgets.json');
+    // Legacy files (categories.json, budgets.json) removed - using user-scoped files instead
     this.ensureDataFile();
   }
 
@@ -50,12 +47,6 @@ export class JSONDataService implements DataService {
     await fs.ensureDir(this.dataDir);
     if (!(await fs.pathExists(this.usersFile))) {
       await fs.writeJson(this.usersFile, { users: [] });
-    }
-    if (!(await fs.pathExists(this.categoriesFile))) {
-      await fs.writeJson(this.categoriesFile, { categories: [] });
-    }
-    if (!(await fs.pathExists(this.budgetsFile))) {
-      await fs.writeJson(this.budgetsFile, { budgets: [] });
     }
   }
 
@@ -128,9 +119,8 @@ export class JSONDataService implements DataService {
         return [];
       }
     } else {
-      // Legacy: global categories (for backward compatibility)
-      const data = await fs.readJson(this.categoriesFile);
-      return data.categories || [];
+      // Legacy: global categories no longer supported - must provide userId
+      return [];
     }
   }
 
@@ -140,8 +130,8 @@ export class JSONDataService implements DataService {
       const userCategoriesFile = path.join(this.dataDir, `categories_${userId}.json`);
       await fs.writeJson(userCategoriesFile, { categories }, { spaces: 2 });
     } else {
-      // Legacy: save global categories
-      await fs.writeJson(this.categoriesFile, { categories }, { spaces: 2 });
+      // Legacy: global categories no longer supported - must provide userId
+      throw new Error('userId is required for saving categories');
     }
   }
 

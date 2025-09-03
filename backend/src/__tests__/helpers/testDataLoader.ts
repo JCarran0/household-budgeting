@@ -109,8 +109,7 @@ export async function setupTestData(dataDir: string, userData: any, transactions
   // Initialize empty categories
   await fs.writeJson(path.join(dataDir, `categories_${userId}.json`), []);
   
-  // Initialize empty budgets
-  await fs.writeJson(path.join(dataDir, 'budgets.json'), { budgets: [] });
+  // Legacy budgets.json no longer needed - using user-scoped files
 }
 
 /**
