@@ -49,6 +49,10 @@ pids/
 
 # TypeScript
 *.tsbuildinfo
+shared/types/*.js
+shared/types/*.js.map
+shared/types/*.d.ts
+shared/types/*.d.ts.map
 
 # Data files (for JSON storage)
 backend/data/*.json
