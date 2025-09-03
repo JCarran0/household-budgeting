@@ -211,14 +211,31 @@ npm run build
 # Backend (.env)
 NODE_ENV=development
 PORT=3001
+
+# Plaid Configuration
 PLAID_CLIENT_ID=your_sandbox_client_id
 PLAID_SECRET=your_sandbox_secret  
 PLAID_ENV=sandbox
+PLAID_PRODUCTS=transactions  # Note: Don't include "accounts" - it's automatic
+PLAID_COUNTRY_CODES=US
+
+# Security
 JWT_SECRET=your_development_jwt_secret
 JWT_EXPIRES_IN=7d
-DATA_DIR=./data
 ENCRYPTION_KEY=32_byte_hex_string
+
+# Storage
+DATA_DIR=./data
+STORAGE_TYPE=filesystem  # Use 's3' for production
+# S3_BUCKET_NAME=your-bucket  # Required if STORAGE_TYPE=s3
+# S3_PREFIX=data/  # Optional S3 prefix
+# AWS_REGION=us-east-1  # Required for S3
 ```
+
+### Common Plaid Issues
+- **"invalid product names: [accounts]"**: Remove "accounts" from PLAID_PRODUCTS - it's included automatically with "transactions"
+- **Phone validation in Plaid Link**: Always enter with country code: `+15551234567` (no spaces/dashes)
+- **"client_id must be properly formatted"**: Ensure you have actual Plaid credentials, not placeholder values
 
 ## Success Metrics
 - ✅ **Zero runtime type errors** - TypeScript catches all
@@ -265,6 +282,30 @@ ENCRYPTION_KEY=32_byte_hex_string
 - **Debug Plaid issues**: Check troubleshooting in architecture guide
 - **Handle auth errors**: Review JWT middleware patterns
 
+## Deployment Configuration
+
+### GitHub Actions Setup
+The deployment pipeline uses a mix of GitHub Secrets (sensitive) and Variables (non-sensitive):
+
+**GitHub Secrets** (Settings → Secrets → Actions):
+- `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` - AWS credentials
+- `PRODUCTION_JWT_SECRET` - JWT signing key
+- `PRODUCTION_PLAID_CLIENT_ID`, `PRODUCTION_PLAID_SECRET` - Plaid API credentials
+- `PRODUCTION_ENCRYPTION_KEY` - Data encryption key
+
+**GitHub Variables** (Settings → Variables → Actions):
+- `PRODUCTION_NODE_ENV`, `PRODUCTION_PORT`, `PRODUCTION_API_PREFIX` - App config
+- `PRODUCTION_PLAID_ENV`, `PRODUCTION_PLAID_PRODUCTS`, `PRODUCTION_PLAID_COUNTRY_CODES` - Plaid config
+- `PRODUCTION_STORAGE_TYPE`, `PRODUCTION_S3_BUCKET_NAME`, `PRODUCTION_S3_PREFIX` - Storage config
+- `AWS_REGION`, `S3_BACKUP_BUCKET`, `EC2_INSTANCE_ID` - AWS infrastructure
+
+### Infrastructure
+- **Terraform managed**: See `terraform/` directory
+- **S3 Buckets**: 
+  - `budget-app-data-*` - Application data storage
+  - `budget-app-backups-*` - Deployment artifacts and backups
+- **EC2 Instance**: Find ID in AWS Console → EC2 → Instances
+
 ## Notes for Future Development
 
 ### Lessons Learned
@@ -274,6 +315,8 @@ ENCRYPTION_KEY=32_byte_hex_string
 - Conditional rendering prevents Plaid Link duplicate script errors
 - Return JWT token on registration for auto-login UX
 - Method binding in API client prevents context loss
+- Use GitHub Variables for non-sensitive config to improve maintainability
+- StorageFactory should have single source of truth for config (ENV vars)
 
 ### Technical Debt
 - Frontend has some TypeScript errors to clean up
