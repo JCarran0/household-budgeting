@@ -5,7 +5,7 @@
  */
 
 import { AuthService } from './authService';
-import { DataService, JSONDataService, InMemoryDataService } from './dataService';
+import { DataService, UnifiedDataService, InMemoryDataService } from './dataService';
 import { PlaidService } from './plaidService';
 import { AccountService } from './accountService';
 import { TransactionService } from './transactionService';
@@ -14,9 +14,10 @@ import { BudgetService } from './budgetService';
 import { ReportService } from './reportService';
 
 // Create data service based on environment
+// Uses StorageFactory to automatically switch between filesystem and S3
 const dataService: DataService = process.env.NODE_ENV === 'test' 
   ? new InMemoryDataService()
-  : new JSONDataService();
+  : new UnifiedDataService();
 
 // Create singleton instances
 export const authService = new AuthService(dataService);

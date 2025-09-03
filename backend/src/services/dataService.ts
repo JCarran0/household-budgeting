@@ -1,6 +1,5 @@
-import fs from 'fs-extra';
-import path from 'path';
 import { Category } from '../../../shared/types';
+import { StorageAdapter, StorageFactory } from './storage';
 
 export interface User {
   id: string;
@@ -25,46 +24,46 @@ export interface DataService {
   getCategories(userId?: string): Promise<Category[]>;
   saveCategories(categories: Category[], userId?: string): Promise<void>;
   
-  
   // Generic data storage methods
   getData<T>(key: string): Promise<T | null>;
   saveData<T>(key: string, data: T): Promise<void>;
   deleteData(key: string): Promise<void>;
 }
 
-export class JSONDataService implements DataService {
-  private dataDir: string;
-  private usersFile: string;
+/**
+ * Unified data service that uses storage adapters
+ * Automatically switches between filesystem (dev) and S3 (production)
+ */
+export class UnifiedDataService implements DataService {
+  private storage: StorageAdapter;
+  private readonly USERS_KEY = 'users';
+  private readonly CATEGORIES_KEY = 'categories';
 
-  constructor(dataDir?: string) {
-    this.dataDir = dataDir || process.env.DATA_DIR || path.join(__dirname, '../../data');
-    this.usersFile = path.join(this.dataDir, 'users.json');
-    // Legacy files (categories.json, budgets.json) removed - using user-scoped files instead
-    this.ensureDataFile();
+  constructor(storage?: StorageAdapter) {
+    this.storage = storage || StorageFactory.getAdapter();
+    this.ensureInitialData();
   }
 
-  private async ensureDataFile(): Promise<void> {
-    await fs.ensureDir(this.dataDir);
-    if (!(await fs.pathExists(this.usersFile))) {
-      await fs.writeJson(this.usersFile, { users: [] });
+  private async ensureInitialData(): Promise<void> {
+    // Ensure users file exists
+    if (!(await this.storage.exists(this.USERS_KEY))) {
+      await this.storage.write(this.USERS_KEY, { users: [] });
     }
   }
 
+  // User Management Methods
   private async readUsers(): Promise<User[]> {
     try {
-      const data = await fs.readJson(this.usersFile);
-      return data.users || [];
-    } catch (error: any) {
-      // If file doesn't exist, return empty array (allows first user registration)
-      if (error.code === 'ENOENT') {
-        return [];
-      }
-      throw error;
+      const data = await this.storage.read<{ users: User[] }>(this.USERS_KEY);
+      return data?.users || [];
+    } catch (error) {
+      console.error('Error reading users:', error);
+      return [];
     }
   }
 
   private async writeUsers(users: User[]): Promise<void> {
-    await fs.writeJson(this.usersFile, { users }, { spaces: 2 });
+    await this.storage.write(this.USERS_KEY, { users });
   }
 
   async getUser(id: string): Promise<User | null> {
@@ -106,74 +105,42 @@ export class JSONDataService implements DataService {
     return await this.readUsers();
   }
 
-  // Category methods
+  // Category Methods
   async getCategories(userId?: string): Promise<Category[]> {
     if (userId) {
       // User-specific categories
-      const userCategoriesFile = path.join(this.dataDir, `categories_${userId}.json`);
-      try {
-        const data = await fs.readJson(userCategoriesFile);
-        return data.categories || [];
-      } catch (error) {
-        // If user-specific file doesn't exist, return empty array
-        return [];
-      }
+      const key = `categories_${userId}`;
+      const data = await this.storage.read<{ categories: Category[] }>(key);
+      return data?.categories || [];
     } else {
-      // Legacy: global categories no longer supported - must provide userId
-      return [];
+      // Legacy: global categories (for backward compatibility)
+      const data = await this.storage.read<{ categories: Category[] }>(this.CATEGORIES_KEY);
+      return data?.categories || [];
     }
   }
 
   async saveCategories(categories: Category[], userId?: string): Promise<void> {
     if (userId) {
       // Save user-specific categories
-      const userCategoriesFile = path.join(this.dataDir, `categories_${userId}.json`);
-      await fs.writeJson(userCategoriesFile, { categories }, { spaces: 2 });
+      const key = `categories_${userId}`;
+      await this.storage.write(key, { categories });
     } else {
-      // Legacy: global categories no longer supported - must provide userId
-      throw new Error('userId is required for saving categories');
+      // Legacy: save global categories
+      await this.storage.write(this.CATEGORIES_KEY, { categories });
     }
   }
 
-  // Generic data storage implementation
+  // Generic Data Storage Methods
   async getData<T>(key: string): Promise<T | null> {
-    const filePath = path.join(this.dataDir, `${key}.json`);
-    
-    try {
-      if (await fs.pathExists(filePath)) {
-        const data = await fs.readJson(filePath);
-        return data as T;
-      }
-      return null;
-    } catch (error) {
-      console.error(`Error reading data for key ${key}:`, error);
-      return null;
-    }
+    return await this.storage.read<T>(key);
   }
 
   async saveData<T>(key: string, data: T): Promise<void> {
-    const filePath = path.join(this.dataDir, `${key}.json`);
-    
-    try {
-      await fs.ensureDir(this.dataDir);
-      await fs.writeJson(filePath, data, { spaces: 2 });
-    } catch (error) {
-      console.error(`Error saving data for key ${key}:`, error);
-      throw error;
-    }
+    await this.storage.write(key, data);
   }
 
   async deleteData(key: string): Promise<void> {
-    const filePath = path.join(this.dataDir, `${key}.json`);
-    
-    try {
-      if (await fs.pathExists(filePath)) {
-        await fs.remove(filePath);
-      }
-    } catch (error) {
-      console.error(`Error deleting data for key ${key}:`, error);
-      throw error;
-    }
+    await this.storage.delete(key);
   }
 }
 
@@ -182,6 +149,7 @@ export class InMemoryDataService implements DataService {
   private users: User[] = [];
   private categories: Category[] = [];
   private userCategories: Map<string, Category[]> = new Map();
+  private genericData: Map<string, any> = new Map();
 
   async getUser(id: string): Promise<User | null> {
     return this.users.find(u => u.id === id) || null;
@@ -198,17 +166,14 @@ export class InMemoryDataService implements DataService {
 
   async updateUser(id: string, updates: Partial<User>): Promise<User | null> {
     const index = this.users.findIndex(u => u.id === id);
+    if (index === -1) return null;
     
-    if (index === -1) {
-      return null;
-    }
-
     this.users[index] = {
       ...this.users[index],
       ...updates,
       updatedAt: new Date(),
     };
-
+    
     return this.users[index];
   }
 
@@ -216,7 +181,6 @@ export class InMemoryDataService implements DataService {
     return this.users;
   }
 
-  // Category methods
   async getCategories(userId?: string): Promise<Category[]> {
     if (userId) {
       return this.userCategories.get(userId) || [];
@@ -232,27 +196,23 @@ export class InMemoryDataService implements DataService {
     }
   }
 
-  // Generic data storage implementation
-  private dataStore: Map<string, unknown> = new Map();
-
   async getData<T>(key: string): Promise<T | null> {
-    const data = this.dataStore.get(key);
-    return (data as T) || null;
+    return this.genericData.get(key) || null;
   }
 
   async saveData<T>(key: string, data: T): Promise<void> {
-    this.dataStore.set(key, data);
+    this.genericData.set(key, data);
   }
 
   async deleteData(key: string): Promise<void> {
-    this.dataStore.delete(key);
+    this.genericData.delete(key);
   }
 
-  // Test helper methods
+  // Test helper method to clear all data
   clear(): void {
     this.users = [];
     this.categories = [];
     this.userCategories.clear();
-    this.dataStore.clear();
+    this.genericData.clear();
   }
 }
