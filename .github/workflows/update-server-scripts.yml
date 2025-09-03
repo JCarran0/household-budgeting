@@ -47,7 +47,13 @@ jobs:
           fi
           
           APP_DIR="/home/appuser/app"
-          TEMP_DIR="/tmp/deployment-$(date +%s)"
+          BASE_TMP="/home/appuser/tmp"
+          
+          # Ensure tmp directory exists and clean old deployments
+          mkdir -p "$BASE_TMP"
+          find "$BASE_TMP" -maxdepth 1 -name "deployment-*" -type d -mtime +1 -exec rm -rf {} \; 2>/dev/null || true
+          
+          TEMP_DIR="$BASE_TMP/deployment-$(date +%s)"
           
           echo "📥 Downloading deployment package..."
           mkdir -p "$TEMP_DIR"
