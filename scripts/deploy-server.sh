@@ -43,10 +43,15 @@ else
     echo "⚠️  Warning: No .env file found in deployment package"
 fi
 
-# Backup current deployment
+# Backup current deployment (excluding data directory)
 if [ -d "$APP_DIR/backend" ]; then
     echo "📦 Backing up current deployment..."
-    tar -czf "$BACKUP_DIR/backup-$(date +%Y%m%d-%H%M%S).tar.gz" -C "$APP_DIR" .
+    tar -czf "$BACKUP_DIR/backup-$(date +%Y%m%d-%H%M%S).tar.gz" \
+        -C "$APP_DIR" \
+        --exclude="backend/data" \
+        --exclude="backend/node_modules" \
+        --exclude="backend/.env" \
+        .
 fi
 
 # Install dependencies
@@ -57,6 +62,15 @@ npm ci --omit=dev
 # Stop application
 echo "⏸️  Stopping application..."
 pm2 stop budget-backend || true
+
+# Clean up old data if switching to S3
+if [ -f "$DEPLOYMENT_DIR/backend/.env" ]; then
+    source "$DEPLOYMENT_DIR/backend/.env"
+    if [ "$STORAGE_TYPE" = "s3" ] && [ -d "$APP_DIR/backend/data" ]; then
+        echo "🧹 Cleaning up local data directory (using S3 storage now)..."
+        rm -rf "$APP_DIR/backend/data"
+    fi
+fi
 
 # Deploy new version
 echo "🔄 Deploying backend..."
@@ -72,7 +86,7 @@ mv "$DEPLOYMENT_DIR/frontend" "$APP_DIR/frontend"
 # Start application with correct path
 echo "▶️  Starting application..."
 cd "$APP_DIR/backend"
-pm2 start dist/index.js --name budget-backend --time || pm2 restart budget-backend
+pm2 start dist/backend/src/index.js --name budget-backend --time || pm2 restart budget-backend
 pm2 save
 
 # Health check
@@ -91,6 +105,8 @@ done
 echo "🧹 Cleaning up..."
 rm -rf "$TEMP_DIR"
 rm -rf "$DEPLOYMENT_DIR"
+rm -rf "$APP_DIR/backend.old"  # Remove old backend after successful deployment
+rm -rf "$APP_DIR/frontend.old"  # Remove old frontend after successful deployment
 
 # Keep only last 5 backups
 ls -t "$BACKUP_DIR"/*.tar.gz 2>/dev/null | tail -n +6 | xargs rm -f 2>/dev/null || true
