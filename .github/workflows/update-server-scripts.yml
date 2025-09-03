@@ -1,0 +1,122 @@
+name: Update Server Deployment Scripts
+on:
+  workflow_dispatch:
+    inputs:
+      script_to_update:
+        description: 'Which script to update'
+        required: true
+        type: choice
+        options:
+          - deploy.sh
+          - rollback.sh
+          - all
+        default: 'deploy.sh'
+
+jobs:
+  update-scripts:
+    runs-on: ubuntu-latest
+    name: Update deployment scripts on server
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Configure AWS
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ vars.PRODUCTION_AWS_REGION }}
+          
+      - name: Update deploy.sh
+        if: ${{ github.event.inputs.script_to_update == 'deploy.sh' || github.event.inputs.script_to_update == 'all' }}
+        run: |
+          echo "📝 Updating deploy.sh on server..."
+          
+          # Create the updated deploy.sh with correct PM2 path
+          cat > /tmp/deploy.sh << 'DEPLOY_SCRIPT'
+          #!/bin/bash
+          set -e
+          
+          # Script to deploy application from S3
+          S3_PATH=$1
+          
+          if [ -z "$S3_PATH" ]; then
+              echo "Usage: deploy.sh s3://bucket/path/to/deployment.tar.gz"
+              exit 1
+          fi
+          
+          APP_DIR="/home/appuser/app"
+          TEMP_DIR="/tmp/deployment-$(date +%s)"
+          
+          echo "📥 Downloading deployment package..."
+          mkdir -p "$TEMP_DIR"
+          cd "$TEMP_DIR"
+          aws s3 cp "$S3_PATH" deployment.tar.gz
+          tar -xzf deployment.tar.gz
+          
+          echo "📦 Installing backend dependencies..."
+          cd deployment/backend
+          npm ci --omit=dev
+          
+          echo "⏸️  Stopping application..."
+          pm2 stop budget-backend || true
+          
+          echo "🔄 Deploying new version..."
+          rm -rf "$APP_DIR/backend.old" "$APP_DIR/frontend.old"
+          [ -d "$APP_DIR/backend" ] && mv "$APP_DIR/backend" "$APP_DIR/backend.old"
+          [ -d "$APP_DIR/frontend" ] && mv "$APP_DIR/frontend" "$APP_DIR/frontend.old"
+          
+          mv "$TEMP_DIR/deployment/backend" "$APP_DIR/backend"
+          mv "$TEMP_DIR/deployment/frontend" "$APP_DIR/frontend"
+          
+          echo "▶️  Starting application with new path..."
+          cd "$APP_DIR/backend"
+          # FIXED: Using index.js instead of backend/src/index.js
+          pm2 start index.js --name budget-backend --time || pm2 restart budget-backend
+          pm2 save
+          
+          echo "🏥 Running health check..."
+          sleep 5
+          for i in {1..10}; do
+              if curl -f http://localhost:3001/health 2>/dev/null; then
+                  echo "✅ Deployment successful!"
+                  rm -rf "$TEMP_DIR"
+                  exit 0
+              fi
+              echo "Retry $i/10..."
+              sleep 2
+          done
+          
+          echo "❌ Health check failed"
+          exit 1
+          DEPLOY_SCRIPT
+          
+          # Upload script via SSM
+          SCRIPT_CONTENT=$(cat /tmp/deploy.sh | base64 -w0)
+          
+          COMMAND_ID=$(aws ssm send-command \
+            --instance-ids "${{ vars.PRODUCTION_EC2_INSTANCE_ID }}" \
+            --document-name "AWS-RunShellScript" \
+            --parameters "commands=[\"echo '$SCRIPT_CONTENT' | base64 -d > /home/appuser/deploy.sh && chmod +x /home/appuser/deploy.sh && chown appuser:appuser /home/appuser/deploy.sh && echo 'Deploy script updated successfully'\"]" \
+            --output text \
+            --query "Command.CommandId")
+          
+          echo "Waiting for command to complete..."
+          aws ssm wait command-executed \
+            --command-id "$COMMAND_ID" \
+            --instance-id "${{ vars.PRODUCTION_EC2_INSTANCE_ID }}"
+          
+          # Get result
+          aws ssm get-command-invocation \
+            --command-id "$COMMAND_ID" \
+            --instance-id "${{ vars.PRODUCTION_EC2_INSTANCE_ID }}" \
+            --query "StandardOutputContent" \
+            --output text
+            
+      - name: Summary
+        run: |
+          echo "### ✅ Server scripts updated!" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **Updated:** ${{ github.event.inputs.script_to_update }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Key change:** PM2 now starts from \`index.js\` instead of \`backend/src/index.js\`" >> $GITHUB_STEP_SUMMARY
