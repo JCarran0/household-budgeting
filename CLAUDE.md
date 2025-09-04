@@ -317,6 +317,11 @@ The deployment pipeline uses a mix of GitHub Secrets (sensitive) and Variables (
 - Method binding in API client prevents context loss
 - Use GitHub Variables for non-sensitive config to improve maintainability
 - StorageFactory should have single source of truth for config (ENV vars)
+- Categories must be user-specific from the start - no global categories
+- Transaction removal logic must only check accounts being synced
+- Performance issues with 800+ items require pagination (50 per page works well)
+- React Query staleTime vs gcTime: staleTime keeps data fresh, gcTime keeps in cache
+- TypeScript rootDir issues when importing from outside src/ - use postbuild script to flatten dist
 
 ### Technical Debt
 - Frontend has some TypeScript errors to clean up

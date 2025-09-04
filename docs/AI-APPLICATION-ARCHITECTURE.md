@@ -95,6 +95,7 @@ household-budgeting/
   - `getCategoryTree()`: Get hierarchical structure
   - `deleteCategory()`: Remove with transaction reassignment
 - **Structure**: Parent categories → Subcategories only
+- **Data Isolation**: All categories are user-specific (no global categories)
 
 #### 6. BudgetService (`backend/src/services/budgetService.ts`)
 - **Purpose**: Monthly budget management
@@ -105,11 +106,13 @@ household-budgeting/
 - **Data Model**: `MonthlyBudget` with YYYY-MM format
 
 #### 7. DataService (`backend/src/services/dataService.ts`)
-- **Purpose**: JSON file persistence layer
+- **Purpose**: Unified data persistence layer with storage adapters
 - **Features**:
-  - User-scoped data isolation
+  - User-scoped data isolation (all data keyed by userId)
+  - Storage adapter pattern (filesystem for dev, S3 for production)
   - Atomic writes with temp files
   - Automatic directory creation
+- **Important**: Categories require userId parameter (no global categories)
 
 ## Frontend Architecture
 
@@ -310,6 +313,26 @@ ENCRYPTION_KEY=xxx (32 bytes hex)
 
 ### Issue: Categories not initializing
 **Solution**: Call `/api/v1/categories/initialize` endpoint
+
+### Issue: Initial sync returns 0 transactions
+**Cause**: Plaid needs 10-60 seconds to prepare transaction data after token exchange
+**Solution**: Wait before syncing, or sync manually later
+
+### Issue: Syncing one account removes transactions from other accounts
+**Cause**: Transaction removal logic checking all transactions instead of just synced accounts
+**Solution**: Only check transactions from accounts being synced:
+```typescript
+const syncedAccountIds = new Set(accounts.map(a => a.id));
+if (syncedAccountIds.has(existing.accountId)) { /* check for removal */ }
+```
+
+### Issue: Transaction page laggy with 800+ transactions
+**Cause**: Rendering all rows at once causes performance issues
+**Solution**: Implement pagination (50 transactions per page recommended)
+
+### Issue: TypeScript build creates nested dist structure
+**Cause**: Importing files from outside rootDir (e.g., shared/types)
+**Solution**: Remove explicit rootDir and use postbuild script to flatten dist structure
 
 ## Next Steps for Development
 
