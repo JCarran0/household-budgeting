@@ -6,6 +6,9 @@ Building a personal budgeting app for 2 users with Plaid integration. Using Risk
 ## Technical Architecture
 For detailed technical architecture, service descriptions, data flows, and implementation details, see **[docs/AI-APPLICATION-ARCHITECTURE.md](docs/AI-APPLICATION-ARCHITECTURE.md)**. This document provides comprehensive guidance for AI agents on the codebase structure, API patterns, common tasks, and troubleshooting.
 
+## Deployment and Operations
+For deployment processes, infrastructure management, CI/CD configuration, and production operations, see **[docs/AI-DEPLOYMENTS.md](docs/AI-DEPLOYMENTS.md)**. This guide covers AWS infrastructure, GitHub Actions setup, troubleshooting, and monitoring.
+
 ## Testing Strategy
 For comprehensive testing guidance, see **[docs/AI-TESTING-STRATEGY.md](docs/AI-TESTING-STRATEGY.md)**. This document covers user story testing, risk-based prioritization, test examples with real code, lessons learned from overmocking, and troubleshooting common test failures. The test strategy references **[docs/AI-USER-STORIES.md](docs/AI-USER-STORIES.md)** which contains the complete product requirements as user stories.
 
@@ -226,7 +229,7 @@ ENCRYPTION_KEY=32_byte_hex_string
 
 # Storage
 DATA_DIR=./data
-STORAGE_TYPE=filesystem  # Use 's3' for production
+STORAGE_TYPE=filesystem  # Use 's3' for production (see docs/AI-DEPLOYMENTS.md)
 # S3_BUCKET_NAME=your-bucket  # Required if STORAGE_TYPE=s3
 # S3_PREFIX=data/  # Optional S3 prefix
 # AWS_REGION=us-east-1  # Required for S3
@@ -266,6 +269,7 @@ STORAGE_TYPE=filesystem  # Use 's3' for production
 
 ### Critical Files
 - **Architecture Guide**: `docs/AI-APPLICATION-ARCHITECTURE.md`
+- **Deployment Guide**: `docs/AI-DEPLOYMENTS.md`
 - **Auth Service**: `backend/src/services/authService.ts`
 - **Account Management**: `backend/src/services/accountService.ts`
 - **Frontend Entry**: `frontend/src/App.tsx`
@@ -282,29 +286,9 @@ STORAGE_TYPE=filesystem  # Use 's3' for production
 - **Debug Plaid issues**: Check troubleshooting in architecture guide
 - **Handle auth errors**: Review JWT middleware patterns
 
-## Deployment Configuration
+## Deployment
 
-### GitHub Actions Setup
-The deployment pipeline uses a mix of GitHub Secrets (sensitive) and Variables (non-sensitive):
-
-**GitHub Secrets** (Settings → Secrets → Actions):
-- `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` - AWS credentials
-- `PRODUCTION_JWT_SECRET` - JWT signing key
-- `PRODUCTION_PLAID_CLIENT_ID`, `PRODUCTION_PLAID_SECRET` - Plaid API credentials
-- `PRODUCTION_ENCRYPTION_KEY` - Data encryption key
-
-**GitHub Variables** (Settings → Variables → Actions):
-- `PRODUCTION_NODE_ENV`, `PRODUCTION_PORT`, `PRODUCTION_API_PREFIX` - App config
-- `PRODUCTION_PLAID_ENV`, `PRODUCTION_PLAID_PRODUCTS`, `PRODUCTION_PLAID_COUNTRY_CODES` - Plaid config
-- `PRODUCTION_STORAGE_TYPE`, `PRODUCTION_S3_BUCKET_NAME`, `PRODUCTION_S3_PREFIX` - Storage config
-- `AWS_REGION`, `S3_BACKUP_BUCKET`, `EC2_INSTANCE_ID` - AWS infrastructure
-
-### Infrastructure
-- **Terraform managed**: See `terraform/` directory
-- **S3 Buckets**: 
-  - `budget-app-data-*` - Application data storage
-  - `budget-app-backups-*` - Deployment artifacts and backups
-- **EC2 Instance**: Find ID in AWS Console → EC2 → Instances
+For comprehensive deployment guidance including infrastructure, CI/CD configuration, troubleshooting, and production operations, see **[docs/AI-DEPLOYMENTS.md](docs/AI-DEPLOYMENTS.md)**.
 
 ## Notes for Future Development
 
