@@ -21,8 +21,9 @@ export interface StoredAccount {
   plaidAccessToken: string;      // Encrypted access token
   institutionId: string;         // Plaid Institution ID
   institutionName: string;       // Bank name (e.g., "Chase")
-  accountName: string;           // Account nickname
+  accountName: string;           // Account name from Plaid
   officialName: string | null;   // Official account name from bank
+  nickname: string | null;       // User-defined nickname for the account
   type: string;                  // Account type (checking, savings, credit)
   subtype: string | null;        // Account subtype
   mask: string | null;           // Last 4 digits
@@ -105,6 +106,7 @@ export class AccountService {
           institutionName,
           accountName: plaidAccount.name,
           officialName: plaidAccount.officialName,
+          nickname: null,  // User-defined nickname, initially null
           type: plaidAccount.type,
           subtype: plaidAccount.subtype,
           mask: plaidAccount.mask,
@@ -242,6 +244,39 @@ export class AccountService {
       return {
         success: false,
         error: 'Failed to sync balances',
+      };
+    }
+  }
+
+  /**
+   * Update account nickname
+   */
+  async updateAccountNickname(userId: string, accountId: string, nickname: string | null): Promise<{ success: boolean; error?: string }> {
+    try {
+      const account = await this.getAccount(userId, accountId);
+      
+      if (!account) {
+        return { success: false, error: 'Account not found' };
+      }
+
+      // Update the nickname
+      account.nickname = nickname;
+      account.updatedAt = new Date();
+
+      // Save the updated account
+      const accounts = await this.dataService.getData<StoredAccount[]>(`accounts_${userId}`) || [];
+      const updatedAccounts = accounts.map(acc => 
+        acc.id === accountId ? account : acc
+      );
+      
+      await this.dataService.saveData(`accounts_${userId}`, updatedAccounts);
+
+      return { success: true };
+    } catch (error) {
+      console.error('Error updating account nickname:', error);
+      return { 
+        success: false, 
+        error: error instanceof Error ? error.message : 'Failed to update account nickname'
       };
     }
   }

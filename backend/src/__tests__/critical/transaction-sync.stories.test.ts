@@ -46,6 +46,7 @@ describe('User Story: Transaction Synchronization', () => {
       institutionName: 'Test Bank',
       accountName: 'Test Checking',
       officialName: 'Test Checking Account',
+      nickname: null,
       type: 'checking',
       subtype: 'checking',
       mask: '1234',

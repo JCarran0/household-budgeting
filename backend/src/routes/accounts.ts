@@ -186,6 +186,55 @@ router.post('/:accountId/sync-transactions', authMiddleware, async (req: AuthReq
 });
 
 /**
+ * PUT /api/v1/accounts/:accountId
+ * Update account details (currently only nickname)
+ */
+router.put('/:accountId', authMiddleware, async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    if (!req.user) {
+      res.status(401).json({ success: false, error: 'Unauthorized' });
+      return;
+    }
+
+    const { accountId } = req.params;
+    
+    // Validate input
+    const updateSchema = z.object({
+      nickname: z.string().max(50).nullable().optional(),
+    });
+
+    const validation = updateSchema.safeParse(req.body);
+    if (!validation.success) {
+      res.status(400).json({ 
+        success: false, 
+        error: 'Invalid request data',
+        details: validation.error.format(),
+      });
+      return;
+    }
+
+    const { nickname } = validation.data;
+    
+    if (nickname !== undefined) {
+      const result = await accountService.updateAccountNickname(req.user.userId, accountId, nickname);
+      
+      if (!result.success) {
+        res.status(result.error === 'Account not found' ? 404 : 400).json({ 
+          success: false, 
+          error: result.error 
+        });
+        return;
+      }
+    }
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error updating account:', error);
+    res.status(500).json({ success: false, error: 'Failed to update account' });
+  }
+});
+
+/**
  * DELETE /api/v1/accounts/:accountId
  * Disconnect a bank account
  */

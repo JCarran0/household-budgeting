@@ -243,12 +243,13 @@ export function EnhancedTransactions() {
   
   // Create account lookup map for tooltips
   const accountLookup = useMemo(() => {
-    const map = new Map<string, { name: string; institution: string; mask: string | null }>();
+    const map = new Map<string, { name: string; institution: string; mask: string | null; nickname: string | null }>();
     accounts?.forEach(acc => {
       map.set(acc.id, {
         name: acc.officialName || acc.accountName || acc.name,
         institution: acc.institutionName || acc.institution,
-        mask: acc.mask
+        mask: acc.mask,
+        nickname: acc.nickname || null
       });
     });
     return map;
@@ -778,7 +779,7 @@ export function EnhancedTransactions() {
                       const accountInfo = accountLookup.get(transaction.accountId);
                       return accountInfo ? (
                         <Tooltip
-                          label={`${accountInfo.name} - ${accountInfo.institution}${accountInfo.mask ? ` ••${accountInfo.mask}` : ''}`}
+                          label={`${accountInfo.nickname || accountInfo.name} - ${accountInfo.institution}${accountInfo.mask ? ` ••${accountInfo.mask}` : ''}`}
                           openDelay={1000}
                           closeDelay={200}
                         >

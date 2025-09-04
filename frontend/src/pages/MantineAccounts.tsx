@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { api } from '../lib/api';
+import { api, type ExtendedPlaidAccount } from '../lib/api';
 import { PlaidButton } from '../components/PlaidButton';
 import { formatDistanceToNow } from 'date-fns';
 import { useState } from 'react';
@@ -31,7 +31,9 @@ import {
   IconDots,
   IconTrash,
   IconAlertCircle,
+  IconEdit,
 } from '@tabler/icons-react';
+import { AccountNicknameModal } from '../components/accounts/AccountNicknameModal';
 
 export function MantineAccounts() {
   const queryClient = useQueryClient();
@@ -42,6 +44,8 @@ export function MantineAccounts() {
     institution: string;
   } | null>(null);
   const [opened, { open, close }] = useDisclosure(false);
+  const [editingAccount, setEditingAccount] = useState<ExtendedPlaidAccount | null>(null);
+  const [nicknameModalOpened, { open: openNicknameModal, close: closeNicknameModal }] = useDisclosure(false);
 
   const { data: accounts, isLoading } = useQuery({
     queryKey: ['accounts'],
@@ -120,6 +124,16 @@ export function MantineAccounts() {
     }
   };
 
+  const handleEditNickname = (account: ExtendedPlaidAccount) => {
+    setEditingAccount(account);
+    openNicknameModal();
+  };
+
+  const handleCloseNicknameModal = () => {
+    closeNicknameModal();
+    setEditingAccount(null);
+  };
+
   if (isLoading) {
     return (
       <Center h={400}>
@@ -162,8 +176,25 @@ export function MantineAccounts() {
                     <IconCreditCard size={24} />
                   </ThemeIcon>
                   <div>
-                    <Text size="lg" fw={600}>{account.name}</Text>
-                    <Group gap="xs">
+                    <Group gap="xs" align="center">
+                      <Text size="lg" fw={600}>
+                        {account.nickname || account.name}
+                      </Text>
+                      <Tooltip label="Edit nickname">
+                        <ActionIcon
+                          variant="subtle"
+                          size="sm"
+                          onClick={() => handleEditNickname(account)}
+                        >
+                          <IconEdit size={14} />
+                        </ActionIcon>
+                      </Tooltip>
+                    </Group>
+                    <Text size="xs" c="dimmed">
+                      {account.nickname ? 'Official: ' : ''}{account.officialName || account.accountName || account.name}
+                      {account.mask && ` ••${account.mask}`}
+                    </Text>
+                    <Group gap="xs" mt={4}>
                       <Badge color="blue" variant="light" size="sm">
                         {account.type}
                       </Badge>
@@ -299,6 +330,13 @@ export function MantineAccounts() {
           </Group>
         </Stack>
       </Modal>
+
+      {/* Nickname Edit Modal */}
+      <AccountNicknameModal
+        account={editingAccount}
+        opened={nicknameModalOpened}
+        onClose={handleCloseNicknameModal}
+      />
     </Stack>
   );
 }

@@ -26,6 +26,7 @@ export interface PlaidAccount {
   plaidAccountId: string;
   plaidItemId: string;
   name: string;
+  nickname?: string | null;
   type: 'checking' | 'savings' | 'credit' | 'investment' | 'loan' | 'other';
   subtype: string | null;
   institution: string;
