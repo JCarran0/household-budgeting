@@ -31,6 +31,7 @@ import {
   Collapse,
   Skeleton,
   LoadingOverlay,
+  Pagination,
 } from '@mantine/core';
 import { DatePickerInput } from '@mantine/dates';
 import { notifications } from '@mantine/notifications';
@@ -62,6 +63,8 @@ const spinAnimation = `
   }
 `;
 
+const TRANSACTIONS_PER_PAGE = 50;
+
 export function EnhancedTransactions() {
   // Use persisted filters from localStorage
   const {
@@ -88,6 +91,7 @@ export function EnhancedTransactions() {
   } = useTransactionFilters();
   
   const [hasInitialized, setHasInitialized] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
   
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -185,14 +189,19 @@ export function EnhancedTransactions() {
   ]);
 
   // Fetch transactions with filters
-  const { data: transactionData, isLoading, isFetching, refetch } = useQuery({
+  const { data: transactionData, isFetching, refetch, status } = useQuery({
     queryKey: ['transactions', queryParams],
     queryFn: () => api.getTransactions(queryParams),
     placeholderData: (previousData) => previousData,
     refetchOnWindowFocus: false,
     staleTime: 5 * 60 * 1000, // 5 minutes - data stays fresh
     gcTime: 10 * 60 * 1000,    // 10 minutes - cache persists (was cacheTime in v4)
+    retry: 1,
   });
+  
+  // Only show skeletons when we're in a true loading state with no data
+  // Since status is always 'success' when returning, this should never show skeletons
+  const showSkeletons = status === 'pending' && !transactionData;
   
   // Removed smart default selection to respect user's persisted filter choice
   // The persisted filters from localStorage should take precedence
@@ -305,7 +314,18 @@ export function EnhancedTransactions() {
   };
 
   const transactions = transactionData?.transactions || [];
-  const totalTransactions = transactionData?.total ?? transactions.length;
+  
+  // Paginate transactions
+  const totalPages = Math.ceil(transactions.length / TRANSACTIONS_PER_PAGE);
+  const paginatedTransactions = transactions.slice(
+    (currentPage - 1) * TRANSACTIONS_PER_PAGE,
+    currentPage * TRANSACTIONS_PER_PAGE
+  );
+  
+  // Reset to page 1 when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [queryParams]);
 
   return (
     <>
@@ -315,7 +335,7 @@ export function EnhancedTransactions() {
         <Group justify="space-between">
           <Group gap="xs">
             <Title order={2}>Transactions</Title>
-            {isFetching && !isLoading && (
+            {isFetching && transactions.length > 0 && (
               <ThemeIcon variant="subtle" size="sm" radius="xl">
                 <IconRefresh size={14} style={{ animation: 'spin 1s linear infinite' }} />
               </ThemeIcon>
@@ -482,13 +502,13 @@ export function EnhancedTransactions() {
             </Grid>
 
             <Group justify="space-between">
-              <Text size="sm" c="dimmed">
-                {isLoading && !transactionData ? (
-                  <Skeleton height={16} width={200} />
-                ) : (
-                  `Showing ${transactions.length} of ${totalTransactions} transactions`
-                )}
-              </Text>
+              {showSkeletons ? (
+                <Skeleton height={16} width={200} />
+              ) : (
+                <Text size="sm" c="dimmed">
+                  Showing {paginatedTransactions.length} of {transactions.length} transactions (Page {currentPage}/{totalPages})
+                </Text>
+              )}
               <Group gap="xs">
                 <Button 
                   variant="subtle" 
@@ -521,7 +541,7 @@ export function EnhancedTransactions() {
 
         {/* Transactions Table */}
         <Paper withBorder style={{ position: 'relative' }}>
-          <LoadingOverlay visible={isFetching && !isLoading} loaderProps={{ size: 'md' }} />
+          <LoadingOverlay visible={isFetching && transactions.length > 0} loaderProps={{ size: 'md' }} />
           <ScrollArea>
             <Table striped highlightOnHover>
               <Table.Thead>
@@ -536,8 +556,8 @@ export function EnhancedTransactions() {
                 </Table.Tr>
               </Table.Thead>
               <Table.Tbody>
-                {isLoading && !transactionData ? (
-                  // Show skeleton rows only on initial load (no cached data)
+                {showSkeletons ? (
+                  // Show skeleton rows only on true initial load
                   [...Array(8)].map((_, index) => (
                     <Table.Tr key={`skeleton-${index}`}>
                       <Table.Td><Skeleton height={20} width={80} /></Table.Td>
@@ -549,7 +569,7 @@ export function EnhancedTransactions() {
                       <Table.Td><Skeleton height={20} width={60} /></Table.Td>
                     </Table.Tr>
                   ))
-                ) : transactions.length === 0 ? (
+                ) : paginatedTransactions.length === 0 ? (
                   <Table.Tr>
                     <Table.Td colSpan={7}>
                       <Center py="xl">
@@ -558,7 +578,7 @@ export function EnhancedTransactions() {
                     </Table.Td>
                   </Table.Tr>
                 ) : (
-                  transactions.map((transaction) => (
+                  paginatedTransactions.map((transaction) => (
                 <Table.Tr key={transaction.id}>
                   <Table.Td>
                     <Text size="sm">{transaction.date}</Text>
@@ -723,6 +743,22 @@ export function EnhancedTransactions() {
             </Table.Tbody>
           </Table>
         </ScrollArea>
+        
+        {/* Pagination */}
+        {totalPages > 1 && (
+          <Group justify="center" mt="md">
+            <Pagination 
+              value={currentPage} 
+              onChange={setCurrentPage} 
+              total={totalPages}
+              siblings={1}
+              boundaries={1}
+            />
+            <Text size="sm" c="dimmed">
+              Page {currentPage} of {totalPages} ({transactions.length} total transactions)
+            </Text>
+          </Group>
+        )}
         </Paper>
       </Stack>
 
