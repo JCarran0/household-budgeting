@@ -126,13 +126,6 @@ function CategoryNode({ category, onEdit, onDelete, level = 0 }: CategoryNodePro
                 </Tooltip>
               )}
 
-              {category.isSystem && (
-                <Tooltip label="Plaid-provided category">
-                  <Badge size="xs" variant="dot" color="green">
-                    System
-                  </Badge>
-                </Tooltip>
-              )}
             </Group>
           </Group>
 

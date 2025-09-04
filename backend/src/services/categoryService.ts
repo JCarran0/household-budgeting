@@ -64,8 +64,7 @@ export class CategoryService {
       name: data.name,
       parentId: data.parentId,
       isHidden: data.isHidden,
-      isSavings: data.isSavings,
-      isSystem: false // User-created categories are not system categories
+      isSavings: data.isSavings
     };
 
     categories.push(newCategory);
@@ -79,11 +78,6 @@ export class CategoryService {
 
     if (index === -1) {
       throw new Error('Category not found');
-    }
-
-    // Prevent editing system categories
-    if (categories[index].isSystem) {
-      throw new Error('System categories cannot be edited');
     }
 
     const updatedCategory = {
@@ -103,11 +97,6 @@ export class CategoryService {
     const categoryToDelete = categories.find(cat => cat.id === id);
     if (!categoryToDelete) {
       throw new Error('Category not found');
-    }
-    
-    // Prevent deleting system categories
-    if (categoryToDelete.isSystem) {
-      throw new Error('System categories cannot be deleted');
     }
     
     // Check if category has subcategories
@@ -164,34 +153,35 @@ export class CategoryService {
       return;
     }
 
-    // Create Plaid system categories
-    const systemCategories: Category[] = [
-      { id: 'plaid_income', name: 'Income', parentId: null, isHidden: false, isSavings: false, isSystem: true },
-      { id: 'plaid_transfer', name: 'Transfer', parentId: null, isHidden: true, isSavings: false, isSystem: true },
-      { id: 'plaid_housing', name: 'Housing', parentId: null, isHidden: false, isSavings: false, isSystem: true },
-      { id: 'plaid_transportation', name: 'Transportation', parentId: null, isHidden: false, isSavings: false, isSystem: true },
-      { id: 'plaid_food_drink', name: 'Food & Drink', parentId: null, isHidden: false, isSavings: false, isSystem: true },
-      { id: 'plaid_shops', name: 'Shopping', parentId: null, isHidden: false, isSavings: false, isSystem: true },
-      { id: 'plaid_entertainment', name: 'Entertainment', parentId: null, isHidden: false, isSavings: false, isSystem: true },
-      { id: 'plaid_service', name: 'Services', parentId: null, isHidden: false, isSavings: false, isSystem: true },
-      { id: 'plaid_healthcare', name: 'Healthcare', parentId: null, isHidden: false, isSavings: false, isSystem: true },
-      { id: 'plaid_education', name: 'Education', parentId: null, isHidden: false, isSavings: false, isSystem: true },
-      { id: 'plaid_personal', name: 'Personal Care', parentId: null, isHidden: false, isSavings: false, isSystem: true },
-      { id: 'plaid_travel', name: 'Travel', parentId: null, isHidden: false, isSavings: false, isSystem: true },
-      { id: 'plaid_bank_fees', name: 'Bank Fees', parentId: null, isHidden: false, isSavings: false, isSystem: true },
-      { id: 'plaid_cash_advance', name: 'Cash Advance', parentId: null, isHidden: false, isSavings: false, isSystem: true },
-      { id: 'plaid_taxes', name: 'Taxes', parentId: null, isHidden: false, isSavings: false, isSystem: true },
-      { id: 'plaid_other', name: 'Other', parentId: null, isHidden: false, isSavings: false, isSystem: true },
+    // Create default categories matching Plaid's category names
+    // These are regular user categories that can be edited/deleted
+    const defaultCategories: Category[] = [
+      { id: uuidv4(), name: 'Income', parentId: null, isHidden: false, isSavings: false },
+      { id: uuidv4(), name: 'Transfer', parentId: null, isHidden: true, isSavings: false },
+      { id: uuidv4(), name: 'Bank Fees', parentId: null, isHidden: false, isSavings: false },
+      { id: uuidv4(), name: 'Cash Advance', parentId: null, isHidden: false, isSavings: false },
+      { id: uuidv4(), name: 'Community', parentId: null, isHidden: false, isSavings: false },
+      { id: uuidv4(), name: 'Education', parentId: null, isHidden: false, isSavings: false },
+      { id: uuidv4(), name: 'Entertainment', parentId: null, isHidden: false, isSavings: false },
+      { id: uuidv4(), name: 'Food and Drink', parentId: null, isHidden: false, isSavings: false },
+      { id: uuidv4(), name: 'Healthcare', parentId: null, isHidden: false, isSavings: false },
+      { id: uuidv4(), name: 'Interest', parentId: null, isHidden: false, isSavings: false },
+      { id: uuidv4(), name: 'Payment', parentId: null, isHidden: true, isSavings: false },
+      { id: uuidv4(), name: 'Personal Care', parentId: null, isHidden: false, isSavings: false },
+      { id: uuidv4(), name: 'Recreation', parentId: null, isHidden: false, isSavings: false },
+      { id: uuidv4(), name: 'Service', parentId: null, isHidden: false, isSavings: false },
+      { id: uuidv4(), name: 'Shops', parentId: null, isHidden: false, isSavings: false },
+      { id: uuidv4(), name: 'Tax', parentId: null, isHidden: false, isSavings: false },
+      { id: uuidv4(), name: 'Travel', parentId: null, isHidden: false, isSavings: false },
+      { id: uuidv4(), name: 'Transportation', parentId: null, isHidden: false, isSavings: false },
+      
+      // Additional useful default categories
+      { id: uuidv4(), name: 'Savings', parentId: null, isHidden: false, isSavings: true },
     ];
 
-    // Create a default user Savings category (not a system category)
-    const userCategories: Category[] = [
-      { id: uuidv4(), name: 'Savings', parentId: null, isHidden: false, isSavings: true, isSystem: false }
-    ];
-
-    const allCategories = [...systemCategories, ...userCategories];
-    await this.dataService.saveCategories(allCategories, userId);
+    await this.dataService.saveCategories(defaultCategories, userId);
   }
+
 }
 
 // Export singleton instance

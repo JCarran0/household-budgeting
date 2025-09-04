@@ -153,7 +153,7 @@ export function CategoryForm({ opened, onClose, category, onSuccess }: CategoryF
       .filter(cat => !category || cat.id !== category.id)
       .map(cat => ({
         value: cat.id,
-        label: cat.isSystem ? `${cat.name} (Plaid)` : cat.name,
+        label: cat.name,
       }));
     
     return options;

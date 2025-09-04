@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Container,
   Title,
@@ -43,6 +43,7 @@ export function Categories() {
   const [editingCategory, setEditingCategory] = useState<Category | null>(null);
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [showHidden, setShowHidden] = useState<boolean>(false);
+  const [hasInitialized, setHasInitialized] = useState<boolean>(false);
   const queryClient = useQueryClient();
 
   // Fetch categories
@@ -58,6 +59,27 @@ export function Categories() {
       }
     },
   });
+
+  // Initialize default categories if none exist
+  const initializeMutation = useMutation({
+    mutationFn: api.initializeDefaultCategories,
+    onSuccess: () => {
+      console.log('Default categories initialized successfully');
+      queryClient.invalidateQueries({ queryKey: ['categories'] });
+      setHasInitialized(true);
+    },
+    onError: (err) => {
+      console.error('Failed to initialize default categories:', err);
+    },
+  });
+
+  // Auto-initialize categories on first use
+  useEffect(() => {
+    if (!isLoading && !hasInitialized && categories && categories.length === 0) {
+      console.log('No categories found, initializing default Plaid system categories...');
+      initializeMutation.mutate();
+    }
+  }, [categories, isLoading, hasInitialized]);
 
 
   // Delete category mutation

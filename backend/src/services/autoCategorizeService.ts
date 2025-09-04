@@ -7,7 +7,8 @@
 import { v4 as uuidv4 } from 'uuid';
 import { DataService } from './dataService';
 import { StoredTransaction } from './transactionService';
-import { AutoCategorizeRule } from '../../../shared/types';
+import { AutoCategorizeRule, Category } from '../../../shared/types';
+import { categoryService } from './index';
 
 export interface StoredAutoCategorizeRule extends AutoCategorizeRule {
   userId: string;
@@ -190,14 +191,18 @@ export class AutoCategorizeService {
 
   /**
    * Apply auto-categorization rules to transactions
-   * Priority: 1. User rules, 2. Plaid category mappings, 3. Uncategorized
+   * Priority: 1. User rules, 2. Plaid category name matching
    */
   async applyRules(
     userId: string,
-    transactions: StoredTransaction[]
+    transactions: StoredTransaction[],
+    userCategories?: Category[]
   ): Promise<{ categorized: number; errors: string[] }> {
     const rules = await this.getRules(userId);
     const activeRules = rules.filter(r => r.isActive);
+    
+    // Get user's categories if not provided
+    const categories = userCategories || await this.dataService.getCategories(userId);
     
     let categorized = 0;
     const errors: string[] = [];
@@ -206,7 +211,9 @@ export class AutoCategorizeService {
       // Skip if already has user-defined category
       if (transaction.userCategoryId) continue;
       
-      // Try user-defined rules
+      let matched = false;
+      
+      // Step 1: Try user-defined rules first
       const description = (transaction.userDescription || transaction.name).toLowerCase();
       for (const rule of activeRules) {
         const pattern = rule.pattern.toLowerCase();
@@ -220,7 +227,27 @@ export class AutoCategorizeService {
           }
           transaction.updatedAt = new Date();
           categorized++;
+          matched = true;
           break; // Stop after first match
+        }
+      }
+      
+      // Step 2: If no user rule matched and transaction has Plaid categories,
+      // try to match with user's categories by name
+      if (!matched && transaction.category && transaction.category.length > 0) {
+        // Get the primary category from Plaid (first element)
+        const plaidPrimaryCategory = transaction.category[0];
+        
+        // Look for a user category with matching name (case-insensitive)
+        const matchingCategory = categories.find(cat => 
+          cat.name.toLowerCase() === plaidPrimaryCategory.toLowerCase()
+        );
+        
+        if (matchingCategory) {
+          transaction.categoryId = matchingCategory.id;
+          transaction.userCategoryId = matchingCategory.id;
+          transaction.updatedAt = new Date();
+          categorized++;
         }
       }
     }
@@ -238,14 +265,20 @@ export class AutoCategorizeService {
     error?: string;
   }> {
     try {
+      // Ensure user has default categories initialized
+      await categoryService.initializeDefaultCategories(userId);
+      
       const transactions = await this.dataService.getData<StoredTransaction[]>(
         `transactions_${userId}`
       ) || [];
 
+      // Get user's categories for matching
+      const userCategories = await this.dataService.getCategories(userId);
+
       // Filter to uncategorized transactions
       const uncategorized = transactions.filter(t => !t.userCategoryId && !t.isHidden);
       
-      const result = await this.applyRules(userId, uncategorized);
+      const result = await this.applyRules(userId, uncategorized, userCategories);
       
       // Save updated transactions
       await this.dataService.saveData(`transactions_${userId}`, transactions);

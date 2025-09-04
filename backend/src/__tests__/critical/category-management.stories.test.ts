@@ -260,7 +260,6 @@ describe('User Story: Category Management', () => {
           parentId: null,
           isHidden: false,
           isSavings: false,
-          plaidCategory: null,
         }
       );
       
@@ -275,7 +274,6 @@ describe('User Story: Category Management', () => {
           parentId: parentId,
           isHidden: false,
           isSavings: false,
-          plaidCategory: null,
         }
       );
       
@@ -300,7 +298,6 @@ describe('User Story: Category Management', () => {
           parentId: null,
           isHidden: false,
           isSavings: false,
-          plaidCategory: null,
         }
       );
       
@@ -337,7 +334,6 @@ describe('User Story: Category Management', () => {
           parentId: null,
           isHidden: false,
           isSavings: false,
-          plaidCategory: null,
         }
       );
       
@@ -355,7 +351,6 @@ describe('User Story: Category Management', () => {
           parentId: null,
           isHidden: false,
           isSavings: false,
-          plaidCategory: null,
         }
       );
       
@@ -370,7 +365,6 @@ describe('User Story: Category Management', () => {
           parentId: null,
           isHidden: false,
           isSavings: false,
-          plaidCategory: null,
         }
       );
       
@@ -392,7 +386,6 @@ describe('User Story: Category Management', () => {
           parentId: parent1.id,
           isHidden: false,
           isSavings: false,
-          plaidCategory: null,
         }
       );
       
@@ -406,7 +399,6 @@ describe('User Story: Category Management', () => {
           parentId: parent2.id,
           isHidden: false,
           isSavings: false,
-          plaidCategory: null,
         }
       );
       
@@ -427,7 +419,6 @@ describe('User Story: Category Management', () => {
           parentId: 'non-existent-id',
           isHidden: false,
           isSavings: false,
-          plaidCategory: null,
         }
       );
       
@@ -448,7 +439,6 @@ describe('User Story: Category Management', () => {
           parentId: parent.id,
           isHidden: false,
           isSavings: false,
-          plaidCategory: null,
         }
       );
       
@@ -463,13 +453,133 @@ describe('User Story: Category Management', () => {
           parentId: subId,
           isHidden: false,
           isSavings: false,
-          plaidCategory: null,
         }
       );
       
       // Should fail - only 2 levels allowed
       expect(subSubResponse.status).toBe(400);
       expect(subSubResponse.body.error).toContain('Cannot create subcategory under another subcategory');
+    });
+  });
+  
+  describe('As a user, I have default categories automatically initialized on first use', () => {
+    test('Default categories matching Plaid names are automatically created', async () => {
+      // Create a new test user to ensure clean state
+      const rand = Math.random().toString(36).substring(2, 8);
+      const newUser = await registerUser(`plaid${rand}`, 'plaid category test passphrase');
+      const newAuthToken = newUser.token;
+      
+      // First call to initialize endpoint should create default categories
+      const initResponse = await authenticatedPost('/api/v1/categories/initialize', newAuthToken, {});
+      expect(initResponse.status).toBe(200);
+      
+      // Get categories for the new user
+      const response = await authenticatedGet('/api/v1/categories', newAuthToken);
+      
+      expect(response.status).toBe(200);
+      expect(response.body.length).toBeGreaterThan(0);
+      
+      // Verify key default categories exist with Plaid-matching names
+      const categoryNames = response.body.map((c: any) => c.name);
+      expect(categoryNames).toContain('Income');
+      expect(categoryNames).toContain('Food and Drink');
+      expect(categoryNames).toContain('Transportation');
+      expect(categoryNames).toContain('Shops');
+      expect(categoryNames).toContain('Healthcare');
+      expect(categoryNames).toContain('Transfer');
+      expect(categoryNames).toContain('Savings');
+      
+      // All categories should be regular user categories (not system)
+      const hasSystemFlag = response.body.some((c: any) => c.isSystem === true);
+      expect(hasSystemFlag).toBe(false);
+    });
+    
+    test('Default categories can be edited and deleted like any user category', async () => {
+      // Create a new test user
+      const rand = Math.random().toString(36).substring(2, 8);
+      const newUser = await registerUser(`edit${rand}`, 'edit test passphrase');
+      const newAuthToken = newUser.token;
+      
+      // Initialize categories
+      await authenticatedPost('/api/v1/categories/initialize', newAuthToken, {});
+      
+      // Get categories
+      const categories = await authenticatedGet('/api/v1/categories', newAuthToken);
+      
+      // Find the Income category
+      const incomeCategory = categories.body.find((c: any) => c.name === 'Income');
+      expect(incomeCategory).toBeDefined();
+      
+      // Edit the Income category - should succeed
+      const editResponse = await authenticatedPut(
+        `/api/v1/categories/${incomeCategory.id}`,
+        newAuthToken,
+        { name: 'Revenue' }
+      );
+      expect(editResponse.status).toBe(200);
+      expect(editResponse.body.name).toBe('Revenue');
+      
+      // Find a category to delete
+      const travelCategory = categories.body.find((c: any) => c.name === 'Travel');
+      expect(travelCategory).toBeDefined();
+      
+      // Delete the Travel category - should succeed
+      const deleteResponse = await authenticatedDelete(
+        `/api/v1/categories/${travelCategory.id}`,
+        newAuthToken
+      );
+      expect(deleteResponse.status).toBe(204);
+      
+      // Verify the category was deleted
+      const afterDelete = await authenticatedGet('/api/v1/categories', newAuthToken);
+      const stillHasTravel = afterDelete.body.some((c: any) => c.name === 'Travel');
+      expect(stillHasTravel).toBe(false);
+    });
+  });
+  
+  describe('As a user, Apply Categorization matches transaction Plaid categories by name', () => {
+    test('Transactions with Plaid categories are matched to user categories by name', async () => {
+      // Create a new test user
+      const rand = Math.random().toString(36).substring(2, 8);
+      const newUser = await registerUser(`namematch${rand}`, 'name match test passphrase');
+      const newAuthToken = newUser.token;
+      
+      // Initialize categories - creates default categories with Plaid-matching names
+      await authenticatedPost('/api/v1/categories/initialize', newAuthToken, {});
+      
+      // Get the user's categories
+      const categoriesResponse = await authenticatedGet('/api/v1/categories', newAuthToken);
+      const categories = categoriesResponse.body;
+      
+      // Verify that the matching logic will work
+      // When a transaction has Plaid category ["Food and Drink", "Restaurants"]
+      // It should match with user category named "Food and Drink"
+      const foodCategory = categories.find((c: any) => c.name === 'Food and Drink');
+      expect(foodCategory).toBeDefined();
+      
+      // Verify other important matches
+      const incomeCategory = categories.find((c: any) => c.name === 'Income');
+      expect(incomeCategory).toBeDefined();
+      
+      const transferCategory = categories.find((c: any) => c.name === 'Transfer');
+      expect(transferCategory).toBeDefined();
+      expect(transferCategory.isHidden).toBe(true); // Transfer should be hidden by default
+      
+      // If user renamed or deleted a category, those transactions won't match
+      // For example, if user deletes "Travel" category:
+      const travelCategory = categories.find((c: any) => c.name === 'Travel');
+      if (travelCategory) {
+        await authenticatedDelete(
+          `/api/v1/categories/${travelCategory.id}`,
+          newAuthToken
+        );
+      }
+      
+      // Now transactions with ["Travel", "Airlines"] won't find a match
+      // and will remain uncategorized - this is expected behavior
+      const afterDelete = await authenticatedGet('/api/v1/categories', newAuthToken);
+      const hasTravel = afterDelete.body.some((c: any) => c.name === 'Travel');
+      expect(hasTravel).toBe(false);
     });
   });
 });

@@ -60,7 +60,7 @@ describe('User Story: Hidden Categories', () => {
       
       // Get the system Transfer category (which is hidden)
       const categories = await categoryService.getAllCategories(userId);
-      const transferCategory = categories.find(c => c.id === 'plaid_transfer');
+      const transferCategory = categories.find(c => c.name === 'Transfer');
       expect(transferCategory).toBeDefined();
       expect(transferCategory?.isHidden).toBe(true);
       
@@ -173,7 +173,7 @@ describe('User Story: Hidden Categories', () => {
       expect(hiddenCategories.length).toBeGreaterThan(0);
       
       // Verify Transfer category exists and is hidden
-      const transferCategory = allCategoriesResponse.body.find((c: any) => c.id === 'plaid_transfer');
+      const transferCategory = allCategoriesResponse.body.find((c: any) => c.name === 'Transfer');
       expect(transferCategory).toBeDefined();
       expect(transferCategory.isHidden).toBe(true);
     });
