@@ -60,16 +60,9 @@ router.post('/connect', authMiddleware, async (req: AuthRequest, res: Response):
       return;
     }
 
-    // Initial transaction sync for new account
-    if (result.account) {
-      const syncResult = await transactionService.syncTransactions(
-        req.user.userId,
-        [result.account],
-        '2025-01-01'
-      );
-      
-      console.log(`Initial sync for new account: ${syncResult.added} transactions added`);
-    }
+    // Note: We don't sync transactions immediately after connection
+    // because Plaid needs time (10-60 seconds) to prepare transaction data.
+    // Users should manually sync transactions after connecting their account.
 
     res.json({
       success: true,
