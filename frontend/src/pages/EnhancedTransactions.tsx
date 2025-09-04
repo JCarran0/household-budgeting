@@ -15,7 +15,6 @@ import {
   MultiSelect,
   Button,
   Badge,
-  Loader,
   Center,
   Paper,
   Table,
@@ -30,6 +29,8 @@ import {
   rem,
   SegmentedControl,
   Collapse,
+  Skeleton,
+  LoadingOverlay,
 } from '@mantine/core';
 import { DatePickerInput } from '@mantine/dates';
 import { notifications } from '@mantine/notifications';
@@ -52,6 +53,14 @@ import { TransactionEditModal } from '../components/transactions/TransactionEdit
 import { TransactionSplitModal } from '../components/transactions/TransactionSplitModal';
 
 type DateFilterOption = 'this-month' | 'ytd' | 'custom' | string; // string for specific month like '2025-01'
+
+// Add CSS for spinning animation
+const spinAnimation = `
+  @keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+  }
+`;
 
 export function EnhancedTransactions() {
   // Use persisted filters from localStorage
@@ -176,12 +185,13 @@ export function EnhancedTransactions() {
   ]);
 
   // Fetch transactions with filters
-  const { data: transactionData, isLoading, refetch } = useQuery({
+  const { data: transactionData, isLoading, isFetching, refetch } = useQuery({
     queryKey: ['transactions', queryParams],
     queryFn: () => api.getTransactions(queryParams),
     placeholderData: (previousData) => previousData,
     refetchOnWindowFocus: false,
-    staleTime: 1000, // Keep data fresh for 1 second to prevent refetching
+    staleTime: 5 * 60 * 1000, // 5 minutes - data stays fresh
+    gcTime: 10 * 60 * 1000,    // 10 minutes - cache persists (was cacheTime in v4)
   });
   
   // Removed smart default selection to respect user's persisted filter choice
@@ -294,22 +304,23 @@ export function EnhancedTransactions() {
       : category.name;
   };
 
-  if (isLoading) {
-    return (
-      <Center h={400}>
-        <Loader size="lg" />
-      </Center>
-    );
-  }
-
   const transactions = transactionData?.transactions || [];
   const totalTransactions = transactionData?.total ?? transactions.length;
 
   return (
-    <Container size="xl" py="xl">
-      <Stack gap="lg">
+    <>
+      <style>{spinAnimation}</style>
+      <Container size="xl" py="xl">
+        <Stack gap="lg">
         <Group justify="space-between">
-          <Title order={2}>Transactions</Title>
+          <Group gap="xs">
+            <Title order={2}>Transactions</Title>
+            {isFetching && !isLoading && (
+              <ThemeIcon variant="subtle" size="sm" radius="xl">
+                <IconRefresh size={14} style={{ animation: 'spin 1s linear infinite' }} />
+              </ThemeIcon>
+            )}
+          </Group>
           <Button
             leftSection={<IconRefresh size={16} />}
             onClick={() => syncMutation.mutate()}
@@ -472,7 +483,11 @@ export function EnhancedTransactions() {
 
             <Group justify="space-between">
               <Text size="sm" c="dimmed">
-                Showing {transactions.length} of {totalTransactions} transactions
+                {isLoading && !transactionData ? (
+                  <Skeleton height={16} width={200} />
+                ) : (
+                  `Showing ${transactions.length} of ${totalTransactions} transactions`
+                )}
               </Text>
               <Group gap="xs">
                 <Button 
@@ -490,8 +505,14 @@ export function EnhancedTransactions() {
                 >
                   Reset Filters
                 </Button>
-                <Button variant="subtle" size="sm" onClick={() => refetch()}>
-                  Refresh
+                <Button 
+                  variant="subtle" 
+                  size="sm" 
+                  onClick={() => refetch()}
+                  loading={isFetching}
+                  leftSection={!isFetching && <IconRefresh size={14} />}
+                >
+                  {isFetching ? 'Refreshing...' : 'Refresh'}
                 </Button>
               </Group>
             </Group>
@@ -499,21 +520,45 @@ export function EnhancedTransactions() {
         </Paper>
 
         {/* Transactions Table */}
-        <ScrollArea>
-          <Table striped highlightOnHover>
-            <Table.Thead>
-              <Table.Tr>
-                <Table.Th>Date</Table.Th>
-                <Table.Th>Description</Table.Th>
-                <Table.Th>Category</Table.Th>
-                <Table.Th>Tags</Table.Th>
-                <Table.Th>Account</Table.Th>
-                <Table.Th>Amount</Table.Th>
-                <Table.Th>Actions</Table.Th>
-              </Table.Tr>
-            </Table.Thead>
-            <Table.Tbody>
-              {transactions.map((transaction) => (
+        <Paper withBorder style={{ position: 'relative' }}>
+          <LoadingOverlay visible={isFetching && !isLoading} loaderProps={{ size: 'md' }} />
+          <ScrollArea>
+            <Table striped highlightOnHover>
+              <Table.Thead>
+                <Table.Tr>
+                  <Table.Th>Date</Table.Th>
+                  <Table.Th>Description</Table.Th>
+                  <Table.Th>Category</Table.Th>
+                  <Table.Th>Tags</Table.Th>
+                  <Table.Th>Account</Table.Th>
+                  <Table.Th>Amount</Table.Th>
+                  <Table.Th>Actions</Table.Th>
+                </Table.Tr>
+              </Table.Thead>
+              <Table.Tbody>
+                {isLoading && !transactionData ? (
+                  // Show skeleton rows only on initial load (no cached data)
+                  [...Array(8)].map((_, index) => (
+                    <Table.Tr key={`skeleton-${index}`}>
+                      <Table.Td><Skeleton height={20} width={80} /></Table.Td>
+                      <Table.Td><Skeleton height={20} /></Table.Td>
+                      <Table.Td><Skeleton height={20} width={120} /></Table.Td>
+                      <Table.Td><Skeleton height={20} width={80} /></Table.Td>
+                      <Table.Td><Skeleton height={20} width={40} /></Table.Td>
+                      <Table.Td><Skeleton height={20} width={80} /></Table.Td>
+                      <Table.Td><Skeleton height={20} width={60} /></Table.Td>
+                    </Table.Tr>
+                  ))
+                ) : transactions.length === 0 ? (
+                  <Table.Tr>
+                    <Table.Td colSpan={7}>
+                      <Center py="xl">
+                        <Text c="dimmed">No transactions found</Text>
+                      </Center>
+                    </Table.Td>
+                  </Table.Tr>
+                ) : (
+                  transactions.map((transaction) => (
                 <Table.Tr key={transaction.id}>
                   <Table.Td>
                     <Text size="sm">{transaction.date}</Text>
@@ -673,16 +718,12 @@ export function EnhancedTransactions() {
                     </Group>
                   </Table.Td>
                 </Table.Tr>
-              ))}
+                  ))
+                )}
             </Table.Tbody>
           </Table>
         </ScrollArea>
-
-        {transactions.length === 0 && (
-          <Center py="xl">
-            <Text c="dimmed">No transactions found matching your filters</Text>
-          </Center>
-        )}
+        </Paper>
       </Stack>
 
       {/* Edit Modal */}
@@ -699,5 +740,6 @@ export function EnhancedTransactions() {
         transaction={splittingTransaction}
       />
     </Container>
+    </>
   );
 }
