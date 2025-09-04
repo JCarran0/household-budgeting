@@ -547,14 +547,42 @@ class ApiClient {
     }
   }
 
-  async applyAutoCategorizeRules(): Promise<{ categorized: number; total: number }> {
+  async previewAutoCategorization(forceRecategorize: boolean = false): Promise<{
+    wouldCategorize: number;
+    wouldRecategorize: number;
+    total: number;
+  }> {
     const { data } = await this.client.post<{ 
       success: boolean; 
-      categorized: number; 
+      wouldCategorize: number;
+      wouldRecategorize: number; 
       total: number; 
       message: string 
-    }>('/autocategorize/apply');
-    return { categorized: data.categorized, total: data.total };
+    }>('/autocategorize/preview', { forceRecategorize });
+    return { 
+      wouldCategorize: data.wouldCategorize, 
+      wouldRecategorize: data.wouldRecategorize,
+      total: data.total 
+    };
+  }
+
+  async applyAutoCategorizeRules(forceRecategorize: boolean = false): Promise<{ 
+    categorized: number; 
+    recategorized: number;
+    total: number 
+  }> {
+    const { data } = await this.client.post<{ 
+      success: boolean; 
+      categorized: number;
+      recategorized: number; 
+      total: number; 
+      message: string 
+    }>('/autocategorize/apply', { forceRecategorize });
+    return { 
+      categorized: data.categorized, 
+      recategorized: data.recategorized,
+      total: data.total 
+    };
   }
 }
 

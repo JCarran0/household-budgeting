@@ -17,10 +17,12 @@ import {
   Center,
   Tooltip,
   Card,
+  Checkbox,
 } from '@mantine/core';
 import { useForm } from '@mantine/form';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { notifications } from '@mantine/notifications';
+import { modals } from '@mantine/modals';
 import {
   IconPlus,
   IconEdit,
@@ -46,6 +48,7 @@ export function AutoCategorization() {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingRule, setEditingRule] = useState<AutoCategorizeRule | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [forceRecategorize, setForceRecategorize] = useState(false);
   const queryClient = useQueryClient();
 
   // Fetch rules
@@ -215,11 +218,15 @@ export function AutoCategorization() {
 
   // Apply rules mutation
   const applyRulesMutation = useMutation({
-    mutationFn: () => api.applyAutoCategorizeRules(),
+    mutationFn: (force: boolean) => api.applyAutoCategorizeRules(force),
     onSuccess: (result) => {
+      const message = forceRecategorize
+        ? `Categorized ${result.categorized} new and recategorized ${result.recategorized} existing transactions`
+        : `Categorized ${result.categorized} of ${result.total} transactions`;
+      
       notifications.show({
         title: 'Rules Applied',
-        message: `Categorized ${result.categorized} of ${result.total} uncategorized transactions`,
+        message,
         color: 'green',
       });
       queryClient.invalidateQueries({ queryKey: ['transactions'] });
@@ -231,6 +238,11 @@ export function AutoCategorization() {
         color: 'red',
       });
     },
+  });
+
+  // Preview mutation for getting counts
+  const previewMutation = useMutation({
+    mutationFn: (force: boolean) => api.previewAutoCategorization(force),
   });
 
   // Toggle rule active status
@@ -334,16 +346,54 @@ export function AutoCategorization() {
             {rules.filter(r => r.isActive).length !== rules.length && 
               ` (${rules.filter(r => r.isActive).length} active)`}
           </Text>
+          <Checkbox
+            label="Recategorize all transactions"
+            checked={forceRecategorize}
+            onChange={(event) => setForceRecategorize(event.currentTarget.checked)}
+            mt="xs"
+            size="sm"
+          />
         </div>
         <Group>
           <Tooltip 
-            label="Applies your custom rules first, then uses Plaid categories as fallback for remaining uncategorized transactions"
+            label={forceRecategorize 
+              ? "Will recategorize ALL transactions using your rules and Plaid categories"
+              : "Applies your custom rules first, then uses Plaid categories as fallback for uncategorized transactions"}
             multiline
           >
             <Button
               leftSection={<IconRobot size={16} />}
-              onClick={() => applyRulesMutation.mutate()}
-              loading={applyRulesMutation.isPending}
+              onClick={async () => {
+                // Get preview of what will be categorized
+                const preview = await previewMutation.mutateAsync(forceRecategorize);
+                
+                if (forceRecategorize && preview.wouldRecategorize > 0) {
+                  // Show confirmation dialog for recategorization
+                  modals.openConfirmModal({
+                    title: 'Recategorize Transactions?',
+                    children: (
+                      <Text size="sm">
+                        This will recategorize {preview.wouldRecategorize} transactions that already have categories.
+                        {preview.wouldCategorize > 0 && ` It will also categorize ${preview.wouldCategorize} new transactions.`}
+                        {' '}Continue?
+                      </Text>
+                    ),
+                    labels: { confirm: 'Yes, Recategorize', cancel: 'Cancel' },
+                    confirmProps: { color: 'blue' },
+                    onConfirm: () => applyRulesMutation.mutate(forceRecategorize),
+                  });
+                } else if (preview.wouldCategorize > 0) {
+                  // Just categorize new transactions
+                  applyRulesMutation.mutate(forceRecategorize);
+                } else {
+                  notifications.show({
+                    title: 'No Transactions to Categorize',
+                    message: 'All transactions are already categorized.',
+                    color: 'blue',
+                  });
+                }
+              }}
+              loading={applyRulesMutation.isPending || previewMutation.isPending}
               variant="light"
             >
               Apply Categorization
@@ -368,6 +418,8 @@ export function AutoCategorization() {
           Rules are applied in priority order. Each rule checks if a transaction's description 
           contains the specified pattern (case-insensitive). The first matching rule assigns 
           its category to the transaction and optionally replaces the description with a custom one. 
+          By default, only uncategorized transactions are processed. When "Recategorize all transactions" 
+          is checked, existing categories will be overwritten based on your rules. 
           Use the arrow buttons to adjust rule priority.
         </Text>
       </Card>

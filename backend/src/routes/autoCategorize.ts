@@ -264,17 +264,18 @@ router.delete('/rules/:ruleId', authMiddleware, async (req: AuthRequest, res: Re
 });
 
 /**
- * POST /api/v1/autocategorize/apply
- * Apply auto-categorization rules to all uncategorized transactions
+ * POST /api/v1/autocategorize/preview
+ * Preview what would be categorized without applying changes
  */
-router.post('/apply', authMiddleware, async (req: AuthRequest, res: Response): Promise<void> => {
+router.post('/preview', authMiddleware, async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     if (!req.user) {
       res.status(401).json({ success: false, error: 'Unauthorized' });
       return;
     }
 
-    const result = await autoCategorizeService.applyRulesToAllTransactions(req.user.userId);
+    const { forceRecategorize = false } = req.body;
+    const result = await autoCategorizeService.previewCategorization(req.user.userId, forceRecategorize);
 
     if (!result.success) {
       res.status(500).json({ success: false, error: result.error });
@@ -283,9 +284,46 @@ router.post('/apply', authMiddleware, async (req: AuthRequest, res: Response): P
 
     res.json({ 
       success: true, 
-      categorized: result.categorized,
-      total: result.total,
-      message: `Categorized ${result.categorized} of ${result.total} transactions`
+      wouldCategorize: result.wouldCategorize || 0,
+      wouldRecategorize: result.wouldRecategorize || 0,
+      total: result.total || 0,
+      message: forceRecategorize 
+        ? `Would categorize ${result.wouldCategorize || 0} new and recategorize ${result.wouldRecategorize || 0} existing transactions`
+        : `Would categorize ${result.wouldCategorize || 0} of ${result.total || 0} uncategorized transactions`
+    });
+  } catch (error) {
+    console.error('Error previewing auto-categorization:', error);
+    res.status(500).json({ success: false, error: 'Failed to preview categorization' });
+  }
+});
+
+/**
+ * POST /api/v1/autocategorize/apply
+ * Apply auto-categorization rules to all transactions
+ */
+router.post('/apply', authMiddleware, async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    if (!req.user) {
+      res.status(401).json({ success: false, error: 'Unauthorized' });
+      return;
+    }
+
+    const { forceRecategorize = false } = req.body;
+    const result = await autoCategorizeService.applyRulesToAllTransactions(req.user.userId, forceRecategorize);
+
+    if (!result.success) {
+      res.status(500).json({ success: false, error: result.error });
+      return;
+    }
+
+    res.json({ 
+      success: true, 
+      categorized: result.categorized || 0,
+      recategorized: result.recategorized || 0,
+      total: result.total || 0,
+      message: forceRecategorize
+        ? `Categorized ${result.categorized || 0} new and recategorized ${result.recategorized || 0} existing transactions`
+        : `Categorized ${result.categorized || 0} of ${result.total || 0} transactions`
     });
   } catch (error) {
     console.error('Error applying auto-categorization:', error);

@@ -192,12 +192,14 @@ export class AutoCategorizeService {
   /**
    * Apply auto-categorization rules to transactions
    * Priority: 1. User rules, 2. Plaid category name matching
+   * @param forceRecategorize - If true, will recategorize even already categorized transactions
    */
   async applyRules(
     userId: string,
     transactions: StoredTransaction[],
-    userCategories?: Category[]
-  ): Promise<{ categorized: number; errors: string[] }> {
+    userCategories?: Category[],
+    forceRecategorize: boolean = false
+  ): Promise<{ categorized: number; recategorized: number; errors: string[] }> {
     const rules = await this.getRules(userId);
     const activeRules = rules.filter(r => r.isActive);
     
@@ -205,13 +207,22 @@ export class AutoCategorizeService {
     const categories = userCategories || await this.dataService.getCategories(userId);
     
     let categorized = 0;
+    let recategorized = 0;
     const errors: string[] = [];
 
     for (const transaction of transactions) {
-      // Skip if already has user-defined category
-      if (transaction.userCategoryId) continue;
+      // Check if transaction has a valid category
+      const validCategory = transaction.userCategoryId ? 
+        categories.find(cat => cat.id === transaction.userCategoryId) : null;
+      const hadValidCategory = !!validCategory;
+      
+      // Skip if already has valid category and we're not force recategorizing
+      if (!forceRecategorize && hadValidCategory) {
+        continue;
+      }
       
       let matched = false;
+      const originalCategoryId = transaction.userCategoryId;
       
       // Step 1: Try user-defined rules first
       const description = (transaction.userDescription || transaction.name).toLowerCase();
@@ -226,7 +237,13 @@ export class AutoCategorizeService {
             transaction.userDescription = rule.userDescription;
           }
           transaction.updatedAt = new Date();
-          categorized++;
+          
+          if (hadValidCategory && originalCategoryId !== rule.categoryId) {
+            recategorized++;
+          } else if (!hadValidCategory) {
+            categorized++;
+          }
+          
           matched = true;
           break; // Stop after first match
         }
@@ -236,31 +253,88 @@ export class AutoCategorizeService {
       // try to match with user's categories by name
       if (!matched && transaction.category && transaction.category.length > 0) {
         // Get the primary category from Plaid (first element)
-        const plaidPrimaryCategory = transaction.category[0];
+        const plaidPrimaryCategory = transaction.category[0]
+          ?.replace(/_/g, ' ')  // Convert FOOD_AND_DRINK to Food and Drink
+          ?.split(' ')
+          ?.map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+          ?.join(' ');
         
         // Look for a user category with matching name (case-insensitive)
         const matchingCategory = categories.find(cat => 
-          cat.name.toLowerCase() === plaidPrimaryCategory.toLowerCase()
+          cat.name.toLowerCase() === plaidPrimaryCategory?.toLowerCase()
         );
         
         if (matchingCategory) {
           transaction.categoryId = matchingCategory.id;
           transaction.userCategoryId = matchingCategory.id;
           transaction.updatedAt = new Date();
-          categorized++;
+          
+          if (hadValidCategory && originalCategoryId !== matchingCategory.id) {
+            recategorized++;
+          } else if (!hadValidCategory) {
+            categorized++;
+          }
         }
       }
     }
 
-    return { categorized, errors };
+    return { categorized, recategorized, errors };
   }
 
   /**
-   * Apply rules to all uncategorized transactions
+   * Preview what would be categorized without actually applying changes
    */
-  async applyRulesToAllTransactions(userId: string): Promise<{
+  async previewCategorization(userId: string, forceRecategorize: boolean = false): Promise<{
+    success: boolean;
+    wouldCategorize?: number;
+    wouldRecategorize?: number;
+    total?: number;
+    error?: string;
+  }> {
+    try {
+      await categoryService.initializeDefaultCategories(userId);
+      
+      const transactions = await this.dataService.getData<StoredTransaction[]>(
+        `transactions_${userId}`
+      ) || [];
+
+      const userCategories = await this.dataService.getCategories(userId);
+      
+      // For preview, include all non-hidden transactions
+      const targetTransactions = forceRecategorize 
+        ? transactions.filter(t => !t.isHidden)
+        : transactions.filter(t => {
+            if (t.isHidden) return false;
+            if (!t.userCategoryId) return true;
+            // Include transactions with invalid category IDs
+            const validCategory = userCategories.find(cat => cat.id === t.userCategoryId);
+            return !validCategory;
+          });
+      
+      // Make a deep copy to avoid modifying actual data
+      const transactionsCopy = targetTransactions.map(t => ({ ...t }));
+      
+      const result = await this.applyRules(userId, transactionsCopy, userCategories, forceRecategorize);
+
+      return {
+        success: true,
+        wouldCategorize: result.categorized,
+        wouldRecategorize: result.recategorized,
+        total: targetTransactions.length,
+      };
+    } catch (error) {
+      console.error('Error previewing categorization:', error);
+      return { success: false, error: 'Failed to preview categorization' };
+    }
+  }
+
+  /**
+   * Apply rules to all transactions (with option to force recategorization)
+   */
+  async applyRulesToAllTransactions(userId: string, forceRecategorize: boolean = false): Promise<{
     success: boolean;
     categorized?: number;
+    recategorized?: number;
     total?: number;
     error?: string;
   }> {
@@ -275,10 +349,18 @@ export class AutoCategorizeService {
       // Get user's categories for matching
       const userCategories = await this.dataService.getCategories(userId);
 
-      // Filter to uncategorized transactions
-      const uncategorized = transactions.filter(t => !t.userCategoryId && !t.isHidden);
+      // Include all non-hidden transactions if force recategorizing
+      const targetTransactions = forceRecategorize 
+        ? transactions.filter(t => !t.isHidden)
+        : transactions.filter(t => {
+            if (t.isHidden) return false;
+            if (!t.userCategoryId) return true;
+            // Include transactions with invalid category IDs
+            const validCategory = userCategories.find(cat => cat.id === t.userCategoryId);
+            return !validCategory;
+          });
       
-      const result = await this.applyRules(userId, uncategorized, userCategories);
+      const result = await this.applyRules(userId, targetTransactions, userCategories, forceRecategorize);
       
       // Save updated transactions
       await this.dataService.saveData(`transactions_${userId}`, transactions);
@@ -286,7 +368,8 @@ export class AutoCategorizeService {
       return {
         success: true,
         categorized: result.categorized,
-        total: uncategorized.length,
+        recategorized: result.recategorized,
+        total: targetTransactions.length,
       };
     } catch (error) {
       console.error('Error applying auto-categorization rules:', error);

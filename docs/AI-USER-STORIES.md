@@ -186,7 +186,10 @@
 - A user should be able to manually trigger auto-categorization
 - A user should be able to see how many transactions were categorized
 - A user should be able to see how many transactions were processed
-- A user should have rules applied only to uncategorized transactions
+- A user should have rules applied only to uncategorized transactions by default
+- A user should be able to optionally recategorize all transactions (overwriting existing categories)
+- A user should see a preview dialog showing transaction counts before applying changes
+- A user should see a warning when choosing to recategorize all transactions
 - A user should have rules match on "contains" pattern in descriptions
 - A user should have pattern matching be case-insensitive
 - A user should have matching transactions' descriptions replaced with custom text when specified
