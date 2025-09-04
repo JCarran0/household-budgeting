@@ -44,7 +44,7 @@ jobs:
           # Create package structure
           mkdir -p deployment/backend deployment/frontend
           
-          # Copy backend (dist is already flattened by postbuild script)
+          # Copy backend - preserve directory structure
           cp -r backend/dist/* deployment/backend/
           cp backend/package*.json deployment/backend/
           
