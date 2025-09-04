@@ -21,6 +21,8 @@ import {
   NumberInput,
   ThemeIcon,
   Box,
+  SegmentedControl,
+  Slider,
 } from '@mantine/core';
 import { DateInput } from '@mantine/dates';
 import { useDisclosure } from '@mantine/hooks';
@@ -46,6 +48,9 @@ export function MantineTransactions() {
   });
   const [opened, { toggle }] = useDisclosure(false);
   const [amountFilter, setAmountFilter] = useState({ min: null as number | null, max: null as number | null });
+  const [amountSearchMode, setAmountSearchMode] = useState<'range' | 'exact'>('range');
+  const [exactAmount, setExactAmount] = useState<number | null>(null);
+  const [amountTolerance, setAmountTolerance] = useState(0.50);
 
   const { data: accounts } = useQuery({
     queryKey: ['accounts'],
@@ -78,12 +83,21 @@ export function MantineTransactions() {
       }
 
       const amount = Math.abs(transaction.amount);
-      if (amountFilter.min && amount < amountFilter.min) return false;
-      if (amountFilter.max && amount > amountFilter.max) return false;
+      
+      // Handle amount filtering based on search mode
+      if (amountSearchMode === 'exact' && exactAmount !== null) {
+        const tolerance = amountTolerance;
+        if (amount < (exactAmount - tolerance) || amount > (exactAmount + tolerance)) {
+          return false;
+        }
+      } else if (amountSearchMode === 'range') {
+        if (amountFilter.min && amount < amountFilter.min) return false;
+        if (amountFilter.max && amount > amountFilter.max) return false;
+      }
 
       return true;
     });
-  }, [transactionData?.transactions, searchTerm, amountFilter]);
+  }, [transactionData?.transactions, searchTerm, amountFilter, amountSearchMode, exactAmount, amountTolerance]);
 
   const groupedTransactions = useMemo(() => {
     const groups: Record<string, Transaction[]> = {};
@@ -192,23 +206,87 @@ export function MantineTransactions() {
                 leftSection={<IconCalendar size={16} />}
               />
             </Grid.Col>
-            <Grid.Col span={{ base: 12, sm: 6, md: 3 }}>
-              <Group grow>
-                <NumberInput
-                  label="Min Amount"
-                  placeholder="0"
-                  value={amountFilter.min || ''}
-                  onChange={(value) => setAmountFilter(prev => ({ ...prev, min: typeof value === 'number' ? value : null }))}
-                  min={0}
+            <Grid.Col span={{ base: 12 }}>
+              <Stack gap="sm">
+                <SegmentedControl
+                  value={amountSearchMode}
+                  onChange={(value) => setAmountSearchMode(value as 'range' | 'exact')}
+                  data={[
+                    { label: 'Amount Range', value: 'range' },
+                    { label: 'Exact Amount', value: 'exact' },
+                  ]}
                 />
-                <NumberInput
-                  label="Max Amount"
-                  placeholder="1000"
-                  value={amountFilter.max || ''}
-                  onChange={(value) => setAmountFilter(prev => ({ ...prev, max: typeof value === 'number' ? value : null }))}
-                  min={0}
-                />
-              </Group>
+                
+                {amountSearchMode === 'range' ? (
+                  <Group grow>
+                    <NumberInput
+                      label="Min Amount"
+                      placeholder="0.00"
+                      prefix="$"
+                      value={amountFilter.min || ''}
+                      onChange={(value) => setAmountFilter(prev => ({ ...prev, min: typeof value === 'number' ? value : null }))}
+                      min={0}
+                      decimalScale={2}
+                      fixedDecimalScale
+                    />
+                    <NumberInput
+                      label="Max Amount"
+                      placeholder="999.99"
+                      prefix="$"
+                      value={amountFilter.max || ''}
+                      onChange={(value) => setAmountFilter(prev => ({ ...prev, max: typeof value === 'number' ? value : null }))}
+                      min={0}
+                      decimalScale={2}
+                      fixedDecimalScale
+                    />
+                  </Group>
+                ) : (
+                  <Stack gap="xs">
+                    <NumberInput
+                      label="Exact Amount"
+                      placeholder="Enter amount to search for"
+                      prefix="$"
+                      value={exactAmount || ''}
+                      onChange={(value) => setExactAmount(typeof value === 'number' ? value : null)}
+                      min={0}
+                      decimalScale={2}
+                      fixedDecimalScale
+                    />
+                    
+                    <Box>
+                      <Text size="sm" mb={4}>Tolerance: ±${amountTolerance.toFixed(2)}</Text>
+                      <Slider
+                        value={amountTolerance}
+                        onChange={setAmountTolerance}
+                        min={0}
+                        max={5}
+                        step={0.10}
+                        marks={[
+                          { value: 0, label: '$0' },
+                          { value: 1, label: '$1' },
+                          { value: 2.5, label: '$2.50' },
+                          { value: 5, label: '$5' },
+                        ]}
+                        mb="sm"
+                      />
+                    </Box>
+                    
+                    <Group gap="xs" mt="xs">
+                      <Text size="xs" c="dimmed">Quick amounts:</Text>
+                      {[10, 20, 50, 100, 200].map((amount) => (
+                        <Button
+                          key={amount}
+                          size="xs"
+                          variant="light"
+                          onClick={() => setExactAmount(amount)}
+                        >
+                          ${amount}
+                        </Button>
+                      ))}
+                    </Group>
+                  </Stack>
+                )}
+              </Stack>
             </Grid.Col>
           </Grid>
         </Card>

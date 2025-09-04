@@ -19,6 +19,9 @@ interface TransactionFilterState {
   includeHidden: boolean;
   onlyUncategorized: boolean;
   amountRange: { min: number | null; max: number | null };
+  amountSearchMode: 'range' | 'exact';
+  exactAmount: number | null;
+  amountTolerance: number;
 }
 
 interface TransactionFilterActions {
@@ -31,6 +34,9 @@ interface TransactionFilterActions {
   setIncludeHidden: (value: boolean) => void;
   setOnlyUncategorized: (value: boolean) => void;
   setAmountRange: (value: { min: number | null; max: number | null }) => void;
+  setAmountSearchMode: (value: 'range' | 'exact') => void;
+  setExactAmount: (value: number | null) => void;
+  setAmountTolerance: (value: number) => void;
   resetFilters: () => void;
   debouncedSearchTerm: string;
 }
@@ -54,6 +60,9 @@ export function useTransactionFilters(): TransactionFilterState & TransactionFil
   const includeHidden = transactionFilters?.includeHidden || false;
   const onlyUncategorized = transactionFilters?.onlyUncategorized || false;
   const amountRange = transactionFilters?.amountRange || { min: null, max: null };
+  const amountSearchMode = (transactionFilters?.amountSearchMode || 'range') as 'range' | 'exact';
+  const exactAmount = transactionFilters?.exactAmount ?? null;
+  const amountTolerance = transactionFilters?.amountTolerance ?? 0.50;
   
   const [debouncedSearchTerm] = useDebouncedValue(searchInput, 300);
   
@@ -97,6 +106,18 @@ export function useTransactionFilters(): TransactionFilterState & TransactionFil
     setTransactionFilters({ amountRange: value });
   }, [setTransactionFilters]);
   
+  const setAmountSearchMode = useCallback((value: 'range' | 'exact') => {
+    setTransactionFilters({ amountSearchMode: value });
+  }, [setTransactionFilters]);
+  
+  const setExactAmount = useCallback((value: number | null) => {
+    setTransactionFilters({ exactAmount: value });
+  }, [setTransactionFilters]);
+  
+  const setAmountTolerance = useCallback((value: number) => {
+    setTransactionFilters({ amountTolerance: value });
+  }, [setTransactionFilters]);
+  
   const resetFilters = useCallback(() => {
     resetTransactionFilters();
   }, [resetTransactionFilters]);
@@ -111,6 +132,9 @@ export function useTransactionFilters(): TransactionFilterState & TransactionFil
     includeHidden,
     onlyUncategorized,
     amountRange,
+    amountSearchMode,
+    exactAmount,
+    amountTolerance,
     setSearchInput,
     setSelectedAccount,
     setSelectedCategories,
@@ -120,6 +144,9 @@ export function useTransactionFilters(): TransactionFilterState & TransactionFil
     setIncludeHidden,
     setOnlyUncategorized,
     setAmountRange,
+    setAmountSearchMode,
+    setExactAmount,
+    setAmountTolerance,
     resetFilters,
     debouncedSearchTerm,
   };

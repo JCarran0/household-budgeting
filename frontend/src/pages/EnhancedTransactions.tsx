@@ -34,6 +34,8 @@ import {
   LoadingOverlay,
   Pagination,
   Alert,
+  Slider,
+  Box,
 } from '@mantine/core';
 import { DatePickerInput } from '@mantine/dates';
 import { notifications } from '@mantine/notifications';
@@ -82,6 +84,9 @@ export function EnhancedTransactions() {
     includeHidden,
     onlyUncategorized,
     amountRange,
+    amountSearchMode,
+    exactAmount,
+    amountTolerance,
     setSearchInput,
     setSelectedAccount,
     setSelectedCategories,
@@ -91,6 +96,9 @@ export function EnhancedTransactions() {
     setIncludeHidden,
     setOnlyUncategorized,
     setAmountRange,
+    setAmountSearchMode,
+    setExactAmount,
+    setAmountTolerance,
     resetFilters,
     debouncedSearchTerm,
   } = useTransactionFilters();
@@ -176,9 +184,16 @@ export function EnhancedTransactions() {
       searchQuery: debouncedSearchTerm || undefined,
       includeHidden,
       onlyUncategorized,
-      minAmount: amountRange.min || undefined,
-      maxAmount: amountRange.max || undefined,
     };
+    
+    // Add amount search params based on mode
+    if (amountSearchMode === 'exact' && exactAmount !== null) {
+      params.exactAmount = exactAmount;
+      params.amountTolerance = amountTolerance;
+    } else if (amountSearchMode === 'range') {
+      params.minAmount = amountRange.min || undefined;
+      params.maxAmount = amountRange.max || undefined;
+    }
     
     // Remove undefined values
     Object.keys(params).forEach(key => {
@@ -197,6 +212,9 @@ export function EnhancedTransactions() {
     includeHidden,
     onlyUncategorized,
     amountRange,
+    amountSearchMode,
+    exactAmount,
+    amountTolerance,
   ]);
 
   // Fetch transactions with filters
@@ -514,26 +532,89 @@ export function EnhancedTransactions() {
             </Grid>
 
             <Grid>
-              <Grid.Col span={{ base: 12, sm: 6, md: 3 }}>
-                <NumberInput
-                  label="Min Amount"
-                  placeholder="0.00"
-                  prefix="$"
-                  value={amountRange.min || undefined}
-                  onChange={(value) => setAmountRange({ ...amountRange, min: value !== undefined ? Number(value) : null })}
-                  min={0}
-                />
-              </Grid.Col>
-              
-              <Grid.Col span={{ base: 12, sm: 6, md: 3 }}>
-                <NumberInput
-                  label="Max Amount"
-                  placeholder="999.99"
-                  prefix="$"
-                  value={amountRange.max || undefined}
-                  onChange={(value) => setAmountRange({ ...amountRange, max: value !== undefined ? Number(value) : null })}
-                  min={0}
-                />
+              <Grid.Col span={{ base: 12 }}>
+                <Stack gap="sm">
+                  <SegmentedControl
+                    value={amountSearchMode}
+                    onChange={(value) => setAmountSearchMode(value as 'range' | 'exact')}
+                    data={[
+                      { label: 'Amount Range', value: 'range' },
+                      { label: 'Exact Amount', value: 'exact' },
+                    ]}
+                  />
+                  
+                  {amountSearchMode === 'range' ? (
+                    <Group grow>
+                      <NumberInput
+                        label="Min Amount"
+                        placeholder="0.00"
+                        prefix="$"
+                        value={amountRange.min || undefined}
+                        onChange={(value) => setAmountRange({ ...amountRange, min: value !== undefined ? Number(value) : null })}
+                        min={0}
+                        decimalScale={2}
+                        fixedDecimalScale
+                      />
+                      <NumberInput
+                        label="Max Amount"
+                        placeholder="999.99"
+                        prefix="$"
+                        value={amountRange.max || undefined}
+                        onChange={(value) => setAmountRange({ ...amountRange, max: value !== undefined ? Number(value) : null })}
+                        min={0}
+                        decimalScale={2}
+                        fixedDecimalScale
+                      />
+                    </Group>
+                  ) : (
+                    <Stack gap="xs">
+                      <Group grow>
+                        <NumberInput
+                          label="Exact Amount"
+                          placeholder="Enter amount to search for"
+                          prefix="$"
+                          value={exactAmount || undefined}
+                          onChange={(value) => setExactAmount(value !== undefined ? Number(value) : null)}
+                          min={0}
+                          decimalScale={2}
+                          fixedDecimalScale
+                        />
+                      </Group>
+                      
+                      <Box>
+                        <Text size="sm" mb={4}>Tolerance: ±${amountTolerance.toFixed(2)}</Text>
+                        <Slider
+                          value={amountTolerance}
+                          onChange={setAmountTolerance}
+                          min={0}
+                          max={5}
+                          step={0.10}
+                          marks={[
+                            { value: 0, label: '$0' },
+                            { value: 1, label: '$1' },
+                            { value: 2.5, label: '$2.50' },
+                            { value: 5, label: '$5' },
+                          ]}
+                          mb="sm"
+                        />
+                      </Box>
+                      
+                      <Group gap="xs" mt="xs">
+                        <Text size="xs" c="dimmed">Quick amounts:</Text>
+                        {[10, 20, 50, 100, 200].map((amount) => (
+                          <Button
+                            key={amount}
+                            size="xs"
+                            variant="light"
+                            onClick={() => setExactAmount(amount)}
+                          >
+                            ${amount}
+                          </Button>
+                        ))}
+                      </Group>
+                    </Stack>
+                  )}
+                </Stack>
               </Grid.Col>
               
               <Grid.Col span={{ base: 12, sm: 6, md: 3 }}>

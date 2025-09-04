@@ -49,6 +49,14 @@ const transactionFilterSchema = z.object({
     if (typeof val === 'string') return parseFloat(val);
     return val;
   }),
+  exactAmount: z.union([z.number(), z.string()]).optional().transform(val => {
+    if (typeof val === 'string') return parseFloat(val);
+    return val;
+  }),
+  amountTolerance: z.union([z.number(), z.string()]).optional().transform(val => {
+    if (typeof val === 'string') return parseFloat(val);
+    return val;
+  }),
 });
 
 const updateCategorySchema = z.object({

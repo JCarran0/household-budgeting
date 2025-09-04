@@ -63,6 +63,8 @@ export interface TransactionFilter {
   onlyUncategorized?: boolean;
   minAmount?: number;
   maxAmount?: number;
+  exactAmount?: number;
+  amountTolerance?: number;
 }
 
 // Result types
@@ -421,12 +423,23 @@ export class TransactionService {
         filtered = filtered.filter((txn: StoredTransaction) => !txn.userCategoryId);
       }
 
-      if (filter.minAmount !== undefined) {
-        filtered = filtered.filter((txn: StoredTransaction) => Math.abs(txn.amount) >= filter.minAmount!);
-      }
+      // Handle exact amount search with tolerance
+      if (filter.exactAmount !== undefined) {
+        const tolerance = filter.amountTolerance || 0.50; // Default tolerance of $0.50
+        const targetAmount = filter.exactAmount;
+        filtered = filtered.filter((txn: StoredTransaction) => {
+          const txnAmount = Math.abs(txn.amount);
+          return txnAmount >= (targetAmount - tolerance) && txnAmount <= (targetAmount + tolerance);
+        });
+      } else {
+        // Handle min/max range search (only if not doing exact search)
+        if (filter.minAmount !== undefined) {
+          filtered = filtered.filter((txn: StoredTransaction) => Math.abs(txn.amount) >= filter.minAmount!);
+        }
 
-      if (filter.maxAmount !== undefined) {
-        filtered = filtered.filter((txn: StoredTransaction) => Math.abs(txn.amount) <= filter.maxAmount!);
+        if (filter.maxAmount !== undefined) {
+          filtered = filtered.filter((txn: StoredTransaction) => Math.abs(txn.amount) <= filter.maxAmount!);
+        }
       }
 
       if (filter.searchQuery) {
