@@ -19,8 +19,10 @@
     "test:ci:full": "npm run test:all",
     "lint": "tsc --noEmit",
     "clean": "rm -rf dist coverage",
-    "reset": "ts-node src/scripts/reset-app.ts",
-    "reset:force": "ts-node src/scripts/reset-app.ts --force"
+    "reset:dev": "ts-node src/scripts/reset-app.ts",
+    "reset:dev:force": "ts-node src/scripts/reset-app.ts --force",
+    "reset": "node dist/scripts/reset-app.js",
+    "reset:force": "node dist/scripts/reset-app.js --force"
   },
   "keywords": [],
   "author": "",
