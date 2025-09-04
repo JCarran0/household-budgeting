@@ -9,14 +9,12 @@ export interface CategoryWithChildren extends Category {
 export interface CreateCategoryDto {
   name: string;
   parentId: string | null;
-  plaidCategory: string | null;
   isHidden: boolean;
   isSavings: boolean;
 }
 
 export interface UpdateCategoryDto {
   name?: string;
-  plaidCategory?: string | null;
   isHidden?: boolean;
   isSavings?: boolean;
 }
@@ -65,9 +63,9 @@ export class CategoryService {
       id: uuidv4(),
       name: data.name,
       parentId: data.parentId,
-      plaidCategory: data.plaidCategory,
       isHidden: data.isHidden,
-      isSavings: data.isSavings
+      isSavings: data.isSavings,
+      isSystem: false // User-created categories are not system categories
     };
 
     categories.push(newCategory);
@@ -81,6 +79,11 @@ export class CategoryService {
 
     if (index === -1) {
       throw new Error('Category not found');
+    }
+
+    // Prevent editing system categories
+    if (categories[index].isSystem) {
+      throw new Error('System categories cannot be edited');
     }
 
     const updatedCategory = {
@@ -100,6 +103,11 @@ export class CategoryService {
     const categoryToDelete = categories.find(cat => cat.id === id);
     if (!categoryToDelete) {
       throw new Error('Category not found');
+    }
+    
+    // Prevent deleting system categories
+    if (categoryToDelete.isSystem) {
+      throw new Error('System categories cannot be deleted');
     }
     
     // Check if category has subcategories
@@ -136,23 +144,7 @@ export class CategoryService {
     }));
   }
 
-  async findByPlaidCategory(plaidCategory: string, userId: string): Promise<Category | null> {
-    const categories = await this.dataService.getCategories(userId);
-    return categories.find(cat => cat.plaidCategory === plaidCategory) || null;
-  }
-
-  async getPlaidCategoryMapping(userId: string): Promise<Record<string, string>> {
-    const categories = await this.dataService.getCategories(userId);
-    const mapping: Record<string, string> = {};
-    
-    categories.forEach(cat => {
-      if (cat.plaidCategory) {
-        mapping[cat.plaidCategory] = cat.id;
-      }
-    });
-    
-    return mapping;
-  }
+  // Removed plaidCategory-related methods as they are no longer needed
 
   async getHiddenCategories(userId: string): Promise<Category[]> {
     const categories = await this.dataService.getCategories(userId);
@@ -172,34 +164,33 @@ export class CategoryService {
       return;
     }
 
-    const defaultCategories: CreateCategoryDto[] = [
-      // Income
-      { name: 'Income', parentId: null, plaidCategory: 'INCOME', isHidden: false, isSavings: false },
-      
-      // Expenses
-      { name: 'Housing', parentId: null, plaidCategory: 'HOUSING', isHidden: false, isSavings: false },
-      { name: 'Transportation', parentId: null, plaidCategory: 'TRANSPORTATION', isHidden: false, isSavings: false },
-      { name: 'Food & Dining', parentId: null, plaidCategory: 'FOOD_AND_DRINK', isHidden: false, isSavings: false },
-      { name: 'Shopping', parentId: null, plaidCategory: 'SHOPS', isHidden: false, isSavings: false },
-      { name: 'Entertainment', parentId: null, plaidCategory: 'ENTERTAINMENT', isHidden: false, isSavings: false },
-      { name: 'Bills & Utilities', parentId: null, plaidCategory: 'SERVICE', isHidden: false, isSavings: false },
-      { name: 'Healthcare', parentId: null, plaidCategory: 'HEALTHCARE', isHidden: false, isSavings: false },
-      { name: 'Education', parentId: null, plaidCategory: 'EDUCATION', isHidden: false, isSavings: false },
-      { name: 'Personal', parentId: null, plaidCategory: 'PERSONAL_CARE', isHidden: false, isSavings: false },
-      
-      // Savings
-      { name: 'Savings', parentId: null, plaidCategory: null, isHidden: false, isSavings: true },
-      
-      // Hidden
-      { name: 'Transfers', parentId: null, plaidCategory: 'TRANSFER', isHidden: true, isSavings: false }
+    // Create Plaid system categories
+    const systemCategories: Category[] = [
+      { id: 'plaid_income', name: 'Income', parentId: null, isHidden: false, isSavings: false, isSystem: true },
+      { id: 'plaid_transfer', name: 'Transfer', parentId: null, isHidden: true, isSavings: false, isSystem: true },
+      { id: 'plaid_housing', name: 'Housing', parentId: null, isHidden: false, isSavings: false, isSystem: true },
+      { id: 'plaid_transportation', name: 'Transportation', parentId: null, isHidden: false, isSavings: false, isSystem: true },
+      { id: 'plaid_food_drink', name: 'Food & Drink', parentId: null, isHidden: false, isSavings: false, isSystem: true },
+      { id: 'plaid_shops', name: 'Shopping', parentId: null, isHidden: false, isSavings: false, isSystem: true },
+      { id: 'plaid_entertainment', name: 'Entertainment', parentId: null, isHidden: false, isSavings: false, isSystem: true },
+      { id: 'plaid_service', name: 'Services', parentId: null, isHidden: false, isSavings: false, isSystem: true },
+      { id: 'plaid_healthcare', name: 'Healthcare', parentId: null, isHidden: false, isSavings: false, isSystem: true },
+      { id: 'plaid_education', name: 'Education', parentId: null, isHidden: false, isSavings: false, isSystem: true },
+      { id: 'plaid_personal', name: 'Personal Care', parentId: null, isHidden: false, isSavings: false, isSystem: true },
+      { id: 'plaid_travel', name: 'Travel', parentId: null, isHidden: false, isSavings: false, isSystem: true },
+      { id: 'plaid_bank_fees', name: 'Bank Fees', parentId: null, isHidden: false, isSavings: false, isSystem: true },
+      { id: 'plaid_cash_advance', name: 'Cash Advance', parentId: null, isHidden: false, isSavings: false, isSystem: true },
+      { id: 'plaid_taxes', name: 'Taxes', parentId: null, isHidden: false, isSavings: false, isSystem: true },
+      { id: 'plaid_other', name: 'Other', parentId: null, isHidden: false, isSavings: false, isSystem: true },
     ];
 
-    const newCategories: Category[] = defaultCategories.map(cat => ({
-      id: uuidv4(),
-      ...cat
-    }));
+    // Create a default user Savings category (not a system category)
+    const userCategories: Category[] = [
+      { id: uuidv4(), name: 'Savings', parentId: null, isHidden: false, isSavings: true, isSystem: false }
+    ];
 
-    await this.dataService.saveCategories(newCategories, userId);
+    const allCategories = [...systemCategories, ...userCategories];
+    await this.dataService.saveCategories(allCategories, userId);
   }
 }
 

@@ -129,7 +129,6 @@ export async function createCategory(
     {
       name,
       parentId: parentId || null,
-      plaidCategory: null,
       isHidden: false,
       isSavings: false,
     }

@@ -126,10 +126,10 @@ function CategoryNode({ category, onEdit, onDelete, level = 0 }: CategoryNodePro
                 </Tooltip>
               )}
 
-              {category.plaidCategory && (
-                <Tooltip label={`Plaid: ${category.plaidCategory}`}>
+              {category.isSystem && (
+                <Tooltip label="Plaid-provided category">
                   <Badge size="xs" variant="dot" color="green">
-                    Auto-mapped
+                    System
                   </Badge>
                 </Tooltip>
               )}

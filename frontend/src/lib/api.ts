@@ -33,7 +33,6 @@ export interface CategoryWithChildren extends Category {
 export interface CreateCategoryDto {
   name: string;
   parentId: string | null;
-  plaidCategory: string | null;
   isHidden: boolean;
   isSavings: boolean;
 }
@@ -49,7 +48,6 @@ function hasTokenAndUser(data: unknown): data is { success: boolean; token: stri
 
 export interface UpdateCategoryDto {
   name?: string;
-  plaidCategory?: string | null;
   isHidden?: boolean;
   isSavings?: boolean;
 }

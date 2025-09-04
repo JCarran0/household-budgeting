@@ -35,6 +35,10 @@ describe('User Story: Hidden Categories', () => {
   
   describe('As a user, I can use hidden categories to exclude transactions from budgets', () => {
     test('I can create a hidden category for transfers', async () => {
+      // Initialize default categories to get system categories
+      await categoryService.initializeDefaultCategories(userId);
+      
+      // Create a custom hidden category
       const response = await authenticatedPost(
         '/api/v1/categories',
         authToken,
@@ -42,32 +46,25 @@ describe('User Story: Hidden Categories', () => {
           name: 'Bank Transfers',
           parentId: null,
           isHidden: true,
-          isSavings: false,
-          plaidCategory: 'TRANSFER',
+          isSavings: false
         }
       );
       
       expect(response.status).toBe(201);
       expect(response.body.isHidden).toBe(true);
-      expect(response.body.plaidCategory).toBe('TRANSFER');
     });
     
     test('I can categorize transactions with hidden categories', async () => {
-      // Create a hidden category
-      const categoryResponse = await authenticatedPost(
-        '/api/v1/categories',
-        authToken,
-        {
-          name: 'Internal Transfers',
-          parentId: null,
-          isHidden: true,
-          isSavings: false,
-          plaidCategory: 'TRANSFER',
-        }
-      );
+      // Initialize default categories to get system Transfer category
+      await categoryService.initializeDefaultCategories(userId);
       
-      expect(categoryResponse.status).toBe(201);
-      const hiddenCategoryId = categoryResponse.body.id;
+      // Get the system Transfer category (which is hidden)
+      const categories = await categoryService.getAllCategories(userId);
+      const transferCategory = categories.find(c => c.id === 'plaid_transfer');
+      expect(transferCategory).toBeDefined();
+      expect(transferCategory?.isHidden).toBe(true);
+      
+      const hiddenCategoryId = transferCategory!.id;
       
       // Create a test transaction using dataService
       const existingTransactions = await dataService.getData<StoredTransaction[]>(
@@ -134,8 +131,7 @@ describe('User Story: Hidden Categories', () => {
           name: 'Credit Card Payments',
           parentId: null,
           isHidden: true,
-          isSavings: false,
-          plaidCategory: null,
+          isSavings: false
         }
       );
       
@@ -177,7 +173,7 @@ describe('User Story: Hidden Categories', () => {
       expect(hiddenCategories.length).toBeGreaterThan(0);
       
       // Verify Transfer category exists and is hidden
-      const transferCategory = allCategoriesResponse.body.find((c: any) => c.plaidCategory === 'TRANSFER');
+      const transferCategory = allCategoriesResponse.body.find((c: any) => c.id === 'plaid_transfer');
       expect(transferCategory).toBeDefined();
       expect(transferCategory.isHidden).toBe(true);
     });
@@ -191,8 +187,7 @@ describe('User Story: Hidden Categories', () => {
           name: 'Groceries',
           parentId: null,
           isHidden: false,
-          isSavings: false,
-          plaidCategory: null,
+          isSavings: false
         }
       );
       
@@ -203,8 +198,7 @@ describe('User Story: Hidden Categories', () => {
           name: 'Transfers',
           parentId: null,
           isHidden: true,
-          isSavings: false,
-          plaidCategory: 'TRANSFER',
+          isSavings: false
         }
       );
       
@@ -299,8 +293,7 @@ describe('User Story: Hidden Categories', () => {
           name: 'Account Transfers',
           parentId: null,
           isHidden: true,
-          isSavings: false,
-          plaidCategory: 'TRANSFER',
+          isSavings: false
         }
       );
       
@@ -326,8 +319,7 @@ describe('User Story: Hidden Categories', () => {
           name: 'Test Category',
           parentId: null,
           isHidden: false,
-          isSavings: false,
-          plaidCategory: null,
+          isSavings: false
         }
       );
       

@@ -20,7 +20,6 @@ describe('CategoryService', () => {
       const newCategory = {
         name: 'Transportation',
         parentId: null,
-        plaidCategory: 'TRANSPORTATION',
         isHidden: false,
         isSavings: false
       };
@@ -43,7 +42,6 @@ describe('CategoryService', () => {
         id: 'parent-1',
         name: 'Transportation',
         parentId: null,
-        plaidCategory: 'TRANSPORTATION',
         isHidden: false,
         isSavings: false
       };
@@ -51,7 +49,6 @@ describe('CategoryService', () => {
       const newSubcategory = {
         name: 'Gas & Fuel',
         parentId: 'parent-1',
-        plaidCategory: 'TRANSPORTATION_GAS',
         isHidden: false,
         isSavings: false
       };
@@ -75,7 +72,6 @@ describe('CategoryService', () => {
       const newSubcategory = {
         name: 'Gas & Fuel',
         parentId: 'non-existent',
-        plaidCategory: 'TRANSPORTATION_GAS',
         isHidden: false,
         isSavings: false
       };
@@ -89,7 +85,6 @@ describe('CategoryService', () => {
         id: 'parent-1',
         name: 'Transportation',
         parentId: null,
-        plaidCategory: 'TRANSPORTATION',
         isHidden: false,
         isSavings: false
       };
@@ -98,7 +93,6 @@ describe('CategoryService', () => {
         id: 'sub-1',
         name: 'Gas',
         parentId: 'parent-1',
-        plaidCategory: 'TRANSPORTATION_GAS',
         isHidden: false,
         isSavings: false
       };
@@ -108,7 +102,6 @@ describe('CategoryService', () => {
       const newSubSubcategory = {
         name: 'Premium Gas',
         parentId: 'sub-1', // Trying to create under a subcategory
-        plaidCategory: null,
         isHidden: false,
         isSavings: false
       };
@@ -122,7 +115,6 @@ describe('CategoryService', () => {
         id: 'cat-1',
         name: 'Transportation',
         parentId: null,
-        plaidCategory: 'TRANSPORTATION',
         isHidden: false,
         isSavings: false
       };
@@ -156,15 +148,13 @@ describe('CategoryService', () => {
           id: 'cat-1',
           name: 'Transportation',
           parentId: null,
-          plaidCategory: 'TRANSPORTATION',
-          isHidden: false,
+            isHidden: false,
           isSavings: false
         },
         {
           id: 'cat-2',
           name: 'Food',
           parentId: null,
-          plaidCategory: 'FOOD',
           isHidden: false,
           isSavings: false
         }
@@ -186,23 +176,20 @@ describe('CategoryService', () => {
           id: 'parent-1',
           name: 'Transportation',
           parentId: null,
-          plaidCategory: 'TRANSPORTATION',
-          isHidden: false,
+            isHidden: false,
           isSavings: false
         },
         {
           id: 'sub-1',
           name: 'Gas',
           parentId: 'parent-1',
-          plaidCategory: 'TRANSPORTATION_GAS',
-          isHidden: false,
+            isHidden: false,
           isSavings: false
         },
         {
           id: 'sub-2',
           name: 'Parking',
           parentId: 'parent-1',
-          plaidCategory: 'TRANSPORTATION_PARKING',
           isHidden: false,
           isSavings: false
         },
@@ -210,7 +197,6 @@ describe('CategoryService', () => {
           id: 'cat-2',
           name: 'Food',
           parentId: null,
-          plaidCategory: 'FOOD',
           isHidden: false,
           isSavings: false
         }
@@ -234,23 +220,20 @@ describe('CategoryService', () => {
           id: 'parent-1',
           name: 'Transportation',
           parentId: null,
-          plaidCategory: 'TRANSPORTATION',
-          isHidden: false,
+            isHidden: false,
           isSavings: false
         },
         {
           id: 'sub-1',
           name: 'Gas',
           parentId: 'parent-1',
-          plaidCategory: 'TRANSPORTATION_GAS',
-          isHidden: false,
+            isHidden: false,
           isSavings: false
         },
         {
           id: 'parent-2',
           name: 'Food',
           parentId: null,
-          plaidCategory: 'FOOD',
           isHidden: false,
           isSavings: false
         }
@@ -270,23 +253,20 @@ describe('CategoryService', () => {
           id: 'parent-1',
           name: 'Transportation',
           parentId: null,
-          plaidCategory: 'TRANSPORTATION',
-          isHidden: false,
+            isHidden: false,
           isSavings: false
         },
         {
           id: 'sub-1',
           name: 'Gas',
           parentId: 'parent-1',
-          plaidCategory: 'TRANSPORTATION_GAS',
-          isHidden: false,
+            isHidden: false,
           isSavings: false
         },
         {
           id: 'sub-2',
           name: 'Parking',
           parentId: 'parent-1',
-          plaidCategory: 'TRANSPORTATION_PARKING',
           isHidden: false,
           isSavings: false
         },
@@ -294,7 +274,6 @@ describe('CategoryService', () => {
           id: 'sub-3',
           name: 'Groceries',
           parentId: 'parent-2',
-          plaidCategory: 'FOOD_GROCERIES',
           isHidden: false,
           isSavings: false
         }
@@ -314,16 +293,14 @@ describe('CategoryService', () => {
           id: 'parent-1',
           name: 'Transportation',
           parentId: null,
-          plaidCategory: 'TRANSPORTATION',
-          isHidden: false,
+            isHidden: false,
           isSavings: false
         },
         {
           id: 'sub-1',
           name: 'Gas',
           parentId: 'parent-1',
-          plaidCategory: 'TRANSPORTATION_GAS',
-          isHidden: false,
+            isHidden: false,
           isSavings: false
         }
       ];
@@ -341,62 +318,6 @@ describe('CategoryService', () => {
     });
   });
 
-  describe('Plaid Category Mapping', () => {
-    it('should find category by Plaid category string', async () => {
-      const categories: Category[] = [
-        {
-          id: 'cat-1',
-          name: 'Transportation',
-          parentId: null,
-          plaidCategory: 'TRANSPORTATION',
-          isHidden: false,
-          isSavings: false
-        },
-        {
-          id: 'cat-2',
-          name: 'Gas',
-          parentId: 'cat-1',
-          plaidCategory: 'TRANSPORTATION_GAS',
-          isHidden: false,
-          isSavings: false
-        }
-      ];
-
-      await dataService.saveCategories(categories, testUserId);
-
-      const category = await categoryService.findByPlaidCategory('TRANSPORTATION_GAS', testUserId);
-
-      expect(category).toEqual(categories[1]);
-    });
-
-    it('should return null when Plaid category not found', async () => {
-      const category = await categoryService.findByPlaidCategory('NON_EXISTENT', testUserId);
-
-      expect(category).toBeNull();
-    });
-
-    it('should map Plaid categories to custom categories', async () => {
-      const categories: Category[] = [
-        {
-          id: 'cat-1',
-          name: 'Transportation',
-          parentId: null,
-          plaidCategory: 'TRANSPORTATION',
-          isHidden: false,
-          isSavings: false
-        }
-      ];
-
-      await dataService.saveCategories(categories, testUserId);
-
-      const mapping = await categoryService.getPlaidCategoryMapping(testUserId);
-
-      expect(mapping).toEqual({
-        'TRANSPORTATION': 'cat-1'
-      });
-    });
-  });
-
   describe('Special Category Flags', () => {
     it('should get all hidden categories', async () => {
       const categories: Category[] = [
@@ -404,15 +325,13 @@ describe('CategoryService', () => {
           id: 'cat-1',
           name: 'Transportation',
           parentId: null,
-          plaidCategory: 'TRANSPORTATION',
-          isHidden: true,
+            isHidden: true,
           isSavings: false
         },
         {
           id: 'cat-2',
           name: 'Food',
           parentId: null,
-          plaidCategory: 'FOOD',
           isHidden: false,
           isSavings: false
         },
@@ -420,8 +339,7 @@ describe('CategoryService', () => {
           id: 'cat-3',
           name: 'Internal Transfers',
           parentId: null,
-          plaidCategory: null,
-          isHidden: true,
+            isHidden: true,
           isSavings: false
         }
       ];
@@ -440,23 +358,20 @@ describe('CategoryService', () => {
           id: 'cat-1',
           name: 'Emergency Fund',
           parentId: null,
-          plaidCategory: null,
-          isHidden: false,
+            isHidden: false,
           isSavings: true
         },
         {
           id: 'cat-2',
           name: 'Vacation Savings',
           parentId: null,
-          plaidCategory: null,
-          isHidden: false,
+            isHidden: false,
           isSavings: true
         },
         {
           id: 'cat-3',
           name: 'Food',
           parentId: null,
-          plaidCategory: 'FOOD',
           isHidden: false,
           isSavings: false
         }
@@ -501,7 +416,6 @@ describe('CategoryService', () => {
         id: 'cat-1',
         name: 'Custom Category',
         parentId: null,
-        plaidCategory: null,
         isHidden: false,
         isSavings: false
       };

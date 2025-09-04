@@ -42,7 +42,6 @@ describe('User Story: Category Management', () => {
           parentId: null,
           isHidden: false,
           isSavings: false,
-          plaidCategory: null,
         }
       );
       
@@ -64,7 +63,6 @@ describe('User Story: Category Management', () => {
           parentId: null,
           isHidden: false,
           isSavings: false,
-          plaidCategory: null,
         }
       );
       
@@ -80,7 +78,6 @@ describe('User Story: Category Management', () => {
           parentId: parentId,
           isHidden: false,
           isSavings: false,
-          plaidCategory: null,
         }
       );
       
@@ -98,7 +95,6 @@ describe('User Story: Category Management', () => {
           parentId: null,
           isHidden: true, // Hidden category
           isSavings: false,
-          plaidCategory: null,
         }
       );
       
@@ -115,7 +111,6 @@ describe('User Story: Category Management', () => {
           parentId: null,
           isHidden: false,
           isSavings: true, // Savings category
-          plaidCategory: null,
         }
       );
       
@@ -137,7 +132,6 @@ describe('User Story: Category Management', () => {
           parentId: food.id,
           isHidden: false,
           isSavings: false,
-          plaidCategory: null,
         }
       );
       
@@ -149,7 +143,6 @@ describe('User Story: Category Management', () => {
           parentId: food.id,
           isHidden: false,
           isSavings: false,
-          plaidCategory: null,
         }
       );
       
@@ -161,7 +154,6 @@ describe('User Story: Category Management', () => {
           parentId: entertainment.id,
           isHidden: false,
           isSavings: false,
-          plaidCategory: null,
         }
       );
       
@@ -196,7 +188,6 @@ describe('User Story: Category Management', () => {
           parentId: null,
           isHidden: false,
           isSavings: false,
-          plaidCategory: null,
         }
       );
       
@@ -235,7 +226,6 @@ describe('User Story: Category Management', () => {
           parentId: null,
           isHidden: false,
           isSavings: false,
-          plaidCategory: null,
         }
       );
       
@@ -334,54 +324,6 @@ describe('User Story: Category Management', () => {
       // 2. Succeed but require reassignment parameter
       // For now, expect success since no transactions exist
       expect(deleteResponse.status).toBe(204);
-    });
-  });
-  
-  describe('As a user, I can map Plaid categories to my custom categories', () => {
-    test('I can associate a Plaid category with my custom category', async () => {
-      const response = await authenticatedPost(
-        '/api/v1/categories',
-        authToken,
-        {
-          name: 'Coffee Shops',
-          parentId: null,
-          isHidden: false,
-          isSavings: false,
-          plaidCategory: 'FOOD_AND_DRINK_COFFEE_SHOPS',
-        }
-      );
-      
-      expect(response.status).toBe(201);
-      expect(response.body.plaidCategory).toBe('FOOD_AND_DRINK_COFFEE_SHOPS');
-    });
-    
-    test('I can update the Plaid category mapping', async () => {
-      // Create category without Plaid mapping
-      const createResponse = await authenticatedPost(
-        '/api/v1/categories',
-        authToken,
-        {
-          name: 'Fast Food',
-          parentId: null,
-          isHidden: false,
-          isSavings: false,
-          plaidCategory: null,
-        }
-      );
-      
-      const categoryId = createResponse.body.id;
-      
-      // Update with Plaid category
-      const updateResponse = await authenticatedPut(
-        `/api/v1/categories/${categoryId}`,
-        authToken,
-        {
-          plaidCategory: 'FOOD_AND_DRINK_FAST_FOOD',
-        }
-      );
-      
-      expect(updateResponse.status).toBe(200);
-      expect(updateResponse.body.plaidCategory).toBe('FOOD_AND_DRINK_FAST_FOOD');
     });
   });
   

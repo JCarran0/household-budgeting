@@ -25,28 +25,11 @@ interface CategoryFormProps {
 interface FormValues {
   name: string;
   parentId: string | null;
-  plaidCategory: string | null;
   isHidden: boolean;
   isSavings: boolean;
 }
 
-const PLAID_CATEGORIES = [
-  { value: 'INCOME', label: 'Income' },
-  { value: 'TRANSFER', label: 'Transfer' },
-  { value: 'HOUSING', label: 'Housing' },
-  { value: 'TRANSPORTATION', label: 'Transportation' },
-  { value: 'FOOD_AND_DRINK', label: 'Food & Drink' },
-  { value: 'SHOPS', label: 'Shopping' },
-  { value: 'ENTERTAINMENT', label: 'Entertainment' },
-  { value: 'SERVICE', label: 'Services' },
-  { value: 'HEALTHCARE', label: 'Healthcare' },
-  { value: 'EDUCATION', label: 'Education' },
-  { value: 'PERSONAL_CARE', label: 'Personal Care' },
-  { value: 'TRAVEL', label: 'Travel' },
-  { value: 'CASH_ADVANCE', label: 'Cash Advance' },
-  { value: 'BANK_FEES', label: 'Bank Fees' },
-  { value: 'TAXES', label: 'Taxes' },
-];
+// Removed PLAID_CATEGORIES constant - no longer needed
 
 export function CategoryForm({ opened, onClose, category, onSuccess }: CategoryFormProps) {
   const isEdit = !!category;
@@ -65,7 +48,6 @@ export function CategoryForm({ opened, onClose, category, onSuccess }: CategoryF
     initialValues: {
       name: '',
       parentId: null,
-      plaidCategory: null,
       isHidden: false,
       isSavings: false,
     },
@@ -85,7 +67,6 @@ export function CategoryForm({ opened, onClose, category, onSuccess }: CategoryF
         form.setValues({
           name: category.name,
           parentId: category.parentId,
-          plaidCategory: category.plaidCategory,
           isHidden: category.isHidden,
           isSavings: category.isSavings,
         });
@@ -144,7 +125,6 @@ export function CategoryForm({ opened, onClose, category, onSuccess }: CategoryF
       // For updates, only send changed fields
       const updates: UpdateCategoryDto = {};
       if (values.name !== category.name) updates.name = values.name;
-      if (values.plaidCategory !== category.plaidCategory) updates.plaidCategory = values.plaidCategory;
       if (values.isHidden !== category.isHidden) updates.isHidden = values.isHidden;
       if (values.isSavings !== category.isSavings) updates.isSavings = values.isSavings;
       
@@ -154,7 +134,10 @@ export function CategoryForm({ opened, onClose, category, onSuccess }: CategoryF
         onClose();
       }
     } else {
-      createMutation.mutate(values as CreateCategoryDto);
+      createMutation.mutate({
+        ...values,
+        plaidCategory: null, // Always null for user-created categories
+      } as CreateCategoryDto);
     }
   };
 
@@ -170,7 +153,7 @@ export function CategoryForm({ opened, onClose, category, onSuccess }: CategoryF
       .filter(cat => !category || cat.id !== category.id)
       .map(cat => ({
         value: cat.id,
-        label: cat.name,
+        label: cat.isSystem ? `${cat.name} (Plaid)` : cat.name,
       }));
     
     return options;
@@ -207,16 +190,6 @@ export function CategoryForm({ opened, onClose, category, onSuccess }: CategoryF
               disabled={loadingParents}
             />
           )}
-
-          <Select
-            label="Plaid Category Mapping"
-            placeholder="Select Plaid category (optional)"
-            data={PLAID_CATEGORIES}
-            clearable
-            searchable
-            {...form.getInputProps('plaidCategory')}
-            description="Used for automatic transaction categorization"
-          />
 
           <Stack gap="xs">
             <Text size="sm" fw={500}>Options</Text>

@@ -66,9 +66,9 @@ export interface Category {
   id: string;
   name: string;
   parentId: string | null;
-  plaidCategory: string | null;
   isHidden: boolean;
   isSavings: boolean;
+  isSystem?: boolean; // True for Plaid-provided categories
 }
 
 export interface MonthlyBudget {

@@ -28,7 +28,6 @@ import {
   IconEye,
   IconEyeOff,
   IconPigMoney,
-  IconRefresh,
   IconAlertCircle,
   IconRobot,
   IconList,
@@ -60,28 +59,6 @@ export function Categories() {
     },
   });
 
-  // Initialize default categories mutation
-  const initializeMutation = useMutation({
-    mutationFn: api.initializeDefaultCategories,
-    onSuccess: (data) => {
-      notifications.show({
-        title: 'Categories Initialized',
-        message: `Created ${data.categories.length} default categories`,
-        color: 'green',
-      });
-      queryClient.invalidateQueries({ queryKey: ['categories'] });
-    },
-    onError: (error: unknown) => {
-      console.error('Initialize categories error:', error);
-      const message = (error as { response?: { data?: { error?: string } }; message?: string })?.response?.data?.error || 
-        (error as { message?: string })?.message || 'Failed to initialize categories';
-      notifications.show({
-        title: 'Error',
-        message: message,
-        color: 'red',
-      });
-    },
-  });
 
   // Delete category mutation
   const deleteMutation = useMutation({
@@ -197,15 +174,6 @@ export function Categories() {
               <Group justify="space-between">
                 <Text size="lg" fw={500}>Manage Categories</Text>
                 <Group>
-                  {!hasCategories && (
-                    <Button
-                      leftSection={<IconRefresh size={16} />}
-                      onClick={() => initializeMutation.mutate()}
-                      loading={initializeMutation.isPending}
-                    >
-                      Initialize Default Categories
-                    </Button>
-                  )}
                   <Button
                     leftSection={<IconPlus size={16} />}
                     onClick={() => setIsFormOpen(true)}
@@ -303,19 +271,11 @@ export function Categories() {
             <ThemeIcon size={60} radius="xl" variant="light" color="gray" mx="auto" mb="md">
               <IconCategory size={30} />
             </ThemeIcon>
-            <Title order={3} mb="sm">No Categories Yet</Title>
+            <Title order={3} mb="sm">Setting Up Categories</Title>
             <Text c="dimmed" mb="lg">
-              Get started by initializing default categories or creating your own
+              Plaid categories are being initialized. Create your custom categories to organize transactions.
             </Text>
             <Group justify="center">
-              <Button
-                variant="light"
-                leftSection={<IconRefresh size={16} />}
-                onClick={() => initializeMutation.mutate()}
-                loading={initializeMutation.isPending}
-              >
-                Initialize Default Categories
-              </Button>
               <Button
                 leftSection={<IconPlus size={16} />}
                 onClick={() => setIsFormOpen(true)}
