@@ -31,9 +31,17 @@
 - A user should be able to view account details (name, type, balance, institution)
 - A user should be able to see the official account name from the bank
 - A user should be able to see when an account was last synced
-- A user should be able to disconnect/remove linked accounts (not yet implemented)
+- A user should be able to disconnect/remove linked accounts
 - A user should be able to see account balances update after syncing
 - A user should be able to reconnect accounts to get extended transaction history
+
+### Account Customization
+- A user should be able to add custom nicknames to their accounts
+- A user should be able to see their custom nickname prominently displayed
+- A user should be able to see the official account name displayed subtly below the nickname
+- A user should be able to edit or clear account nicknames at any time
+- A user should see account nicknames in transaction tooltips for easy identification
+- A user should be limited to 50 characters for account nicknames
 
 ### Account Types
 - A user should be able to connect checking accounts
