@@ -287,16 +287,20 @@ export function AutoCategorization() {
 
   // Build category options for select
   const categoryOptions = categories
-    .filter(cat => !cat.isHidden)
     .map(cat => {
       const parentCategory = cat.parentId
         ? categories.find(p => p.id === cat.parentId)
         : null;
+      const label = parentCategory 
+        ? `${parentCategory.name} → ${cat.name}` 
+        : cat.name;
+      // Add indicator for hidden categories
+      const displayLabel = cat.isHidden 
+        ? `${label} (Excluded from budgets)`
+        : label;
       return {
         value: cat.id,
-        label: parentCategory 
-          ? `${parentCategory.name} → ${cat.name}` 
-          : cat.name,
+        label: displayLabel,
       };
     })
     .sort((a, b) => a.label.localeCompare(b.label));

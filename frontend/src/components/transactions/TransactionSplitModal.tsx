@@ -67,16 +67,20 @@ export function TransactionSplitModal({
     }
     
     return categories
-      .filter(cat => !cat.isHidden)
       .map(cat => {
         const parentCategory = cat.parentId
           ? categories.find(p => p.id === cat.parentId)
           : null;
+        const baseLabel = parentCategory 
+          ? `${parentCategory.name} → ${cat.name}` 
+          : cat.name || '';
+        // Add indicator for hidden categories
+        const label = cat.isHidden 
+          ? `${baseLabel} (Excluded from budgets)`
+          : baseLabel;
         return {
           value: cat.id || '',
-          label: parentCategory 
-            ? `${parentCategory.name} → ${cat.name}` 
-            : cat.name || '',
+          label: label,
         };
       })
       .filter(opt => opt.value && opt.label)

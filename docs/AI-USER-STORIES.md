@@ -132,11 +132,20 @@
 
 ### Category Properties
 - A user should be able to name/rename categories
-- A user should be able to mark categories as hidden
+- A user should be able to mark categories as hidden (excluded from budget calculations)
 - A user should be able to mark categories as savings categories
 - A user should be able to map categories to Plaid categories
 - A user should be able to search/filter categories by name
 - A user should be able to show/hide hidden categories in the view
+
+### Hidden Categories
+- A user should be able to categorize transactions with hidden categories
+- A user should see hidden categories in transaction categorization dropdowns
+- A user should see "(Excluded from budgets)" label next to hidden categories
+- A user should be able to create auto-categorization rules using hidden categories
+- A user should NOT see hidden categories in budget creation/editing forms
+- A user should be able to use hidden categories for transfers between accounts
+- A user should have hidden category transactions excluded from budget calculations
 
 ### Category Operations
 - A user should be able to edit existing categories
