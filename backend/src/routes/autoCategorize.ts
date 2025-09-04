@@ -19,7 +19,7 @@ interface AuthRequest extends Request {
 // Input validation schemas
 const createRuleSchema = z.object({
   description: z.string().min(1).max(200),
-  pattern: z.string().min(1).max(100),
+  patterns: z.array(z.string().min(1).max(100)).min(1).max(5),
   categoryId: z.string().min(1),
   categoryName: z.string().optional(),
   userDescription: z.string().max(200).optional(),
@@ -28,7 +28,7 @@ const createRuleSchema = z.object({
 
 const updateRuleSchema = z.object({
   description: z.string().min(1).max(200).optional(),
-  pattern: z.string().min(1).max(100).optional(),
+  patterns: z.array(z.string().min(1).max(100)).min(1).max(5).optional(),
   categoryId: z.string().min(1).optional(),
   categoryName: z.string().optional(),
   userDescription: z.string().max(200).optional(),

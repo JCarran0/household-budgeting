@@ -502,7 +502,7 @@ class ApiClient {
 
   async createAutoCategorizeRule(rule: {
     description: string;
-    pattern: string;
+    patterns: string[];
     categoryId: string;
     categoryName?: string;
     userDescription?: string;
@@ -514,7 +514,7 @@ class ApiClient {
 
   async updateAutoCategorizeRule(ruleId: string, updates: {
     description?: string;
-    pattern?: string;
+    patterns?: string[];
     categoryId?: string;
     categoryName?: string;
     userDescription?: string;

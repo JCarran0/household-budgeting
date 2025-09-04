@@ -118,7 +118,7 @@ describe('User Story: Data Privacy and Isolation', () => {
         user1.token,
         {
           description: 'User1 Coffee Rule',
-          pattern: 'starbucks',
+          patterns: ['starbucks'],
           categoryId: user1Cat.id,
           isActive: true,
         }
@@ -130,7 +130,7 @@ describe('User Story: Data Privacy and Isolation', () => {
         user2.token,
         {
           description: 'User2 Gas Rule',
-          pattern: 'shell',
+          patterns: ['shell'],
           categoryId: user2Cat.id,
           isActive: true,
         }

@@ -10,8 +10,10 @@ import { StoredTransaction } from './transactionService';
 import { AutoCategorizeRule, Category } from '../../../shared/types';
 import { categoryService } from './index';
 
-export interface StoredAutoCategorizeRule extends AutoCategorizeRule {
+export interface StoredAutoCategorizeRule extends Omit<AutoCategorizeRule, 'patterns'> {
   userId: string;
+  patterns: string[]; // Ensure patterns is always an array
+  pattern?: string; // Legacy field for migration
 }
 
 export class AutoCategorizeService {
@@ -25,8 +27,27 @@ export class AutoCategorizeService {
       `autocategorize_rules_${userId}`
     ) || [];
     
+    // Migrate old single-pattern rules to patterns array
+    const migratedRules = rules.map(rule => {
+      if (!rule.patterns && rule.pattern) {
+        // Migrate from old format
+        rule.patterns = [rule.pattern];
+        delete rule.pattern;
+      } else if (!rule.patterns) {
+        // Ensure patterns is always an array
+        rule.patterns = [];
+      }
+      return rule;
+    });
+    
+    // Save migrated rules if any migration occurred
+    const needsSave = rules.some(rule => 'pattern' in rule);
+    if (needsSave) {
+      await this.dataService.saveData(`autocategorize_rules_${userId}`, migratedRules);
+    }
+    
     // Sort by priority (lower number = higher priority)
-    return rules.sort((a, b) => a.priority - b.priority);
+    return migratedRules.sort((a, b) => a.priority - b.priority);
   }
 
   /**
@@ -36,7 +57,7 @@ export class AutoCategorizeService {
     userId: string,
     data: {
       description: string;
-      pattern: string;
+      patterns: string[];
       categoryId: string;
       categoryName?: string;
       userDescription?: string;
@@ -46,12 +67,14 @@ export class AutoCategorizeService {
     try {
       const rules = await this.getRules(userId);
       
-      // Check for duplicate pattern
-      const duplicate = rules.find(r => 
-        r.pattern.toLowerCase() === data.pattern.toLowerCase()
-      );
-      if (duplicate) {
-        return { success: false, error: 'A rule with this pattern already exists' };
+      // Check for duplicate patterns
+      const lowerPatterns = data.patterns.map(p => p.toLowerCase());
+      for (const rule of rules) {
+        const existingPatterns = rule.patterns.map(p => p.toLowerCase());
+        const hasDuplicate = lowerPatterns.some(p => existingPatterns.includes(p));
+        if (hasDuplicate) {
+          return { success: false, error: 'One or more patterns already exist in another rule' };
+        }
       }
 
       // Assign next priority number (highest + 1)
@@ -64,7 +87,7 @@ export class AutoCategorizeService {
         id: uuidv4(),
         userId,
         description: data.description,
-        pattern: data.pattern,
+        patterns: data.patterns,
         matchType: 'contains',
         categoryId: data.categoryId,
         categoryName: data.categoryName,
@@ -93,7 +116,7 @@ export class AutoCategorizeService {
     ruleId: string,
     updates: Partial<{
       description: string;
-      pattern: string;
+      patterns: string[];
       categoryId: string;
       categoryName: string;
       userDescription: string;
@@ -108,14 +131,16 @@ export class AutoCategorizeService {
         return { success: false, error: 'Rule not found' };
       }
 
-      // Check for duplicate pattern if pattern is being updated
-      if (updates.pattern && updates.pattern !== rule.pattern) {
-        const duplicate = rules.find(r => 
-          r.id !== ruleId && 
-          r.pattern.toLowerCase() === updates.pattern!.toLowerCase()
-        );
-        if (duplicate) {
-          return { success: false, error: 'A rule with this pattern already exists' };
+      // Check for duplicate patterns if patterns are being updated
+      if (updates.patterns && JSON.stringify(updates.patterns) !== JSON.stringify(rule.patterns)) {
+        const lowerPatterns = updates.patterns.map(p => p.toLowerCase());
+        for (const otherRule of rules) {
+          if (otherRule.id === ruleId) continue;
+          const existingPatterns = otherRule.patterns.map(p => p.toLowerCase());
+          const hasDuplicate = lowerPatterns.some(p => existingPatterns.includes(p));
+          if (hasDuplicate) {
+            return { success: false, error: 'One or more patterns already exist in another rule' };
+          }
         }
       }
 
@@ -227,9 +252,13 @@ export class AutoCategorizeService {
       // Step 1: Try user-defined rules first
       const description = (transaction.userDescription || transaction.name).toLowerCase();
       for (const rule of activeRules) {
-        const pattern = rule.pattern.toLowerCase();
+        // Check if any pattern matches (OR logic)
+        const matches = rule.patterns.some(pattern => {
+          const lowerPattern = pattern.toLowerCase();
+          return rule.matchType === 'contains' && description.includes(lowerPattern);
+        });
         
-        if (rule.matchType === 'contains' && description.includes(pattern)) {
+        if (matches) {
           transaction.categoryId = rule.categoryId;
           transaction.userCategoryId = rule.categoryId;
           // Apply user description if provided by the rule

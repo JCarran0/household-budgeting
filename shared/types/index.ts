@@ -95,7 +95,7 @@ export interface ApiError {
 export interface AutoCategorizeRule {
   id: string;
   description: string; // Rule description for UI
-  pattern: string; // The text to search for
+  patterns: string[]; // Array of text patterns to search for (OR logic)
   matchType: 'contains'; // For now just contains, can add 'exact', 'regex' later
   categoryId: string;
   categoryName?: string; // For display purposes

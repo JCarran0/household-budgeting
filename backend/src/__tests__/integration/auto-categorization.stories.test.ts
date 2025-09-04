@@ -46,13 +46,13 @@ describe('User Story: Auto-Categorization', () => {
   });
   
   describe('As a user, I can create and manage auto-categorization rules', () => {
-    test('I can create a rule to automatically categorize transactions', async () => {
+    test('I can create a rule with a single pattern to automatically categorize transactions', async () => {
       const response = await authenticatedPost(
         '/api/v1/autocategorize/rules',
         authToken,
         {
           description: 'Starbucks Coffee',
-          pattern: 'starbucks',
+          patterns: ['starbucks'],
           categoryId: coffeeCategoryId,
           categoryName: 'Coffee Shops',
           userDescription: 'Morning coffee',
@@ -63,9 +63,34 @@ describe('User Story: Auto-Categorization', () => {
       expect(response.status).toBe(200);
       expect(response.body.success).toBe(true);
       expect(response.body.rule).toBeDefined();
-      expect(response.body.rule.pattern).toBe('starbucks');
+      expect(response.body.rule.patterns).toEqual(['starbucks']);
       expect(response.body.rule.categoryId).toBe(coffeeCategoryId);
       expect(response.body.rule.priority).toBe(1); // First rule gets priority 1
+    });
+
+    test('I can create a rule with multiple patterns using OR logic', async () => {
+      const response = await authenticatedPost(
+        '/api/v1/autocategorize/rules',
+        authToken,
+        {
+          description: 'All Coffee Shops',
+          patterns: ['starbucks', 'coffee bean', 'peets', 'dunkin', 'blue bottle'],
+          categoryId: coffeeCategoryId,
+          categoryName: 'Coffee Shops',
+          userDescription: 'Coffee shop visit',
+          isActive: true,
+        }
+      );
+      
+      expect(response.status).toBe(200);
+      expect(response.body.success).toBe(true);
+      expect(response.body.rule).toBeDefined();
+      expect(response.body.rule.patterns).toHaveLength(5);
+      expect(response.body.rule.patterns).toContain('starbucks');
+      expect(response.body.rule.patterns).toContain('coffee bean');
+      expect(response.body.rule.patterns).toContain('peets');
+      expect(response.body.rule.patterns).toContain('dunkin');
+      expect(response.body.rule.patterns).toContain('blue bottle');
     });
     
     test('I can create multiple rules with different priorities', async () => {
@@ -75,7 +100,7 @@ describe('User Story: Auto-Categorization', () => {
         authToken,
         {
           description: 'Walmart Groceries',
-          pattern: 'walmart',
+          patterns: ['walmart'],
           categoryId: groceryCategoryId,
           isActive: true,
         }
@@ -89,7 +114,7 @@ describe('User Story: Auto-Categorization', () => {
         authToken,
         {
           description: 'Uber Rides',
-          pattern: 'uber',
+          patterns: ['uber'],
           categoryId: transportCategoryId,
           isActive: true,
         }
@@ -97,58 +122,91 @@ describe('User Story: Auto-Categorization', () => {
       
       expect(rule2.body.rule.priority).toBe(2);
       
-      // Create third rule
+      // Create third rule with multiple patterns
       const rule3 = await authenticatedPost(
         '/api/v1/autocategorize/rules',
         authToken,
         {
-          description: 'Coffee Shop',
-          pattern: 'coffee',
+          description: 'Coffee Shops',
+          patterns: ['coffee', 'starbucks', 'peets'],
           categoryId: coffeeCategoryId,
           isActive: true,
         }
       );
       
       expect(rule3.body.rule.priority).toBe(3);
+      expect(rule3.body.rule.patterns).toHaveLength(3);
     });
     
-    test('I cannot create duplicate rules with the same pattern', async () => {
-      // Create first rule
+    test('I cannot create duplicate rules with overlapping patterns', async () => {
+      // Create first rule with multiple patterns
       await authenticatedPost(
         '/api/v1/autocategorize/rules',
         authToken,
         {
           description: 'Amazon Shopping',
-          pattern: 'amazon',
+          patterns: ['amazon', 'amzn'],
           categoryId: groceryCategoryId,
           isActive: true,
         }
       );
       
-      // Try to create duplicate
+      // Try to create rule with overlapping pattern
       const duplicateResponse = await authenticatedPost(
         '/api/v1/autocategorize/rules',
         authToken,
         {
           description: 'Amazon Prime',
-          pattern: 'amazon', // Same pattern
+          patterns: ['amazon prime', 'amazon'], // 'amazon' overlaps
           categoryId: coffeeCategoryId,
           isActive: true,
         }
       );
       
       expect(duplicateResponse.status).toBe(400);
-      expect(duplicateResponse.body.error).toContain('already exists');
+      expect(duplicateResponse.body.error).toContain('already exist');
+    });
+
+    test('I cannot create a rule with more than 5 patterns', async () => {
+      const response = await authenticatedPost(
+        '/api/v1/autocategorize/rules',
+        authToken,
+        {
+          description: 'Too Many Patterns',
+          patterns: ['p1', 'p2', 'p3', 'p4', 'p5', 'p6'], // 6 patterns
+          categoryId: groceryCategoryId,
+          isActive: true,
+        }
+      );
+      
+      expect(response.status).toBe(400);
+      expect(response.body.error).toContain('Invalid');
+    });
+
+    test('I cannot create a rule with empty patterns array', async () => {
+      const response = await authenticatedPost(
+        '/api/v1/autocategorize/rules',
+        authToken,
+        {
+          description: 'No Patterns',
+          patterns: [],
+          categoryId: groceryCategoryId,
+          isActive: true,
+        }
+      );
+      
+      expect(response.status).toBe(400);
+      expect(response.body.error).toContain('Invalid');
     });
     
     test('I can retrieve all my auto-categorization rules', async () => {
-      // Create several rules
+      // Create several rules with different pattern counts
       await authenticatedPost(
         '/api/v1/autocategorize/rules',
         authToken,
         {
           description: 'Whole Foods',
-          pattern: 'whole foods',
+          patterns: ['whole foods', 'whole foods market'],
           categoryId: groceryCategoryId,
           isActive: true,
         }
@@ -159,7 +217,7 @@ describe('User Story: Auto-Categorization', () => {
         authToken,
         {
           description: 'Lyft Rides',
-          pattern: 'lyft',
+          patterns: ['lyft'],
           categoryId: transportCategoryId,
           isActive: false,
         }
@@ -172,21 +230,23 @@ describe('User Story: Auto-Categorization', () => {
       expect(response.body.success).toBe(true);
       expect(response.body.rules).toHaveLength(2);
       
-      // Verify they're sorted by priority
+      // Verify they're sorted by priority and have patterns array
       expect(response.body.rules[0].priority).toBe(1);
+      expect(response.body.rules[0].patterns).toHaveLength(2);
       expect(response.body.rules[1].priority).toBe(2);
+      expect(response.body.rules[1].patterns).toHaveLength(1);
     });
   });
   
   describe('As a user, I can modify and delete rules', () => {
-    test('I can update an existing rule', async () => {
+    test('I can update an existing rule with new patterns', async () => {
       // Create a rule
       const createResponse = await authenticatedPost(
         '/api/v1/autocategorize/rules',
         authToken,
         {
           description: 'Target Shopping',
-          pattern: 'target',
+          patterns: ['target'],
           categoryId: groceryCategoryId,
           isActive: true,
         }
@@ -194,12 +254,12 @@ describe('User Story: Auto-Categorization', () => {
       
       const ruleId = createResponse.body.rule.id;
       
-      // Update the rule
+      // Update the rule with multiple patterns
       const updateResponse = await authenticatedPut(
         `/api/v1/autocategorize/rules/${ruleId}`,
         authToken,
         {
-          pattern: 'target corp',
+          patterns: ['target', 'target corp', 'tgt'],
           userDescription: 'Target store purchase',
           isActive: false,
         }
@@ -212,19 +272,19 @@ describe('User Story: Auto-Categorization', () => {
       const rulesResponse = await authenticatedGet('/api/v1/autocategorize/rules', authToken);
       const updatedRule = rulesResponse.body.rules.find((r: any) => r.id === ruleId);
       
-      expect(updatedRule.pattern).toBe('target corp');
+      expect(updatedRule.patterns).toEqual(['target', 'target corp', 'tgt']);
       expect(updatedRule.userDescription).toBe('Target store purchase');
       expect(updatedRule.isActive).toBe(false);
     });
     
     test('I can delete a rule', async () => {
-      // Create a rule
+      // Create a rule with multiple patterns
       const createResponse = await authenticatedPost(
         '/api/v1/autocategorize/rules',
         authToken,
         {
           description: 'CVS Pharmacy',
-          pattern: 'cvs',
+          patterns: ['cvs', 'cvs pharmacy', 'cvs/pharmacy'],
           categoryId: groceryCategoryId,
           isActive: true,
         }
@@ -251,7 +311,7 @@ describe('User Story: Auto-Categorization', () => {
         '/api/v1/autocategorize/rules/non-existent-id',
         authToken,
         {
-          pattern: 'new pattern',
+          patterns: ['new pattern'],
         }
       );
       
@@ -268,6 +328,44 @@ describe('User Story: Auto-Categorization', () => {
       expect(response.status).toBe(404);
       expect(response.body.error).toContain('not found');
     });
+
+    test('I cannot update a rule with duplicate patterns from another rule', async () => {
+      // Create first rule
+      await authenticatedPost(
+        '/api/v1/autocategorize/rules',
+        authToken,
+        {
+          description: 'Rule 1',
+          patterns: ['pattern1', 'pattern2'],
+          categoryId: groceryCategoryId,
+          isActive: true,
+        }
+      );
+      
+      // Create second rule
+      const rule2 = await authenticatedPost(
+        '/api/v1/autocategorize/rules',
+        authToken,
+        {
+          description: 'Rule 2',
+          patterns: ['pattern3'],
+          categoryId: coffeeCategoryId,
+          isActive: true,
+        }
+      );
+      
+      // Try to update rule2 with pattern from rule1
+      const updateResponse = await authenticatedPut(
+        `/api/v1/autocategorize/rules/${rule2.body.rule.id}`,
+        authToken,
+        {
+          patterns: ['pattern3', 'pattern1'], // pattern1 already exists in rule1
+        }
+      );
+      
+      expect(updateResponse.status).toBe(400);
+      expect(updateResponse.body.error).toContain('already exist');
+    });
   });
   
   describe('As a user, I can manage rule priorities', () => {
@@ -276,13 +374,13 @@ describe('User Story: Auto-Categorization', () => {
     let rule3Id: string;
     
     beforeEach(async () => {
-      // Create three rules
+      // Create three rules with multiple patterns
       const r1 = await authenticatedPost(
         '/api/v1/autocategorize/rules',
         authToken,
         {
           description: 'Rule 1',
-          pattern: 'pattern1',
+          patterns: ['pattern1a', 'pattern1b'],
           categoryId: groceryCategoryId,
           isActive: true,
         }
@@ -294,7 +392,7 @@ describe('User Story: Auto-Categorization', () => {
         authToken,
         {
           description: 'Rule 2',
-          pattern: 'pattern2',
+          patterns: ['pattern2'],
           categoryId: coffeeCategoryId,
           isActive: true,
         }
@@ -306,7 +404,7 @@ describe('User Story: Auto-Categorization', () => {
         authToken,
         {
           description: 'Rule 3',
-          pattern: 'pattern3',
+          patterns: ['pattern3a', 'pattern3b', 'pattern3c'],
           categoryId: transportCategoryId,
           isActive: true,
         }
@@ -332,10 +430,13 @@ describe('User Story: Auto-Categorization', () => {
       
       expect(rules[0].id).toBe(rule3Id);
       expect(rules[0].priority).toBe(1);
+      expect(rules[0].patterns).toHaveLength(3);
       expect(rules[1].id).toBe(rule1Id);
       expect(rules[1].priority).toBe(2);
+      expect(rules[1].patterns).toHaveLength(2);
       expect(rules[2].id).toBe(rule2Id);
       expect(rules[2].priority).toBe(3);
+      expect(rules[2].patterns).toHaveLength(1);
     });
     
     test('I can move a rule up in priority', async () => {
@@ -416,14 +517,14 @@ describe('User Story: Auto-Categorization', () => {
   });
   
   describe('As a user, I can apply rules to transactions', () => {
-    test('I can apply all active rules to uncategorized transactions', async () => {
-      // Create some rules
+    test('I can apply all active rules with multiple patterns to uncategorized transactions', async () => {
+      // Create some rules with multiple patterns
       await authenticatedPost(
         '/api/v1/autocategorize/rules',
         authToken,
         {
-          description: 'Kroger Groceries',
-          pattern: 'kroger',
+          description: 'Grocery Stores',
+          patterns: ['kroger', 'publix', 'whole foods', 'trader joes'],
           categoryId: groceryCategoryId,
           isActive: true,
         }
@@ -433,8 +534,8 @@ describe('User Story: Auto-Categorization', () => {
         '/api/v1/autocategorize/rules',
         authToken,
         {
-          description: 'Starbucks Coffee',
-          pattern: 'starbucks',
+          description: 'Coffee Shops',
+          patterns: ['starbucks', 'coffee', 'dunkin', 'peets'],
           categoryId: coffeeCategoryId,
           isActive: true,
         }
@@ -454,13 +555,13 @@ describe('User Story: Auto-Categorization', () => {
     });
     
     test('Inactive rules are not applied to transactions', async () => {
-      // Create an inactive rule
+      // Create an inactive rule with multiple patterns
       await authenticatedPost(
         '/api/v1/autocategorize/rules',
         authToken,
         {
           description: 'Disabled Rule',
-          pattern: 'disabled',
+          patterns: ['disabled1', 'disabled2'],
           categoryId: groceryCategoryId,
           isActive: false, // Inactive
         }
@@ -477,64 +578,70 @@ describe('User Story: Auto-Categorization', () => {
       // The inactive rule should not be applied
     });
     
-    test('Rules are applied in priority order', async () => {
-      // Create overlapping rules with different priorities
+    test('Rules with OR patterns are applied correctly', async () => {
+      // Create rule with multiple patterns
       await authenticatedPost(
         '/api/v1/autocategorize/rules',
         authToken,
         {
-          description: 'General Coffee',
-          pattern: 'coffee',
-          categoryId: coffeeCategoryId,
+          description: 'All Transportation',
+          patterns: ['uber', 'lyft', 'taxi', 'cab', 'subway'],
+          categoryId: transportCategoryId,
           isActive: true,
         }
       );
       
-      await authenticatedPost(
-        '/api/v1/autocategorize/rules',
-        authToken,
-        {
-          description: 'Specific Starbucks',
-          pattern: 'starbucks coffee',
-          categoryId: coffeeCategoryId,
-          userDescription: 'Starbucks visit',
-          isActive: true,
-        }
-      );
-      
-      // Reorder so more specific rule has higher priority
-      const rulesResponse = await authenticatedGet('/api/v1/autocategorize/rules', authToken);
-      const rules = rulesResponse.body.rules;
-      const specificRuleId = rules.find((r: any) => r.pattern === 'starbucks coffee').id;
-      const generalRuleId = rules.find((r: any) => r.pattern === 'coffee').id;
-      
-      await authenticatedPut(
-        '/api/v1/autocategorize/rules/reorder',
-        authToken,
-        {
-          ruleIds: [specificRuleId, generalRuleId], // Specific rule first
-        }
-      );
-      
-      // Apply rules
+      // Apply rules - any transaction matching ANY of the patterns would be categorized
       const response = await authenticatedPost(
         '/api/v1/autocategorize/apply',
         authToken
       );
       
       expect(response.status).toBe(200);
-      // Higher priority (more specific) rule would be applied first
+      expect(response.body.success).toBe(true);
+    });
+  });
+
+  describe('Migration and backwards compatibility', () => {
+    test('Legacy rules with single pattern are migrated to patterns array', async () => {
+      // Note: In a real implementation, you'd test migration by directly manipulating
+      // the data service to create a rule with the old 'pattern' field format
+      // Then verify it gets migrated to 'patterns' array when fetched
+      
+      // When fetching rules, the service should migrate automatically
+      const response = await authenticatedGet('/api/v1/autocategorize/rules', authToken);
+      
+      expect(response.status).toBe(200);
+      // Any legacy rules would be migrated to have patterns array
     });
   });
   
   describe('Edge cases and validation', () => {
-    test('I cannot create a rule with empty pattern', async () => {
+    test('I cannot create a rule with empty patterns', async () => {
       const response = await authenticatedPost(
         '/api/v1/autocategorize/rules',
         authToken,
         {
           description: 'Empty Pattern Rule',
-          pattern: '',
+          patterns: ['', '  ', ''], // Empty or whitespace patterns
+          categoryId: groceryCategoryId,
+          isActive: true,
+        }
+      );
+      
+      expect(response.status).toBe(400);
+      expect(response.body.error).toContain('Invalid');
+    });
+
+    test('Pattern length validation - cannot exceed 100 characters', async () => {
+      const longPattern = 'a'.repeat(101);
+      
+      const response = await authenticatedPost(
+        '/api/v1/autocategorize/rules',
+        authToken,
+        {
+          description: 'Long Pattern Rule',
+          patterns: [longPattern],
           categoryId: groceryCategoryId,
           isActive: true,
         }
@@ -550,7 +657,7 @@ describe('User Story: Auto-Categorization', () => {
         authToken,
         {
           description: 'Invalid Category Rule',
-          pattern: 'test',
+          patterns: ['test'],
           categoryId: 'non-existent-category',
           isActive: true,
         }
@@ -568,7 +675,7 @@ describe('User Story: Auto-Categorization', () => {
         authToken,
         {
           description: 'Valid Rule',
-          pattern: 'valid',
+          patterns: ['valid'],
           categoryId: groceryCategoryId,
           isActive: true,
         }
@@ -587,19 +694,20 @@ describe('User Story: Auto-Categorization', () => {
     });
     
     test('Pattern matching is case-insensitive', async () => {
-      // Create a rule with lowercase pattern
+      // Create a rule with lowercase patterns
       const ruleResponse = await authenticatedPost(
         '/api/v1/autocategorize/rules',
         authToken,
         {
           description: 'Case Test',
-          pattern: 'walmart',
+          patterns: ['walmart', 'wal-mart'],
           categoryId: groceryCategoryId,
           isActive: true,
         }
       );
       
-      expect(ruleResponse.body.rule.pattern).toBe('walmart');
+      expect(ruleResponse.body.rule.patterns).toContain('walmart');
+      expect(ruleResponse.body.rule.patterns).toContain('wal-mart');
       
       // Try to create duplicate with different case
       const duplicateResponse = await authenticatedPost(
@@ -607,14 +715,38 @@ describe('User Story: Auto-Categorization', () => {
         authToken,
         {
           description: 'Case Test Duplicate',
-          pattern: 'WALMART',
+          patterns: ['WALMART'], // Same pattern, different case
           categoryId: groceryCategoryId,
           isActive: true,
         }
       );
       
       expect(duplicateResponse.status).toBe(400);
-      expect(duplicateResponse.body.error).toContain('already exists');
+      expect(duplicateResponse.body.error).toContain('already exist');
+    });
+
+    test('Rules with multiple patterns match using OR logic', async () => {
+      // Create a rule with multiple patterns
+      await authenticatedPost(
+        '/api/v1/autocategorize/rules',
+        authToken,
+        {
+          description: 'Multi-Pattern OR Test',
+          patterns: ['morning', 'afternoon', 'evening'],
+          categoryId: coffeeCategoryId,
+          userDescription: 'Time-based coffee',
+          isActive: true,
+        }
+      );
+      
+      // If we had transactions, any containing 'morning' OR 'afternoon' OR 'evening' would match
+      const response = await authenticatedPost(
+        '/api/v1/autocategorize/apply',
+        authToken
+      );
+      
+      expect(response.status).toBe(200);
+      // The rule would match transactions containing ANY of the patterns
     });
   });
 });

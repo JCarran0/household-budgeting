@@ -144,7 +144,7 @@ describe('User Story: Hidden Categories', () => {
         authToken,
         {
           description: 'Credit card payments',
-          pattern: 'PAYMENT TO CREDIT CARD',
+          patterns: ['PAYMENT TO CREDIT CARD'],
           categoryId: hiddenCategoryId,
           userDescription: 'Monthly CC payment',
           isActive: true,

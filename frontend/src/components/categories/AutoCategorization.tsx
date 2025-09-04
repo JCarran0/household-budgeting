@@ -18,6 +18,7 @@ import {
   Tooltip,
   Card,
   Checkbox,
+  CloseButton,
 } from '@mantine/core';
 import { useForm } from '@mantine/form';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -38,7 +39,7 @@ import type { AutoCategorizeRule } from '../../../../shared/types';
 
 interface RuleFormValues {
   description: string;
-  pattern: string;
+  patterns: string[];
   categoryId: string;
   userDescription: string;
   isActive: boolean;
@@ -67,7 +68,7 @@ export function AutoCategorization() {
   const form = useForm<RuleFormValues>({
     initialValues: {
       description: '',
-      pattern: '',
+      patterns: [''],
       categoryId: '',
       userDescription: '',
       isActive: true,
@@ -78,9 +79,19 @@ export function AutoCategorization() {
         if (value.length > 200) return 'Description must be less than 200 characters';
         return null;
       },
-      pattern: (value) => {
-        if (!value.trim()) return 'Pattern is required';
-        if (value.length > 100) return 'Pattern must be less than 100 characters';
+      patterns: (value) => {
+        if (!value || value.length === 0) return 'At least one pattern is required';
+        const nonEmptyPatterns = value.filter((p: string) => p.trim());
+        if (nonEmptyPatterns.length === 0) return 'At least one pattern is required';
+        if (value.length > 5) return 'Maximum 5 patterns allowed';
+        
+        // Validate individual patterns
+        for (let i = 0; i < value.length; i++) {
+          const pattern = value[i];
+          if (!pattern || !pattern.trim()) return `Pattern ${i + 1} cannot be empty`;
+          if (pattern.length > 100) return `Pattern ${i + 1} must be less than 100 characters`;
+        }
+        
         return null;
       },
       categoryId: (value) => {
@@ -100,7 +111,9 @@ export function AutoCategorization() {
       if (editingRule) {
         form.setValues({
           description: editingRule.description,
-          pattern: editingRule.pattern,
+          patterns: editingRule.patterns && editingRule.patterns.length > 0 
+            ? editingRule.patterns 
+            : [''], // Ensure at least one pattern field
           categoryId: editingRule.categoryId,
           userDescription: editingRule.userDescription || '',
           isActive: editingRule.isActive,
@@ -112,12 +125,29 @@ export function AutoCategorization() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isFormOpen, editingRule]);
 
+  // Add pattern field
+  const addPatternField = () => {
+    if (form.values.patterns.length < 5) {
+      form.insertListItem('patterns', '');
+    }
+  };
+
+  // Remove pattern field
+  const removePatternField = (index: number) => {
+    if (form.values.patterns.length > 1) {
+      form.removeListItem('patterns', index);
+    }
+  };
+
   // Create rule mutation
   const createRuleMutation = useMutation({
     mutationFn: (data: RuleFormValues) => {
       const category = categories.find(c => c.id === data.categoryId);
+      // Filter out empty patterns
+      const cleanPatterns = data.patterns.filter(p => p.trim());
       return api.createAutoCategorizeRule({
         ...data,
+        patterns: cleanPatterns,
         categoryName: category?.name,
       });
     },
@@ -143,10 +173,13 @@ export function AutoCategorization() {
   const updateRuleMutation = useMutation({
     mutationFn: ({ id, data }: { id: string; data: Partial<RuleFormValues> }) => {
       const category = data.categoryId ? categories.find(c => c.id === data.categoryId) : undefined;
-      return api.updateAutoCategorizeRule(id, {
+      // Filter out empty patterns if patterns are being updated
+      const cleanData = {
         ...data,
+        patterns: data.patterns ? data.patterns.filter(p => p.trim()) : undefined,
         categoryName: category?.name,
-      });
+      };
+      return api.updateAutoCategorizeRule(id, cleanData);
     },
     onSuccess: () => {
       notifications.show({
@@ -292,7 +325,7 @@ export function AutoCategorization() {
     const query = searchQuery.toLowerCase();
     return (
       rule.description.toLowerCase().includes(query) ||
-      rule.pattern.toLowerCase().includes(query) ||
+      rule.patterns?.some(p => p.toLowerCase().includes(query)) ||
       rule.categoryName?.toLowerCase().includes(query)
     );
   });
@@ -416,7 +449,7 @@ export function AutoCategorization() {
         </Group>
         <Text size="sm" c="dimmed">
           Rules are applied in priority order. Each rule checks if a transaction's description 
-          contains the specified pattern (case-insensitive). The first matching rule assigns 
+          contains ANY of the specified patterns (OR logic). The first matching rule assigns 
           its category to the transaction and optionally replaces the description with a custom one. 
           By default, only uncategorized transactions are processed. When "Recategorize all transactions" 
           is checked, existing categories will be overwritten based on your rules. 
@@ -465,7 +498,7 @@ export function AutoCategorization() {
                 <Table.Th>Priority</Table.Th>
                 <Table.Th>Status</Table.Th>
                 <Table.Th>Rule Description</Table.Th>
-                <Table.Th>Pattern</Table.Th>
+                <Table.Th>Patterns</Table.Th>
                 <Table.Th>Category</Table.Th>
                 <Table.Th>User Description</Table.Th>
                 <Table.Th>Actions</Table.Th>
@@ -515,9 +548,17 @@ export function AutoCategorization() {
                     <Text size="sm">{rule.description}</Text>
                   </Table.Td>
                   <Table.Td>
-                    <Badge variant="light" color="blue">
-                      contains "{rule.pattern}"
-                    </Badge>
+                    {rule.patterns && rule.patterns.length > 0 ? (
+                      <Group gap="xs">
+                        {rule.patterns.map((pattern, idx) => (
+                          <Badge key={idx} variant="light" color="blue" size="sm">
+                            {pattern}
+                          </Badge>
+                        ))}
+                      </Group>
+                    ) : (
+                      <Text size="sm" c="dimmed" fs="italic">No patterns</Text>
+                    )}
                   </Table.Td>
                   <Table.Td>
                     <Badge variant="dot" color="green">
@@ -572,23 +613,53 @@ export function AutoCategorization() {
         title={editingRule ? 'Edit Auto-Categorization Rule' : 'Create Auto-Categorization Rule'}
         size="md"
       >
-        <form onSubmit={form.onSubmit(handleSubmit)}>
+        <form onSubmit={form.onSubmit((values) => handleSubmit(values))}>
           <Stack>
             <TextInput
               label="Rule Description"
-              placeholder="e.g., Grocery stores"
+              placeholder="e.g., Coffee shops"
               description="A friendly name for this rule"
               required
               {...form.getInputProps('description')}
             />
 
-            <TextInput
-              label="Pattern"
-              placeholder="e.g., safeway"
-              description="Text to search for in transaction descriptions (case-insensitive)"
-              required
-              {...form.getInputProps('pattern')}
-            />
+            <Stack gap="xs">
+              <Text size="sm" fw={500}>
+                Patterns
+                <Text span c="dimmed" fw={400}> (Transaction will match if it contains ANY of these)</Text>
+              </Text>
+              {form.values.patterns.map((_, index) => (
+                <Group key={index} gap="xs">
+                  <TextInput
+                    placeholder={index === 0 ? "e.g., starbucks" : `Pattern ${index + 1}`}
+                    style={{ flex: 1 }}
+                    {...form.getInputProps(`patterns.${index}`)}
+                  />
+                  {form.values.patterns.length > 1 && (
+                    <Tooltip label="Remove pattern">
+                      <CloseButton
+                        onClick={() => removePatternField(index)}
+                        aria-label="Remove pattern"
+                      />
+                    </Tooltip>
+                  )}
+                </Group>
+              ))}
+              {form.values.patterns.length < 5 && (
+                <Button
+                  variant="subtle"
+                  size="xs"
+                  leftSection={<IconPlus size={14} />}
+                  onClick={addPatternField}
+                  disabled={!form.values.patterns[form.values.patterns.length - 1]?.trim()}
+                >
+                  Add OR pattern
+                </Button>
+              )}
+              {form.errors.patterns && (
+                <Text size="xs" c="red">{form.errors.patterns as string}</Text>
+              )}
+            </Stack>
 
             <Select
               label="Category"
@@ -603,7 +674,7 @@ export function AutoCategorization() {
 
             <TextInput
               label="User Description (Optional)"
-              placeholder="e.g., Grocery Shopping"
+              placeholder="e.g., Coffee Shopping"
               description="Replace transaction description with this text when pattern matches"
               {...form.getInputProps('userDescription')}
             />
