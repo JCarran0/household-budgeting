@@ -68,7 +68,11 @@
 - A user should be able to select "All Accounts" or individual accounts from a dropdown
 - A user should be able to see account names with institution in the filter dropdown
 - A user should be able to filter their transactions by category
-- A user should be able to filter their transactions by amount range
+- A user should be able to filter their transactions by amount range (min/max)
+- A user should be able to search for transactions with an exact amount (e.g., $19.99)
+- A user should be able to adjust the tolerance for exact amount searches (±$0 to ±$5)
+- A user should be able to quickly select common amounts ($10, $20, $50, $100, $200)
+- A user should be able to toggle between "Range" and "Exact" amount search modes
 - A user should be able to filter their transactions by tags they've created
 - A user should NOT see a filter for pending transactions (since we don't sync them)
 - A user should be able to filter to show/hide hidden transactions
