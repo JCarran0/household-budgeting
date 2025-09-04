@@ -1,4 +1,5 @@
 import { useState, useMemo, useCallback, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api, type ExtendedPlaidAccount } from '../lib/api';
 import { format, startOfMonth, endOfMonth, startOfYear } from 'date-fns';
@@ -32,6 +33,7 @@ import {
   Skeleton,
   LoadingOverlay,
   Pagination,
+  Alert,
 } from '@mantine/core';
 import { DatePickerInput } from '@mantine/dates';
 import { notifications } from '@mantine/notifications';
@@ -49,6 +51,7 @@ import {
   IconRefresh,
   IconBuilding,
   IconFilterOff,
+  IconAlertCircle,
 } from '@tabler/icons-react';
 import { TransactionEditModal } from '../components/transactions/TransactionEditModal';
 import { TransactionSplitModal } from '../components/transactions/TransactionSplitModal';
@@ -66,6 +69,8 @@ const spinAnimation = `
 const TRANSACTIONS_PER_PAGE = 50;
 
 export function EnhancedTransactions() {
+  const navigate = useNavigate();
+  
   // Use persisted filters from localStorage
   const {
     searchInput,
@@ -154,6 +159,12 @@ export function EnhancedTransactions() {
     queryFn: api.getCategories,
   });
 
+  // Fetch uncategorized count
+  const { data: uncategorizedData } = useQuery({
+    queryKey: ['transactions', 'uncategorized', 'count'],
+    queryFn: api.getUncategorizedCount,
+  });
+
   // Build query parameters
   const queryParams = useMemo(() => {
     const params: Record<string, unknown> = {
@@ -235,6 +246,7 @@ export function EnhancedTransactions() {
         color: 'green',
       });
       queryClient.invalidateQueries({ queryKey: ['transactions'] });
+      queryClient.invalidateQueries({ queryKey: ['transactions', 'uncategorized', 'count'] });
     },
     onError: () => {
       notifications.show({
@@ -349,6 +361,45 @@ export function EnhancedTransactions() {
             Sync Transactions
           </Button>
         </Group>
+
+        {/* Uncategorized Transactions Alert */}
+        {uncategorizedData && uncategorizedData.count > 0 && (
+          <Alert
+            icon={<IconAlertCircle size={20} />}
+            title="Uncategorized Transactions"
+            color={uncategorizedData.count > 10 ? 'red' : 'orange'}
+            variant="filled"
+            styles={{
+              root: { cursor: 'pointer' },
+            }}
+            onClick={() => {
+              // Set filter to show only uncategorized transactions
+              setOnlyUncategorized(true);
+              // Reset other filters that might conflict
+              setSelectedCategories([]);
+            }}
+          >
+            <Group justify="space-between">
+              <Text size="sm">
+                You have {uncategorizedData.count} uncategorized transaction{uncategorizedData.count !== 1 ? 's' : ''} 
+                {' '}({Math.round((uncategorizedData.count / uncategorizedData.total) * 100)}% of total).
+                Click here to filter to uncategorized transactions only.
+              </Text>
+              <Button
+                size="xs"
+                variant="white"
+                color={uncategorizedData.count > 10 ? 'red' : 'orange'}
+                leftSection={<IconCategory size={14} />}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  navigate('/categories');
+                }}
+              >
+                Manage Categories
+              </Button>
+            </Group>
+          </Alert>
+        )}
 
         {/* Filters */}
         <Paper p="md" withBorder>

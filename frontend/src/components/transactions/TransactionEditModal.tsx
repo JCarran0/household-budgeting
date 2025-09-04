@@ -104,6 +104,7 @@ export function TransactionEditModal({
         color: 'green',
       });
       queryClient.invalidateQueries({ queryKey: ['transactions'] });
+      queryClient.invalidateQueries({ queryKey: ['transactions', 'uncategorized', 'count'] });
     },
     onError: () => {
       notifications.show({
@@ -125,6 +126,7 @@ export function TransactionEditModal({
         color: 'green',
       });
       queryClient.invalidateQueries({ queryKey: ['transactions'] });
+      queryClient.invalidateQueries({ queryKey: ['transactions', 'uncategorized', 'count'] });
     },
     onError: () => {
       notifications.show({
@@ -146,6 +148,7 @@ export function TransactionEditModal({
         color: 'green',
       });
       queryClient.invalidateQueries({ queryKey: ['transactions'] });
+      queryClient.invalidateQueries({ queryKey: ['transactions', 'uncategorized', 'count'] });
     },
     onError: () => {
       notifications.show({
