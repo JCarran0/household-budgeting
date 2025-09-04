@@ -127,14 +127,17 @@
 - A user should be able to create subcategories under parent categories
 - A user should be able to view their categories in a hierarchical tree structure
 - A user should be able to see the total number of their categories
-- A user should be able to initialize default categories for their account with one click
+- A user should have Plaid system categories automatically initialized on first use
 - A user should not see categories created by other users
 
 ### Category Properties
 - A user should be able to name/rename categories
 - A user should be able to mark categories as hidden (excluded from budget calculations)
 - A user should be able to mark categories as savings categories
-- A user should be able to map categories to Plaid categories
+- A user should be able to use Plaid system categories as parent categories
+- A user should see Plaid categories marked with "(Plaid)" label in selection dropdowns
+- A user should see system categories marked with a "System" badge
+- A user should NOT be able to edit or delete system categories
 - A user should be able to search/filter categories by name
 - A user should be able to show/hide hidden categories in the view
 
@@ -148,9 +151,10 @@
 - A user should have hidden category transactions excluded from budget calculations
 
 ### Category Operations
-- A user should be able to edit existing categories
-- A user should be able to delete categories
-- A user should be able to see which Plaid category maps to each category
+- A user should be able to edit existing user-created categories
+- A user should be able to delete user-created categories
+- A user should be able to create custom categories under Plaid parent categories
+- A user should see Plaid system categories persist even after deleting all custom categories
 - A user should be able to see statistics (total, hidden count, savings count)
 
 ## Auto-Categorization
