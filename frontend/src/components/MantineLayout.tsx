@@ -1,5 +1,5 @@
-import { AppShell, Burger, Group, NavLink, Text, ActionIcon, Avatar, Menu, rem } from '@mantine/core';
-import { useDisclosure } from '@mantine/hooks';
+import { AppShell, Burger, Group, NavLink, Text, ActionIcon, Avatar, Menu, rem, Tooltip, Kbd } from '@mantine/core';
+import { useDisclosure, useHotkeys } from '@mantine/hooks';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { 
   IconHome, 
@@ -15,7 +15,8 @@ import {
 import { useAuthStore } from '../stores/authStore';
 
 export function MantineLayout() {
-  const [opened, { toggle }] = useDisclosure();
+  const [mobileOpened, { toggle: toggleMobile }] = useDisclosure();
+  const [desktopOpened, { toggle: toggleDesktop }] = useDisclosure(true);
   const navigate = useNavigate();
   const location = useLocation();
   const { user, logout } = useAuthStore();
@@ -24,6 +25,11 @@ export function MantineLayout() {
     logout();
     navigate('/login');
   };
+
+  // Add keyboard shortcut for toggling sidebar (Ctrl/Cmd + B)
+  useHotkeys([
+    ['mod+b', () => toggleDesktop()],
+  ]);
 
   const navItems = [
     { label: 'Dashboard', icon: IconHome, path: '/dashboard' },
@@ -40,19 +46,37 @@ export function MantineLayout() {
       navbar={{
         width: 300,
         breakpoint: 'sm',
-        collapsed: { mobile: !opened },
+        collapsed: { mobile: !mobileOpened, desktop: !desktopOpened },
       }}
       padding="md"
     >
       <AppShell.Header>
         <Group h="100%" px="md" justify="space-between">
           <Group>
+            {/* Mobile burger - only shows on mobile */}
             <Burger
-              opened={opened}
-              onClick={toggle}
+              opened={mobileOpened}
+              onClick={toggleMobile}
               hiddenFrom="sm"
               size="sm"
             />
+            {/* Desktop burger - only shows on desktop */}
+            <Tooltip 
+              label={
+                <Group gap={4}>
+                  <Text size="sm">{desktopOpened ? "Collapse sidebar" : "Expand sidebar"}</Text>
+                  <Kbd size="xs">⌘B</Kbd>
+                </Group>
+              } 
+              openDelay={500}
+            >
+              <Burger
+                opened={desktopOpened}
+                onClick={toggleDesktop}
+                visibleFrom="sm"
+                size="sm"
+              />
+            </Tooltip>
             <Group gap="xs">
               <IconPigMoney size={28} color="var(--mantine-color-yellow-5)" />
               <Text size="xl" fw={700}>
@@ -103,7 +127,10 @@ export function MantineLayout() {
               rightSection={<IconChevronRight size="0.9rem" stroke={1.5} />}
               onClick={() => {
                 navigate(item.path);
-                toggle();
+                // Only close on mobile after navigation
+                if (window.innerWidth < 768) {
+                  toggleMobile();
+                }
               }}
               variant="filled"
               mb="xs"
