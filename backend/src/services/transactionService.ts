@@ -476,7 +476,7 @@ export class TransactionService {
   async updateTransactionCategory(
     userId: string,
     transactionId: string,
-    categoryId: string
+    categoryId: string | null
   ): Promise<{ success: boolean; error?: string }> {
     try {
       const transactions = await this.dataService.getData<StoredTransaction[]>(
@@ -488,6 +488,7 @@ export class TransactionService {
         return { success: false, error: 'Transaction not found' };
       }
 
+      // Set to null if null (uncategorized), not undefined
       transaction.userCategoryId = categoryId;
       transaction.updatedAt = new Date();
 

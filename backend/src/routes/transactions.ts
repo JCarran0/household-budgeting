@@ -60,7 +60,7 @@ const transactionFilterSchema = z.object({
 });
 
 const updateCategorySchema = z.object({
-  categoryId: z.string().min(1),
+  categoryId: z.union([z.string().min(1), z.null()]),
 });
 
 const addTagsSchema = z.object({

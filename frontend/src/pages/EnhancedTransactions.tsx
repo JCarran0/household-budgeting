@@ -36,6 +36,7 @@ import {
   Alert,
   Slider,
   Box,
+  Loader,
 } from '@mantine/core';
 import { DatePickerInput } from '@mantine/dates';
 import { notifications } from '@mantine/notifications';
@@ -72,6 +73,8 @@ const TRANSACTIONS_PER_PAGE = 50;
 
 export function EnhancedTransactions() {
   const navigate = useNavigate();
+  const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null);
+  const [selectedCategoryValue, setSelectedCategoryValue] = useState<string | null>(null);
   
   // Use persisted filters from localStorage
   const {
@@ -113,6 +116,36 @@ export function EnhancedTransactions() {
   const [showCustomDatePicker, setShowCustomDatePicker] = useState(false);
   
   const queryClient = useQueryClient();
+  
+  // Update category mutation
+  const updateCategoryMutation = useMutation({
+    mutationFn: ({ transactionId, categoryId }: { transactionId: string; categoryId: string | null }) =>
+      api.updateTransactionCategory(transactionId, categoryId),
+    onSuccess: async () => {
+      notifications.show({
+        title: 'Category Updated',
+        message: 'Transaction category has been updated',
+        color: 'green',
+      });
+      // Invalidate all transactions queries regardless of params
+      await queryClient.invalidateQueries({ 
+        predicate: (query) => query.queryKey[0] === 'transactions'
+      });
+      // Force refetch immediately
+      await refetch();
+      setEditingCategoryId(null);
+      setSelectedCategoryValue(null);
+    },
+    onError: () => {
+      notifications.show({
+        title: 'Error',
+        message: 'Failed to update category',
+        color: 'red',
+      });
+      setEditingCategoryId(null);
+      setSelectedCategoryValue(null);
+    },
+  });
   
   // Callback for search input change
   const handleSearchChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
@@ -221,9 +254,8 @@ export function EnhancedTransactions() {
   const { data: transactionData, isFetching, refetch, status } = useQuery({
     queryKey: ['transactions', queryParams],
     queryFn: () => api.getTransactions(queryParams),
-    placeholderData: (previousData) => previousData,
     refetchOnWindowFocus: false,
-    staleTime: 5 * 60 * 1000, // 5 minutes - data stays fresh
+    staleTime: 0, // Always consider data stale so it refetches on invalidation
     gcTime: 10 * 60 * 1000,    // 10 minutes - cache persists (was cacheTime in v4)
     retry: 1,
   });
@@ -304,6 +336,12 @@ export function EnhancedTransactions() {
       };
     })
     .sort((a, b) => a.label.localeCompare(b.label)) || [];
+  
+  // Category options for inline editing (includes Uncategorized option)
+  const inlineCategoryOptions = [
+    { value: 'uncategorized', label: 'Uncategorized' },
+    ...categoryOptions
+  ];
 
   // Account options for filter
   const accountOptions = [
@@ -332,6 +370,21 @@ export function EnhancedTransactions() {
   const handleSplitModalClose = () => {
     setIsSplitModalOpen(false);
     setSplittingTransaction(null);
+  };
+  
+  const handleCategoryClick = (transactionId: string, currentCategoryId: string | null) => {
+    setEditingCategoryId(transactionId);
+    setSelectedCategoryValue(currentCategoryId || 'uncategorized');
+  };
+  
+  const handleCategorySelect = (transactionId: string, value: string | null) => {
+    const categoryId = value === 'uncategorized' ? null : value;
+    updateCategoryMutation.mutate({ transactionId, categoryId });
+  };
+  
+  const handleCategoryCancel = () => {
+    setEditingCategoryId(null);
+    setSelectedCategoryValue(null);
   };
 
   const getCategoryDisplay = (transaction: Transaction) => {
@@ -742,25 +795,66 @@ export function EnhancedTransactions() {
                   </Table.Td>
                   
                   <Table.Td>
-                    {getCategoryDisplay(transaction) ? (
-                      <Tooltip
-                        label={getCategoryDisplay(transaction)}
-                        openDelay={1000}
-                        closeDelay={200}
-                      >
-                        <Badge 
-                          variant="light" 
-                          leftSection={<IconCategory size={12} />}
-                          maw={200}
-                          style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}
-                        >
-                          {getCategoryDisplay(transaction)}
-                        </Badge>
-                      </Tooltip>
+                    {editingCategoryId === transaction.id ? (
+                      <Select
+                        data={inlineCategoryOptions}
+                        value={selectedCategoryValue}
+                        onChange={(value) => {
+                          // Update state
+                          setSelectedCategoryValue(value);
+                          // Immediately trigger the update with the new value
+                          if (value !== null) {
+                            handleCategorySelect(transaction.id, value);
+                          }
+                        }}
+                        onBlur={handleCategoryCancel}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Escape') {
+                            e.preventDefault();
+                            handleCategoryCancel();
+                          }
+                        }}
+                        placeholder="Select category"
+                        searchable
+                        clearable={false}
+                        size="sm"
+                        autoFocus
+                        styles={{
+                          input: { minWidth: 200 },
+                        }}
+                        leftSection={updateCategoryMutation.isPending ? <Loader size={14} /> : <IconCategory size={14} />}
+                        disabled={updateCategoryMutation.isPending}
+                      />
                     ) : (
-                      <Badge variant="default" color="gray">
-                        Uncategorized
-                      </Badge>
+                      <div
+                        onClick={() => handleCategoryClick(transaction.id, transaction.categoryId)}
+                        style={{ cursor: 'pointer' }}
+                      >
+                        {getCategoryDisplay(transaction) ? (
+                          <Tooltip
+                            label={getCategoryDisplay(transaction)}
+                            openDelay={1000}
+                            closeDelay={200}
+                          >
+                            <Badge 
+                              variant="light" 
+                              leftSection={<IconCategory size={12} />}
+                              maw={200}
+                              style={{ overflow: 'hidden', textOverflow: 'ellipsis', cursor: 'pointer' }}
+                            >
+                              {getCategoryDisplay(transaction)}
+                            </Badge>
+                          </Tooltip>
+                        ) : (
+                          <Badge 
+                            variant="default" 
+                            color="gray"
+                            style={{ cursor: 'pointer' }}
+                          >
+                            Uncategorized
+                          </Badge>
+                        )}
+                      </div>
                     )}
                   </Table.Td>
                   

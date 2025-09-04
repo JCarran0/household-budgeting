@@ -259,7 +259,7 @@ class ApiClient {
     return data;
   }
 
-  async updateTransactionCategory(transactionId: string, categoryId: string): Promise<void> {
+  async updateTransactionCategory(transactionId: string, categoryId: string | null): Promise<void> {
     const response = await this.client.put(`/transactions/${transactionId}/category`, { categoryId });
     if (!response.data.success) {
       throw new Error(response.data.error || 'Failed to update category');
