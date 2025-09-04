@@ -248,10 +248,15 @@ export class TransactionService {
       }
     }
 
-    // Mark removed transactions
+    // Mark removed transactions (only for accounts we're currently syncing)
     let removed = 0;
+    const syncedAccountIds = new Set(accounts.map(a => a.id));
+    
     for (const existing of existingTransactions) {
-      if (existing.plaidTransactionId && !processedIds.has(existing.plaidTransactionId)) {
+      // Only check transactions from accounts we're currently syncing
+      if (syncedAccountIds.has(existing.accountId) && 
+          existing.plaidTransactionId && 
+          !processedIds.has(existing.plaidTransactionId)) {
         if (existing.status !== 'removed') {
           existing.status = 'removed';
           existing.updatedAt = new Date();
