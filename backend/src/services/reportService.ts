@@ -106,7 +106,7 @@ export class ReportService {
         `transactions_${userId}`
       ) || [];
       
-      const categories = await this.dataService.getCategories();
+      const categories = await this.dataService.getCategories(userId);
 
       const categoryMap = new Map(categories.map(c => [c.id, c.name]));
       const trends: SpendingTrend[] = [];
@@ -178,7 +178,7 @@ export class ReportService {
         `transactions_${userId}`
       ) || [];
       
-      const categories = await this.dataService.getCategories();
+      const categories = await this.dataService.getCategories(userId);
 
       // Filter transactions
       const filteredTransactions = transactions.filter(t => 
@@ -416,7 +416,7 @@ export class ReportService {
         `transactions_${userId}`
       ) || [];
       
-      const categories = await this.dataService.getCategories();
+      const categories = await this.dataService.getCategories(userId);
 
       const ytdTransactions = transactions.filter(t => 
         t.date >= startDate && 

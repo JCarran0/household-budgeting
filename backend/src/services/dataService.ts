@@ -21,8 +21,8 @@ export interface DataService {
   getAllUsers(): Promise<User[]>;
   
   // Category methods
-  getCategories(userId?: string): Promise<Category[]>;
-  saveCategories(categories: Category[], userId?: string): Promise<void>;
+  getCategories(userId: string): Promise<Category[]>;
+  saveCategories(categories: Category[], userId: string): Promise<void>;
   
   // Generic data storage methods
   getData<T>(key: string): Promise<T | null>;
@@ -37,7 +37,6 @@ export interface DataService {
 export class UnifiedDataService implements DataService {
   private storage: StorageAdapter;
   private readonly USERS_KEY = 'users';
-  private readonly CATEGORIES_KEY = 'categories';
 
   constructor(storage?: StorageAdapter) {
     this.storage = storage || StorageFactory.getAdapter();
@@ -106,28 +105,17 @@ export class UnifiedDataService implements DataService {
   }
 
   // Category Methods
-  async getCategories(userId?: string): Promise<Category[]> {
-    if (userId) {
-      // User-specific categories
-      const key = `categories_${userId}`;
-      const data = await this.storage.read<{ categories: Category[] }>(key);
-      return data?.categories || [];
-    } else {
-      // Legacy: global categories (for backward compatibility)
-      const data = await this.storage.read<{ categories: Category[] }>(this.CATEGORIES_KEY);
-      return data?.categories || [];
-    }
+  async getCategories(userId: string): Promise<Category[]> {
+    // User-specific categories
+    const key = `categories_${userId}`;
+    const data = await this.storage.read<{ categories: Category[] }>(key);
+    return data?.categories || [];
   }
 
-  async saveCategories(categories: Category[], userId?: string): Promise<void> {
-    if (userId) {
-      // Save user-specific categories
-      const key = `categories_${userId}`;
-      await this.storage.write(key, { categories });
-    } else {
-      // Legacy: save global categories
-      await this.storage.write(this.CATEGORIES_KEY, { categories });
-    }
+  async saveCategories(categories: Category[], userId: string): Promise<void> {
+    // Save user-specific categories
+    const key = `categories_${userId}`;
+    await this.storage.write(key, { categories });
   }
 
   // Generic Data Storage Methods
@@ -147,7 +135,6 @@ export class UnifiedDataService implements DataService {
 // In-memory implementation for testing
 export class InMemoryDataService implements DataService {
   private users: User[] = [];
-  private categories: Category[] = [];
   private userCategories: Map<string, Category[]> = new Map();
   private genericData: Map<string, any> = new Map();
 
@@ -181,19 +168,12 @@ export class InMemoryDataService implements DataService {
     return this.users;
   }
 
-  async getCategories(userId?: string): Promise<Category[]> {
-    if (userId) {
-      return this.userCategories.get(userId) || [];
-    }
-    return this.categories;
+  async getCategories(userId: string): Promise<Category[]> {
+    return this.userCategories.get(userId) || [];
   }
 
-  async saveCategories(categories: Category[], userId?: string): Promise<void> {
-    if (userId) {
-      this.userCategories.set(userId, categories);
-    } else {
-      this.categories = categories;
-    }
+  async saveCategories(categories: Category[], userId: string): Promise<void> {
+    this.userCategories.set(userId, categories);
   }
 
   async getData<T>(key: string): Promise<T | null> {
@@ -211,7 +191,6 @@ export class InMemoryDataService implements DataService {
   // Test helper method to clear all data
   clear(): void {
     this.users = [];
-    this.categories = [];
     this.userCategories.clear();
     this.genericData.clear();
   }
