@@ -207,7 +207,7 @@ export function Reports() {
                   YTD Income
                 </Text>
                 <Text fw={700} size="xl">
-                  ${ytd?.totalIncome.toLocaleString() || 0}
+                  ${ytd?.totalIncome ? Math.ceil(ytd.totalIncome).toLocaleString() : 0}
                 </Text>
                 <Text size="xs" c="dimmed" mt={7}>
                   ${ytd?.averageMonthlyIncome.toFixed(0) || 0}/month avg
@@ -226,7 +226,7 @@ export function Reports() {
                   YTD Expenses
                 </Text>
                 <Text fw={700} size="xl">
-                  ${ytd?.totalExpenses.toLocaleString() || 0}
+                  ${ytd?.totalExpenses ? Math.ceil(ytd.totalExpenses).toLocaleString() : 0}
                 </Text>
                 <Text size="xs" c="dimmed" mt={7}>
                   ${ytd?.averageMonthlyExpenses.toFixed(0) || 0}/month avg
@@ -245,7 +245,7 @@ export function Reports() {
                   Net Income
                 </Text>
                 <Text fw={700} size="xl" c={ytd?.netIncome && ytd.netIncome > 0 ? 'green' : 'red'}>
-                  ${ytd?.netIncome.toLocaleString() || 0}
+                  {ytd?.netIncome ? (ytd.netIncome < 0 ? '-' : '') + '$' + Math.ceil(Math.abs(ytd.netIncome)).toLocaleString() : '$0'}
                 </Text>
                 <Text size="xs" c="dimmed" mt={7}>
                   This year
