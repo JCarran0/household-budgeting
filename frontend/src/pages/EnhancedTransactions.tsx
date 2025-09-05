@@ -382,11 +382,6 @@ export function EnhancedTransactions() {
     }).sort((a, b) => a.label.localeCompare(b.label)) || [])
   ];
   
-  // Category options for inline editing (includes Uncategorized option)
-  const inlineCategoryOptions = [
-    { value: 'uncategorized', label: 'Uncategorized' },
-    ...categoryOptions
-  ];
 
   // Account options for filter
   const accountOptions = [
@@ -1017,7 +1012,7 @@ export function EnhancedTransactions() {
                   <Table.Td>
                     {editingCategoryId === transaction.id ? (
                       <Select
-                        data={inlineCategoryOptions}
+                        data={categoryOptions}
                         value={selectedCategoryValue}
                         onChange={(value) => {
                           // Update state

@@ -27,7 +27,7 @@ interface BulkEditModalProps {
 export interface BulkEditUpdates {
   categoryId?: string | null;
   userDescription?: string | null;
-  descriptionMode?: 'keep' | 'replace' | 'clear';
+  descriptionMode?: 'replace' | 'clear';
 }
 
 export function BulkEditModal({
@@ -39,7 +39,7 @@ export function BulkEditModal({
   onConfirm,
 }: BulkEditModalProps) {
   const [categoryId, setCategoryId] = useState<string | null>(null);
-  const [descriptionMode, setDescriptionMode] = useState<'keep' | 'replace' | 'clear'>('keep');
+  const [descriptionMode, setDescriptionMode] = useState<'replace' | 'clear'>('replace');
   const [description, setDescription] = useState('');
   
   const handleConfirm = () => {
@@ -64,7 +64,7 @@ export function BulkEditModal({
   
   const handleClose = () => {
     setCategoryId(null);
-    setDescriptionMode('keep');
+    setDescriptionMode('replace');
     setDescription('');
     onClose();
   };
@@ -73,9 +73,6 @@ export function BulkEditModal({
     if (mode === 'category') {
       return categoryId !== null;
     } else if (mode === 'description') {
-      if (descriptionMode === 'keep') {
-        return false; // No changes to make
-      }
       if (descriptionMode === 'replace') {
         return description.trim().length > 0;
       }
@@ -112,10 +109,7 @@ export function BulkEditModal({
           <Select
             label="Select Category"
             placeholder="Choose a category"
-            data={[
-              { value: 'uncategorized', label: 'Uncategorized' },
-              ...categories
-            ]}
+            data={categories}
             value={categoryId}
             onChange={setCategoryId}
             searchable
@@ -125,14 +119,13 @@ export function BulkEditModal({
         ) : (
           <Stack gap="md">
             <RadioGroup
-              label="Description Update Mode"
+              label="Choose Action"
               value={descriptionMode}
-              onChange={(value) => setDescriptionMode(value as 'keep' | 'replace' | 'clear')}
+              onChange={(value) => setDescriptionMode(value as 'replace' | 'clear')}
               required
             >
-              <Radio value="keep" label="Keep existing descriptions" />
-              <Radio value="replace" label="Replace all with new description" />
-              <Radio value="clear" label="Clear all descriptions" />
+              <Radio value="replace" label="Set new description for all" />
+              <Radio value="clear" label="Clear all descriptions (revert to original)" />
             </RadioGroup>
             
             {descriptionMode === 'replace' && (
