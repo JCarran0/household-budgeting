@@ -464,9 +464,9 @@ Based on risk assessment, minimum coverage for each area:
 - [x] Financial calculation stories (17 tests passing)
 - [x] Transaction sync stories (10 tests passing)
 - [x] Category management stories (16 tests passing)
-- [x] Search/Filtering stories (44 tests passing)
+- [x] Search/Filtering stories (46 tests passing)
 
-**Current Status**: 124 critical path tests passing
+**Current Status**: 146 critical path tests passing
 
 ### Phase 2: Integration Tests (✅ PARTIAL)
 - [ ] Full Plaid connection flow
@@ -710,11 +710,11 @@ beforeEach(async () => {
 ## Current Test Results (January 2025)
 
 ### Test Suite Status
-- **Critical Path Tests**: ✅ 124/124 passing (100%)
+- **Critical Path Tests**: ✅ 146/146 passing (100%)
   - Authentication: 12/12 passing
   - Data Isolation: 7/7 passing
   - Encryption: 18/18 passing
-  - Search/Filtering: 44/44 passing
+  - Search/Filtering: 46/46 passing
   - Transaction Sync: 10/10 passing
   - Category Management: 16/16 passing
   - Financial Calculations: 17/17 passing
@@ -780,13 +780,22 @@ beforeEach(async () => {
    - Service includes proper error messages for boundary conditions
 
 13. **Search & Filtering Testing** (September 2025): Complete search/filtering test coverage achieved:
-   - Created 44 comprehensive tests covering all filter types
+   - Created 46 comprehensive tests covering all filter types
    - Tested text search, date ranges, accounts, categories, amounts, and tags
    - Verified filter combinations work correctly together
    - Tested edge cases like empty searches, special characters, and whitespace
    - Confirmed totalCount and unfilteredTotal calculations are accurate
    - Validated that hidden/pending transactions are properly excluded by default
    - Used diverse test data spanning multiple months, accounts, and categories
+
+14. **Category Filter Bug Fix** (September 2025): Fixed critical filtering logic issue affecting transaction visibility:
+   - **Bug**: Category filter excluded uncategorized transactions due to incorrect logic in backend service
+   - **Root Cause**: Logic `categoryToCheck = txn.userCategoryId || txn.categoryId` included Plaid categories for uncategorized filter, causing false matches
+   - **Fix**: Updated to check `txn.userCategoryId` directly for uncategorized transactions and handle "uncategorized" as special value
+   - **Frontend Enhancement**: Added "Uncategorized" option to category filter dropdown for better UX
+   - **Testing**: Added comprehensive tests for uncategorized filtering and mixed category selection scenarios
+   - **Key Learning**: Filtering edge cases require explicit testing - uncategorized state logic can be easily missed in complex filter combinations
+   - **Impact**: Critical user workflow (filtering transactions by category) was broken, demonstrating importance of testing all filter states including "empty" conditions
 
 ## Success Metrics
 
