@@ -55,6 +55,7 @@ import {
 } from '@tabler/icons-react';
 import { format, subMonths, startOfMonth, endOfMonth, startOfYear, endOfYear } from 'date-fns';
 import { api } from '../lib/api';
+import { TransactionPreviewTrigger } from '../components/transactions';
 
 // Color palette for charts
 const COLORS = [
@@ -164,6 +165,7 @@ interface ProcessedParentData {
   hasChildren: boolean;
   childCount: number;
   singleChildName?: string;
+  singleChildId?: string;
 }
 
 interface ProcessedChildData {
@@ -181,6 +183,8 @@ export function Reports() {
   const [drillDownState, setDrillDownState] = useState<DrillDownState>({
     level: 'parent'
   });
+  
+  // Transaction preview is handled by TransactionPreviewTrigger components
   
   // Calculate date ranges based on selected option
   const { startDate, endDate, startMonth, endMonth } = getDateRange(timeRange);
@@ -233,7 +237,8 @@ export function Reports() {
         percentage: parent.percentage,
         hasChildren: validChildren.length > 0,
         childCount: validChildren.length,
-        singleChildName: validChildren.length === 1 ? validChildren[0].categoryName : undefined
+        singleChildName: validChildren.length === 1 ? validChildren[0].categoryName : undefined,
+        singleChildId: validChildren.length === 1 ? validChildren[0].categoryId : undefined
       });
       
       // Store children data if any
@@ -258,7 +263,8 @@ export function Reports() {
       return processedCategoryData.parentData
         .slice(0, 8) // Top 8 categories
         .map(item => ({
-          id: item.id,
+          // Use child ID for single-child categories, parent ID otherwise
+          id: item.singleChildId || item.id,
           name: item.childCount === 1 && item.singleChildName 
             ? `${item.name} (${item.singleChildName})`
             : item.name,
@@ -326,7 +332,7 @@ export function Reports() {
   trendsData?.trends?.forEach(trend => uniqueCategories.add(trend.categoryName));
   const categoryNames = Array.from(uniqueCategories).slice(0, 8); // Limit to top 8 for visibility
   
-  // Handle pie slice click
+  // Handle pie slice click - drill down to subcategories
   const handleSliceClick = (data: PieChartEntry) => {
     if (!data.clickable) return; // Don't drill down if not clickable
     
@@ -339,6 +345,7 @@ export function Reports() {
       });
     }
   };
+  
   
   // Navigate back to parent view
   const navigateToParent = () => {
@@ -356,7 +363,7 @@ export function Reports() {
             ${data.value.toFixed(0)} ({data.percentage.toFixed(1)}%)
           </Text>
           {data.clickable && (
-            <Text size="xs" c="blue" mt={4}>Click to view details</Text>
+            <Text size="xs" c="blue" mt={4}>Click to view subcategories</Text>
           )}
         </Paper>
       );
@@ -652,7 +659,7 @@ export function Reports() {
                             fill={COLORS[index % COLORS.length]}
                             style={{ 
                               cursor: entry.clickable ? 'pointer' : 'default',
-                              filter: entry.clickable ? 'brightness(1)' : 'brightness(1)',
+                              filter: 'brightness(1)',
                               transition: 'filter 0.2s'
                             }}
                             onMouseEnter={(e) => {
@@ -661,7 +668,9 @@ export function Reports() {
                               }
                             }}
                             onMouseLeave={(e) => {
-                              e.currentTarget.style.filter = 'brightness(1)';
+                              if (entry.clickable) {
+                                e.currentTarget.style.filter = 'brightness(1)';
+                              }
                             }}
                           />
                         ))}
@@ -673,19 +682,27 @@ export function Reports() {
                   {/* Legend */}
                   <SimpleGrid cols={2} spacing="xs" mt="md">
                     {pieChartData.map((entry: PieChartEntry, index: number) => (
-                      <Group key={entry.name} gap="xs">
-                        <div
-                          style={{
-                            width: 12,
-                            height: 12,
-                            backgroundColor: COLORS[index % COLORS.length],
-                            borderRadius: 2,
-                          }}
-                        />
-                        <Text size="sm" truncate>
-                          {entry.name}
-                        </Text>
-                      </Group>
+                      <TransactionPreviewTrigger
+                        key={entry.name}
+                        categoryId={entry.id || null}
+                        categoryName={entry.name}
+                        dateRange={{ startDate, endDate }}
+                        tooltipText="Click to preview transactions"
+                      >
+                        <Group gap="xs" style={{ borderRadius: 'var(--mantine-radius-sm)', padding: '4px' }}>
+                          <div
+                            style={{
+                              width: 12,
+                              height: 12,
+                              backgroundColor: COLORS[index % COLORS.length],
+                              borderRadius: 2,
+                            }}
+                          />
+                          <Text size="sm" truncate>
+                            {entry.name}
+                          </Text>
+                        </Group>
+                      </TransactionPreviewTrigger>
                     ))}
                   </SimpleGrid>
                 </Paper>
@@ -696,19 +713,27 @@ export function Reports() {
                   <Text size="lg" fw={600} mb="md">Top Spending Categories</Text>
                   <Stack gap="sm">
                     {ytd?.topCategories.map((category, index) => (
-                      <div key={category.categoryId}>
-                        <Group justify="space-between" mb={5}>
-                          <Text size="sm">{category.categoryName}</Text>
-                          <Text size="sm" fw={600}>
-                            ${category.amount.toFixed(0)}
-                          </Text>
-                        </Group>
-                        <Progress
-                          value={category.percentage}
-                          color={COLORS[index % COLORS.length]}
-                          size="lg"
-                        />
-                      </div>
+                      <TransactionPreviewTrigger
+                        key={category.categoryId}
+                        categoryId={category.categoryId}
+                        categoryName={category.categoryName}
+                        dateRange={{ startDate: format(startOfYear(new Date()), 'yyyy-MM-dd'), endDate: format(new Date(), 'yyyy-MM-dd') }}
+                        tooltipText="Click to preview YTD transactions"
+                      >
+                        <div style={{ borderRadius: 'var(--mantine-radius-sm)', padding: '8px', margin: '-8px' }}>
+                          <Group justify="space-between" mb={5}>
+                            <Text size="sm">{category.categoryName}</Text>
+                            <Text size="sm" fw={600}>
+                              ${category.amount.toFixed(0)}
+                            </Text>
+                          </Group>
+                          <Progress
+                            value={category.percentage}
+                            color={COLORS[index % COLORS.length]}
+                            size="lg"
+                          />
+                        </div>
+                      </TransactionPreviewTrigger>
                     ))}
                   </Stack>
                 </Paper>

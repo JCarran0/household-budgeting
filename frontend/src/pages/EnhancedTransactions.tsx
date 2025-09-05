@@ -1,5 +1,5 @@
 import { useState, useMemo, useCallback, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api, type ExtendedPlaidAccount } from '../lib/api';
 import { format, startOfMonth, endOfMonth, startOfYear } from 'date-fns';
@@ -73,6 +73,7 @@ const TRANSACTIONS_PER_PAGE = 50;
 
 export function EnhancedTransactions() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null);
   const [selectedCategoryValue, setSelectedCategoryValue] = useState<string | null>(null);
   
@@ -116,6 +117,46 @@ export function EnhancedTransactions() {
   const [showCustomDatePicker, setShowCustomDatePicker] = useState(false);
   
   const queryClient = useQueryClient();
+  
+  // Handle URL parameters from reports page navigation
+  useEffect(() => {
+    if (!hasInitialized) {
+      const categoryIds = searchParams.get('categoryIds');
+      const onlyUncategorizedParam = searchParams.get('onlyUncategorized');
+      const startDate = searchParams.get('startDate');
+      const endDate = searchParams.get('endDate');
+
+      // Apply filters from URL parameters
+      if (categoryIds) {
+        const categoryIdArray = categoryIds.split(',');
+        setSelectedCategories(categoryIdArray);
+        setOnlyUncategorized(false);
+      }
+      
+      if (onlyUncategorizedParam === 'true') {
+        setOnlyUncategorized(true);
+        setSelectedCategories([]);
+      }
+      
+      if (startDate && endDate) {
+        const startDateObj = new Date(startDate);
+        const endDateObj = new Date(endDate);
+        setCustomDateRange([startDateObj, endDateObj]);
+        setDateFilterOption('custom');
+      }
+      
+      setHasInitialized(true);
+      
+      // Show notification when filters are applied from reports
+      if (categoryIds || onlyUncategorizedParam === 'true' || (startDate && endDate)) {
+        notifications.show({
+          title: 'Filters Applied',
+          message: 'Filters have been applied from the reports page',
+          color: 'blue',
+        });
+      }
+    }
+  }, [searchParams, hasInitialized, setSelectedCategories, setOnlyUncategorized, setCustomDateRange, setDateFilterOption]);
   
   // Update category mutation
   const updateCategoryMutation = useMutation({
@@ -264,14 +305,8 @@ export function EnhancedTransactions() {
   // Since status is always 'success' when returning, this should never show skeletons
   const showSkeletons = status === 'pending' && !transactionData;
   
-  // Removed smart default selection to respect user's persisted filter choice
-  // The persisted filters from localStorage should take precedence
-  useEffect(() => {
-    if (!hasInitialized && transactionData?.transactions) {
-      // Just mark as initialized without changing the user's filter
-      setHasInitialized(true);
-    }
-  }, [transactionData, hasInitialized]);
+  // Initialization is now handled by URL parameter processing above
+  // URL parameters take precedence over persisted filters when navigating from reports
   
   // Create account lookup map for tooltips
   const accountLookup = useMemo(() => {

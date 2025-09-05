@@ -104,6 +104,10 @@ class ApiClient {
       headers: {
         'Content-Type': 'application/json',
       },
+      paramsSerializer: {
+        // Serialize arrays without brackets (e.g., categoryIds=1&categoryIds=2)
+        indexes: null,
+      },
     });
     
     // Bind methods to ensure 'this' context is preserved
