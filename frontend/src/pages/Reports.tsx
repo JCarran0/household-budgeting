@@ -1,3 +1,4 @@
+import { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useReportsFilters } from '../hooks/usePersistedFilters';
 import { notifications } from '@mantine/notifications';
@@ -22,6 +23,8 @@ import {
   Tabs,
   ActionIcon,
   Tooltip,
+  Breadcrumbs,
+  Anchor,
 } from '@mantine/core';
 import { 
   LineChart, 
@@ -48,6 +51,7 @@ import {
   IconArrowUpRight,
   IconArrowDownRight,
   IconFilterOff,
+  IconArrowLeft,
 } from '@tabler/icons-react';
 import { format, subMonths, startOfMonth, endOfMonth, startOfYear, endOfYear } from 'date-fns';
 import { api } from '../lib/api';
@@ -134,9 +138,21 @@ function getDateRange(option: string): { startDate: string; endDate: string; sta
   }
 }
 
+// Type for drill-down state
+interface DrillDownState {
+  level: 'parent' | 'child';
+  parentId?: string;
+  parentName?: string;
+}
+
 export function Reports() {
   // Use persisted filters from localStorage
   const { timeRange, setTimeRange, resetFilters } = useReportsFilters();
+  
+  // Drill-down state for category breakdown
+  const [drillDownState, setDrillDownState] = useState<DrillDownState>({
+    level: 'parent'
+  });
   
   // Calculate date ranges based on selected option
   const { startDate, endDate, startMonth, endMonth } = getDateRange(timeRange);
@@ -159,7 +175,7 @@ export function Reports() {
 
   const { data: breakdownData, isLoading: breakdownLoading } = useQuery({
     queryKey: ['reports', 'breakdown', startDate, endDate],
-    queryFn: () => api.getCategoryBreakdown(startDate, endDate),
+    queryFn: () => api.getCategoryBreakdown(startDate, endDate, true),
   });
 
   const { data: projectionsData, isLoading: projectionsLoading } = useQuery({
@@ -218,15 +234,121 @@ export function Reports() {
   trendsData?.trends?.forEach(trend => uniqueCategories.add(trend.categoryName));
   const categoryNames = Array.from(uniqueCategories).slice(0, 8); // Limit to top 8 for visibility
 
-  // Prepare pie chart data
-  const pieChartData = breakdownData?.breakdown
-    ?.filter(item => item.amount > 0)
-    .slice(0, 8) // Top 8 categories
-    .map(item => ({
-      name: item.categoryName,
-      value: item.amount,
-      percentage: item.percentage,
-    })) || [];
+  // Process and aggregate category data for drill-down
+  const processedCategoryData = useMemo(() => {
+    if (!breakdownData?.breakdown) return { parentData: [], childData: new Map() };
+    
+    const parentData: Array<{
+      id: string;
+      name: string;
+      value: number;
+      percentage: number;
+      hasChildren: boolean;
+      childCount: number;
+      singleChildName?: string;
+    }> = [];
+    
+    const childData = new Map<string, Array<{
+      id: string;
+      name: string;
+      value: number;
+      percentage: number;
+    }>>();
+    
+    // Process each parent category
+    breakdownData.breakdown.forEach(parent => {
+      if (parent.amount <= 0) return; // Skip negative amounts
+      
+      const children = parent.subcategories || [];
+      const validChildren = children.filter(child => child.amount > 0);
+      
+      // Store parent data
+      parentData.push({
+        id: parent.categoryId,
+        name: parent.categoryName,
+        value: parent.amount,
+        percentage: parent.percentage,
+        hasChildren: validChildren.length > 0,
+        childCount: validChildren.length,
+        singleChildName: validChildren.length === 1 ? validChildren[0].categoryName : undefined
+      });
+      
+      // Store children data if any
+      if (validChildren.length > 0) {
+        const childTotal = validChildren.reduce((sum, child) => sum + child.amount, 0);
+        childData.set(parent.categoryId, validChildren.map(child => ({
+          id: child.categoryId,
+          name: child.categoryName,
+          value: child.amount,
+          percentage: (child.amount / childTotal) * 100
+        })));
+      }
+    });
+    
+    return { parentData, childData };
+  }, [breakdownData]);
+  
+  // Get current pie chart data based on drill-down state
+  const pieChartData = useMemo(() => {
+    if (drillDownState.level === 'parent') {
+      // Show parent categories
+      return processedCategoryData.parentData
+        .slice(0, 8) // Top 8 categories
+        .map(item => ({
+          id: item.id,
+          name: item.childCount === 1 && item.singleChildName 
+            ? `${item.name} (${item.singleChildName})`
+            : item.name,
+          value: item.value,
+          percentage: item.percentage,
+          clickable: item.childCount > 1, // Only clickable if multiple children
+          hasChildren: item.hasChildren,
+          childCount: item.childCount
+        }));
+    } else {
+      // Show children of selected parent
+      const children = processedCategoryData.childData.get(drillDownState.parentId || '');
+      return children || [];
+    }
+  }, [drillDownState, processedCategoryData]);
+  
+  // Handle pie slice click
+  const handleSliceClick = (data: any) => {
+    if (!data.clickable) return; // Don't drill down if not clickable
+    
+    if (drillDownState.level === 'parent' && data.childCount > 1) {
+      // Drill down to children
+      setDrillDownState({
+        level: 'child',
+        parentId: data.id,
+        parentName: data.name
+      });
+    }
+  };
+  
+  // Navigate back to parent view
+  const navigateToParent = () => {
+    setDrillDownState({ level: 'parent' });
+  };
+  
+  // Custom tooltip for pie chart
+  const CustomTooltip = ({ active, payload }: any) => {
+    if (active && payload && payload[0]) {
+      const data = payload[0].payload;
+      return (
+        <Paper p="xs" withBorder shadow="sm">
+          <Text size="sm" fw={600}>{data.name}</Text>
+          <Text size="xs" c="dimmed">
+            ${data.value.toFixed(0)} ({data.percentage.toFixed(1)}%)
+          </Text>
+          {data.clickable && (
+            <Text size="xs" c="blue" mt={4}>Click to view details</Text>
+          )}
+        </Paper>
+      );
+    }
+    return null;
+  };
 
   const ytd = ytdData?.summary;
 
@@ -469,7 +591,33 @@ export function Reports() {
             <Grid>
               <Grid.Col span={{ base: 12, md: 6 }}>
                 <Paper withBorder p="md">
-                  <Text size="lg" fw={600} mb="md">Category Breakdown</Text>
+                  <Group justify="space-between" mb="md">
+                    <div>
+                      <Text size="lg" fw={600}>Category Breakdown</Text>
+                      {drillDownState.level === 'child' && (
+                        <Breadcrumbs mt={4}>
+                          <Anchor 
+                            size="sm" 
+                            onClick={navigateToParent}
+                            style={{ cursor: 'pointer' }}
+                          >
+                            All Categories
+                          </Anchor>
+                          <Text size="sm">{drillDownState.parentName}</Text>
+                        </Breadcrumbs>
+                      )}
+                    </div>
+                    {drillDownState.level === 'child' && (
+                      <ActionIcon
+                        variant="subtle"
+                        onClick={navigateToParent}
+                        size="lg"
+                      >
+                        <IconArrowLeft size={20} />
+                      </ActionIcon>
+                    )}
+                  </Group>
+                  
                   <ResponsiveContainer width="100%" height={300}>
                     <PieChart>
                       <Pie
@@ -481,12 +629,30 @@ export function Reports() {
                         outerRadius={100}
                         fill="#8884d8"
                         dataKey="value"
+                        onClick={handleSliceClick}
+                        style={{ outline: 'none' }}
                       >
-                        {pieChartData.map((_, index) => (
-                          <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                        {pieChartData.map((entry, index) => (
+                          <Cell 
+                            key={`cell-${index}`} 
+                            fill={COLORS[index % COLORS.length]}
+                            style={{ 
+                              cursor: entry.clickable ? 'pointer' : 'default',
+                              filter: entry.clickable ? 'brightness(1)' : 'brightness(1)',
+                              transition: 'filter 0.2s'
+                            }}
+                            onMouseEnter={(e) => {
+                              if (entry.clickable) {
+                                e.currentTarget.style.filter = 'brightness(1.1)';
+                              }
+                            }}
+                            onMouseLeave={(e) => {
+                              e.currentTarget.style.filter = 'brightness(1)';
+                            }}
+                          />
                         ))}
                       </Pie>
-                      <RechartsTooltip formatter={(value: number) => `$${value.toFixed(0)}`} />
+                      <RechartsTooltip content={<CustomTooltip />} />
                     </PieChart>
                   </ResponsiveContainer>
                   
