@@ -79,7 +79,7 @@ export function Categories() {
       console.log('No categories found, initializing default Plaid system categories...');
       initializeMutation.mutate();
     }
-  }, [categories, isLoading, hasInitialized]);
+  }, [categories, isLoading, hasInitialized, initializeMutation]);
 
 
   // Delete category mutation

@@ -62,8 +62,15 @@ export function TransactionPreviewModal({
     staleTime: 1000 * 60 * 5, // 5 minutes
   });
 
-  const transactions = transactionData?.transactions || [];
-  const totalCount = transactionData?.total || 0;
+  const transactions = useMemo(() => 
+    transactionData?.transactions || [], 
+    [transactionData]
+  );
+  
+  const totalCount = useMemo(() => 
+    transactionData?.total || 0, 
+    [transactionData]
+  );
 
   // Calculate total amount for displayed transactions
   const displayedTotal = useMemo(() => {
