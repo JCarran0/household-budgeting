@@ -7,13 +7,14 @@ This document provides a comprehensive overview of the household budgeting appli
 ## Core Architecture Overview
 
 ### Tech Stack
-- **Frontend**: React 18 + TypeScript + Vite + Mantine UI v8
+- **Frontend**: React 18 + TypeScript + Vite + Mantine UI v8 + @mantine/modals
 - **Backend**: Node.js + Express + TypeScript
 - **Storage**: JSON files (MVP phase)
 - **External Integration**: Plaid API for bank connections
 - **Authentication**: JWT with bcrypt password hashing
 - **State Management**: Zustand (frontend), Service singletons (backend)
 - **Data Fetching**: TanStack Query (React Query)
+- **Charts**: Recharts for interactive visualizations
 
 ### Project Structure
 ```
@@ -79,13 +80,15 @@ household-budgeting/
 - **Purpose**: Transaction management and categorization
 - **Key Methods**:
   - `syncTransactions()`: Fetch and store new transactions
-  - `getUserTransactions()`: Query with filters
+  - `getUserTransactions()`: Query with filters (supports categoryIds for filtering)
   - `updateCategory()`: Assign category to transaction
   - `splitTransaction()`: Split into sub-transactions
 - **Features**:
-  - Automatic categorization via Plaid categories
+  - Integration with AutoCategorizeService for rule-based categorization
+  - Plaid category name fallback matching
   - Transaction tagging and hiding
   - Split transaction support
+  - Support for orphaned category ID detection and handling
 
 #### 5. CategoryService (`backend/src/services/categoryService.ts`)
 - **Purpose**: Two-level category hierarchy management
@@ -105,7 +108,29 @@ household-budgeting/
   - `getBudgetComparison()`: Budget vs actual spending
 - **Data Model**: `MonthlyBudget` with YYYY-MM format
 
-#### 7. DataService (`backend/src/services/dataService.ts`)
+#### 7. AutoCategorizeService (`backend/src/services/autoCategorizeService.ts`)
+- **Purpose**: Automated transaction categorization with user-defined rules
+- **Key Methods**:
+  - `getRules()`: Fetch user's auto-categorization rules
+  - `createRule()`: Create new rule with multiple patterns (OR logic)
+  - `updateRule()`: Modify existing rules including patterns
+  - `deleteRule()`: Remove rule and re-number priorities
+  - `reorderRules()`: Bulk reorder rules by priority
+  - `moveRuleUp()`: Move single rule up in priority
+  - `moveRuleDown()`: Move single rule down in priority
+  - `applyRules()`: Apply rules to transactions with pattern matching
+  - `previewCategorization()`: Show what would be categorized without applying
+  - `applyRulesToAllTransactions()`: Apply rules to all user transactions
+- **Features**:
+  - Multiple patterns per rule (up to 5, OR logic)
+  - Rule priority system (lower number = higher priority)
+  - Re-categorization with orphaned category ID handling
+  - Plaid category name fallback matching
+  - Preview before applying changes
+  - Force recategorization option
+- **Data Model**: `StoredAutoCategorizeRule` with patterns array and migration support
+
+#### 8. DataService (`backend/src/services/dataService.ts`)
 - **Purpose**: Unified data persistence layer with storage adapters
 - **Features**:
   - User-scoped data isolation (all data keyed by userId)
@@ -121,10 +146,10 @@ household-budgeting/
 #### Pages (`frontend/src/pages/`)
 - **MantineDashboard**: Main dashboard with stats cards
 - **MantineAccounts**: Account management with Plaid Link
-- **EnhancedTransactions**: Transaction list with filtering
-- **Categories**: Category hierarchy management
+- **EnhancedTransactions**: Transaction list with filtering and inline category editing
+- **Categories**: Category hierarchy management with auto-categorization rules
 - **Budgets**: Monthly budget interface
-- **Reports**: Spending analysis and trends
+- **Reports**: Spending analysis with interactive drill-down pie charts and transaction previews
 
 #### API Client (`frontend/src/lib/api.ts`)
 - Axios-based HTTP client
@@ -141,6 +166,19 @@ household-budgeting/
 - React Plaid Link wrapper
 - Conditional rendering to prevent errors
 - Handles token exchange flow
+
+#### Auto-Categorization (`frontend/src/components/categories/AutoCategorization.tsx`)
+- Complete auto-categorization rule management interface
+- Multiple pattern support (up to 5 patterns per rule with OR logic)
+- Rule priority management with drag-and-drop reordering
+- Preview and apply categorization with confirmation dialogs
+- Re-categorization option with orphaned category ID handling
+
+#### Transaction Components (`frontend/src/components/transactions/`)
+- **TransactionPreviewModal**: Modal showing first 25 transactions for a category
+- **TransactionPreviewTrigger**: Wrapper component making any content clickable for transaction preview
+- **Features**: Navigation to transactions page with filters applied
+- **Integration**: Used throughout Reports page for category breakdown exploration
 
 ## Critical Data Flow Patterns
 
@@ -175,16 +213,45 @@ Frontend requests budget comparison
 → Dashboard updates progress indicators
 ```
 
+### 4. Auto-Categorization Flow
+```
+User creates/edits rules with multiple patterns
+→ Rules stored with priority ordering
+→ User triggers categorization (preview or apply)
+→ Backend fetches uncategorized transactions (or all if force recategorize)
+→ Each transaction matched against rule patterns (OR logic)
+→ First matching rule assigns category and description
+→ Fallback to Plaid category name matching if no rules match
+→ Results returned with counts of categorized/recategorized transactions
+```
+
+### 5. Transaction Preview Flow
+```
+User clicks category in reports
+→ TransactionPreviewTrigger opens modal
+→ Modal fetches first 25 transactions for category/date range
+→ Displays transaction list with total count and amount
+→ "View All" button navigates to transactions page with filters applied
+→ URL parameters preserve category and date filters
+```
+
 ## Current Implementation Status
 
 ### ✅ Completed Features
 - JWT authentication with rate limiting
 - Plaid account connection and sync
 - Transaction management with categorization
-- Two-level category hierarchy
+- Auto-categorization rules with multiple patterns (OR logic)
+- Rule priority management and reordering
+- Re-categorization with orphaned category ID handling
+- Transaction preview modal with navigation to filtered transactions page
+- Interactive drill-down pie charts in reports
+- Two-level category hierarchy (all user-specific)
 - Monthly budget tracking
 - Dashboard with stats and alerts
+- Enhanced reports with updated date range options (This Month, This Year, etc.)
 - Responsive UI with dark theme
+- Inline transaction category editing
 
 ### ⚠️ Known Issues
 1. **No Account Removal UI**: Backend has `disconnectAccount()` method but frontend lacks UI
@@ -334,6 +401,25 @@ if (syncedAccountIds.has(existing.accountId)) { /* check for removal */ }
 **Cause**: Importing files from outside rootDir (e.g., shared/types)
 **Solution**: Remove explicit rootDir and use postbuild script to flatten dist structure
 
+### Issue: Auto-categorization rules not applying to transactions
+**Check**:
+1. Rules are active (`isActive: true`)
+2. Rule patterns match transaction descriptions (case-insensitive)
+3. Categories referenced by rules still exist (not orphaned IDs)
+4. Rule priority order is correct
+**Solution**: Use preview functionality to debug rule matching
+
+### Issue: Transactions show as "uncategorized" but can't be categorized
+**Cause**: Transactions have orphaned category IDs (e.g., old `plaid_*` IDs)
+**Solution**: Use "Recategorize all transactions" option to fix orphaned categories
+
+### Issue: Transaction preview modal shows no results
+**Check**:
+1. Date range includes transactions for the category
+2. Category ID is valid and matches existing transactions
+3. Transactions aren't hidden from the query
+**Solution**: Verify category and date range parameters in network tab
+
 ## Next Steps for Development
 
 ### High Priority
@@ -372,6 +458,16 @@ if (syncedAccountIds.has(existing.accountId)) { /* check for removal */ }
 - Backend: `backend/src/services/authService.ts`
 - Middleware: `backend/src/middleware/authMiddleware.ts`
 - Frontend: `frontend/src/stores/authStore.ts`
+
+### Auto-Categorization
+- Backend Service: `backend/src/services/autoCategorizeService.ts`
+- Routes: `backend/src/routes/autoCategorize.ts`
+- Frontend UI: `frontend/src/components/categories/AutoCategorization.tsx`
+
+### Transaction Preview
+- Frontend Components: `frontend/src/components/transactions/`
+- Modal: `TransactionPreviewModal.tsx`
+- Trigger: `TransactionPreviewTrigger.tsx`
 
 ## Final Notes
 
