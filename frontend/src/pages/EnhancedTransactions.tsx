@@ -326,9 +326,9 @@ export function EnhancedTransactions() {
       const baseLabel = parentCategory 
         ? `${parentCategory.name} → ${cat.name}` 
         : cat.name;
-      // Add indicator for hidden categories
+      // Add indicator for hidden categories with visual icon
       const label = cat.isHidden 
-        ? `${baseLabel} (Excluded from budgets)`
+        ? `👁️‍🗨️ ${baseLabel} (Excluded from budgets)`
         : baseLabel;
       return {
         value: cat.id,

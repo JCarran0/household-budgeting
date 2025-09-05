@@ -16,6 +16,7 @@ import {
   IconChevronRight,
   IconEdit,
   IconTrash,
+  IconEye,
   IconEyeOff,
   IconPigMoney,
   IconCategory,
@@ -67,7 +68,6 @@ function CategoryNode({ category, onEdit, onDelete, level = 0 }: CategoryNodePro
         style={{
           marginLeft: level * 24,
           cursor: hasChildren ? 'pointer' : 'default',
-          backgroundColor: category.isHidden ? 'var(--mantine-color-gray-0)' : undefined,
         }}
         onClick={handleToggle}
       >
@@ -95,9 +95,25 @@ function CategoryNode({ category, onEdit, onDelete, level = 0 }: CategoryNodePro
               {isSubcategory ? <IconSubtask size={14} /> : <IconCategory size={14} />}
             </ThemeIcon>
 
+            {category.isHidden ? (
+              <Tooltip label="Hidden from budgets">
+                <IconEyeOff size={16} color="var(--mantine-color-dimmed)" />
+              </Tooltip>
+            ) : (
+              <Tooltip label="Visible in budgets">
+                <IconEye size={16} color="var(--mantine-color-dimmed)" />
+              </Tooltip>
+            )}
+
             <Text fw={isSubcategory ? 400 : 500} size={isSubcategory ? "sm" : "md"}>
               {category.name}
             </Text>
+
+            {category.isHidden && (
+              <Text size="xs" c="dimmed">
+                (Excluded from budgets)
+              </Text>
+            )}
 
             <Group gap={4}>
               {category.isSavings && (
@@ -112,20 +128,6 @@ function CategoryNode({ category, onEdit, onDelete, level = 0 }: CategoryNodePro
                   </Badge>
                 </Tooltip>
               )}
-              
-              {category.isHidden && (
-                <Tooltip label="Hidden from budgets">
-                  <Badge
-                    size="xs"
-                    variant="light"
-                    color="gray"
-                    leftSection={<IconEyeOff size={10} />}
-                  >
-                    Hidden
-                  </Badge>
-                </Tooltip>
-              )}
-
             </Group>
           </Group>
 
