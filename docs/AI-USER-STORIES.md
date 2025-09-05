@@ -144,6 +144,23 @@
 - A user should have split amounts validated to equal the original amount
 - A user should have the original transaction hidden when split
 
+### Bulk Transaction Editing
+- A user should be able to select multiple transactions using checkboxes
+- A user should be able to select all visible transactions with a "Select All" checkbox
+- A user should be able to deselect all transactions when all are selected
+- A user should be able to use Shift+Click to select a range of transactions
+- A user should be able to use Cmd/Ctrl+Click to toggle individual transaction selections
+- A user should see a count of how many transactions are selected
+- A user should see the total amount of selected transactions
+- A user should be able to bulk edit the category of selected transactions
+- A user should be able to bulk edit the description of selected transactions
+- A user should be able to clear descriptions for selected transactions
+- A user should see a confirmation dialog before applying bulk changes
+- A user should see progress indication during bulk operations
+- A user should receive a notification when bulk updates complete successfully
+- A user should receive an error notification if bulk updates fail
+- A user should be able to cancel bulk operations before they complete
+
 ## Category Management
 
 ### Category Structure

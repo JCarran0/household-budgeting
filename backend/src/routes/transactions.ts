@@ -84,6 +84,16 @@ const syncAllSchema = z.object({
   startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
 });
 
+const bulkUpdateSchema = z.object({
+  transactionIds: z.array(z.string().min(1)).min(1).max(100),
+  updates: z.object({
+    categoryId: z.union([z.string().min(1), z.null()]).optional(),
+    userDescription: z.union([z.string(), z.null()]).optional(),
+  }).refine(data => Object.keys(data).length > 0, {
+    message: 'At least one update field must be provided',
+  }),
+});
+
 /**
  * GET /api/v1/transactions/uncategorized/count
  * Get count of uncategorized transactions
@@ -406,6 +416,83 @@ router.post('/:transactionId/split', authMiddleware, async (req: AuthRequest, re
   } catch (error) {
     console.error('Error splitting transaction:', error);
     res.status(500).json({ success: false, error: 'Failed to split transaction' });
+  }
+});
+
+/**
+ * PUT /api/v1/transactions/bulk
+ * Bulk update multiple transactions
+ */
+router.put('/bulk', authMiddleware, async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    if (!req.user) {
+      res.status(401).json({ success: false, error: 'Unauthorized' });
+      return;
+    }
+
+    const validation = bulkUpdateSchema.safeParse(req.body);
+    if (!validation.success) {
+      res.status(400).json({ 
+        success: false, 
+        error: 'Invalid request data',
+        details: validation.error.format(),
+      });
+      return;
+    }
+
+    const { transactionIds, updates } = validation.data;
+    
+    // Update transactions in bulk
+    let successCount = 0;
+    let failedCount = 0;
+    const errors: string[] = [];
+    
+    for (const transactionId of transactionIds) {
+      try {
+        // Update category if provided
+        if (updates.categoryId !== undefined) {
+          const result = await transactionService.updateTransactionCategory(
+            req.user.userId,
+            transactionId,
+            updates.categoryId
+          );
+          if (!result.success) {
+            failedCount++;
+            errors.push(`Transaction ${transactionId}: ${result.error}`);
+            continue;
+          }
+        }
+        
+        // Update description if provided
+        if (updates.userDescription !== undefined) {
+          const result = await transactionService.updateTransactionDescription(
+            req.user.userId,
+            transactionId,
+            updates.userDescription
+          );
+          if (!result.success) {
+            failedCount++;
+            errors.push(`Transaction ${transactionId}: ${result.error}`);
+            continue;
+          }
+        }
+        
+        successCount++;
+      } catch (error) {
+        failedCount++;
+        errors.push(`Transaction ${transactionId}: Update failed`);
+      }
+    }
+    
+    res.json({ 
+      success: true,
+      updated: successCount,
+      failed: failedCount,
+      errors: errors.length > 0 ? errors : undefined,
+    });
+  } catch (error) {
+    console.error('Error performing bulk update:', error);
+    res.status(500).json({ success: false, error: 'Failed to perform bulk update' });
   }
 });
 

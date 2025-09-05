@@ -269,6 +269,18 @@ class ApiClient {
       throw new Error(response.data.error || 'Failed to update category');
     }
   }
+  
+  async bulkUpdateTransactions(transactionIds: string[], updates: { categoryId?: string | null; userDescription?: string | null }): Promise<{ updated: number; failed: number; errors?: string[] }> {
+    const response = await this.client.put('/transactions/bulk', { transactionIds, updates });
+    if (!response.data.success) {
+      throw new Error(response.data.error || 'Failed to perform bulk update');
+    }
+    return {
+      updated: response.data.updated || 0,
+      failed: response.data.failed || 0,
+      errors: response.data.errors,
+    };
+  }
 
   async addTransactionTags(transactionId: string, tags: string[]): Promise<void> {
     const response = await this.client.post(`/transactions/${transactionId}/tags`, { tags });

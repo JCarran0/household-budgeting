@@ -58,6 +58,8 @@ import {
 } from '@tabler/icons-react';
 import { TransactionEditModal } from '../components/transactions/TransactionEditModal';
 import { TransactionSplitModal } from '../components/transactions/TransactionSplitModal';
+import { BulkEditBar } from '../components/transactions/BulkEditBar';
+import { BulkEditModal, type BulkEditUpdates } from '../components/transactions/BulkEditModal';
 
 type DateFilterOption = 'this-month' | 'ytd' | 'custom' | string; // string for specific month like '2025-01'
 
@@ -115,6 +117,11 @@ export function EnhancedTransactions() {
   const [splittingTransaction, setSplittingTransaction] = useState<Transaction | null>(null);
   const [isSplitModalOpen, setIsSplitModalOpen] = useState(false);
   const [showCustomDatePicker, setShowCustomDatePicker] = useState(false);
+  
+  // Bulk selection state
+  const [selectedTransactionIds, setSelectedTransactionIds] = useState<Set<string>>(new Set());
+  const [lastClickedId, setLastClickedId] = useState<string | null>(null);
+  const [bulkEditMode, setBulkEditMode] = useState<'category' | 'description' | null>(null);
   
   const queryClient = useQueryClient();
   
@@ -410,6 +417,146 @@ export function EnhancedTransactions() {
     setSplittingTransaction(null);
   };
   
+  // Bulk selection handlers
+  const handleSelectAll = () => {
+    if (selectedTransactionIds.size === paginatedTransactions.length) {
+      // Deselect all
+      setSelectedTransactionIds(new Set());
+    } else {
+      // Select all on current page
+      const newSelection = new Set(paginatedTransactions.map(t => t.id));
+      setSelectedTransactionIds(newSelection);
+    }
+  };
+
+  const handleSelectTransaction = (
+    transactionId: string, 
+    index: number, 
+    event: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    const shiftKey = event.nativeEvent instanceof MouseEvent && event.nativeEvent.shiftKey;
+    const ctrlKey = event.nativeEvent instanceof MouseEvent && (event.nativeEvent.ctrlKey || event.nativeEvent.metaKey);
+    
+    if (shiftKey && lastClickedId !== null) {
+      // Find the index of the last clicked transaction
+      const lastIndex = paginatedTransactions.findIndex(t => t.id === lastClickedId);
+      if (lastIndex !== -1) {
+        // Select range
+        const startIndex = Math.min(lastIndex, index);
+        const endIndex = Math.max(lastIndex, index);
+        const newSelection = new Set(selectedTransactionIds);
+        
+        for (let i = startIndex; i <= endIndex; i++) {
+          newSelection.add(paginatedTransactions[i].id);
+        }
+        
+        setSelectedTransactionIds(newSelection);
+      }
+    } else if (ctrlKey) {
+      // Toggle single selection
+      const newSelection = new Set(selectedTransactionIds);
+      if (newSelection.has(transactionId)) {
+        newSelection.delete(transactionId);
+      } else {
+        newSelection.add(transactionId);
+      }
+      setSelectedTransactionIds(newSelection);
+    } else {
+      // Regular click - toggle single selection
+      const newSelection = new Set(selectedTransactionIds);
+      if (newSelection.has(transactionId)) {
+        newSelection.delete(transactionId);
+      } else {
+        newSelection.add(transactionId);
+      }
+      setSelectedTransactionIds(newSelection);
+    }
+    
+    setLastClickedId(transactionId);
+  };
+
+  // Bulk edit handlers
+  const handleBulkEditCategory = () => {
+    setBulkEditMode('category');
+  };
+  
+  const handleBulkEditDescription = () => {
+    setBulkEditMode('description');
+  };
+  
+  const handleClearSelection = () => {
+    setSelectedTransactionIds(new Set());
+    setLastClickedId(null);
+  };
+  
+  const handleBulkEditConfirm = async (updates: BulkEditUpdates) => {
+    const selectedIds = Array.from(selectedTransactionIds);
+    
+    const notificationId = notifications.show({
+      title: 'Processing',
+      message: `Updating ${selectedIds.length} transactions...`,
+      color: 'blue',
+      loading: true,
+      autoClose: false,
+    });
+    
+    try {
+      // Build the updates object based on the mode
+      const apiUpdates: { categoryId?: string | null; userDescription?: string | null } = {};
+      
+      if (updates.categoryId !== undefined) {
+        apiUpdates.categoryId = updates.categoryId;
+      }
+      
+      if (updates.descriptionMode === 'replace' && updates.userDescription !== undefined) {
+        apiUpdates.userDescription = updates.userDescription;
+      } else if (updates.descriptionMode === 'clear') {
+        apiUpdates.userDescription = null;
+      }
+      
+      // Only make the API call if there are actual updates
+      if (Object.keys(apiUpdates).length > 0) {
+        const result = await api.bulkUpdateTransactions(selectedIds, apiUpdates);
+        
+        notifications.update({
+          id: notificationId,
+          title: 'Success',
+          message: `Updated ${result.updated} transactions${result.failed > 0 ? ` (${result.failed} failed)` : ''}`,
+          color: result.failed > 0 ? 'yellow' : 'green',
+          loading: false,
+          autoClose: 5000,
+        });
+        
+        if (result.errors && result.errors.length > 0) {
+          console.error('Bulk update errors:', result.errors);
+        }
+      } else {
+        notifications.update({
+          id: notificationId,
+          title: 'No Changes',
+          message: 'No updates were made',
+          color: 'gray',
+          loading: false,
+          autoClose: 3000,
+        });
+      }
+      
+      setSelectedTransactionIds(new Set());
+      setBulkEditMode(null);
+      queryClient.invalidateQueries({ queryKey: ['transactions'] });
+    } catch (error) {
+      console.error('Bulk update failed:', error);
+      notifications.update({
+        id: notificationId,
+        title: 'Error',
+        message: error instanceof Error ? error.message : 'Failed to update transactions',
+        color: 'red',
+        loading: false,
+        autoClose: 5000,
+      });
+    }
+  };
+
   const handleCategoryClick = (transactionId: string, currentCategoryId: string | null) => {
     setEditingCategoryId(transactionId);
     setSelectedCategoryValue(currentCategoryId || 'uncategorized');
@@ -448,6 +595,18 @@ export function EnhancedTransactions() {
     currentPage * TRANSACTIONS_PER_PAGE
   );
   
+  // Calculate selected transaction amount
+  const selectedAmount = useMemo(() => {
+    let total = 0;
+    for (const id of selectedTransactionIds) {
+      const transaction = transactions.find(t => t.id === id);
+      if (transaction) {
+        total += transaction.amount;
+      }
+    }
+    return total;
+  }, [selectedTransactionIds, transactions]);
+  
   // Reset to page 1 when filters change
   useEffect(() => {
     setCurrentPage(1);
@@ -475,6 +634,15 @@ export function EnhancedTransactions() {
             Sync Transactions
           </Button>
         </Group>
+
+        {/* Bulk Edit Bar */}
+        <BulkEditBar
+          selectedCount={selectedTransactionIds.size}
+          selectedAmount={selectedAmount}
+          onEditCategory={handleBulkEditCategory}
+          onEditDescription={handleBulkEditDescription}
+          onClearSelection={handleClearSelection}
+        />
 
         {/* Uncategorized Transactions Alert */}
         {uncategorizedData && uncategorizedData.count > 0 && (
@@ -774,6 +942,13 @@ export function EnhancedTransactions() {
             <Table striped highlightOnHover>
               <Table.Thead>
                 <Table.Tr>
+                  <Table.Th style={{ width: 40 }}>
+                    <Checkbox
+                      checked={selectedTransactionIds.size > 0 && selectedTransactionIds.size === paginatedTransactions.length}
+                      indeterminate={selectedTransactionIds.size > 0 && selectedTransactionIds.size < paginatedTransactions.length}
+                      onChange={handleSelectAll}
+                    />
+                  </Table.Th>
                   <Table.Th>Date</Table.Th>
                   <Table.Th>Description</Table.Th>
                   <Table.Th>Category</Table.Th>
@@ -788,6 +963,7 @@ export function EnhancedTransactions() {
                   // Show skeleton rows only on true initial load
                   [...Array(8)].map((_, index) => (
                     <Table.Tr key={`skeleton-${index}`}>
+                      <Table.Td><Skeleton height={20} width={20} /></Table.Td>
                       <Table.Td><Skeleton height={20} width={80} /></Table.Td>
                       <Table.Td><Skeleton height={20} /></Table.Td>
                       <Table.Td><Skeleton height={20} width={120} /></Table.Td>
@@ -799,15 +975,21 @@ export function EnhancedTransactions() {
                   ))
                 ) : paginatedTransactions.length === 0 ? (
                   <Table.Tr>
-                    <Table.Td colSpan={7}>
+                    <Table.Td colSpan={8}>
                       <Center py="xl">
                         <Text c="dimmed">No transactions found</Text>
                       </Center>
                     </Table.Td>
                   </Table.Tr>
                 ) : (
-                  paginatedTransactions.map((transaction) => (
+                  paginatedTransactions.map((transaction, index) => (
                 <Table.Tr key={transaction.id}>
+                  <Table.Td>
+                    <Checkbox
+                      checked={selectedTransactionIds.has(transaction.id)}
+                      onChange={(event) => handleSelectTransaction(transaction.id, index, event)}
+                    />
+                  </Table.Td>
                   <Table.Td>
                     <Text size="sm">{transaction.date}</Text>
                   </Table.Td>
@@ -1043,6 +1225,16 @@ export function EnhancedTransactions() {
         opened={isSplitModalOpen}
         onClose={handleSplitModalClose}
         transaction={splittingTransaction}
+      />
+      
+      {/* Bulk Edit Modal */}
+      <BulkEditModal
+        opened={bulkEditMode !== null}
+        onClose={() => setBulkEditMode(null)}
+        mode={bulkEditMode || 'category'}
+        selectedCount={selectedTransactionIds.size}
+        categories={categoryOptions}
+        onConfirm={handleBulkEditConfirm}
       />
     </Container>
     </>
