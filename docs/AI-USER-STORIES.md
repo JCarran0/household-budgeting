@@ -76,6 +76,12 @@
 - A user should be able to select "All Accounts" or individual accounts from a dropdown
 - A user should be able to see account names with institution in the filter dropdown
 - A user should be able to filter their transactions by category
+- A user should see transactions update immediately when category filter is applied
+- A user should be able to select multiple categories (OR logic)
+- A user should be able to filter for "Uncategorized" transactions
+- A user should be able to combine category filters with other filters (date, account, search)
+- A user should see visual indication of active category filters
+- A user should be able to clear category filters
 - A user should be able to filter their transactions by amount range (min/max)
 - A user should be able to search for transactions with an exact amount (e.g., $19.99)
 - A user should be able to adjust the tolerance for exact amount searches (±$0 to ±$5)
@@ -113,6 +119,16 @@
 - A user should be able to edit a transaction's description
 - A user should be able to revert to the original Plaid description
 - A user should be able to change a transaction's category
+- A user should be able to click on a transaction's category to edit it inline
+- A user should see a category dropdown when clicking on category values
+- A user should be able to select from all available categories in the dropdown
+- A user should see categories in hierarchical format (Parent → Subcategory)
+- A user should be able to set transactions as "Uncategorized"
+- A user should see hidden categories with "(Excluded from budgets)" suffix in dropdown
+- A user should have category changes saved automatically when selecting from dropdown
+- A user should be able to cancel category editing by clicking outside or pressing ESC
+- A user should see loading state while category updates are saving
+- A user should see error notifications if category update fails
 - A user should be able to add tags to transactions
 - A user should be able to remove tags from transactions
 - A user should be able to add notes to transactions
@@ -156,6 +172,14 @@
 - A user should be able to use hidden categories for transfers between accounts
 - A user should have hidden category transactions excluded from budget calculations
 
+### Hidden Categories Visual Design
+- A user should see hidden categories using consistent colors (not special white/different color)
+- A user should see a closed eye icon (👁‍🗨️) next to hidden category names
+- A user should see an open eye icon (👁️) next to visible category names (optional)
+- A user should see the eye icon before or after the category name consistently
+- A user should see icon tooltips explaining the visibility status
+- A user should see icons that don't interfere with click targets or interactions
+
 ### Category Operations
 - A user should be able to create new categories at any time
 - A user should be able to create subcategories under any parent category
@@ -166,7 +190,13 @@
 ### Rule Management
 - A user should be able to create their own auto-categorization rules
 - A user should be able to set a description for each of their rules
-- A user should be able to define a text pattern for matching
+- A user should be able to define multiple text patterns for matching (OR logic)
+- A user should be able to add additional patterns using "+ OR" button/link
+- A user should be able to remove individual patterns from a rule
+- A user should have rules match if ANY of the patterns are found (OR logic)
+- A user should be limited to a maximum of 5 patterns per rule
+- A user should see all patterns displayed as badges in the rules list
+- A user should see clear indication that patterns use OR logic in the UI
 - A user should be able to assign one of their categories to each rule
 - A user should be able to optionally set a custom user description for matching transactions
 - A user should be able to enable/disable their individual rules
@@ -262,6 +292,15 @@
 - A user should be able to see cash flow trends
 - A user should be able to see projected cash flow
 
+### Date Range Options
+- A user should be able to select "This Month" as a date range option
+- A user should be able to select "Last Month" as a date range option
+- A user should be able to select "This Year" as a date range option
+- A user should be able to select "Year to Date" as a date range option
+- A user should have "This Month" as the default selection
+- A user should see reports update immediately when changing date ranges
+- A user should have date ranges calculate correctly regardless of current date
+
 ### Spending Trends
 - A user should be able to see spending by category over time
 - A user should be able to see spending trends charts
@@ -273,6 +312,30 @@
 - A user should be able to see spending percentages by category
 - A user should be able to see category spending comparisons
 - A user should be able to drill down into subcategories
+
+### Interactive Charts
+- A user should see only parent-level categories in the initial pie chart view
+- A user should be able to click on parent categories with multiple subcategories to drill down
+- A user should see the entire pie transform to show only that parent's subcategories
+- A user should see single-child parents displayed as "Parent Name (Child Name)"
+- A user should NOT be able to click on single-child parents (no drill-down needed)
+- A user should see breadcrumb navigation showing current drill-down level
+- A user should be able to navigate back to parent view via breadcrumbs or back button
+- A user should see smooth transition animations when drilling down/up
+- A user should see pointer cursor on clickable pie slices
+- A user should see hover effects on clickable slices (brightness, scale, outline)
+
+### Transaction Preview
+- A user should be able to click on any category reference in reports to see a transaction preview
+- A user should see a modal showing the first 25 transactions for that category
+- A user should see transaction date, description, and amount in the preview
+- A user should see total count and amount summary at the top of the preview
+- A user should see "No transactions found" when no transactions exist for the category
+- A user should be able to close the modal with ESC key or clicking outside
+- A user should see a "View All in Transactions Page" button in the modal footer
+- A user should be navigated to the transactions page with appropriate filters applied when clicking "View All"
+- A user should see loading states while transaction preview data is fetching
+- A user should see error handling if preview data fails to load
 
 ## User Interface & Experience
 
