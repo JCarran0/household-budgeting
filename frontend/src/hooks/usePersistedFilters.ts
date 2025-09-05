@@ -253,7 +253,7 @@ export function useReportsFilters(): ReportsFilterState & ReportsFilterActions {
   const resetReportsFilters = useFilterStore((state) => state.resetReportsFilters);
   
   // Get the current value directly from the store
-  const timeRange = reportsFilters?.timeRange || '6';
+  const timeRange = reportsFilters?.timeRange || 'thisMonth';
   
   const setTimeRange = useCallback((range: string) => {
     setReportsFilters({ timeRange: range });

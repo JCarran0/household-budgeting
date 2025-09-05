@@ -81,7 +81,7 @@ const defaultDashboardFilters: DashboardFilters = {
 };
 
 const defaultReportsFilters: ReportsFilters = {
-  timeRange: '6', // Default to 6 months
+  timeRange: 'thisMonth', // Default to This Month
 };
 
 // Helper to validate and migrate stored data
@@ -139,8 +139,24 @@ const validateStoredFilters = (stored: unknown): Partial<FilterStore> => {
   // Validate reports filters
   if (storedData?.reports && typeof storedData.reports === 'object') {
     const r = storedData.reports as Record<string, unknown>;
+    let timeRange = defaultReportsFilters.timeRange;
+    
+    if (typeof r.timeRange === 'string') {
+      // Handle migration from old numeric values to new string values
+      if (r.timeRange === '3') {
+        timeRange = 'last3';
+      } else if (r.timeRange === '6') {
+        timeRange = 'last6';
+      } else if (r.timeRange === '12') {
+        timeRange = 'last12';
+      } else {
+        // Keep the value if it's already in new format
+        timeRange = r.timeRange;
+      }
+    }
+    
     validated.reports = {
-      timeRange: typeof r.timeRange === 'string' ? r.timeRange : defaultReportsFilters.timeRange,
+      timeRange: timeRange,
     };
   }
   

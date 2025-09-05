@@ -49,7 +49,7 @@ import {
   IconArrowDownRight,
   IconFilterOff,
 } from '@tabler/icons-react';
-import { format, subMonths } from 'date-fns';
+import { format, subMonths, startOfMonth, endOfMonth, startOfYear, endOfYear } from 'date-fns';
 import { api } from '../lib/api';
 
 // Color palette for charts
@@ -64,15 +64,82 @@ const COLORS = [
   '#14b8a6', // teal
 ];
 
+// Helper function to get date range based on option
+function getDateRange(option: string): { startDate: string; endDate: string; startMonth: string; endMonth: string } {
+  const now = new Date();
+  
+  switch(option) {
+    case 'thisMonth': {
+      const monthStart = startOfMonth(now);
+      const monthEnd = endOfMonth(now);
+      return {
+        startDate: format(monthStart, 'yyyy-MM-dd'),
+        endDate: format(monthEnd, 'yyyy-MM-dd'),
+        startMonth: format(monthStart, 'yyyy-MM'),
+        endMonth: format(monthEnd, 'yyyy-MM')
+      };
+    }
+    case 'lastMonth': {
+      const lastMonth = subMonths(now, 1);
+      const monthStart = startOfMonth(lastMonth);
+      const monthEnd = endOfMonth(lastMonth);
+      return {
+        startDate: format(monthStart, 'yyyy-MM-dd'),
+        endDate: format(monthEnd, 'yyyy-MM-dd'),
+        startMonth: format(monthStart, 'yyyy-MM'),
+        endMonth: format(monthEnd, 'yyyy-MM')
+      };
+    }
+    case 'thisYear': {
+      const yearStart = startOfYear(now);
+      const yearEnd = endOfYear(now);
+      return {
+        startDate: format(yearStart, 'yyyy-MM-dd'),
+        endDate: format(yearEnd, 'yyyy-MM-dd'),
+        startMonth: format(yearStart, 'yyyy-MM'),
+        endMonth: format(yearEnd, 'yyyy-MM')
+      };
+    }
+    case 'yearToDate': {
+      const yearStart = startOfYear(now);
+      return {
+        startDate: format(yearStart, 'yyyy-MM-dd'),
+        endDate: format(now, 'yyyy-MM-dd'),
+        startMonth: format(yearStart, 'yyyy-MM'),
+        endMonth: format(now, 'yyyy-MM')
+      };
+    }
+    case 'last3':
+    case 'last6':
+    case 'last12': {
+      const months = parseInt(option.replace('last', ''));
+      const startDate = subMonths(now, months);
+      return {
+        startDate: format(startDate, 'yyyy-MM-dd'),
+        endDate: format(now, 'yyyy-MM-dd'),
+        startMonth: format(startDate, 'yyyy-MM'),
+        endMonth: format(now, 'yyyy-MM')
+      };
+    }
+    default: {
+      // Default to last 6 months for backwards compatibility
+      const startDate = subMonths(now, 6);
+      return {
+        startDate: format(startDate, 'yyyy-MM-dd'),
+        endDate: format(now, 'yyyy-MM-dd'),
+        startMonth: format(startDate, 'yyyy-MM'),
+        endMonth: format(now, 'yyyy-MM')
+      };
+    }
+  }
+}
+
 export function Reports() {
   // Use persisted filters from localStorage
   const { timeRange, setTimeRange, resetFilters } = useReportsFilters();
   
-  // Calculate date ranges
-  const endMonth = format(new Date(), 'yyyy-MM');
-  const startMonth = format(subMonths(new Date(), parseInt(timeRange)), 'yyyy-MM');
-  const startDate = `${startMonth}-01`;
-  const endDate = format(new Date(), 'yyyy-MM-dd');
+  // Calculate date ranges based on selected option
+  const { startDate, endDate, startMonth, endMonth } = getDateRange(timeRange);
 
   // Fetch all report data
   const { data: ytdData, isLoading: ytdLoading } = useQuery({
@@ -171,22 +238,26 @@ export function Reports() {
           <Group gap="xs">
             <Select
               value={timeRange}
-              onChange={(value) => setTimeRange(value || '6')}
+              onChange={(value) => setTimeRange(value || 'thisMonth')}
               data={[
-                { value: '3', label: 'Last 3 months' },
-                { value: '6', label: 'Last 6 months' },
-                { value: '12', label: 'Last 12 months' },
+                { value: 'thisMonth', label: 'This Month' },
+                { value: 'lastMonth', label: 'Last Month' },
+                { value: 'yearToDate', label: 'Year to Date' },
+                { value: 'thisYear', label: 'This Year' },
+                { value: 'last3', label: 'Last 3 Months' },
+                { value: 'last6', label: 'Last 6 Months' },
+                { value: 'last12', label: 'Last 12 Months' },
               ]}
               w={200}
             />
-            <Tooltip label="Reset to default (6 months)">
+            <Tooltip label="Reset to default (This Month)">
               <ActionIcon
                 variant="subtle"
                 onClick={() => {
                   resetFilters();
                   notifications.show({
                     title: 'View Reset',
-                    message: 'Reset to 6 months view',
+                    message: 'Reset to This Month view',
                     color: 'blue',
                   });
                 }}
