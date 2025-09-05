@@ -575,6 +575,30 @@ describe('User Story: Transaction Search and Filtering', () => {
         !t.userCategoryId && t.accountId === 'checking-account'
       )).toBe(true);
     });
+
+    test('I can filter for uncategorized transactions using categoryIds', async () => {
+      // Test the new "uncategorized" special value in categoryIds
+      const result = await transactionService.getTransactions(testUserId, {
+        categoryIds: ['uncategorized'],
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.transactions!.every(t => !t.userCategoryId)).toBe(true);
+      expect(result.transactions!.length).toBeGreaterThan(0);
+    });
+
+    test('I can combine "uncategorized" with regular categories', async () => {
+      // Test mixed selection: uncategorized + regular categories
+      const result = await transactionService.getTransactions(testUserId, {
+        categoryIds: ['uncategorized', 'coffee-category'],
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.transactions!.every(t => 
+        !t.userCategoryId || t.userCategoryId === 'coffee-category'
+      )).toBe(true);
+      expect(result.transactions!.length).toBeGreaterThan(1); // Should include both uncategorized and coffee transactions
+    });
   });
 
   describe('As a user, I can filter by amounts', () => {

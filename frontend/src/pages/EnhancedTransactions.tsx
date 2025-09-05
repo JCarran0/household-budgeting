@@ -318,8 +318,11 @@ export function EnhancedTransactions() {
   }, [transactionData]);
 
   // Category options for filter
-  const categoryOptions = categories
-    ?.map(cat => {
+  const categoryOptions = [
+    // Add uncategorized option at the top
+    { value: 'uncategorized', label: 'Uncategorized' },
+    // Existing category options
+    ...(categories?.map(cat => {
       const parentCategory = cat.parentId
         ? categories.find(p => p.id === cat.parentId)
         : null;
@@ -334,8 +337,8 @@ export function EnhancedTransactions() {
         value: cat.id,
         label: label,
       };
-    })
-    .sort((a, b) => a.label.localeCompare(b.label)) || [];
+    }).sort((a, b) => a.label.localeCompare(b.label)) || [])
+  ];
   
   // Category options for inline editing (includes Uncategorized option)
   const inlineCategoryOptions = [

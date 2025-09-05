@@ -399,9 +399,15 @@ export class TransactionService {
 
       if (filter.categoryIds && filter.categoryIds.length > 0) {
         filtered = filtered.filter((txn: StoredTransaction) => {
-          // Check both userCategoryId (user's custom) and categoryId (Plaid's)
-          const categoryToCheck = txn.userCategoryId || txn.categoryId;
-          return categoryToCheck ? filter.categoryIds!.includes(categoryToCheck) : false;
+          // Handle "uncategorized" special case first
+          if (filter.categoryIds!.includes('uncategorized')) {
+            // If uncategorized is selected, include transactions without user categories
+            if (!txn.userCategoryId) return true;
+          }
+          
+          // For regular categories, check if the transaction's user category is in the filter
+          // We only check userCategoryId (not Plaid categoryId) for regular category filters
+          return txn.userCategoryId ? filter.categoryIds!.includes(txn.userCategoryId) : false;
         });
       }
 
