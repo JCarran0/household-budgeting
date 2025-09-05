@@ -145,6 +145,34 @@ interface DrillDownState {
   parentName?: string;
 }
 
+// Types for pie chart data
+interface PieChartEntry {
+  id?: string;
+  name: string;
+  value: number;
+  percentage: number;
+  clickable?: boolean;
+  hasChildren?: boolean;
+  childCount?: number;
+}
+
+interface ProcessedParentData {
+  id: string;
+  name: string;
+  value: number;
+  percentage: number;
+  hasChildren: boolean;
+  childCount: number;
+  singleChildName?: string;
+}
+
+interface ProcessedChildData {
+  id: string;
+  name: string;
+  value: number;
+  percentage: number;
+}
+
 export function Reports() {
   // Use persisted filters from localStorage
   const { timeRange, setTimeRange, resetFilters } = useReportsFilters();
@@ -182,6 +210,70 @@ export function Reports() {
     queryKey: ['reports', 'projections'],
     queryFn: () => api.getProjections(6),
   });
+
+  // Process and aggregate category data for drill-down
+  const processedCategoryData = useMemo(() => {
+    if (!breakdownData?.breakdown) return { parentData: [], childData: new Map() };
+    
+    const parentData: ProcessedParentData[] = [];
+    const childData = new Map<string, ProcessedChildData[]>();
+    
+    // Process each parent category
+    breakdownData.breakdown.forEach(parent => {
+      if (parent.amount <= 0) return; // Skip negative amounts
+      
+      const children = parent.subcategories || [];
+      const validChildren = children.filter(child => child.amount > 0);
+      
+      // Store parent data
+      parentData.push({
+        id: parent.categoryId,
+        name: parent.categoryName,
+        value: parent.amount,
+        percentage: parent.percentage,
+        hasChildren: validChildren.length > 0,
+        childCount: validChildren.length,
+        singleChildName: validChildren.length === 1 ? validChildren[0].categoryName : undefined
+      });
+      
+      // Store children data if any
+      if (validChildren.length > 0) {
+        const childTotal = validChildren.reduce((sum, child) => sum + child.amount, 0);
+        childData.set(parent.categoryId, validChildren.map(child => ({
+          id: child.categoryId,
+          name: child.categoryName,
+          value: child.amount,
+          percentage: (child.amount / childTotal) * 100
+        })));
+      }
+    });
+    
+    return { parentData, childData };
+  }, [breakdownData]);
+  
+  // Get current pie chart data based on drill-down state
+  const pieChartData: PieChartEntry[] = useMemo(() => {
+    if (drillDownState.level === 'parent') {
+      // Show parent categories
+      return processedCategoryData.parentData
+        .slice(0, 8) // Top 8 categories
+        .map(item => ({
+          id: item.id,
+          name: item.childCount === 1 && item.singleChildName 
+            ? `${item.name} (${item.singleChildName})`
+            : item.name,
+          value: item.value,
+          percentage: item.percentage,
+          clickable: item.childCount > 1, // Only clickable if multiple children
+          hasChildren: item.hasChildren,
+          childCount: item.childCount
+        }));
+    } else {
+      // Show children of selected parent
+      const children = processedCategoryData.childData.get(drillDownState.parentId || '');
+      return children || [];
+    }
+  }, [drillDownState, processedCategoryData]);
 
   const isLoading = ytdLoading || cashFlowLoading || trendsLoading || breakdownLoading || projectionsLoading;
 
@@ -233,94 +325,16 @@ export function Reports() {
   const uniqueCategories = new Set<string>();
   trendsData?.trends?.forEach(trend => uniqueCategories.add(trend.categoryName));
   const categoryNames = Array.from(uniqueCategories).slice(0, 8); // Limit to top 8 for visibility
-
-  // Process and aggregate category data for drill-down
-  const processedCategoryData = useMemo(() => {
-    if (!breakdownData?.breakdown) return { parentData: [], childData: new Map() };
-    
-    const parentData: Array<{
-      id: string;
-      name: string;
-      value: number;
-      percentage: number;
-      hasChildren: boolean;
-      childCount: number;
-      singleChildName?: string;
-    }> = [];
-    
-    const childData = new Map<string, Array<{
-      id: string;
-      name: string;
-      value: number;
-      percentage: number;
-    }>>();
-    
-    // Process each parent category
-    breakdownData.breakdown.forEach(parent => {
-      if (parent.amount <= 0) return; // Skip negative amounts
-      
-      const children = parent.subcategories || [];
-      const validChildren = children.filter(child => child.amount > 0);
-      
-      // Store parent data
-      parentData.push({
-        id: parent.categoryId,
-        name: parent.categoryName,
-        value: parent.amount,
-        percentage: parent.percentage,
-        hasChildren: validChildren.length > 0,
-        childCount: validChildren.length,
-        singleChildName: validChildren.length === 1 ? validChildren[0].categoryName : undefined
-      });
-      
-      // Store children data if any
-      if (validChildren.length > 0) {
-        const childTotal = validChildren.reduce((sum, child) => sum + child.amount, 0);
-        childData.set(parent.categoryId, validChildren.map(child => ({
-          id: child.categoryId,
-          name: child.categoryName,
-          value: child.amount,
-          percentage: (child.amount / childTotal) * 100
-        })));
-      }
-    });
-    
-    return { parentData, childData };
-  }, [breakdownData]);
-  
-  // Get current pie chart data based on drill-down state
-  const pieChartData = useMemo(() => {
-    if (drillDownState.level === 'parent') {
-      // Show parent categories
-      return processedCategoryData.parentData
-        .slice(0, 8) // Top 8 categories
-        .map(item => ({
-          id: item.id,
-          name: item.childCount === 1 && item.singleChildName 
-            ? `${item.name} (${item.singleChildName})`
-            : item.name,
-          value: item.value,
-          percentage: item.percentage,
-          clickable: item.childCount > 1, // Only clickable if multiple children
-          hasChildren: item.hasChildren,
-          childCount: item.childCount
-        }));
-    } else {
-      // Show children of selected parent
-      const children = processedCategoryData.childData.get(drillDownState.parentId || '');
-      return children || [];
-    }
-  }, [drillDownState, processedCategoryData]);
   
   // Handle pie slice click
-  const handleSliceClick = (data: any) => {
+  const handleSliceClick = (data: PieChartEntry) => {
     if (!data.clickable) return; // Don't drill down if not clickable
     
-    if (drillDownState.level === 'parent' && data.childCount > 1) {
+    if (drillDownState.level === 'parent' && data.childCount && data.childCount > 1) {
       // Drill down to children
       setDrillDownState({
         level: 'child',
-        parentId: data.id,
+        parentId: data.id || '',
         parentName: data.name
       });
     }
@@ -332,7 +346,7 @@ export function Reports() {
   };
   
   // Custom tooltip for pie chart
-  const CustomTooltip = ({ active, payload }: any) => {
+  const CustomTooltip = ({ active, payload }: { active?: boolean; payload?: Array<{ payload: PieChartEntry }> }) => {
     if (active && payload && payload[0]) {
       const data = payload[0].payload;
       return (
@@ -632,7 +646,7 @@ export function Reports() {
                         onClick={handleSliceClick}
                         style={{ outline: 'none' }}
                       >
-                        {pieChartData.map((entry, index) => (
+                        {pieChartData.map((entry: PieChartEntry, index: number) => (
                           <Cell 
                             key={`cell-${index}`} 
                             fill={COLORS[index % COLORS.length]}
@@ -658,7 +672,7 @@ export function Reports() {
                   
                   {/* Legend */}
                   <SimpleGrid cols={2} spacing="xs" mt="md">
-                    {pieChartData.map((entry, index) => (
+                    {pieChartData.map((entry: PieChartEntry, index: number) => (
                       <Group key={entry.name} gap="xs">
                         <div
                           style={{
