@@ -131,7 +131,7 @@ export class ReportService {
         const categorySpending = new Map<string, { amount: number; count: number }>();
 
         for (const txn of monthTransactions) {
-          const categoryId = txn.userCategoryId || txn.categoryId || 'uncategorized';
+          const categoryId = txn.categoryId || 'uncategorized';
           
           // Skip if filtering by categories and not in list
           if (categoryIds && categoryIds.length > 0 && !categoryIds.includes(categoryId)) {
@@ -196,7 +196,7 @@ export class ReportService {
       const categorySpending = new Map<string, { amount: number; count: number }>();
 
       for (const txn of filteredTransactions) {
-        const categoryId = txn.userCategoryId || txn.categoryId || 'uncategorized';
+        const categoryId = txn.categoryId || 'uncategorized';
         const current = categorySpending.get(categoryId) || { amount: 0, count: 0 };
         categorySpending.set(categoryId, {
           amount: current.amount + txn.amount,
@@ -445,7 +445,7 @@ export class ReportService {
       const categorySpending = new Map<string, number>();
       
       for (const txn of ytdTransactions.filter(t => t.amount > 0)) {
-        const categoryId = txn.userCategoryId || txn.categoryId || 'uncategorized';
+        const categoryId = txn.categoryId || 'uncategorized';
         const current = categorySpending.get(categoryId) || 0;
         categorySpending.set(categoryId, current + txn.amount);
       }

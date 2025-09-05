@@ -36,8 +36,8 @@ describe('User Story: Transaction Search and Filtering', () => {
         userDescription: null,
         merchantName: 'Starbucks',
         category: ['Food and Drink', 'Coffee Shops'],
-        categoryId: '13005000',
-        userCategoryId: 'coffee-category',
+        plaidCategoryId: '13005000',
+        categoryId: 'coffee-category',
         status: 'posted' as const,
         pending: false,
         isoCurrencyCode: 'USD',
@@ -63,8 +63,8 @@ describe('User Story: Transaction Search and Filtering', () => {
         userDescription: 'Weekly groceries',
         merchantName: 'Whole Foods',
         category: ['Shops', 'Groceries'],
-        categoryId: '19013000',
-        userCategoryId: 'groceries-category',
+        plaidCategoryId: '19013000',
+        categoryId: 'groceries-category',
         status: 'posted' as const,
         pending: false,
         isoCurrencyCode: 'USD',
@@ -91,8 +91,8 @@ describe('User Story: Transaction Search and Filtering', () => {
         userDescription: null,
         merchantName: null,
         category: ['Transfer', 'Deposit'],
-        categoryId: '21005000',
-        userCategoryId: 'income-category',
+        plaidCategoryId: '21005000',
+        categoryId: 'income-category',
         status: 'posted' as const,
         pending: false,
         isoCurrencyCode: 'USD',
@@ -118,8 +118,8 @@ describe('User Story: Transaction Search and Filtering', () => {
         userDescription: null,
         merchantName: 'Amazon',
         category: ['Shops', 'Online'],
-        categoryId: '19019000',
-        userCategoryId: null, // Uncategorized
+        plaidCategoryId: '19019000',
+        categoryId: null, // Uncategorized
         status: 'posted' as const,
         pending: false,
         isoCurrencyCode: 'USD',
@@ -146,8 +146,8 @@ describe('User Story: Transaction Search and Filtering', () => {
         userDescription: null,
         merchantName: null,
         category: ['Transfer', 'Internal'],
-        categoryId: '21001000',
-        userCategoryId: 'transfer-category',
+        plaidCategoryId: '21001000',
+        categoryId: 'transfer-category',
         status: 'posted' as const,
         pending: false,
         isoCurrencyCode: 'USD',
@@ -174,8 +174,8 @@ describe('User Story: Transaction Search and Filtering', () => {
         userDescription: null,
         merchantName: 'Local Restaurant',
         category: ['Food and Drink', 'Restaurants'],
-        categoryId: '13005032',
-        userCategoryId: 'dining-category',
+        plaidCategoryId: '13005032',
+        categoryId: 'dining-category',
         status: 'pending' as const,
         pending: true, // Pending transaction
         isoCurrencyCode: 'USD',
@@ -202,8 +202,8 @@ describe('User Story: Transaction Search and Filtering', () => {
         userDescription: null,
         merchantName: 'Old Store',
         category: ['Shops', 'Other'],
-        categoryId: '19999000',
-        userCategoryId: null, // Uncategorized
+        plaidCategoryId: '19999000',
+        categoryId: null, // Uncategorized
         status: 'posted' as const,
         pending: false,
         isoCurrencyCode: 'USD',
@@ -230,8 +230,8 @@ describe('User Story: Transaction Search and Filtering', () => {
         userDescription: null,
         merchantName: null,
         category: ['Food and Drink', 'Other'],
-        categoryId: '13005999',
-        userCategoryId: 'snacks-category',
+        plaidCategoryId: '13005999',
+        categoryId: 'snacks-category',
         status: 'posted' as const,
         pending: false,
         isoCurrencyCode: 'USD',
@@ -258,8 +258,8 @@ describe('User Story: Transaction Search and Filtering', () => {
         userDescription: 'Monthly rent',
         merchantName: 'Property Management',
         category: ['Payment', 'Rent'],
-        categoryId: '16001000',
-        userCategoryId: 'housing-category',
+        plaidCategoryId: '16001000',
+        categoryId: 'housing-category',
         status: 'posted' as const,
         pending: false,
         isoCurrencyCode: 'USD',
@@ -286,8 +286,8 @@ describe('User Story: Transaction Search and Filtering', () => {
         userDescription: null,
         merchantName: "O'Reilly's",
         category: ['Shops', 'Automotive'],
-        categoryId: '19002000',
-        userCategoryId: 'auto-category',
+        plaidCategoryId: '19002000',
+        categoryId: 'auto-category',
         status: 'posted' as const,
         pending: false,
         isoCurrencyCode: 'USD',
@@ -539,7 +539,7 @@ describe('User Story: Transaction Search and Filtering', () => {
 
       expect(result.success).toBe(true);
       expect(result.transactions).toHaveLength(1);
-      expect(result.transactions![0].userCategoryId).toBe('coffee-category');
+      expect(result.transactions![0].categoryId).toBe('coffee-category');
     });
 
     test('I can filter by multiple categories', async () => {
@@ -550,7 +550,7 @@ describe('User Story: Transaction Search and Filtering', () => {
       expect(result.success).toBe(true);
       expect(result.transactions).toHaveLength(2);
       expect(result.transactions!.every(t => 
-        ['coffee-category', 'groceries-category'].includes(t.userCategoryId!)
+        ['coffee-category', 'groceries-category'].includes(t.categoryId!)
       )).toBe(true);
     });
 
@@ -560,7 +560,7 @@ describe('User Story: Transaction Search and Filtering', () => {
       });
 
       expect(result.success).toBe(true);
-      expect(result.transactions!.every(t => !t.userCategoryId)).toBe(true);
+      expect(result.transactions!.every(t => !t.categoryId)).toBe(true);
       expect(result.transactions!.length).toBeGreaterThan(0);
     });
 
@@ -572,7 +572,7 @@ describe('User Story: Transaction Search and Filtering', () => {
 
       expect(result.success).toBe(true);
       expect(result.transactions!.every(t => 
-        !t.userCategoryId && t.accountId === 'checking-account'
+        !t.categoryId && t.accountId === 'checking-account'
       )).toBe(true);
     });
 
@@ -583,7 +583,7 @@ describe('User Story: Transaction Search and Filtering', () => {
       });
 
       expect(result.success).toBe(true);
-      expect(result.transactions!.every(t => !t.userCategoryId)).toBe(true);
+      expect(result.transactions!.every(t => !t.categoryId)).toBe(true);
       expect(result.transactions!.length).toBeGreaterThan(0);
     });
 
@@ -595,7 +595,7 @@ describe('User Story: Transaction Search and Filtering', () => {
 
       expect(result.success).toBe(true);
       expect(result.transactions!.every(t => 
-        !t.userCategoryId || t.userCategoryId === 'coffee-category'
+        !t.categoryId || t.categoryId === 'coffee-category'
       )).toBe(true);
       expect(result.transactions!.length).toBeGreaterThan(1); // Should include both uncategorized and coffee transactions
     });

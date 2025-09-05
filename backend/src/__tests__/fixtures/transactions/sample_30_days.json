@@ -14,8 +14,8 @@
       "TRANSPORTATION",
       "TRANSPORTATION_TAXIS_AND_RIDE_SHARES"
     ],
+    "plaidCategoryId": "a18dc7b1-8278-4283-a9da-359629b6ba5d",
     "categoryId": "a18dc7b1-8278-4283-a9da-359629b6ba5d",
-    "userCategoryId": "a18dc7b1-8278-4283-a9da-359629b6ba5d",
     "status": "posted",
     "pending": false,
     "isoCurrencyCode": "USD",
@@ -242,8 +242,8 @@
       "TRANSPORTATION",
       "TRANSPORTATION_TAXIS_AND_RIDE_SHARES"
     ],
+    "plaidCategoryId": "a18dc7b1-8278-4283-a9da-359629b6ba5d",
     "categoryId": "a18dc7b1-8278-4283-a9da-359629b6ba5d",
-    "userCategoryId": "a18dc7b1-8278-4283-a9da-359629b6ba5d",
     "status": "posted",
     "pending": false,
     "isoCurrencyCode": "USD",
@@ -546,8 +546,8 @@
       "TRANSPORTATION",
       "TRANSPORTATION_TAXIS_AND_RIDE_SHARES"
     ],
+    "plaidCategoryId": "a18dc7b1-8278-4283-a9da-359629b6ba5d",
     "categoryId": "a18dc7b1-8278-4283-a9da-359629b6ba5d",
-    "userCategoryId": "a18dc7b1-8278-4283-a9da-359629b6ba5d",
     "status": "posted",
     "pending": false,
     "isoCurrencyCode": "USD",
@@ -774,8 +774,8 @@
       "TRANSPORTATION",
       "TRANSPORTATION_TAXIS_AND_RIDE_SHARES"
     ],
+    "plaidCategoryId": "a18dc7b1-8278-4283-a9da-359629b6ba5d",
     "categoryId": "a18dc7b1-8278-4283-a9da-359629b6ba5d",
-    "userCategoryId": "a18dc7b1-8278-4283-a9da-359629b6ba5d",
     "status": "posted",
     "pending": false,
     "isoCurrencyCode": "USD",
@@ -1078,8 +1078,8 @@
       "TRANSPORTATION",
       "TRANSPORTATION_TAXIS_AND_RIDE_SHARES"
     ],
+    "plaidCategoryId": "a18dc7b1-8278-4283-a9da-359629b6ba5d",
     "categoryId": "a18dc7b1-8278-4283-a9da-359629b6ba5d",
-    "userCategoryId": "a18dc7b1-8278-4283-a9da-359629b6ba5d",
     "status": "posted",
     "pending": false,
     "isoCurrencyCode": "USD",

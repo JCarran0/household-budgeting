@@ -102,10 +102,10 @@ router.get('/uncategorized/count', authMiddleware, async (req: AuthRequest, res:
       return;
     }
 
-    // Count transactions without a user-assigned category
+    // Count transactions without a category
     // Exclude hidden transactions and split child transactions
     const uncategorizedCount = result.transactions.filter(
-      t => !t.userCategoryId && !t.isHidden && !t.parentTransactionId
+      t => !t.categoryId && !t.isHidden && !t.parentTransactionId
     ).length;
 
     res.json({ 
@@ -158,15 +158,9 @@ router.get('/', authMiddleware, async (req: AuthRequest, res: Response): Promise
       return;
     }
 
-    // Map userCategoryId to categoryId for frontend compatibility
-    const mappedTransactions = result.transactions?.map(txn => ({
-      ...txn,
-      categoryId: txn.userCategoryId || txn.categoryId,
-    })) || [];
-
     res.json({
       success: true,
-      transactions: mappedTransactions,
+      transactions: result.transactions || [],
       totalCount: result.totalCount,
       total: result.unfilteredTotal || result.totalCount,
     });

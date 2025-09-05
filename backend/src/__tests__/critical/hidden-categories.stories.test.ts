@@ -82,8 +82,8 @@ describe('User Story: Hidden Categories', () => {
         name: 'Transfer to Savings',
         merchantName: null,
         category: ['Transfer'],
-        categoryId: '21000000',
-        userCategoryId: null,
+        plaidCategoryId: '21000000',
+        categoryId: null,
         status: 'posted',
         pending: false,
         isoCurrencyCode: 'USD',
@@ -119,7 +119,7 @@ describe('User Story: Hidden Categories', () => {
       ) || [];
       const updatedTransaction = updatedTransactions.find(t => t.id === 'test-transfer-123');
       
-      expect(updatedTransaction?.userCategoryId).toBe(hiddenCategoryId);
+      expect(updatedTransaction?.categoryId).toBe(hiddenCategoryId);
     });
     
     test('I can create auto-categorization rules using hidden categories', async () => {
@@ -218,8 +218,8 @@ describe('User Story: Hidden Categories', () => {
           name: 'Whole Foods',
           merchantName: 'Whole Foods',
           category: ['Shops', 'Food and Drink'],
-          categoryId: '13005000',
-          userCategoryId: visibleCategory.body.id,
+          plaidCategoryId: '13005000',
+          categoryId: visibleCategory.body.id,
           status: 'posted',
           pending: false,
           isoCurrencyCode: 'USD',
@@ -245,8 +245,8 @@ describe('User Story: Hidden Categories', () => {
           name: 'Transfer to Savings',
           merchantName: null,
           category: ['Transfer'],
-          categoryId: '21000000',
-          userCategoryId: hiddenCategory.body.id,
+          plaidCategoryId: '21000000',
+          categoryId: hiddenCategory.body.id,
           status: 'posted',
           pending: false,
           isoCurrencyCode: 'USD',

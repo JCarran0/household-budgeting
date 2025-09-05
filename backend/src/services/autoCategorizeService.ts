@@ -237,8 +237,8 @@ export class AutoCategorizeService {
 
     for (const transaction of transactions) {
       // Check if transaction has a valid category
-      const validCategory = transaction.userCategoryId ? 
-        categories.find(cat => cat.id === transaction.userCategoryId) : null;
+      const validCategory = transaction.categoryId ? 
+        categories.find(cat => cat.id === transaction.categoryId) : null;
       const hadValidCategory = !!validCategory;
       
       // Skip if already has valid category and we're not force recategorizing
@@ -247,7 +247,7 @@ export class AutoCategorizeService {
       }
       
       let matched = false;
-      const originalCategoryId = transaction.userCategoryId;
+      const originalCategoryId = transaction.categoryId;
       
       // Step 1: Try user-defined rules first
       const description = (transaction.userDescription || transaction.name).toLowerCase();
@@ -260,7 +260,6 @@ export class AutoCategorizeService {
         
         if (matches) {
           transaction.categoryId = rule.categoryId;
-          transaction.userCategoryId = rule.categoryId;
           // Apply user description if provided by the rule
           if (rule.userDescription) {
             transaction.userDescription = rule.userDescription;
@@ -295,7 +294,6 @@ export class AutoCategorizeService {
         
         if (matchingCategory) {
           transaction.categoryId = matchingCategory.id;
-          transaction.userCategoryId = matchingCategory.id;
           transaction.updatedAt = new Date();
           
           if (hadValidCategory && originalCategoryId !== matchingCategory.id) {
@@ -334,9 +332,9 @@ export class AutoCategorizeService {
         ? transactions.filter(t => !t.isHidden)
         : transactions.filter(t => {
             if (t.isHidden) return false;
-            if (!t.userCategoryId) return true;
+            if (!t.categoryId) return true;
             // Include transactions with invalid category IDs
-            const validCategory = userCategories.find(cat => cat.id === t.userCategoryId);
+            const validCategory = userCategories.find(cat => cat.id === t.categoryId);
             return !validCategory;
           });
       
@@ -383,9 +381,9 @@ export class AutoCategorizeService {
         ? transactions.filter(t => !t.isHidden)
         : transactions.filter(t => {
             if (t.isHidden) return false;
-            if (!t.userCategoryId) return true;
+            if (!t.categoryId) return true;
             // Include transactions with invalid category IDs
-            const validCategory = userCategories.find(cat => cat.id === t.userCategoryId);
+            const validCategory = userCategories.find(cat => cat.id === t.categoryId);
             return !validCategory;
           });
       

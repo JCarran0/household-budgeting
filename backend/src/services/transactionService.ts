@@ -26,8 +26,8 @@ export interface StoredTransaction {
   userDescription: string | null;      // User-edited description (overrides name for display)
   merchantName: string | null;         // Merchant name if available
   category: string[] | null;           // Plaid categories
-  categoryId: string | null;           // Our category ID
-  userCategoryId: string | null;       // User's custom category
+  plaidCategoryId: string | null;      // Plaid's suggested category ID
+  categoryId: string | null;           // User's assigned category
   status: TransactionStatus;           // Transaction status
   pending: boolean;                    // Is transaction pending?
   isoCurrencyCode: string | null;      // Currency code
@@ -293,8 +293,8 @@ export class TransactionService {
       userDescription: null, // User hasn't edited description yet
       merchantName: plaidTxn.merchantName,
       category: plaidTxn.category,
-      categoryId: plaidTxn.categoryId,
-      userCategoryId: null,
+      plaidCategoryId: plaidTxn.categoryId,
+      categoryId: null,
       status: plaidTxn.pending ? 'pending' : 'posted',
       pending: plaidTxn.pending,
       isoCurrencyCode: plaidTxn.isoCurrencyCode,
@@ -401,13 +401,12 @@ export class TransactionService {
         filtered = filtered.filter((txn: StoredTransaction) => {
           // Handle "uncategorized" special case first
           if (filter.categoryIds!.includes('uncategorized')) {
-            // If uncategorized is selected, include transactions without user categories
-            if (!txn.userCategoryId) return true;
+            // If uncategorized is selected, include transactions without categories
+            if (!txn.categoryId) return true;
           }
           
-          // For regular categories, check if the transaction's user category is in the filter
-          // We only check userCategoryId (not Plaid categoryId) for regular category filters
-          return txn.userCategoryId ? filter.categoryIds!.includes(txn.userCategoryId) : false;
+          // For regular categories, check if the transaction's category is in the filter
+          return txn.categoryId ? filter.categoryIds!.includes(txn.categoryId) : false;
         });
       }
 
@@ -426,7 +425,7 @@ export class TransactionService {
       }
 
       if (filter.onlyUncategorized) {
-        filtered = filtered.filter((txn: StoredTransaction) => !txn.userCategoryId);
+        filtered = filtered.filter((txn: StoredTransaction) => !txn.categoryId);
       }
 
       // Handle exact amount search with tolerance
@@ -495,7 +494,7 @@ export class TransactionService {
       }
 
       // Set to null if null (uncategorized), not undefined
-      transaction.userCategoryId = categoryId;
+      transaction.categoryId = categoryId;
       transaction.updatedAt = new Date();
 
       await this.dataService.saveData(`transactions_${userId}`, transactions);
@@ -587,8 +586,8 @@ export class TransactionService {
           userDescription: split.description || null,
           merchantName: originalTransaction.merchantName,
           category: originalTransaction.category,
+          plaidCategoryId: originalTransaction.plaidCategoryId,
           categoryId: split.categoryId || null,
-          userCategoryId: split.categoryId || null,
           status: originalTransaction.status,
           pending: originalTransaction.pending,
           isoCurrencyCode: originalTransaction.isoCurrencyCode,

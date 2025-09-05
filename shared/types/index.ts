@@ -50,7 +50,8 @@ export interface Transaction {
   userDescription: string | null; // User-edited description
   merchantName: string | null;
   category: string[];
-  categoryId: string | null;
+  plaidCategoryId: string | null; // Plaid's suggested category
+  categoryId: string | null; // User's assigned category
   pending: boolean;
   tags: string[];
   notes: string | null;

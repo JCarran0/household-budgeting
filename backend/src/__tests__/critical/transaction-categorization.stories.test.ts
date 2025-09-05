@@ -76,8 +76,8 @@ describe('User Story: Transaction Categorization', () => {
       name: 'Kroger',
       merchantName: 'Kroger',
       category: ['Shops', 'Groceries'],
-      categoryId: '19013000',
-      userCategoryId: groceryCategory.id, // Initially in groceries
+      plaidCategoryId: '19013000',
+      categoryId: groceryCategory.id, // Initially in groceries
       status: 'posted',
       pending: false,
       isoCurrencyCode: 'USD',
@@ -115,7 +115,7 @@ describe('User Story: Transaction Categorization', () => {
       const updatedTransaction = transactions.find(t => t.id === testTransaction.id);
       
       expect(updatedTransaction).toBeDefined();
-      expect(updatedTransaction?.userCategoryId).toBe(diningCategory.id);
+      expect(updatedTransaction?.categoryId).toBe(diningCategory.id);
     });
     
     test('I can set a transaction to uncategorized by passing null', async () => {
@@ -136,7 +136,7 @@ describe('User Story: Transaction Categorization', () => {
       const updatedTransaction = transactions.find(t => t.id === testTransaction.id);
       
       expect(updatedTransaction).toBeDefined();
-      expect(updatedTransaction?.userCategoryId).toBeNull();
+      expect(updatedTransaction?.categoryId).toBeNull();
     });
     
     test('I can update an uncategorized transaction to have a category', async () => {
@@ -164,7 +164,7 @@ describe('User Story: Transaction Categorization', () => {
       const updatedTransaction = transactions.find(t => t.id === testTransaction.id);
       
       expect(updatedTransaction).toBeDefined();
-      expect(updatedTransaction?.userCategoryId).toBe(diningCategory.id);
+      expect(updatedTransaction?.categoryId).toBe(diningCategory.id);
     });
     
     test('I get an error when updating a non-existent transaction', async () => {
@@ -200,7 +200,7 @@ describe('User Story: Transaction Categorization', () => {
       ) || [];
       const unchangedTransaction = transactions.find(t => t.id === testTransaction.id);
       
-      expect(unchangedTransaction?.userCategoryId).toBe(groceryCategory.id);
+      expect(unchangedTransaction?.categoryId).toBe(groceryCategory.id);
     });
     
     test('Category update accepts string or null but not undefined', async () => {
@@ -273,7 +273,7 @@ describe('User Story: Transaction Categorization', () => {
       const updatedTransaction = transactions.find(t => t.id === testTransaction.id);
       
       expect(updatedTransaction).toBeDefined();
-      expect(updatedTransaction?.userCategoryId).toBe(diningCategory.id);
+      expect(updatedTransaction?.categoryId).toBe(diningCategory.id);
     });
     
     test('Setting category to null excludes transaction from categorized transactions', async () => {
@@ -295,7 +295,7 @@ describe('User Story: Transaction Categorization', () => {
         `transactions_${userId}`
       ) || [];
       let transaction = transactions.find(t => t.id === testTransaction.id);
-      expect(transaction?.userCategoryId).toBe(groceryCategory.id);
+      expect(transaction?.categoryId).toBe(groceryCategory.id);
       
       // Set transaction to uncategorized (null)
       const updateResponse = await authenticatedPut(
@@ -311,7 +311,7 @@ describe('User Story: Transaction Categorization', () => {
         `transactions_${userId}`
       ) || [];
       transaction = transactions.find(t => t.id === testTransaction.id);
-      expect(transaction?.userCategoryId).toBeNull();
+      expect(transaction?.categoryId).toBeNull();
     });
   });
   
@@ -321,7 +321,7 @@ describe('User Story: Transaction Categorization', () => {
       const uncategorizedTx: StoredTransaction = {
         ...testTransaction,
         id: 'uncategorized-tx-001',
-        userCategoryId: null,
+        categoryId: null,
         name: 'Unknown Store',
       };
       
