@@ -305,7 +305,6 @@ export class PlaidService {
           },
         };
 
-        console.log(`Fetching transactions: offset=${offset}, count=${countPerPage}, dates=${startDate} to ${endDate}`);
         const response = await this.client.transactionsGet(request);
         
         // Map and add transactions to our collection
@@ -316,7 +315,6 @@ export class PlaidService {
         totalTransactions = response.data.total_transactions;
         itemId = response.data.item?.item_id;
         
-        console.log(`Fetched ${batchTransactions.length} transactions (${allTransactions.length}/${totalTransactions} total)`);
         
         // Check if we have all transactions
         if (allTransactions.length >= totalTransactions) {
@@ -338,6 +336,7 @@ export class PlaidService {
       if (options.includePending === false) {
         finalTransactions = allTransactions.filter(t => !t.pending);
       }
+      
 
       return {
         success: true,

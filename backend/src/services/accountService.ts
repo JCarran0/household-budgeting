@@ -295,15 +295,27 @@ export class AccountService {
         };
       }
 
-      // Remove from Plaid (optional - keeps historical data)
-      const accessToken = this.decryptToken(account.plaidAccessToken);
-      await this.plaidService.removeItem(accessToken);
+      // Remove from Plaid - this completely deletes the Item
+      // This ensures reconnecting will create a new Item with proper transaction history
+      try {
+        const accessToken = this.decryptToken(account.plaidAccessToken);
+        
+        const removeResult = await this.plaidService.removeItem(accessToken);
+        
+        if (!removeResult.success) {
+          // Log the error but continue with disconnection
+          // User can still disconnect locally even if Plaid removal fails
+          console.error(`Failed to remove Plaid Item ${account.plaidItemId}: ${removeResult.error || 'Unknown error'}`);
+        }
+      } catch (plaidError) {
+        // Log error but don't fail the whole disconnection
+        console.error(`Error calling Plaid removeItem for account ${accountId}:`, plaidError);
+      }
 
-      // Mark as inactive
+      // Mark as inactive locally
       account.status = 'inactive';
       account.updatedAt = new Date();
       await this.saveAccount(account);
-
       return { success: true };
     } catch (error) {
       console.error('Error disconnecting account:', error);
