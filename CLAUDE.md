@@ -65,7 +65,7 @@ Building a personal budgeting app for 2 users with Plaid integration. Using Risk
 ### Deployment Tasks
 | Task | Command/Action | Reference |
 |------|---------------|-----------|
-| **Deploy to production** | Push to `main` branch (auto-deploys via GitHub Actions) | [Deployment Guide](docs/AI-DEPLOYMENTS.md#automatic-deployment-github-actions) |
+| **Deploy to production** | Manual trigger via GitHub Actions workflow_dispatch | [Deployment Guide](docs/AI-DEPLOYMENTS.md#manual-deployment-github-actions) |
 | **Manual deployment** | Run `./scripts/deploy-server.sh` from project root | [Deployment Guide](docs/AI-DEPLOYMENTS.md#manual-deployment) |
 | **Check deployment logs** | AWS SSM Session Manager or CloudWatch | [Deployment Guide](docs/AI-DEPLOYMENTS.md#monitoring-and-logs) |
 | **Update environment vars** | GitHub Settings → Secrets/Variables → Actions | [Deployment Guide](docs/AI-DEPLOYMENTS.md#deployment-configuration) |

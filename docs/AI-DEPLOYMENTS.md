@@ -66,8 +66,8 @@ Configure in: Settings → Secrets and variables → Actions → Variables
 
 ## Deployment Process
 
-### Automatic Deployment (GitHub Actions)
-The deployment pipeline triggers on push to the `main` branch:
+### Manual Deployment (GitHub Actions)
+The deployment pipeline is triggered manually via workflow_dispatch:
 
 1. **Build Phase**:
    - TypeScript compilation with postbuild script to flatten dist structure
@@ -378,7 +378,7 @@ Expected response:
 ## Backup and Recovery
 
 ### Automated Backups
-Deployment artifacts are automatically saved to S3 with timestamps, allowing rollback to any previous version.
+Deployment artifacts are saved to S3 with timestamps during each deployment, allowing rollback to any previous version.
 
 ### Manual Backup
 ```bash
@@ -457,6 +457,63 @@ du -h /home/appuser | sort -rh | head -20
 pm2 flush
 ```
 
+## Secrets Management Roadmap
+
+### Current State
+- Secrets stored in GitHub Secrets
+- Deployed as .env file in artifacts
+- PM2 loads from .env via dotenv in application
+
+### Phase 1: Immediate Fix (30 minutes)
+**Status**: Ready to implement
+**Goal**: Fix PM2 environment loading issue
+
+1. Run fix script on server:
+```bash
+# Download and run the fix
+curl -o /tmp/fix-pm2.sh https://raw.githubusercontent.com/YOUR_REPO/main/scripts/fix-pm2-env.sh
+chmod +x /tmp/fix-pm2.sh
+/tmp/fix-pm2.sh
+```
+
+2. Or manually:
+```bash
+sudo -u appuser bash
+cd /home/appuser/app
+# Check .env exists
+ls -la backend/.env
+# Update ecosystem.config.js to set cwd
+pm2 delete budget-backend
+pm2 start ecosystem.config.js
+```
+
+### Phase 2: Deployment Script Updates (This Week)
+**Goal**: Ensure reliable deployments
+
+- Update deploy-server.sh to use ecosystem.config.js
+- Ensure .env is in backend directory
+- Add verification step for environment variables
+
+### Phase 3: AWS SSM Parameter Store (Next Month)
+**Goal**: Remove secrets from deployment artifacts
+
+1. Create parameters in SSM:
+```bash
+aws ssm put-parameter --name "/budget-app/production/jwt-secret" \
+  --value "your-secret" --type "SecureString"
+```
+
+2. Update application to load from SSM at startup
+3. Remove .env generation from GitHub Actions
+4. Add SSM permissions to EC2 IAM role
+
+### Phase 4: GitHub OIDC (Future)
+**Goal**: Remove AWS credentials from GitHub
+
+- Setup OIDC provider
+- Create IAM role for GitHub Actions  
+- Remove long-lived AWS keys
+
 ## Future Improvements
 
 ### Recommended Enhancements
@@ -465,11 +522,10 @@ pm2 flush
 3. **Auto-Scaling**: Handle traffic spikes
 4. **CDN Integration**: CloudFront for static assets
 5. **Database Migration**: Move from JSON to RDS
-6. **Secrets Manager**: AWS Secrets Manager integration
-7. **Monitoring**: DataDog or New Relic integration
-8. **CI/CD Enhancement**: Add staging environment
-9. **Load Balancing**: Multiple EC2 instances with ALB
-10. **Backup Automation**: Daily automated backups with retention policy
+6. **Monitoring**: DataDog or New Relic integration
+7. **CI/CD Enhancement**: Add staging environment
+8. **Load Balancing**: Multiple EC2 instances with ALB
+9. **Backup Automation**: Daily automated backups with retention policy
 
 ## Useful Commands Reference
 
