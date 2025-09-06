@@ -342,9 +342,9 @@ export function MantineTransactions() {
                             radius="xl"
                           >
                             {transaction.amount < 0 ? (
-                              <IconArrowDownRight size={16} />
-                            ) : (
                               <IconArrowUpRight size={16} />
+                            ) : (
+                              <IconArrowDownRight size={16} />
                             )}
                           </ThemeIcon>
                           <div style={{ flex: 1 }}>

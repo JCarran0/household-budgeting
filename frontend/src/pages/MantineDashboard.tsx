@@ -354,9 +354,9 @@ export function MantineDashboard() {
                         radius="xl"
                       >
                         {transaction.amount < 0 ? (
-                          <IconArrowDownRight size={14} />
-                        ) : (
                           <IconArrowUpRight size={14} />
+                        ) : (
+                          <IconArrowDownRight size={14} />
                         )}
                       </ThemeIcon>
                       <div>

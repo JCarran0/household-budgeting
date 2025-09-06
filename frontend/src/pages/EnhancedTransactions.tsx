@@ -1134,9 +1134,9 @@ export function EnhancedTransactions() {
                           color={transaction.amount > 0 ? 'red' : 'green'}
                         >
                           {transaction.amount > 0 ? (
-                            <IconArrowUpRight size={14} />
-                          ) : (
                             <IconArrowDownRight size={14} />
+                          ) : (
+                            <IconArrowUpRight size={14} />
                           )}
                         </ThemeIcon>
                         <Text fw={500} c={transaction.amount > 0 ? 'red' : 'green'}>

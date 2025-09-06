@@ -264,9 +264,9 @@ export function TransactionPreviewModal({
                             color={transaction.amount > 0 ? 'red' : 'green'}
                           >
                             {transaction.amount > 0 ? (
-                              <IconArrowUpRight size={12} />
-                            ) : (
                               <IconArrowDownRight size={12} />
+                            ) : (
+                              <IconArrowUpRight size={12} />
                             )}
                           </ThemeIcon>
                           <Text 

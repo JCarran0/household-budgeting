@@ -428,7 +428,7 @@ export function Reports() {
                 </Text>
               </div>
               <ThemeIcon color="green" variant="light" size={38} radius="md">
-                <IconArrowDownRight size={22} />
+                <IconArrowUpRight size={22} />
               </ThemeIcon>
             </Group>
           </Card>
@@ -447,7 +447,7 @@ export function Reports() {
                 </Text>
               </div>
               <ThemeIcon color="red" variant="light" size={38} radius="md">
-                <IconArrowUpRight size={22} />
+                <IconArrowDownRight size={22} />
               </ThemeIcon>
             </Group>
           </Card>
