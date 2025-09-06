@@ -3,6 +3,7 @@ import { QueryClientProvider } from '@tanstack/react-query';
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
 import { MantineProvider, createTheme } from '@mantine/core';
 import { Notifications } from '@mantine/notifications';
+import { ModalsProvider } from '@mantine/modals';
 import '@mantine/core/styles.css';
 import '@mantine/dates/styles.css';
 import '@mantine/charts/styles.css';
@@ -34,8 +35,9 @@ function App() {
   return (
     <ErrorBoundary level="app">
       <MantineProvider theme={theme} defaultColorScheme="dark">
-        <Notifications position="top-right" />
-        <QueryClientProvider client={queryClient}>
+        <ModalsProvider>
+          <Notifications position="top-right" />
+          <QueryClientProvider client={queryClient}>
           <PlaidLinkProvider>
             <BrowserRouter>
               <Routes>
@@ -81,6 +83,7 @@ function App() {
           </PlaidLinkProvider>
           <ReactQueryDevtools initialIsOpen={false} />
         </QueryClientProvider>
+        </ModalsProvider>
       </MantineProvider>
     </ErrorBoundary>
   );

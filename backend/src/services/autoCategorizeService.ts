@@ -250,7 +250,8 @@ export class AutoCategorizeService {
       const originalCategoryId = transaction.categoryId;
       
       // Step 1: Try user-defined rules first
-      const description = (transaction.userDescription || transaction.name).toLowerCase();
+      const description = (transaction.userDescription || transaction.name || '').toLowerCase();
+      
       for (const rule of activeRules) {
         // Check if any pattern matches (OR logic)
         const matches = rule.patterns.some(pattern => {
