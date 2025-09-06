@@ -42,7 +42,8 @@ household-budgeting/
 │   │   ├── hooks/           # Custom React hooks
 │   │   └── stores/          # Zustand state stores
 └── shared/
-    └── types/               # Shared TypeScript types
+    ├── types/               # Shared TypeScript types
+    └── utils/               # Shared utility functions
 ```
 
 ## Key Services Architecture
@@ -135,19 +136,29 @@ household-budgeting/
   - `generateProjections()`: Future cash flow predictions
   - `getYearToDateSummary()`: YTD financial summary
 - **Income vs Expense Filtering**:
-  - Expenses: `amount > 0` (Plaid convention)
-  - Income: `amount < 0` (negative values in Plaid)
+  - **Plaid Amount Convention**: 
+    - Expenses: `amount > 0` (positive values represent money going out)
+    - Income: `amount < 0` (negative values represent money coming in)
+    - This convention is used consistently throughout the application
   - Both methods support hierarchical category grouping
+  - Uses `isIncomeCategory()` and `isExpenseCategory()` helpers from shared utilities
 - **Features**: Excludes hidden categories from reports, supports date ranges
 
 #### 7. BudgetService (`backend/src/services/budgetService.ts`)
-- **Purpose**: Monthly budget management
+- **Purpose**: Monthly budget management (expense categories only)
 - **Key Methods**:
   - `setBudget()`: Set monthly budget for category
   - `copyBudgets()`: Copy from previous month
   - `getBudgetComparison()`: Budget vs actual spending
+  - `getBudgetVsActual()`: Returns `null` for income categories (excluded from budget tracking)
   - `hasBudgetsForCategory()`: Check if category has any budgets (for deletion protection)
+- **Income Category Exclusion**:
+  - Income categories (starting with "INCOME") are excluded from budget comparisons
+  - `getBudgetVsActual()` returns `null` for income categories instead of comparison data
+  - `getMonthlyBudgetVsActual()` skips income categories in loops
+  - Rationale: Income doesn't follow expense budgeting logic - you don't "budget" income amounts
 - **Data Model**: `MonthlyBudget` with YYYY-MM format
+- **Shared Utilities**: Uses `isIncomeCategory()` from `shared/utils/categoryHelpers.ts`
 
 #### 8. AutoCategorizeService (`backend/src/services/autoCategorizeService.ts`)
 - **Purpose**: Automated transaction categorization with user-defined rules
@@ -181,6 +192,25 @@ household-budgeting/
   - Automatic directory creation
 - **Important**: Categories require userId parameter (no global categories)
 
+## Shared Utilities
+
+### Category Helper Functions (`shared/utils/categoryHelpers.ts`)
+- **Purpose**: Centralized logic for category type identification and classification
+- **Shared Between**: Frontend and backend for consistent category handling
+- **Key Functions**:
+  - `isIncomeCategory(categoryId: string): boolean`
+    - Returns `true` for categories starting with "INCOME"
+    - Used to exclude income from expense budgeting and reporting
+  - `isTransferCategory(categoryId: string): boolean` 
+    - Returns `true` for TRANSFER_IN and TRANSFER_OUT categories
+    - Used to exclude transfers from most financial reports
+  - `isExpenseCategory(categoryId: string): boolean`
+    - Returns `true` for categories that should be included in expense budgeting
+    - Excludes income and transfer categories
+    - Primary filter for budget forms and expense calculations
+- **Usage Pattern**: Import and use these helpers instead of duplicating category type logic
+- **Plaid Convention**: Leverages Plaid's category ID structure for automatic classification
+
 ## Frontend Architecture
 
 ### Key Components
@@ -190,7 +220,10 @@ household-budgeting/
 - **MantineAccounts**: Account management with Plaid Link
 - **EnhancedTransactions**: Transaction list with filtering and inline category editing
 - **Categories**: Category hierarchy management with auto-categorization rules
-- **Budgets**: Monthly budget interface
+- **Budgets**: Monthly budget interface with expense category filtering
+  - Budget forms filter categories to only show expense categories (excludes income)
+  - Actual spending calculations exclude income transactions from budget comparisons
+  - Uses `isExpenseCategory()` helper for consistent filtering
 - **Reports**: Financial analysis with:
   - Income/expense toggle for category breakdowns
   - Interactive drill-down pie charts
