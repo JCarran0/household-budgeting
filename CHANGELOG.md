@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+### [1.1.1](https://github.com/JCarran0/household-budgeting/compare/v1.1.0...v1.1.1) (2025-09-06)
+
+
+### Bug Fixes
+
+* **auto-categorize:** enable recategorization by adding missing ModalsProvider ([4635c5f](https://github.com/JCarran0/household-budgeting/commit/4635c5fb2ab31398f6a71e90673b7aeebd91441a))
+* remove backticks causing permission error in /commit command ([4114dfb](https://github.com/JCarran0/household-budgeting/commit/4114dfb30d7447a63bd5dd643394a2af27ce39d3))
+* **ui:** swap arrow icons for income and expenses ([5b9e47a](https://github.com/JCarran0/household-budgeting/commit/5b9e47a8dea4a5e985cc35d97e3c4dca95943578))
+
 ## [1.1.0](https://github.com/JCarran0/household-budgeting/compare/v1.0.0...v1.1.0) (2025-09-06)
 
 
