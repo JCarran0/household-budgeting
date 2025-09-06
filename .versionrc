@@ -1,0 +1,41 @@
+{
+  "header": "# Changelog\n\nAll notable changes to this project will be documented in this file.\n\nThe format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),\nand this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).\n",
+  "types": [
+    {"type": "feat", "section": "Features", "hidden": false},
+    {"type": "fix", "section": "Bug Fixes", "hidden": false},
+    {"type": "docs", "section": "Documentation", "hidden": false},
+    {"type": "style", "section": "Styling", "hidden": false},
+    {"type": "refactor", "section": "Code Refactoring", "hidden": false},
+    {"type": "perf", "section": "Performance Improvements", "hidden": false},
+    {"type": "test", "section": "Tests", "hidden": false},
+    {"type": "build", "section": "Build System", "hidden": false},
+    {"type": "ci", "section": "CI/CD", "hidden": false},
+    {"type": "chore", "section": "Chores", "hidden": false},
+    {"type": "revert", "section": "Reverts", "hidden": false}
+  ],
+  "commitUrlFormat": "https://github.com/JCarran0/household-budgeting/commit/{{hash}}",
+  "compareUrlFormat": "https://github.com/JCarran0/household-budgeting/compare/{{previousTag}}...{{currentTag}}",
+  "issueUrlFormat": "https://github.com/JCarran0/household-budgeting/issues/{{id}}",
+  "userUrlFormat": "https://github.com/{{user}}",
+  "releaseCommitMessageFormat": "chore(release): {{currentTag}}",
+  "bumpFiles": [
+    {
+      "filename": "package.json",
+      "type": "json"
+    },
+    {
+      "filename": "backend/package.json",
+      "type": "json"
+    },
+    {
+      "filename": "frontend/package.json",
+      "type": "json"
+    }
+  ],
+  "skip": {
+    "bump": false,
+    "changelog": false,
+    "commit": false,
+    "tag": false
+  }
+}

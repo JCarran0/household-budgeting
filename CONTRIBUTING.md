@@ -60,64 +60,55 @@ Update your .env file with PostgreSQL connection details.
 
 ## Changelog Management
 
-### Automatic Updates
-The CHANGELOG.md is automatically updated after each push to main:
-1. GitHub Actions workflow analyzes new commits
-2. Parses conventional commit messages
-3. Updates the `[Unreleased]` section
-4. Commits changes back to the repository
-
-### Manual Edits
-You can manually edit the `[Unreleased]` section in CHANGELOG.md to:
-- Improve descriptions for clarity
-- Add additional context
-- Group related changes
-- Remove irrelevant entries
-
-The automatic updates will preserve your manual edits.
+This project uses [standard-version](https://github.com/conventional-changelog/standard-version) for automated versioning and changelog generation based on [Conventional Commits](https://www.conventionalcommits.org/).
 
 ## Release Process
 
 ### Creating a Release
 
-1. **Review Unreleased Changes**
+1. **Make sure your working directory is clean**
    ```bash
-   # Check what's pending release
-   cat CHANGELOG.md | head -50
+   git status
    ```
 
-2. **Prepare the Release**
+2. **Run the release command**
    ```bash
-   # Automatic version detection based on changes
-   npm run release:prepare
+   # Automatic version bump based on commits
+   npm run release
    
-   # OR specify version bump type
-   npm run release:prepare -- minor
-   npm run release:prepare -- major
-   npm run release:prepare -- patch
+   # For specific version types
+   npm run release:patch   # 1.0.0 → 1.0.1
+   npm run release:minor   # 1.0.0 → 1.1.0
+   npm run release:major   # 1.0.0 → 2.0.0
    
-   # For alpha/beta releases
-   npm run release:prepare -- prerelease
+   # For prerelease versions
+   npm run release:alpha   # 1.0.0 → 1.0.1-alpha.0
+   
+   # Dry run to preview changes
+   npm run release -- --dry-run
    ```
 
-3. **Review and Commit**
+3. **Push changes and tags**
    ```bash
-   # Review the changes
-   git diff
-   
-   # Commit the release
-   git add -A
-   git commit -m "chore: release v1.0.0"
-   
-   # Push commit and tag
-   git push
-   git push --tags
+   git push --follow-tags origin main
    ```
 
 4. **Deploy to Production**
    - Go to GitHub Actions
    - Run "Deploy to Production" workflow
    - The deployment will include the new version
+
+### What standard-version does
+
+1. **Analyzes commits** since the last release tag
+2. **Determines version bump** from conventional commits:
+   - `fix:` commits = PATCH release
+   - `feat:` commits = MINOR release
+   - Breaking changes = MAJOR release
+3. **Updates version** in all package.json files
+4. **Generates CHANGELOG.md** with all changes organized by type
+5. **Creates git commit** with message `chore(release): 1.0.0`
+6. **Creates git tag** with the new version
 
 ### Version Display
 
