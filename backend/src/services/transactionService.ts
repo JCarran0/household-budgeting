@@ -698,4 +698,14 @@ export class TransactionService {
       throw new Error('Failed to decrypt access token. Please reconnect your bank account.');
     }
   }
+
+  /**
+   * Check if any transactions are associated with a category
+   */
+  async hasTransactionsForCategory(categoryId: string, userId: string): Promise<boolean> {
+    const transactions = await this.dataService.getData<StoredTransaction[]>(
+      `transactions_${userId}`
+    ) || [];
+    return transactions.some(t => t.categoryId === categoryId);
+  }
 }

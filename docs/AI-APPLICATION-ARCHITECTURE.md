@@ -90,6 +90,7 @@ household-budgeting/
   - `getUserTransactions()`: Query with filters (supports categoryIds for filtering)
   - `updateCategory()`: Assign category to transaction
   - `splitTransaction()`: Split into sub-transactions
+  - `hasTransactionsForCategory()`: Check if category has any transactions (for deletion protection)
 - **Automatic Categorization**:
   - New transactions: Directly assigned Plaid category ID (detailed or primary)
   - Category updates: Preserves user overrides when Plaid changes categories
@@ -107,7 +108,7 @@ household-budgeting/
   - `initializeDefaultCategories()`: Creates 121 categories (120 Plaid + 1 custom)
   - `createCategory()`: Add custom category with SNAKE_CASE ID generation
   - `getCategoryTree()`: Get hierarchical structure
-  - `deleteCategory()`: Remove category (custom only)
+  - `deleteCategory()`: Remove category with referential integrity checks
 - **Category ID Pattern**:
   - Plaid categories: Direct SNAKE_CASE IDs (e.g., `FOOD_AND_DRINK_COFFEE`)
   - Custom categories: `CUSTOM_` prefix (e.g., `CUSTOM_WINE_BUDGET`)
@@ -116,6 +117,11 @@ household-budgeting/
   - 16 primary categories (e.g., INCOME, FOOD_AND_DRINK)
   - 104 subcategories with descriptions
   - Direct ID mapping - no translation needed
+- **Deletion Protection**: Categories cannot be deleted if they have:
+  - Subcategories
+  - Active budgets (checked via `BudgetService.hasBudgetsForCategory()`)
+  - Auto-categorization rules (checked via `AutoCategorizeService.hasRulesForCategory()`)
+  - Associated transactions (checked via `TransactionService.hasTransactionsForCategory()`)
 - **Data Model**: Categories include `isCustom` flag and optional `description`
 - **Data Isolation**: All categories are user-specific (no global categories)
 
@@ -140,6 +146,7 @@ household-budgeting/
   - `setBudget()`: Set monthly budget for category
   - `copyBudgets()`: Copy from previous month
   - `getBudgetComparison()`: Budget vs actual spending
+  - `hasBudgetsForCategory()`: Check if category has any budgets (for deletion protection)
 - **Data Model**: `MonthlyBudget` with YYYY-MM format
 
 #### 8. AutoCategorizeService (`backend/src/services/autoCategorizeService.ts`)
@@ -155,6 +162,7 @@ household-budgeting/
   - `applyRules()`: Apply rules to transactions with pattern matching
   - `previewCategorization()`: Show what would be categorized without applying
   - `applyRulesToAllTransactions()`: Apply rules to all user transactions
+  - `hasRulesForCategory()`: Check if category is used in any rules (for deletion protection)
 - **Features**:
   - Multiple patterns per rule (up to 5, OR logic)
   - Rule priority system (lower number = higher priority)
@@ -340,6 +348,17 @@ const dataService = new DataService();
 const plaidService = new PlaidService();
 const authService = new AuthService(dataService);
 // Ensures consistent state across app
+```
+
+### Circular Dependency Resolution
+When services need to reference each other (e.g., CategoryService needs AutoCategorizeService and vice versa), use dependency injection:
+```typescript
+// Create first service without circular dependency
+const categoryService = new CategoryService(dataService, budgetService, undefined, transactionService);
+// Create second service with reference to first
+const autoCategorizeService = new AutoCategorizeService(dataService, categoryService);
+// Update first service with reference to second
+(categoryService as any).autoCategorizeService = autoCategorizeService;
 ```
 
 ## Quick Modification Guide

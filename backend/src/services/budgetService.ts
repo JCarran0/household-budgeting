@@ -261,6 +261,11 @@ export class BudgetService {
     const filteredBudgets = budgets.filter(b => b.categoryId !== categoryId);
     await this.dataService.saveData(`budgets_${userId}`, filteredBudgets);
   }
+
+  async hasBudgetsForCategory(categoryId: string, userId: string): Promise<boolean> {
+    const budgets = await this.getAllBudgets(userId);
+    return budgets.some(b => b.categoryId === categoryId);
+  }
 }
 
 // Export singleton instance

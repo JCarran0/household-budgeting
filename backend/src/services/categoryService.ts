@@ -1,6 +1,9 @@
 import { Category } from '../../../shared/types';
 import { DataService } from './dataService';
 import { PLAID_CATEGORIES } from '../constants/plaidCategories';
+import { BudgetService } from './budgetService';
+import { AutoCategorizeService } from './autoCategorizeService';
+import { TransactionService } from './transactionService';
 
 export interface CategoryWithChildren extends Category {
   children?: Category[];
@@ -20,7 +23,12 @@ export interface UpdateCategoryDto {
 }
 
 export class CategoryService {
-  constructor(private dataService: DataService) {}
+  constructor(
+    private dataService: DataService,
+    private budgetService?: BudgetService,
+    private autoCategorizeService?: AutoCategorizeService,
+    private transactionService?: TransactionService
+  ) {}
 
   /**
    * Generate a SNAKE_CASE ID for custom categories
@@ -134,8 +142,29 @@ export class CategoryService {
       throw new Error('Cannot delete category with subcategories');
     }
     
-    // TODO: Check for associated transactions once transaction service is implemented
-    // This would require checking if any transactions are using this categoryId
+    // Check if category has associated budgets
+    if (this.budgetService) {
+      const hasBudgets = await this.budgetService.hasBudgetsForCategory(id, userId);
+      if (hasBudgets) {
+        throw new Error('Cannot delete category with active budgets. Please delete the budgets first.');
+      }
+    }
+    
+    // Check if category is used in auto-categorization rules
+    if (this.autoCategorizeService) {
+      const hasRules = await this.autoCategorizeService.hasRulesForCategory(id, userId);
+      if (hasRules) {
+        throw new Error('Cannot delete category used in auto-categorization rules. Please update or delete the rules first.');
+      }
+    }
+    
+    // Check if category has associated transactions
+    if (this.transactionService) {
+      const hasTransactions = await this.transactionService.hasTransactionsForCategory(id, userId);
+      if (hasTransactions) {
+        throw new Error('Cannot delete category with associated transactions. Please recategorize the transactions first.');
+      }
+    }
     
     // Remove the category
     const filteredCategories = categories.filter(cat => cat.id !== id);
@@ -230,12 +259,17 @@ export class CategoryService {
 // Export singleton instance
 let categoryServiceInstance: CategoryService | null = null;
 
-export function getCategoryService(dataService?: DataService): CategoryService {
+export function getCategoryService(
+  dataService?: DataService,
+  budgetService?: BudgetService,
+  autoCategorizeService?: AutoCategorizeService,
+  transactionService?: TransactionService
+): CategoryService {
   if (!categoryServiceInstance) {
     if (!dataService) {
       throw new Error('DataService must be provided when creating CategoryService instance');
     }
-    categoryServiceInstance = new CategoryService(dataService);
+    categoryServiceInstance = new CategoryService(dataService, budgetService, autoCategorizeService, transactionService);
   }
   return categoryServiceInstance;
 }

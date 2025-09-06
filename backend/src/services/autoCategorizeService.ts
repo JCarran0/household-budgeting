@@ -8,7 +8,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { DataService } from './dataService';
 import { StoredTransaction } from './transactionService';
 import { AutoCategorizeRule, Category } from '../../../shared/types';
-import { categoryService } from './index';
+import { CategoryService } from './categoryService';
 
 export interface StoredAutoCategorizeRule extends Omit<AutoCategorizeRule, 'patterns'> {
   userId: string;
@@ -17,7 +17,10 @@ export interface StoredAutoCategorizeRule extends Omit<AutoCategorizeRule, 'patt
 }
 
 export class AutoCategorizeService {
-  constructor(private dataService: DataService) {}
+  constructor(
+    private dataService: DataService,
+    private categoryService?: CategoryService
+  ) {}
 
   /**
    * Get all auto-categorization rules for a user
@@ -320,7 +323,9 @@ export class AutoCategorizeService {
     error?: string;
   }> {
     try {
-      await categoryService.initializeDefaultCategories(userId);
+      if (this.categoryService) {
+        await this.categoryService.initializeDefaultCategories(userId);
+      }
       
       const transactions = await this.dataService.getData<StoredTransaction[]>(
         `transactions_${userId}`
@@ -368,7 +373,9 @@ export class AutoCategorizeService {
   }> {
     try {
       // Ensure user has default categories initialized
-      await categoryService.initializeDefaultCategories(userId);
+      if (this.categoryService) {
+        await this.categoryService.initializeDefaultCategories(userId);
+      }
       
       const transactions = await this.dataService.getData<StoredTransaction[]>(
         `transactions_${userId}`
@@ -473,5 +480,13 @@ export class AutoCategorizeService {
       console.error('Error moving rule down:', error);
       return { success: false, error: 'Failed to move rule' };
     }
+  }
+
+  /**
+   * Check if any auto-categorization rules reference a category
+   */
+  async hasRulesForCategory(categoryId: string, userId: string): Promise<boolean> {
+    const rules = await this.getRules(userId);
+    return rules.some(r => r.categoryId === categoryId);
   }
 }

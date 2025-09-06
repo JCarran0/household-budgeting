@@ -219,6 +219,18 @@
 - A user should be able to create subcategories under any parent category
 - A user should be able to see statistics (total, hidden count, savings count)
 
+### Category Deletion Protection
+- A user should NOT be able to delete a category that has subcategories
+- A user should NOT be able to delete a category with active budgets
+- A user should NOT be able to delete a category used in auto-categorization rules
+- A user should NOT be able to delete a category with associated transactions
+- A user should see specific error messages explaining why deletion failed:
+  - "Cannot delete category with subcategories"
+  - "Cannot delete category with active budgets. Please delete the budgets first."
+  - "Cannot delete category used in auto-categorization rules. Please update or delete the rules first."
+  - "Cannot delete category with associated transactions. Please recategorize the transactions first."
+- A user should be able to delete a category after removing all dependencies
+
 ## Auto-Categorization
 
 ### Rule Management

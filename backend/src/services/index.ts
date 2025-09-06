@@ -12,6 +12,7 @@ import { TransactionService } from './transactionService';
 import { CategoryService } from './categoryService';
 import { BudgetService } from './budgetService';
 import { ReportService } from './reportService';
+import { AutoCategorizeService } from './autoCategorizeService';
 
 // Create data service based on environment
 // Uses StorageFactory to automatically switch between filesystem and S3
@@ -24,8 +25,13 @@ export const authService = new AuthService(dataService);
 export const plaidService = new PlaidService();
 export const accountService = new AccountService(dataService, plaidService);
 export const transactionService = new TransactionService(dataService, plaidService);
-export const categoryService = new CategoryService(dataService);
 export const budgetService = new BudgetService(dataService);
+// Create categoryService first without autoCategorizeService
+export const categoryService = new CategoryService(dataService, budgetService, undefined, transactionService);
+// Then create autoCategorizeService with categoryService
+export const autoCategorizeService = new AutoCategorizeService(dataService, categoryService);
+// Now update categoryService with autoCategorizeService reference
+(categoryService as any).autoCategorizeService = autoCategorizeService;
 export const reportService = new ReportService(dataService);
 
 // Export dataService for other services that need it

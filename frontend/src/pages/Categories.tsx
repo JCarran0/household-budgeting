@@ -88,16 +88,20 @@ export function Categories() {
     onSuccess: () => {
       notifications.show({
         title: 'Category Deleted',
-        message: 'Category and its subcategories have been deleted',
+        message: 'Category has been deleted successfully',
         color: 'green',
       });
       queryClient.invalidateQueries({ queryKey: ['categories'] });
     },
-    onError: () => {
+    onError: (error: unknown) => {
+      const errorMessage = 
+        (error as { response?: { data?: { error?: string } } })?.response?.data?.error || 
+        'Failed to delete category';
       notifications.show({
-        title: 'Error',
-        message: 'Failed to delete category',
+        title: 'Cannot Delete Category',
+        message: errorMessage,
         color: 'red',
+        autoClose: false, // Keep error visible so user can read the instructions
       });
     },
   });
@@ -108,7 +112,17 @@ export function Categories() {
   };
 
   const handleDelete = (categoryId: string): void => {
-    if (window.confirm('Are you sure you want to delete this category and all its subcategories?')) {
+    const category = categories?.find((c: Category) => c.id === categoryId);
+    const categoryName = category?.name || 'this category';
+    
+    if (window.confirm(
+      `Are you sure you want to delete "${categoryName}"?\n\n` +
+      'Note: This will fail if the category:\n' +
+      '• Has subcategories\n' +
+      '• Is used in any budgets\n' +
+      '• Is used in auto-categorization rules\n' +
+      '• Has associated transactions'
+    )) {
       deleteMutation.mutate(categoryId);
     }
   };
