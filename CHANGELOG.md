@@ -5,6 +5,33 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.0](https://github.com/JCarran0/household-budgeting/compare/v1.1.1...v1.2.0) (2025-09-06)
+
+
+### Features
+
+* **categories:** add deletion protection for categories with dependencies ([7deb472](https://github.com/JCarran0/household-budgeting/commit/7deb4729552b18b28b43c998c4e012d68b8d2b0a))
+* **navigation:** add filter synchronization between Reports and Transactions pages ([5505f57](https://github.com/JCarran0/household-budgeting/commit/5505f57d64c482c2fb89b0a5c52418bcd0086c27))
+* **reports:** add income category dashboards with drill-down analysis ([edfee8d](https://github.com/JCarran0/household-budgeting/commit/edfee8d1b6a80e700314c751e5ea98415bcf73ca))
+* **ui:** add app version display to user profile menu ([6d239c6](https://github.com/JCarran0/household-budgeting/commit/6d239c60f580199bc97964316cb5a2470ca893b1))
+
+
+### Bug Fixes
+
+* **api:** move version endpoint under API prefix to fix 404 error ([850a2e0](https://github.com/JCarran0/household-budgeting/commit/850a2e016a794dad064eaecd862fa7c730b50894))
+* **auto-categorization:** include merchantName in pattern matching to handle punctuation differences ([c7d6705](https://github.com/JCarran0/household-budgeting/commit/c7d6705ac141caa92df35a52e09d2113c57d841c))
+* **budget:** exclude income categories from budget tracking ([8a6baed](https://github.com/JCarran0/household-budgeting/commit/8a6baeda228b7cc745a681428bf8172d6b5ea43f))
+* **budget:** format budget amounts with commas and no decimals ([01b41c2](https://github.com/JCarran0/household-budgeting/commit/01b41c28cbf5aa1c265d8321986566778835419d))
+* **categories:** improve deletion UX with proper status codes and no confirmation ([4b74c29](https://github.com/JCarran0/household-budgeting/commit/4b74c296fab29865b185754788c833ae0d16f71f))
+* **reports:** prevent tab reset when toggling income/expense view ([f499053](https://github.com/JCarran0/household-budgeting/commit/f4990539ee3cc3811a55ce71559b11ecb8582524))
+* **reports:** use consistent color palette for income and expense views ([e82c0d7](https://github.com/JCarran0/household-budgeting/commit/e82c0d731fe6148d399e3864632ca747536e0764))
+
+
+### Documentation
+
+* add user story updates as MUST UPDATE criteria in /update-docs command ([f22ebb6](https://github.com/JCarran0/household-budgeting/commit/f22ebb63e0b6c08539bce50800811c39c5cfde7d))
+* **architecture:** document income/expense separation pattern for budget system ([fbca169](https://github.com/JCarran0/household-budgeting/commit/fbca16965869f31c7a6755afb6c3a7bc78132c6e))
+
 ### [1.1.1](https://github.com/JCarran0/household-budgeting/compare/v1.1.0...v1.1.1) (2025-09-06)
 
 
