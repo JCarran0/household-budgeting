@@ -58,9 +58,9 @@ describe('User Story: Hidden Categories', () => {
       // Initialize default categories to get system Transfer category
       await categoryService.initializeDefaultCategories(userId);
       
-      // Get the system Transfer category (which is hidden)
+      // Get the system Transfer Out category (which is hidden)
       const categories = await categoryService.getAllCategories(userId);
-      const transferCategory = categories.find(c => c.name === 'Transfer');
+      const transferCategory = categories.find(c => c.name === 'Transfer Out');
       expect(transferCategory).toBeDefined();
       expect(transferCategory?.isHidden).toBe(true);
       
@@ -81,7 +81,7 @@ describe('User Story: Hidden Categories', () => {
         date: '2025-01-15',
         name: 'Transfer to Savings',
         merchantName: null,
-        category: ['Transfer'],
+        category: ['TRANSFER_OUT'],
         plaidCategoryId: '21000000',
         categoryId: null,
         status: 'posted',
@@ -172,10 +172,13 @@ describe('User Story: Hidden Categories', () => {
       const hiddenCategories = allCategoriesResponse.body.filter((c: any) => c.isHidden);
       expect(hiddenCategories.length).toBeGreaterThan(0);
       
-      // Verify Transfer category exists and is hidden
-      const transferCategory = allCategoriesResponse.body.find((c: any) => c.name === 'Transfer');
-      expect(transferCategory).toBeDefined();
-      expect(transferCategory.isHidden).toBe(true);
+      // Verify Transfer In and Transfer Out categories exist and are hidden
+      const transferInCategory = allCategoriesResponse.body.find((c: any) => c.name === 'Transfer In');
+      const transferOutCategory = allCategoriesResponse.body.find((c: any) => c.name === 'Transfer Out');
+      expect(transferInCategory).toBeDefined();
+      expect(transferOutCategory).toBeDefined();
+      expect(transferInCategory.isHidden).toBe(true);
+      expect(transferOutCategory.isHidden).toBe(true);
     });
     
     test('Hidden category transactions are excluded from budget calculations', async () => {
@@ -217,7 +220,7 @@ describe('User Story: Hidden Categories', () => {
           date: '2025-01-10',
           name: 'Whole Foods',
           merchantName: 'Whole Foods',
-          category: ['Shops', 'Food and Drink'],
+          category: ['FOOD_AND_DRINK', 'FOOD_AND_DRINK_GROCERIES'],
           plaidCategoryId: '13005000',
           categoryId: visibleCategory.body.id,
           status: 'posted',
@@ -244,7 +247,7 @@ describe('User Story: Hidden Categories', () => {
           date: '2025-01-12',
           name: 'Transfer to Savings',
           merchantName: null,
-          category: ['Transfer'],
+          category: ['TRANSFER_OUT'],
           plaidCategoryId: '21000000',
           categoryId: hiddenCategory.body.id,
           status: 'posted',

@@ -19,9 +19,7 @@ describe('User Story: Income vs Expense Transaction Filtering', () => {
     };
     
     // Reset rate limiting
-    if ('resetRateLimiting' in authService) {
-      (authService as any).resetRateLimiting();
-    }
+    authService.resetRateLimiting();
   });
 
   beforeEach(async () => {
@@ -31,12 +29,10 @@ describe('User Story: Income vs Expense Transaction Filtering', () => {
     }
     
     // Reset rate limiting
-    if ('resetRateLimiting' in authService) {
-      (authService as any).resetRateLimiting();
-    }
+    authService.resetRateLimiting();
     
-    // Create a test user
-    const username = `testuser_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+    // Create a test user (keep under 20 chars)
+    const username = `tu${Math.random().toString(36).substring(2, 8)}`;
     const response = await request(app)
       .post('/api/v1/auth/register')
       .send({
@@ -45,7 +41,8 @@ describe('User Story: Income vs Expense Transaction Filtering', () => {
       });
     
     if (response.status !== 201) {
-      console.error('Registration failed:', response.body);
+      console.error('Registration failed:', JSON.stringify(response.body, null, 2));
+      throw new Error(`Registration failed: ${JSON.stringify(response.body)}`);
     }
     expect(response.status).toBe(201);
     authToken = response.body.token;
@@ -70,9 +67,9 @@ describe('User Story: Income vs Expense Transaction Filtering', () => {
           name: 'Direct Deposit Payroll',
           userDescription: null,
           merchantName: 'EMPLOYER INC',
-          category: ['TRANSFER', 'DEPOSIT'],
-          plaidCategoryId: 'TRANSFER_DEPOSIT',
-          categoryId: 'TRANSFER_DEPOSIT',
+          category: ['TRANSFER_IN', 'TRANSFER_IN_DEPOSIT'],
+          plaidCategoryId: 'TRANSFER_IN_DEPOSIT',
+          categoryId: 'TRANSFER_IN_DEPOSIT',
           status: 'posted',
           pending: false,
           tags: [],
@@ -97,9 +94,9 @@ describe('User Story: Income vs Expense Transaction Filtering', () => {
           name: 'Refund from Amazon',
           userDescription: null,
           merchantName: 'AMAZON',
-          category: ['SHOPS', 'ONLINE'],
-          plaidCategoryId: 'SHOPS_ONLINE',
-          categoryId: 'SHOPS_ONLINE',
+          category: ['GENERAL_MERCHANDISE', 'GENERAL_MERCHANDISE_ONLINE_MARKETPLACES'],
+          plaidCategoryId: 'GENERAL_MERCHANDISE_ONLINE_MARKETPLACES',
+          categoryId: 'GENERAL_MERCHANDISE_ONLINE_MARKETPLACES',
           status: 'posted',
           pending: false,
           tags: [],
@@ -124,9 +121,9 @@ describe('User Story: Income vs Expense Transaction Filtering', () => {
           name: 'Credit Card Rewards',
           userDescription: null,
           merchantName: 'CHASE REWARDS',
-          category: ['BANK_FEES', 'REWARDS'],
-          plaidCategoryId: 'BANK_FEES_REWARDS',
-          categoryId: 'BANK_FEES_REWARDS',
+          category: ['INCOME', 'INCOME_OTHER_INCOME'],
+          plaidCategoryId: 'INCOME_OTHER_INCOME',
+          categoryId: 'INCOME_OTHER_INCOME',
           status: 'posted',
           pending: false,
           tags: [],
@@ -152,9 +149,9 @@ describe('User Story: Income vs Expense Transaction Filtering', () => {
           name: 'The Italian Place',
           userDescription: null,
           merchantName: 'THE ITALIAN PLACE',
-          category: ['FOOD_AND_DRINK', 'RESTAURANTS'],
-          plaidCategoryId: 'FOOD_AND_DRINK_RESTAURANTS',
-          categoryId: 'FOOD_AND_DRINK_RESTAURANTS',
+          category: ['FOOD_AND_DRINK', 'FOOD_AND_DRINK_RESTAURANT'],
+          plaidCategoryId: 'FOOD_AND_DRINK_RESTAURANT',
+          categoryId: 'FOOD_AND_DRINK_RESTAURANT',
           status: 'posted',
           pending: false,
           tags: ['dining'],
@@ -179,7 +176,7 @@ describe('User Story: Income vs Expense Transaction Filtering', () => {
           name: 'Shell Gas Station',
           userDescription: null,
           merchantName: 'SHELL',
-          category: ['TRANSPORTATION', 'GAS'],
+          category: ['TRANSPORTATION', 'TRANSPORTATION_GAS'],
           plaidCategoryId: 'TRANSPORTATION_GAS',
           categoryId: 'TRANSPORTATION_GAS',
           status: 'posted',
@@ -206,9 +203,9 @@ describe('User Story: Income vs Expense Transaction Filtering', () => {
           name: 'Monthly Rent Payment',
           userDescription: null,
           merchantName: 'PROPERTY MANAGEMENT',
-          category: ['GENERAL_SERVICES', 'RENT'],
-          plaidCategoryId: 'GENERAL_SERVICES_RENT',
-          categoryId: 'GENERAL_SERVICES_RENT',
+          category: ['RENT_AND_UTILITIES', 'RENT_AND_UTILITIES_RENT'],
+          plaidCategoryId: 'RENT_AND_UTILITIES_RENT',
+          categoryId: 'RENT_AND_UTILITIES_RENT',
           status: 'posted',
           pending: false,
           tags: ['rent'],
@@ -382,7 +379,7 @@ describe('User Story: Income vs Expense Transaction Filtering', () => {
         merchantName: 'TEST',
         category: ['OTHER'],
         plaidCategoryId: 'OTHER',
-        categoryId: 'OTHER',
+        categoryId: null,
         status: 'posted',
         pending: false,
         tags: [],

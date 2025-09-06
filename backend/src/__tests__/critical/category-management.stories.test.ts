@@ -484,9 +484,10 @@ describe('User Story: Category Management', () => {
       expect(categoryNames).toContain('Income');
       expect(categoryNames).toContain('Food and Drink');
       expect(categoryNames).toContain('Transportation');
-      expect(categoryNames).toContain('Shops');
-      expect(categoryNames).toContain('Healthcare');
-      expect(categoryNames).toContain('Transfer');
+      expect(categoryNames).toContain('General Merchandise'); // Changed from 'Shops'
+      expect(categoryNames).toContain('Medical'); // Changed from 'Healthcare'
+      expect(categoryNames).toContain('Transfer In'); // Changed from 'Transfer'
+      expect(categoryNames).toContain('Transfer Out'); // Added
       expect(categoryNames).toContain('Savings');
       
       // All categories should be regular user categories (not system)
@@ -519,21 +520,23 @@ describe('User Story: Category Management', () => {
       expect(editResponse.status).toBe(200);
       expect(editResponse.body.name).toBe('Revenue');
       
-      // Find a category to delete
-      const travelCategory = categories.body.find((c: any) => c.name === 'Travel');
-      expect(travelCategory).toBeDefined();
+      // Find a category to delete - use a subcategory that has no children
+      const categoryToDelete = categories.body.find((c: any) => 
+        c.name === 'Other Income' && c.parentId !== null
+      );
+      expect(categoryToDelete).toBeDefined();
       
-      // Delete the Travel category - should succeed
+      // Delete the subcategory - should succeed
       const deleteResponse = await authenticatedDelete(
-        `/api/v1/categories/${travelCategory.id}`,
+        `/api/v1/categories/${categoryToDelete.id}`,
         newAuthToken
       );
       expect(deleteResponse.status).toBe(204);
       
       // Verify the category was deleted
       const afterDelete = await authenticatedGet('/api/v1/categories', newAuthToken);
-      const stillHasTravel = afterDelete.body.some((c: any) => c.name === 'Travel');
-      expect(stillHasTravel).toBe(false);
+      const stillHasCategory = afterDelete.body.some((c: any) => c.id === categoryToDelete.id);
+      expect(stillHasCategory).toBe(false);
     });
   });
   
@@ -561,25 +564,31 @@ describe('User Story: Category Management', () => {
       const incomeCategory = categories.find((c: any) => c.name === 'Income');
       expect(incomeCategory).toBeDefined();
       
-      const transferCategory = categories.find((c: any) => c.name === 'Transfer');
-      expect(transferCategory).toBeDefined();
-      expect(transferCategory.isHidden).toBe(true); // Transfer should be hidden by default
+      // Check Transfer In and Transfer Out categories (both should be hidden)
+      const transferInCategory = categories.find((c: any) => c.name === 'Transfer In');
+      const transferOutCategory = categories.find((c: any) => c.name === 'Transfer Out');
+      expect(transferInCategory).toBeDefined();
+      expect(transferOutCategory).toBeDefined();
+      expect(transferInCategory.isHidden).toBe(true); // Transfer In should be hidden by default
+      expect(transferOutCategory.isHidden).toBe(true); // Transfer Out should be hidden by default
       
       // If user renamed or deleted a category, those transactions won't match
-      // For example, if user deletes "Travel" category:
-      const travelCategory = categories.find((c: any) => c.name === 'Travel');
-      if (travelCategory) {
-        await authenticatedDelete(
-          `/api/v1/categories/${travelCategory.id}`,
+      // For example, if user deletes a leaf category like "Flights":
+      const flightsCategory = categories.find((c: any) => 
+        c.name === 'Flights' && c.parentId !== null
+      );
+      if (flightsCategory) {
+        const deleteResult = await authenticatedDelete(
+          `/api/v1/categories/${flightsCategory.id}`,
           newAuthToken
         );
+        expect(deleteResult.status).toBe(204);
+        
+        // Verify the category was deleted
+        const afterDelete = await authenticatedGet('/api/v1/categories', newAuthToken);
+        const hasFlights = afterDelete.body.some((c: any) => c.id === flightsCategory.id);
+        expect(hasFlights).toBe(false);
       }
-      
-      // Now transactions with ["Travel", "Airlines"] won't find a match
-      // and will remain uncategorized - this is expected behavior
-      const afterDelete = await authenticatedGet('/api/v1/categories', newAuthToken);
-      const hasTravel = afterDelete.body.some((c: any) => c.name === 'Travel');
-      expect(hasTravel).toBe(false);
     });
   });
 });

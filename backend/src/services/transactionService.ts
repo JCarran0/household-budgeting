@@ -482,7 +482,8 @@ export class TransactionService {
       if (filter.transactionType && filter.transactionType !== 'all') {
         filtered = filtered.filter((txn: StoredTransaction) => {
           // In Plaid, positive amounts are debits (expenses), negative amounts are credits (income)
-          const isExpense = txn.amount > 0;
+          // Zero amounts are treated as expenses (non-income)
+          const isExpense = txn.amount >= 0;
           return filter.transactionType === 'expense' ? isExpense : !isExpense;
         });
       }
