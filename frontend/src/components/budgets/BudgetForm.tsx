@@ -12,6 +12,7 @@ import { useForm } from '@mantine/form';
 import { useMutation } from '@tanstack/react-query';
 import { notifications } from '@mantine/notifications';
 import { api, type CreateBudgetDto } from '../../lib/api';
+import { formatCurrency } from '../../utils/formatters';
 import type { MonthlyBudget, Category } from '../../../../shared/types';
 
 interface BudgetFormProps {
@@ -185,7 +186,7 @@ export function BudgetForm({
             </Text>
             {isEdit && (
               <Text size="sm" c="dimmed">
-                Current: ${budget.amount.toFixed(2)}
+                Current: {formatCurrency(budget.amount)}
               </Text>
             )}
           </Group>

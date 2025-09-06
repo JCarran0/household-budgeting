@@ -13,6 +13,7 @@ import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { notifications } from '@mantine/notifications';
 import { api } from '../../lib/api';
+import { formatCurrency } from '../../utils/formatters';
 import type { MonthlyBudget, Category } from '../../../../shared/types';
 
 interface BudgetGridProps {
@@ -83,7 +84,7 @@ function BudgetRow({ budget, category, onDelete, onUpdate }: BudgetRowProps) {
             }}
           />
         ) : (
-          <Text fw={500}>${budget.amount.toFixed(2)}</Text>
+          <Text fw={500}>{formatCurrency(budget.amount)}</Text>
         )}
       </Table.Td>
       

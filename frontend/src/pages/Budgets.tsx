@@ -36,6 +36,7 @@ import {
 } from '@tabler/icons-react';
 import { format, addMonths, subMonths, startOfMonth } from 'date-fns';
 import { api } from '../lib/api';
+import { formatCurrency } from '../utils/formatters';
 import { BudgetGrid } from '../components/budgets/BudgetGrid';
 import { BudgetForm } from '../components/budgets/BudgetForm';
 import { BudgetComparison } from '../components/budgets/BudgetComparison';
@@ -293,7 +294,7 @@ export function Budgets() {
                   </ThemeIcon>
                   <div>
                     <Text size="xs" c="dimmed">Total Budget</Text>
-                    <Text fw={600} size="lg">${totalBudget.toFixed(2)}</Text>
+                    <Text fw={600} size="lg">{formatCurrency(totalBudget)}</Text>
                   </div>
                 </Group>
               </Card>
