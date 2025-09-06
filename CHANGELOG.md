@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.0](https://github.com/JCarran0/household-budgeting/compare/v1.0.0...v1.1.0) (2025-09-06)
+
+
+### Features
+
+* **ci:** run tests and builds before creating releases ([c617285](https://github.com/JCarran0/household-budgeting/commit/c61728522d3fcd304484df47f9bd7758929475a9))
+
+
+### Tests
+
+* fix all test failures after Plaid PFC implementation ([486c14a](https://github.com/JCarran0/household-budgeting/commit/486c14a91ae6489b10854a0bf6705bae48dda3ff))
+
 ## 1.0.0 (2025-09-06)
 
 
