@@ -13,6 +13,7 @@ interface TransactionPreviewTriggerProps {
   limit?: number; // Number of transactions to preview (default 25)
   showTooltip?: boolean; // Whether to show hover tooltip
   tooltipText?: string; // Custom tooltip text
+  timeRangeFilter?: string; // Reports page time range filter (e.g., 'thisMonth', 'yearToDate')
 }
 
 export function TransactionPreviewTrigger({
@@ -25,6 +26,7 @@ export function TransactionPreviewTrigger({
   limit = 25,
   showTooltip = true,
   tooltipText = "Click to preview transactions",
+  timeRangeFilter,
 }: TransactionPreviewTriggerProps) {
   const [isModalOpen, setIsModalOpen] = useState(false);
 
@@ -99,6 +101,7 @@ export function TransactionPreviewTrigger({
         categoryName={categoryName}
         dateRange={dateRange}
         limit={limit}
+        timeRangeFilter={timeRangeFilter}
       />
     </>
   );

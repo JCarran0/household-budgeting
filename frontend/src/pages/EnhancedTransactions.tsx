@@ -2,7 +2,7 @@ import { useState, useMemo, useCallback, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api, type ExtendedPlaidAccount } from '../lib/api';
-import { format, startOfMonth, endOfMonth, startOfYear } from 'date-fns';
+import { format, startOfMonth, endOfMonth, startOfYear, subMonths } from 'date-fns';
 import type { Transaction } from '../../../shared/types';
 import { useTransactionFilters } from '../hooks/usePersistedFilters';
 import {
@@ -126,6 +126,27 @@ export function EnhancedTransactions() {
   
   const queryClient = useQueryClient();
   
+  // Helper function to convert reports time range to transaction date filter
+  const convertTimeRangeToDateFilter = (timeRangeFilter: string): DateFilterOption => {
+    switch(timeRangeFilter) {
+      case 'thisMonth':
+        return 'this-month';
+      case 'lastMonth':
+        return format(subMonths(new Date(), 1), 'yyyy-MM');
+      case 'yearToDate':
+        return 'ytd';
+      case 'thisYear':
+        return format(new Date(), 'yyyy'); // Current year
+      case 'last3':
+      case 'last6':  
+      case 'last12':
+        // For these cases, we'll use custom date range since transaction filters don't have exact equivalents
+        return 'custom';
+      default:
+        return 'ytd'; // Default fallback
+    }
+  };
+
   // Handle URL parameters from reports page navigation
   useEffect(() => {
     if (!hasInitialized) {
@@ -133,6 +154,7 @@ export function EnhancedTransactions() {
       const onlyUncategorizedParam = searchParams.get('onlyUncategorized');
       const startDate = searchParams.get('startDate');
       const endDate = searchParams.get('endDate');
+      const timeRangeFilter = searchParams.get('timeRangeFilter');
 
       // Apply filters from URL parameters
       if (categoryIds) {
@@ -146,7 +168,19 @@ export function EnhancedTransactions() {
         setSelectedCategories([]);
       }
       
-      if (startDate && endDate) {
+      // Handle date filtering based on timeRangeFilter or explicit dates
+      if (timeRangeFilter) {
+        const dateFilterValue = convertTimeRangeToDateFilter(timeRangeFilter);
+        setDateFilterOption(dateFilterValue);
+        
+        // For cases that need custom date range, set the explicit dates
+        if (dateFilterValue === 'custom' && startDate && endDate) {
+          const startDateObj = new Date(startDate);
+          const endDateObj = new Date(endDate);
+          setCustomDateRange([startDateObj, endDateObj]);
+        }
+      } else if (startDate && endDate) {
+        // Fallback to custom date range if no timeRangeFilter but dates are provided
         const startDateObj = new Date(startDate);
         const endDateObj = new Date(endDate);
         setCustomDateRange([startDateObj, endDateObj]);
@@ -156,10 +190,15 @@ export function EnhancedTransactions() {
       setHasInitialized(true);
       
       // Show notification when filters are applied from reports
-      if (categoryIds || onlyUncategorizedParam === 'true' || (startDate && endDate)) {
+      if (categoryIds || onlyUncategorizedParam === 'true' || timeRangeFilter || (startDate && endDate)) {
+        const filterTypes = [];
+        if (categoryIds) filterTypes.push('category');
+        if (onlyUncategorizedParam === 'true') filterTypes.push('uncategorized transactions');
+        if (timeRangeFilter || (startDate && endDate)) filterTypes.push('date range');
+        
         notifications.show({
           title: 'Filters Applied',
-          message: 'Filters have been applied from the reports page',
+          message: `Applied ${filterTypes.join(', ')} filters from reports`,
           color: 'blue',
         });
       }

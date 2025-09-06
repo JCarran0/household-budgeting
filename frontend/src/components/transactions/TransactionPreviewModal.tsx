@@ -35,6 +35,7 @@ interface TransactionPreviewModalProps {
   categoryName: string;
   dateRange: { startDate: string; endDate: string };
   limit?: number; // default 25
+  timeRangeFilter?: string; // Reports page time range filter (e.g., 'thisMonth', 'yearToDate')
 }
 
 export function TransactionPreviewModal({
@@ -44,6 +45,7 @@ export function TransactionPreviewModal({
   categoryName,
   dateRange,
   limit = 25,
+  timeRangeFilter,
 }: TransactionPreviewModalProps) {
   const navigate = useNavigate();
 
@@ -87,6 +89,12 @@ export function TransactionPreviewModal({
     }
     params.set('startDate', dateRange.startDate);
     params.set('endDate', dateRange.endDate);
+    
+    // Include the time range filter from reports page if provided
+    if (timeRangeFilter) {
+      params.set('timeRangeFilter', timeRangeFilter);
+    }
+    
     navigate(`/transactions?${params.toString()}`);
     onClose();
   };

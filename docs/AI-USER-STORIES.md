@@ -81,6 +81,9 @@
 - A user should be able to quickly filter by "Year to Date"
 - A user should be able to select any past month of the current year from a dropdown
 - A user should be able to use custom date ranges when needed
+- A user should be able to navigate to the transactions page with filters pre-applied via URL parameters
+- A user should see appropriate filters automatically selected when navigating from other pages (e.g., Reports)
+- A user should see notifications indicating which filters were applied from external navigation
 - A user should be able to filter their transactions by specific account
 - A user should be able to select "All Accounts" or individual accounts from a dropdown
 - A user should be able to see account names with institution in the filter dropdown
@@ -365,6 +368,12 @@
 - A user should be able to close the modal with ESC key or clicking outside
 - A user should see a "View All in Transactions Page" button in the modal footer
 - A user should be navigated to the transactions page with appropriate filters applied when clicking "View All"
+- A user should have the same time range filter from the Reports page applied to the Transactions page
+- A user should see the correct category filter applied when navigating from category-specific previews
+- A user should see URL parameters for `timeRangeFilter`, `categoryIds`, `startDate`, and `endDate` properly formatted
+- A user should see notifications confirming which filters were applied from the Reports page navigation
+- A user should be able to navigate with preserved filters for all time range options (This Month, Year to Date, Last 3 Months, etc.)
+- A user should see consistent filter behavior whether navigating from categorized or uncategorized transaction previews
 - A user should see loading states while transaction preview data is fetching
 - A user should see error handling if preview data fails to load
 
@@ -375,6 +384,19 @@
 - A user should be able to collapse/expand the sidebar
 - A user should be able to see which page they're currently on
 - A user should be able to access all major features from the navigation
+
+### Inter-Page Filter Synchronization
+- A user should experience seamless filter preservation when navigating between Reports and Transactions pages
+- A user should see the same time range context maintained across page transitions
+- A developer should be able to use URL parameters to pass filter state between pages
+- A developer should implement the following URL parameter contract for transactions page:
+  - `timeRangeFilter`: String value matching Reports page time range options (thisMonth, yearToDate, last3, last6, last12, etc.)
+  - `categoryIds`: Comma-separated list of category IDs to filter by
+  - `startDate`: ISO date string (YYYY-MM-DD) for filter start date
+  - `endDate`: ISO date string (YYYY-MM-DD) for filter end date
+  - `onlyUncategorized`: Boolean string ('true') for uncategorized transaction filter
+- A developer should handle URL parameters gracefully with fallback behavior for invalid or missing values
+- A developer should provide user feedback when filters are applied via URL parameters (notifications/alerts)
 
 ### Responsive Design
 - A user should be able to use the app on desktop computers

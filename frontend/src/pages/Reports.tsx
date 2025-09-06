@@ -688,6 +688,7 @@ export function Reports() {
                         categoryName={entry.name}
                         dateRange={{ startDate, endDate }}
                         tooltipText="Click to preview transactions"
+                        timeRangeFilter={timeRange}
                       >
                         <Group gap="xs" style={{ borderRadius: 'var(--mantine-radius-sm)', padding: '4px' }}>
                           <div
@@ -719,6 +720,7 @@ export function Reports() {
                         categoryName={category.categoryName}
                         dateRange={{ startDate: format(startOfYear(new Date()), 'yyyy-MM-dd'), endDate: format(new Date(), 'yyyy-MM-dd') }}
                         tooltipText="Click to preview YTD transactions"
+                        timeRangeFilter="yearToDate"
                       >
                         <div style={{ borderRadius: 'var(--mantine-radius-sm)', padding: '8px', margin: '-8px' }}>
                           <Group justify="space-between" mb={5}>
