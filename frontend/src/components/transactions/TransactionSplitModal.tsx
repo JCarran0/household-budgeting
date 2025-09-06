@@ -123,7 +123,8 @@ export function TransactionSplitModal({
         ]
       });
     }
-  }, [transaction, opened, form]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [transaction, opened]); // form.setValues is stable, don't need it in deps
 
   // Update remaining amount when splits change
   useEffect(() => {
@@ -131,7 +132,8 @@ export function TransactionSplitModal({
       const totalSplit = form.values.splits.reduce((sum, split) => sum + (split.amount || 0), 0);
       setRemainingAmount(Math.abs(transaction.amount) - totalSplit);
     }
-  }, [form.values.splits, transaction]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form.values.splits, transaction]); // form.values.splits is the actual dependency
 
   // Split transaction mutation
   const splitMutation = useMutation({
@@ -289,7 +291,9 @@ export function TransactionSplitModal({
 
                   <TextInput
                     label="Description (optional)"
-                    placeholder="What is this split for?"
+                    placeholder={transaction?.userDescription 
+                      ? `Leave blank to use: ${transaction.userDescription}` 
+                      : "What is this split for?"}
                     {...form.getInputProps(`splits.${index}.description`)}
                   />
                 </Stack>

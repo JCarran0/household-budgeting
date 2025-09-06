@@ -47,7 +47,6 @@ import {
   IconArrowDownRight,
   IconEdit,
   IconCategory,
-  IconEye,
   IconEyeOff,
   IconScissors,
   IconDots,
@@ -1166,18 +1165,6 @@ export function EnhancedTransactions() {
                             onClick={() => handleSplitClick(transaction)}
                           >
                             Split Transaction
-                          </Menu.Item>
-                          
-                          <Menu.Item
-                            leftSection={
-                              transaction.isHidden ? (
-                                <IconEye style={{ width: rem(14), height: rem(14) }} />
-                              ) : (
-                                <IconEyeOff style={{ width: rem(14), height: rem(14) }} />
-                              )
-                            }
-                          >
-                            {transaction.isHidden ? 'Show' : 'Hide'} from Budget
                           </Menu.Item>
                         </Menu.Dropdown>
                       </Menu>

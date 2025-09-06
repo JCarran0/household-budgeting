@@ -582,8 +582,9 @@ export class TransactionService {
           plaidAccountId: originalTransaction.plaidAccountId,
           amount: originalTransaction.amount > 0 ? split.amount : -split.amount, // Maintain sign
           date: originalTransaction.date,
-          name: split.description || `${originalTransaction.name} (Split ${i + 1})`,
-          userDescription: split.description || null,
+          // Use split description if provided, otherwise inherit from original
+          name: originalTransaction.name, // Always keep the original bank name
+          userDescription: split.description || originalTransaction.userDescription || null,
           merchantName: originalTransaction.merchantName,
           category: originalTransaction.category,
           plaidCategoryId: originalTransaction.plaidCategoryId,
@@ -592,7 +593,7 @@ export class TransactionService {
           pending: originalTransaction.pending,
           isoCurrencyCode: originalTransaction.isoCurrencyCode,
           tags: split.tags || [],
-          notes: split.description || null,
+          notes: originalTransaction.notes, // Preserve original notes
           isHidden: false,
           isSplit: false,
           parentTransactionId: originalTransaction.id,

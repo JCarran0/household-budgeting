@@ -33,7 +33,6 @@ interface EditFormValues {
   categoryId: string;
   tags: string[];
   notes: string;
-  isHidden: boolean;
 }
 
 export function TransactionEditModal({ 
@@ -76,7 +75,6 @@ export function TransactionEditModal({
       categoryId: '',
       tags: [],
       notes: '',
-      isHidden: false,
     },
   });
 
@@ -88,10 +86,10 @@ export function TransactionEditModal({
         categoryId: transaction.categoryId || '',
         tags: transaction.tags || [],
         notes: transaction.notes || '',
-        isHidden: transaction.isHidden || false,
       });
     }
-  }, [transaction, opened, form]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [transaction, opened]); // form.setValues is stable, don't need it in deps
 
   // Update category mutation
   const updateCategoryMutation = useMutation({
