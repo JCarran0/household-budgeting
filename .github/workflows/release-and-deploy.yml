@@ -26,10 +26,55 @@ on:
           - 'alpha'
 
 jobs:
+  # Validation job - runs tests and build before creating release
+  validate:
+    runs-on: ubuntu-latest
+    name: Validate Code
+    if: ${{ github.event.inputs.skip_release != 'true' }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          
+      - name: Install and test backend
+        working-directory: ./backend
+        run: |
+          echo "📦 Installing backend dependencies..."
+          npm ci
+          echo "🧪 Running backend tests..."
+          npm test
+          echo "🔨 Building backend..."
+          npm run build
+          
+      - name: Install and build frontend
+        working-directory: ./frontend
+        run: |
+          echo "📦 Installing frontend dependencies..."
+          npm ci
+          echo "🔨 Building frontend..."
+          npm run build
+          
+      - name: Success message
+        run: |
+          echo "✅ All tests passed and builds succeeded!"
+          echo "### ✅ Validation Successful" >> $GITHUB_STEP_SUMMARY
+          echo "- Backend tests: ✅ Passed" >> $GITHUB_STEP_SUMMARY
+          echo "- Backend build: ✅ Succeeded" >> $GITHUB_STEP_SUMMARY
+          echo "- Frontend build: ✅ Succeeded" >> $GITHUB_STEP_SUMMARY
+
   release:
+    needs: [validate]
     runs-on: ubuntu-latest
     name: Create Release
-    if: ${{ github.event.inputs.skip_release != 'true' }}
+    if: ${{ github.event.inputs.skip_release != 'true' && needs.validate.result == 'success' }}
     outputs:
       new_version: ${{ steps.version.outputs.new_version }}
       release_created: ${{ steps.version.outputs.release_created }}
@@ -118,10 +163,55 @@ jobs:
           echo "release_created=false" >> $GITHUB_OUTPUT
           echo "ℹ️ No changes to release, will deploy current version: v$CURRENT_VERSION"
 
+  # Separate validation for deploy-only (when skip_release is true)
+  validate_deploy_only:
+    runs-on: ubuntu-latest
+    name: Validate Code (Deploy Only)
+    if: ${{ github.event.inputs.skip_release == 'true' }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          
+      - name: Install and test backend
+        working-directory: ./backend
+        run: |
+          echo "📦 Installing backend dependencies..."
+          npm ci
+          echo "🧪 Running backend tests..."
+          npm test
+          echo "🔨 Building backend..."
+          npm run build
+          
+      - name: Install and build frontend
+        working-directory: ./frontend
+        run: |
+          echo "📦 Installing frontend dependencies..."
+          npm ci
+          echo "🔨 Building frontend..."
+          npm run build
+          
+      - name: Success message
+        run: |
+          echo "✅ All tests passed and builds succeeded!"
+          echo "### ✅ Validation Successful (Deploy Only)" >> $GITHUB_STEP_SUMMARY
+          echo "- Backend tests: ✅ Passed" >> $GITHUB_STEP_SUMMARY
+          echo "- Backend build: ✅ Succeeded" >> $GITHUB_STEP_SUMMARY
+          echo "- Frontend build: ✅ Succeeded" >> $GITHUB_STEP_SUMMARY
+
   deploy:
-    needs: [release]
-    # Always run deploy, even if release was skipped
-    if: always() && (needs.release.result == 'success' || needs.release.result == 'skipped')
+    needs: [release, validate_deploy_only]
+    # Run if either path succeeded (release path or deploy-only path)
+    if: |
+      always() && 
+      (needs.release.result == 'success' || needs.release.result == 'skipped') &&
+      (needs.validate_deploy_only.result == 'success' || needs.validate_deploy_only.result == 'skipped')
     runs-on: ubuntu-latest
     name: Deploy to Production
     environment:
@@ -153,7 +243,6 @@ jobs:
         run: |
           npm ci
           npm run build
-          npm test
           
       - name: Build frontend
         working-directory: ./frontend
