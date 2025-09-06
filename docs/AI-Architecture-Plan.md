@@ -74,12 +74,27 @@ This document outlines the strategic architecture and cost optimization for a pe
 - **Security**: AES-256 encryption, rate limiting, secure token storage
 
 ### 🚧 Remaining Milestones & Next Priorities
-- **Milestone 5**: Enhanced Monitoring (Low Priority)
+
+#### Infrastructure Improvements (Based on Deployment Lessons)
+- **Milestone 5a**: Docker Containerization (Medium Priority - Q1 2026)
+  - Containerize backend and frontend applications
+  - Eliminate path and environment configuration issues
+  - Enable consistent dev/prod parity
+  - Simplify rollback with image tagging
+  
+- **Milestone 5b**: Enhanced CI/CD Pipeline (Medium Priority - Q1 2026)  
+  - Add automated smoke tests post-deployment
+  - Implement deployment validation checks
+  - Add Slack/Discord notifications for deployment status
+  - Create staging environment for pre-production testing
+
+- **Milestone 5c**: Enhanced Monitoring (Low Priority - Q2 2026)
   - CloudWatch detailed metrics integration
   - Grafana dashboard setup
   - Alert automation for critical errors
-  
-- **Feature Priorities** (Per CLAUDE.md):
+  - Add deployment success/failure metrics
+
+#### Application Feature Priorities (Per CLAUDE.md):
   1. Savings categories with rollover functionality
   2. Bill reminders and recurring transactions
   3. Enhanced reporting and data visualizations
@@ -743,6 +758,26 @@ JWT_SECRET: Strong random string
 3. Use Route 53 for DNS ($0.50/month)
 4. Add WAF basic rules ($5/month)
 5. Migrate to RDS PostgreSQL ($15/month)
+
+## Deployment Architecture Lessons Learned
+
+### Critical Success Factors Discovered
+1. **Directory Structure Preservation** - Deployment scripts must maintain exact build output structure
+2. **PM2 Working Directory** - Explicit `cwd` configuration required for environment variable loading
+3. **Direct SSH Access** - Valuable for rapid debugging despite SSM being primary deployment method
+4. **Validation Automation** - Post-deployment checks prevent silent failures
+
+### Architectural Decisions Based on Experience
+1. **Prefer Explicit Configuration** - Never rely on implicit behavior (PM2, paths, environment)
+2. **Maintain Structure Consistency** - Source → Build → Deploy should preserve hierarchies
+3. **Centralize Configuration** - Single source of truth for PM2 (ecosystem.config.js)
+4. **Automate Validation** - Every deployment should self-verify
+
+### Recommended Architecture Evolution
+**Phase 1 (Current)**: EC2 + PM2 + Manual Validation
+**Phase 2 (Q1 2026)**: Docker + Automated Validation + Smoke Tests  
+**Phase 3 (Q2 2026)**: Container Orchestration + Blue-Green Deployment
+**Phase 4 (Future)**: Kubernetes/ECS if scaling beyond 2 users
 
 ## Architecture Decision Records
 

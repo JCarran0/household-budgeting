@@ -578,3 +578,110 @@ If deployment issues persist:
 3. Ensure S3 buckets are accessible
 4. Confirm EC2 instance has proper IAM role
 5. Review GitHub Actions logs for build errors
+
+## Lessons Learned & Technical Debt
+
+### Common Deployment Pitfalls
+
+#### 1. Directory Structure Flattening Issue
+**Problem**: Copying `dist/*` instead of `dist` flattens the compiled TypeScript output
+```bash
+# ❌ Wrong - flattens structure
+cp -r backend/dist/* deployment/backend/
+
+# ✅ Correct - preserves structure  
+cp -r backend/dist deployment/backend/
+```
+**Impact**: Breaks module resolution, PM2 can't find entry point
+**Solution**: Always preserve directory structure in deployment scripts
+
+#### 2. PM2 Working Directory Configuration
+**Problem**: PM2 not loading environment variables from `.env` file
+```javascript
+// ❌ Wrong - PM2 runs from wrong directory
+{ script: 'dist/index.js' }
+
+// ✅ Correct - specify working directory
+{ 
+  script: 'dist/index.js',
+  cwd: '/home/appuser/app/backend'
+}
+```
+**Impact**: Application fails with missing environment variables
+**Solution**: Always set `cwd` in ecosystem.config.js to the backend directory
+
+#### 3. Multiple Package.json Resolution
+**Problem**: Node.js looking for `../package.json` relative to compiled files
+**Workaround Used**: Copied package.json to parent directory (anti-pattern)
+**Proper Solution**: Fix deployment to maintain proper dist/ structure
+
+### PM2 Configuration Best Practices
+
+1. **Always use ecosystem.config.js** - Don't rely on PM2 CLI arguments
+2. **Set explicit working directory** - Use `cwd` to ensure correct context
+3. **Configure logging paths** - Specify error_file and out_file
+4. **Enable graceful shutdown** - Set kill_timeout and wait_ready
+5. **Clean up old processes** - Delete before starting to avoid duplicates
+
+### Deployment Structure Validation Checklist
+
+Run these checks after deployment to verify correct structure:
+```bash
+# SSH to server
+ssh -i ~/.ssh/budget-app-key ubuntu@budget.jaredcarrano.com
+
+# Switch to app user
+sudo -u appuser bash
+
+# Validation checks
+test -d /home/appuser/app/backend/dist && echo "✅ dist directory exists" || echo "❌ dist directory missing"
+test -f /home/appuser/app/backend/dist/index.js && echo "✅ Entry point exists" || echo "❌ Entry point missing"
+test -f /home/appuser/app/backend/.env && echo "✅ Environment file exists" || echo "❌ Environment file missing"
+test -f /home/appuser/app/ecosystem.config.js && echo "✅ PM2 config exists" || echo "❌ PM2 config missing"
+
+# Check PM2 process
+pm2 status | grep budget-backend && echo "✅ PM2 process running" || echo "❌ PM2 process not found"
+
+# Test health endpoint
+curl -s http://localhost:3001/health | grep -q "ok" && echo "✅ Health check passing" || echo "❌ Health check failing"
+```
+
+### Technical Debt Tracker
+
+| Issue | Priority | Effort | Impact | Solution |
+|-------|----------|--------|--------|----------|
+| Manual deployment structure fixes | High | Low | Deployment failures | Fixed in GitHub Actions |
+| No automated deployment validation | Medium | Low | Silent failures | Add post-deploy checks |
+| PM2 configuration scattered | Medium | Low | Confusion | Centralize in ecosystem.config.js |
+| No smoke tests after deployment | Medium | Medium | Undetected issues | Add API endpoint tests |
+| Using filesystem on EC2 for temp files | Low | Medium | Disk space issues | Use S3 or clean up regularly |
+| No deployment rollback automation | Medium | High | Slow recovery | Implement blue-green deployment |
+
+### Anti-patterns to Avoid
+
+1. **Don't flatten compiled output** - Always preserve directory structure
+2. **Don't use relative paths in production** - Use absolute paths in configs
+3. **Don't mix source and compiled files** - Keep clear separation
+4. **Don't rely on implicit PM2 behavior** - Be explicit in configuration
+5. **Don't skip validation** - Always verify deployment success
+6. **Don't use `cp -r dir/*`** - Use `cp -r dir` to preserve structure
+
+### Recommended Future Improvements
+
+#### Short-term (Quick Wins)
+1. **Add deployment validation script** - Run checks automatically after deploy
+2. **Create PM2 template** - Standardize ecosystem.config.js generation
+3. **Add deployment notifications** - Slack/Discord webhook for status
+4. **Document rollback procedure** - Clear steps for emergency recovery
+
+#### Medium-term (1-3 months)
+1. **Docker containerization** - Eliminate path and environment issues
+2. **Enhanced CI/CD pipeline** - Add staging environment and smoke tests
+3. **Automated backups** - Daily S3 snapshots with retention policy
+4. **Monitoring dashboard** - Grafana or CloudWatch dashboard
+
+#### Long-term (3-6 months)
+1. **Blue-green deployment** - Zero-downtime deployments
+2. **Infrastructure as Code** - Terraform manages all configs
+3. **Multi-region failover** - Disaster recovery capability
+4. **Kubernetes migration** - For true scalability (if needed)

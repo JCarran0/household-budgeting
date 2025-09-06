@@ -482,6 +482,40 @@ sudo -u appuser bash
 # PM2 status: pm2 status
 ```
 
+#### Quick Deployment Validation
+After deployment, run these checks to verify everything is correct:
+```bash
+# One-line validation (run as appuser)
+cd /home/appuser/app && \
+test -d backend/dist && echo "✅ dist/" || echo "❌ dist/" && \
+test -f backend/dist/index.js && echo "✅ index.js" || echo "❌ index.js" && \
+test -f backend/.env && echo "✅ .env" || echo "❌ .env" && \
+test -f ecosystem.config.js && echo "✅ PM2 config" || echo "❌ PM2 config" && \
+pm2 status | grep -q budget-backend && echo "✅ PM2 running" || echo "❌ PM2 not running" && \
+curl -s http://localhost:3001/health | grep -q "ok" && echo "✅ Health OK" || echo "❌ Health FAIL"
+```
+
+#### Common Troubleshooting Commands
+```bash
+# Check PM2 logs for errors
+pm2 logs budget-backend --lines 50
+
+# Restart application
+pm2 restart budget-backend
+
+# Check environment variables are loaded
+pm2 env budget-backend | grep -E "(JWT|PLAID|NODE_ENV)"
+
+# Test API directly
+curl -s http://localhost:3001/health | jq '.'
+
+# Check disk space
+df -h /home/appuser
+
+# Clean up old PM2 logs
+pm2 flush
+```
+
 **Note**: Use this for debugging production issues when AWS SSM is not sufficient. The application runs as `appuser` and is managed by PM2.
 
 ## Notes for Future Development
