@@ -74,6 +74,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **api**: add Express application with auth routes
 - **auth**: add input validation and authentication middleware
 - **auth**: implement authentication service with TDD approach
+- add /feature and /task slash commands for development workflows
 
 ### Fixed
 - Transaction menu action bugs and split description handling
@@ -206,6 +207,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - update project plan to reflect completed Phase 1
 - **security**: add comprehensive security documentation and policies
 - add production server SSH access details to CLAUDE.md
+- add deployment lessons learned and validation commands
 
 ### Testing
 - **transactions**: add comprehensive tests for inline category editing
