@@ -1,15 +1,20 @@
-# AI Architecture Plan - Minimal Cost Production Deployment
+# AI Architecture Plan - Strategic Planning & Cost Analysis
+
+> **Document Purpose**: This document contains strategic planning, cost analysis, architecture decisions, and risk assessments for the production deployment. For operational procedures, troubleshooting, and deployment instructions, see [AI-DEPLOYMENTS.md](./AI-DEPLOYMENTS.md).
+
+## Document Scope
+- **What This Document Contains**: Cost projections, architecture decision records (ADRs), risk assessments, strategic planning, Terraform infrastructure code
+- **What This Document Doesn't Cover**: Day-to-day operations, troubleshooting guides, deployment procedures (see [AI-DEPLOYMENTS.md](./AI-DEPLOYMENTS.md))
+- **Primary Audience**: AI agents planning infrastructure changes or analyzing costs
 
 ## 🎉 Deployment Status: LIVE IN PRODUCTION
 
 **Application URL**: https://budget.jaredcarrano.com  
-**Previous URL**: http://67.202.9.86 (now redirects to HTTPS)  
+**Infrastructure Status**: ✅ Fully Operational with HTTPS  
 **Deployment Date**: September 2, 2025  
-**SSL Enabled**: September 2, 2025  
-**Infrastructure Status**: ✅ Fully Operational with HTTPS
 
 ## Executive Summary
-This document outlines a minimal-cost production architecture for a personal household budgeting application serving 2 users. The focus is on simplicity, security, and keeping costs under $10/month while maintaining a reliable production environment.
+This document outlines the strategic architecture and cost optimization for a personal household budgeting application serving 2 users. The focus is on maintaining costs under $10/month while ensuring security and reliability.
 
 ### ✅ Completed Milestones
 - **Milestone 1**: AWS Infrastructure Setup (September 2, 2025)

@@ -1,4 +1,11 @@
-# User Stories - Household Budgeting Application
+# AI User Stories - Product Requirements & Features
+
+## 📚 Related Documentation
+- **[CLAUDE.md](../CLAUDE.md)** - Main index and project overview
+- **[AI-TESTING-STRATEGY.md](./AI-TESTING-STRATEGY.md)** - How these stories are tested
+- **[AI-APPLICATION-ARCHITECTURE.md](./AI-APPLICATION-ARCHITECTURE.md)** - Technical implementation of features
+- **[AI-DEPLOYMENTS.md](./AI-DEPLOYMENTS.md)** - How features are deployed
+- **[AI-Architecture-Plan.md](./AI-Architecture-Plan.md)** - Strategic planning for feature development
 
 ## Authentication & User Management
 

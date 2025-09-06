@@ -1,5 +1,12 @@
 # AI Application Architecture Guide
 
+## 📚 Related Documentation
+- **[CLAUDE.md](../CLAUDE.md)** - Main index and project overview
+- **[AI-DEPLOYMENTS.md](./AI-DEPLOYMENTS.md)** - Deployment procedures and troubleshooting
+- **[AI-TESTING-STRATEGY.md](./AI-TESTING-STRATEGY.md)** - Testing patterns and examples
+- **[AI-USER-STORIES.md](./AI-USER-STORIES.md)** - Product requirements and features
+- **[AI-Architecture-Plan.md](./AI-Architecture-Plan.md)** - Infrastructure costs and strategic planning
+
 ## Quick Start for AI Agents
 
 This document provides a comprehensive overview of the household budgeting application architecture, designed to help AI coding agents quickly understand and work with the codebase.
@@ -304,12 +311,16 @@ const authService = new AuthService(dataService);
 
 ## Quick Modification Guide
 
+<!-- TASK: Add new API endpoint -->
+<!-- PATTERN: API development -->
 ### To Add a New API Endpoint
 1. Create route handler in `backend/src/routes/`
 2. Add business logic to relevant service
 3. Update API client in `frontend/src/lib/api.ts`
 4. Add types to `shared/types/`
 
+<!-- TASK: Add new React page -->
+<!-- PATTERN: Frontend development -->
 ### To Add a New Page
 1. Create component in `frontend/src/pages/`
 2. Add route in `frontend/src/App.tsx`
@@ -362,8 +373,11 @@ ENCRYPTION_KEY=xxx (32 bytes hex)
 - API URL hardcoded to `http://localhost:3001`
 - Plaid Link configured in `PlaidButton` component
 
+<!-- TROUBLESHOOT: Common problems -->
+<!-- PATTERN: Debugging -->
 ## Common Troubleshooting
 
+<!-- TROUBLESHOOT: API client errors -->
 ### Issue: "Cannot read properties of undefined"
 **Cause**: API client methods not bound properly
 **Solution**: Check method binding in api.ts constructor

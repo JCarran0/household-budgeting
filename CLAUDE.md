@@ -3,14 +3,109 @@
 ## Project Overview
 Building a personal budgeting app for 2 users with Plaid integration. Using Risk-Based Testing with TypeScript strict mode for rapid, type-safe development.
 
-## Technical Architecture
-For detailed technical architecture, service descriptions, data flows, and implementation details, see **[docs/AI-APPLICATION-ARCHITECTURE.md](docs/AI-APPLICATION-ARCHITECTURE.md)**. This document provides comprehensive guidance for AI agents on the codebase structure, API patterns, common tasks, and troubleshooting.
+## 📚 Documentation Index for AI Agents
 
-## Deployment and Operations
-For deployment processes, infrastructure management, CI/CD configuration, and production operations, see **[docs/AI-DEPLOYMENTS.md](docs/AI-DEPLOYMENTS.md)**. This guide covers AWS infrastructure, GitHub Actions setup, troubleshooting, and monitoring.
+### Quick Navigation Map
+| Document | Purpose | When to Use |
+|----------|---------|-------------|
+| **[AI-APPLICATION-ARCHITECTURE.md](docs/AI-APPLICATION-ARCHITECTURE.md)** | Technical implementation guide | Adding features, understanding service patterns, modifying APIs |
+| **[AI-DEPLOYMENTS.md](docs/AI-DEPLOYMENTS.md)** | Operational procedures | Deploying code, troubleshooting production, configuring CI/CD |
+| **[AI-Architecture-Plan.md](docs/AI-Architecture-Plan.md)** | Strategic planning & costs | Analyzing infrastructure costs, reviewing architecture decisions |
+| **[AI-TESTING-STRATEGY.md](docs/AI-TESTING-STRATEGY.md)** | Test philosophy & examples | Writing tests, understanding test patterns, debugging test failures |
+| **[AI-USER-STORIES.md](docs/AI-USER-STORIES.md)** | Product requirements | Understanding features, acceptance criteria, user scenarios |
 
-## Testing Strategy
-For comprehensive testing guidance, see **[docs/AI-TESTING-STRATEGY.md](docs/AI-TESTING-STRATEGY.md)**. This document covers user story testing, risk-based prioritization, test examples with real code, lessons learned from overmocking, and troubleshooting common test failures. The test strategy references **[docs/AI-USER-STORIES.md](docs/AI-USER-STORIES.md)** which contains the complete product requirements as user stories.
+### Document Contents Overview
+
+#### Technical Architecture
+**[docs/AI-APPLICATION-ARCHITECTURE.md](docs/AI-APPLICATION-ARCHITECTURE.md)** - Core technical guide
+- Service architecture (singleton patterns, JWT handling)
+- API structure and patterns
+- Data flow and storage patterns
+- Frontend component organization
+- Common modification tasks with examples
+
+#### Deployment and Operations
+**[docs/AI-DEPLOYMENTS.md](docs/AI-DEPLOYMENTS.md)** - Operational playbook
+- GitHub Actions CI/CD configuration
+- AWS infrastructure management via SSM
+- Environment variable setup
+- Troubleshooting production issues
+- Monitoring and logging
+
+**[docs/AI-Architecture-Plan.md](docs/AI-Architecture-Plan.md)** - Strategic planning
+- Cost analysis and projections ($10/month target)
+- Architecture Decision Records (ADRs)
+- Risk assessment framework
+- Terraform infrastructure code
+- Deployment milestones and timeline
+
+#### Testing Strategy
+**[docs/AI-TESTING-STRATEGY.md](docs/AI-TESTING-STRATEGY.md)** - Test guidance
+- Risk-based testing philosophy
+- Integration > unit test approach
+- Real code examples from the codebase
+- Anti-patterns and lessons learned
+- Test troubleshooting guide
+
+**[docs/AI-USER-STORIES.md](docs/AI-USER-STORIES.md)** - Product requirements
+- Complete user story specifications
+- Acceptance criteria for each feature
+- UI/UX requirements
+- Test scenarios and edge cases
+
+## 🔧 Common AI Agent Tasks - Quick Reference
+
+### Adding New Features
+| Task | Instructions | Reference |
+|------|-------------|-----------|
+| **Add API endpoint** | 1. Create route in `backend/src/routes/`<br>2. Add service method in `backend/src/services/`<br>3. Update API client in `frontend/src/lib/api.ts` | [Architecture Guide](docs/AI-APPLICATION-ARCHITECTURE.md#to-add-a-new-api-endpoint) |
+| **Add React page** | 1. Create component in `frontend/src/pages/`<br>2. Add route in `frontend/src/App.tsx`<br>3. Update navigation if needed | [Architecture Guide](docs/AI-APPLICATION-ARCHITECTURE.md#to-add-a-new-page) |
+| **Add database model** | 1. Create interface in `backend/src/types/`<br>2. Add service in `backend/src/services/`<br>3. Use StorageService for persistence | [Architecture Guide](docs/AI-APPLICATION-ARCHITECTURE.md#service-architecture) |
+
+### Deployment Tasks
+| Task | Command/Action | Reference |
+|------|---------------|-----------|
+| **Deploy to production** | Push to `main` branch (auto-deploys via GitHub Actions) | [Deployment Guide](docs/AI-DEPLOYMENTS.md#automatic-deployment-github-actions) |
+| **Manual deployment** | Run `./scripts/deploy-server.sh` from project root | [Deployment Guide](docs/AI-DEPLOYMENTS.md#manual-deployment) |
+| **Check deployment logs** | AWS SSM Session Manager or CloudWatch | [Deployment Guide](docs/AI-DEPLOYMENTS.md#monitoring-and-logs) |
+| **Update environment vars** | GitHub Settings → Secrets/Variables → Actions | [Deployment Guide](docs/AI-DEPLOYMENTS.md#deployment-configuration) |
+
+### Testing Tasks
+| Task | Command | Reference |
+|------|---------|-----------|
+| **Run all tests** | `npm test` in backend or frontend directory | [Testing Guide](docs/AI-TESTING-STRATEGY.md#running-tests) |
+| **Run specific test** | `npm test -- path/to/test.spec.ts` | [Testing Guide](docs/AI-TESTING-STRATEGY.md#running-tests) |
+| **Add integration test** | Create in `backend/src/__tests__/integration/` | [Testing Guide](docs/AI-TESTING-STRATEGY.md#integration-test-examples) |
+| **Debug test failures** | Check for auth tokens, async issues, mock problems | [Testing Guide](docs/AI-TESTING-STRATEGY.md#troubleshooting-test-failures) |
+
+### Common Debugging
+| Issue | Solution | Reference |
+|-------|----------|-----------|
+| **Plaid connection errors** | Check PLAID_PRODUCTS doesn't include "accounts" | [Architecture Guide](docs/AI-APPLICATION-ARCHITECTURE.md#common-plaid-issues) |
+| **Auth failures** | Verify JWT_SECRET is set, check token expiration | [Architecture Guide](docs/AI-APPLICATION-ARCHITECTURE.md#authentication-flow) |
+| **S3 storage issues** | Verify STORAGE_TYPE=s3 and bucket permissions | [Deployment Guide](docs/AI-DEPLOYMENTS.md#storage-configuration) |
+| **TypeScript errors** | Never use `any`, use `unknown` with type guards | See TypeScript section below |
+
+### File Locations Quick Reference
+```
+backend/
+├── src/
+│   ├── routes/        # API endpoints
+│   ├── services/      # Business logic (singletons)
+│   ├── middleware/    # Auth, error handling
+│   ├── types/         # TypeScript interfaces
+│   └── __tests__/     # Backend tests
+frontend/
+├── src/
+│   ├── pages/         # Route components
+│   ├── components/    # Reusable UI components
+│   ├── lib/api.ts     # API client
+│   └── hooks/         # React hooks
+docs/
+├── AI-*.md            # AI agent documentation
+terraform/             # Infrastructure as code
+scripts/               # Deployment scripts
+```
 
 ## Development Philosophy
 
@@ -265,6 +360,65 @@ STORAGE_TYPE=filesystem  # Use 's3' for production (see docs/AI-DEPLOYMENTS.md)
 - **Integration test** critical financial flows
 - **Skip trivial tests** like getters/setters
 
+## 🤖 AI Agent Directives
+
+### CRITICAL RULES - Never Violate These
+1. **NEVER use `any` types** - Use `unknown`, generics, or proper types instead
+2. **NEVER commit secrets** - All sensitive data must use environment variables
+3. **NEVER skip security validation** - Always validate inputs, sanitize outputs
+4. **NEVER modify production directly** - All changes go through GitHub → CI/CD
+5. **NEVER ignore TypeScript errors** - Fix them properly, don't suppress
+
+### Standard Operating Procedures
+
+#### When Starting a Task
+1. **Review relevant documentation** - Check the documentation index above
+2. **Understand existing patterns** - Look at similar code before implementing
+3. **Check for existing utilities** - Don't reinvent what already exists
+4. **Verify dependencies** - Ensure libraries are installed before using them
+
+#### When Modifying Code
+1. **Preserve existing patterns** - Match the style of surrounding code
+2. **Update types first** - Change TypeScript interfaces before implementation
+3. **Test critical paths** - Ensure auth, money, and data operations work
+4. **Handle errors properly** - Use Result pattern or proper try/catch blocks
+
+#### When Debugging Issues
+1. **Check the obvious first** - Environment variables, configuration, permissions
+2. **Read error messages carefully** - They often contain the solution
+3. **Consult troubleshooting guides** - See deployment and architecture docs
+4. **Test in isolation** - Narrow down the problem to specific components
+
+#### When Deploying
+1. **Test locally first** - Ensure `npm run build` succeeds
+2. **Check GitHub Actions** - Verify CI/CD pipeline configuration
+3. **Monitor deployment** - Watch logs during and after deployment
+4. **Verify health checks** - Ensure application is responding correctly
+
+### Decision Tree for Common Scenarios
+
+```
+Need to add a feature?
+├─ Is it a new API endpoint?
+│  └─ See AI-APPLICATION-ARCHITECTURE.md → "To Add a New API Endpoint"
+├─ Is it a new UI page?
+│  └─ See AI-APPLICATION-ARCHITECTURE.md → "To Add a New Page"
+├─ Is it a data model change?
+│  └─ Update types/ → services/ → ensure backward compatibility
+└─ Is it a third-party integration?
+   └─ Check existing patterns (e.g., Plaid integration)
+
+Having issues?
+├─ TypeScript errors?
+│  └─ Never use `any` - fix types properly
+├─ Test failures?
+│  └─ See AI-TESTING-STRATEGY.md → "Troubleshooting Test Failures"
+├─ Deployment problems?
+│  └─ See AI-DEPLOYMENTS.md → "Troubleshooting"
+└─ Plaid/API issues?
+   └─ See AI-APPLICATION-ARCHITECTURE.md → "Common Issues"
+```
+
 ## Quick References
 
 ### Critical Files
@@ -306,6 +460,39 @@ For comprehensive deployment guidance including infrastructure, CI/CD configurat
 - Performance issues with 800+ items require pagination (50 per page works well)
 - React Query staleTime vs gcTime: staleTime keeps data fresh, gcTime keeps in cache
 - TypeScript rootDir issues when importing from outside src/ - use postbuild script to flatten dist
+
+## 📋 Living Documentation
+
+### 🚨 Current Known Issues
+Track active problems that AI agents should be aware of when working on the codebase.
+
+| Issue | Impact | Workaround | Priority |
+|-------|--------|------------|----------|
+| Frontend TypeScript errors | Build warnings | Fix types as encountered | Medium |
+| Some components use `any` type | Type safety compromised | Replace with proper types | High |
+| Expired Plaid token recovery | User must manually reconnect | Implement refresh mechanism | Medium |
+| Performance with 800+ transactions | Slow page load | Pagination implemented (50/page) | Resolved ✅ |
+
+### 📝 Recent Architecture Decisions
+Track important decisions that affect how the codebase should be modified.
+
+| Date | Decision | Rationale | Impact |
+|------|----------|-----------|--------|
+| 2024-12 | User-specific categories | Multi-user support requirement | All categories now have userId field |
+| 2024-11 | Pagination for transactions | Performance issues with large datasets | 50 items per page default |
+| 2024-10 | Service singletons | Prevent auth token inconsistencies | All services use getInstance() pattern |
+| 2024-09 | S3 for production storage | Filesystem not reliable on EC2 | StorageService abstracts storage backend |
+| 2024-09 | Mantine UI over Tailwind | Faster development with pre-built components | Consistent dark theme UI |
+
+### 🔄 Pending Architectural Changes
+Planned changes that haven't been implemented yet.
+
+| Change | Reason | Target Date | Notes |
+|--------|--------|-------------|-------|
+| Add transaction caching | Reduce API calls | TBD | Use React Query or similar |
+| Implement webhook support | Real-time transaction updates | TBD | Plaid webhooks for sync |
+| Add data export feature | User data portability | TBD | CSV/JSON export options |
+| Mobile app development | Better user experience | TBD | React Native likely choice |
 
 ### Technical Debt
 - Frontend has some TypeScript errors to clean up

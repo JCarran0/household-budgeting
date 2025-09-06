@@ -1,5 +1,12 @@
 # AI Testing Strategy - Household Budgeting Application
 
+## 📚 Related Documentation
+- **[CLAUDE.md](../CLAUDE.md)** - Main index and project overview
+- **[AI-APPLICATION-ARCHITECTURE.md](./AI-APPLICATION-ARCHITECTURE.md)** - Technical architecture and patterns
+- **[AI-USER-STORIES.md](./AI-USER-STORIES.md)** - Product requirements this strategy tests
+- **[AI-DEPLOYMENTS.md](./AI-DEPLOYMENTS.md)** - How tests run in CI/CD pipeline
+- **[AI-Architecture-Plan.md](./AI-Architecture-Plan.md)** - Risk assessment informing test priorities
+
 ## Philosophy: User Story Testing with Risk-Based Approach
 
 This testing strategy prioritizes **real user behaviors** over isolated unit tests. We focus on testing complete user stories that validate actual workflows, using our Risk-Based Testing approach to prioritize what matters most: protecting user money and data integrity.

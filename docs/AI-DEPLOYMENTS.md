@@ -1,6 +1,11 @@
-# AI Agent Deployment Guide
+# AI Agent Deployment & Operations Guide
 
-This document provides comprehensive deployment guidance for AI agents working with the household budgeting application. It covers infrastructure, deployment processes, configuration, and troubleshooting.
+> **Document Purpose**: This is the operational guide for deploying, configuring, and troubleshooting the production application. For strategic planning, cost analysis, and architecture decisions, see [AI-Architecture-Plan.md](./AI-Architecture-Plan.md).
+
+## Document Scope
+- **What This Document Contains**: Deployment procedures, configuration management, troubleshooting guides, operational commands, CI/CD setup
+- **What This Document Doesn't Cover**: Cost analysis, architecture decisions, risk assessments (see [AI-Architecture-Plan.md](./AI-Architecture-Plan.md))
+- **Primary Audience**: AI agents performing deployments, debugging issues, or configuring the application
 
 ## Overview
 
