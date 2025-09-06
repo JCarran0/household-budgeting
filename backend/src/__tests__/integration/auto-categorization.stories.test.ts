@@ -5,6 +5,7 @@
  * Maps to auto-categorization stories from the user requirements
  */
 
+import { v4 as uuidv4 } from 'uuid';
 import {
   registerUser,
   authenticatedGet,
@@ -14,9 +15,11 @@ import {
   createCategory,
 } from '../helpers/apiHelper';
 import { authService, dataService } from '../../services';
+import type { StoredTransaction } from '../../services/transactionService';
 
 describe('User Story: Auto-Categorization', () => {
   let authToken: string;
+  let userId: string;
   let groceryCategoryId: string;
   let coffeeCategoryId: string;
   let transportCategoryId: string;
@@ -33,6 +36,7 @@ describe('User Story: Auto-Categorization', () => {
     const rand = Math.random().toString(36).substring(2, 8);
     const user = await registerUser(`auto${rand}`, 'auto categorization secure passphrase');
     authToken = user.token;
+    userId = user.userId;
     
     // Create some test categories
     const grocery = await createCategory(authToken, 'Groceries');
@@ -747,6 +751,462 @@ describe('User Story: Auto-Categorization', () => {
       
       expect(response.status).toBe(200);
       // The rule would match transactions containing ANY of the patterns
+    });
+  });
+
+  describe('As a user, I want patterns to match merchantName field for cleaner matching', () => {
+    let boardingCategoryId: string;
+    
+    beforeEach(async () => {
+      // Create a custom boarding category for our tests
+      const boarding = await createCategory(authToken, 'Boarding');
+      boardingCategoryId = boarding.id;
+    });
+
+    test('Pattern matches merchantName when it differs from name (Camp Belly Rub scenario)', async () => {
+      // Create test transactions with name/merchantName mismatch
+      const testTransactions: Partial<StoredTransaction>[] = [
+        {
+          id: uuidv4(),
+          userId,
+          accountId: 'test-account',
+          plaidTransactionId: 'camp-1',
+          plaidAccountId: 'plaid-test',
+          amount: 27.00,
+          date: '2025-08-29',
+          name: 'CAMP BELLY RUB, LLC', // Has comma
+          userDescription: null,
+          merchantName: 'Camp Belly Rub LLC', // No comma - cleaner
+          category: ['FOOD_AND_DRINK', 'FOOD_AND_DRINK_RESTAURANT'],
+          plaidCategoryId: null,
+          categoryId: null, // Uncategorized
+          status: 'posted' as const,
+          pending: false,
+          isoCurrencyCode: 'USD',
+          tags: [],
+          notes: null,
+          isHidden: false,
+          isSplit: false,
+          parentTransactionId: null,
+          splitTransactionIds: [],
+          location: null,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        },
+        {
+          id: uuidv4(),
+          userId,
+          accountId: 'test-account',
+          plaidTransactionId: 'catskill-1',
+          plaidAccountId: 'plaid-test',
+          amount: 139.60,
+          date: '2025-08-04',
+          name: 'CATSKILL MTN BED N BIS',
+          userDescription: null,
+          merchantName: 'Catskill Mtn Bed N Bis',
+          category: ['TRAVEL', 'TRAVEL_LODGING'],
+          plaidCategoryId: null,
+          categoryId: null, // Uncategorized
+          status: 'posted' as const,
+          pending: false,
+          isoCurrencyCode: 'USD',
+          tags: [],
+          notes: null,
+          isHidden: false,
+          isSplit: false,
+          parentTransactionId: null,
+          splitTransactionIds: [],
+          location: null,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        }
+      ];
+      
+      await dataService.saveData(`transactions_${userId}`, testTransactions);
+      
+      // Create rule with patterns matching merchantName (not name)
+      const ruleResponse = await authenticatedPost(
+        '/api/v1/autocategorize/rules',
+        authToken,
+        {
+          description: 'Boarding',
+          patterns: ['Camp Belly Rub LLC', 'Catskill Mtn Bed N Bis'], // Matches merchantName, not name
+          categoryId: boardingCategoryId,
+          categoryName: 'Boarding',
+          userDescription: '',
+          isActive: true,
+        }
+      );
+      
+      expect(ruleResponse.status).toBe(200);
+      
+      // Apply rules
+      const applyResponse = await authenticatedPost(
+        '/api/v1/autocategorize/apply',
+        authToken
+      );
+      
+      expect(applyResponse.status).toBe(200);
+      expect(applyResponse.body.categorized).toBe(2); // Both should be categorized
+      
+      // Verify transactions were categorized
+      const transactionsAfter = await dataService.getData<StoredTransaction[]>(`transactions_${userId}`) || [];
+      const campBellyRub = transactionsAfter.find((t: any) => t.plaidTransactionId === 'camp-1');
+      const catskill = transactionsAfter.find((t: any) => t.plaidTransactionId === 'catskill-1');
+      
+      expect(campBellyRub).toBeDefined();
+      expect(catskill).toBeDefined();
+      expect(campBellyRub?.categoryId).toBe(boardingCategoryId);
+      expect(catskill?.categoryId).toBe(boardingCategoryId);
+    });
+
+    test('Pattern matching respects field priority: userDescription > merchantName > name', async () => {
+      
+      const testTransactions = [
+        // Transaction with all three fields
+        {
+          id: uuidv4(),
+          userId,
+          accountId: 'test-account',
+          plaidTransactionId: 'all-fields',
+          plaidAccountId: 'plaid-test',
+          amount: 50.00,
+          date: '2025-09-01',
+          name: 'NAME_PATTERN',
+          userDescription: 'USER_PATTERN',
+          merchantName: 'MERCHANT_PATTERN',
+          category: [],
+          plaidCategoryId: null,
+          categoryId: null,
+          status: 'posted' as const,
+          pending: false,
+          isoCurrencyCode: 'USD',
+          tags: [],
+          notes: null,
+          isHidden: false,
+          isSplit: false,
+          parentTransactionId: null,
+          splitTransactionIds: [],
+          location: null,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        },
+        // Transaction with only merchantName and name
+        {
+          id: uuidv4(),
+          userId,
+          accountId: 'test-account',
+          plaidTransactionId: 'merchant-name',
+          plaidAccountId: 'plaid-test',
+          amount: 60.00,
+          date: '2025-09-02',
+          name: 'SHOULD_NOT_MATCH',
+          userDescription: null,
+          merchantName: 'MERCHANT_PATTERN',
+          category: [],
+          plaidCategoryId: null,
+          categoryId: null,
+          status: 'posted' as const,
+          pending: false,
+          isoCurrencyCode: 'USD',
+          tags: [],
+          notes: null,
+          isHidden: false,
+          isSplit: false,
+          parentTransactionId: null,
+          splitTransactionIds: [],
+          location: null,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        },
+        // Transaction with only name
+        {
+          id: uuidv4(),
+          userId,
+          accountId: 'test-account',
+          plaidTransactionId: 'name-only',
+          plaidAccountId: 'plaid-test',
+          amount: 70.00,
+          date: '2025-09-03',
+          name: 'NAME_PATTERN',
+          userDescription: null,
+          merchantName: null,
+          category: [],
+          plaidCategoryId: null,
+          categoryId: null,
+          status: 'posted' as const,
+          pending: false,
+          isoCurrencyCode: 'USD',
+          tags: [],
+          notes: null,
+          isHidden: false,
+          isSplit: false,
+          parentTransactionId: null,
+          splitTransactionIds: [],
+          location: null,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        }
+      ];
+      
+      await dataService.saveData(`transactions_${userId}`, testTransactions);
+      
+      // Create rules that match different fields
+      await authenticatedPost(
+        '/api/v1/autocategorize/rules',
+        authToken,
+        {
+          description: 'User Description Match',
+          patterns: ['USER_PATTERN'],
+          categoryId: coffeeCategoryId,
+          isActive: true,
+        }
+      );
+      
+      await authenticatedPost(
+        '/api/v1/autocategorize/rules',
+        authToken,
+        {
+          description: 'Merchant Name Match',
+          patterns: ['MERCHANT_PATTERN'],
+          categoryId: groceryCategoryId,
+          isActive: true,
+        }
+      );
+      
+      await authenticatedPost(
+        '/api/v1/autocategorize/rules',
+        authToken,
+        {
+          description: 'Name Match',
+          patterns: ['NAME_PATTERN'],
+          categoryId: transportCategoryId,
+          isActive: true,
+        }
+      );
+      
+      // Apply rules
+      const applyResponse = await authenticatedPost(
+        '/api/v1/autocategorize/apply',
+        authToken
+      );
+      
+      expect(applyResponse.status).toBe(200);
+      
+      // Verify correct categorization based on priority
+      const transactionsAfter = await dataService.getData<StoredTransaction[]>(`transactions_${userId}`) || [];
+      
+      const allFields = transactionsAfter.find((t: any) => t.plaidTransactionId === 'all-fields');
+      expect(allFields).toBeDefined();
+      expect(allFields?.categoryId).toBe(coffeeCategoryId); // USER_PATTERN wins (highest priority)
+      
+      const merchantName = transactionsAfter.find((t: any) => t.plaidTransactionId === 'merchant-name');
+      expect(merchantName).toBeDefined();
+      expect(merchantName?.categoryId).toBe(groceryCategoryId); // MERCHANT_PATTERN matches
+      
+      const nameOnly = transactionsAfter.find((t: any) => t.plaidTransactionId === 'name-only');
+      expect(nameOnly).toBeDefined();
+      expect(nameOnly?.categoryId).toBe(transportCategoryId); // NAME_PATTERN matches
+    });
+
+    test('Case-insensitive matching works across all fields including merchantName', async () => {
+      
+      const testTransactions = [
+        {
+          id: uuidv4(),
+          userId,
+          accountId: 'test-account',
+          plaidTransactionId: 'case-test-1',
+          plaidAccountId: 'plaid-test',
+          amount: 25.00,
+          date: '2025-09-01',
+          name: 'UPPERCASE NAME',
+          userDescription: null,
+          merchantName: 'MixedCase Merchant',
+          category: [],
+          plaidCategoryId: null,
+          categoryId: null,
+          status: 'posted' as const,
+          pending: false,
+          isoCurrencyCode: 'USD',
+          tags: [],
+          notes: null,
+          isHidden: false,
+          isSplit: false,
+          parentTransactionId: null,
+          splitTransactionIds: [],
+          location: null,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        }
+      ];
+      
+      await dataService.saveData(`transactions_${userId}`, testTransactions);
+      
+      // Create rule with lowercase pattern
+      const ruleResponse = await authenticatedPost(
+        '/api/v1/autocategorize/rules',
+        authToken,
+        {
+          description: 'Case Insensitive Test',
+          patterns: ['mixedcase merchant'], // Lowercase pattern
+          categoryId: coffeeCategoryId,
+          isActive: true,
+        }
+      );
+      
+      expect(ruleResponse.status).toBe(200);
+      
+      // Apply rules
+      const applyResponse = await authenticatedPost(
+        '/api/v1/autocategorize/apply',
+        authToken
+      );
+      
+      expect(applyResponse.status).toBe(200);
+      expect(applyResponse.body.categorized).toBe(1);
+      
+      // Verify categorization worked despite case differences
+      const transactionsAfter = await dataService.getData<StoredTransaction[]>(`transactions_${userId}`) || [];
+      const transaction = transactionsAfter.find((t: any) => t.plaidTransactionId === 'case-test-1');
+      expect(transaction).toBeDefined();
+      expect(transaction?.categoryId).toBe(coffeeCategoryId);
+    });
+
+    test('Recategorization with forceRecategorize works with merchantName matching', async () => {
+      
+      const testTransactions = [
+        {
+          id: uuidv4(),
+          userId,
+          accountId: 'test-account',
+          plaidTransactionId: 'recategorize-test',
+          plaidAccountId: 'plaid-test',
+          amount: 35.00,
+          date: '2025-09-01',
+          name: 'TRANSACTION, WITH COMMA',
+          userDescription: null,
+          merchantName: 'Transaction Without Comma',
+          category: [],
+          plaidCategoryId: null,
+          categoryId: groceryCategoryId, // Already categorized
+          status: 'posted' as const,
+          pending: false,
+          isoCurrencyCode: 'USD',
+          tags: [],
+          notes: null,
+          isHidden: false,
+          isSplit: false,
+          parentTransactionId: null,
+          splitTransactionIds: [],
+          location: null,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        }
+      ];
+      
+      await dataService.saveData(`transactions_${userId}`, testTransactions);
+      
+      // Create rule matching merchantName
+      await authenticatedPost(
+        '/api/v1/autocategorize/rules',
+        authToken,
+        {
+          description: 'Recategorize Test',
+          patterns: ['Transaction Without Comma'],
+          categoryId: coffeeCategoryId,
+          isActive: true,
+        }
+      );
+      
+      // Apply without force - should not recategorize
+      const applyResponse1 = await authenticatedPost(
+        '/api/v1/autocategorize/apply',
+        authToken,
+        { forceRecategorize: false }
+      );
+      
+      expect(applyResponse1.status).toBe(200);
+      expect(applyResponse1.body.categorized).toBe(0);
+      expect(applyResponse1.body.recategorized).toBe(0);
+      
+      // Apply with force - should recategorize
+      const applyResponse2 = await authenticatedPost(
+        '/api/v1/autocategorize/apply',
+        authToken,
+        { forceRecategorize: true }
+      );
+      
+      expect(applyResponse2.status).toBe(200);
+      expect(applyResponse2.body.recategorized).toBe(1);
+      
+      // Verify recategorization
+      const transactionsAfter = await dataService.getData<StoredTransaction[]>(`transactions_${userId}`) || [];
+      const transaction = transactionsAfter.find((t: any) => t.plaidTransactionId === 'recategorize-test');
+      expect(transaction).toBeDefined();
+      expect(transaction?.categoryId).toBe(coffeeCategoryId);
+    });
+
+    test('Transactions with merchantName but no name field are matched correctly', async () => {
+      
+      const testTransactions = [
+        {
+          id: uuidv4(),
+          userId,
+          accountId: 'test-account',
+          plaidTransactionId: 'merchant-only',
+          plaidAccountId: 'plaid-test',
+          amount: 45.00,
+          date: '2025-09-01',
+          name: null, // No name field
+          userDescription: null,
+          merchantName: 'Merchant Only Pattern',
+          category: [],
+          plaidCategoryId: null,
+          categoryId: null,
+          status: 'posted' as const,
+          pending: false,
+          isoCurrencyCode: 'USD',
+          tags: [],
+          notes: null,
+          isHidden: false,
+          isSplit: false,
+          parentTransactionId: null,
+          splitTransactionIds: [],
+          location: null,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        }
+      ];
+      
+      await dataService.saveData(`transactions_${userId}`, testTransactions);
+      
+      // Create rule matching merchantName
+      await authenticatedPost(
+        '/api/v1/autocategorize/rules',
+        authToken,
+        {
+          description: 'Merchant Only Test',
+          patterns: ['Merchant Only Pattern'],
+          categoryId: coffeeCategoryId,
+          isActive: true,
+        }
+      );
+      
+      // Apply rules
+      const applyResponse = await authenticatedPost(
+        '/api/v1/autocategorize/apply',
+        authToken
+      );
+      
+      expect(applyResponse.status).toBe(200);
+      expect(applyResponse.body.categorized).toBe(1);
+      
+      // Verify categorization
+      const transactionsAfter = await dataService.getData<StoredTransaction[]>(`transactions_${userId}`) || [];
+      const transaction = transactionsAfter.find((t: any) => t.plaidTransactionId === 'merchant-only');
+      expect(transaction).toBeDefined();
+      expect(transaction?.categoryId).toBe(coffeeCategoryId);
     });
   });
 });

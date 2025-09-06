@@ -626,7 +626,7 @@ export function AutoCategorization() {
             <Stack gap="xs">
               <Text size="sm" fw={500}>
                 Patterns
-                <Text span c="dimmed" fw={400}> (Transaction will match if it contains ANY of these)</Text>
+                <Text span c="dimmed" fw={400}> (Matches transaction description/merchant name - case insensitive)</Text>
               </Text>
               {form.values.patterns.map((_, index) => (
                 <Group key={index} gap="xs">
