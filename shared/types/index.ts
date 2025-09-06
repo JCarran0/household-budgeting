@@ -65,9 +65,11 @@ export interface Transaction {
 }
 
 export interface Category {
-  id: string;
-  name: string;
-  parentId: string | null;
+  id: string;                   // SNAKE_CASE ID: "FOOD_AND_DRINK_COFFEE" or "CUSTOM_WINE_BUDGET"
+  name: string;                 // Human readable: "Coffee" or "Wine Budget"
+  parentId: string | null;      // Parent category ID (SNAKE_CASE)
+  description?: string;         // Description from Plaid taxonomy or user-provided
+  isCustom: boolean;           // true for user-created categories
   isHidden: boolean;
   isSavings: boolean;
 }

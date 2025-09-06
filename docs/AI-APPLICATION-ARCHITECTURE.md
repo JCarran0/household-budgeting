@@ -86,25 +86,37 @@ household-budgeting/
 #### 4. TransactionService (`backend/src/services/transactionService.ts`)
 - **Purpose**: Transaction management and categorization
 - **Key Methods**:
-  - `syncTransactions()`: Fetch and store new transactions
+  - `syncTransactions()`: Fetch and store new transactions with auto-categorization
   - `getUserTransactions()`: Query with filters (supports categoryIds for filtering)
   - `updateCategory()`: Assign category to transaction
   - `splitTransaction()`: Split into sub-transactions
+- **Automatic Categorization**:
+  - New transactions: Directly assigned Plaid category ID (detailed or primary)
+  - Category updates: Preserves user overrides when Plaid changes categories
+  - Direct mapping: `transaction.category[1] || transaction.category[0]` → `categoryId`
 - **Features**:
   - Integration with AutoCategorizeService for rule-based categorization
-  - Plaid category name fallback matching
+  - Zero-mapping Plaid category assignment
   - Transaction tagging and hiding
   - Split transaction support
   - Support for orphaned category ID detection and handling
 
 #### 5. CategoryService (`backend/src/services/categoryService.ts`)
-- **Purpose**: Two-level category hierarchy management
+- **Purpose**: Two-level category hierarchy management with Plaid PFC integration
 - **Key Methods**:
-  - `initializeDefaultCategories()`: Create starter categories
-  - `createCategory()`: Add new category/subcategory
+  - `initializeDefaultCategories()`: Creates 121 categories (120 Plaid + 1 custom)
+  - `createCategory()`: Add custom category with SNAKE_CASE ID generation
   - `getCategoryTree()`: Get hierarchical structure
-  - `deleteCategory()`: Remove with transaction reassignment
-- **Structure**: Parent categories → Subcategories only
+  - `deleteCategory()`: Remove category (custom only)
+- **Category ID Pattern**:
+  - Plaid categories: Direct SNAKE_CASE IDs (e.g., `FOOD_AND_DRINK_COFFEE`)
+  - Custom categories: `CUSTOM_` prefix (e.g., `CUSTOM_WINE_BUDGET`)
+  - Collision handling: Appends numbers (e.g., `CUSTOM_WINE_BUDGET_2`)
+- **Plaid Integration**: 
+  - 16 primary categories (e.g., INCOME, FOOD_AND_DRINK)
+  - 104 subcategories with descriptions
+  - Direct ID mapping - no translation needed
+- **Data Model**: Categories include `isCustom` flag and optional `description`
 - **Data Isolation**: All categories are user-specific (no global categories)
 
 #### 6. BudgetService (`backend/src/services/budgetService.ts`)
@@ -375,6 +387,27 @@ ENCRYPTION_KEY=xxx (32 bytes hex)
 
 <!-- TROUBLESHOOT: Common problems -->
 <!-- PATTERN: Debugging -->
+## Data Models
+
+### Category Interface
+```typescript
+interface Category {
+  id: string;                   // SNAKE_CASE ID (e.g., "FOOD_AND_DRINK_COFFEE" or "CUSTOM_WINE_BUDGET")
+  name: string;                 // Human readable name (e.g., "Coffee" or "Wine Budget")
+  parentId: string | null;      // Parent category ID (SNAKE_CASE)
+  description?: string;         // Description from Plaid taxonomy or user-provided
+  isCustom: boolean;           // true for user-created categories
+  isHidden: boolean;           // Hidden from budgets/reports
+  isSavings: boolean;          // Savings category with rollover
+}
+```
+
+### Category ID Examples
+- **Plaid Primary**: `INCOME`, `FOOD_AND_DRINK`, `TRANSPORTATION`
+- **Plaid Detailed**: `INCOME_WAGES`, `FOOD_AND_DRINK_COFFEE`, `TRANSPORTATION_GAS`
+- **Custom Categories**: `CUSTOM_WINE_BUDGET`, `CUSTOM_DATE_NIGHTS`, `CUSTOM_EMERGENCY_FUND`
+- **Collision Handling**: `CUSTOM_SAVINGS`, `CUSTOM_SAVINGS_2`, `CUSTOM_SAVINGS_3`
+
 ## Common Troubleshooting
 
 <!-- TROUBLESHOOT: API client errors -->

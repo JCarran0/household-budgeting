@@ -65,6 +65,7 @@ export interface TransactionFilter {
   maxAmount?: number;
   exactAmount?: number;
   amountTolerance?: number;
+  transactionType?: 'income' | 'expense' | 'all'; // Filter by income vs expense
 }
 
 // Result types
@@ -294,7 +295,8 @@ export class TransactionService {
       merchantName: plaidTxn.merchantName,
       category: plaidTxn.category,
       plaidCategoryId: plaidTxn.categoryId,
-      categoryId: null,
+      // Use Plaid's detailed category ID directly, or primary if no detailed exists
+      categoryId: plaidTxn.category?.[1] || plaidTxn.category?.[0] || null,
       status: plaidTxn.pending ? 'pending' : 'posted',
       pending: plaidTxn.pending,
       isoCurrencyCode: plaidTxn.isoCurrencyCode,
@@ -346,6 +348,25 @@ export class TransactionService {
 
     if (existing.merchantName !== plaidTxn.merchantName) {
       existing.merchantName = plaidTxn.merchantName;
+      changed = true;
+    }
+
+    // Update category if Plaid's category changed (but preserve user's manual override if they set one)
+    const newPlaidCategoryId = plaidTxn.category?.[1] || plaidTxn.category?.[0] || null;
+    const oldPlaidCategoryId = existing.category?.[1] || existing.category?.[0] || null;
+    const plaidCategoryChanged = JSON.stringify(existing.category) !== JSON.stringify(plaidTxn.category);
+    
+    if (plaidCategoryChanged) {
+      existing.category = plaidTxn.category;
+      existing.plaidCategoryId = plaidTxn.categoryId;
+      
+      // Only update categoryId if user hasn't manually set a custom category
+      // If the current categoryId matches the old Plaid category, update it to the new one
+      // If it's different (user override), preserve it
+      if (!existing.categoryId || existing.categoryId === oldPlaidCategoryId) {
+        existing.categoryId = newPlaidCategoryId;
+      }
+      
       changed = true;
     }
 
@@ -455,6 +476,15 @@ export class TransactionService {
           txn.tags.some(tag => tag.toLowerCase().includes(query)) ||
           (txn.notes && txn.notes.toLowerCase().includes(query))
         );
+      }
+
+      // Filter by income vs expense
+      if (filter.transactionType && filter.transactionType !== 'all') {
+        filtered = filtered.filter((txn: StoredTransaction) => {
+          // In Plaid, positive amounts are debits (expenses), negative amounts are credits (income)
+          const isExpense = txn.amount > 0;
+          return filter.transactionType === 'expense' ? isExpense : !isExpense;
+        });
       }
 
       // Sort by date descending

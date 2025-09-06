@@ -43,7 +43,8 @@ describe('CategoryService', () => {
         name: 'Transportation',
         parentId: null,
         isHidden: false,
-        isSavings: false
+        isSavings: false,
+        isCustom: true
       };
 
       const newSubcategory = {
@@ -86,7 +87,8 @@ describe('CategoryService', () => {
         name: 'Transportation',
         parentId: null,
         isHidden: false,
-        isSavings: false
+        isSavings: false,
+        isCustom: true
       };
 
       const subcategory: Category = {
@@ -94,7 +96,8 @@ describe('CategoryService', () => {
         name: 'Gas',
         parentId: 'parent-1',
         isHidden: false,
-        isSavings: false
+        isSavings: false,
+        isCustom: true
       };
 
       await dataService.saveCategories([parentCategory, subcategory], testUserId);
@@ -116,7 +119,8 @@ describe('CategoryService', () => {
         name: 'Transportation',
         parentId: null,
         isHidden: false,
-        isSavings: false
+        isSavings: false,
+        isCustom: true
       };
 
       const updates = {
@@ -149,14 +153,16 @@ describe('CategoryService', () => {
           name: 'Transportation',
           parentId: null,
             isHidden: false,
-          isSavings: false
+          isSavings: false,
+          isCustom: true
         },
         {
           id: 'cat-2',
           name: 'Food',
           parentId: null,
           isHidden: false,
-          isSavings: false
+          isSavings: false,
+          isCustom: true
         }
       ];
 
@@ -177,28 +183,32 @@ describe('CategoryService', () => {
           name: 'Transportation',
           parentId: null,
             isHidden: false,
-          isSavings: false
+          isSavings: false,
+          isCustom: true
         },
         {
           id: 'sub-1',
           name: 'Gas',
           parentId: 'parent-1',
             isHidden: false,
-          isSavings: false
+          isSavings: false,
+          isCustom: true
         },
         {
           id: 'sub-2',
           name: 'Parking',
           parentId: 'parent-1',
           isHidden: false,
-          isSavings: false
+          isSavings: false,
+          isCustom: true
         },
         {
           id: 'cat-2',
           name: 'Food',
           parentId: null,
           isHidden: false,
-          isSavings: false
+          isSavings: false,
+          isCustom: true
         }
       ];
 
@@ -221,21 +231,24 @@ describe('CategoryService', () => {
           name: 'Transportation',
           parentId: null,
             isHidden: false,
-          isSavings: false
+          isSavings: false,
+          isCustom: true
         },
         {
           id: 'sub-1',
           name: 'Gas',
           parentId: 'parent-1',
             isHidden: false,
-          isSavings: false
+          isSavings: false,
+          isCustom: true
         },
         {
           id: 'parent-2',
           name: 'Food',
           parentId: null,
           isHidden: false,
-          isSavings: false
+          isSavings: false,
+          isCustom: true
         }
       ];
 
@@ -254,28 +267,32 @@ describe('CategoryService', () => {
           name: 'Transportation',
           parentId: null,
             isHidden: false,
-          isSavings: false
+          isSavings: false,
+          isCustom: true
         },
         {
           id: 'sub-1',
           name: 'Gas',
           parentId: 'parent-1',
             isHidden: false,
-          isSavings: false
+          isSavings: false,
+          isCustom: true
         },
         {
           id: 'sub-2',
           name: 'Parking',
           parentId: 'parent-1',
           isHidden: false,
-          isSavings: false
+          isSavings: false,
+          isCustom: true
         },
         {
           id: 'sub-3',
           name: 'Groceries',
           parentId: 'parent-2',
           isHidden: false,
-          isSavings: false
+          isSavings: false,
+          isCustom: true
         }
       ];
 
@@ -294,14 +311,16 @@ describe('CategoryService', () => {
           name: 'Transportation',
           parentId: null,
             isHidden: false,
-          isSavings: false
+          isSavings: false,
+          isCustom: true
         },
         {
           id: 'sub-1',
           name: 'Gas',
           parentId: 'parent-1',
             isHidden: false,
-          isSavings: false
+          isSavings: false,
+          isCustom: true
         }
       ];
 
@@ -326,21 +345,24 @@ describe('CategoryService', () => {
           name: 'Transportation',
           parentId: null,
             isHidden: true,
-          isSavings: false
+          isSavings: false,
+          isCustom: true
         },
         {
           id: 'cat-2',
           name: 'Food',
           parentId: null,
           isHidden: false,
-          isSavings: false
+          isSavings: false,
+          isCustom: true
         },
         {
           id: 'cat-3',
           name: 'Internal Transfers',
           parentId: null,
             isHidden: true,
-          isSavings: false
+          isSavings: false,
+          isCustom: true
         }
       ];
 
@@ -359,21 +381,24 @@ describe('CategoryService', () => {
           name: 'Emergency Fund',
           parentId: null,
             isHidden: false,
-          isSavings: true
+          isSavings: true,
+          isCustom: true
         },
         {
           id: 'cat-2',
           name: 'Vacation Savings',
           parentId: null,
             isHidden: false,
-          isSavings: true
+          isSavings: true,
+          isCustom: true
         },
         {
           id: 'cat-3',
           name: 'Food',
           parentId: null,
           isHidden: false,
-          isSavings: false
+          isSavings: false,
+          isCustom: true
         }
       ];
 
@@ -417,7 +442,8 @@ describe('CategoryService', () => {
         name: 'Custom Category',
         parentId: null,
         isHidden: false,
-        isSavings: false
+        isSavings: false,
+        isCustom: true
       };
 
       await dataService.saveCategories([existingCategory], testUserId);

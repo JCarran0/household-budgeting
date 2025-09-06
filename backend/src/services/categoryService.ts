@@ -1,6 +1,6 @@
-import { v4 as uuidv4 } from 'uuid';
 import { Category } from '../../../shared/types';
 import { DataService } from './dataService';
+import { PLAID_CATEGORIES } from '../constants/plaidCategories';
 
 export interface CategoryWithChildren extends Category {
   children?: Category[];
@@ -21,6 +21,29 @@ export interface UpdateCategoryDto {
 
 export class CategoryService {
   constructor(private dataService: DataService) {}
+
+  /**
+   * Generate a SNAKE_CASE ID for custom categories
+   */
+  private generateCategoryId(name: string, existingIds: string[]): string {
+    // Convert name to SNAKE_CASE with CUSTOM_ prefix
+    const baseId = `CUSTOM_${name
+      .toUpperCase()
+      .replace(/[^A-Z0-9]+/g, '_')
+      .replace(/^_+|_+$/g, '')}`;
+    
+    // If base ID doesn't exist, use it
+    if (!existingIds.includes(baseId)) {
+      return baseId;
+    }
+    
+    // If it exists, append a number
+    let counter = 2;
+    while (existingIds.includes(`${baseId}_${counter}`)) {
+      counter++;
+    }
+    return `${baseId}_${counter}`;
+  }
 
   async getAllCategories(userId: string): Promise<Category[]> {
     return this.dataService.getCategories(userId);
@@ -59,10 +82,16 @@ export class CategoryService {
       }
     }
 
+    // Generate SNAKE_CASE ID for the new category
+    const existingIds = categories.map(c => c.id);
+    const categoryId = this.generateCategoryId(data.name, existingIds);
+
     const newCategory: Category = {
-      id: uuidv4(),
+      id: categoryId,
       name: data.name,
       parentId: data.parentId,
+      description: undefined, // User can add description later if needed
+      isCustom: true, // User-created categories are always custom
       isHidden: data.isHidden,
       isSavings: data.isSavings
     };
@@ -153,31 +182,45 @@ export class CategoryService {
       return;
     }
 
-    // Create default categories matching Plaid's category names
-    // These are regular user categories that can be edited/deleted
-    const defaultCategories: Category[] = [
-      { id: uuidv4(), name: 'Income', parentId: null, isHidden: false, isSavings: false },
-      { id: uuidv4(), name: 'Transfer', parentId: null, isHidden: true, isSavings: false },
-      { id: uuidv4(), name: 'Bank Fees', parentId: null, isHidden: false, isSavings: false },
-      { id: uuidv4(), name: 'Cash Advance', parentId: null, isHidden: false, isSavings: false },
-      { id: uuidv4(), name: 'Community', parentId: null, isHidden: false, isSavings: false },
-      { id: uuidv4(), name: 'Education', parentId: null, isHidden: false, isSavings: false },
-      { id: uuidv4(), name: 'Entertainment', parentId: null, isHidden: false, isSavings: false },
-      { id: uuidv4(), name: 'Food and Drink', parentId: null, isHidden: false, isSavings: false },
-      { id: uuidv4(), name: 'Healthcare', parentId: null, isHidden: false, isSavings: false },
-      { id: uuidv4(), name: 'Interest', parentId: null, isHidden: false, isSavings: false },
-      { id: uuidv4(), name: 'Payment', parentId: null, isHidden: true, isSavings: false },
-      { id: uuidv4(), name: 'Personal Care', parentId: null, isHidden: false, isSavings: false },
-      { id: uuidv4(), name: 'Recreation', parentId: null, isHidden: false, isSavings: false },
-      { id: uuidv4(), name: 'Service', parentId: null, isHidden: false, isSavings: false },
-      { id: uuidv4(), name: 'Shops', parentId: null, isHidden: false, isSavings: false },
-      { id: uuidv4(), name: 'Tax', parentId: null, isHidden: false, isSavings: false },
-      { id: uuidv4(), name: 'Travel', parentId: null, isHidden: false, isSavings: false },
-      { id: uuidv4(), name: 'Transportation', parentId: null, isHidden: false, isSavings: false },
-      
-      // Additional useful default categories
-      { id: uuidv4(), name: 'Savings', parentId: null, isHidden: false, isSavings: true },
-    ];
+    const defaultCategories: Category[] = [];
+
+    // Create all Plaid primary and subcategories
+    Object.entries(PLAID_CATEGORIES).forEach(([primaryId, primary]) => {
+      // Add primary category
+      defaultCategories.push({
+        id: primaryId,
+        name: primary.name,
+        parentId: null,
+        description: undefined,
+        isCustom: false,
+        isHidden: ['TRANSFER_IN', 'TRANSFER_OUT'].includes(primaryId),
+        isSavings: false
+      });
+
+      // Add all subcategories for this primary category
+      Object.entries(primary.subcategories).forEach(([subcategoryId, subcategory]) => {
+        defaultCategories.push({
+          id: subcategoryId,
+          name: subcategory.name,
+          parentId: primaryId,
+          description: subcategory.description,
+          isCustom: false,
+          isHidden: false,
+          isSavings: false
+        });
+      });
+    });
+
+    // Add a custom Savings category that's not in Plaid taxonomy
+    defaultCategories.push({
+      id: 'CUSTOM_SAVINGS',
+      name: 'Savings',
+      parentId: null,
+      description: 'Money set aside for future use',
+      isCustom: true,
+      isHidden: false,
+      isSavings: true
+    });
 
     await this.dataService.saveCategories(defaultCategories, userId);
   }

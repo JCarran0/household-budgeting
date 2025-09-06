@@ -68,6 +68,8 @@
 - A user should be able to see transaction sync status and results
 - A user should be able to manually trigger transaction sync
 - A user should have transactions automatically deduplicated
+- A user should have transactions automatically categorized using Plaid's Personal Finance Categories
+- A user should see transactions assigned to the most specific category available (detailed over primary)
 
 ### Transaction Viewing & Filtering
 - A user should be able to view all their transactions in a table/list format
@@ -175,15 +177,20 @@
 - A user should be able to create subcategories under parent categories
 - A user should be able to view their categories in a hierarchical tree structure
 - A user should be able to see the total number of their categories
-- A user should have default categories automatically initialized on first use (matching Plaid category names)
+- A user should have 121 default categories automatically initialized on first use (Plaid Personal Finance Categories):
+  - 16 primary categories (e.g., INCOME, FOOD_AND_DRINK, TRANSPORTATION)
+  - 104 subcategories with descriptions (e.g., "Coffee: Purchases at coffee shops or cafes")
+  - 1 custom savings category
 - A user should not see categories created by other users
+- A user's custom categories should receive SNAKE_CASE IDs with CUSTOM_ prefix (e.g., CUSTOM_WINE_BUDGET)
 
 ### Category Properties
-- A user should be able to name/rename categories
-- A user should be able to mark categories as hidden (excluded from budget calculations)
-- A user should be able to mark categories as savings categories
-- A user should be able to edit all their categories (including default ones)
-- A user should be able to delete all their categories (including default ones)
+- A user should be able to name/rename custom categories (Plaid categories have fixed names)
+- A user should be able to mark any category as hidden (excluded from budget calculations)
+- A user should be able to mark any category as savings categories
+- A user should be able to edit properties of custom categories (isHidden, isSavings for all)
+- A user should be able to delete only custom categories (Plaid categories are permanent)
+- A user should be able to see category descriptions for Plaid categories
 - A user should be able to search/filter categories by name
 - A user should be able to show/hide hidden categories in the view
 

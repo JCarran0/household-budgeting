@@ -112,11 +112,19 @@ export function Budgets() {
 
   // Calculate actuals from transactions
   const actuals = useMemo<Record<string, number>>(() => {
-    if (!transactionData?.transactions) return {};
+    if (!transactionData?.transactions || !categories) return {};
+    
+    // Create a set of hidden category IDs for efficient lookup
+    const hiddenCategoryIds = new Set(
+      categories.filter(c => c.isHidden).map(c => c.id)
+    );
     
     const actualsByCategory: Record<string, number> = {};
     transactionData.transactions.forEach(transaction => {
-      if (transaction.categoryId && !transaction.isHidden) {
+      // Exclude hidden transactions and transactions in hidden categories
+      if (transaction.categoryId && 
+          !transaction.isHidden && 
+          !hiddenCategoryIds.has(transaction.categoryId)) {
         const amount = Math.abs(transaction.amount);
         actualsByCategory[transaction.categoryId] = 
           (actualsByCategory[transaction.categoryId] || 0) + amount;
@@ -124,7 +132,7 @@ export function Budgets() {
     });
     
     return actualsByCategory;
-  }, [transactionData]);
+  }, [transactionData, categories]);
 
   // Fetch budget comparison
   const { data: comparisonData, isLoading: comparisonLoading } = useQuery({

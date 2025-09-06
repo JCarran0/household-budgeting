@@ -109,6 +109,8 @@ export class ReportService {
       const categories = await this.dataService.getCategories(userId);
 
       const categoryMap = new Map(categories.map(c => [c.id, c.name]));
+      // Create a set of hidden category IDs for efficient lookup
+      const hiddenCategoryIds = new Set(categories.filter(c => c.isHidden).map(c => c.id));
       const trends: SpendingTrend[] = [];
 
       // Generate month list
@@ -118,13 +120,14 @@ export class ReportService {
         const monthStart = startOfMonth(new Date(month + '-01')).toISOString().split('T')[0];
         const monthEnd = endOfMonth(new Date(month + '-01')).toISOString().split('T')[0];
 
-        // Filter transactions for this month
+        // Filter transactions for this month (excluding hidden categories)
         const monthTransactions = transactions.filter(t => 
           t.date >= monthStart && 
           t.date <= monthEnd && 
           !t.isHidden &&
           !t.pending &&
-          t.amount > 0 // Expenses only
+          t.amount > 0 && // Expenses only
+          (!t.categoryId || !hiddenCategoryIds.has(t.categoryId)) // Exclude hidden categories
         );
 
         // Group by category
@@ -179,14 +182,17 @@ export class ReportService {
       ) || [];
       
       const categories = await this.dataService.getCategories(userId);
+      // Create a set of hidden category IDs for efficient lookup
+      const hiddenCategoryIds = new Set(categories.filter(c => c.isHidden).map(c => c.id));
 
-      // Filter transactions
+      // Filter transactions (excluding hidden categories)
       const filteredTransactions = transactions.filter(t => 
         t.date >= startDate && 
         t.date <= endDate && 
         !t.isHidden &&
         !t.pending &&
-        t.amount > 0 // Expenses only
+        t.amount > 0 && // Expenses only
+        (!t.categoryId || !hiddenCategoryIds.has(t.categoryId)) // Exclude hidden categories
       );
 
       // Calculate total
@@ -299,6 +305,10 @@ export class ReportService {
       const transactions = await this.dataService.getData<StoredTransaction[]>(
         `transactions_${userId}`
       ) || [];
+      
+      const categories = await this.dataService.getCategories(userId);
+      // Create a set of hidden category IDs for efficient lookup
+      const hiddenCategoryIds = new Set(categories.filter(c => c.isHidden).map(c => c.id));
 
       const months = this.getMonthRange(startMonth, endMonth);
       const summary: CashFlowSummary[] = [];
@@ -311,7 +321,8 @@ export class ReportService {
           t.date >= monthStart && 
           t.date <= monthEnd && 
           !t.isHidden &&
-          !t.pending
+          !t.pending &&
+          (!t.categoryId || !hiddenCategoryIds.has(t.categoryId)) // Exclude hidden categories
         );
 
         const income = monthTransactions
