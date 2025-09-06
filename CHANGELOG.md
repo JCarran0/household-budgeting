@@ -139,6 +139,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **transactions**: resolve hooks error when filtering by date
 - **plaid**: resolve 400 error when connecting bank accounts
 - **typescript**: resolve VSCode Jest type recognition issues
+- **deploy**: preserve dist directory structure in deployments
 
 ### Changed
 - Optimized AI agent documentation structure and navigation
