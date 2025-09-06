@@ -2,9 +2,15 @@
 
 Review testing requirements for changes made in this Claude Code session according to our testing strategy.
 
+## Testing Strategy Documentation
+@docs/AI-TESTING-STRATEGY.md
+
+## User Stories Documentation  
+@docs/AI-USER-STORIES.md
+
 ## Instructions
 
-1. **Review our testing strategy**: Carefully read `docs/AI-TESTING-STRATEGY.md`, focusing on:
+1. **Review our testing strategy**: From the included AI-TESTING-STRATEGY.md above, focus on:
    - Section "Core Testing Principles" - understand our risk-based approach
    - Section "Test Suite Organization" - know where different tests belong
    - Section "When to Add Tests" - decision criteria for test creation
@@ -61,14 +67,12 @@ Review testing requirements for changes made in this Claude Code session accordi
 ```
 
 ## Important Reminders
-- Refer to `docs/AI-TESTING-STRATEGY.md` for detailed examples and patterns
+- Testing strategy and user stories are included above for reference
 - Skip trivial tests (getters, setters, formatters) per our strategy
 - Use real Plaid sandbox, not mocks, for integration tests
 - Focus on user workflows, not isolated functions
 
-## Quick Reference
-- Strategy doc: `docs/AI-TESTING-STRATEGY.md`
-- User stories: `docs/AI-USER-STORIES.md`
+## Quick Reference Test Locations
 - Critical tests: `backend/src/__tests__/critical/`
 - Integration tests: `backend/src/__tests__/integration/`
 - Frontend tests: `frontend/src/__tests__/stories/`

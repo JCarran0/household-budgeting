@@ -6,6 +6,26 @@ Review changes made in this Claude Code session and intelligently determine if A
 
 This command helps maintain accurate, up-to-date documentation optimized for AI agent consumption. It reviews session changes against specific criteria to avoid unnecessary documentation churn while ensuring critical updates aren't missed.
 
+## Current Documentation Files
+
+### Main Project Guide
+@CLAUDE.md
+
+### Architecture Documentation
+@docs/AI-APPLICATION-ARCHITECTURE.md
+
+### Deployment Documentation
+@docs/AI-DEPLOYMENTS.md
+
+### Testing Strategy
+@docs/AI-TESTING-STRATEGY.md
+
+### User Stories
+@docs/AI-USER-STORIES.md
+
+### Architecture Plan
+@docs/AI-Architecture-Plan.md
+
 ## Instructions
 
 ### 1. Analyze Session Changes
@@ -49,7 +69,7 @@ Documentation should ONLY be updated when changes meet these criteria:
 
 ### 3. Review Each Documentation File
 
-Check each AI documentation file for potential updates:
+With the documentation files included above, check each for potential updates:
 
 | Document | Check For |
 |----------|-----------|

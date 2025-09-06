@@ -8,6 +8,12 @@ description: Systematic debugging workflow for reported issues
 
 I'll help you debug this issue using a systematic approach. Let me analyze the problem and guide you through the debugging process.
 
+## Project Context
+@CLAUDE.md
+
+## Architecture Documentation
+@docs/AI-APPLICATION-ARCHITECTURE.md
+
 ## Initial Analysis
 
 First, let me understand:
@@ -61,11 +67,11 @@ Based on the issue type, check for:
 - Configuration mismatches
 
 ### Step 5: Review Documentation
-Check relevant documentation for:
-- Known issues or gotchas
-- API/service documentation
-- Configuration requirements
-- Breaking changes in dependencies
+The included documentation files above contain:
+- Known issues and gotchas (see AI-APPLICATION-ARCHITECTURE.md troubleshooting section)
+- Service architecture and API patterns
+- Configuration requirements (see CLAUDE.md environment variables)
+- Common problems and solutions
 
 ### Step 6: Develop Solution
 - Identify minimal fix vs proper solution
