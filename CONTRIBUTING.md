@@ -95,8 +95,21 @@ This project uses [standard-version](https://github.com/conventional-changelog/s
 
 4. **Deploy to Production**
    - Go to GitHub Actions
-   - Run "Deploy to Production" workflow
-   - The deployment will include the new version
+   - Run "Release and Deploy to Production" workflow
+   - This will handle both release and deployment automatically
+
+### Alternative: Integrated Release + Deploy
+
+For a simpler workflow, use the integrated "Release and Deploy to Production" action:
+
+1. **Push your commits to main** (using conventional commits)
+2. **Go to GitHub Actions**
+3. **Run "Release and Deploy to Production"**
+   - Automatically creates release if there are new commits
+   - Deploys the new version to production
+   - Updates CHANGELOG.md with all changes
+
+This is the recommended approach as it ensures every deployment is properly versioned.
 
 ### What standard-version does
 

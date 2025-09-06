@@ -66,8 +66,34 @@ Configure in: Settings → Secrets and variables → Actions → Variables
 
 ## Deployment Process
 
-### Manual Deployment (GitHub Actions)
-The deployment pipeline is triggered manually via workflow_dispatch:
+### Integrated Release and Deployment (Recommended)
+Use the `Release and Deploy to Production` workflow for a seamless release + deployment:
+
+```bash
+# GitHub Actions → Actions tab → Release and Deploy to Production → Run workflow
+```
+
+**Options:**
+- **deployment_message**: Description of the deployment
+- **skip_release**: Check to deploy without creating a new release
+- **release_type**: Leave empty for auto-detect, or force patch/minor/major/alpha
+
+**Process:**
+1. **Release Phase** (if not skipped):
+   - Checks for unreleased commits
+   - Runs standard-version to create release
+   - Updates CHANGELOG.md and version numbers
+   - Creates git tag and pushes to GitHub
+
+2. **Deploy Phase**:
+   - Builds backend and frontend
+   - Creates deployment package with new version
+   - Uploads to S3 with version in filename
+   - Deploys via SSM to EC2
+   - Verifies deployment health
+
+### Legacy Deployment (Without Release)
+The original `Deploy to Production` workflow still exists for backwards compatibility:
 
 1. **Build Phase**:
    - TypeScript compilation with postbuild script to flatten dist structure
@@ -76,7 +102,7 @@ The deployment pipeline is triggered manually via workflow_dispatch:
 
 2. **Upload Phase**:
    - Upload artifact to S3 backup bucket with timestamp
-   - Store as `backend-YYYY-MM-DD-HHMMSS.tar.gz`
+   - Store as `deploy-YYYY-MM-DD-HHMMSS.tar.gz`
 
 3. **Deploy Phase**:
    - Use AWS SSM to send commands to EC2 instance

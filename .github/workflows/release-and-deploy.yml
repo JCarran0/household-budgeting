@@ -1,0 +1,308 @@
+name: Release and Deploy to Production
+
+on:
+  workflow_dispatch:
+    inputs:
+      deployment_message:
+        description: 'Deployment message'
+        required: false
+        default: 'Production release and deployment'
+        type: string
+      skip_release:
+        description: 'Skip release creation (deploy current version only)'
+        required: false
+        default: false
+        type: boolean
+      release_type:
+        description: 'Force specific release type (leave empty for auto-detect)'
+        required: false
+        default: ''
+        type: choice
+        options:
+          - '' # Auto-detect from commits
+          - 'patch'
+          - 'minor'
+          - 'major'
+          - 'alpha'
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    name: Create Release
+    if: ${{ github.event.inputs.skip_release != 'true' }}
+    outputs:
+      new_version: ${{ steps.version.outputs.new_version }}
+      release_created: ${{ steps.version.outputs.release_created }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+          
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          
+      - name: Install dependencies
+        run: npm ci
+        
+      - name: Configure Git
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          
+      - name: Check for unreleased changes
+        id: check
+        run: |
+          # Get the last tag
+          LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+          
+          if [ -z "$LAST_TAG" ]; then
+            echo "No previous tags found, will create first release"
+            echo "has_changes=true" >> $GITHUB_OUTPUT
+          else
+            # Check if there are new commits since last tag
+            COMMITS=$(git log ${LAST_TAG}..HEAD --oneline)
+            if [ -z "$COMMITS" ]; then
+              echo "No new commits since last release ($LAST_TAG)"
+              echo "has_changes=false" >> $GITHUB_OUTPUT
+            else
+              echo "Found new commits since $LAST_TAG:"
+              echo "$COMMITS"
+              echo "has_changes=true" >> $GITHUB_OUTPUT
+            fi
+          fi
+          
+      - name: Create release
+        id: version
+        if: steps.check.outputs.has_changes == 'true'
+        run: |
+          # Determine release command based on input
+          RELEASE_TYPE="${{ github.event.inputs.release_type }}"
+          
+          if [ -z "$RELEASE_TYPE" ]; then
+            echo "Auto-detecting version bump from commits..."
+            RELEASE_CMD="npm run release"
+          elif [ "$RELEASE_TYPE" = "alpha" ]; then
+            echo "Creating alpha release..."
+            RELEASE_CMD="npm run release:alpha"
+          else
+            echo "Creating $RELEASE_TYPE release..."
+            RELEASE_CMD="npm run release:$RELEASE_TYPE"
+          fi
+          
+          # Run standard-version
+          $RELEASE_CMD
+          
+          # Get the new version
+          NEW_VERSION=$(node -p "require('./package.json').version")
+          echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
+          echo "release_created=true" >> $GITHUB_OUTPUT
+          echo "✅ Created release v$NEW_VERSION"
+          
+      - name: Push changes
+        if: steps.version.outputs.release_created == 'true'
+        run: |
+          git push --follow-tags origin main
+          echo "📦 Pushed release v${{ steps.version.outputs.new_version }} to GitHub"
+          
+      - name: Skip release
+        if: steps.check.outputs.has_changes != 'true'
+        run: |
+          CURRENT_VERSION=$(node -p "require('./package.json').version")
+          echo "new_version=$CURRENT_VERSION" >> $GITHUB_OUTPUT
+          echo "release_created=false" >> $GITHUB_OUTPUT
+          echo "ℹ️ No changes to release, will deploy current version: v$CURRENT_VERSION"
+
+  deploy:
+    needs: [release]
+    # Always run deploy, even if release was skipped
+    if: always() && (needs.release.result == 'success' || needs.release.result == 'skipped')
+    runs-on: ubuntu-latest
+    name: Deploy to Production
+    environment:
+      name: production
+      url: https://budget.jaredcarrano.com
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: main # Ensure we have the latest including any release commits
+          
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          
+      - name: Get deployment version
+        id: deploy_version
+        run: |
+          # Get version from package.json (will be updated if release was created)
+          VERSION=$(node -p "require('./package.json').version")
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "🚀 Deploying version: v$VERSION"
+          
+      - name: Build backend
+        working-directory: ./backend
+        run: |
+          npm ci
+          npm run build
+          npm test
+          
+      - name: Build frontend
+        working-directory: ./frontend
+        run: |
+          npm ci
+          npm run build
+          
+      - name: Create deployment package
+        run: |
+          # Create package structure
+          mkdir -p deployment/backend deployment/frontend
+          
+          # Copy backend - preserve directory structure
+          cp -r backend/dist deployment/backend/
+          cp backend/package*.json deployment/backend/
+          
+          # Copy frontend
+          cp -r frontend/dist/* deployment/frontend/
+          
+          # Generate .env file with secrets and variables
+          cat > deployment/backend/.env << EOF
+          NODE_ENV=${{ vars.PRODUCTION_NODE_ENV }}
+          PORT=${{ vars.PRODUCTION_PORT }}
+          JWT_SECRET=${{ secrets.PRODUCTION_JWT_SECRET }}
+          JWT_EXPIRES_IN=${{ vars.PRODUCTION_JWT_EXPIRES_IN }}
+          PLAID_CLIENT_ID=${{ secrets.PRODUCTION_PLAID_CLIENT_ID }}
+          PLAID_SECRET=${{ secrets.PRODUCTION_PLAID_SECRET }}
+          PLAID_ENV=${{ vars.PRODUCTION_PLAID_ENV }}
+          PLAID_PRODUCTS=${{ vars.PRODUCTION_PLAID_PRODUCTS }}
+          PLAID_COUNTRY_CODES=${{ vars.PRODUCTION_PLAID_COUNTRY_CODES }}
+          DATA_DIR=${{ vars.PRODUCTION_DATA_DIR }}
+          ENCRYPTION_KEY=${{ secrets.PRODUCTION_ENCRYPTION_KEY }}
+          STORAGE_TYPE=${{ vars.PRODUCTION_STORAGE_TYPE }}
+          S3_BUCKET_NAME=${{ vars.PRODUCTION_S3_BUCKET_NAME }}
+          S3_PREFIX=${{ vars.PRODUCTION_S3_PREFIX }}
+          AWS_REGION=${{ vars.PRODUCTION_AWS_REGION }}
+          FRONTEND_URL=${{ vars.PRODUCTION_FRONTEND_URL }}
+          API_PREFIX=${{ vars.PRODUCTION_API_PREFIX }}
+          LOG_LEVEL=${{ vars.PRODUCTION_LOG_LEVEL }}
+          DEPLOYMENT_VERSION=${{ steps.deploy_version.outputs.version }}
+          EOF
+          
+          # Add metadata
+          echo "$GITHUB_SHA" > deployment/REVISION
+          echo "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > deployment/TIMESTAMP
+          echo "${{ steps.deploy_version.outputs.version }}" > deployment/VERSION
+          
+          # Create tarball
+          tar -czf deployment.tar.gz deployment/
+          
+      - name: Configure AWS
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ vars.PRODUCTION_AWS_REGION }}
+          
+      - name: Upload to S3
+        id: upload
+        run: |
+          VERSION="${{ steps.deploy_version.outputs.version }}"
+          TIMESTAMP=$(date +%Y%m%d-%H%M%S)
+          S3_PATH="s3://${{ vars.PRODUCTION_S3_BACKUP_BUCKET }}/deployments/v${VERSION}-${TIMESTAMP}.tar.gz"
+          
+          aws s3 cp deployment.tar.gz "$S3_PATH"
+          echo "s3_path=$S3_PATH" >> $GITHUB_OUTPUT
+          echo "📦 Package uploaded to: $S3_PATH"
+          
+      - name: Deploy via SSM
+        run: |
+          echo "🚀 Triggering deployment on EC2..."
+          
+          # Simple SSM command - just call the deploy script with S3 path
+          COMMAND_ID=$(aws ssm send-command \
+            --instance-ids "${{ vars.PRODUCTION_EC2_INSTANCE_ID }}" \
+            --document-name "AWS-RunShellScript" \
+            --parameters "commands=[\"sudo -u appuser /home/appuser/deploy.sh ${{ steps.upload.outputs.s3_path }}\"]" \
+            --output text \
+            --query "Command.CommandId")
+          
+          echo "Command ID: $COMMAND_ID"
+          
+          # Wait for completion
+          aws ssm wait command-executed \
+            --command-id "$COMMAND_ID" \
+            --instance-id "${{ vars.PRODUCTION_EC2_INSTANCE_ID }}" || true
+          
+          # Get status
+          STATUS=$(aws ssm get-command-invocation \
+            --command-id "$COMMAND_ID" \
+            --instance-id "${{ vars.PRODUCTION_EC2_INSTANCE_ID }}" \
+            --query "Status" \
+            --output text)
+          
+          echo "Status: $STATUS"
+          
+          # Show output
+          aws ssm get-command-invocation \
+            --command-id "$COMMAND_ID" \
+            --instance-id "${{ vars.PRODUCTION_EC2_INSTANCE_ID }}" \
+            --query "StandardOutputContent" \
+            --output text
+          
+          if [ "$STATUS" != "Success" ]; then
+            echo "=== Error Output ==="
+            aws ssm get-command-invocation \
+              --command-id "$COMMAND_ID" \
+              --instance-id "${{ vars.PRODUCTION_EC2_INSTANCE_ID }}" \
+              --query "StandardErrorContent" \
+              --output text
+            exit 1
+          fi
+          
+      - name: Verify deployment
+        run: |
+          echo "🔍 Verifying deployment..."
+          
+          # Quick health check
+          for i in {1..5}; do
+            if curl -s https://budget.jaredcarrano.com/health | grep -q "ok"; then
+              echo "✅ Deployment verified!"
+              DEPLOYED_VERSION=$(curl -s https://budget.jaredcarrano.com/health | jq -r .version)
+              echo "📌 Deployed version: v$DEPLOYED_VERSION"
+              exit 0
+            fi
+            echo "Retry $i/5..."
+            sleep 3
+          done
+          
+          echo "❌ Health check failed"
+          exit 1
+          
+      - name: Summary
+        if: success()
+        run: |
+          VERSION="${{ steps.deploy_version.outputs.version }}"
+          RELEASE_CREATED="${{ needs.release.outputs.release_created }}"
+          
+          echo "### 🎉 Deployment Successful!" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **Version:** v$VERSION" >> $GITHUB_STEP_SUMMARY
+          if [ "$RELEASE_CREATED" = "true" ]; then
+            echo "- **Release:** ✅ New release created" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "- **Release:** ℹ️ No new release (no changes or skipped)" >> $GITHUB_STEP_SUMMARY
+          fi
+          echo "- **Message:** ${{ github.event.inputs.deployment_message }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Commit:** \`${{ github.sha }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Deployed by:** @${{ github.actor }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **URL:** https://budget.jaredcarrano.com" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "[View Release](https://github.com/${{ github.repository }}/releases/tag/v$VERSION) | [View Changelog](https://github.com/${{ github.repository }}/blob/main/CHANGELOG.md)" >> $GITHUB_STEP_SUMMARY
