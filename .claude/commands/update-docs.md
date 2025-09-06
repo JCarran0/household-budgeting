@@ -47,6 +47,7 @@ Documentation should ONLY be updated when changes meet these criteria:
 - **Security changes**: New security requirements or authentication modifications
 - **Infrastructure changes**: New deployment methods, storage backends, or services
 - **Critical bug fixes**: Solutions to data loss, security issues, or system failures
+- **User story updates or additions**: Changes to business requirements should always be documented.
 
 #### **SHOULD Update** - Important Patterns
 - **New architectural patterns**: Service patterns, state management, or data flow
