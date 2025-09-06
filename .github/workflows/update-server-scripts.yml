@@ -78,8 +78,8 @@ jobs:
           
           echo "▶️  Starting application with new path..."
           cd "$APP_DIR/backend"
-          # FIXED: Using index.js instead of backend/src/index.js
-          pm2 start index.js --name budget-backend --time || pm2 restart budget-backend
+          # Using dist/index.js with proper directory structure
+          pm2 start dist/index.js --name budget-backend --time || pm2 restart budget-backend
           pm2 save
           
           echo "🏥 Running health check..."
@@ -125,4 +125,4 @@ jobs:
           echo "### ✅ Server scripts updated!" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "- **Updated:** ${{ github.event.inputs.script_to_update }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Key change:** PM2 now starts from \`index.js\` instead of \`backend/src/index.js\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Key change:** PM2 now starts from \`dist/index.js\` with proper directory structure" >> $GITHUB_STEP_SUMMARY
