@@ -22,6 +22,7 @@ interface TransactionFilterState {
   amountSearchMode: 'range' | 'exact';
   exactAmount: number | null;
   amountTolerance: number;
+  transactionType: 'all' | 'income' | 'expense';
 }
 
 interface TransactionFilterActions {
@@ -37,6 +38,7 @@ interface TransactionFilterActions {
   setAmountSearchMode: (value: 'range' | 'exact') => void;
   setExactAmount: (value: number | null) => void;
   setAmountTolerance: (value: number) => void;
+  setTransactionType: (value: 'all' | 'income' | 'expense') => void;
   resetFilters: () => void;
   debouncedSearchTerm: string;
 }
@@ -63,6 +65,7 @@ export function useTransactionFilters(): TransactionFilterState & TransactionFil
   const amountSearchMode = (transactionFilters?.amountSearchMode || 'range') as 'range' | 'exact';
   const exactAmount = transactionFilters?.exactAmount ?? null;
   const amountTolerance = transactionFilters?.amountTolerance ?? 0.50;
+  const transactionType = (transactionFilters?.transactionType || 'all') as 'all' | 'income' | 'expense';
   
   const [debouncedSearchTerm] = useDebouncedValue(searchInput, 300);
   
@@ -118,6 +121,10 @@ export function useTransactionFilters(): TransactionFilterState & TransactionFil
     setTransactionFilters({ amountTolerance: value });
   }, [setTransactionFilters]);
   
+  const setTransactionType = useCallback((value: 'all' | 'income' | 'expense') => {
+    setTransactionFilters({ transactionType: value });
+  }, [setTransactionFilters]);
+  
   const resetFilters = useCallback(() => {
     resetTransactionFilters();
   }, [resetTransactionFilters]);
@@ -135,6 +142,7 @@ export function useTransactionFilters(): TransactionFilterState & TransactionFil
     amountSearchMode,
     exactAmount,
     amountTolerance,
+    transactionType,
     setSearchInput,
     setSelectedAccount,
     setSelectedCategories,
@@ -147,6 +155,7 @@ export function useTransactionFilters(): TransactionFilterState & TransactionFil
     setAmountSearchMode,
     setExactAmount,
     setAmountTolerance,
+    setTransactionType,
     resetFilters,
     debouncedSearchTerm,
   };

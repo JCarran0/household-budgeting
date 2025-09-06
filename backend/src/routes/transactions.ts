@@ -57,6 +57,7 @@ const transactionFilterSchema = z.object({
     if (typeof val === 'string') return parseFloat(val);
     return val;
   }),
+  transactionType: z.enum(['income', 'expense', 'all']).optional(),
 });
 
 const updateCategorySchema = z.object({

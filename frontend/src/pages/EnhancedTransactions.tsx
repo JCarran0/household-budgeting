@@ -104,6 +104,8 @@ export function EnhancedTransactions() {
     setAmountSearchMode,
     setExactAmount,
     setAmountTolerance,
+    transactionType,
+    setTransactionType,
     resetFilters,
     debouncedSearchTerm,
   } = useTransactionFilters();
@@ -264,6 +266,7 @@ export function EnhancedTransactions() {
       searchQuery: debouncedSearchTerm || undefined,
       includeHidden,
       onlyUncategorized,
+      transactionType: transactionType === 'all' ? undefined : transactionType,
     };
     
     // Add amount search params based on mode
@@ -295,6 +298,7 @@ export function EnhancedTransactions() {
     amountSearchMode,
     exactAmount,
     amountTolerance,
+    transactionType,
   ]);
 
   // Fetch transactions with filters
@@ -788,6 +792,20 @@ export function EnhancedTransactions() {
                 />
               </Grid.Col>
             </Grid>
+
+            {/* Transaction Type Filter */}
+            <Stack gap="xs">
+              <Text size="sm" fw={500}>Transaction Type</Text>
+              <SegmentedControl
+                value={transactionType}
+                onChange={(value) => setTransactionType(value as 'all' | 'income' | 'expense')}
+                data={[
+                  { label: 'All Transactions', value: 'all' },
+                  { label: 'Income', value: 'income' },
+                  { label: 'Expenses', value: 'expense' },
+                ]}
+              />
+            </Stack>
 
             <Grid>
               <Grid.Col span={{ base: 12 }}>
