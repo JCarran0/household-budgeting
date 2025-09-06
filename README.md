@@ -1,10 +1,15 @@
 # Household Budgeting App
 
+![Version](https://img.shields.io/badge/version-1.0.0--alpha.1-blue)
+[![Changelog](https://img.shields.io/badge/changelog-Keep%20a%20Changelog-brightgreen)](CHANGELOG.md)
+
 A modern personal budgeting application with bank account integration via Plaid, built with React and Node.js.
 
 ## 🚀 Production Deployment Status
 
-**Live Application**: https://budget.jaredcarrano.com
+**Live Application**: https://budget.jaredcarrano.com  
+**Current Version**: v1.0.0-alpha.1  
+**Version Info**: https://budget.jaredcarrano.com/version
 
 The application is successfully deployed on AWS infrastructure:
 - **EC2 Instance**: t4g.micro (ARM-based, Ubuntu 22.04)
@@ -53,6 +58,19 @@ The application is successfully deployed on AWS infrastructure:
 - Multi-user household support
 - Mobile app
 - PostgreSQL migration from JSON storage
+
+## 📋 What's New
+
+See [CHANGELOG.md](CHANGELOG.md) for a detailed list of changes in each version.
+
+**Latest Updates (v1.0.0-alpha.1)**:
+- Full production deployment with CI/CD pipeline
+- Comprehensive transaction management with bulk editing
+- Interactive reporting with drill-down navigation
+- Auto-categorization with OR logic patterns
+- Semantic versioning with automated changelog
+
+Check current version and pending changes: `curl https://budget.jaredcarrano.com/version`
 
 ## 🛠 Tech Stack
 
@@ -314,8 +332,11 @@ terraform destroy
 ### Monitoring & Health Checks
 
 ```bash
-# Check application health
+# Check application health (includes version)
 curl https://budget.jaredcarrano.com/health
+
+# Check version and unreleased changes
+curl https://budget.jaredcarrano.com/version
 
 # Check PM2 process details
 sudo -u appuser pm2 describe budget-backend
@@ -386,15 +407,18 @@ See [CLAUDE.md](CLAUDE.md) for:
 - Testing strategies
 - Troubleshooting guide
 
-### Commit Convention
-We follow [Conventional Commits](https://www.conventionalcommits.org/):
+### Commit Convention & Versioning
+We follow [Conventional Commits](https://www.conventionalcommits.org/) with Semantic Versioning:
 ```
-feat(scope): add new feature
-fix(scope): fix bug
-docs: update documentation
-test: add tests
-chore: maintenance tasks
+feat(scope): add new feature     # Triggers MINOR version bump
+fix(scope): fix bug              # Triggers PATCH version bump
+feat!: breaking change           # Triggers MAJOR version bump
+docs: update documentation       # No version change
+test: add tests                  # No version change
+chore: maintenance tasks         # No version change
 ```
+
+The CHANGELOG.md is automatically updated after each push to main. See [CONTRIBUTING.md](CONTRIBUTING.md) for detailed guidelines and release process.
 
 ### Project Plan
 See [PROJECT_PLAN.md](PROJECT_PLAN.md) for development phases and progress.
@@ -429,9 +453,16 @@ We follow Risk-Based Testing:
 1. Fork the repository
 2. Create a feature branch
 3. Follow TypeScript strict mode (no `any` types)
-4. Add tests for critical paths
-5. Ensure all tests pass
-6. Submit a pull request
+4. Use [Conventional Commits](https://www.conventionalcommits.org/) for version management
+5. Add tests for critical paths
+6. Ensure all tests pass
+7. Submit a pull request
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for detailed guidelines on:
+- Commit message format
+- Version bumping rules
+- Release process
+- Changelog management
 
 ## 📄 License
 
