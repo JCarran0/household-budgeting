@@ -76,7 +76,7 @@ if (process.env.NODE_ENV === 'development') {
 
 // Health check endpoint
 app.get('/health', (_req: Request, res: Response) => {
-  const pkg = require('../package.json');
+  const pkg = require('../../package.json');
   res.json({
     status: 'ok',
     timestamp: new Date().toISOString(),
@@ -87,7 +87,7 @@ app.get('/health', (_req: Request, res: Response) => {
 
 // Version endpoint
 app.get('/version', (_req: Request, res: Response) => {
-  const pkg = require('../package.json');
+  const pkg = require('../../package.json');
   const fs = require('fs');
   const path = require('path');
   
