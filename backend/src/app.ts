@@ -85,8 +85,19 @@ app.get('/health', (_req: Request, res: Response) => {
   });
 });
 
-// Version endpoint
-app.get('/version', (_req: Request, res: Response) => {
+// API routes
+const apiPrefix = process.env.API_PREFIX || '/api/v1';
+app.use(`${apiPrefix}/auth`, authRoutes);
+app.use(`${apiPrefix}/plaid`, plaidRoutes);
+app.use(`${apiPrefix}/accounts`, accountRoutes);
+app.use(`${apiPrefix}/transactions`, transactionRoutes);
+app.use(`${apiPrefix}/categories`, categoryRoutes);
+app.use(`${apiPrefix}/budgets`, budgetRoutes);
+app.use(`${apiPrefix}/reports`, reportRoutes);
+app.use(`${apiPrefix}/autocategorize`, autoCategorizeRoutes);
+
+// Version endpoint under API prefix
+app.get(`${apiPrefix}/version`, (_req: Request, res: Response) => {
   const pkg = require('../../package.json');
   const fs = require('fs');
   const path = require('path');
@@ -112,17 +123,6 @@ app.get('/version', (_req: Request, res: Response) => {
     unreleased: unreleased || 'No unreleased changes',
   });
 });
-
-// API routes
-const apiPrefix = process.env.API_PREFIX || '/api/v1';
-app.use(`${apiPrefix}/auth`, authRoutes);
-app.use(`${apiPrefix}/plaid`, plaidRoutes);
-app.use(`${apiPrefix}/accounts`, accountRoutes);
-app.use(`${apiPrefix}/transactions`, transactionRoutes);
-app.use(`${apiPrefix}/categories`, categoryRoutes);
-app.use(`${apiPrefix}/budgets`, budgetRoutes);
-app.use(`${apiPrefix}/reports`, reportRoutes);
-app.use(`${apiPrefix}/autocategorize`, autoCategorizeRoutes);
 
 // 404 handler
 app.use((req: Request, res: Response) => {
