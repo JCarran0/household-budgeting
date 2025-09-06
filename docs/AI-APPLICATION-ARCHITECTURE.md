@@ -483,6 +483,11 @@ if (syncedAccountIds.has(existing.accountId)) { /* check for removal */ }
 - Modal: `TransactionPreviewModal.tsx`
 - Trigger: `TransactionPreviewTrigger.tsx`
 
+### Application Metadata
+- Health Endpoint: `GET /health` - Returns status, timestamp, environment, and version
+- Version Endpoint: `GET /version` - Returns current version, unreleased changes, deployment info
+- Version Source: `package.json` version field (synced across all packages)
+
 ## Final Notes
 
 This application follows a pragmatic "spike and stabilize" approach:

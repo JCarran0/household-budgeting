@@ -266,6 +266,80 @@ When moving from development to production:
    - [ ] Set up CDN for static assets
    - [ ] Enable gzip compression
 
+## Release Management
+
+### Versioning Strategy
+The application uses [Semantic Versioning](https://semver.org/) with automated changelog management:
+- **MAJOR.MINOR.PATCH** format (e.g., 1.2.3)
+- **Conventional Commits** determine version bumps
+- **Rolling changelog** tracks unreleased changes
+
+### Release Process
+
+#### 1. Automatic Changelog Updates
+After each push to main:
+```yaml
+# .github/workflows/update-changelog.yml
+- Parses conventional commits
+- Updates CHANGELOG.md Unreleased section
+- Commits changes back with [skip ci]
+```
+
+#### 2. Creating a Release
+```bash
+# Check pending changes
+cat CHANGELOG.md | head -50
+curl https://budget.jaredcarrano.com/version
+
+# Prepare release (auto-detects version bump)
+npm run release:prepare
+
+# Or specify version type
+npm run release:prepare -- major
+npm run release:prepare -- minor
+npm run release:prepare -- patch
+
+# Commit and push
+git add -A
+git commit -m "chore: release v1.1.0"
+git push && git push --tags
+```
+
+#### 3. Version Information in Deployment
+The deployment process includes version metadata:
+- Version injected into deployment package
+- Available at `/health` and `/version` endpoints
+- Stored in deployment artifacts on S3
+
+### GitHub Workflows
+
+#### update-changelog.yml
+- **Trigger**: Push to main branch
+- **Purpose**: Parse commits and update CHANGELOG.md
+- **Frequency**: Every commit to main
+
+#### deploy-production.yml (with versioning)
+- **Includes**: Version from package.json
+- **Deploys**: Tagged releases to production
+- **Metadata**: Commit hash, timestamp, version
+
+### Version Endpoints
+
+```bash
+# Health check with version
+curl https://budget.jaredcarrano.com/health
+# Response: {"status":"ok","version":"1.0.0-alpha.1",...}
+
+# Detailed version info
+curl https://budget.jaredcarrano.com/version
+# Response: {
+#   "current": "1.0.0-alpha.1",
+#   "unreleased": "...",
+#   "deployedAt": "2025-01-15T10:00:00Z",
+#   "commitHash": "abc123"
+# }
+```
+
 ## Monitoring and Logs
 
 ### Application Logs

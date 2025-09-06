@@ -249,23 +249,33 @@ function processData(data: unknown) {
 ```
 
 ### Commit Types
-- **feat**: New feature or functionality
-- **fix**: Bug fix
+- **feat**: New feature or functionality (triggers MINOR version bump)
+- **fix**: Bug fix (triggers PATCH version bump)
 - **docs**: Documentation changes only
 - **style**: Code style changes
 - **refactor**: Code refactoring
 - **test**: Adding or updating tests
 - **chore**: Maintenance tasks
 - **perf**: Performance improvements
+- **build**: Build system or dependency changes
+- **ci**: CI/CD configuration changes
+
+### Breaking Changes
+To indicate a breaking change (triggers MAJOR version bump):
+- Add `!` after type: `feat!: replace auth system`
+- OR add `BREAKING CHANGE:` in the footer
 
 ### Examples
 ```bash
 feat(auth): add JWT token generation for user login
 fix(transaction): correct date parsing for Plaid transactions
+feat!: migrate from REST to GraphQL API
 test(auth): add tests for password validation
 docs: update README with setup instructions
 refactor(budget): simplify monthly calculation logic
 ```
+
+📚 **For detailed commit guidelines and examples, see [CONTRIBUTING.md](CONTRIBUTING.md)**
 
 ## Getting Started
 
@@ -353,6 +363,15 @@ STORAGE_TYPE=filesystem  # Use 's3' for production (see docs/AI-DEPLOYMENTS.md)
 4. **Type Safety**: Never use `any` types
 5. **Test Critical Paths**: Focus on auth, money, and data integrity
 
+### Versioning & Release Workflow
+1. **Daily Development**: Use conventional commits on main branch
+2. **Automatic Changelog**: Push to GitHub triggers changelog updates
+3. **Check Pending Changes**: Visit `/version` endpoint or review CHANGELOG.md
+4. **Create Release**: Run `npm run release:prepare` when ready for new version
+5. **Deploy with Version**: GitHub Actions includes version in deployments
+
+Current Version: **1.0.0-alpha.1** (Check `/health` or `/version` endpoints for latest)
+
 ### Risk-Based Development
 - **Spike features quickly** with minimal tests
 - **Add tests when you find bugs**
@@ -439,6 +458,8 @@ Having issues?
 - **Create new page**: See architecture guide section "To Add a New Page"
 - **Debug Plaid issues**: Check troubleshooting in architecture guide
 - **Handle auth errors**: Review JWT middleware patterns
+- **Create a release**: Run `npm run release:prepare` and follow prompts
+- **Check version**: Visit `/version` endpoint or run `curl localhost:3001/version`
 
 ## Deployment
 
