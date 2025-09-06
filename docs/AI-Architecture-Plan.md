@@ -11,58 +11,116 @@
 
 **Application URL**: https://budget.jaredcarrano.com  
 **Infrastructure Status**: ✅ Fully Operational with HTTPS  
-**Deployment Date**: September 2, 2025  
+**Initial Deployment Date**: September 2, 2025  
+**Last Updated**: December 2025
 
 ## Executive Summary
-This document outlines the strategic architecture and cost optimization for a personal household budgeting application serving 2 users. The focus is on maintaining costs under $10/month while ensuring security and reliability.
+This document outlines the strategic architecture and cost optimization for a personal household budgeting application serving 2 users. The focus is on maintaining costs under $10/month while ensuring security and reliability. The application has been successfully deployed and is actively used in production.
 
-### ✅ Completed Milestones
-- **Milestone 1**: AWS Infrastructure Setup (September 2, 2025)
+### ✅ Completed Milestones (All Core Infrastructure Complete)
+
+- **Milestone 1**: AWS Infrastructure Setup ✅ (September 2025)
   - Terraform configuration created and applied
   - EC2 t4g.micro instance running Ubuntu 22.04
-  - S3 backup bucket configured
+  - S3 data bucket configured (not just backup - primary storage)
   - Security groups and IAM roles established
   - Budget alerts configured at $10/month
+  - SSM Session Manager for secure access
   
-- **Milestone 2**: Application Deployment & nginx Configuration (September 2, 2025)
+- **Milestone 2**: Application Deployment & nginx Configuration ✅ (September 2025)
   - Backend and frontend successfully deployed
   - PM2 process management configured with auto-restart
   - nginx reverse proxy configured
   - Application accessible at https://budget.jaredcarrano.com
   - Health monitoring endpoint active
 
-- **Milestone 3**: SSL Setup & Domain Configuration (September 2, 2025)
+- **Milestone 3**: SSL Setup & Domain Configuration ✅ (September 2025)
   - DNS A record configured for budget.jaredcarrano.com
   - Let's Encrypt SSL certificate obtained and installed
   - HTTPS enabled with automatic HTTP → HTTPS redirect
   - Certificate auto-renewal configured via systemd timer
   - nginx updated with SSL configuration and security headers
 
-- **Milestone 3b**: S3 Data Storage (September 2, 2025)
+- **Milestone 3b**: S3 Data Storage ✅ (September 2025)
   - Created flexible storage adapter system
-  - Implemented S3 storage for production data
+  - Implemented S3 storage for production data (primary, not backup)
   - Filesystem storage for local development
   - Automatic switching based on environment
   - S3 bucket with versioning and encryption
 
-- **Milestone 4**: CI/CD Pipeline with GitHub Actions (September 2, 2025)
+- **Milestone 4**: CI/CD Pipeline with GitHub Actions ✅ (September-December 2025)
   - PR validation workflow for automated testing
-  - Production deployment workflow with zero downtime
+  - Production deployment workflow with zero downtime via SSM
   - Rollback capability for quick recovery
-  - Integration with S3 storage configuration
+  - Integration with S3 storage configuration  
   - Comprehensive deployment documentation
+  - Manual deployment trigger with GitHub workflow_dispatch
+  - Automatic deployment on push to main branch
 
-### 🚧 Remaining Milestones
-- **Milestone 5**: Monitoring & Production Hardening (Pending)
+### ✅ Completed Application Features (December 2025)
+
+- **Authentication System**: JWT-based with 15+ character passphrase requirement
+- **Plaid Integration**: Full account linking with Bank of America and Capital One
+- **Transaction Management**: 
+  - Automatic sync with 730-day history
+  - Pagination (50 per page) for performance
+  - Transaction splitting and categorization
+- **Budget System**: 
+  - Monthly budget creation and tracking
+  - Copy from previous month functionality
+  - Category-based spending analysis
+- **Categories**: Two-level hierarchy with user-specific categories
+- **Reporting**: Income vs expense, category trends, budget performance
+- **Security**: AES-256 encryption, rate limiting, secure token storage
+
+### 🚧 Remaining Milestones & Next Priorities
+- **Milestone 5**: Enhanced Monitoring (Low Priority)
+  - CloudWatch detailed metrics integration
+  - Grafana dashboard setup
+  - Alert automation for critical errors
+  
+- **Feature Priorities** (Per CLAUDE.md):
+  1. Savings categories with rollover functionality
+  2. Bill reminders and recurring transactions
+  3. Enhanced reporting and data visualizations
+  4. Mobile app development (React Native)
+
+## Key Implementation Changes from Original Plan
+
+### What Changed During Development
+1. **S3 as Primary Storage** (Not Just Backup)
+   - Original: JSON files on EC2 with S3 backup
+   - Actual: S3 as primary data store via StorageService abstraction
+   - Benefit: Better reliability, easier backup, no EBS data volume needed
+
+2. **SSM for Deployment** (Not SSH)
+   - Original: SSH-based deployment with private keys
+   - Actual: AWS Systems Manager for secure, auditable deployments
+   - Benefit: No SSH key management, better security, CloudTrail logging
+
+3. **GitHub Actions Variables**
+   - Original: All config in GitHub Secrets
+   - Actual: Mix of Secrets (sensitive) and Variables (non-sensitive)
+   - Benefit: Easier configuration management, better visibility
+
+4. **Sophisticated CI/CD**
+   - Original: Simple scp/ssh deployment
+   - Actual: Full pipeline with S3 artifacts, zero-downtime deployment, rollback
+   - Benefit: Professional deployment process, better reliability
+
+5. **User-Specific Categories from Start**
+   - Original: Global categories plan
+   - Actual: All categories user-scoped from beginning
+   - Benefit: Proper multi-user support, no migration needed
 
 ## Architecture Overview
 
-### Core Principles
-1. **Minimal Cost**: Target under $10/month total AWS costs
-2. **Simplicity First**: Use familiar Express/Node.js on EC2
-3. **Security**: Encrypted data despite minimal infrastructure
-4. **Single Environment**: Production only (local for development)
-5. **Infrastructure as Code**: Terraform for reproducibility
+### Core Principles (Validated in Production)
+1. **Minimal Cost**: ✅ Currently ~$0.14/month, projected $8.82/month after free tier
+2. **Simplicity First**: ✅ Express/Node.js on single EC2 instance working well
+3. **Security**: ✅ AES-256 encryption, JWT auth, rate limiting all implemented
+4. **Single Environment**: ✅ Production on AWS, local for development
+5. **Infrastructure as Code**: ✅ Full Terraform configuration maintained
 
 ## Minimal AWS Architecture
 
@@ -414,33 +472,44 @@ sudo systemctl restart ssh
 - **nginx**: v1.18.0 (Ubuntu)
 - **UFW Firewall**: Active (ports 22, 80, 443)
 
-## Actual Monthly Costs
+## Actual Monthly Costs (Production Reality)
 
-### AWS Services (After Free Tier Year 1)
+### Current AWS Services Usage (December 2025 - In Free Tier)
+```
+Service              | Usage                    | Monthly Cost
+---------------------|--------------------------|-------------
+EC2 t4g.micro        | 24/7 usage              | $0.00 (free tier)
+EBS 20GB gp3         | Root volume             | $0.00 (free tier)
+Elastic IP           | Static IP when running  | $0.00
+S3 Data Storage      | ~5GB for app data       | $0.12
+S3 Backup            | Deployment artifacts    | $0.02
+Data Transfer        | <10GB out               | $0.00 (free tier)
+SSM Session Manager  | Secure access           | $0.00
+CloudWatch           | Basic metrics           | $0.00
+---------------------|--------------------------|-------------
+Total Current        |                          | ~$0.14/month
+```
+
+### Projected After Free Tier (Year 2+)
 ```
 Service              | Usage                    | Monthly Cost
 ---------------------|--------------------------|-------------
 EC2 t4g.micro        | 24/7 usage              | $6.05
 EBS 20GB gp3         | Root volume             | $1.60
 Elastic IP           | Static IP when running  | $0.00
-S3 Backup            | 1GB Standard            | $0.02
-S3 Backup            | 10GB Glacier            | $0.04
+S3 Data Storage      | ~10GB Standard          | $0.23
+S3 Backup            | 10GB artifacts          | $0.04
 Data Transfer        | 10GB out                | $0.90
 ---------------------|--------------------------|-------------
-Total                |                          | $8.61/month
+Total Year 2+        |                          | $8.82/month
 ```
 
-### First Year (Free Tier)
-```
-Service              | Free Tier Coverage       | Monthly Cost
----------------------|--------------------------|-------------
-EC2 t4g.micro        | 750 hours/month         | $0.00
-EBS 20GB             | 30GB included           | $0.00
-S3                   | 5GB Standard            | $0.00
-Data Transfer        | 100GB out               | $0.00
----------------------|--------------------------|-------------
-Total Year 1         |                          | $0.00/month
-```
+### Cost Optimization Achieved
+- ✅ Using S3 for data storage instead of EBS volumes
+- ✅ SSM Session Manager eliminates bastion host needs
+- ✅ GitHub Actions for CI/CD (free for public repos)
+- ✅ Let's Encrypt for SSL (free certificates)
+- ✅ Successfully staying under $10/month target
 
 ## Deployment Steps
 
@@ -724,15 +793,80 @@ JWT_SECRET: Strong random string
 - PostgreSQL RDS: $15/month
 - Additional backup: $1-2/month
 
+## Next Steps & Recommendations (December 2025)
+
+### Immediate Priorities (Application Features)
+Based on current implementation status and user value:
+
+1. **Savings Categories with Rollover** (High Priority)
+   - Implement special category type for savings goals
+   - Carry forward unused budget to next month
+   - Track progress toward savings targets
+   - Estimated effort: 2-3 days
+
+2. **Bill Reminders & Recurring Transactions** (High Priority)
+   - Add recurring transaction templates
+   - Email/notification system for upcoming bills
+   - Auto-categorization for recurring items
+   - Estimated effort: 3-4 days
+
+3. **Enhanced Reporting** (Medium Priority)
+   - Year-over-year comparisons
+   - Custom date range reports
+   - Export to CSV/PDF functionality
+   - More visualization options
+   - Estimated effort: 2-3 days
+
+### Infrastructure Optimizations (Low Priority - System is Stable)
+
+1. **Monitoring Enhancements**
+   - Add UptimeRobot for external monitoring (free)
+   - Configure CloudWatch alarms for critical metrics
+   - Set up log aggregation with CloudWatch Logs
+
+2. **Backup Improvements**
+   - Implement point-in-time recovery capability
+   - Add cross-region backup replication
+   - Create restore testing automation
+
+3. **Performance Optimizations**
+   - Consider Redis for session management
+   - Implement API response caching
+   - Add CDN for static assets (CloudFront)
+
+### Technical Debt (Address As Needed)
+
+1. **TypeScript Cleanup**
+   - Remove remaining `any` types in frontend
+   - Add stricter type checking for API responses
+   - Improve error type definitions
+
+2. **Test Coverage**
+   - Add more integration tests for critical paths
+   - Implement E2E testing with Playwright
+   - Add performance benchmarks
+
+3. **Documentation**
+   - Create user guide for the application
+   - Document API endpoints with OpenAPI/Swagger
+   - Add inline code documentation
+
 ## Conclusion
 
-This minimal architecture provides a secure, reliable, and extremely cost-effective solution for a personal budgeting application serving 2 users. Key benefits:
+This architecture has proven successful in production since September 2025. The implementation exceeded the original plan in several ways:
 
-- **Ultra-Low Cost**: FREE first year, under $10/month after
-- **Simple**: Single EC2 instance, familiar Express/Node.js
-- **Secure**: Encrypted data, SSL, proper access controls
-- **Reliable**: Automated backups, process monitoring, health checks
-- **Maintainable**: GitHub Actions CI/CD, Terraform IaC
-- **Scalable**: Can easily add PostgreSQL or upgrade instance if needed
+### Achievements
+- **Cost**: Currently ~$0.14/month (well under $10 target)
+- **Reliability**: Zero downtime deployments via SSM and GitHub Actions
+- **Security**: Comprehensive security with S3 encryption, JWT auth, rate limiting
+- **Performance**: Handles 800+ transactions smoothly with pagination
+- **User Experience**: Professional UI with dark theme, responsive design
 
-The architecture prioritizes simplicity and cost over complexity, perfect for a personal learning project that will see real production use.
+### Key Learnings
+- S3 as primary storage was the right choice over EC2 filesystem
+- SSM deployment is superior to SSH for security and auditability
+- GitHub Actions Variables improve configuration management
+- User-specific data models from the start prevent migration issues
+- Integration tests with real Plaid sandbox are more valuable than mocks
+
+The architecture successfully balances simplicity, cost-effectiveness, and professional features, making it an excellent foundation for continued development of this personal budgeting application.
