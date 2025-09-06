@@ -200,6 +200,9 @@ export function Reports() {
   // State for income vs expense view
   const [categoryView, setCategoryView] = useState<'expenses' | 'income'>('expenses');
   
+  // State for active tab
+  const [activeTab, setActiveTab] = useState<string | null>('cashflow');
+  
   // Transaction preview is handled by TransactionPreviewTrigger components
   
   // Calculate date ranges based on selected option
@@ -523,7 +526,7 @@ export function Reports() {
           </Card>
         </SimpleGrid>
 
-        <Tabs defaultValue="cashflow">
+        <Tabs value={activeTab} onChange={setActiveTab}>
           <Tabs.List>
             <Tabs.Tab value="cashflow" leftSection={<IconCash size={16} />}>
               Cash Flow
