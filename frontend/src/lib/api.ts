@@ -476,6 +476,29 @@ class ApiClient {
     return data;
   }
 
+  async getIncomeCategoryBreakdown(startDate: string, endDate: string, includeSubcategories = true): Promise<{
+    breakdown: Array<{
+      categoryId: string;
+      categoryName: string;
+      amount: number;
+      percentage: number;
+      transactionCount: number;
+      subcategories?: Array<{
+        categoryId: string;
+        categoryName: string;
+        amount: number;
+        percentage: number;
+        transactionCount: number;
+      }>;
+    }>;
+    total: number;
+  }> {
+    const { data } = await this.client.get('/reports/income-breakdown', {
+      params: { startDate, endDate, includeSubcategories }
+    });
+    return data;
+  }
+
   async getCashFlow(startMonth: string, endMonth: string): Promise<{
     summary: Array<{
       month: string;

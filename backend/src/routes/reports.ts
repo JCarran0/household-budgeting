@@ -224,6 +224,52 @@ router.get('/projections', authMiddleware, async (req: AuthRequest, res: Respons
 });
 
 /**
+ * GET /api/v1/reports/income-breakdown
+ * Get income category breakdown for a period
+ */
+router.get('/income-breakdown', authMiddleware, async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    if (!req.user) {
+      res.status(401).json({ success: false, error: 'Unauthorized' });
+      return;
+    }
+
+    const validation = categoryBreakdownSchema.safeParse(req.query);
+    if (!validation.success) {
+      res.status(400).json({ 
+        success: false, 
+        error: 'Invalid parameters',
+        details: validation.error.format(),
+      });
+      return;
+    }
+
+    const { startDate, endDate, includeSubcategories = true } = validation.data;
+
+    const result = await reportService.getIncomeCategoryBreakdown(
+      req.user.userId,
+      startDate,
+      endDate,
+      includeSubcategories
+    );
+
+    if (!result.success) {
+      res.status(500).json({ success: false, error: result.error });
+      return;
+    }
+
+    res.json({
+      success: true,
+      breakdown: result.breakdown,
+      total: result.total,
+    });
+  } catch (error) {
+    console.error('Error getting income breakdown:', error);
+    res.status(500).json({ success: false, error: 'Failed to get income breakdown' });
+  }
+});
+
+/**
  * GET /api/v1/reports/year-to-date
  * Get year-to-date summary
  */

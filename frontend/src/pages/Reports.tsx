@@ -25,6 +25,7 @@ import {
   Tooltip,
   Breadcrumbs,
   Anchor,
+  SegmentedControl,
 } from '@mantine/core';
 import { 
   LineChart, 
@@ -67,6 +68,18 @@ const COLORS = [
   '#8b5cf6', // violet
   '#ec4899', // pink
   '#14b8a6', // teal
+];
+
+// Income-specific color palette (green shades)
+const INCOME_COLORS = [
+  '#10b981', // emerald
+  '#059669', // emerald-600
+  '#14b8a6', // teal
+  '#0d9488', // teal-600
+  '#22c55e', // green
+  '#16a34a', // green-600
+  '#84cc16', // lime
+  '#65a30d', // lime-600
 ];
 
 // Helper function to get date range based on option
@@ -184,6 +197,9 @@ export function Reports() {
     level: 'parent'
   });
   
+  // State for income vs expense view
+  const [categoryView, setCategoryView] = useState<'expenses' | 'income'>('expenses');
+  
   // Transaction preview is handled by TransactionPreviewTrigger components
   
   // Calculate date ranges based on selected option
@@ -206,8 +222,14 @@ export function Reports() {
   });
 
   const { data: breakdownData, isLoading: breakdownLoading } = useQuery({
-    queryKey: ['reports', 'breakdown', startDate, endDate],
-    queryFn: () => api.getCategoryBreakdown(startDate, endDate, true),
+    queryKey: ['reports', 'breakdown', startDate, endDate, categoryView],
+    queryFn: () => {
+      if (categoryView === 'income') {
+        return api.getIncomeCategoryBreakdown(startDate, endDate, true);
+      } else {
+        return api.getCategoryBreakdown(startDate, endDate, true);
+      }
+    },
   });
 
   const { data: projectionsData, isLoading: projectionsLoading } = useQuery({
@@ -609,35 +631,55 @@ export function Reports() {
           </Tabs.Panel>
 
           <Tabs.Panel value="categories" pt="xl">
-            <Grid>
-              <Grid.Col span={{ base: 12, md: 6 }}>
-                <Paper withBorder p="md">
-                  <Group justify="space-between" mb="md">
-                    <div>
-                      <Text size="lg" fw={600}>Category Breakdown</Text>
+            <Stack gap="md">
+              {/* Income/Expense Toggle */}
+              <Group justify="center">
+                <SegmentedControl
+                  value={categoryView}
+                  onChange={(value: string) => {
+                    setCategoryView(value as 'expenses' | 'income');
+                    // Reset drill-down when switching views
+                    setDrillDownState({ level: 'parent' });
+                  }}
+                  data={[
+                    { label: 'Expenses', value: 'expenses' },
+                    { label: 'Income', value: 'income' }
+                  ]}
+                  size="md"
+                />
+              </Group>
+
+              <Grid>
+                <Grid.Col span={{ base: 12, md: 6 }}>
+                  <Paper withBorder p="md">
+                    <Group justify="space-between" mb="md">
+                      <div>
+                        <Text size="lg" fw={600}>
+                          {categoryView === 'income' ? 'Income' : 'Category'} Breakdown
+                        </Text>
+                        {drillDownState.level === 'child' && (
+                          <Breadcrumbs mt={4}>
+                            <Anchor 
+                              size="sm" 
+                              onClick={navigateToParent}
+                              style={{ cursor: 'pointer' }}
+                            >
+                              All Categories
+                            </Anchor>
+                            <Text size="sm">{drillDownState.parentName}</Text>
+                          </Breadcrumbs>
+                        )}
+                      </div>
                       {drillDownState.level === 'child' && (
-                        <Breadcrumbs mt={4}>
-                          <Anchor 
-                            size="sm" 
-                            onClick={navigateToParent}
-                            style={{ cursor: 'pointer' }}
-                          >
-                            All Categories
-                          </Anchor>
-                          <Text size="sm">{drillDownState.parentName}</Text>
-                        </Breadcrumbs>
+                        <ActionIcon
+                          variant="subtle"
+                          onClick={navigateToParent}
+                          size="lg"
+                        >
+                          <IconArrowLeft size={20} />
+                        </ActionIcon>
                       )}
-                    </div>
-                    {drillDownState.level === 'child' && (
-                      <ActionIcon
-                        variant="subtle"
-                        onClick={navigateToParent}
-                        size="lg"
-                      >
-                        <IconArrowLeft size={20} />
-                      </ActionIcon>
-                    )}
-                  </Group>
+                    </Group>
                   
                   <ResponsiveContainer width="100%" height={300}>
                     <PieChart>
@@ -653,27 +695,30 @@ export function Reports() {
                         onClick={handleSliceClick}
                         style={{ outline: 'none' }}
                       >
-                        {pieChartData.map((entry: PieChartEntry, index: number) => (
-                          <Cell 
-                            key={`cell-${index}`} 
-                            fill={COLORS[index % COLORS.length]}
-                            style={{ 
-                              cursor: entry.clickable ? 'pointer' : 'default',
-                              filter: 'brightness(1)',
-                              transition: 'filter 0.2s'
-                            }}
-                            onMouseEnter={(e) => {
-                              if (entry.clickable) {
-                                e.currentTarget.style.filter = 'brightness(1.1)';
-                              }
-                            }}
-                            onMouseLeave={(e) => {
-                              if (entry.clickable) {
-                                e.currentTarget.style.filter = 'brightness(1)';
-                              }
-                            }}
-                          />
-                        ))}
+                        {pieChartData.map((entry: PieChartEntry, index: number) => {
+                          const colorPalette = categoryView === 'income' ? INCOME_COLORS : COLORS;
+                          return (
+                            <Cell 
+                              key={`cell-${index}`} 
+                              fill={colorPalette[index % colorPalette.length]}
+                              style={{ 
+                                cursor: entry.clickable ? 'pointer' : 'default',
+                                filter: 'brightness(1)',
+                                transition: 'filter 0.2s'
+                              }}
+                              onMouseEnter={(e) => {
+                                if (entry.clickable) {
+                                  e.currentTarget.style.filter = 'brightness(1.1)';
+                                }
+                              }}
+                              onMouseLeave={(e) => {
+                                if (entry.clickable) {
+                                  e.currentTarget.style.filter = 'brightness(1)';
+                                }
+                              }}
+                            />
+                          );
+                        })}
                       </Pie>
                       <RechartsTooltip content={<CustomTooltip />} />
                     </PieChart>
@@ -681,66 +726,104 @@ export function Reports() {
                   
                   {/* Legend */}
                   <SimpleGrid cols={2} spacing="xs" mt="md">
-                    {pieChartData.map((entry: PieChartEntry, index: number) => (
-                      <TransactionPreviewTrigger
-                        key={entry.name}
-                        categoryId={entry.id || null}
-                        categoryName={entry.name}
-                        dateRange={{ startDate, endDate }}
-                        tooltipText="Click to preview transactions"
-                        timeRangeFilter={timeRange}
-                      >
-                        <Group gap="xs" style={{ borderRadius: 'var(--mantine-radius-sm)', padding: '4px' }}>
-                          <div
-                            style={{
-                              width: 12,
-                              height: 12,
-                              backgroundColor: COLORS[index % COLORS.length],
-                              borderRadius: 2,
-                            }}
-                          />
-                          <Text size="sm" truncate>
-                            {entry.name}
-                          </Text>
-                        </Group>
-                      </TransactionPreviewTrigger>
-                    ))}
+                    {pieChartData.map((entry: PieChartEntry, index: number) => {
+                      const colorPalette = categoryView === 'income' ? INCOME_COLORS : COLORS;
+                      return (
+                        <TransactionPreviewTrigger
+                          key={entry.name}
+                          categoryId={entry.id || null}
+                          categoryName={entry.name}
+                          dateRange={{ startDate, endDate }}
+                          tooltipText="Click to preview transactions"
+                          timeRangeFilter={timeRange}
+                        >
+                          <Group gap="xs" style={{ borderRadius: 'var(--mantine-radius-sm)', padding: '4px' }}>
+                            <div
+                              style={{
+                                width: 12,
+                                height: 12,
+                                backgroundColor: colorPalette[index % colorPalette.length],
+                                borderRadius: 2,
+                              }}
+                            />
+                            <Text size="sm" truncate>
+                              {entry.name}
+                            </Text>
+                          </Group>
+                        </TransactionPreviewTrigger>
+                      );
+                    })}
                   </SimpleGrid>
                 </Paper>
               </Grid.Col>
 
               <Grid.Col span={{ base: 12, md: 6 }}>
                 <Paper withBorder p="md">
-                  <Text size="lg" fw={600} mb="md">Top Spending Categories</Text>
+                  <Text size="lg" fw={600} mb="md">
+                    {categoryView === 'income' ? 'Top Income Sources' : 'Top Spending Categories'}
+                  </Text>
                   <Stack gap="sm">
-                    {ytd?.topCategories.map((category, index) => (
-                      <TransactionPreviewTrigger
-                        key={category.categoryId}
-                        categoryId={category.categoryId}
-                        categoryName={category.categoryName}
-                        dateRange={{ startDate: format(startOfYear(new Date()), 'yyyy-MM-dd'), endDate: format(new Date(), 'yyyy-MM-dd') }}
-                        tooltipText="Click to preview YTD transactions"
-                        timeRangeFilter="yearToDate"
-                      >
-                        <div style={{ borderRadius: 'var(--mantine-radius-sm)', padding: '8px', margin: '-8px' }}>
-                          <Group justify="space-between" mb={5}>
-                            <Text size="sm">{category.categoryName}</Text>
-                            <Text size="sm" fw={600}>
-                              ${category.amount.toFixed(0)}
-                            </Text>
-                          </Group>
-                          <Progress
-                            value={category.percentage}
-                            color={COLORS[index % COLORS.length]}
-                            size="lg"
-                          />
-                        </div>
-                      </TransactionPreviewTrigger>
-                    ))}
+                    {categoryView === 'income' ? (
+                      // Show top income categories from current breakdown data
+                      pieChartData.slice(0, 5).map((category, index) => {
+                        const colorPalette = INCOME_COLORS;
+                        return (
+                          <TransactionPreviewTrigger
+                            key={category.id || category.name}
+                            categoryId={category.id || null}
+                            categoryName={category.name}
+                            dateRange={{ startDate, endDate }}
+                            tooltipText="Click to preview transactions"
+                            timeRangeFilter={timeRange}
+                          >
+                            <div style={{ borderRadius: 'var(--mantine-radius-sm)', padding: '8px', margin: '-8px' }}>
+                              <Group justify="space-between" mb={5}>
+                                <Text size="sm">{category.name}</Text>
+                                <Text size="sm" fw={600}>
+                                  ${category.value.toFixed(0)}
+                                </Text>
+                              </Group>
+                              <Progress
+                                value={category.percentage}
+                                color={colorPalette[index % colorPalette.length]}
+                                size="lg"
+                              />
+                            </div>
+                          </TransactionPreviewTrigger>
+                        );
+                      })
+                    ) : (
+                      // Show YTD top spending categories
+                      ytd?.topCategories.map((category, index) => (
+                        <TransactionPreviewTrigger
+                          key={category.categoryId}
+                          categoryId={category.categoryId}
+                          categoryName={category.categoryName}
+                          dateRange={{ startDate: format(startOfYear(new Date()), 'yyyy-MM-dd'), endDate: format(new Date(), 'yyyy-MM-dd') }}
+                          tooltipText="Click to preview YTD transactions"
+                          timeRangeFilter="yearToDate"
+                        >
+                          <div style={{ borderRadius: 'var(--mantine-radius-sm)', padding: '8px', margin: '-8px' }}>
+                            <Group justify="space-between" mb={5}>
+                              <Text size="sm">{category.categoryName}</Text>
+                              <Text size="sm" fw={600}>
+                                ${category.amount.toFixed(0)}
+                              </Text>
+                            </Group>
+                            <Progress
+                              value={category.percentage}
+                              color={COLORS[index % COLORS.length]}
+                              size="lg"
+                            />
+                          </div>
+                        </TransactionPreviewTrigger>
+                      ))
+                    )}
                   </Stack>
                 </Paper>
               </Grid.Col>
             </Grid>
+            </Stack>
           </Tabs.Panel>
 
           <Tabs.Panel value="projections" pt="xl">

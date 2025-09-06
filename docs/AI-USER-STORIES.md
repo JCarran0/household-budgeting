@@ -346,6 +346,11 @@
 - A user should be able to see spending percentages by category
 - A user should be able to see category spending comparisons
 - A user should be able to drill down into subcategories
+- A user should be able to toggle between income and expense category views
+- A user should be able to see income sources breakdown with hierarchical drill-down
+- A user should be able to view top income sources alongside top spending categories
+- A user should see income categories displayed with a distinct green color palette
+- A user should be able to click on income categories to preview associated transactions
 
 ### Interactive Charts
 - A user should see only parent-level categories in the initial pie chart view

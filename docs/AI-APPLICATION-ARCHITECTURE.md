@@ -119,7 +119,22 @@ household-budgeting/
 - **Data Model**: Categories include `isCustom` flag and optional `description`
 - **Data Isolation**: All categories are user-specific (no global categories)
 
-#### 6. BudgetService (`backend/src/services/budgetService.ts`)
+#### 6. ReportService (`backend/src/services/reportService.ts`)
+- **Purpose**: Financial reporting and analytics
+- **Key Methods**:
+  - `getCategoryBreakdown()`: Expense category breakdown with hierarchy
+  - `getIncomeCategoryBreakdown()`: Income category breakdown (negative amounts)
+  - `getSpendingTrends()`: Category spending over time
+  - `getCashFlowSummary()`: Income vs expenses by month
+  - `generateProjections()`: Future cash flow predictions
+  - `getYearToDateSummary()`: YTD financial summary
+- **Income vs Expense Filtering**:
+  - Expenses: `amount > 0` (Plaid convention)
+  - Income: `amount < 0` (negative values in Plaid)
+  - Both methods support hierarchical category grouping
+- **Features**: Excludes hidden categories from reports, supports date ranges
+
+#### 7. BudgetService (`backend/src/services/budgetService.ts`)
 - **Purpose**: Monthly budget management
 - **Key Methods**:
   - `setBudget()`: Set monthly budget for category
@@ -127,7 +142,7 @@ household-budgeting/
   - `getBudgetComparison()`: Budget vs actual spending
 - **Data Model**: `MonthlyBudget` with YYYY-MM format
 
-#### 7. AutoCategorizeService (`backend/src/services/autoCategorizeService.ts`)
+#### 8. AutoCategorizeService (`backend/src/services/autoCategorizeService.ts`)
 - **Purpose**: Automated transaction categorization with user-defined rules
 - **Key Methods**:
   - `getRules()`: Fetch user's auto-categorization rules
@@ -149,7 +164,7 @@ household-budgeting/
   - Force recategorization option
 - **Data Model**: `StoredAutoCategorizeRule` with patterns array and migration support
 
-#### 8. DataService (`backend/src/services/dataService.ts`)
+#### 9. DataService (`backend/src/services/dataService.ts`)
 - **Purpose**: Unified data persistence layer with storage adapters
 - **Features**:
   - User-scoped data isolation (all data keyed by userId)
@@ -168,7 +183,12 @@ household-budgeting/
 - **EnhancedTransactions**: Transaction list with filtering and inline category editing
 - **Categories**: Category hierarchy management with auto-categorization rules
 - **Budgets**: Monthly budget interface
-- **Reports**: Spending analysis with interactive drill-down pie charts and transaction previews
+- **Reports**: Financial analysis with:
+  - Income/expense toggle for category breakdowns
+  - Interactive drill-down pie charts
+  - Top income sources and spending categories
+  - Transaction previews with navigation to filtered views
+  - Income-specific green color palette
 
 #### API Client (`frontend/src/lib/api.ts`)
 - Axios-based HTTP client
@@ -265,6 +285,7 @@ User clicks category in reports
 - Re-categorization with orphaned category ID handling
 - Transaction preview modal with navigation to filtered transactions page
 - Interactive drill-down pie charts in reports
+- Income category dashboards with toggle between income/expense views
 - Two-level category hierarchy (all user-specific)
 - Monthly budget tracking
 - Dashboard with stats and alerts

@@ -168,6 +168,132 @@ export class ReportService {
   }
 
   /**
+   * Get income category breakdown for a period
+   */
+  async getIncomeCategoryBreakdown(
+    userId: string,
+    startDate: string,
+    endDate: string,
+    includeSubcategories: boolean = true
+  ): Promise<CategoryBreakdownResult> {
+    try {
+      const transactions = await this.dataService.getData<StoredTransaction[]>(
+        `transactions_${userId}`
+      ) || [];
+      
+      const categories = await this.dataService.getCategories(userId);
+      // Create a set of hidden category IDs for efficient lookup
+      const hiddenCategoryIds = new Set(categories.filter(c => c.isHidden).map(c => c.id));
+
+      // Filter transactions for income (negative amounts, excluding hidden categories)
+      const filteredTransactions = transactions.filter(t => 
+        t.date >= startDate && 
+        t.date <= endDate && 
+        !t.isHidden &&
+        !t.pending &&
+        t.amount < 0 && // Income only (negative amounts)
+        (!t.categoryId || !hiddenCategoryIds.has(t.categoryId)) // Exclude hidden categories
+      );
+
+      // Calculate total income (absolute value)
+      const total = filteredTransactions.reduce((sum, t) => sum + Math.abs(t.amount), 0);
+
+      // Group by category
+      const categoryIncome = new Map<string, { amount: number; count: number }>();
+
+      for (const txn of filteredTransactions) {
+        const categoryId = txn.categoryId || 'uncategorized';
+        const current = categoryIncome.get(categoryId) || { amount: 0, count: 0 };
+        categoryIncome.set(categoryId, {
+          amount: current.amount + Math.abs(txn.amount), // Use absolute value for income
+          count: current.count + 1
+        });
+      }
+
+      // Build hierarchy if needed
+      const breakdown: CategoryBreakdown[] = [];
+      
+      if (includeSubcategories) {
+        // Group by parent categories
+        const parentCategories = categories.filter(c => !c.parentId);
+        
+        for (const parent of parentCategories) {
+          const subcategories = categories.filter(c => c.parentId === parent.id);
+          const subcategoryBreakdown: CategoryBreakdown[] = [];
+          let parentAmount = 0;
+          let parentCount = 0;
+
+          // Add parent's own income if any
+          const parentIncome = categoryIncome.get(parent.id);
+          if (parentIncome) {
+            parentAmount += parentIncome.amount;
+            parentCount += parentIncome.count;
+          }
+
+          // Add subcategories
+          for (const sub of subcategories) {
+            const subIncome = categoryIncome.get(sub.id);
+            if (subIncome) {
+              parentAmount += subIncome.amount;
+              parentCount += subIncome.count;
+              subcategoryBreakdown.push({
+                categoryId: sub.id,
+                categoryName: sub.name,
+                amount: subIncome.amount,
+                percentage: total > 0 ? (subIncome.amount / total) * 100 : 0,
+                transactionCount: subIncome.count
+              });
+            }
+          }
+
+          if (parentAmount > 0) {
+            breakdown.push({
+              categoryId: parent.id,
+              categoryName: parent.name,
+              amount: parentAmount,
+              percentage: total > 0 ? (parentAmount / total) * 100 : 0,
+              transactionCount: parentCount,
+              subcategories: subcategoryBreakdown.length > 0 ? subcategoryBreakdown : undefined
+            });
+          }
+        }
+
+        // Add uncategorized income if any
+        const uncategorized = categoryIncome.get('uncategorized');
+        if (uncategorized) {
+          breakdown.push({
+            categoryId: 'uncategorized',
+            categoryName: 'Uncategorized',
+            amount: uncategorized.amount,
+            percentage: total > 0 ? (uncategorized.amount / total) * 100 : 0,
+            transactionCount: uncategorized.count
+          });
+        }
+      } else {
+        // Flat list
+        for (const [categoryId, data] of categoryIncome) {
+          const category = categories.find(c => c.id === categoryId);
+          breakdown.push({
+            categoryId,
+            categoryName: category?.name || 'Uncategorized',
+            amount: data.amount,
+            percentage: total > 0 ? (data.amount / total) * 100 : 0,
+            transactionCount: data.count
+          });
+        }
+      }
+
+      // Sort by amount descending
+      breakdown.sort((a, b) => b.amount - a.amount);
+
+      return { success: true, breakdown, total };
+    } catch (error) {
+      console.error('Error getting income breakdown:', error);
+      return { success: false, error: 'Failed to get income breakdown' };
+    }
+  }
+
+  /**
    * Get category breakdown for a period
    */
   async getCategoryBreakdown(
