@@ -83,10 +83,39 @@ rm -rf "$APP_DIR/frontend.old"
 [ -d "$APP_DIR/frontend" ] && mv "$APP_DIR/frontend" "$APP_DIR/frontend.old"
 mv "$DEPLOYMENT_DIR/frontend" "$APP_DIR/frontend"
 
-# Start application with correct path
+# Ensure ecosystem.config.js exists
+if [ ! -f "$APP_DIR/ecosystem.config.js" ]; then
+    echo "📝 Creating ecosystem.config.js..."
+    cat > "$APP_DIR/ecosystem.config.js" << 'EOF'
+module.exports = {
+  apps: [{
+    name: 'budget-backend',
+    script: 'dist/index.js',
+    cwd: '/home/appuser/app/backend',
+    instances: 1,
+    exec_mode: 'fork',
+    env: {
+      NODE_ENV: 'production',
+      PORT: 3001
+    },
+    error_file: '/home/appuser/logs/error.log',
+    out_file: '/home/appuser/logs/output.log',
+    log_date_format: 'YYYY-MM-DD HH:mm:ss',
+    max_memory_restart: '500M',
+    watch: false,
+    autorestart: true,
+    max_restarts: 10,
+    min_uptime: '10s'
+  }]
+};
+EOF
+fi
+
+# Start application using ecosystem config
 echo "▶️  Starting application..."
-cd "$APP_DIR/backend"
-pm2 start index.js --name budget-backend --time || pm2 restart budget-backend
+cd "$APP_DIR"
+pm2 delete budget-backend 2>/dev/null || true
+pm2 start ecosystem.config.js
 pm2 save
 
 # Health check
