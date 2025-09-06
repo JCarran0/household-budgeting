@@ -231,16 +231,18 @@ router.delete('/:id', async (req: Request, res: Response) => {
     res.status(204).send();
   } catch (error) {
     if (error instanceof Error) {
+      // 404 for not found
       if (error.message.includes('not found')) {
         res.status(404).json({ error: error.message });
         return;
       }
-      if (error.message.includes('subcategories') || 
-          error.message.includes('transactions')) {
+      // 400 for any validation error (dependencies preventing deletion)
+      if (error.message.includes('Cannot delete category')) {
         res.status(400).json({ error: error.message });
         return;
       }
     }
+    // 500 only for unexpected server errors
     console.error('Error deleting category:', error);
     res.status(500).json({ error: 'Failed to delete category' });
   }

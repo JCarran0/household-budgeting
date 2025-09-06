@@ -112,19 +112,7 @@ export function Categories() {
   };
 
   const handleDelete = (categoryId: string): void => {
-    const category = categories?.find((c: Category) => c.id === categoryId);
-    const categoryName = category?.name || 'this category';
-    
-    if (window.confirm(
-      `Are you sure you want to delete "${categoryName}"?\n\n` +
-      'Note: This will fail if the category:\n' +
-      '• Has subcategories\n' +
-      '• Is used in any budgets\n' +
-      '• Is used in auto-categorization rules\n' +
-      '• Has associated transactions'
-    )) {
-      deleteMutation.mutate(categoryId);
-    }
+    deleteMutation.mutate(categoryId);
   };
 
   const handleFormClose = (): void => {
