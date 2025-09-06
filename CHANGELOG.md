@@ -141,6 +141,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **typescript**: resolve VSCode Jest type recognition issues
 - **deploy**: preserve dist directory structure in deployments
 - **deploy**: update server scripts workflow to use dist/index.js
+- sync package.json versions and use root version as source of truth
 
 ### Changed
 - Optimized AI agent documentation structure and navigation
@@ -204,6 +205,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - update documentation with lessons learned and project status
 - update project plan to reflect completed Phase 1
 - **security**: add comprehensive security documentation and policies
+- add production server SSH access details to CLAUDE.md
 
 ### Testing
 - **transactions**: add comprehensive tests for inline category editing
