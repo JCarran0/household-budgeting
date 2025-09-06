@@ -35,7 +35,7 @@ Following our conventional commit format:
 - **build**: Build system changes
 - **ci**: CI/CD changes
 
-Breaking changes: Add `!` after type or `BREAKING CHANGE:` in footer
+Breaking changes: Add ! after type or BREAKING CHANGE: in footer
 
 ### Step 4: Commit Message
 Based on the actual changes made, I'll craft a commit message that:
