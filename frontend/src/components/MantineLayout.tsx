@@ -13,10 +13,13 @@ import {
   IconChartBar
 } from '@tabler/icons-react';
 import { useAuthStore } from '../stores/authStore';
+import { api } from '../lib/api';
+import { useState, useEffect } from 'react';
 
 export function MantineLayout() {
   const [mobileOpened, { toggle: toggleMobile }] = useDisclosure();
   const [desktopOpened, { toggle: toggleDesktop }] = useDisclosure(true);
+  const [version, setVersion] = useState<string | null>(null);
   const navigate = useNavigate();
   const location = useLocation();
   const { user, logout } = useAuthStore();
@@ -25,6 +28,21 @@ export function MantineLayout() {
     logout();
     navigate('/login');
   };
+
+  // Fetch version on mount
+  useEffect(() => {
+    const fetchVersion = async () => {
+      try {
+        const versionData = await api.getVersion();
+        setVersion(versionData.current);
+      } catch (error) {
+        console.error('Failed to fetch version:', error);
+        // Silently fail - version is not critical
+      }
+    };
+
+    fetchVersion();
+  }, []);
 
   // Add keyboard shortcut for toggling sidebar (Ctrl/Cmd + B)
   useHotkeys([
@@ -111,6 +129,17 @@ export function MantineLayout() {
               >
                 Logout
               </Menu.Item>
+              
+              {version && (
+                <>
+                  <Menu.Divider />
+                  <Menu.Item component="div" c="dimmed">
+                    <Text size="xs" c="dimmed">
+                      v{version}
+                    </Text>
+                  </Menu.Item>
+                </>
+              )}
             </Menu.Dropdown>
           </Menu>
         </Group>

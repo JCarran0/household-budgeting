@@ -30,6 +30,14 @@ export interface CategoryWithChildren extends Category {
   children?: Category[];
 }
 
+export interface VersionResponse {
+  current: string;
+  environment: string;
+  deployedAt: string;
+  commitHash: string;
+  unreleased: string;
+}
+
 export interface CreateCategoryDto {
   name: string;
   parentId: string | null;
@@ -111,6 +119,7 @@ class ApiClient {
     });
     
     // Bind methods to ensure 'this' context is preserved
+    this.getVersion = this.getVersion.bind(this);
     this.createLinkToken = this.createLinkToken.bind(this);
     this.exchangePublicToken = this.exchangePublicToken.bind(this);
     this.connectAccount = this.connectAccount.bind(this);
@@ -187,6 +196,12 @@ class ApiClient {
       token: data.token,
       user: data.user
     };
+  }
+
+  // Version endpoint
+  async getVersion(): Promise<VersionResponse> {
+    const { data } = await this.client.get<VersionResponse>('/version');
+    return data;
   }
 
   // Plaid endpoints
