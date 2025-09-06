@@ -465,6 +465,25 @@ Having issues?
 
 For comprehensive deployment guidance including infrastructure, CI/CD configuration, troubleshooting, and production operations, see **[docs/AI-DEPLOYMENTS.md](docs/AI-DEPLOYMENTS.md)**.
 
+### Production Server Access
+For direct investigation and debugging, SSH access is available:
+```bash
+# Connect to server
+ssh -i ~/.ssh/budget-app-key ubuntu@budget.jaredcarrano.com
+
+# Switch to application user
+sudo -u appuser bash
+
+# Key locations
+# App directory: /home/appuser/app
+# Backend: /home/appuser/app/backend
+# Frontend: /home/appuser/app/frontend
+# PM2 logs: pm2 logs budget-backend
+# PM2 status: pm2 status
+```
+
+**Note**: Use this for debugging production issues when AWS SSM is not sufficient. The application runs as `appuser` and is managed by PM2.
+
 ## Notes for Future Development
 
 ### Lessons Learned
