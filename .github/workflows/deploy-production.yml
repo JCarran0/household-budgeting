@@ -45,7 +45,7 @@ jobs:
           mkdir -p deployment/backend deployment/frontend
           
           # Copy backend - preserve directory structure
-          cp -r backend/dist/* deployment/backend/
+          cp -r backend/dist deployment/backend/
           cp backend/package*.json deployment/backend/
           
           # Copy frontend
