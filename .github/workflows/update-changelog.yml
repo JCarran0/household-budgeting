@@ -1,0 +1,84 @@
+name: Update Changelog
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - 'CHANGELOG.md'
+      - '.github/workflows/update-changelog.yml'
+
+jobs:
+  update-changelog:
+    runs-on: ubuntu-latest
+    # Only run if not a changelog commit
+    if: "!contains(github.event.head_commit.message, '[skip ci]') && !contains(github.event.head_commit.message, 'chore: update changelog')"
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Full history for changelog generation
+          token: ${{ secrets.GITHUB_TOKEN }}
+          
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          
+      - name: Configure Git
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          
+      - name: Get last changelog update
+        id: last-update
+        run: |
+          # Find the last commit that updated CHANGELOG.md (excluding [skip ci] commits)
+          LAST_CHANGELOG_COMMIT=$(git log -1 --format="%H" --grep="chore: update changelog" -- CHANGELOG.md || echo "")
+          if [ -z "$LAST_CHANGELOG_COMMIT" ]; then
+            # If no changelog commits found, use the first commit
+            LAST_CHANGELOG_COMMIT=$(git rev-list --max-parents=0 HEAD)
+          fi
+          echo "commit=$LAST_CHANGELOG_COMMIT" >> $GITHUB_OUTPUT
+          echo "Last changelog update: $LAST_CHANGELOG_COMMIT"
+          
+      - name: Get commits since last update
+        id: commits
+        run: |
+          # Get all commits since last changelog update
+          COMMITS=$(git log --format="%H %s" ${{ steps.last-update.outputs.commit }}..HEAD --no-merges)
+          
+          if [ -z "$COMMITS" ]; then
+            echo "No new commits to process"
+            echo "has_commits=false" >> $GITHUB_OUTPUT
+          else
+            echo "Found commits to process:"
+            echo "$COMMITS"
+            echo "has_commits=true" >> $GITHUB_OUTPUT
+            
+            # Save commits to file for processing
+            echo "$COMMITS" > /tmp/commits.txt
+          fi
+          
+      - name: Update CHANGELOG.md
+        if: steps.commits.outputs.has_commits == 'true'
+        run: |
+          node scripts/update-changelog.js /tmp/commits.txt
+          
+      - name: Check for changes
+        id: changes
+        run: |
+          if git diff --quiet CHANGELOG.md; then
+            echo "No changes to CHANGELOG.md"
+            echo "has_changes=false" >> $GITHUB_OUTPUT
+          else
+            echo "CHANGELOG.md has been updated"
+            echo "has_changes=true" >> $GITHUB_OUTPUT
+          fi
+          
+      - name: Commit and push changes
+        if: steps.changes.outputs.has_changes == 'true'
+        run: |
+          git add CHANGELOG.md
+          git commit -m "chore: update changelog [skip ci]"
+          git push origin main

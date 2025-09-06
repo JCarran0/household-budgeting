@@ -76,10 +76,40 @@ if (process.env.NODE_ENV === 'development') {
 
 // Health check endpoint
 app.get('/health', (_req: Request, res: Response) => {
+  const pkg = require('../package.json');
   res.json({
     status: 'ok',
     timestamp: new Date().toISOString(),
     environment: process.env.NODE_ENV || 'development',
+    version: pkg.version,
+  });
+});
+
+// Version endpoint
+app.get('/version', (_req: Request, res: Response) => {
+  const pkg = require('../package.json');
+  const fs = require('fs');
+  const path = require('path');
+  
+  // Read changelog to get unreleased changes
+  let unreleased = '';
+  try {
+    const changelogPath = path.join(__dirname, '../../CHANGELOG.md');
+    const changelog = fs.readFileSync(changelogPath, 'utf-8');
+    const unreleasedMatch = changelog.match(/## \[Unreleased\]([\s\S]*?)## \[[\d.]+/m);
+    if (unreleasedMatch) {
+      unreleased = unreleasedMatch[1].trim();
+    }
+  } catch (error) {
+    console.error('Error reading changelog:', error);
+  }
+  
+  res.json({
+    current: pkg.version,
+    environment: process.env.NODE_ENV || 'development',
+    deployedAt: process.env.DEPLOYMENT_TIMESTAMP || 'unknown',
+    commitHash: process.env.COMMIT_HASH || 'unknown',
+    unreleased: unreleased || 'No unreleased changes',
   });
 });
 

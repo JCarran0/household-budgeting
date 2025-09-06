@@ -1,10 +1,17 @@
 {
+  "name": "household-budgeting",
+  "version": "1.0.0-alpha.1",
+  "description": "Personal budgeting application with Plaid integration",
+  "private": true,
   "devDependencies": {
+    "conventional-changelog-cli": "^5.0.0",
     "husky": "^9.1.7",
     "lint-staged": "^16.1.6"
   },
   "scripts": {
-    "prepare": "husky"
+    "prepare": "husky",
+    "changelog:update": "node scripts/update-changelog.js",
+    "release:prepare": "node scripts/prepare-release.js"
   },
   "lint-staged": {
     "backend/**/*.{ts,tsx}": [
