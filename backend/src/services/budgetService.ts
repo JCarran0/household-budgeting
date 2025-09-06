@@ -1,6 +1,7 @@
 import { v4 as uuidv4 } from 'uuid';
 import { MonthlyBudget } from '../../../shared/types';
 import { DataService } from './dataService';
+import { isIncomeCategory } from '../../../shared/utils/categoryHelpers';
 
 // Stored budget structure with user isolation
 export interface StoredBudget extends MonthlyBudget {
@@ -135,7 +136,13 @@ export class BudgetService {
     month: string,
     actualAmount: number,
     userId: string
-  ): Promise<BudgetComparison> {
+  ): Promise<BudgetComparison | null> {
+    // Skip income categories in budget comparisons
+    // Income categories don't follow the same budgeting logic as expenses
+    if (isIncomeCategory(categoryId)) {
+      return null;
+    }
+    
     const budget = await this.getBudget(categoryId, month, userId);
     const budgeted = budget?.amount || 0;
     const remaining = budgeted - actualAmount;
@@ -160,19 +167,33 @@ export class BudgetService {
     const budgets = await this.getMonthlyBudgets(month, userId);
     const comparisons: BudgetComparison[] = [];
 
-    // Process budgeted categories
+    // Process budgeted categories (excluding income categories)
     for (const budget of budgets) {
+      // Skip income categories
+      if (isIncomeCategory(budget.categoryId)) {
+        continue;
+      }
+      
       const actual = actuals.get(budget.categoryId) || 0;
       const comparison = await this.getBudgetVsActual(budget.categoryId, month, actual, userId);
-      comparisons.push(comparison);
+      if (comparison) {
+        comparisons.push(comparison);
+      }
     }
 
-    // Process unbudgeted categories with actuals
+    // Process unbudgeted categories with actuals (excluding income categories)
     for (const [categoryId, actual] of actuals) {
+      // Skip income categories
+      if (isIncomeCategory(categoryId)) {
+        continue;
+      }
+      
       const hasBudget = budgets.some(b => b.categoryId === categoryId);
       if (!hasBudget) {
         const comparison = await this.getBudgetVsActual(categoryId, month, actual, userId);
-        comparisons.push(comparison);
+        if (comparison) {
+          comparisons.push(comparison);
+        }
       }
     }
 

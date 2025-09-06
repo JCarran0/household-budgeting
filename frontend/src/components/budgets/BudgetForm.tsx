@@ -14,6 +14,7 @@ import { notifications } from '@mantine/notifications';
 import { api, type CreateBudgetDto } from '../../lib/api';
 import { formatCurrency } from '../../utils/formatters';
 import type { MonthlyBudget, Category } from '../../../../shared/types';
+import { isExpenseCategory } from '../../../../shared/utils/categoryHelpers';
 
 interface BudgetFormProps {
   opened: boolean;
@@ -102,7 +103,7 @@ export function BudgetForm({
     });
   };
 
-  // Build category options with hierarchy
+  // Build category options with hierarchy (excluding income categories)
   const categoryOptions = React.useMemo(() => {
     if (!categories || categories.length === 0) {
       return [];
@@ -111,6 +112,7 @@ export function BudgetForm({
     try {
       const options = categories
         .filter(cat => !cat.isHidden) // Don't show hidden categories
+        .filter(cat => isExpenseCategory(cat.id)) // Exclude income categories from budgeting
         .map(cat => {
           const parentCategory = cat.parentId ? 
             categories.find(p => p.id === cat.parentId) : null;

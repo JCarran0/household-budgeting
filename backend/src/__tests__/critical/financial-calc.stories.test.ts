@@ -70,13 +70,14 @@ describe('User Story: Financial Calculations', () => {
         testUserId
       );
       
-      expect(comparison.categoryId).toBe(categoryId);
-      expect(comparison.month).toBe('2025-01');
-      expect(comparison.budgeted).toBe(500);
-      expect(comparison.actual).toBe(191.34);
-      expect(comparison.remaining).toBeCloseTo(308.66, 2);
-      expect(comparison.percentUsed).toBe(38); // 191.34 / 500 = 38.27%
-      expect(comparison.isOverBudget).toBe(false);
+      expect(comparison).not.toBeNull();
+      expect(comparison!.categoryId).toBe(categoryId);
+      expect(comparison!.month).toBe('2025-01');
+      expect(comparison!.budgeted).toBe(500);
+      expect(comparison!.actual).toBe(191.34);
+      expect(comparison!.remaining).toBeCloseTo(308.66, 2);
+      expect(comparison!.percentUsed).toBe(38); // 191.34 / 500 = 38.27%
+      expect(comparison!.isOverBudget).toBe(false);
     });
 
     it('should handle over-budget scenarios correctly', async () => {
@@ -643,8 +644,9 @@ describe('User Story: Financial Calculations', () => {
         testUserId
       );
       
-      expect(comparison.remaining).toBe(499999.99);
-      expect(comparison.percentUsed).toBe(50);
+      expect(comparison).not.toBeNull();
+      expect(comparison!.remaining).toBe(499999.99);
+      expect(comparison!.percentUsed).toBe(50);
     });
 
     it('should handle precision in financial calculations', async () => {
@@ -673,8 +675,9 @@ describe('User Story: Financial Calculations', () => {
         testUserId
       );
       
-      expect(comparison.remaining).toBeCloseTo(222.22, 2);
-      expect(comparison.percentUsed).toBe(33); // Should round to integer
+      expect(comparison).not.toBeNull();
+      expect(comparison!.remaining).toBeCloseTo(222.22, 2);
+      expect(comparison!.percentUsed).toBe(33); // Should round to integer
     });
   });
 });
