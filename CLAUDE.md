@@ -165,7 +165,10 @@ scripts/               # Deployment scripts
 ### 4. Budget Categories
 **User Story**: As a user, I can create and manage budget categories
 - ✅ Two-level hierarchy (Category → Subcategory)
-- ✅ Default category initialization
+- ✅ Plaid PFC integration with 121 default categories
+- ✅ Automatic transaction categorization using Plaid taxonomy
+- ✅ Custom categories with SNAKE_CASE ID generation
+- ✅ Category descriptions for better understanding
 - ✅ Savings categories for future rollover
 
 ### 5. Monthly Budgeting
@@ -461,6 +464,7 @@ Having issues?
 - **Handle auth errors**: Review JWT middleware patterns
 - **Create a release**: Run `npm run release:prepare` and follow prompts
 - **Check version**: Visit `/version` endpoint or run `curl localhost:3001/version`
+- **⚠️ Category Migration**: Before deploying Plaid PFC changes, delete existing category data: `rm backend/data/categories_*.json`
 
 ## Deployment
 
@@ -553,6 +557,7 @@ Track important decisions that affect how the codebase should be modified.
 
 | Date | Decision | Rationale | Impact |
 |------|----------|-----------|--------|
+| 2025-01 | SNAKE_CASE category IDs with Plaid PFC | Direct mapping eliminates complexity | **BREAKING**: Must delete existing category data before deployment |
 | 2024-12 | User-specific categories | Multi-user support requirement | All categories now have userId field |
 | 2024-11 | Pagination for transactions | Performance issues with large datasets | 50 items per page default |
 | 2024-10 | Service singletons | Prevent auth token inconsistencies | All services use getInstance() pattern |
