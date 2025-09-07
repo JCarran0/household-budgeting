@@ -48,19 +48,28 @@ function BudgetRow({ budget, category, onDelete, onUpdate }: BudgetRowProps) {
     setIsEditing(false);
   };
 
-  if (!category) return null;
+  // Display orphaned budgets as "Unknown Category"
+  const isOrphaned = !category;
+  const displayName = isOrphaned ? 'Unknown Category' : category.name;
 
   return (
     <Table.Tr>
       <Table.Td>
         <Group gap="xs">
-          <Text fw={500}>{category.name}</Text>
-          {category.isHidden && (
+          <Text fw={500} c={isOrphaned ? 'dimmed' : undefined}>
+            {displayName}
+          </Text>
+          {isOrphaned && (
+            <Badge size="xs" variant="light" color="red">
+              Orphaned
+            </Badge>
+          )}
+          {category?.isHidden && (
             <Badge size="xs" variant="light" color="gray">
               Hidden
             </Badge>
           )}
-          {category.isSavings && (
+          {category?.isSavings && (
             <Badge size="xs" variant="light" color="yellow">
               Savings
             </Badge>
@@ -115,16 +124,18 @@ function BudgetRow({ budget, category, onDelete, onUpdate }: BudgetRowProps) {
             </>
           ) : (
             <>
-              <Tooltip label="Quick edit">
-                <ActionIcon
-                  size="sm"
-                  variant="subtle"
-                  onClick={() => setIsEditing(true)}
-                >
-                  <IconEdit size={16} />
-                </ActionIcon>
-              </Tooltip>
-              <Tooltip label="Delete budget">
+              {!isOrphaned && (
+                <Tooltip label="Quick edit">
+                  <ActionIcon
+                    size="sm"
+                    variant="subtle"
+                    onClick={() => setIsEditing(true)}
+                  >
+                    <IconEdit size={16} />
+                  </ActionIcon>
+                </Tooltip>
+              )}
+              <Tooltip label={isOrphaned ? "Delete orphaned budget" : "Delete budget"}>
                 <ActionIcon
                   size="sm"
                   variant="subtle"
@@ -146,9 +157,12 @@ export function BudgetGrid({ budgets, categories, month, onEdit }: BudgetGridPro
   const queryClient = useQueryClient();
 
   // Filter out budgets for hidden categories (including subcategories of hidden parents)
+  // But KEEP orphaned budgets (where category doesn't exist) so they can be deleted
   const visibleBudgets = budgets.filter(budget => {
     const category = categories.find(c => c.id === budget.categoryId);
-    if (!category) return false;
+    
+    // Keep orphaned budgets so they can be deleted
+    if (!category) return true;
     
     // Hide if category is directly hidden
     if (category.isHidden) return false;
@@ -216,7 +230,12 @@ export function BudgetGrid({ budgets, categories, month, onEdit }: BudgetGridPro
     }
   };
 
-  // Group visible budgets by parent category
+  // Separate orphaned budgets from categorized budgets
+  const orphanedBudgets = visibleBudgets.filter(budget => 
+    !categories.find(c => c.id === budget.categoryId)
+  );
+  
+  // Group non-orphaned visible budgets by parent category
   const budgetsByParent = visibleBudgets.reduce<Record<string, MonthlyBudget[]>>((acc, budget) => {
     const category = categories.find(c => c.id === budget.categoryId);
     if (category) {
@@ -299,6 +318,19 @@ export function BudgetGrid({ budgets, categories, month, onEdit }: BudgetGridPro
               />
             );
           })}
+          
+        {/* Orphaned budgets (categories that no longer exist) */}
+        {orphanedBudgets.map(budget => (
+          <BudgetRow
+            key={budget.id}
+            budget={budget}
+            category={undefined}
+            month={month}
+            onEdit={onEdit}
+            onDelete={handleDelete}
+            onUpdate={handleUpdate}
+          />
+        ))}
       </Table.Tbody>
     </Table>
   );
