@@ -110,6 +110,7 @@ household-budgeting/
   - `createCategory()`: Add custom category with SNAKE_CASE ID generation
   - `getCategoryTree()`: Get hierarchical structure
   - `deleteCategory()`: Remove category with referential integrity checks
+  - `importFromCSV()`: Bulk import categories from CSV with auto-parent creation
 - **Category ID Pattern**:
   - Plaid categories: Direct SNAKE_CASE IDs (e.g., `FOOD_AND_DRINK_COFFEE`)
   - Custom categories: `CUSTOM_` prefix (e.g., `CUSTOM_WINE_BUDGET`)
@@ -193,6 +194,16 @@ household-budgeting/
 - **Important**: Categories require userId parameter (no global categories)
 
 ## Shared Utilities
+
+### CSV Parser (`backend/src/utils/csvParser.ts`)
+- **Purpose**: Parse and validate CSV files for bulk category import
+- **Key Functions**:
+  - `parseCategoryCSV(csvContent: string)`: Validates headers and parses category data
+  - Handles quoted values to support commas in descriptions
+  - Validates required headers: Parent, Child
+  - Supports optional headers: Type, Hidden, Savings, Description
+- **Return Type**: `ParsedCategory[]` with validation errors
+- **Error Handling**: Returns specific error messages for invalid format or missing headers
 
 ### Category Helper Functions (`shared/utils/categoryHelpers.ts`)
 - **Purpose**: Centralized logic for category type identification and classification
@@ -404,6 +415,13 @@ const autoCategorizeService = new AutoCategorizeService(dataService, categorySer
 3. Update API client in `frontend/src/lib/api.ts`
 4. Add types to `shared/types/`
 
+#### Example: CSV Import Endpoint
+- **Route**: `POST /api/v1/categories/import-csv` in `backend/src/routes/categories.ts`
+- **Service Method**: `CategoryService.importFromCSV(csvContent, userId)`
+- **CSV Parser**: `backend/src/utils/csvParser.ts` for validation and parsing
+- **Frontend Component**: `CSVImport.tsx` with file upload and text paste support
+- **API Client**: `importCategoriesFromCSV()` method in `frontend/src/lib/api.ts`
+
 <!-- TASK: Add new React page -->
 <!-- PATTERN: Frontend development -->
 ### To Add a New Page
@@ -485,8 +503,27 @@ interface Category {
 
 <!-- TROUBLESHOOT: API client errors -->
 ### Issue: "Cannot read properties of undefined"
-**Cause**: API client methods not bound properly
-**Solution**: Check method binding in api.ts constructor
+**Cause**: API client methods not bound properly in constructor
+**Solution**: Ensure all methods are bound in the API client constructor
+
+**Details**: When adding new methods to the API client (`frontend/src/lib/api.ts`), they must be explicitly bound in the constructor to preserve the correct `this` context when passed as callbacks:
+
+```typescript
+constructor() {
+  // ... existing bindings
+  
+  // Budget methods - ALL must be bound!
+  this.getBudgets = this.getBudgets.bind(this);
+  this.getAvailableBudgetMonths = this.getAvailableBudgetMonths.bind(this);
+  this.getMonthlyBudgets = this.getMonthlyBudgets.bind(this);
+  this.setBudget = this.setBudget.bind(this);
+  this.deleteBudget = this.deleteBudget.bind(this);
+  this.copyBudgets = this.copyBudgets.bind(this);
+  // ... etc
+}
+```
+
+**Common Symptom**: Methods work when called directly but fail when used in React Query or as event handlers, showing "No data available" or similar errors even when data exists.
 
 ### Issue: Plaid Link duplicate script warning
 **Cause**: Multiple component mounts

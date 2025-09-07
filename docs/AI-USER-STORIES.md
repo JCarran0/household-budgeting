@@ -224,6 +224,18 @@
 - A user should be able to create subcategories under any parent category
 - A user should be able to see statistics (total, hidden count, savings count)
 
+### CSV Import for Categories
+- A user should be able to import categories in bulk via CSV file upload
+- A user should be able to paste CSV data directly without needing a file
+- A user should see the required CSV format with headers: Parent, Child, Type, Hidden, Savings, Description
+- A user should have their CSV validated for proper format and headers
+- A user should have parent categories auto-created when importing subcategories
+- A user should see the number of categories successfully imported
+- A user should see specific error messages for any categories that fail to import
+- A user should be able to use quoted values in CSV to handle commas in descriptions
+- A user should have duplicate categories automatically skipped during import
+- A user should have SNAKE_CASE IDs generated for custom categories with CUSTOM_ prefix
+
 ### Category Deletion Protection
 - A user should NOT be able to delete a category that has subcategories
 - A user should NOT be able to delete a category with active budgets
@@ -290,7 +302,10 @@
 ### Budget Creation
 - A user should be able to create monthly budgets for their categories
 - A user should be able to set budget amounts for their specific categories
-- A user should be able to copy their budgets from the previous month
+- A user should be able to copy their budgets from any previously created month
+- A user should be able to select from a dropdown menu of available budget months when copying
+- A user should see the number of budgets available in each month
+- A user should see the most recent month marked as recommended when copying
 - A user should be able to edit their budget amounts inline
 - A user should be able to delete their budgets
 - A user should not see or affect other users' budgets

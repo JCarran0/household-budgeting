@@ -203,7 +203,68 @@ describe('User Story: Transaction Management', () => {
 });
 ```
 
-### Example 3: Financial Calculations (Critical)
+### Example 3: CSV Import for Categories
+Maps to bulk category management stories:
+
+```typescript
+// backend/src/__tests__/integration/csv-import.test.ts
+describe('User Story: CSV Import for Categories', () => {
+  describe('As a user, I can bulk import categories via CSV', () => {
+    it('should import categories with auto-parent creation', async () => {
+      const csvContent = `Parent,Child,Hidden,Savings,Description
+"Entertainment","Movies","false","false","Movie tickets and streaming"
+"Entertainment","Concerts","false","false","Live music events"
+"Savings Goals","Vacation Fund","false","true","Annual vacation savings"`;
+
+      const response = await request(app)
+        .post('/api/v1/categories/import-csv')
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({ csvContent });
+
+      expect(response.status).toBe(200);
+      expect(response.body.success).toBe(true);
+      expect(response.body.importedCount).toBe(3);
+      
+      // Verify parent was auto-created
+      const categories = await categoryService.getCategoryTree(userId);
+      const entertainment = categories.find(c => c.name === 'Entertainment');
+      expect(entertainment).toBeDefined();
+      expect(entertainment.id).toBe('CUSTOM_ENTERTAINMENT');
+    });
+
+    it('should validate CSV format and headers', async () => {
+      const invalidCSV = `Wrong,Headers
+"Data","Values"`;
+
+      const response = await request(app)
+        .post('/api/v1/categories/import-csv')
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({ csvContent: invalidCSV });
+
+      expect(response.status).toBe(400);
+      expect(response.body.error).toContain('Missing required headers');
+    });
+
+    it('should handle quoted values with commas', async () => {
+      const csvContent = `Parent,Child,Description
+"Shopping","Gifts","Birthday, holiday, and special occasion gifts"`;
+
+      const response = await request(app)
+        .post('/api/v1/categories/import-csv')
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({ csvContent });
+
+      expect(response.status).toBe(200);
+      const categories = await categoryService.getCategoryTree(userId);
+      const gifts = categories.find(c => c.parentId === 'CUSTOM_SHOPPING')
+        ?.children?.find(c => c.name === 'Gifts');
+      expect(gifts?.description).toContain('Birthday, holiday');
+    });
+  });
+});
+```
+
+### Example 4: Financial Calculations (Critical)
 Maps to budget tracking and financial accuracy stories:
 
 ```typescript
