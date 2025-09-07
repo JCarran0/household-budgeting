@@ -576,6 +576,7 @@ Track important decisions that affect how the codebase should be modified.
 
 | Date | Decision | Rationale | Impact |
 |------|----------|-----------|--------|
+| 2025-09 | Generalized CSV import framework | Support multiple CSV import types beyond categories | Created extensible BaseCSVParser system with ImportService for future transaction/mapping imports |
 | 2025-01 | SNAKE_CASE category IDs with Plaid PFC | Direct mapping eliminates complexity | **BREAKING**: Must delete existing category data before deployment |
 | 2024-12 | User-specific categories | Multi-user support requirement | All categories now have userId field |
 | 2024-11 | Pagination for transactions | Performance issues with large datasets | 50 items per page default |

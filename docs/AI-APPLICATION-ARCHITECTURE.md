@@ -184,7 +184,32 @@ household-budgeting/
   - Force recategorization option
 - **Data Model**: `StoredAutoCategorizeRule` with patterns array and migration support
 
-#### 9. DataService (`backend/src/services/dataService.ts`)
+#### 9. ImportService (`backend/src/services/importService.ts`)
+- **Purpose**: Unified CSV import processing for all import types
+- **Key Methods**:
+  - `importCSV()`: Main entry point for all CSV imports by type
+  - `getJobStatus()`: Check import job status (preparation for async)
+  - `getParserInfo()`: Get sample CSV and format info for import type
+- **Import Types**:
+  - `categories`: Full implementation with auto-parent creation
+  - `transactions`: Parser ready, business logic pending implementation
+  - `mappings`: Parser ready, business logic pending implementation
+- **Architecture**:
+  - Job tracking for future async processing migration
+  - Extensible parser system (BaseCSVParser → Type-specific parsers)
+  - Batch processing support for large files
+  - Comprehensive error handling with row-level validation
+- **Parser Hierarchy**:
+  - `BaseCSVParser<T>`: Abstract base with common CSV parsing logic
+  - `CategoryCSVParser`: Handles category import with parent auto-creation
+  - `TransactionCSVParser`: Ready for bank transaction imports (multiple formats)
+  - `MappingCSVParser`: Ready for auto-categorization mapping imports
+- **Future-Ready Design**:
+  - Structured for S3 upload + Lambda processing migration
+  - Job-based tracking even for synchronous imports
+  - Configurable batch sizes and validation options
+
+#### 10. DataService (`backend/src/services/dataService.ts`)
 - **Purpose**: Unified data persistence layer with storage adapters
 - **Features**:
   - User-scoped data isolation (all data keyed by userId)
@@ -195,15 +220,19 @@ household-budgeting/
 
 ## Shared Utilities
 
-### CSV Parser (`backend/src/utils/csvParser.ts`)
-- **Purpose**: Parse and validate CSV files for bulk category import
-- **Key Functions**:
-  - `parseCategoryCSV(csvContent: string)`: Validates headers and parses category data
-  - Handles quoted values to support commas in descriptions
-  - Validates required headers: Parent, Child
-  - Supports optional headers: Type, Hidden, Savings, Description
-- **Return Type**: `ParsedCategory[]` with validation errors
-- **Error Handling**: Returns specific error messages for invalid format or missing headers
+### CSV Import Framework (`backend/src/utils/csvImport/`)
+- **Purpose**: Extensible framework for parsing and validating CSV files for multiple import types
+- **Architecture**:
+  - `BaseCSVParser<T>`: Abstract base class with common parsing logic
+  - Type-specific parsers extending base (CategoryCSVParser, TransactionCSVParser, etc.)
+  - `ImportService`: Unified service coordinating all import operations
+- **Key Features**:
+  - Configurable column mappings and transformations
+  - Row-level validation with detailed error reporting
+  - Support for different CSV formats (delimiter, quotes, encoding)
+  - Batch processing for large files
+  - Job tracking preparation for async processing
+- **Legacy**: `csvParser.ts` - Original category parser (still functional, but superseded)
 
 ### Category Helper Functions (`shared/utils/categoryHelpers.ts`)
 - **Purpose**: Centralized logic for category type identification and classification
@@ -264,6 +293,13 @@ household-budgeting/
 - Rule priority management with drag-and-drop reordering
 - Preview and apply categorization with confirmation dialogs
 - Re-categorization option with orphaned category ID handling
+
+### CSV Import (`frontend/src/components/categories/CSVImport.tsx`)
+- Generic CSV import interface for category bulk operations
+- File upload and direct text paste support
+- Real-time validation with error display
+- Sample CSV format display with examples
+- Uses ImportService framework for processing
 
 #### Transaction Components (`frontend/src/components/transactions/`)
 - **TransactionPreviewModal**: Modal showing first 25 transactions for a category
@@ -417,10 +453,28 @@ const autoCategorizeService = new AutoCategorizeService(dataService, categorySer
 
 #### Example: CSV Import Endpoint
 - **Route**: `POST /api/v1/categories/import-csv` in `backend/src/routes/categories.ts`
-- **Service Method**: `CategoryService.importFromCSV(csvContent, userId)`
-- **CSV Parser**: `backend/src/utils/csvParser.ts` for validation and parsing
+- **Service Method**: `CategoryService.importFromCSV(csvContent, userId)` (delegates to ImportService)
+- **Import Framework**: Uses `backend/src/utils/csvImport/` for parsing and validation
 - **Frontend Component**: `CSVImport.tsx` with file upload and text paste support
 - **API Client**: `importCategoriesFromCSV()` method in `frontend/src/lib/api.ts`
+
+### To Add a New CSV Import Type
+1. **Create Type-Specific Parser**: Extend `BaseCSVParser<T>` in `backend/src/utils/csvImport/`
+   ```typescript
+   export class YourCSVParser extends BaseCSVParser<ParsedYourType> {
+     protected initializeColumnMappings(): void {
+       // Define column mappings with validation and transformations
+     }
+     protected validateRow(row: Record<string, string>, rowNumber: number): ParsedYourType | ParseError {
+       // Row-level validation logic
+     }
+   }
+   ```
+2. **Add Import Type**: Update `ImportType` union in `backend/src/utils/csvImport/types.ts`
+3. **Implement Business Logic**: Add case to ImportService.importCSV() switch statement
+4. **Add Route**: Create endpoint in appropriate route file using ImportService
+5. **Frontend Integration**: Create UI component and API client method
+6. **Add Sample Data**: Implement `getSampleCSV()` and `getFormatDescription()` static methods
 
 <!-- TASK: Add new React page -->
 <!-- PATTERN: Frontend development -->
@@ -490,6 +544,54 @@ interface Category {
   isCustom: boolean;           // true for user-created categories
   isHidden: boolean;           // Hidden from budgets/reports
   isSavings: boolean;          // Savings category with rollover
+}
+```
+
+### CSV Import Framework Types
+```typescript
+// Base types for CSV import system
+interface ImportJob {
+  id: string;
+  userId: string;
+  type: ImportType;             // 'categories' | 'transactions' | 'mappings'
+  status: ImportStatus;         // 'pending' | 'processing' | 'completed' | 'failed'
+  progress: number;
+  totalRows: number;
+  processedRows: number;
+  errors: ParseError[];
+  result?: ImportResult;
+}
+
+interface ImportResult {
+  success: boolean;
+  message: string;
+  imported?: number;
+  skipped?: number;
+  errors?: string[];
+}
+
+// Type-specific parsed data
+interface ParsedCategory {
+  parent: string | null;
+  name: string;
+  isHidden: boolean;
+  isSavings: boolean;
+  description?: string;
+}
+
+interface ParsedTransaction {
+  date: string;
+  description: string;
+  amount: number;
+  category?: string;
+  accountName?: string;
+}
+
+interface ParsedMapping {
+  sourcePattern: string;
+  targetCategory: string;
+  matchType: 'exact' | 'contains' | 'regex';
+  priority?: number;
 }
 ```
 
