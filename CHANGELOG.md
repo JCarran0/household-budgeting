@@ -5,6 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.0](https://github.com/JCarran0/household-budgeting/compare/v1.3.1...v1.4.0) (2025-09-07)
+
+
+### Features
+
+* **budgets:** enhance copy feature to allow selection from any previous month ([14cb183](https://github.com/JCarran0/household-budgeting/commit/14cb18303e6251b32f4551431a02887008ecc28f))
+* **categories:** add CSV import functionality for bulk category creation ([0a9626b](https://github.com/JCarran0/household-budgeting/commit/0a9626b6d32196a54f5fcf92a83d6f0a536f76b6))
+* **categories:** add description field with tooltips for categories ([dc9ac7e](https://github.com/JCarran0/household-budgeting/commit/dc9ac7ec82eff8af143a7cde887315133616f656))
+
+
+### Bug Fixes
+
+* **budgets:** allow deletion of orphaned budgets with unknown categories ([c11f020](https://github.com/JCarran0/household-budgeting/commit/c11f0208f29eb67d7135411ddee55be755d3ead6))
+* **reports:** exclude subcategories of hidden parents from all reports ([c6f4a19](https://github.com/JCarran0/household-budgeting/commit/c6f4a1976b9affec2a9de83cd6cc71eafffc1db2))
+
+
+### Chores
+
+* **dev:** add server management scripts and instructions ([880ed51](https://github.com/JCarran0/household-budgeting/commit/880ed510fc3b9f7032fba3cdfd9dae1ac30403a9))
+
 ### [1.3.1](https://github.com/JCarran0/household-budgeting/compare/v1.3.0...v1.3.1) (2025-09-07)
 
 
