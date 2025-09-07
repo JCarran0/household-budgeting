@@ -200,7 +200,6 @@
 - A user should be able to delete only custom categories (Plaid categories are permanent)
 - A user should be able to see category descriptions for Plaid categories (pre-populated from Plaid taxonomy)
 - A user should be able to search/filter categories by name
-- A user should be able to show/hide hidden categories in the view
 
 ### Hidden Categories
 - A user should be able to categorize transactions with hidden categories

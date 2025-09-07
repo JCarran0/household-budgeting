@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import {
   Container,
   Title,
@@ -7,7 +7,6 @@ import {
   Button,
   TextInput,
   Stack,
-  ActionIcon,
   Loader,
   Center,
   Alert,
@@ -15,7 +14,6 @@ import {
   Grid,
   Card,
   ThemeIcon,
-  Tooltip,
   Divider,
   Tabs,
 } from '@mantine/core';
@@ -25,7 +23,6 @@ import {
   IconPlus,
   IconSearch,
   IconCategory,
-  IconEye,
   IconEyeOff,
   IconPigMoney,
   IconAlertCircle,
@@ -44,7 +41,6 @@ export function Categories() {
   const [isFormOpen, setIsFormOpen] = useState<boolean>(false);
   const [editingCategory, setEditingCategory] = useState<Category | null>(null);
   const [searchQuery, setSearchQuery] = useState<string>('');
-  const [showHidden, setShowHidden] = useState<boolean>(false);
   const [hasInitialized, setHasInitialized] = useState<boolean>(false);
   const [isCSVImportOpen, setIsCSVImportOpen] = useState<boolean>(false);
   const queryClient = useQueryClient();
@@ -128,21 +124,36 @@ export function Categories() {
     queryClient.invalidateQueries({ queryKey: ['categories'] });
   };
 
-  // Filter categories based on search and visibility
-  const filteredCategories = categories?.filter((category: CategoryWithChildren) => {
-    if (!showHidden && category.isHidden) return false;
+  // Filter categories based on search - memoized for performance
+  const filteredCategories = useMemo(() => {
+    if (!categories) return undefined;
+    if (!searchQuery) return categories;
     
-    if (searchQuery) {
-      const query = searchQuery.toLowerCase();
+    const query = searchQuery.toLowerCase();
+    
+    return categories.map((category: CategoryWithChildren) => {
       const matchesParent = category.name.toLowerCase().includes(query);
-      const matchesChildren = category.children?.some(
+      const matchingChildren = category.children?.filter(
         child => child.name.toLowerCase().includes(query)
       );
-      return matchesParent || matchesChildren;
-    }
-    
-    return true;
-  });
+      
+      // If parent matches, show parent with all children
+      if (matchesParent) {
+        return category;
+      }
+      
+      // If only some children match, show parent with filtered children
+      if (matchingChildren && matchingChildren.length > 0) {
+        return {
+          ...category,
+          children: matchingChildren
+        };
+      }
+      
+      // No matches
+      return null;
+    }).filter(Boolean) as CategoryWithChildren[];
+  }, [categories, searchQuery]);
 
   // Calculate statistics
   const totalCategories = categories?.reduce((count: number, cat: CategoryWithChildren) => 
@@ -272,15 +283,6 @@ export function Categories() {
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                 />
-                <Tooltip label={showHidden ? "Hide hidden categories" : "Show hidden categories"}>
-                  <ActionIcon
-                    variant={showHidden ? "filled" : "default"}
-                    onClick={() => setShowHidden(!showHidden)}
-                    size="lg"
-                  >
-                    {showHidden ? <IconEye size={16} /> : <IconEyeOff size={16} />}
-                  </ActionIcon>
-                </Tooltip>
               </Group>
 
               <Divider mb="md" />
