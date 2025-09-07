@@ -328,16 +328,18 @@
 - A user should be able to see parent categories displayed above their child categories
 - A user should be able to see child categories indented under their parent categories
 - A user should be able to see parent category totals that intelligently aggregate from children
-- A user should be able to see parent budgets calculated as the maximum of (direct parent budget, sum of children budgets)
-- A user should be able to see parent actuals calculated as (direct parent spending + sum of children spending)
-- A user should be able to see visual indicators when parent totals are calculated from children (e.g., "Kids (Σ)")
-- A user should be able to hover over calculated parent categories to see "Includes subcategory totals" tooltip
+- A user should be able to see different aggregation logic for expense vs income categories:
+  - **Expense Categories:** Parent budget = maximum of (direct parent budget, sum of children budgets) to prevent double-counting
+  - **Income Categories:** Parent budget = direct parent budget + sum of children budgets (additive for income targets)
+- A user should be able to see parent actuals calculated as (direct parent spending/income + sum of children spending/income) for both types
+- A user should be able to see income categories with inverse "over budget" logic (under target = bad, exceeding target = good)
+- A user should be able to see visual distinction between income (💰) and expense (💳) categories
 - A user should be able to see parent categories even when they have no direct budget but have budgeted children
 - A user should be able to see parent categories even when they have no direct transactions but children have transactions
 - A user should be able to click on any category (parent or child) to preview its transactions
 - A user should be able to see parent category transaction previews that include both direct parent transactions and aggregated child transactions when appropriate
 - A user should be able to navigate from parent category previews to the full transactions page with appropriate filters
-- A user should be able to distinguish between categories with direct budgets vs. calculated aggregated budgets through visual styling
+- A user should be able to distinguish between categories with direct budgets vs. calculated aggregated budgets through italic font styling
 
 ### Budget Visualization
 - A user should be able to see progress bars for budget usage

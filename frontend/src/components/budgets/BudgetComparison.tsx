@@ -130,15 +130,43 @@ export function BudgetComparison({ comparison, categories }: BudgetComparisonPro
       const childBudgetSum = children.reduce((sum, child) => sum + child.budgeted, 0);
       const childActualSum = children.reduce((sum, child) => sum + child.actual, 0);
       
-      const budgeted = existingParent 
-        ? Math.max(childBudgetSum, existingParent.budgeted)
-        : childBudgetSum;
+      // Determine if this is an income category based on children or existing parent
+      const isIncomeCategory = existingParent?.isIncomeCategory || 
+        (children.length > 0 && children[0].isIncomeCategory) || false;
       
+      // Calculate budgeted amount based on category type
+      let budgeted: number;
+      if (isIncomeCategory) {
+        // Income: additive approach - parent budget adds to children
+        budgeted = existingParent 
+          ? childBudgetSum + existingParent.budgeted
+          : childBudgetSum;
+      } else {
+        // Expense: max approach - prevent double counting
+        budgeted = existingParent 
+          ? Math.max(childBudgetSum, existingParent.budgeted)
+          : childBudgetSum;
+      }
+      
+      // Actual is always additive for both income and expense
       const actual = existingParent 
         ? childActualSum + existingParent.actual
         : childActualSum;
       
-      const remaining = budgeted - actual;
+      // Calculate remaining and over budget based on category type
+      let remaining: number;
+      let isOverBudget: boolean;
+      
+      if (isIncomeCategory) {
+        // Income: positive remaining = exceeding target (good)
+        remaining = actual - budgeted;
+        isOverBudget = actual < budgeted; // Under target is "over budget" for income
+      } else {
+        // Expense: positive remaining = under budget (good)
+        remaining = budgeted - actual;
+        isOverBudget = actual > budgeted;
+      }
+      
       const percentUsed = budgeted > 0 ? Math.round((actual / budgeted) * 100) : 0;
       
       return {
@@ -147,7 +175,9 @@ export function BudgetComparison({ comparison, categories }: BudgetComparisonPro
         actual,
         remaining,
         percentUsed,
-        isOverBudget: actual > budgeted,
+        isOverBudget,
+        budgetType: isIncomeCategory ? 'income' : 'expense',
+        isIncomeCategory,
         isParent: true,
         isCalculated: !existingParent || (childBudgetSum > 0), // Flag if this includes child data
         childrenIds: children.map(c => c.categoryId),
@@ -283,7 +313,7 @@ export function BudgetComparison({ comparison, categories }: BudgetComparisonPro
               fw={600}
               c={comparison.totals.remaining < 0 ? 'red' : 'green'}
             >
-              {comparison.totals.remaining < 0 ? '-' : ''}
+              {comparison.totals.remaining < 0 ? '-' : '+'}
               ${Math.abs(comparison.totals.remaining).toFixed(2)}
             </Text>
           </Stack>
@@ -388,9 +418,12 @@ export function BudgetComparison({ comparison, categories }: BudgetComparisonPro
                 <Table.Td>
                   <Text 
                     fw={500}
-                    c={comp.remaining < 0 ? 'red' : 'green'}
+                    c={comp.isIncomeCategory 
+                      ? (comp.remaining >= 0 ? 'green' : 'red')  // Income: positive = good, negative = bad
+                      : (comp.remaining >= 0 ? 'green' : 'red')  // Expense: positive = good, negative = bad
+                    }
                   >
-                    {comp.remaining < 0 ? '-' : ''}
+                    {comp.remaining < 0 ? '-' : '+'}
                     ${Math.abs(comp.remaining).toFixed(2)}
                   </Text>
                 </Table.Td>
