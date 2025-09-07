@@ -2,6 +2,7 @@ import React, { useEffect } from 'react';
 import {
   Modal,
   TextInput,
+  Textarea,
   Select,
   Checkbox,
   Button,
@@ -25,6 +26,7 @@ interface CategoryFormProps {
 interface FormValues {
   name: string;
   parentId: string | null;
+  description: string;
   isHidden: boolean;
   isSavings: boolean;
 }
@@ -48,6 +50,7 @@ export function CategoryForm({ opened, onClose, category, onSuccess }: CategoryF
     initialValues: {
       name: '',
       parentId: null,
+      description: '',
       isHidden: false,
       isSavings: false,
     },
@@ -55,6 +58,10 @@ export function CategoryForm({ opened, onClose, category, onSuccess }: CategoryF
       name: (value) => {
         if (!value.trim()) return 'Category name is required';
         if (value.length > 100) return 'Category name must be less than 100 characters';
+        return null;
+      },
+      description: (value) => {
+        if (value && value.length > 500) return 'Description must be less than 500 characters';
         return null;
       },
     },
@@ -67,6 +74,7 @@ export function CategoryForm({ opened, onClose, category, onSuccess }: CategoryF
         form.setValues({
           name: category.name,
           parentId: category.parentId,
+          description: category.description || '',
           isHidden: category.isHidden,
           isSavings: category.isSavings,
         });
@@ -125,6 +133,7 @@ export function CategoryForm({ opened, onClose, category, onSuccess }: CategoryF
       // For updates, only send changed fields
       const updates: UpdateCategoryDto = {};
       if (values.name !== category.name) updates.name = values.name;
+      if (values.description !== (category.description || '')) updates.description = values.description || undefined;
       if (values.isHidden !== category.isHidden) updates.isHidden = values.isHidden;
       if (values.isSavings !== category.isSavings) updates.isSavings = values.isSavings;
       
@@ -135,9 +144,12 @@ export function CategoryForm({ opened, onClose, category, onSuccess }: CategoryF
       }
     } else {
       createMutation.mutate({
-        ...values,
-        plaidCategory: null, // Always null for user-created categories
-      } as CreateCategoryDto);
+        name: values.name,
+        parentId: values.parentId,
+        description: values.description || undefined,
+        isHidden: values.isHidden,
+        isSavings: values.isSavings,
+      });
     }
   };
 
@@ -176,6 +188,15 @@ export function CategoryForm({ opened, onClose, category, onSuccess }: CategoryF
             placeholder="e.g., Transportation"
             required
             {...form.getInputProps('name')}
+          />
+
+          <Textarea
+            label="Description"
+            placeholder="Optional description for this category"
+            rows={3}
+            maxLength={500}
+            {...form.getInputProps('description')}
+            description={`${form.values.description.length}/500 characters`}
           />
 
           {showParentSelector && (

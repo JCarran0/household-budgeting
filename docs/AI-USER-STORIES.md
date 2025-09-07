@@ -189,11 +189,16 @@
 
 ### Category Properties
 - A user should be able to name/rename custom categories (Plaid categories have fixed names)
+- A user should be able to add a description to custom categories (up to 500 characters)
+- A user should be able to edit descriptions for custom categories they created
+- A user should see a character counter (X/500) when entering category descriptions
+- A user should be able to see descriptions as tooltips when hovering over category names
+- A user should see tooltips appear after a 500ms delay to avoid distraction
 - A user should be able to mark any category as hidden (excluded from budget calculations)
 - A user should be able to mark any category as savings categories
-- A user should be able to edit properties of custom categories (isHidden, isSavings for all)
+- A user should be able to edit properties of custom categories (name, description, isHidden, isSavings)
 - A user should be able to delete only custom categories (Plaid categories are permanent)
-- A user should be able to see category descriptions for Plaid categories
+- A user should be able to see category descriptions for Plaid categories (pre-populated from Plaid taxonomy)
 - A user should be able to search/filter categories by name
 - A user should be able to show/hide hidden categories in the view
 

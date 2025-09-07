@@ -105,9 +105,18 @@ function CategoryNode({ category, onEdit, onDelete, level = 0 }: CategoryNodePro
               </Tooltip>
             )}
 
-            <Text fw={isSubcategory ? 400 : 500} size={isSubcategory ? "sm" : "md"}>
-              {category.name}
-            </Text>
+            <Tooltip 
+              label={category.description || "No description available"} 
+              withArrow
+              multiline
+              maw={300}
+              openDelay={500}
+              disabled={!category.description}
+            >
+              <Text fw={isSubcategory ? 400 : 500} size={isSubcategory ? "sm" : "md"}>
+                {category.name}
+              </Text>
+            </Tooltip>
 
             {category.isHidden && (
               <Text size="xs" c="dimmed">

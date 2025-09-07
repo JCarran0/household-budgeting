@@ -12,12 +12,14 @@ export interface CategoryWithChildren extends Category {
 export interface CreateCategoryDto {
   name: string;
   parentId: string | null;
+  description?: string;
   isHidden: boolean;
   isSavings: boolean;
 }
 
 export interface UpdateCategoryDto {
   name?: string;
+  description?: string;
   isHidden?: boolean;
   isSavings?: boolean;
 }
@@ -98,7 +100,7 @@ export class CategoryService {
       id: categoryId,
       name: data.name,
       parentId: data.parentId,
-      description: undefined, // User can add description later if needed
+      description: data.description || undefined,
       isCustom: true, // User-created categories are always custom
       isHidden: data.isHidden,
       isSavings: data.isSavings

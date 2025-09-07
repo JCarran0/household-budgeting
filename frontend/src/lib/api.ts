@@ -41,6 +41,7 @@ export interface VersionResponse {
 export interface CreateCategoryDto {
   name: string;
   parentId: string | null;
+  description?: string;
   isHidden: boolean;
   isSavings: boolean;
 }
@@ -56,6 +57,7 @@ function hasTokenAndUser(data: unknown): data is { success: boolean; token: stri
 
 export interface UpdateCategoryDto {
   name?: string;
+  description?: string;
   isHidden?: boolean;
   isSavings?: boolean;
 }

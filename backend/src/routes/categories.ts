@@ -9,12 +9,14 @@ const router = Router();
 const createCategorySchema = z.object({
   name: z.string().min(1).max(100),
   parentId: z.string().nullable(),
+  description: z.string().max(500).optional(),
   isHidden: z.boolean(),
   isSavings: z.boolean()
 });
 
 const updateCategorySchema = z.object({
   name: z.string().min(1).max(100).optional(),
+  description: z.string().max(500).optional(),
   isHidden: z.boolean().optional(),
   isSavings: z.boolean().optional()
 });
