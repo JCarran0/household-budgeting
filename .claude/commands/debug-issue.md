@@ -8,6 +8,11 @@ description: Systematic debugging workflow for reported issues
 
 I'll help you debug this issue using a systematic approach. Let me analyze the problem and guide you through the debugging process.
 
+## Prerequisites Check
+- Development servers: Run `npm run dev:check` to verify status
+- If servers needed but not running: `npm run dev`
+- If servers need restart: `npm run dev:restart`
+
 ## Project Context
 @CLAUDE.md
 

@@ -8,6 +8,11 @@ description: Improve development infrastructure, tooling, or architecture
 
 I'll help you improve the development infrastructure or tooling.
 
+## Prerequisites Check
+- Development servers: Run `npm run dev:check` to verify status
+- If servers needed but not running: `npm run dev`
+- If servers need restart: `npm run dev:restart`
+
 ## Project Context
 @CLAUDE.md
 @docs/AI-DEPLOYMENTS.md

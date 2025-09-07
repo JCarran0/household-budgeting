@@ -321,6 +321,16 @@ npm run test
 npm run build
 ```
 
+### Development Server Management
+
+**IMPORTANT**: Development servers are often already running. Before starting servers:
+1. Check if they're running: `npm run dev:check`
+2. If running, skip startup commands
+3. If needed to restart: `npm run dev:restart` (stops then starts)
+
+Frontend runs on: http://localhost:3000
+Backend runs on: http://localhost:3001
+
 ### Required Environment Variables
 ```bash
 # Backend (.env)
@@ -420,6 +430,12 @@ Current Version: **1.0.0-alpha.1** (Check `/health` or `/version` endpoints for 
 2. **Check GitHub Actions** - Verify CI/CD pipeline configuration
 3. **Monitor deployment** - Watch logs during and after deployment
 4. **Verify health checks** - Ensure application is responding correctly
+
+#### When Working with Development Servers
+1. **Check first** - Always verify if servers are running with `npm run dev:check`
+2. **Don't duplicate** - Never start servers that are already running
+3. **Use existing** - Connect to running servers instead of starting new ones
+4. **Restart if needed** - Only restart if explicitly asked or if debugging server issues
 
 ### Decision Tree for Common Scenarios
 

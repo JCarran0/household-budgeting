@@ -5,6 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:check": "lsof -i :3000 -i :3001 || echo 'No servers running'",
+    "dev:restart": "npm run dev:stop && npm run dev",
+    "dev:stop": "kill $(lsof -t -i:3000) 2>/dev/null || true",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "type-check": "tsc -b --noEmit",

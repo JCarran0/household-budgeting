@@ -8,6 +8,11 @@ description: Handle quick tasks like UI tweaks, refactoring, or simple changes
 
 I'll help you with this task.
 
+## Prerequisites Check
+- Development servers: Run `npm run dev:check` to verify status
+- If servers needed but not running: `npm run dev`
+- If servers need restart: `npm run dev:restart`
+
 ## Project Context
 @CLAUDE.md
 
