@@ -33,6 +33,7 @@ interface EditFormValues {
   categoryId: string;
   tags: string[];
   notes: string;
+  isHidden: boolean;
 }
 
 export function TransactionEditModal({ 
@@ -75,6 +76,7 @@ export function TransactionEditModal({
       categoryId: '',
       tags: [],
       notes: '',
+      isHidden: false,
     },
   });
 
@@ -86,6 +88,7 @@ export function TransactionEditModal({
         categoryId: transaction.categoryId || '',
         tags: transaction.tags || [],
         notes: transaction.notes || '',
+        isHidden: transaction.isHidden || false,
       });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -157,6 +160,28 @@ export function TransactionEditModal({
     },
   });
 
+  // Update hidden status mutation
+  const updateHiddenMutation = useMutation({
+    mutationFn: ({ transactionId, isHidden }: { transactionId: string; isHidden: boolean }) =>
+      api.updateTransactionHidden(transactionId, isHidden),
+    onSuccess: () => {
+      notifications.show({
+        title: 'Hidden Status Updated',
+        message: 'Transaction hidden status has been updated',
+        color: 'green',
+      });
+      queryClient.invalidateQueries({ queryKey: ['transactions'] });
+      queryClient.invalidateQueries({ queryKey: ['transactions', 'uncategorized', 'count'] });
+    },
+    onError: () => {
+      notifications.show({
+        title: 'Error',
+        message: 'Failed to update hidden status',
+        color: 'red',
+      });
+    },
+  });
+
   // Build category options - MUST be before any conditional returns
   const categoryOptions = React.useMemo(() => {
     if (!categories || categories.length === 0) {
@@ -189,7 +214,7 @@ export function TransactionEditModal({
   // Build tag options (existing tags)
   const tagOptions = availableTags.map(tag => tag);
 
-  const isLoading = updateCategoryMutation.isPending || addTagsMutation.isPending || updateDescriptionMutation.isPending;
+  const isLoading = updateCategoryMutation.isPending || addTagsMutation.isPending || updateDescriptionMutation.isPending || updateHiddenMutation.isPending;
 
   const handleSubmit = async (values: EditFormValues) => {
     if (!transaction) return;
@@ -227,6 +252,16 @@ export function TransactionEditModal({
         await addTagsMutation.mutateAsync({
           transactionId: transaction.id,
           tags: values.tags,
+        });
+      }
+
+      // Update hidden status if changed
+      const currentHidden = transaction.isHidden || false;
+      const hiddenChanged = values.isHidden !== currentHidden;
+      if (hiddenChanged) {
+        await updateHiddenMutation.mutateAsync({
+          transactionId: transaction.id,
+          isHidden: values.isHidden,
         });
       }
 

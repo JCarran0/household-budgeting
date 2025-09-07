@@ -684,6 +684,35 @@ export class TransactionService {
   }
 
   /**
+   * Update transaction hidden status
+   */
+  async updateTransactionHidden(
+    userId: string,
+    transactionId: string,
+    isHidden: boolean
+  ): Promise<{ success: boolean; error?: string }> {
+    try {
+      const transactions = await this.dataService.getData<StoredTransaction[]>(
+        `transactions_${userId}`
+      ) || [];
+
+      const transaction = transactions.find(t => t.id === transactionId);
+      if (!transaction) {
+        return { success: false, error: 'Transaction not found' };
+      }
+
+      transaction.isHidden = isHidden;
+      transaction.updatedAt = new Date();
+
+      await this.dataService.saveData(`transactions_${userId}`, transactions);
+      return { success: true };
+    } catch (error) {
+      console.error('Error updating transaction hidden status:', error);
+      return { success: false, error: 'Failed to update hidden status' };
+    }
+  }
+
+  /**
    * Decrypt access token for use
    */
   private decryptToken(encryptedToken: string): string {

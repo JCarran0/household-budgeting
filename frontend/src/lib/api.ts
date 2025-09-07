@@ -321,6 +321,13 @@ class ApiClient {
     }
   }
 
+  async updateTransactionHidden(transactionId: string, isHidden: boolean): Promise<void> {
+    const response = await this.client.put(`/transactions/${transactionId}/hidden`, { isHidden });
+    if (!response.data.success) {
+      throw new Error(response.data.error || 'Failed to update hidden status');
+    }
+  }
+
   // Category endpoints
   async getCategories(): Promise<Category[]> {
     const { data } = await this.client.get<Category[]>('/categories');
