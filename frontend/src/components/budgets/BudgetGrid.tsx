@@ -145,6 +145,23 @@ function BudgetRow({ budget, category, onDelete, onUpdate }: BudgetRowProps) {
 export function BudgetGrid({ budgets, categories, month, onEdit }: BudgetGridProps) {
   const queryClient = useQueryClient();
 
+  // Filter out budgets for hidden categories (including subcategories of hidden parents)
+  const visibleBudgets = budgets.filter(budget => {
+    const category = categories.find(c => c.id === budget.categoryId);
+    if (!category) return false;
+    
+    // Hide if category is directly hidden
+    if (category.isHidden) return false;
+    
+    // Hide if parent category is hidden
+    if (category.parentId) {
+      const parent = categories.find(p => p.id === category.parentId);
+      if (parent?.isHidden) return false;
+    }
+    
+    return true;
+  });
+
   // Update budget mutation
   const updateMutation = useMutation({
     mutationFn: ({ categoryId, amount }: { categoryId: string; amount: number }) =>
@@ -199,8 +216,8 @@ export function BudgetGrid({ budgets, categories, month, onEdit }: BudgetGridPro
     }
   };
 
-  // Group budgets by parent category
-  const budgetsByParent = budgets.reduce<Record<string, MonthlyBudget[]>>((acc, budget) => {
+  // Group visible budgets by parent category
+  const budgetsByParent = visibleBudgets.reduce<Record<string, MonthlyBudget[]>>((acc, budget) => {
     const category = categories.find(c => c.id === budget.categoryId);
     if (category) {
       const parentId = category.parentId || category.id;
@@ -262,8 +279,8 @@ export function BudgetGrid({ budgets, categories, month, onEdit }: BudgetGridPro
           </React.Fragment>
         ))}
         
-        {/* Budgets without parent categories */}
-        {budgets
+        {/* Visible budgets without parent categories */}
+        {visibleBudgets
           .filter(budget => {
             const category = categories.find(c => c.id === budget.categoryId);
             return category && !category.parentId && !budgetsByParent[category.id];

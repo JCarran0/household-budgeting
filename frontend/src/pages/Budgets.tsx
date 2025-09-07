@@ -117,9 +117,18 @@ export function Budgets() {
     if (!transactionData?.transactions || !categories) return {};
     
     // Create a set of hidden category IDs for efficient lookup
-    const hiddenCategoryIds = new Set(
-      categories.filter(c => c.isHidden).map(c => c.id)
-    );
+    // Include categories that are either directly hidden or have a hidden parent
+    const hiddenCategoryIds = new Set<string>();
+    categories.forEach(cat => {
+      if (cat.isHidden) {
+        hiddenCategoryIds.add(cat.id);
+      } else if (cat.parentId) {
+        const parent = categories.find(p => p.id === cat.parentId);
+        if (parent?.isHidden) {
+          hiddenCategoryIds.add(cat.id);
+        }
+      }
+    });
     
     const actualsByCategory: Record<string, number> = {};
     transactionData.transactions.forEach(transaction => {

@@ -111,7 +111,15 @@ export function BudgetForm({
     
     try {
       const options = categories
-        .filter(cat => !cat.isHidden) // Don't show hidden categories
+        .filter(cat => {
+          // Don't show hidden categories (including subcategories of hidden parents)
+          if (cat.isHidden) return false;
+          if (cat.parentId) {
+            const parent = categories.find(p => p.id === cat.parentId);
+            if (parent?.isHidden) return false;
+          }
+          return true;
+        })
         .filter(cat => isExpenseCategory(cat.id)) // Exclude income categories from budgeting
         .map(cat => {
           const parentCategory = cat.parentId ? 

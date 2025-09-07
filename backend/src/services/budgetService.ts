@@ -162,15 +162,21 @@ export class BudgetService {
   async getMonthlyBudgetVsActual(
     month: string,
     actuals: Map<string, number>,
-    userId: string
+    userId: string,
+    hiddenCategoryIds?: Set<string>
   ): Promise<BudgetComparison[]> {
     const budgets = await this.getMonthlyBudgets(month, userId);
     const comparisons: BudgetComparison[] = [];
 
-    // Process budgeted categories (excluding income categories)
+    // Process budgeted categories (excluding income and hidden categories)
     for (const budget of budgets) {
       // Skip income categories
       if (isIncomeCategory(budget.categoryId)) {
+        continue;
+      }
+      
+      // Skip hidden categories if hiddenCategoryIds set is provided
+      if (hiddenCategoryIds && hiddenCategoryIds.has(budget.categoryId)) {
         continue;
       }
       
@@ -181,10 +187,15 @@ export class BudgetService {
       }
     }
 
-    // Process unbudgeted categories with actuals (excluding income categories)
+    // Process unbudgeted categories with actuals (excluding income and hidden categories)
     for (const [categoryId, actual] of actuals) {
       // Skip income categories
       if (isIncomeCategory(categoryId)) {
+        continue;
+      }
+      
+      // Skip hidden categories if hiddenCategoryIds set is provided
+      if (hiddenCategoryIds && hiddenCategoryIds.has(categoryId)) {
         continue;
       }
       
