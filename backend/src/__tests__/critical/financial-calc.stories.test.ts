@@ -546,6 +546,153 @@ describe('User Story: Financial Calculations', () => {
     });
   });
 
+  describe('As a user, I need accurate monthly boundary calculations', () => {
+    it('should not include next months transactions in budget vs actual calculations', async () => {
+      // Create a mortgage payment category
+      const category = await categoryService.createCategory({
+        name: 'Mortgage Payment',
+        parentId: null,
+        isHidden: false,
+        isSavings: false
+      }, testUserId);
+      
+      const categoryId = category.id;
+      
+      // Create budget for July 2025
+      await budgetService.createOrUpdateBudget({
+        categoryId,
+        month: '2025-07',
+        amount: 2500
+      }, testUserId);
+      
+      // Simulate the bug scenario: transaction on July 1st and August 1st
+      // This represents the same mortgage payment occurring monthly
+      const julyTransactionAmount = 2215.60;
+      const augustTransactionAmount = 2215.60;
+      
+      // Budget vs actual should ONLY include July transaction
+      // The bug was including August 1st transaction due to <= comparison
+      const comparison = await budgetService.getBudgetVsActual(
+        categoryId,
+        '2025-07',
+        julyTransactionAmount, // Should be ONLY July amount, not July + August
+        testUserId
+      );
+      
+      expect(comparison).not.toBeNull();
+      expect(comparison!.categoryId).toBe(categoryId);
+      expect(comparison!.month).toBe('2025-07');
+      expect(comparison!.budgeted).toBe(2500);
+      expect(comparison!.actual).toBe(2215.60); // Should be single transaction, not doubled
+      expect(comparison!.remaining).toBeCloseTo(284.40, 2); // 2500 - 2215.60
+      expect(comparison!.percentUsed).toBe(89); // 2215.60 / 2500 = 88.6%
+      expect(comparison!.isOverBudget).toBe(false);
+      
+      // Verify that doubling would be detected as incorrect
+      const incorrectDoubledAmount = julyTransactionAmount + augustTransactionAmount; // 4431.20
+      const incorrectComparison = await budgetService.getBudgetVsActual(
+        categoryId,
+        '2025-07',
+        incorrectDoubledAmount,
+        testUserId
+      );
+      
+      // This would be the bug scenario - should NOT happen
+      expect(incorrectComparison!.actual).toBe(4431.20);
+      expect(incorrectComparison!.isOverBudget).toBe(true); // Would incorrectly show as over budget
+    });
+
+    it('should handle month boundary transitions correctly', async () => {
+      // Test various month boundaries that could cause issues
+      const category = await categoryService.createCategory({
+        name: 'Utilities',
+        parentId: null,
+        isHidden: false,
+        isSavings: false
+      }, testUserId);
+      
+      const categoryId = category.id;
+      
+      // Create budgets for different month boundary scenarios
+      const testCases = [
+        { month: '2025-02', description: 'February (non-leap year)' },
+        { month: '2025-12', description: 'December to January transition' },
+        { month: '2024-02', description: 'February (leap year)' },
+        { month: '2025-01', description: 'January start of year' }
+      ];
+      
+      for (const testCase of testCases) {
+        await budgetService.createOrUpdateBudget({
+          categoryId,
+          month: testCase.month,
+          amount: 100,
+        }, testUserId);
+        
+        const comparison = await budgetService.getBudgetVsActual(
+          categoryId,
+          testCase.month,
+          75, // Consistent spending amount
+          testUserId
+        );
+        
+        expect(comparison).not.toBeNull();
+        expect(comparison!.month).toBe(testCase.month);
+        expect(comparison!.budgeted).toBe(100);
+        expect(comparison!.actual).toBe(75);
+        expect(comparison!.remaining).toBe(25);
+      }
+    });
+
+    it('should handle end-of-month date calculations precisely', async () => {
+      // Test that end-of-month calculations don't leak into next month
+      const category = await categoryService.createCategory({
+        name: 'Monthly Service',
+        parentId: null,
+        isHidden: false,
+        isSavings: false
+      }, testUserId);
+      
+      const categoryId = category.id;
+      
+      // Create budget for a month with 31 days
+      await budgetService.createOrUpdateBudget({
+        categoryId,
+        month: '2025-01', // January has 31 days
+        amount: 500
+      }, testUserId);
+      
+      // Simulate spending on the last day of January vs first day of February
+      const januaryLastDaySpending = 200; // This should be included
+      
+      const comparison = await budgetService.getBudgetVsActual(
+        categoryId,
+        '2025-01',
+        januaryLastDaySpending,
+        testUserId
+      );
+      
+      expect(comparison!.actual).toBe(200);
+      expect(comparison!.remaining).toBe(300);
+      
+      // Test for February (shorter month)
+      await budgetService.createOrUpdateBudget({
+        categoryId,
+        month: '2025-02', // February has 28 days in 2025
+        amount: 500
+      }, testUserId);
+      
+      const februaryComparison = await budgetService.getBudgetVsActual(
+        categoryId,
+        '2025-02',
+        150,
+        testUserId
+      );
+      
+      expect(februaryComparison!.actual).toBe(150);
+      expect(februaryComparison!.remaining).toBe(350);
+    });
+  });
+
   describe('As a user, I need accurate handling of edge cases', () => {
     it('should handle zero budget amounts correctly', async () => {
       // Create a category

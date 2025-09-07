@@ -107,7 +107,7 @@ export function Budgets() {
     queryKey: ['transactions', selectedMonth],
     queryFn: () => api.getTransactions({
       startDate: format(selectedDate, 'yyyy-MM-01'),
-      endDate: format(addMonths(selectedDate, 1), 'yyyy-MM-01'),
+      endDate: format(addMonths(startOfMonth(selectedDate), 1).getTime() - 1, 'yyyy-MM-dd'),
     }),
     enabled: activeTab === 'comparison',
   });

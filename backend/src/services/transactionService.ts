@@ -737,4 +737,61 @@ export class TransactionService {
     ) || [];
     return transactions.some(t => t.categoryId === categoryId);
   }
+
+  /**
+   * Create a transaction for testing purposes
+   * This method bypasses normal Plaid sync flow and creates a transaction directly
+   */
+  async createTestTransaction(transactionData: {
+    userId: string;
+    accountId: string;
+    plaidTransactionId: string;
+    plaidAccountId: string;
+    amount: number;
+    date: string;
+    name: string;
+    userDescription: string | null;
+    merchantName: string | null;
+    category: string[] | null;
+    plaidCategoryId: string | null;
+    categoryId: string | null;
+    status: TransactionStatus;
+    pending: boolean;
+    isoCurrencyCode: string | null;
+    tags: string[];
+    notes: string | null;
+    isHidden: boolean;
+    location: {
+      address: string | null;
+      city: string | null;
+      region: string | null;
+      postalCode: string | null;
+      country: string | null;
+      lat: number | null;
+      lon: number | null;
+    } | null;
+  }): Promise<StoredTransaction> {
+    const transaction: StoredTransaction = {
+      id: uuidv4(),
+      ...transactionData,
+      isSplit: false,
+      parentTransactionId: null,
+      splitTransactionIds: [],
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+
+    // Get existing transactions
+    const transactions = await this.dataService.getData<StoredTransaction[]>(
+      `transactions_${transactionData.userId}`
+    ) || [];
+
+    // Add the new transaction
+    transactions.push(transaction);
+
+    // Save updated transactions
+    await this.dataService.saveData(`transactions_${transactionData.userId}`, transactions);
+
+    return transaction;
+  }
 }
