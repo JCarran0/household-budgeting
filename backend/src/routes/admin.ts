@@ -1,5 +1,5 @@
 import express from 'express';
-import { categoryService } from '../services';
+import { categoryService, transactionService } from '../services';
 import { authMiddleware } from '../middleware/authMiddleware';
 
 const router = express.Router();
@@ -112,6 +112,130 @@ router.get('/migration-status', async (req, res) => {
   } catch (error) {
     console.error('Failed to get migration status:', error);
     res.status(500).json({ error: 'Failed to get migration status' });
+  }
+});
+
+/**
+ * Clean up transaction location data by removing null-only location objects
+ */
+router.post('/clean-location-data', async (req, res) => {
+  try {
+    const userId = req.user?.userId;
+    if (!userId) {
+      res.status(401).json({ error: 'User not authenticated' });
+      return;
+    }
+
+    console.log(`Starting location data cleanup for user ${userId}`);
+
+    // Get all transactions for the user directly from data service to manipulate raw data
+    const dataService = (transactionService as any).dataService;
+    const transactions = await dataService.getTransactions(userId);
+    let cleanedCount = 0;
+
+    // Helper function to check if location has any non-null data
+    const hasLocationData = (location: any): boolean => {
+      if (!location || typeof location !== 'object') {
+        return false;
+      }
+      
+      const fields = ['address', 'city', 'region', 'postalCode', 'country', 'lat', 'lon'];
+      return fields.some(field => location[field] !== null && location[field] !== undefined);
+    };
+
+    // Process each transaction to clean up location data
+    const cleanedTransactions = transactions.map((transaction: any) => {
+      if (transaction.location && !hasLocationData(transaction.location)) {
+        cleanedCount++;
+        console.log(`Cleaned location data for transaction ${transaction.id} (${transaction.merchantName})`);
+        
+        return {
+          ...transaction,
+          location: null
+        };
+      }
+      return transaction;
+    });
+
+    // Save all cleaned transactions back
+    if (cleanedCount > 0) {
+      await dataService.saveTransactions(cleanedTransactions, userId);
+    }
+
+    const result: MigrationResult = {
+      success: true,
+      message: `Successfully cleaned ${cleanedCount} transactions with empty location data`,
+      migratedCount: cleanedCount,
+      totalCount: transactions.length
+    };
+
+    console.log(`Location cleanup completed: ${cleanedCount}/${transactions.length} transactions cleaned`);
+    
+    res.json(result);
+  } catch (error) {
+    console.error('Location cleanup failed:', error);
+    
+    const result: MigrationResult = {
+      success: false,
+      message: `Location cleanup failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      migratedCount: 0,
+      totalCount: 0
+    };
+    
+    res.status(500).json(result);
+  }
+});
+
+/**
+ * Get location cleanup status - check transaction location data state
+ */
+router.get('/location-cleanup-status', async (req, res) => {
+  try {
+    const userId = req.user?.userId;
+    if (!userId) {
+      res.status(401).json({ error: 'User not authenticated' });
+      return;
+    }
+
+    // Get transactions directly from data service to check raw data
+    const dataService = (transactionService as any).dataService;
+    const transactions = await dataService.getTransactions(userId);
+
+    // Helper function to check if location has any non-null data
+    const hasLocationData = (location: any): boolean => {
+      if (!location || typeof location !== 'object') {
+        return false;
+      }
+      
+      const fields = ['address', 'city', 'region', 'postalCode', 'country', 'lat', 'lon'];
+      return fields.some(field => location[field] !== null && location[field] !== undefined);
+    };
+
+    let emptyLocationCount = 0;
+    let validLocationCount = 0;
+    let nullLocationCount = 0;
+
+    transactions.forEach((txn: any) => {
+      if (txn.location === null || txn.location === undefined) {
+        nullLocationCount++;
+      } else if (hasLocationData(txn.location)) {
+        validLocationCount++;
+      } else {
+        emptyLocationCount++;
+      }
+    });
+
+    res.json({
+      totalTransactions: transactions.length,
+      transactionsWithEmptyLocation: emptyLocationCount,
+      transactionsWithValidLocation: validLocationCount,
+      transactionsWithNullLocation: nullLocationCount,
+      cleanupNeeded: emptyLocationCount > 0,
+      cleanupComplete: emptyLocationCount === 0
+    });
+  } catch (error) {
+    console.error('Failed to get location cleanup status:', error);
+    res.status(500).json({ error: 'Failed to get location cleanup status' });
   }
 });
 

@@ -93,6 +93,18 @@ export class TransactionService {
   ) {}
 
   /**
+   * Check if a location object contains any non-null data
+   */
+  private hasLocationData(location: any): boolean {
+    if (!location || typeof location !== 'object') {
+      return false;
+    }
+    
+    const fields = ['address', 'city', 'region', 'postalCode', 'country', 'lat', 'lon'];
+    return fields.some(field => location[field] !== null && location[field] !== undefined);
+  }
+
+  /**
    * Sync transactions from Plaid for all user accounts
    */
   async syncTransactions(
@@ -306,15 +318,21 @@ export class TransactionService {
       isSplit: false,
       parentTransactionId: null,
       splitTransactionIds: [],
-      location: plaidTxn.location ? {
-        address: plaidTxn.location.address || null,
-        city: plaidTxn.location.city || null,
-        region: plaidTxn.location.region || null,
-        postalCode: plaidTxn.location.postalCode || null,
-        country: plaidTxn.location.country || null,
-        lat: null,
-        lon: null,
-      } : null,
+      location: (() => {
+        if (!plaidTxn.location) return null;
+        
+        const locationData = {
+          address: plaidTxn.location.address || null,
+          city: plaidTxn.location.city || null,
+          region: plaidTxn.location.region || null,
+          postalCode: plaidTxn.location.postalCode || null,
+          country: plaidTxn.location.country || null,
+          lat: null,
+          lon: null,
+        };
+        
+        return this.hasLocationData(locationData) ? locationData : null;
+      })(),
       createdAt: new Date(),
       updatedAt: new Date(),
     };

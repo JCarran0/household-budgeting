@@ -146,6 +146,18 @@ export class PlaidService {
     });
   }
 
+  /**
+   * Check if a location object contains any non-null data
+   */
+  private hasLocationData(location: any): boolean {
+    if (!location || typeof location !== 'object') {
+      return false;
+    }
+    
+    const fields = ['address', 'city', 'region', 'postalCode', 'country'];
+    return fields.some(field => location[field] !== null && location[field] !== undefined);
+  }
+
   private getPlaidEnvironment(): string {
     const env = process.env.PLAID_ENV || 'sandbox';
     switch (env) {
@@ -477,13 +489,19 @@ export class PlaidService {
         categoryId: txn.category_id || null,
         pending: txn.pending,
         isoCurrencyCode: txn.iso_currency_code || null,
-        location: txn.location ? {
-          address: txn.location.address || null,
-          city: txn.location.city || null,
-          region: txn.location.region || null,
-          postalCode: txn.location.postal_code || null,
-          country: txn.location.country || null,
-        } : undefined,
+        location: (() => {
+          if (!txn.location) return undefined;
+          
+          const locationData = {
+            address: txn.location.address || null,
+            city: txn.location.city || null,
+            region: txn.location.region || null,
+            postalCode: txn.location.postal_code || null,
+            country: txn.location.country || null,
+          };
+          
+          return this.hasLocationData(locationData) ? locationData : undefined;
+        })(),
       };
     });
   }
