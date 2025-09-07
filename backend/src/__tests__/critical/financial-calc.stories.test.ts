@@ -113,7 +113,9 @@ describe('User Story: Financial Calculations', () => {
         actual: 150,
         remaining: -50,
         percentUsed: 150,
-        isOverBudget: true
+        isOverBudget: true,
+        budgetType: 'expense',
+        isIncomeCategory: false
       });
     });
 
@@ -145,7 +147,9 @@ describe('User Story: Financial Calculations', () => {
         actual: 75,
         remaining: -75,
         percentUsed: 0,
-        isOverBudget: true // Any spending without budget is over
+        isOverBudget: true, // Any spending without budget is over
+        budgetType: 'expense',
+        isIncomeCategory: false
       });
     });
 
