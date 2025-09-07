@@ -142,6 +142,19 @@ class ApiClient {
     this.updateCategory = this.updateCategory.bind(this);
     this.deleteCategory = this.deleteCategory.bind(this);
     this.initializeDefaultCategories = this.initializeDefaultCategories.bind(this);
+    this.importCategoriesFromCSV = this.importCategoriesFromCSV.bind(this);
+    
+    // Budget methods
+    this.getBudgets = this.getBudgets.bind(this);
+    this.getAvailableBudgetMonths = this.getAvailableBudgetMonths.bind(this);
+    this.getMonthlyBudgets = this.getMonthlyBudgets.bind(this);
+    this.getCategoryBudgets = this.getCategoryBudgets.bind(this);
+    this.getBudget = this.getBudget.bind(this);
+    this.createOrUpdateBudget = this.createOrUpdateBudget.bind(this);
+    this.copyBudgets = this.copyBudgets.bind(this);
+    this.getBudgetComparison = this.getBudgetComparison.bind(this);
+    this.getBudgetHistory = this.getBudgetHistory.bind(this);
+    this.deleteBudget = this.deleteBudget.bind(this);
 
     // Request interceptor to add auth token
     this.client.interceptors.request.use(
@@ -375,9 +388,29 @@ class ApiClient {
     return data;
   }
 
+  async importCategoriesFromCSV(csvContent: string): Promise<{
+    success: boolean;
+    message: string;
+    importedCount?: number;
+    errors?: string[];
+  }> {
+    const { data } = await this.client.post<{
+      success: boolean;
+      message: string;
+      importedCount?: number;
+      errors?: string[];
+    }>('/categories/import-csv', { csvContent });
+    return data;
+  }
+
   // Budget endpoints
   async getBudgets(): Promise<MonthlyBudget[]> {
     const { data } = await this.client.get<MonthlyBudget[]>('/budgets');
+    return data;
+  }
+
+  async getAvailableBudgetMonths(): Promise<{ month: string; count: number }[]> {
+    const { data } = await this.client.get<{ month: string; count: number }[]>('/budgets/available-months');
     return data;
   }
 

@@ -31,11 +31,13 @@ import {
   IconAlertCircle,
   IconRobot,
   IconList,
+  IconFileUpload,
 } from '@tabler/icons-react';
 import { api, type CategoryWithChildren } from '../lib/api';
 import { CategoryTree } from '../components/categories/CategoryTree';
 import { CategoryForm } from '../components/categories/CategoryForm';
 import { AutoCategorization } from '../components/categories/AutoCategorization';
+import { CSVImport } from '../components/categories/CSVImport';
 import type { Category } from '../../../shared/types';
 
 export function Categories() {
@@ -44,6 +46,7 @@ export function Categories() {
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [showHidden, setShowHidden] = useState<boolean>(false);
   const [hasInitialized, setHasInitialized] = useState<boolean>(false);
+  const [isCSVImportOpen, setIsCSVImportOpen] = useState<boolean>(false);
   const queryClient = useQueryClient();
 
   // Fetch categories
@@ -199,6 +202,13 @@ export function Categories() {
                 <Text size="lg" fw={500}>Manage Categories</Text>
                 <Group>
                   <Button
+                    leftSection={<IconFileUpload size={16} />}
+                    onClick={() => setIsCSVImportOpen(true)}
+                    variant="light"
+                  >
+                    Import CSV
+                  </Button>
+                  <Button
                     leftSection={<IconPlus size={16} />}
                     onClick={() => setIsFormOpen(true)}
                   >
@@ -315,6 +325,11 @@ export function Categories() {
                 onClose={handleFormClose}
                 category={editingCategory}
                 onSuccess={handleFormSuccess}
+              />
+              
+              <CSVImport
+                opened={isCSVImportOpen}
+                onClose={() => setIsCSVImportOpen(false)}
               />
             </Stack>
           </Tabs.Panel>

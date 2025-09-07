@@ -130,6 +130,47 @@ router.post('/initialize', async (req: Request, res: Response) => {
   }
 });
 
+// POST /api/categories/import-csv - Import categories from CSV
+router.post('/import-csv', async (req: Request, res: Response) => {
+  try {
+    const userId = req.user?.userId;
+    if (!userId) {
+      res.status(401).json({ error: 'User not authenticated' });
+      return;
+    }
+
+    const { csvContent } = req.body;
+    
+    if (!csvContent || typeof csvContent !== 'string') {
+      res.status(400).json({ error: 'CSV content is required' });
+      return;
+    }
+
+    const result = await categoryService.importFromCSV(csvContent, userId);
+    
+    if (result.success) {
+      res.json({
+        success: true,
+        message: result.message,
+        importedCount: result.importedCount,
+        errors: result.errors
+      });
+    } else {
+      res.status(400).json({
+        success: false,
+        message: result.message,
+        errors: result.errors
+      });
+    }
+  } catch (error) {
+    console.error('Error importing categories from CSV:', error);
+    res.status(500).json({ 
+      error: 'Failed to import categories',
+      message: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
 // GET /api/categories/:id - Get a specific category
 router.get('/:id', async (req: Request, res: Response): Promise<void> => {
   try {

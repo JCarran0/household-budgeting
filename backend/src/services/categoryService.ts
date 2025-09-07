@@ -4,6 +4,7 @@ import { PLAID_CATEGORIES } from '../constants/plaidCategories';
 import { BudgetService } from './budgetService';
 import { AutoCategorizeService } from './autoCategorizeService';
 import { TransactionService } from './transactionService';
+import { parseCSVContent } from '../utils/csvParser';
 
 export interface CategoryWithChildren extends Category {
   children?: Category[];
@@ -254,6 +255,135 @@ export class CategoryService {
     });
 
     await this.dataService.saveCategories(defaultCategories, userId);
+  }
+
+  async importFromCSV(csvContent: string, userId: string): Promise<{ 
+    success: boolean; 
+    importedCount: number; 
+    message: string;
+    errors?: string[];
+  }> {
+    // Parse CSV content
+    const parseResult = parseCSVContent(csvContent);
+    
+    if (!parseResult.success || !parseResult.categories) {
+      return {
+        success: false,
+        importedCount: 0,
+        message: parseResult.error || 'Failed to parse CSV',
+        errors: parseResult.rowErrors?.map(e => `Row ${e.row}: ${e.error}`)
+      };
+    }
+
+    const existingCategories = await this.dataService.getCategories(userId);
+    const existingIds = existingCategories.map(c => c.id);
+    const existingNames = new Map<string, Category>();
+    
+    // Build a map of existing categories by name and parent for duplicate checking
+    existingCategories.forEach(cat => {
+      const key = `${cat.parentId || 'root'}:${cat.name}`;
+      existingNames.set(key, cat);
+    });
+
+    const categoriesToAdd: Category[] = [];
+    const errors: string[] = [];
+    const processedParents = new Set<string>();
+
+    // Process each parsed category
+    for (const parsedCat of parseResult.categories) {
+      try {
+        // If category has a parent
+        if (parsedCat.parent) {
+          // Check if parent exists or has been processed
+          const parentKey = `root:${parsedCat.parent}`;
+          let parentCategory = existingNames.get(parentKey);
+          
+          if (!parentCategory && !processedParents.has(parsedCat.parent)) {
+            // Create parent category if it doesn't exist
+            const parentId = this.generateCategoryId(parsedCat.parent, [...existingIds, ...categoriesToAdd.map(c => c.id)]);
+            
+            parentCategory = {
+              id: parentId,
+              name: parsedCat.parent,
+              parentId: null,
+              description: undefined,
+              isCustom: true,
+              isHidden: parsedCat.isHidden, // Use child's settings for auto-created parent
+              isSavings: parsedCat.isSavings
+            };
+            
+            categoriesToAdd.push(parentCategory);
+            existingNames.set(parentKey, parentCategory);
+            processedParents.add(parsedCat.parent);
+          }
+
+          // Create the child category
+          const childKey = `${parentCategory?.id || parsedCat.parent}:${parsedCat.name}`;
+          
+          // Check for duplicate
+          if (existingNames.has(childKey)) {
+            errors.push(`Category "${parsedCat.name}" under parent "${parsedCat.parent}" already exists`);
+            continue;
+          }
+
+          const childId = this.generateCategoryId(parsedCat.name, [...existingIds, ...categoriesToAdd.map(c => c.id)]);
+          
+          const childCategory: Category = {
+            id: childId,
+            name: parsedCat.name,
+            parentId: parentCategory?.id || parsedCat.parent,
+            description: parsedCat.description,
+            isCustom: true,
+            isHidden: parsedCat.isHidden,
+            isSavings: parsedCat.isSavings
+          };
+
+          categoriesToAdd.push(childCategory);
+          existingNames.set(childKey, childCategory);
+        } else {
+          // Top-level category
+          const key = `root:${parsedCat.name}`;
+          
+          // Check for duplicate
+          if (existingNames.has(key)) {
+            errors.push(`Category "${parsedCat.name}" already exists`);
+            continue;
+          }
+
+          const categoryId = this.generateCategoryId(parsedCat.name, [...existingIds, ...categoriesToAdd.map(c => c.id)]);
+          
+          const category: Category = {
+            id: categoryId,
+            name: parsedCat.name,
+            parentId: null,
+            description: parsedCat.description,
+            isCustom: true,
+            isHidden: parsedCat.isHidden,
+            isSavings: parsedCat.isSavings
+          };
+
+          categoriesToAdd.push(category);
+          existingNames.set(key, category);
+        }
+      } catch (error) {
+        errors.push(`Failed to process category "${parsedCat.name}": ${error instanceof Error ? error.message : 'Unknown error'}`);
+      }
+    }
+
+    // Save all new categories
+    if (categoriesToAdd.length > 0) {
+      const allCategories = [...existingCategories, ...categoriesToAdd];
+      await this.dataService.saveCategories(allCategories, userId);
+    }
+
+    return {
+      success: categoriesToAdd.length > 0,
+      importedCount: categoriesToAdd.length,
+      message: categoriesToAdd.length > 0 
+        ? `Successfully imported ${categoriesToAdd.length} categories`
+        : 'No categories were imported',
+      errors: errors.length > 0 ? errors : undefined
+    };
   }
 
 }
