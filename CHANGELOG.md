@@ -5,6 +5,28 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.8.0](https://github.com/JCarran0/household-budgeting/compare/v1.7.0...v1.8.0) (2025-09-07)
+
+
+### Features
+
+* **budgets:** add income budget hierarchical aggregation support ([bc60731](https://github.com/JCarran0/household-budgeting/commit/bc6073130bcfe870ffdf8a4312cea03c20462e89))
+* **budgets:** add income budget tracking with inverse logic ([c701120](https://github.com/JCarran0/household-budgeting/commit/c701120d91f81d10984ebaf4d45d596de167439c))
+* **categories:** add clickable transaction counts with preview modal ([788bb81](https://github.com/JCarran0/household-budgeting/commit/788bb81ffc750dd62f0072a80d146ec82bd43fdb))
+* **transactions:** add CSV export functionality with filter preservation ([61d1988](https://github.com/JCarran0/household-budgeting/commit/61d1988fdbf7eca11e83ea688b2fb42a7418605d))
+* **transactions:** optimize location data storage by removing empty objects ([c3556c5](https://github.com/JCarran0/household-budgeting/commit/c3556c5e3a4e2b4008ea840f82030aa0062e73a3))
+
+
+### Bug Fixes
+
+* **budgets:** replace window.confirm with Mantine modals for Arc Browser compatibility ([f4c7f7f](https://github.com/JCarran0/household-budgeting/commit/f4c7f7fcef4b604bd24d60a60170e8cb10405b68))
+* **deploy:** ensure shared utilities are deployed to root level for import resolution ([68d413d](https://github.com/JCarran0/household-budgeting/commit/68d413daa994f4999e42163b9e88b7e6ee60587a))
+
+
+### Tests
+
+* **budgets:** fix failing critical tests for budget comparison ([5201f1d](https://github.com/JCarran0/household-budgeting/commit/5201f1d41fe7fcd04e3527c567284a7d32a4c702))
+
 ## [1.7.0](https://github.com/JCarran0/household-budgeting/compare/v1.6.0...v1.7.0) (2025-09-07)
 
 
