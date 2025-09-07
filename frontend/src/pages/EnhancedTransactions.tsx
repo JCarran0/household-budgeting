@@ -55,6 +55,7 @@ import {
   IconFilterOff,
   IconAlertCircle,
   IconDatabaseImport,
+  IconDownload,
 } from '@tabler/icons-react';
 import { TransactionEditModal } from '../components/transactions/TransactionEditModal';
 import { TransactionImport } from '../components/transactions/TransactionImport';
@@ -634,6 +635,97 @@ export function EnhancedTransactions() {
       : category.name;
   };
 
+  const exportToCSV = () => {
+    if (!transactionData?.transactions || transactionData.transactions.length === 0) {
+      notifications.show({
+        title: 'No Data',
+        message: 'No transactions to export',
+        color: 'yellow',
+      });
+      return;
+    }
+
+    // CSV headers
+    const headers = [
+      'Date',
+      'Description',
+      'Amount',
+      'Category',
+      'Account',
+      'Institution',
+      'Merchant',
+      'Tags',
+      'Notes',
+      'Status'
+    ];
+
+    // Helper function to escape CSV values
+    const escapeCSV = (value: string | null | undefined): string => {
+      if (value == null) return '';
+      const str = String(value);
+      // If the value contains comma, quotes, or newline, wrap in quotes and escape internal quotes
+      if (str.includes(',') || str.includes('"') || str.includes('\n')) {
+        return `"${str.replace(/"/g, '""')}"`;
+      }
+      return str;
+    };
+
+    // Get account info for each transaction
+    const getAccountInfo = (accountId: string) => {
+      const account = accounts?.find(a => a.id === accountId);
+      return {
+        accountName: account?.nickname || account?.name || 'Unknown',
+        institution: account?.institution || 'Unknown'
+      };
+    };
+
+    // Build CSV rows from all transactions (not just current page)
+    const rows = transactionData.transactions.map(transaction => {
+      const { accountName, institution } = getAccountInfo(transaction.accountId);
+      const categoryDisplay = getCategoryDisplay(transaction) || 'Uncategorized';
+      const description = transaction.userDescription || transaction.name;
+      const tags = transaction.tags?.join('; ') || '';
+      const status = transaction.isHidden ? 'Hidden' : 'Visible';
+      
+      return [
+        escapeCSV(transaction.date),
+        escapeCSV(description),
+        escapeCSV(transaction.amount.toFixed(2)),
+        escapeCSV(categoryDisplay),
+        escapeCSV(accountName),
+        escapeCSV(institution),
+        escapeCSV(transaction.merchantName),
+        escapeCSV(tags),
+        escapeCSV(transaction.notes),
+        escapeCSV(status)
+      ].join(',');
+    });
+
+    // Combine headers and rows into CSV content
+    const csvContent = [headers.join(','), ...rows].join('\n');
+
+    // Create blob and download
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    
+    // Generate filename with current date
+    const today = format(new Date(), 'yyyy-MM-dd');
+    link.download = `transactions-export-${today}.csv`;
+    
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(url);
+
+    notifications.show({
+      title: 'Export Complete',
+      message: `Exported ${transactionData.transactions.length} transactions to CSV`,
+      color: 'green',
+    });
+  };
+
   const transactions = transactionData?.transactions || [];
   
   // Paginate transactions
@@ -681,6 +773,14 @@ export function EnhancedTransactions() {
               variant="light"
             >
               Import CSV
+            </Button>
+            <Button
+              leftSection={<IconDownload size={16} />}
+              onClick={exportToCSV}
+              variant="light"
+              disabled={!transactionData?.transactions || transactionData.transactions.length === 0}
+            >
+              Export CSV
             </Button>
             <Button
               leftSection={<IconRefresh size={16} />}
