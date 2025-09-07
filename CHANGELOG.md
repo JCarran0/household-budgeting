@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.7.0](https://github.com/JCarran0/household-budgeting/compare/v1.6.0...v1.7.0) (2025-09-07)
+
+
+### Features
+
+* **budgets:** implement hierarchical budget display with smart parent aggregation ([26e26fa](https://github.com/JCarran0/household-budgeting/commit/26e26fa63b6a010d3d8dc9cfb5505a0a8dcc70b8))
+
+
+### Bug Fixes
+
+* **categories:** implement hierarchical income detection for budget filtering ([5f79f02](https://github.com/JCarran0/household-budgeting/commit/5f79f0211ad1a3d0c1645a1d52ccce4b60c53ff9))
+
 ## [1.6.0](https://github.com/JCarran0/household-budgeting/compare/v1.5.0...v1.6.0) (2025-09-07)
 
 
