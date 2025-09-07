@@ -170,9 +170,9 @@ export function BudgetForm({
             }
           />
 
-          {selectedCategory?.isSavings && (
+          {selectedCategory?.isRollover && (
             <Text size="sm" c="yellow" fw={500}>
-              This is a savings category - unused budget will roll over to next month
+              This is a rollover category - unused budget will roll over to next month
             </Text>
           )}
 

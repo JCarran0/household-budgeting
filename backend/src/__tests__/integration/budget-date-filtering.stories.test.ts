@@ -51,7 +51,7 @@ describe('User Story: Budget Date Filtering Integration', () => {
         name: 'Mortgage Payment',
         parentId: null,
         isHidden: false,
-        isSavings: false
+        isRollover: false
       }, testUserId);
       
       // Create July 2025 budget
@@ -182,7 +182,7 @@ describe('User Story: Budget Date Filtering Integration', () => {
         name: 'Boundary Test Category',
         parentId: null,
         isHidden: false,
-        isSavings: false
+        isRollover: false
       }, testUserId);
       
       for (const testCase of testCases) {
@@ -273,7 +273,7 @@ describe('User Story: Budget Date Filtering Integration', () => {
         name: 'Timezone Test Category',
         parentId: null,
         isHidden: false,
-        isSavings: false
+        isRollover: false
       }, testUserId);
       
       await budgetService.createOrUpdateBudget({

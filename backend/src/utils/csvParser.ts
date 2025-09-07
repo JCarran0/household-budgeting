@@ -3,7 +3,7 @@ export interface CategoryCSVRow {
   Child: string;
   Type?: string;
   Hidden?: string;
-  Savings?: string;
+  Rollover?: string;
   Description?: string;
 }
 
@@ -11,7 +11,7 @@ export interface ParsedCategory {
   parent: string | null;
   name: string;
   isHidden: boolean;
-  isSavings: boolean;
+  isRollover: boolean;
   description?: string;
 }
 
@@ -70,7 +70,7 @@ export function parseCSVContent(content: string): CSVParseResult {
         // Type field is reserved for future use
         // const type = values[headerIndices['Type']]?.trim()?.toLowerCase() || '';
         const hidden = values[headerIndices['Hidden']]?.trim()?.toLowerCase() || '';
-        const savings = values[headerIndices['Savings']]?.trim()?.toLowerCase() || '';
+        const rollover = values[headerIndices['Rollover']]?.trim()?.toLowerCase() || '';
         const description = values[headerIndices['Description']]?.trim() || '';
 
         // Validate row
@@ -81,13 +81,13 @@ export function parseCSVContent(content: string): CSVParseResult {
 
         // Parse boolean values
         const isHidden = ['yes', 'true', '1', 'y'].includes(hidden);
-        const isSavings = ['yes', 'true', '1', 'y'].includes(savings);
+        const isRollover = ['yes', 'true', '1', 'y'].includes(rollover);
 
         categories.push({
           parent: parent || null,
           name: child,
           isHidden,
-          isSavings,
+          isRollover,
           description: description || undefined
         });
       } catch (error) {

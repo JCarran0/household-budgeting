@@ -125,15 +125,15 @@ function CategoryNode({ category, onEdit, onDelete, level = 0 }: CategoryNodePro
             )}
 
             <Group gap={4}>
-              {category.isSavings && (
-                <Tooltip label="Savings category">
+              {category.isRollover && (
+                <Tooltip label="Rollover category">
                   <Badge
                     size="xs"
                     variant="light"
                     color="yellow"
                     leftSection={<IconPigMoney size={10} />}
                   >
-                    Savings
+                    Rollover
                   </Badge>
                 </Tooltip>
               )}

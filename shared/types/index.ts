@@ -71,7 +71,7 @@ export interface Category {
   description?: string;         // Description from Plaid taxonomy or user-provided
   isCustom: boolean;           // true for user-created categories
   isHidden: boolean;
-  isSavings: boolean;
+  isRollover: boolean;
 }
 
 export interface MonthlyBudget {

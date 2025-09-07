@@ -543,7 +543,7 @@ interface Category {
   description?: string;         // Description from Plaid taxonomy or user-provided
   isCustom: boolean;           // true for user-created categories
   isHidden: boolean;           // Hidden from budgets/reports
-  isSavings: boolean;          // Savings category with rollover
+  isRollover: boolean;         // Rollover category for budget carryover
 }
 ```
 
@@ -575,7 +575,7 @@ interface ParsedCategory {
   parent: string | null;
   name: string;
   isHidden: boolean;
-  isSavings: boolean;
+  isRollover: boolean;
   description?: string;
 }
 
@@ -599,7 +599,7 @@ interface ParsedMapping {
 - **Plaid Primary**: `INCOME`, `FOOD_AND_DRINK`, `TRANSPORTATION`
 - **Plaid Detailed**: `INCOME_WAGES`, `FOOD_AND_DRINK_COFFEE`, `TRANSPORTATION_GAS`
 - **Custom Categories**: `CUSTOM_WINE_BUDGET`, `CUSTOM_DATE_NIGHTS`, `CUSTOM_EMERGENCY_FUND`
-- **Collision Handling**: `CUSTOM_SAVINGS`, `CUSTOM_SAVINGS_2`, `CUSTOM_SAVINGS_3`
+- **Collision Handling**: `CUSTOM_ROLLOVER`, `CUSTOM_ROLLOVER_2`, `CUSTOM_ROLLOVER_3`
 
 ## Common Troubleshooting
 
@@ -688,7 +688,7 @@ if (syncedAccountIds.has(existing.accountId)) { /* check for removal */ }
 
 ### Medium Priority
 1. **Recurring Transactions**: Detect and mark recurring
-2. **Budget Rollover**: Implement savings category rollover
+2. **Budget Rollover**: Implement rollover category functionality
 3. **Advanced Reports**: Charts and visualizations
 
 ### Low Priority
@@ -722,6 +722,15 @@ if (syncedAccountIds.has(existing.accountId)) { /* check for removal */ }
 - Backend Service: `backend/src/services/autoCategorizeService.ts`
 - Routes: `backend/src/routes/autoCategorize.ts`
 - Frontend UI: `frontend/src/components/categories/AutoCategorization.tsx`
+
+### Admin Panel
+- Backend Routes: `backend/src/routes/admin.ts`
+- Frontend Page: `frontend/src/pages/Admin.tsx`
+- Features:
+  - Data migration utilities (e.g., field renaming)
+  - System status monitoring
+  - Batch operations for data maintenance
+- Migration Pattern: Direct dataService access with object destructuring for field removal
 
 ### Transaction Preview
 - Frontend Components: `frontend/src/components/transactions/`

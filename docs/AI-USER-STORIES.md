@@ -52,7 +52,7 @@
 
 ### Account Types
 - A user should be able to connect checking accounts
-- A user should be able to connect savings accounts
+- A user should be able to connect bank accounts (checking, savings, credit cards)
 - A user should be able to connect credit card accounts
 - A user should be able to connect investment accounts
 - A user should be able to connect loan accounts
@@ -183,7 +183,7 @@
 - A user should have 121 default categories automatically initialized on first use (Plaid Personal Finance Categories):
   - 16 primary categories (e.g., INCOME, FOOD_AND_DRINK, TRANSPORTATION)
   - 104 subcategories with descriptions (e.g., "Coffee: Purchases at coffee shops or cafes")
-  - 1 custom savings category
+  - 1 custom rollover category
 - A user should not see categories created by other users
 - A user's custom categories should receive SNAKE_CASE IDs with CUSTOM_ prefix (e.g., CUSTOM_WINE_BUDGET)
 
@@ -195,8 +195,8 @@
 - A user should be able to see descriptions as tooltips when hovering over category names
 - A user should see tooltips appear after a 500ms delay to avoid distraction
 - A user should be able to mark any category as hidden (excluded from budget calculations)
-- A user should be able to mark any category as savings categories
-- A user should be able to edit properties of custom categories (name, description, isHidden, isSavings)
+- A user should be able to mark any category as rollover categories
+- A user should be able to edit properties of custom categories (name, description, isHidden, isRollover)
 - A user should be able to delete only custom categories (Plaid categories are permanent)
 - A user should be able to see category descriptions for Plaid categories (pre-populated from Plaid taxonomy)
 - A user should be able to search/filter categories by name
@@ -221,12 +221,12 @@
 ### Category Operations
 - A user should be able to create new categories at any time
 - A user should be able to create subcategories under any parent category
-- A user should be able to see statistics (total, hidden count, savings count)
+- A user should be able to see statistics (total, hidden count, rollover count)
 
 ### CSV Import for Categories
 - A user should be able to import categories in bulk via CSV file upload
 - A user should be able to paste CSV data directly without needing a file
-- A user should see the required CSV format with headers: Parent, Child, Type, Hidden, Savings, Description
+- A user should see the required CSV format with headers: Parent, Child, Type, Hidden, Rollover, Description
 - A user should have their CSV validated for proper format and headers
 - A user should have parent categories auto-created when importing subcategories
 - A user should see the number of categories successfully imported
@@ -497,6 +497,22 @@
 - A user should be able to retry failed syncs
 - A user should see partial success results when some accounts sync
 
+## Admin Panel
+
+### Data Management
+- A user with admin access should be able to access the Admin panel from the sidebar
+- A user should be able to view system statistics (total entities, migration status)
+- A user should be able to perform data migrations (e.g., field renaming)
+- A user should see clear confirmation dialogs before running migrations
+- A user should see success/error messages after migration operations
+- A user should see real-time status updates after migrations complete
+- A user should be able to check migration status to see if migrations are needed
+
+### System Monitoring
+- A user should be able to view system health status
+- A user should be able to see database statistics
+- A user should be able to perform batch operations on data
+
 ## Performance
 
 ### Loading States
@@ -532,7 +548,7 @@
 ### Planned Features
 - A user should be able to set up recurring transactions
 - A user should be able to forecast future cash flow
-- A user should be able to set savings goals
+- A user should be able to set savings goals (separate from rollover functionality)
 - A user should be able to track investment performance
 - A user should be able to generate tax reports
 - A user should be able to share budgets with another user (spouse)

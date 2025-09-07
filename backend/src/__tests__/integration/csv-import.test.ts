@@ -100,7 +100,7 @@ Savings,Emergency Fund,,No,Yes,Emergency savings fund
       expect(movies?.description).toBe('Cinema and streaming services');
       expect(games).toBeDefined();
       expect(emergencyFund).toBeDefined();
-      expect(emergencyFund?.isSavings).toBe(true);
+      expect(emergencyFund?.isRollover).toBe(true);
     });
 
     it('should auto-create parent categories when they do not exist', async () => {
@@ -145,13 +145,13 @@ Travel,Hotels,,No,No,Accommodation expenses`;
       const normal = categories.find(c => c.name === 'Normal Category');
 
       expect(hidden?.isHidden).toBe(true);
-      expect(hidden?.isSavings).toBe(false);
+      expect(hidden?.isRollover).toBe(false);
       
       expect(savings?.isHidden).toBe(false);
-      expect(savings?.isSavings).toBe(true);
+      expect(savings?.isRollover).toBe(true);
       
       expect(normal?.isHidden).toBe(false);
-      expect(normal?.isSavings).toBe(false);
+      expect(normal?.isRollover).toBe(false);
     });
 
     it('should skip duplicate categories and report errors', async () => {

@@ -169,7 +169,7 @@ scripts/               # Deployment scripts
 - ✅ Automatic transaction categorization using Plaid taxonomy
 - ✅ Custom categories with SNAKE_CASE ID generation
 - ✅ Category descriptions for better understanding
-- ✅ Savings categories for future rollover
+- ✅ Rollover categories for budget carryover
 
 ### 5. Monthly Budgeting
 **User Story**: As a user, I can set monthly budgets and track spending
@@ -195,9 +195,10 @@ scripts/               # Deployment scripts
 5. **Budget Tracking**: Monthly budgets with comparison views
 6. **Security**: AES-256 encryption, rate limiting, passphrase auth
 7. **Income Analytics**: Category dashboards with income/expense toggle views
+8. **Admin Panel**: Data migration tools, system monitoring, batch operations
 
 ### 🚧 Next Priorities
-1. **Savings categories with rollover**
+1. **Rollover categories for budget carryover**
 2. **Bill reminders and recurring transactions**
 3. **Enhanced reporting and visualizations**
 4. **Mobile app development**
@@ -576,6 +577,8 @@ Track important decisions that affect how the codebase should be modified.
 
 | Date | Decision | Rationale | Impact |
 |------|----------|-----------|--------|
+| 2025-09 | Field migration pattern with Admin UI | Safe data migrations with user control | Direct dataService access with destructuring for clean field removal |
+| 2025-09 | Rename "savings" to "rollover" | Avoid confusion with future savings features | Updated all references from isSavings to isRollover across codebase |
 | 2025-09 | Generalized CSV import framework | Support multiple CSV import types beyond categories | Created extensible BaseCSVParser system with ImportService for future transaction/mapping imports |
 | 2025-01 | SNAKE_CASE category IDs with Plaid PFC | Direct mapping eliminates complexity | **BREAKING**: Must delete existing category data before deployment |
 | 2024-12 | User-specific categories | Multi-user support requirement | All categories now have userId field |

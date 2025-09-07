@@ -10,7 +10,8 @@ import {
   IconPigMoney,
   IconChevronRight,
   IconCategory,
-  IconChartBar
+  IconChartBar,
+  IconSettings
 } from '@tabler/icons-react';
 import { useAuthStore } from '../stores/authStore';
 import { api } from '../lib/api';
@@ -58,6 +59,7 @@ export function MantineLayout() {
     { label: 'Categories', icon: IconCategory, path: '/categories' },
     { label: 'Budgets', icon: IconPigMoney, path: '/budgets' },
     { label: 'Reports', icon: IconChartBar, path: '/reports' },
+    { label: 'Admin', icon: IconSettings, path: '/admin' },
   ];
 
   return (

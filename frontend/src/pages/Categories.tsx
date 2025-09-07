@@ -166,10 +166,10 @@ export function Categories() {
     return count + parentHidden + childrenHidden;
   }, 0) || 0;
   
-  const savingsCount = categories?.reduce((count: number, cat: CategoryWithChildren) => {
-    const parentSavings = cat.isSavings ? 1 : 0;
-    const childrenSavings = cat.children?.filter(c => c.isSavings).length || 0;
-    return count + parentSavings + childrenSavings;
+  const rolloverCount = categories?.reduce((count: number, cat: CategoryWithChildren) => {
+    const parentRollover = cat.isRollover ? 1 : 0;
+    const childrenRollover = cat.children?.filter(c => c.isRollover).length || 0;
+    return count + parentRollover + childrenRollover;
   }, 0) || 0;
 
   if (isLoading) {
@@ -252,8 +252,8 @@ export function Categories() {
                       <IconPigMoney size={20} />
                     </ThemeIcon>
                     <div>
-                      <Text size="xs" c="dimmed">Savings Categories</Text>
-                      <Text fw={600} size="lg">{savingsCount}</Text>
+                      <Text size="xs" c="dimmed">Rollover Categories</Text>
+                      <Text fw={600} size="lg">{rolloverCount}</Text>
                     </div>
                   </Group>
                 </Card>

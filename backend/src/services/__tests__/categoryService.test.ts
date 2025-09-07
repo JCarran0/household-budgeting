@@ -21,7 +21,7 @@ describe('CategoryService', () => {
         name: 'Transportation',
         parentId: null,
         isHidden: false,
-        isSavings: false
+        isRollover: false
       };
 
       const category = await categoryService.createCategory(newCategory, testUserId);
@@ -43,7 +43,7 @@ describe('CategoryService', () => {
         name: 'Transportation',
         parentId: null,
         isHidden: false,
-        isSavings: false,
+        isRollover: false,
         isCustom: true
       };
 
@@ -51,7 +51,7 @@ describe('CategoryService', () => {
         name: 'Gas & Fuel',
         parentId: 'parent-1',
         isHidden: false,
-        isSavings: false
+        isRollover: false
       };
 
       await dataService.saveCategories([parentCategory], testUserId);
@@ -74,7 +74,7 @@ describe('CategoryService', () => {
         name: 'Gas & Fuel',
         parentId: 'non-existent',
         isHidden: false,
-        isSavings: false
+        isRollover: false
       };
 
       await expect(categoryService.createCategory(newSubcategory, testUserId))
@@ -87,7 +87,7 @@ describe('CategoryService', () => {
         name: 'Transportation',
         parentId: null,
         isHidden: false,
-        isSavings: false,
+        isRollover: false,
         isCustom: true
       };
 
@@ -96,7 +96,7 @@ describe('CategoryService', () => {
         name: 'Gas',
         parentId: 'parent-1',
         isHidden: false,
-        isSavings: false,
+        isRollover: false,
         isCustom: true
       };
 
@@ -106,7 +106,7 @@ describe('CategoryService', () => {
         name: 'Premium Gas',
         parentId: 'sub-1', // Trying to create under a subcategory
         isHidden: false,
-        isSavings: false
+        isRollover: false
       };
 
       await expect(categoryService.createCategory(newSubSubcategory, testUserId))
@@ -119,7 +119,7 @@ describe('CategoryService', () => {
         name: 'Transportation',
         parentId: null,
         isHidden: false,
-        isSavings: false,
+        isRollover: false,
         isCustom: true
       };
 
@@ -153,7 +153,7 @@ describe('CategoryService', () => {
           name: 'Transportation',
           parentId: null,
             isHidden: false,
-          isSavings: false,
+          isRollover: false,
           isCustom: true
         },
         {
@@ -161,7 +161,7 @@ describe('CategoryService', () => {
           name: 'Food',
           parentId: null,
           isHidden: false,
-          isSavings: false,
+          isRollover: false,
           isCustom: true
         }
       ];
@@ -183,7 +183,7 @@ describe('CategoryService', () => {
           name: 'Transportation',
           parentId: null,
             isHidden: false,
-          isSavings: false,
+          isRollover: false,
           isCustom: true
         },
         {
@@ -191,7 +191,7 @@ describe('CategoryService', () => {
           name: 'Gas',
           parentId: 'parent-1',
             isHidden: false,
-          isSavings: false,
+          isRollover: false,
           isCustom: true
         },
         {
@@ -199,7 +199,7 @@ describe('CategoryService', () => {
           name: 'Parking',
           parentId: 'parent-1',
           isHidden: false,
-          isSavings: false,
+          isRollover: false,
           isCustom: true
         },
         {
@@ -207,7 +207,7 @@ describe('CategoryService', () => {
           name: 'Food',
           parentId: null,
           isHidden: false,
-          isSavings: false,
+          isRollover: false,
           isCustom: true
         }
       ];
@@ -231,7 +231,7 @@ describe('CategoryService', () => {
           name: 'Transportation',
           parentId: null,
             isHidden: false,
-          isSavings: false,
+          isRollover: false,
           isCustom: true
         },
         {
@@ -239,7 +239,7 @@ describe('CategoryService', () => {
           name: 'Gas',
           parentId: 'parent-1',
             isHidden: false,
-          isSavings: false,
+          isRollover: false,
           isCustom: true
         },
         {
@@ -247,7 +247,7 @@ describe('CategoryService', () => {
           name: 'Food',
           parentId: null,
           isHidden: false,
-          isSavings: false,
+          isRollover: false,
           isCustom: true
         }
       ];
@@ -267,7 +267,7 @@ describe('CategoryService', () => {
           name: 'Transportation',
           parentId: null,
             isHidden: false,
-          isSavings: false,
+          isRollover: false,
           isCustom: true
         },
         {
@@ -275,7 +275,7 @@ describe('CategoryService', () => {
           name: 'Gas',
           parentId: 'parent-1',
             isHidden: false,
-          isSavings: false,
+          isRollover: false,
           isCustom: true
         },
         {
@@ -283,7 +283,7 @@ describe('CategoryService', () => {
           name: 'Parking',
           parentId: 'parent-1',
           isHidden: false,
-          isSavings: false,
+          isRollover: false,
           isCustom: true
         },
         {
@@ -291,7 +291,7 @@ describe('CategoryService', () => {
           name: 'Groceries',
           parentId: 'parent-2',
           isHidden: false,
-          isSavings: false,
+          isRollover: false,
           isCustom: true
         }
       ];
@@ -311,7 +311,7 @@ describe('CategoryService', () => {
           name: 'Transportation',
           parentId: null,
             isHidden: false,
-          isSavings: false,
+          isRollover: false,
           isCustom: true
         },
         {
@@ -319,7 +319,7 @@ describe('CategoryService', () => {
           name: 'Gas',
           parentId: 'parent-1',
             isHidden: false,
-          isSavings: false,
+          isRollover: false,
           isCustom: true
         }
       ];
@@ -345,7 +345,7 @@ describe('CategoryService', () => {
           name: 'Transportation',
           parentId: null,
             isHidden: true,
-          isSavings: false,
+          isRollover: false,
           isCustom: true
         },
         {
@@ -353,7 +353,7 @@ describe('CategoryService', () => {
           name: 'Food',
           parentId: null,
           isHidden: false,
-          isSavings: false,
+          isRollover: false,
           isCustom: true
         },
         {
@@ -361,7 +361,7 @@ describe('CategoryService', () => {
           name: 'Internal Transfers',
           parentId: null,
             isHidden: true,
-          isSavings: false,
+          isRollover: false,
           isCustom: true
         }
       ];
@@ -381,7 +381,7 @@ describe('CategoryService', () => {
           name: 'Emergency Fund',
           parentId: null,
             isHidden: false,
-          isSavings: true,
+          isRollover: true,
           isCustom: true
         },
         {
@@ -389,7 +389,7 @@ describe('CategoryService', () => {
           name: 'Vacation Savings',
           parentId: null,
             isHidden: false,
-          isSavings: true,
+          isRollover: true,
           isCustom: true
         },
         {
@@ -397,14 +397,14 @@ describe('CategoryService', () => {
           name: 'Food',
           parentId: null,
           isHidden: false,
-          isSavings: false,
+          isRollover: false,
           isCustom: true
         }
       ];
 
       await dataService.saveCategories(categories, testUserId);
 
-      const savings = await categoryService.getSavingsCategories(testUserId);
+      const savings = await categoryService.getRolloverCategories(testUserId);
 
       expect(savings).toHaveLength(2);
       expect(savings).toEqual([categories[0], categories[1]]);
@@ -430,7 +430,7 @@ describe('CategoryService', () => {
           expect.objectContaining({ name: 'Healthcare', parentId: null }),
           expect.objectContaining({ name: 'Education', parentId: null }),
           expect.objectContaining({ name: 'Personal', parentId: null }),
-          expect.objectContaining({ name: 'Savings', parentId: null, isSavings: true }),
+          expect.objectContaining({ name: 'Savings', parentId: null, isRollover: true }),
           expect.objectContaining({ name: 'Transfers', parentId: null, isHidden: true })
         ])
       );
@@ -442,7 +442,7 @@ describe('CategoryService', () => {
         name: 'Custom Category',
         parentId: null,
         isHidden: false,
-        isSavings: false,
+        isRollover: false,
         isCustom: true
       };
 

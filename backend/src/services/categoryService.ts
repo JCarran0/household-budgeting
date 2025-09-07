@@ -15,14 +15,14 @@ export interface CreateCategoryDto {
   parentId: string | null;
   description?: string;
   isHidden: boolean;
-  isSavings: boolean;
+  isRollover: boolean;
 }
 
 export interface UpdateCategoryDto {
   name?: string;
   description?: string;
   isHidden?: boolean;
-  isSavings?: boolean;
+  isRollover?: boolean;
 }
 
 export class CategoryService {
@@ -105,7 +105,7 @@ export class CategoryService {
       description: data.description || undefined,
       isCustom: true, // User-created categories are always custom
       isHidden: data.isHidden,
-      isSavings: data.isSavings
+      isRollover: data.isRollover
     };
 
     categories.push(newCategory);
@@ -202,9 +202,9 @@ export class CategoryService {
     return categories.filter(cat => cat.isHidden);
   }
 
-  async getSavingsCategories(userId: string): Promise<Category[]> {
+  async getRolloverCategories(userId: string): Promise<Category[]> {
     const categories = await this.dataService.getCategories(userId);
-    return categories.filter(cat => cat.isSavings);
+    return categories.filter(cat => cat.isRollover);
   }
 
   async initializeDefaultCategories(userId: string): Promise<void> {
@@ -227,7 +227,7 @@ export class CategoryService {
         description: undefined,
         isCustom: false,
         isHidden: ['TRANSFER_IN', 'TRANSFER_OUT'].includes(primaryId),
-        isSavings: false
+        isRollover: false
       });
 
       // Add all subcategories for this primary category
@@ -239,7 +239,7 @@ export class CategoryService {
           description: subcategory.description,
           isCustom: false,
           isHidden: false,
-          isSavings: false
+          isRollover: false
         });
       });
     });
@@ -252,7 +252,7 @@ export class CategoryService {
       description: 'Money set aside for future use',
       isCustom: true,
       isHidden: false,
-      isSavings: true
+      isRollover: true
     });
 
     await this.dataService.saveCategories(defaultCategories, userId);

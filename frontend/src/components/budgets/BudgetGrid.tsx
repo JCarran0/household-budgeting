@@ -69,9 +69,9 @@ function BudgetRow({ budget, category, onDelete, onUpdate }: BudgetRowProps) {
               Hidden
             </Badge>
           )}
-          {category?.isSavings && (
+          {category?.isRollover && (
             <Badge size="xs" variant="light" color="yellow">
-              Savings
+              Rollover
             </Badge>
           )}
         </Group>

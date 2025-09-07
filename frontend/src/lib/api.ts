@@ -43,7 +43,7 @@ export interface CreateCategoryDto {
   parentId: string | null;
   description?: string;
   isHidden: boolean;
-  isSavings: boolean;
+  isRollover: boolean;
 }
 
 // Type guard functions
@@ -59,7 +59,7 @@ export interface UpdateCategoryDto {
   name?: string;
   description?: string;
   isHidden?: boolean;
-  isSavings?: boolean;
+  isRollover?: boolean;
 }
 
 export interface CreateBudgetDto {
@@ -702,6 +702,28 @@ class ApiClient {
       skipDuplicates: options.skipDuplicates !== false,
       updateCategoriesOnly: options.updateCategoriesOnly || false
     });
+    return data;
+  }
+
+  // Admin methods
+  async migrateSavingsToRollover(): Promise<{
+    success: boolean;
+    message: string;
+    migratedCount: number;
+    totalCount: number;
+  }> {
+    const { data } = await this.client.post('/admin/migrate-savings-to-rollover');
+    return data;
+  }
+
+  async getMigrationStatus(): Promise<{
+    totalCategories: number;
+    categoriesWithOldField: number;
+    categoriesWithNewField: number;
+    migrationNeeded: boolean;
+    migrationComplete: boolean;
+  }> {
+    const { data } = await this.client.get('/admin/migration-status');
     return data;
   }
 }

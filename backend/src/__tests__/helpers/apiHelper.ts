@@ -130,7 +130,7 @@ export async function createCategory(
       name,
       parentId: parentId || null,
       isHidden: false,
-      isSavings: false,
+      isRollover: false,
     }
   );
   

@@ -39,7 +39,7 @@ describe('Category Deletion Protection', () => {
         name: 'Test Category',
         parentId: null,
         isHidden: false,
-        isSavings: false
+        isRollover: false
       }, testUserId);
       
       // Should be able to delete it
@@ -60,7 +60,7 @@ describe('Category Deletion Protection', () => {
         name: 'Parent Category',
         parentId: null,
         isHidden: false,
-        isSavings: false
+        isRollover: false
       }, testUserId);
       
       // Create subcategory
@@ -68,7 +68,7 @@ describe('Category Deletion Protection', () => {
         name: 'Subcategory',
         parentId: parent.id,
         isHidden: false,
-        isSavings: false
+        isRollover: false
       }, testUserId);
       
       // Should not be able to delete parent
@@ -85,7 +85,7 @@ describe('Category Deletion Protection', () => {
         name: 'Budget Category',
         parentId: null,
         isHidden: false,
-        isSavings: false
+        isRollover: false
       }, testUserId);
       
       // Create a budget for this category
@@ -107,7 +107,7 @@ describe('Category Deletion Protection', () => {
         name: 'Budget Category',
         parentId: null,
         isHidden: false,
-        isSavings: false
+        isRollover: false
       }, testUserId);
       
       // Create a budget for this category
@@ -134,7 +134,7 @@ describe('Category Deletion Protection', () => {
         name: 'Rule Category',
         parentId: null,
         isHidden: false,
-        isSavings: false
+        isRollover: false
       }, testUserId);
       
       // Create an auto-categorization rule for this category
@@ -157,7 +157,7 @@ describe('Category Deletion Protection', () => {
         name: 'Rule Category',
         parentId: null,
         isHidden: false,
-        isSavings: false
+        isRollover: false
       }, testUserId);
       
       // Create an auto-categorization rule for this category
@@ -187,7 +187,7 @@ describe('Category Deletion Protection', () => {
         name: 'Transaction Category',
         parentId: null,
         isHidden: false,
-        isSavings: false
+        isRollover: false
       }, testUserId);
       
       // Create a transaction with this category
@@ -244,14 +244,14 @@ describe('Category Deletion Protection', () => {
         name: 'Category 1',
         parentId: null,
         isHidden: false,
-        isSavings: false
+        isRollover: false
       }, testUserId);
       
       const category2 = await categoryService.createCategory({
         name: 'Category 2',
         parentId: null,
         isHidden: false,
-        isSavings: false
+        isRollover: false
       }, testUserId);
       
       // Create a transaction with category1
@@ -314,7 +314,7 @@ describe('Category Deletion Protection', () => {
         name: 'Multi-Block Category',
         parentId: null,
         isHidden: false,
-        isSavings: false
+        isRollover: false
       }, testUserId);
       
       // Create subcategory (first blocker)
@@ -322,7 +322,7 @@ describe('Category Deletion Protection', () => {
         name: 'Subcategory',
         parentId: category.id,
         isHidden: false,
-        isSavings: false
+        isRollover: false
       }, testUserId);
       
       // Create budget (second blocker)
@@ -357,7 +357,7 @@ describe('Category Deletion Protection', () => {
         name: 'User1 Category',
         parentId: null,
         isHidden: false,
-        isSavings: false
+        isRollover: false
       }, user1);
       
       // User 2 creates a category with the same name
@@ -365,7 +365,7 @@ describe('Category Deletion Protection', () => {
         name: 'User2 Category',
         parentId: null,
         isHidden: false,
-        isSavings: false
+        isRollover: false
       }, user2);
       
       // User 2 creates a budget for their category

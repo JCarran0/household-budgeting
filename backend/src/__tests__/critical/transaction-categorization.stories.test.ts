@@ -43,7 +43,7 @@ describe('User Story: Transaction Categorization', () => {
         name: 'Groceries',
         parentId: null,
         isHidden: false,
-        isSavings: false
+        isRollover: false
       }
     );
     
@@ -54,7 +54,7 @@ describe('User Story: Transaction Categorization', () => {
         name: 'Dining Out',
         parentId: null,
         isHidden: false,
-        isSavings: false
+        isRollover: false
       }
     );
     

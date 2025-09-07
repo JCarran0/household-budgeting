@@ -28,7 +28,7 @@ interface FormValues {
   parentId: string | null;
   description: string;
   isHidden: boolean;
-  isSavings: boolean;
+  isRollover: boolean;
 }
 
 // Removed PLAID_CATEGORIES constant - no longer needed
@@ -52,7 +52,7 @@ export function CategoryForm({ opened, onClose, category, onSuccess }: CategoryF
       parentId: null,
       description: '',
       isHidden: false,
-      isSavings: false,
+      isRollover: false,
     },
     validate: {
       name: (value) => {
@@ -76,7 +76,7 @@ export function CategoryForm({ opened, onClose, category, onSuccess }: CategoryF
           parentId: category.parentId,
           description: category.description || '',
           isHidden: category.isHidden,
-          isSavings: category.isSavings,
+          isRollover: category.isRollover,
         });
       } else {
         form.reset();
@@ -135,7 +135,7 @@ export function CategoryForm({ opened, onClose, category, onSuccess }: CategoryF
       if (values.name !== category.name) updates.name = values.name;
       if (values.description !== (category.description || '')) updates.description = values.description || undefined;
       if (values.isHidden !== category.isHidden) updates.isHidden = values.isHidden;
-      if (values.isSavings !== category.isSavings) updates.isSavings = values.isSavings;
+      if (values.isRollover !== category.isRollover) updates.isRollover = values.isRollover;
       
       if (Object.keys(updates).length > 0) {
         updateMutation.mutate(updates);
@@ -148,7 +148,7 @@ export function CategoryForm({ opened, onClose, category, onSuccess }: CategoryF
         parentId: values.parentId,
         description: values.description || undefined,
         isHidden: values.isHidden,
-        isSavings: values.isSavings,
+        isRollover: values.isRollover,
       });
     }
   };
@@ -222,9 +222,9 @@ export function CategoryForm({ opened, onClose, category, onSuccess }: CategoryF
             />
 
             <Checkbox
-              label="Savings Category"
-              {...form.getInputProps('isSavings', { type: 'checkbox' })}
-              description="Mark as savings for future rollover features"
+              label="Rollover Category"
+              {...form.getInputProps('isRollover', { type: 'checkbox' })}
+              description="Mark for rollover to carry unused budget to next month"
             />
           </Stack>
 

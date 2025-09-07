@@ -46,7 +46,7 @@ describe('User Story: Hidden Categories', () => {
           name: 'Bank Transfers',
           parentId: null,
           isHidden: true,
-          isSavings: false
+          isRollover: false
         }
       );
       
@@ -131,7 +131,7 @@ describe('User Story: Hidden Categories', () => {
           name: 'Credit Card Payments',
           parentId: null,
           isHidden: true,
-          isSavings: false
+          isRollover: false
         }
       );
       
@@ -306,7 +306,7 @@ describe('User Story: Hidden Categories', () => {
           name: 'Groceries',
           parentId: null,
           isHidden: false,
-          isSavings: false
+          isRollover: false
         }
       );
       
@@ -317,7 +317,7 @@ describe('User Story: Hidden Categories', () => {
           name: 'Transfers',
           parentId: null,
           isHidden: true,
-          isSavings: false
+          isRollover: false
         }
       );
       
@@ -412,7 +412,7 @@ describe('User Story: Hidden Categories', () => {
           name: 'Account Transfers',
           parentId: null,
           isHidden: true,
-          isSavings: false
+          isRollover: false
         }
       );
       
@@ -438,7 +438,7 @@ describe('User Story: Hidden Categories', () => {
           name: 'Test Category',
           parentId: null,
           isHidden: false,
-          isSavings: false
+          isRollover: false
         }
       );
       

@@ -123,10 +123,10 @@ export function CSVImport({ opened, onClose }: CSVImportProps) {
     onClose();
   };
 
-  const sampleCSV = `Parent,Child,Type,Hidden,Savings,Description
+  const sampleCSV = `Parent,Child,Type,Hidden,Rollover,Description
 Entertainment,Movies,,No,No,Cinema and streaming services
 Entertainment,Games,,No,No,Video games and gaming subscriptions
-Savings,Emergency Fund,,No,Yes,Emergency savings fund
+Rollover,Emergency Fund,,No,Yes,Emergency rollover fund
 ,Groceries,,No,No,Food and household items
 Travel,Flights,,Yes,No,Air travel expenses`;
 
@@ -140,7 +140,7 @@ Travel,Flights,,Yes,No,Air travel expenses`;
       <Stack gap="md">
         <Alert icon={<IconAlertCircle size={16} />} color="blue">
           <Text size="sm">
-            Upload a CSV file with the following columns: Parent, Child, Type, Hidden, Savings, Description.
+            Upload a CSV file with the following columns: Parent, Child, Type, Hidden, Rollover, Description.
             If a parent category doesn't exist, it will be created automatically.
           </Text>
         </Alert>
@@ -155,7 +155,7 @@ Travel,Flights,,Yes,No,Air travel expenses`;
               <Code block>{sampleCSV}</Code>
             </ScrollArea>
             <Text size="xs" c="dimmed">
-              Hidden and Savings columns accept: yes, true, 1, y (case-insensitive)
+              Hidden and Rollover columns accept: yes, true, 1, y (case-insensitive)
             </Text>
           </Stack>
         </Paper>

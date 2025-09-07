@@ -19,6 +19,7 @@ import { EnhancedTransactions } from './pages/EnhancedTransactions';
 import { Categories } from './pages/Categories';
 import { Budgets } from './pages/Budgets';
 import { Reports } from './pages/Reports';
+import { Admin } from './pages/Admin';
 import { PlaidLinkProvider } from './providers/PlaidLinkProvider';
 import { queryClient } from './lib/queryClient';
 import { ErrorBoundary } from './components/ErrorBoundary';
@@ -73,6 +74,11 @@ function App() {
                     <Route path="/reports" element={
                       <RouteErrorBoundary routeName="Reports">
                         <Reports />
+                      </RouteErrorBoundary>
+                    } />
+                    <Route path="/admin" element={
+                      <RouteErrorBoundary routeName="Admin">
+                        <Admin />
                       </RouteErrorBoundary>
                     } />
                   </Route>

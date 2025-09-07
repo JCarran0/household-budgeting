@@ -5,7 +5,7 @@ export interface ParsedCategory {
   parent: string | null;
   name: string;
   isHidden: boolean;
-  isSavings: boolean;
+  isRollover: boolean;
   description?: string;
 }
 
@@ -53,9 +53,9 @@ export class CategoryCSVParser extends BaseCSVParser<ParsedCategory> {
       transform: (value: string) => this.parseBoolean(value)
     });
 
-    this.columnMappings.set('isSavings', {
-      sourceColumn: 'Savings',
-      targetField: 'isSavings',
+    this.columnMappings.set('isRollover', {
+      sourceColumn: 'Rollover',
+      targetField: 'isRollover',
       required: false,
       transform: (value: string) => this.parseBoolean(value)
     });
@@ -95,7 +95,7 @@ export class CategoryCSVParser extends BaseCSVParser<ParsedCategory> {
 
       // Extract other fields
       const isHidden = this.applyMapping(row, 'isHidden') || false;
-      const isSavings = this.applyMapping(row, 'isSavings') || false;
+      const isRollover = this.applyMapping(row, 'isRollover') || false;
       const description = this.applyMapping(row, 'description');
 
       // Validate description if present
@@ -112,7 +112,7 @@ export class CategoryCSVParser extends BaseCSVParser<ParsedCategory> {
         parent,
         name: nameValue,
         isHidden,
-        isSavings,
+        isRollover,
         description
       };
     } catch (error) {
@@ -127,10 +127,10 @@ export class CategoryCSVParser extends BaseCSVParser<ParsedCategory> {
    * Get a sample CSV for this parser type
    */
   public static getSampleCSV(): string {
-    return `Parent,Child,Type,Hidden,Savings,Description
+    return `Parent,Child,Type,Hidden,Rollover,Description
 Entertainment,Movies,,No,No,Cinema and streaming services
 Entertainment,Games,,No,No,Video games and gaming subscriptions
-Savings,Emergency Fund,,No,Yes,Emergency savings fund
+Rollover,Emergency Fund,,No,Yes,Emergency rollover fund
 ,Groceries,,No,No,Food and household items
 Travel,Flights,,Yes,No,Air travel expenses`;
   }
@@ -144,7 +144,7 @@ Travel,Flights,,Yes,No,Air travel expenses`;
 - Child: Category name (required)
 - Type: Reserved for future use (optional)
 - Hidden: Whether the category is hidden (Yes/No, optional, defaults to No)
-- Savings: Whether this is a savings category (Yes/No, optional, defaults to No)
+- Rollover: Whether this is a rollover category (Yes/No, optional, defaults to No)
 - Description: Category description (optional)
 
 Note: If a parent category doesn't exist, it will be created automatically.`;

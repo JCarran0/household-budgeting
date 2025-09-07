@@ -41,7 +41,7 @@ describe('User Story: Category Management', () => {
           name: 'Housing',
           parentId: null,
           isHidden: false,
-          isSavings: false,
+          isRollover: false,
         }
       );
       
@@ -49,7 +49,7 @@ describe('User Story: Category Management', () => {
       expect(response.body.name).toBe('Housing');
       expect(response.body.parentId).toBeNull();
       expect(response.body.isHidden).toBe(false);
-      expect(response.body.isSavings).toBe(false);
+      expect(response.body.isRollover).toBe(false);
       expect(response.body.id).toBeDefined();
     });
     
@@ -62,7 +62,7 @@ describe('User Story: Category Management', () => {
           name: 'Transportation',
           parentId: null,
           isHidden: false,
-          isSavings: false,
+          isRollover: false,
         }
       );
       
@@ -77,7 +77,7 @@ describe('User Story: Category Management', () => {
           name: 'Car Payment',
           parentId: parentId,
           isHidden: false,
-          isSavings: false,
+          isRollover: false,
         }
       );
       
@@ -94,7 +94,7 @@ describe('User Story: Category Management', () => {
           name: 'Internal Transfer',
           parentId: null,
           isHidden: true, // Hidden category
-          isSavings: false,
+          isRollover: false,
         }
       );
       
@@ -110,12 +110,12 @@ describe('User Story: Category Management', () => {
           name: 'Vacation Fund',
           parentId: null,
           isHidden: false,
-          isSavings: true, // Savings category
+          isRollover: true, // Savings category
         }
       );
       
       expect(response.status).toBe(201);
-      expect(response.body.isSavings).toBe(true);
+      expect(response.body.isRollover).toBe(true);
     });
     
     test('I can retrieve all my categories in hierarchical structure', async () => {
@@ -131,7 +131,7 @@ describe('User Story: Category Management', () => {
           name: 'Groceries',
           parentId: food.id,
           isHidden: false,
-          isSavings: false,
+          isRollover: false,
         }
       );
       
@@ -142,7 +142,7 @@ describe('User Story: Category Management', () => {
           name: 'Restaurants',
           parentId: food.id,
           isHidden: false,
-          isSavings: false,
+          isRollover: false,
         }
       );
       
@@ -153,7 +153,7 @@ describe('User Story: Category Management', () => {
           name: 'Movies',
           parentId: entertainment.id,
           isHidden: false,
-          isSavings: false,
+          isRollover: false,
         }
       );
       
@@ -187,7 +187,7 @@ describe('User Story: Category Management', () => {
           name: 'Utilities',
           parentId: null,
           isHidden: false,
-          isSavings: false,
+          isRollover: false,
         }
       );
       
@@ -201,7 +201,7 @@ describe('User Story: Category Management', () => {
         {
           name: 'Home Utilities',
           isHidden: true,
-          isSavings: false,
+          isRollover: false,
         }
       );
       
@@ -225,7 +225,7 @@ describe('User Story: Category Management', () => {
           name: 'Temporary Category',
           parentId: null,
           isHidden: false,
-          isSavings: false,
+          isRollover: false,
         }
       );
       
@@ -259,7 +259,7 @@ describe('User Story: Category Management', () => {
           name: 'Parent Category',
           parentId: null,
           isHidden: false,
-          isSavings: false,
+          isRollover: false,
         }
       );
       
@@ -273,7 +273,7 @@ describe('User Story: Category Management', () => {
           name: 'Child Category',
           parentId: parentId,
           isHidden: false,
-          isSavings: false,
+          isRollover: false,
         }
       );
       
@@ -297,7 +297,7 @@ describe('User Story: Category Management', () => {
           name: 'Shopping',
           parentId: null,
           isHidden: false,
-          isSavings: false,
+          isRollover: false,
         }
       );
       
@@ -333,7 +333,7 @@ describe('User Story: Category Management', () => {
           name: '',
           parentId: null,
           isHidden: false,
-          isSavings: false,
+          isRollover: false,
         }
       );
       
@@ -350,7 +350,7 @@ describe('User Story: Category Management', () => {
           name: 'Duplicate Name',
           parentId: null,
           isHidden: false,
-          isSavings: false,
+          isRollover: false,
         }
       );
       
@@ -364,7 +364,7 @@ describe('User Story: Category Management', () => {
           name: 'Duplicate Name',
           parentId: null,
           isHidden: false,
-          isSavings: false,
+          isRollover: false,
         }
       );
       
@@ -385,7 +385,7 @@ describe('User Story: Category Management', () => {
           name: 'Travel',
           parentId: parent1.id,
           isHidden: false,
-          isSavings: false,
+          isRollover: false,
         }
       );
       
@@ -398,7 +398,7 @@ describe('User Story: Category Management', () => {
           name: 'Travel',
           parentId: parent2.id,
           isHidden: false,
-          isSavings: false,
+          isRollover: false,
         }
       );
       
@@ -418,7 +418,7 @@ describe('User Story: Category Management', () => {
           name: 'Orphan Category',
           parentId: 'non-existent-id',
           isHidden: false,
-          isSavings: false,
+          isRollover: false,
         }
       );
       
@@ -438,7 +438,7 @@ describe('User Story: Category Management', () => {
           name: 'Level 2',
           parentId: parent.id,
           isHidden: false,
-          isSavings: false,
+          isRollover: false,
         }
       );
       
@@ -452,7 +452,7 @@ describe('User Story: Category Management', () => {
           name: 'Level 3',
           parentId: subId,
           isHidden: false,
-          isSavings: false,
+          isRollover: false,
         }
       );
       

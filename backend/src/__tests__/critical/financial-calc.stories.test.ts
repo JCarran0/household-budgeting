@@ -45,7 +45,7 @@ describe('User Story: Financial Calculations', () => {
         name: 'Groceries',
         parentId: null,
         isHidden: false,
-        isSavings: false
+        isRollover: false
       }, testUserId);
       
       const categoryId = category.id;
@@ -86,7 +86,7 @@ describe('User Story: Financial Calculations', () => {
         name: 'Entertainment',
         parentId: null,
         isHidden: false,
-        isSavings: false
+        isRollover: false
       }, testUserId);
       
       const categoryId = category.id;
@@ -123,7 +123,7 @@ describe('User Story: Financial Calculations', () => {
         name: 'Uncategorized',
         parentId: null,
         isHidden: false,
-        isSavings: false
+        isRollover: false
       }, testUserId);
       
       const categoryId = category.id;
@@ -155,21 +155,21 @@ describe('User Story: Financial Calculations', () => {
         name: 'Food',
         parentId: null,
         isHidden: false,
-        isSavings: false
+        isRollover: false
       }, testUserId);
       
       const cat2 = await categoryService.createCategory({
         name: 'Transport',
         parentId: null,
         isHidden: false,
-        isSavings: false
+        isRollover: false
       }, testUserId);
       
       const cat3 = await categoryService.createCategory({
         name: 'Shopping',
         parentId: null,
         isHidden: false,
-        isSavings: false
+        isRollover: false
       }, testUserId);
       
       const cat1Id = cat1.id;
@@ -242,7 +242,7 @@ describe('User Story: Financial Calculations', () => {
         name: 'Utilities',
         parentId: null,
         isHidden: false,
-        isSavings: false
+        isRollover: false
       }, testUserId);
       
       const categoryId = category.id;
@@ -283,7 +283,7 @@ describe('User Story: Financial Calculations', () => {
         name: 'Insurance',
         parentId: null,
         isHidden: false,
-        isSavings: false
+        isRollover: false
       }, testUserId);
       
       const categoryId = category.id;
@@ -326,21 +326,21 @@ describe('User Story: Financial Calculations', () => {
         name: 'Housing',
         parentId: null,
         isHidden: false,
-        isSavings: false
+        isRollover: false
       }, testUserId);
       
       const cat2 = await categoryService.createCategory({
         name: 'Food',
         parentId: null,
         isHidden: false,
-        isSavings: false
+        isRollover: false
       }, testUserId);
       
       const cat3 = await categoryService.createCategory({
         name: 'Transport',
         parentId: null,
         isHidden: false,
-        isSavings: false
+        isRollover: false
       }, testUserId);
       
       // Create budgets
@@ -375,7 +375,7 @@ describe('User Story: Financial Calculations', () => {
         name: 'Vacation Fund',
         parentId: null,
         isHidden: false,
-        isSavings: true, // Savings category
+        isRollover: true, // Savings category
       }, testUserId);
       
       const categoryId = category.id;
@@ -404,7 +404,7 @@ describe('User Story: Financial Calculations', () => {
         name: 'Emergency Fund',
         parentId: null,
         isHidden: false,
-        isSavings: true
+        isRollover: true
       }, testUserId);
       
       const categoryId = category.id;
@@ -433,7 +433,7 @@ describe('User Story: Financial Calculations', () => {
         name: 'New Car Fund',
         parentId: null,
         isHidden: false,
-        isSavings: true
+        isRollover: true
       }, testUserId);
       
       const categoryId = category.id;
@@ -471,14 +471,14 @@ describe('User Story: Financial Calculations', () => {
         name: 'Rent',
         parentId: null,
         isHidden: false,
-        isSavings: false
+        isRollover: false
       }, testUserId);
       
       const cat2 = await categoryService.createCategory({
         name: 'Groceries',
         parentId: null,
         isHidden: false,
-        isSavings: false
+        isRollover: false
       }, testUserId);
       
       // Create budgets for January
@@ -520,7 +520,7 @@ describe('User Story: Financial Calculations', () => {
         name: 'Internet',
         parentId: null,
         isHidden: false,
-        isSavings: false
+        isRollover: false
       }, testUserId);
       
       const categoryId = category.id;
@@ -553,7 +553,7 @@ describe('User Story: Financial Calculations', () => {
         name: 'Mortgage Payment',
         parentId: null,
         isHidden: false,
-        isSavings: false
+        isRollover: false
       }, testUserId);
       
       const categoryId = category.id;
@@ -608,7 +608,7 @@ describe('User Story: Financial Calculations', () => {
         name: 'Utilities',
         parentId: null,
         isHidden: false,
-        isSavings: false
+        isRollover: false
       }, testUserId);
       
       const categoryId = category.id;
@@ -649,7 +649,7 @@ describe('User Story: Financial Calculations', () => {
         name: 'Monthly Service',
         parentId: null,
         isHidden: false,
-        isSavings: false
+        isRollover: false
       }, testUserId);
       
       const categoryId = category.id;
@@ -700,7 +700,7 @@ describe('User Story: Financial Calculations', () => {
         name: 'Miscellaneous',
         parentId: null,
         isHidden: false,
-        isSavings: false
+        isRollover: false
       }, testUserId);
       
       const categoryId = category.id;
@@ -719,7 +719,7 @@ describe('User Story: Financial Calculations', () => {
         name: 'TestCategory',
         parentId: null,
         isHidden: false,
-        isSavings: false
+        isRollover: false
       }, testUserId);
       
       const categoryId = category.id;
@@ -738,7 +738,7 @@ describe('User Story: Financial Calculations', () => {
         name: 'TestCategory',
         parentId: null,
         isHidden: false,
-        isSavings: false
+        isRollover: false
       }, testUserId);
       
       const categoryId = category.id;
@@ -769,7 +769,7 @@ describe('User Story: Financial Calculations', () => {
         name: 'HighBudget',
         parentId: null,
         isHidden: false,
-        isSavings: false
+        isRollover: false
       }, testUserId);
       
       const categoryId = category.id;
@@ -802,7 +802,7 @@ describe('User Story: Financial Calculations', () => {
         name: 'Precision',
         parentId: null,
         isHidden: false,
-        isSavings: false
+        isRollover: false
       }, testUserId);
       
       const categoryId = category.id;

@@ -200,7 +200,7 @@ export class ImportService {
                 description: undefined,
                 isCustom: true,
                 isHidden: false,
-                isSavings: false
+                isRollover: false
               };
               
               categoriesToAdd.push(parentCategory!);
@@ -243,7 +243,7 @@ export class ImportService {
             description: parsedCat.description,
             isCustom: true,
             isHidden: parsedCat.isHidden,
-            isSavings: parsedCat.isSavings
+            isRollover: parsedCat.isRollover
           };
 
           categoriesToAdd.push(childCategory);

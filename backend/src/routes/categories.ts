@@ -11,14 +11,14 @@ const createCategorySchema = z.object({
   parentId: z.string().nullable(),
   description: z.string().max(500).optional(),
   isHidden: z.boolean(),
-  isSavings: z.boolean()
+  isRollover: z.boolean()
 });
 
 const updateCategorySchema = z.object({
   name: z.string().min(1).max(100).optional(),
   description: z.string().max(500).optional(),
   isHidden: z.boolean().optional(),
-  isSavings: z.boolean().optional()
+  isRollover: z.boolean().optional()
 });
 
 // All routes require authentication
@@ -96,11 +96,11 @@ router.get('/savings', async (req: Request, res: Response) => {
       res.status(401).json({ error: 'User not authenticated' });
       return;
     }
-    const savings = await categoryService.getSavingsCategories(userId);
-    res.json(savings);
+    const rollover = await categoryService.getRolloverCategories(userId);
+    res.json(rollover);
   } catch (error) {
-    console.error('Error fetching savings categories:', error);
-    res.status(500).json({ error: 'Failed to fetch savings categories' });
+    console.error('Error fetching rollover categories:', error);
+    res.status(500).json({ error: 'Failed to fetch rollover categories' });
   }
 });
 

@@ -192,7 +192,7 @@ describe('Plaid Category Integration', () => {
           name: testCase.name,
           parentId: null,
           isHidden: false,
-          isSavings: false
+          isRollover: false
         }, testUserId);
 
         expect(category.id).toBe(testCase.expectedId);
@@ -209,7 +209,7 @@ describe('Plaid Category Integration', () => {
         name: 'Wine Budget',
         parentId: null,
         isHidden: false,
-        isSavings: false
+        isRollover: false
       }, testUserId);
       
       expect(category1.id).toBe('CUSTOM_WINE_BUDGET');
@@ -219,7 +219,7 @@ describe('Plaid Category Integration', () => {
         name: 'Wine   Budget', // Extra spaces
         parentId: null,
         isHidden: false,
-        isSavings: false
+        isRollover: false
       }, testUserId);
       
       expect(category2.id).toBe('CUSTOM_WINE_BUDGET_2');
@@ -229,7 +229,7 @@ describe('Plaid Category Integration', () => {
         name: 'WINE BUDGET!', // Different case and punctuation
         parentId: null,
         isHidden: false,
-        isSavings: false
+        isRollover: false
       }, testUserId);
       
       expect(category3.id).toBe('CUSTOM_WINE_BUDGET_3');
@@ -243,7 +243,7 @@ describe('Plaid Category Integration', () => {
         name: 'FOOD_AND_DRINK_COFFEE', // Trying to use Plaid ID as name
         parentId: null,
         isHidden: false,
-        isSavings: false
+        isRollover: false
       }, testUserId);
       
       // Should get CUSTOM_ prefix
