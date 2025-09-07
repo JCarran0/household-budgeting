@@ -5,6 +5,32 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.5.0](https://github.com/JCarran0/household-budgeting/compare/v1.4.0...v1.5.0) (2025-09-07)
+
+
+### Features
+
+* **import:** add category-only update mode for matched transactions ([1b0b0db](https://github.com/JCarran0/household-budgeting/commit/1b0b0db788768a86a294bfc584afcf00a9c0a493))
+* **import:** add CSV transaction import with duplicate detection ([daacaba](https://github.com/JCarran0/household-budgeting/commit/daacaba1e5e890a9ae5adfd8f2b2fe392d2fdf50))
+* **import:** create generalized CSV import framework for multiple use cases ([5d4ab3e](https://github.com/JCarran0/household-budgeting/commit/5d4ab3ea6a43b8c86415ae18cbf5c067b672195e))
+
+
+### Bug Fixes
+
+* **import:** implement actual category updates and improve matching logic ([694c504](https://github.com/JCarran0/household-budgeting/commit/694c504461d7bb79d3a6c84065954f971370cbcc))
+
+
+### Documentation
+
+* document generalized CSV import framework architecture ([a765313](https://github.com/JCarran0/household-budgeting/commit/a765313fb8664aa3595361e459aefc263e463898))
+* update AI documentation for CSV import feature ([8673427](https://github.com/JCarran0/household-budgeting/commit/8673427112fa0fc1b45d039596591292ae6d9614))
+
+
+### Code Refactoring
+
+* **categories:** remove hidden categories toggle and improve search performance ([f7873c4](https://github.com/JCarran0/household-budgeting/commit/f7873c44d111daa3ad550c25c56c99bcffa9a134))
+* **categories:** rename savings concept to rollover throughout application ([d4d4ada](https://github.com/JCarran0/household-budgeting/commit/d4d4adafd6620041f043d0925320c303c6bc108a))
+
 ## [1.4.0](https://github.com/JCarran0/household-budgeting/compare/v1.3.1...v1.4.0) (2025-09-07)
 
 
