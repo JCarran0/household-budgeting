@@ -17,6 +17,8 @@ import {
   ActionIcon,
   Tooltip,
   Tabs,
+  Menu,
+  ScrollArea,
 } from '@mantine/core';
 import { MonthPickerInput } from '@mantine/dates';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -33,8 +35,9 @@ import {
   IconChevronRight,
   IconRefresh,
   IconFilterOff,
+  IconChevronDown,
 } from '@tabler/icons-react';
-import { format, addMonths, subMonths, startOfMonth } from 'date-fns';
+import { format, addMonths, subMonths, startOfMonth, parseISO } from 'date-fns';
 import { api } from '../lib/api';
 import { formatCurrency } from '../utils/formatters';
 import { BudgetGrid } from '../components/budgets/BudgetGrid';
@@ -187,10 +190,17 @@ export function Budgets() {
     handleDateChange(addMonths(selectedDate, 1));
   };
 
-  const handleCopyFromPreviousMonth = (): void => {
-    const previousMonth = format(subMonths(selectedDate, 1), 'yyyy-MM');
-    if (window.confirm(`Copy all budgets from ${format(subMonths(selectedDate, 1), 'MMMM yyyy')} to ${displayMonth}?`)) {
-      copyMutation.mutate({ fromMonth: previousMonth, toMonth: selectedMonth });
+  // Fetch available budget months
+  const { data: availableMonths, isLoading: monthsLoading } = useQuery({
+    queryKey: ['budgets', 'available-months'],
+    queryFn: api.getAvailableBudgetMonths,
+  });
+
+  const handleCopyFromMonth = (fromMonth: string): void => {
+    const fromDate = parseISO(fromMonth + '-01');
+    const fromDisplayMonth = format(fromDate, 'MMMM yyyy');
+    if (window.confirm(`Copy all budgets from ${fromDisplayMonth} to ${displayMonth}?`)) {
+      copyMutation.mutate({ fromMonth, toMonth: selectedMonth });
     }
   };
 
@@ -263,16 +273,61 @@ export function Budgets() {
             </Group>
 
             <Group>
-              <Tooltip label="Copy budgets from previous month">
-                <Button
-                  variant="light"
-                  leftSection={<IconCopy size={16} />}
-                  onClick={handleCopyFromPreviousMonth}
-                  loading={copyMutation.isPending}
-                >
-                  Copy from Previous
-                </Button>
-              </Tooltip>
+              <Menu shadow="md" width={260} position="bottom-end">
+                <Menu.Target>
+                  <Button
+                    variant="light"
+                    leftSection={<IconCopy size={16} />}
+                    rightSection={<IconChevronDown size={16} />}
+                    loading={copyMutation.isPending || monthsLoading}
+                  >
+                    Copy from Previous
+                  </Button>
+                </Menu.Target>
+
+                <Menu.Dropdown>
+                  {availableMonths && availableMonths.length > 0 ? (
+                    <>
+                      <Menu.Label>Select a month to copy from</Menu.Label>
+                      <ScrollArea h={300} type="auto">
+                        {availableMonths
+                          .filter(m => m.month !== selectedMonth)
+                          .slice(0, 12)
+                          .map((monthData, index) => {
+                            const monthDate = parseISO(monthData.month + '-01');
+                            const displayName = format(monthDate, 'MMMM yyyy');
+                            const isRecommended = index === 0;
+                            
+                            return (
+                              <Menu.Item
+                                key={monthData.month}
+                                onClick={() => handleCopyFromMonth(monthData.month)}
+                                rightSection={
+                                  <Text size="xs" c="dimmed">
+                                    {monthData.count} {monthData.count === 1 ? 'budget' : 'budgets'}
+                                  </Text>
+                                }
+                              >
+                                <Group gap="xs">
+                                  <Text size="sm">{displayName}</Text>
+                                  {isRecommended && (
+                                    <Text size="xs" c="blue" fw={500}>
+                                      (Most Recent)
+                                    </Text>
+                                  )}
+                                </Group>
+                              </Menu.Item>
+                            );
+                          })}
+                      </ScrollArea>
+                    </>
+                  ) : (
+                    <Menu.Item disabled>
+                      <Text size="sm" c="dimmed">No previous budgets available</Text>
+                    </Menu.Item>
+                  )}
+                </Menu.Dropdown>
+              </Menu>
               
               <Tooltip label="Refresh data">
                 <ActionIcon onClick={() => refetchBudgets()} size="lg" variant="default">
@@ -395,14 +450,61 @@ export function Budgets() {
                     Create your first budget for {displayMonth}
                   </Text>
                   <Group justify="center">
-                    <Button
-                      variant="light"
-                      leftSection={<IconCopy size={16} />}
-                      onClick={handleCopyFromPreviousMonth}
-                      loading={copyMutation.isPending}
-                    >
-                      Copy from Previous Month
-                    </Button>
+                    <Menu shadow="md" width={260} position="bottom-start">
+                      <Menu.Target>
+                        <Button
+                          variant="light"
+                          leftSection={<IconCopy size={16} />}
+                          rightSection={<IconChevronDown size={16} />}
+                          loading={copyMutation.isPending || monthsLoading}
+                        >
+                          Copy from Previous Month
+                        </Button>
+                      </Menu.Target>
+                      
+                      <Menu.Dropdown>
+                        {availableMonths && availableMonths.length > 0 ? (
+                          <>
+                            <Menu.Label>Select a month to copy from</Menu.Label>
+                            <ScrollArea h={300} type="auto">
+                              {availableMonths
+                                .filter(m => m.month !== selectedMonth)
+                                .slice(0, 12)
+                                .map((monthData, index) => {
+                                  const monthDate = parseISO(monthData.month + '-01');
+                                  const displayName = format(monthDate, 'MMMM yyyy');
+                                  const isRecommended = index === 0;
+                                  
+                                  return (
+                                    <Menu.Item
+                                      key={monthData.month}
+                                      onClick={() => handleCopyFromMonth(monthData.month)}
+                                      rightSection={
+                                        <Text size="xs" c="dimmed">
+                                          {monthData.count} {monthData.count === 1 ? 'budget' : 'budgets'}
+                                        </Text>
+                                      }
+                                    >
+                                      <Group gap="xs">
+                                        <Text size="sm">{displayName}</Text>
+                                        {isRecommended && (
+                                          <Text size="xs" c="blue" fw={500}>
+                                            (Most Recent)
+                                          </Text>
+                                        )}
+                                      </Group>
+                                    </Menu.Item>
+                                  );
+                                })}
+                            </ScrollArea>
+                          </>
+                        ) : (
+                          <Menu.Item disabled>
+                            <Text size="sm" c="dimmed">No previous budgets available</Text>
+                          </Menu.Item>
+                        )}
+                      </Menu.Dropdown>
+                    </Menu>
                     <Button
                       leftSection={<IconPlus size={16} />}
                       onClick={() => setIsFormOpen(true)}

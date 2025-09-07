@@ -298,6 +298,24 @@ export class BudgetService {
     const budgets = await this.getAllBudgets(userId);
     return budgets.some(b => b.categoryId === categoryId);
   }
+
+  async getDistinctBudgetMonths(userId: string): Promise<{ month: string; count: number }[]> {
+    const budgets = await this.getAllBudgets(userId);
+    
+    // Group budgets by month and count them
+    const monthMap = new Map<string, number>();
+    budgets.forEach(budget => {
+      const count = monthMap.get(budget.month) || 0;
+      monthMap.set(budget.month, count + 1);
+    });
+    
+    // Convert to array and sort by month descending (most recent first)
+    const months = Array.from(monthMap.entries())
+      .map(([month, count]) => ({ month, count }))
+      .sort((a, b) => b.month.localeCompare(a.month));
+    
+    return months;
+  }
 }
 
 // Export singleton instance

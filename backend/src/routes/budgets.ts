@@ -40,6 +40,22 @@ router.get('/', async (req: Request, res: Response): Promise<void> => {
   }
 });
 
+// GET /api/budgets/available-months - Get distinct months with budgets
+router.get('/available-months', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const userId = req.user?.userId;
+    if (!userId) {
+      res.status(401).json({ error: 'User not authenticated' });
+      return;
+    }
+    const months = await budgetService.getDistinctBudgetMonths(userId);
+    res.json(months);
+  } catch (error) {
+    console.error('Error fetching available budget months:', error);
+    res.status(500).json({ error: 'Failed to fetch available budget months' });
+  }
+});
+
 // GET /api/budgets/month/:month - Get budgets for a specific month
 router.get('/month/:month', async (req: Request, res: Response): Promise<void> => {
   try {
