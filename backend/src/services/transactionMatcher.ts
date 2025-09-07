@@ -230,6 +230,87 @@ export class TransactionMatcher {
   }
 
   /**
+   * Find matches for category updates - existing-transaction-centric
+   * For each existing transaction, finds the best matching import transaction
+   * This ensures all existing transactions get a chance to be matched
+   */
+  public findMatchesForCategoryUpdate(
+    importTransactions: ParsedTransaction[],
+    existingTransactions: StoredTransaction[],
+    options: MatchingOptions = {}
+  ): MatchingResult {
+    const opts = { ...this.defaultOptions, ...options };
+    const matches: TransactionMatch[] = [];
+    const usedImportIndices = new Set<number>();
+    
+    let exactMatches = 0;
+    let highConfidenceMatches = 0;
+    let potentialMatches = 0;
+
+    // For each existing transaction, find the best import match
+    for (const existingTxn of existingTransactions) {
+      let bestMatch: TransactionMatch | undefined;
+      let bestImportIndex = -1;
+
+      // Check all import transactions for matches
+      importTransactions.forEach((importTxn, index) => {
+        // Skip if this import transaction was already matched
+        if (usedImportIndices.has(index)) return;
+
+        // Check if amount and date match
+        if (this.isAmountMatch(importTxn.amount, existingTxn.amount, opts.amountTolerance)) {
+          const importDate = this.normalizeDate(importTxn.date);
+          const existingDate = existingTxn.date;
+          
+          if (importDate && this.isDateWithinWindow(importDate, existingDate, opts.dateWindowDays)) {
+            const similarity = this.calculateDescriptionSimilarity(
+              importTxn.description,
+              existingTxn.name || existingTxn.userDescription || ''
+            );
+            
+            // Keep the best match for this existing transaction
+            if (!bestMatch || similarity > bestMatch.confidence) {
+              const matchType = this.determineMatchType(similarity);
+              bestMatch = {
+                existingTransaction: existingTxn,
+                importTransaction: importTxn,
+                confidence: similarity,
+                matchReason: `Amount: ${Math.abs(importTxn.amount)}, Date: ${importDate} vs ${existingDate}`,
+                matchType
+              };
+              bestImportIndex = index;
+            }
+          }
+        }
+      });
+
+      // If we found a match, add it and mark the import as used
+      if (bestMatch && bestImportIndex >= 0) {
+        matches.push(bestMatch);
+        usedImportIndices.add(bestImportIndex);
+        
+        const confidence = bestMatch.confidence;
+        if (confidence >= 0.8) {
+          exactMatches++;
+        } else if (confidence >= opts.descriptionSimilarityThreshold) {
+          highConfidenceMatches++;
+        } else {
+          potentialMatches++;
+        }
+      }
+    }
+
+    return {
+      matches,
+      totalProcessed: existingTransactions.length,
+      exactMatches,
+      highConfidenceMatches,
+      potentialMatches,
+      noMatches: existingTransactions.length - matches.length
+    };
+  }
+
+  /**
    * Group transactions by potential duplicates
    * Useful for preview interfaces
    */

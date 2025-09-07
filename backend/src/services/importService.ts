@@ -320,7 +320,11 @@ export class ImportService {
 
       // Match imported transactions with existing ones
       const matcher = new TransactionMatcher();
-      const matchingResult = matcher.findMatches(parseResult.data, existingTransactionsResult.transactions);
+      
+      // Use different matching strategy for category updates vs imports
+      const matchingResult = options.updateCategoriesOnly
+        ? matcher.findMatchesForCategoryUpdate(parseResult.data, existingTransactionsResult.transactions)
+        : matcher.findMatches(parseResult.data, existingTransactionsResult.transactions);
       
       // Group results for processing
       const { duplicates, newTransactions } = matcher.groupByDuplicates(matchingResult.matches, parseResult.data);
@@ -612,13 +616,12 @@ export class ImportService {
         }
 
         // Update the existing transaction's category
-        // Note: This would need to be implemented in TransactionService
-        // For now, we'll simulate the update
+        await this.transactionService.updateTransactionCategory(
+          userId,
+          match.existingTransaction.id,
+          categoryId
+        );
         
-        // In a real implementation, you'd call:
-        // await this.transactionService.updateTransactionCategory(userId, match.existingTransaction.id, categoryId);
-        
-        // For now, just track that we would update it
         updated++;
         job.processedRows++;
         job.progress = Math.round((job.processedRows / job.totalRows) * 100);
