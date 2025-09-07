@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "nodemon --watch src --ext ts --exec ts-node src/index.ts",
     "build": "tsc -p tsconfig.build.json && npm run postbuild",
-    "postbuild": "if [ -d dist/backend/src ]; then cp -r dist/backend/src/* dist/ && rm -rf dist/backend; fi && if [ -d dist/shared ]; then rm -rf dist/shared; fi",
+    "postbuild": "if [ -d dist/backend/src ]; then cp -r dist/backend/src/* dist/ && rm -rf dist/backend; fi",
     "start": "node index.js",
     "test": "npm run test:critical",
     "test:critical": "jest critical --runInBand",

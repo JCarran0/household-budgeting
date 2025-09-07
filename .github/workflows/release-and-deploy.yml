@@ -259,6 +259,11 @@ jobs:
           cp -r backend/dist deployment/backend/
           cp backend/package*.json deployment/backend/
           
+          # Copy shared utilities to root level (matches import path ../../../shared)
+          if [ -d backend/dist/shared ]; then
+            cp -r backend/dist/shared deployment/shared
+          fi
+          
           # Copy frontend
           cp -r frontend/dist/* deployment/frontend/
           

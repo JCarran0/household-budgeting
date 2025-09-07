@@ -36,7 +36,8 @@
   },
   "include": [
     "src/**/*",
-    "../shared/types/**/*"
+    "../shared/types/**/*",
+    "../shared/utils/**/*"
   ],
   "exclude": [
     "node_modules",
