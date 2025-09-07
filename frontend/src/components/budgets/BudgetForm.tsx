@@ -14,7 +14,9 @@ import { notifications } from '@mantine/notifications';
 import { api, type CreateBudgetDto } from '../../lib/api';
 import { formatCurrency } from '../../utils/formatters';
 import type { MonthlyBudget, Category } from '../../../../shared/types';
-import { isExpenseCategory } from '../../../../shared/utils/categoryHelpers';
+import { 
+  isExpenseCategoryWithCategories 
+} from '../../../../shared/utils/categoryHelpers';
 
 interface BudgetFormProps {
   opened: boolean;
@@ -120,7 +122,7 @@ export function BudgetForm({
           }
           return true;
         })
-        .filter(cat => isExpenseCategory(cat.id)) // Exclude income categories from budgeting
+        .filter(cat => isExpenseCategoryWithCategories(cat.id, categories)) // Exclude income categories (including subcategories) from budgeting
         .map(cat => {
           const parentCategory = cat.parentId ? 
             categories.find(p => p.id === cat.parentId) : null;

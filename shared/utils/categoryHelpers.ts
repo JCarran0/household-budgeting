@@ -2,9 +2,13 @@
  * Category helper utilities shared between frontend and backend
  */
 
+// Import Category type for hierarchical functions
+import type { Category } from '../types';
+
 /**
  * Check if a category is an income category based on its ID
  * Income categories in Plaid taxonomy start with "INCOME"
+ * @deprecated Use isIncomeCategoryHierarchical for proper subcategory support
  */
 export function isIncomeCategory(categoryId: string): boolean {
   return categoryId.startsWith('INCOME');
@@ -21,7 +25,82 @@ export function isTransferCategory(categoryId: string): boolean {
 /**
  * Check if a category should be included in budget comparisons
  * Income and transfer categories are typically excluded from expense budgeting
+ * @deprecated Use isExpenseCategoryHierarchical for proper subcategory support
  */
 export function isExpenseCategory(categoryId: string): boolean {
   return !isIncomeCategory(categoryId) && !isTransferCategory(categoryId);
+}
+
+/**
+ * Create a lookup map for efficient category hierarchy traversal
+ */
+export function createCategoryLookup(categories: Category[]): Map<string, Category> {
+  return new Map(categories.map(cat => [cat.id, cat]));
+}
+
+/**
+ * Check if a category or any of its ancestors is an income category
+ * This properly handles subcategories under INCOME parent categories
+ */
+export function isIncomeCategoryHierarchical(
+  categoryId: string,
+  categoryLookup: Map<string, Category>
+): boolean {
+  const visited = new Set<string>(); // Prevent infinite loops
+  let currentId: string | null = categoryId;
+  
+  while (currentId && !visited.has(currentId)) {
+    visited.add(currentId);
+    
+    // Check if current category is a root income category
+    if (currentId.startsWith('INCOME')) {
+      // Only return true if the category actually exists in the lookup
+      // This prevents false positives for non-existent INCOME_ categories
+      return categoryLookup.has(currentId);
+    }
+    
+    // Move up to parent
+    const category = categoryLookup.get(currentId);
+    if (!category) {
+      // Category doesn't exist, can't traverse further
+      return false;
+    }
+    currentId = category.parentId;
+  }
+  
+  return false;
+}
+
+/**
+ * Check if a category should be included in budget comparisons using hierarchical logic
+ * Income and transfer categories (including subcategories) are excluded from expense budgeting
+ */
+export function isExpenseCategoryHierarchical(
+  categoryId: string,
+  categoryLookup: Map<string, Category>
+): boolean {
+  return !isIncomeCategoryHierarchical(categoryId, categoryLookup) && !isTransferCategory(categoryId);
+}
+
+/**
+ * Async version that accepts categories array instead of lookup map
+ * Useful when you don't already have a lookup map created
+ */
+export function isIncomeCategoryWithCategories(
+  categoryId: string,
+  categories: Category[]
+): boolean {
+  const lookup = createCategoryLookup(categories);
+  return isIncomeCategoryHierarchical(categoryId, lookup);
+}
+
+/**
+ * Async version for expense category detection with categories array
+ */
+export function isExpenseCategoryWithCategories(
+  categoryId: string,
+  categories: Category[]
+): boolean {
+  const lookup = createCategoryLookup(categories);
+  return isExpenseCategoryHierarchical(categoryId, lookup);
 }

@@ -1,7 +1,11 @@
 import { v4 as uuidv4 } from 'uuid';
-import { MonthlyBudget } from '../../../shared/types';
+import { MonthlyBudget, Category } from '../../../shared/types';
 import { DataService } from './dataService';
-import { isIncomeCategory } from '../../../shared/utils/categoryHelpers';
+import { 
+  isIncomeCategory, 
+  isIncomeCategoryHierarchical,
+  createCategoryLookup 
+} from '../../../shared/utils/categoryHelpers';
 
 // Stored budget structure with user isolation
 export interface StoredBudget extends MonthlyBudget {
@@ -27,7 +31,10 @@ export interface BudgetComparison {
 }
 
 export class BudgetService {
-  constructor(private dataService: DataService) {}
+  constructor(
+    private dataService: DataService,
+    private getCategoriesCallback?: (userId: string) => Promise<Category[]>
+  ) {}
 
   private validateMonth(month: string): void {
     const monthRegex = /^\d{4}-(0[1-9]|1[0-2])$/;
@@ -137,10 +144,19 @@ export class BudgetService {
     actualAmount: number,
     userId: string
   ): Promise<BudgetComparison | null> {
-    // Skip income categories in budget comparisons
+    // Skip income categories in budget comparisons (including subcategories)
     // Income categories don't follow the same budgeting logic as expenses
-    if (isIncomeCategory(categoryId)) {
-      return null;
+    if (this.getCategoriesCallback) {
+      const categories = await this.getCategoriesCallback(userId);
+      const categoryLookup = createCategoryLookup(categories);
+      if (isIncomeCategoryHierarchical(categoryId, categoryLookup)) {
+        return null;
+      }
+    } else {
+      // Fallback to simple check if no categories callback available
+      if (isIncomeCategory(categoryId)) {
+        return null;
+      }
     }
     
     const budget = await this.getBudget(categoryId, month, userId);
@@ -168,10 +184,21 @@ export class BudgetService {
     const budgets = await this.getMonthlyBudgets(month, userId);
     const comparisons: BudgetComparison[] = [];
 
+    // Get categories for hierarchical income detection
+    let categoryLookup: Map<string, Category> | null = null;
+    if (this.getCategoriesCallback) {
+      const categories = await this.getCategoriesCallback(userId);
+      categoryLookup = createCategoryLookup(categories);
+    }
+
     // Process budgeted categories (excluding income and hidden categories)
     for (const budget of budgets) {
-      // Skip income categories
-      if (isIncomeCategory(budget.categoryId)) {
+      // Skip income categories (including subcategories)
+      const isIncome = categoryLookup 
+        ? isIncomeCategoryHierarchical(budget.categoryId, categoryLookup)
+        : isIncomeCategory(budget.categoryId);
+      
+      if (isIncome) {
         continue;
       }
       
@@ -321,12 +348,15 @@ export class BudgetService {
 // Export singleton instance
 let budgetServiceInstance: BudgetService | null = null;
 
-export function getBudgetService(dataService?: DataService): BudgetService {
+export function getBudgetService(
+  dataService?: DataService, 
+  getCategoriesCallback?: (userId: string) => Promise<Category[]>
+): BudgetService {
   if (!budgetServiceInstance) {
     if (!dataService) {
       throw new Error('DataService must be provided when creating BudgetService instance');
     }
-    budgetServiceInstance = new BudgetService(dataService);
+    budgetServiceInstance = new BudgetService(dataService, getCategoriesCallback);
   }
   return budgetServiceInstance;
 }

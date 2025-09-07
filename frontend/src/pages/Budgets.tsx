@@ -46,7 +46,9 @@ import { BudgetComparison } from '../components/budgets/BudgetComparison';
 // Error boundaries available for use when needed
 // import { FinancialErrorBoundary, FormErrorBoundary, AsyncErrorBoundary } from '../components/ErrorBoundary';
 import type { MonthlyBudget } from '../../../shared/types';
-import { isExpenseCategory } from '../../../shared/utils/categoryHelpers';
+import { 
+  isExpenseCategoryWithCategories
+} from '../../../shared/utils/categoryHelpers';
 
 export function Budgets() {
   // Use persisted filters from localStorage
@@ -140,9 +142,9 @@ export function Budgets() {
           !transaction.isHidden && 
           !hiddenCategoryIds.has(transaction.categoryId)) {
         
-        // Only include expense categories in budget comparisons
+        // Only include expense categories in budget comparisons (including subcategories)
         // Income categories should be excluded from budget tracking
-        if (isExpenseCategory(transaction.categoryId)) {
+        if (isExpenseCategoryWithCategories(transaction.categoryId, categories)) {
           // For expenses, amounts are positive in Plaid, so use as-is
           const amount = Math.abs(transaction.amount);
           actualsByCategory[transaction.categoryId] = 

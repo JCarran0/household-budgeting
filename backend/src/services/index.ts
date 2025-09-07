@@ -26,9 +26,13 @@ export const authService = new AuthService(dataService);
 export const plaidService = new PlaidService();
 export const accountService = new AccountService(dataService, plaidService);
 export const transactionService = new TransactionService(dataService, plaidService);
+// Create budgetService temporarily without categories callback
 export const budgetService = new BudgetService(dataService);
 // Create categoryService first without autoCategorizeService and importService
 export const categoryService = new CategoryService(dataService, budgetService, undefined, transactionService, undefined);
+
+// Update budgetService with categories callback
+(budgetService as any).getCategoriesCallback = (userId: string) => categoryService.getAllCategories(userId);
 // Then create autoCategorizeService with categoryService
 export const autoCategorizeService = new AutoCategorizeService(dataService, categoryService);
 // Create importService with all required dependencies
