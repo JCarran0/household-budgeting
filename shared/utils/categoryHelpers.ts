@@ -3,7 +3,7 @@
  */
 
 // Import Category type for hierarchical functions
-import type { Category } from '../types';
+import type { Category, BudgetType } from '../types';
 
 /**
  * Check if a category is an income category based on its ID
@@ -103,4 +103,34 @@ export function isExpenseCategoryWithCategories(
 ): boolean {
   const lookup = createCategoryLookup(categories);
   return isExpenseCategoryHierarchical(categoryId, lookup);
+}
+
+/**
+ * Determine the budget type for a given category
+ * Income categories should use inverse budget logic (over = good, under = bad)
+ * Expense categories use normal budget logic (over = bad, under = good)
+ */
+export function getBudgetType(
+  categoryId: string,
+  categories: Category[]
+): BudgetType {
+  const lookup = createCategoryLookup(categories);
+  return isIncomeCategoryHierarchical(categoryId, lookup) ? 'income' : 'expense';
+}
+
+/**
+ * Check if a category can be budgeted (excludes transfers)
+ * Both income and expense categories can be budgeted, but transfers cannot
+ */
+export function isBudgetableCategory(
+  categoryId: string,
+  _categories: Category[] // Prefix with underscore to indicate intentionally unused
+): boolean {
+  // Transfer categories should not be budgetable
+  if (isTransferCategory(categoryId)) {
+    return false;
+  }
+  
+  // Both income and expense categories are budgetable
+  return true;
 }

@@ -22,7 +22,7 @@ import {
 } from '@tabler/icons-react';
 import { format, startOfMonth, endOfMonth } from 'date-fns';
 import type { BudgetComparisonResponse } from '../../lib/api';
-import type { Category } from '../../../../shared/types';
+import type { Category, BudgetComparison as BudgetComparisonType } from '../../../../shared/types';
 import { TransactionPreviewTrigger } from '../transactions/TransactionPreviewTrigger';
 
 interface BudgetComparisonProps {
@@ -37,6 +37,8 @@ interface HierarchicalComparison {
   remaining: number;
   percentUsed: number;
   isOverBudget: boolean;
+  budgetType?: 'income' | 'expense';
+  isIncomeCategory?: boolean;
   isParent?: boolean;
   isChild?: boolean;
   parentId?: string | null;
@@ -59,11 +61,20 @@ export function BudgetComparison({ comparison, categories }: BudgetComparisonPro
     return category.name;
   };
 
-  const getProgressColor = (percentUsed: number): string => {
-    if (percentUsed <= 50) return 'green';
-    if (percentUsed <= 80) return 'yellow';
-    if (percentUsed <= 100) return 'orange';
-    return 'red';
+  const getProgressColor = (percentUsed: number, isIncomeCategory: boolean = false): string => {
+    if (isIncomeCategory) {
+      // For income: higher percentage is better (inverse logic)
+      if (percentUsed >= 100) return 'green'; // Meeting or exceeding target
+      if (percentUsed >= 80) return 'yellow'; // Close to target
+      if (percentUsed >= 50) return 'orange'; // Concerning shortfall
+      return 'red'; // Significant shortfall
+    } else {
+      // For expenses: lower percentage is better (normal logic)
+      if (percentUsed <= 50) return 'green';
+      if (percentUsed <= 80) return 'yellow';
+      if (percentUsed <= 100) return 'orange';
+      return 'red';
+    }
   };
 
   const exportToCSV = (): void => {
@@ -165,6 +176,8 @@ export function BudgetComparison({ comparison, categories }: BudgetComparisonPro
       const compWithHierarchy: HierarchicalComparison = {
         ...comp,
         parentId: category?.parentId || null,
+        budgetType: (comp as BudgetComparisonType).budgetType || 'expense',
+        isIncomeCategory: (comp as BudgetComparisonType).isIncomeCategory || false,
       };
       
       if (category?.parentId) {
@@ -296,7 +309,7 @@ export function BudgetComparison({ comparison, categories }: BudgetComparisonPro
         
         <Progress
           value={Math.min(comparison.totals.percentUsed, 100)}
-          color={getProgressColor(comparison.totals.percentUsed)}
+          color={getProgressColor(comparison.totals.percentUsed, false)} // Totals use expense logic for now
           size="lg"
           mt="md"
           striped={comparison.totals.isOverBudget}
@@ -321,10 +334,11 @@ export function BudgetComparison({ comparison, categories }: BudgetComparisonPro
             const categoryName = category ? (
               comp.isChild && category.parentId ? category.name : getCategoryName(comp.categoryId)
             ) : 'Unknown Category';
-            const progressColor = getProgressColor(comp.percentUsed);
+            const progressColor = getProgressColor(comp.percentUsed, comp.isIncomeCategory);
             
-            // Enhanced category name - no visual indicators needed
-            const displayName = categoryName;
+            // Enhanced category name with budget type indicator
+            const budgetTypeIcon = comp.isIncomeCategory ? '💰 ' : '💳 ';
+            const displayName = budgetTypeIcon + categoryName;
             
             const tooltipText = comp.isCalculated && comp.isParent
               ? "Aggregated total from subcategories - click to view all related transactions"
@@ -396,18 +410,53 @@ export function BudgetComparison({ comparison, categories }: BudgetComparisonPro
                 </Table.Td>
                 
                 <Table.Td>
-                  {comp.isOverBudget ? (
-                    <Tooltip label={`${comp.percentUsed - 100}% over budget`}>
-                      <Badge
-                        color="red"
-                        variant="light"
-                        leftSection={<IconTrendingUp size={12} />}
-                      >
-                        Over
-                      </Badge>
-                    </Tooltip>
-                  ) : comp.percentUsed > 80 ? (
-                    <Tooltip label="Approaching budget limit">
+                  {comp.isIncomeCategory ? (
+                    // Income category logic: over budget = good, under budget = bad
+                    comp.isOverBudget ? (
+                      <Tooltip label={`${100 - comp.percentUsed}% below income target`}>
+                        <Badge
+                          color="red"
+                          variant="light"
+                          leftSection={<IconTrendingDown size={12} />}
+                        >
+                          Below Target
+                        </Badge>
+                      </Tooltip>
+                    ) : comp.percentUsed < 80 ? (
+                      <Tooltip label={`Only ${comp.percentUsed}% of income target reached`}>
+                        <Badge
+                          color="yellow"
+                          variant="light"
+                          leftSection={<IconAlertCircle size={12} />}
+                        >
+                          Needs Attention
+                        </Badge>
+                      </Tooltip>
+                    ) : (
+                      <Tooltip label={`${comp.percentUsed}% of income target reached`}>
+                        <Badge
+                          color="green"
+                          variant="light"
+                          leftSection={<IconTrendingUp size={12} />}
+                        >
+                          On Target
+                        </Badge>
+                      </Tooltip>
+                    )
+                  ) : (
+                    // Expense category logic: normal budget logic
+                    comp.isOverBudget ? (
+                      <Tooltip label={`${comp.percentUsed - 100}% over budget`}>
+                        <Badge
+                          color="red"
+                          variant="light"
+                          leftSection={<IconTrendingUp size={12} />}
+                        >
+                          Over Budget
+                        </Badge>
+                      </Tooltip>
+                    ) : comp.percentUsed > 80 ? (
+                      <Tooltip label="Approaching budget limit">
                       <Badge
                         color="yellow"
                         variant="light"
@@ -416,16 +465,17 @@ export function BudgetComparison({ comparison, categories }: BudgetComparisonPro
                         Warning
                       </Badge>
                     </Tooltip>
-                  ) : (
-                    <Tooltip label={`${100 - comp.percentUsed}% remaining`}>
-                      <Badge
-                        color="green"
-                        variant="light"
-                        leftSection={<IconTrendingDown size={12} />}
-                      >
-                        On Track
-                      </Badge>
-                    </Tooltip>
+                    ) : (
+                      <Tooltip label={`${100 - comp.percentUsed}% remaining`}>
+                        <Badge
+                          color="green"
+                          variant="light"
+                          leftSection={<IconTrendingDown size={12} />}
+                        >
+                          On Track
+                        </Badge>
+                      </Tooltip>
+                    )
                   )}
                 </Table.Td>
               </Table.Tr>

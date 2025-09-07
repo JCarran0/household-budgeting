@@ -1,10 +1,10 @@
 import { v4 as uuidv4 } from 'uuid';
-import { MonthlyBudget, Category } from '../../../shared/types';
+import { MonthlyBudget, Category, BudgetType } from '../../../shared/types';
 import { DataService } from './dataService';
 import { 
-  isIncomeCategory, 
-  isIncomeCategoryHierarchical,
-  createCategoryLookup 
+  createCategoryLookup,
+  getBudgetType,
+  isBudgetableCategory
 } from '../../../shared/utils/categoryHelpers';
 
 // Stored budget structure with user isolation
@@ -28,6 +28,8 @@ export interface BudgetComparison {
   remaining: number;
   percentUsed: number;
   isOverBudget: boolean;
+  budgetType: 'income' | 'expense';
+  isIncomeCategory: boolean; // Convenience flag for UI logic
 }
 
 export class BudgetService {
@@ -144,21 +146,52 @@ export class BudgetService {
     actualAmount: number,
     userId: string
   ): Promise<BudgetComparison | null> {
-    // Skip income categories in budget comparisons (including subcategories)
-    // Income categories don't follow the same budgeting logic as expenses
+    // Check if category is budgetable (excludes only transfers)
     if (this.getCategoriesCallback) {
       const categories = await this.getCategoriesCallback(userId);
-      const categoryLookup = createCategoryLookup(categories);
-      if (isIncomeCategoryHierarchical(categoryId, categoryLookup)) {
+      if (!isBudgetableCategory(categoryId, categories)) {
         return null;
       }
-    } else {
-      // Fallback to simple check if no categories callback available
-      if (isIncomeCategory(categoryId)) {
-        return null;
+      
+      const budgetType = getBudgetType(categoryId, categories);
+      const isIncomeCategory = budgetType === 'income';
+      
+      const budget = await this.getBudget(categoryId, month, userId);
+      const budgeted = budget?.amount || 0;
+      
+      // For income categories, we want to handle inverse logic:
+      // - remaining = actual - budgeted (positive remaining = good for income)
+      // - isOverBudget = actual < budgeted (under target is "bad" for income)
+      let remaining: number;
+      let isOverBudget: boolean;
+      
+      if (isIncomeCategory) {
+        // Income: exceeding budget is good, falling short is bad
+        remaining = actualAmount - budgeted; // positive = over target (good)
+        isOverBudget = actualAmount < budgeted; // under target is "over budget" semantically
+      } else {
+        // Expense: normal logic - under budget is good, over is bad
+        remaining = budgeted - actualAmount; // positive = under budget (good)
+        isOverBudget = actualAmount > budgeted || (budgeted === 0 && actualAmount > 0);
       }
+      
+      const percentUsed = budgeted > 0 ? (Math.abs(actualAmount) / budgeted) * 100 : 0;
+
+      return {
+        categoryId,
+        month,
+        budgeted,
+        actual: actualAmount,
+        remaining,
+        percentUsed: Math.round(percentUsed),
+        isOverBudget,
+        budgetType,
+        isIncomeCategory
+      };
     }
     
+    // Fallback for when no categories callback is available
+    // Default to expense logic
     const budget = await this.getBudget(categoryId, month, userId);
     const budgeted = budget?.amount || 0;
     const remaining = budgeted - actualAmount;
@@ -171,7 +204,9 @@ export class BudgetService {
       actual: actualAmount,
       remaining,
       percentUsed: Math.round(percentUsed),
-      isOverBudget: actualAmount > budgeted || (budgeted === 0 && actualAmount > 0)
+      isOverBudget: actualAmount > budgeted || (budgeted === 0 && actualAmount > 0),
+      budgetType: 'expense' as BudgetType,
+      isIncomeCategory: false
     };
   }
 
@@ -184,21 +219,21 @@ export class BudgetService {
     const budgets = await this.getMonthlyBudgets(month, userId);
     const comparisons: BudgetComparison[] = [];
 
-    // Get categories for hierarchical income detection
+    // Get categories for budget type detection and hierarchy traversal
     let categoryLookup: Map<string, Category> | null = null;
     if (this.getCategoriesCallback) {
       const categories = await this.getCategoriesCallback(userId);
       categoryLookup = createCategoryLookup(categories);
     }
 
-    // Process budgeted categories (excluding income and hidden categories)
+    // Process budgeted categories (including both income and expense categories, excluding only hidden)
     for (const budget of budgets) {
-      // Skip income categories (including subcategories)
-      const isIncome = categoryLookup 
-        ? isIncomeCategoryHierarchical(budget.categoryId, categoryLookup)
-        : isIncomeCategory(budget.categoryId);
+      // Skip non-budgetable categories (transfers)
+      const isBudgetable = categoryLookup 
+        ? isBudgetableCategory(budget.categoryId, categoryLookup.get(budget.categoryId) ? Array.from(categoryLookup.values()) : [])
+        : !budget.categoryId.startsWith('TRANSFER_');
       
-      if (isIncome) {
+      if (!isBudgetable) {
         continue;
       }
       
@@ -214,10 +249,14 @@ export class BudgetService {
       }
     }
 
-    // Process unbudgeted categories with actuals (excluding income and hidden categories)
+    // Process unbudgeted categories with actuals (including both income and expense, excluding only transfers and hidden)
     for (const [categoryId, actual] of actuals) {
-      // Skip income categories
-      if (isIncomeCategory(categoryId)) {
+      // Skip non-budgetable categories (transfers)
+      const isBudgetable = categoryLookup 
+        ? isBudgetableCategory(categoryId, Array.from(categoryLookup.values()))
+        : !categoryId.startsWith('TRANSFER_');
+        
+      if (!isBudgetable) {
         continue;
       }
       

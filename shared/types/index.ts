@@ -81,6 +81,22 @@ export interface MonthlyBudget {
   amount: number;
 }
 
+// Budget type classification
+export type BudgetType = 'income' | 'expense';
+
+// Extended interface for budget comparisons (defined in backend)
+export interface BudgetComparison {
+  categoryId: string;
+  month: string;
+  budgeted: number;
+  actual: number;
+  remaining: number;
+  percentUsed: number;
+  isOverBudget: boolean;
+  budgetType: BudgetType;
+  isIncomeCategory: boolean;
+}
+
 export interface LinkTokenResponse {
   link_token: string;
 }

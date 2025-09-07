@@ -15,7 +15,8 @@ import { api, type CreateBudgetDto } from '../../lib/api';
 import { formatCurrency } from '../../utils/formatters';
 import type { MonthlyBudget, Category } from '../../../../shared/types';
 import { 
-  isExpenseCategoryWithCategories 
+  isBudgetableCategory,
+  getBudgetType 
 } from '../../../../shared/utils/categoryHelpers';
 
 interface BudgetFormProps {
@@ -105,7 +106,7 @@ export function BudgetForm({
     });
   };
 
-  // Build category options with hierarchy (excluding income categories)
+  // Build category options with hierarchy (including both income and expense categories, excluding only transfers)
   const categoryOptions = React.useMemo(() => {
     if (!categories || categories.length === 0) {
       return [];
@@ -122,15 +123,18 @@ export function BudgetForm({
           }
           return true;
         })
-        .filter(cat => isExpenseCategoryWithCategories(cat.id, categories)) // Exclude income categories (including subcategories) from budgeting
+        .filter(cat => isBudgetableCategory(cat.id, categories)) // Include both income and expense, exclude only transfers
         .map(cat => {
           const parentCategory = cat.parentId ? 
             categories.find(p => p.id === cat.parentId) : null;
+          const budgetType = getBudgetType(cat.id, categories);
+          const typeIndicator = budgetType === 'income' ? '💰' : '💳';
           
           // Ensure we return a valid option object
+          const baseName = parentCategory ? `${parentCategory.name} → ${cat.name}` : cat.name || '';
           return {
             value: cat.id || '',
-            label: parentCategory ? `${parentCategory.name} → ${cat.name}` : cat.name || '',
+            label: `${typeIndicator} ${baseName}`,
             // Note: Mantine Select doesn't support 'group' directly in option objects
             // group: parentCategory?.name,
           };
@@ -172,10 +176,24 @@ export function BudgetForm({
             }
           />
 
-          {selectedCategory?.isRollover && (
-            <Text size="sm" c="yellow" fw={500}>
-              This is a rollover category - unused budget will roll over to next month
-            </Text>
+          {selectedCategory && (
+            <>
+              {selectedCategory.isRollover && (
+                <Text size="sm" c="yellow" fw={500}>
+                  This is a rollover category - unused budget will roll over to next month
+                </Text>
+              )}
+              {getBudgetType(selectedCategory.id, categories) === 'income' && (
+                <Text size="sm" c="blue" fw={500}>
+                  💰 Income Budget: Exceeding your target is good, falling short needs attention
+                </Text>
+              )}
+              {getBudgetType(selectedCategory.id, categories) === 'expense' && (
+                <Text size="sm" c="green" fw={500}>
+                  💳 Expense Budget: Staying under budget is the goal
+                </Text>
+              )}
+            </>
           )}
 
           <NumberInput

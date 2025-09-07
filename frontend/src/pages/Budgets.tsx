@@ -48,7 +48,7 @@ import { BudgetComparison } from '../components/budgets/BudgetComparison';
 // import { FinancialErrorBoundary, FormErrorBoundary, AsyncErrorBoundary } from '../components/ErrorBoundary';
 import type { MonthlyBudget } from '../../../shared/types';
 import { 
-  isExpenseCategoryWithCategories
+  isBudgetableCategory
 } from '../../../shared/utils/categoryHelpers';
 
 export function Budgets() {
@@ -143,11 +143,13 @@ export function Budgets() {
           !transaction.isHidden && 
           !hiddenCategoryIds.has(transaction.categoryId)) {
         
-        // Only include expense categories in budget comparisons (including subcategories)
-        // Income categories should be excluded from budget tracking
-        if (isExpenseCategoryWithCategories(transaction.categoryId, categories)) {
-          // For expenses, amounts are positive in Plaid, so use as-is
+        // Include both income and expense categories in budget comparisons (exclude only transfers)
+        if (isBudgetableCategory(transaction.categoryId, categories)) {
+          // For income categories: Plaid amounts are negative (money coming in)
+          // For expense categories: Plaid amounts are positive (money going out)
+          // We store the absolute amount but track the sign for proper calculations
           const amount = Math.abs(transaction.amount);
+          
           actualsByCategory[transaction.categoryId] = 
             (actualsByCategory[transaction.categoryId] || 0) + amount;
         }
