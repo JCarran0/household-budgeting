@@ -323,6 +323,22 @@
 - A user should be able to see total budget vs total actual
 - A user should be able to export budget comparisons to CSV
 
+### Hierarchical Budget Display
+- A user should be able to see budget categories organized hierarchically
+- A user should be able to see parent categories displayed above their child categories
+- A user should be able to see child categories indented under their parent categories
+- A user should be able to see parent category totals that intelligently aggregate from children
+- A user should be able to see parent budgets calculated as the maximum of (direct parent budget, sum of children budgets)
+- A user should be able to see parent actuals calculated as (direct parent spending + sum of children spending)
+- A user should be able to see visual indicators when parent totals are calculated from children (e.g., "Kids (Σ)")
+- A user should be able to hover over calculated parent categories to see "Includes subcategory totals" tooltip
+- A user should be able to see parent categories even when they have no direct budget but have budgeted children
+- A user should be able to see parent categories even when they have no direct transactions but children have transactions
+- A user should be able to click on any category (parent or child) to preview its transactions
+- A user should be able to see parent category transaction previews that include both direct parent transactions and aggregated child transactions when appropriate
+- A user should be able to navigate from parent category previews to the full transactions page with appropriate filters
+- A user should be able to distinguish between categories with direct budgets vs. calculated aggregated budgets through visual styling
+
 ### Budget Visualization
 - A user should be able to see progress bars for budget usage
 - A user should be able to see color coding (green/yellow/red) for budget status

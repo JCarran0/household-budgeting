@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import {
   Table,
   Text,
@@ -10,6 +11,7 @@ import {
   ThemeIcon,
   Tooltip,
   Button,
+  Box,
 } from '@mantine/core';
 import {
   IconTrendingUp,
@@ -18,12 +20,30 @@ import {
   IconDownload,
   IconCheck,
 } from '@tabler/icons-react';
+import { format, startOfMonth, endOfMonth } from 'date-fns';
 import type { BudgetComparisonResponse } from '../../lib/api';
 import type { Category } from '../../../../shared/types';
+import { TransactionPreviewTrigger } from '../transactions/TransactionPreviewTrigger';
 
 interface BudgetComparisonProps {
   comparison: BudgetComparisonResponse;
   categories: Category[];
+}
+
+interface HierarchicalComparison {
+  categoryId: string;
+  budgeted: number;
+  actual: number;
+  remaining: number;
+  percentUsed: number;
+  isOverBudget: boolean;
+  isParent?: boolean;
+  isChild?: boolean;
+  parentId?: string | null;
+  isCalculated?: boolean;  // Flag for aggregated parents
+  childrenIds?: string[];  // Track which children contributed to totals
+  originalBudget?: number; // Store original parent budget before aggregation
+  originalActual?: number; // Store original parent actual before aggregation
 }
 
 export function BudgetComparison({ comparison, categories }: BudgetComparisonProps) {
@@ -71,12 +91,143 @@ export function BudgetComparison({ comparison, categories }: BudgetComparisonPro
     window.URL.revokeObjectURL(url);
   };
 
+  // Calculate date range for the budget month
+  const dateRange = useMemo(() => {
+    const [year, month] = comparison.month.split('-').map(Number);
+    const monthDate = new Date(year, month - 1, 1);
+    return {
+      startDate: format(startOfMonth(monthDate), 'yyyy-MM-dd'),
+      endDate: format(endOfMonth(monthDate), 'yyyy-MM-dd'),
+    };
+  }, [comparison.month]);
+
   // Sort comparisons by variance (most over budget first)
   const sortedComparisons = [...comparison.comparisons].sort((a, b) => {
     if (a.isOverBudget && !b.isOverBudget) return -1;
     if (!a.isOverBudget && b.isOverBudget) return 1;
     return a.remaining - b.remaining;
   });
+
+  // Enhanced hierarchical organization with smart parent aggregation
+  const hierarchicalComparisons = useMemo(() => {
+    // Helper function to calculate enhanced parent totals
+    const calculateParentTotals = (
+      parentId: string, 
+      children: HierarchicalComparison[], 
+      existingParent?: HierarchicalComparison
+    ): HierarchicalComparison => {
+      const childBudgetSum = children.reduce((sum, child) => sum + child.budgeted, 0);
+      const childActualSum = children.reduce((sum, child) => sum + child.actual, 0);
+      
+      const budgeted = existingParent 
+        ? Math.max(childBudgetSum, existingParent.budgeted)
+        : childBudgetSum;
+      
+      const actual = existingParent 
+        ? childActualSum + existingParent.actual
+        : childActualSum;
+      
+      const remaining = budgeted - actual;
+      const percentUsed = budgeted > 0 ? Math.round((actual / budgeted) * 100) : 0;
+      
+      return {
+        categoryId: parentId,
+        budgeted,
+        actual,
+        remaining,
+        percentUsed,
+        isOverBudget: actual > budgeted,
+        isParent: true,
+        isCalculated: !existingParent || (childBudgetSum > 0), // Flag if this includes child data
+        childrenIds: children.map(c => c.categoryId),
+        originalBudget: existingParent?.budgeted,
+        originalActual: existingParent?.actual,
+        parentId: null,
+      };
+    };
+
+    // Build category hierarchy maps
+    const parentCategoryIds = new Set<string>();
+    const childrenByParent = new Map<string, HierarchicalComparison[]>();
+    const existingParentComparisons = new Map<string, HierarchicalComparison>();
+    
+    // First pass: identify all parents and group children
+    categories.forEach(category => {
+      if (category.parentId) {
+        parentCategoryIds.add(category.parentId);
+      }
+    });
+    
+    // Second pass: separate comparisons into parents and children
+    const childComparisons: HierarchicalComparison[] = [];
+    sortedComparisons.forEach(comp => {
+      const category = categories.find(c => c.id === comp.categoryId);
+      const compWithHierarchy: HierarchicalComparison = {
+        ...comp,
+        parentId: category?.parentId || null,
+      };
+      
+      if (category?.parentId) {
+        // It's a child category
+        if (!childrenByParent.has(category.parentId)) {
+          childrenByParent.set(category.parentId, []);
+        }
+        childrenByParent.get(category.parentId)!.push({
+          ...compWithHierarchy,
+          isChild: true,
+        });
+        childComparisons.push(compWithHierarchy);
+      } else if (parentCategoryIds.has(comp.categoryId)) {
+        // It's a parent category that has children
+        existingParentComparisons.set(comp.categoryId, {
+          ...compWithHierarchy,
+          isParent: true,
+        });
+      } else {
+        // It's a standalone category (no parent, no children)
+        existingParentComparisons.set(comp.categoryId, {
+          ...compWithHierarchy,
+          isParent: false,
+          isChild: false,
+        });
+      }
+    });
+    
+    // Third pass: calculate enhanced parent totals and build final hierarchy
+    const finalResult: HierarchicalComparison[] = [];
+    const processedParents = new Set<string>();
+    
+    // Process all parent categories (both existing and missing)
+    parentCategoryIds.forEach(parentId => {
+      const children = childrenByParent.get(parentId) || [];
+      if (children.length === 0) return; // Skip parents with no children in budget data
+      
+      const existingParent = existingParentComparisons.get(parentId);
+      const enhancedParent = calculateParentTotals(parentId, children, existingParent);
+      
+      finalResult.push(enhancedParent);
+      processedParents.add(parentId);
+      
+      // Sort children by variance within each parent group
+      children.sort((a, b) => {
+        if (a.isOverBudget && !b.isOverBudget) return -1;
+        if (!a.isOverBudget && b.isOverBudget) return 1;
+        return a.remaining - b.remaining;
+      });
+      
+      // Add all children immediately after their parent
+      finalResult.push(...children);
+    });
+    
+    // Add standalone categories (no parent, no children)
+    existingParentComparisons.forEach((comp, categoryId) => {
+      if (!processedParents.has(categoryId) && !childComparisons.some(c => c.categoryId === categoryId)) {
+        finalResult.push(comp);
+      }
+    });
+    
+    return finalResult;
+  }, [sortedComparisons, categories]);
 
   return (
     <Stack gap="lg">
@@ -165,14 +316,51 @@ export function BudgetComparison({ comparison, categories }: BudgetComparisonPro
           </Table.Tr>
         </Table.Thead>
         <Table.Tbody>
-          {sortedComparisons.map((comp) => {
-            const categoryName = getCategoryName(comp.categoryId);
+          {hierarchicalComparisons.map((comp) => {
+            const category = categories.find(c => c.id === comp.categoryId);
+            const categoryName = category ? (
+              comp.isChild && category.parentId ? category.name : getCategoryName(comp.categoryId)
+            ) : 'Unknown Category';
             const progressColor = getProgressColor(comp.percentUsed);
+            
+            // Enhanced category name - no visual indicators needed
+            const displayName = categoryName;
+            
+            const tooltipText = comp.isCalculated && comp.isParent
+              ? "Aggregated total from subcategories - click to view all related transactions"
+              : "Click to view transactions";
             
             return (
               <Table.Tr key={comp.categoryId}>
                 <Table.Td>
-                  <Text fw={500}>{categoryName}</Text>
+                  <Box pl={comp.isChild ? 24 : 0}>
+                    <TransactionPreviewTrigger
+                      categoryId={comp.categoryId}
+                      categoryName={getCategoryName(comp.categoryId)}
+                      dateRange={dateRange}
+                      showTooltip={true}
+                      tooltipText={tooltipText}
+                    >
+                      <Text 
+                        fw={comp.isParent ? 600 : 500}
+                        size={comp.isChild ? 'sm' : 'md'}
+                        style={{ 
+                          cursor: 'pointer',
+                          textDecoration: 'none',
+                          transition: 'all 0.2s ease',
+                          fontStyle: comp.isCalculated ? 'italic' : 'normal',
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.textDecoration = 'underline';
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.textDecoration = 'none';
+                        }}
+                      >
+                        {displayName}
+                      </Text>
+                    </TransactionPreviewTrigger>
+                  </Box>
                 </Table.Td>
                 
                 <Table.Td>
