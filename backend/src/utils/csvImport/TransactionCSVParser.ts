@@ -9,6 +9,7 @@ export interface ParsedTransaction {
   accountName?: string;
   merchantName?: string;
   notes?: string;
+  institution?: string; // Added for external import support
 }
 
 /**
@@ -64,10 +65,22 @@ export class TransactionCSVParser extends BaseCSVParser<ParsedTransaction> {
       required: true,
       transform: (value: string) => {
         const amount = this.parseNumber(value);
-        // Some banks use negative for credits, we standardize to positive = debit
-        return amount !== null ? Math.abs(amount) : 0;
+        if (amount === null) return 0;
+        
+        // For external app imports, preserve sign (negative = expense, positive = income/transfer)
+        // For bank exports, standardize to positive = debit
+        if (this.bankFormat === 'external_app') {
+          return amount; // Keep original sign
+        } else {
+          return Math.abs(amount); // Standardize to positive
+        }
       },
       validate: (value: any) => {
+        // If it's already a number (from transform), check if it's valid
+        if (typeof value === 'number') {
+          return !isNaN(value) && isFinite(value) ? true : 'Invalid amount';
+        }
+        // If it's still a string, parse it
         const num = this.parseNumber(value);
         if (num === null) return 'Invalid amount';
         return true;
@@ -103,6 +116,15 @@ export class TransactionCSVParser extends BaseCSVParser<ParsedTransaction> {
       this.columnMappings.set('notes', {
         sourceColumn: mappings.notes,
         targetField: 'notes',
+        required: false
+      });
+    }
+
+    // Institution column (for external app imports)
+    if (mappings.accountName && this.bankFormat === 'external_app') {
+      this.columnMappings.set('institution', {
+        sourceColumn: mappings.accountName,
+        targetField: 'institution',
         required: false
       });
     }
@@ -146,6 +168,7 @@ export class TransactionCSVParser extends BaseCSVParser<ParsedTransaction> {
       const accountName = this.applyMapping(row, 'accountName');
       const merchantName = this.applyMapping(row, 'merchantName');
       const notes = this.applyMapping(row, 'notes');
+      const institution = this.applyMapping(row, 'institution');
 
       return {
         date,
@@ -154,7 +177,8 @@ export class TransactionCSVParser extends BaseCSVParser<ParsedTransaction> {
         category,
         accountName,
         merchantName,
-        notes
+        notes,
+        institution
       };
     } catch (error) {
       return {
@@ -176,6 +200,13 @@ export class TransactionCSVParser extends BaseCSVParser<ParsedTransaction> {
         category: 'Category',
         merchantName: 'Merchant',
         notes: 'Notes'
+      },
+      external_app: {
+        date: 'Date',
+        description: 'Description',
+        amount: 'Amount',
+        category: 'Category',
+        accountName: 'Institution'
       },
       chase: {
         date: 'Transaction Date',
@@ -221,11 +252,11 @@ export class TransactionCSVParser extends BaseCSVParser<ParsedTransaction> {
    * Get list of supported bank formats
    */
   public static getSupportedFormats(): BankFormat[] {
-    return ['generic', 'chase', 'bofa', 'wells_fargo', 'capital_one'];
+    return ['generic', 'external_app', 'chase', 'bofa', 'wells_fargo', 'capital_one'];
   }
 }
 
-type BankFormat = 'generic' | 'chase' | 'bofa' | 'wells_fargo' | 'capital_one';
+type BankFormat = 'generic' | 'external_app' | 'chase' | 'bofa' | 'wells_fargo' | 'capital_one';
 
 interface BankColumnMapping {
   date: string;

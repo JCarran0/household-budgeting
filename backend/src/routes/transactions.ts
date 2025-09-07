@@ -3,7 +3,7 @@
  */
 
 import { Router, Request, Response } from 'express';
-import { transactionService, accountService } from '../services';
+import { transactionService, accountService, importService } from '../services';
 import { authMiddleware } from '../middleware/authMiddleware';
 import { z } from 'zod';
 
@@ -610,6 +610,78 @@ router.get('/summary', authMiddleware, async (req: AuthRequest, res: Response): 
   } catch (error) {
     console.error('Error calculating summary:', error);
     res.status(500).json({ success: false, error: 'Failed to calculate summary' });
+  }
+});
+
+// Transaction import schema
+const transactionImportSchema = z.object({
+  csvContent: z.string().min(1, 'CSV content is required'),
+  preview: z.boolean().optional().default(false),
+  skipDuplicates: z.boolean().optional().default(true),
+});
+
+/**
+ * Import transactions from CSV/TSV
+ * POST /api/v1/transactions/import-csv
+ */
+router.post('/import-csv', authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    if (!req.user?.userId) {
+      return res.status(401).json({ success: false, error: 'User not authenticated' });
+    }
+
+    // Validate request body
+    const validationResult = transactionImportSchema.safeParse(req.body);
+    if (!validationResult.success) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid request data',
+        details: validationResult.error.issues.map(issue => ({
+          field: issue.path.join('.'),
+          message: issue.message
+        }))
+      });
+    }
+
+    const { csvContent, preview, skipDuplicates } = validationResult.data;
+
+    // Import transactions via ImportService
+    const result = await importService.importCSV(
+      req.user.userId,
+      'transactions',
+      csvContent,
+      {
+        dryRun: preview,
+        skipDuplicates
+      }
+    );
+
+    // Return result
+    if (result.success) {
+      return res.json({
+        success: true,
+        message: result.message,
+        data: {
+          imported: result.imported || 0,
+          skipped: result.skipped || 0,
+          errors: result.errors || [],
+          warnings: result.warnings || []
+        }
+      });
+    } else {
+      return res.status(400).json({
+        success: false,
+        error: result.message,
+        details: result.errors || []
+      });
+    }
+  } catch (error) {
+    console.error('Error importing transactions:', error);
+    return res.status(500).json({ 
+      success: false, 
+      error: 'Failed to import transactions',
+      details: [error instanceof Error ? error.message : 'Unknown error occurred']
+    });
   }
 });
 

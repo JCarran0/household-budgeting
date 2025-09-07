@@ -54,8 +54,10 @@ import {
   IconBuilding,
   IconFilterOff,
   IconAlertCircle,
+  IconDatabaseImport,
 } from '@tabler/icons-react';
 import { TransactionEditModal } from '../components/transactions/TransactionEditModal';
+import { TransactionImport } from '../components/transactions/TransactionImport';
 import { TransactionSplitModal } from '../components/transactions/TransactionSplitModal';
 import { BulkEditBar } from '../components/transactions/BulkEditBar';
 import { BulkEditModal, type BulkEditUpdates } from '../components/transactions/BulkEditModal';
@@ -77,6 +79,7 @@ export function EnhancedTransactions() {
   const [searchParams] = useSearchParams();
   const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null);
   const [selectedCategoryValue, setSelectedCategoryValue] = useState<string | null>(null);
+  const [isTransactionImportOpen, setIsTransactionImportOpen] = useState(false);
   
   // Use persisted filters from localStorage
   const {
@@ -671,13 +674,22 @@ export function EnhancedTransactions() {
               </ThemeIcon>
             )}
           </Group>
-          <Button
-            leftSection={<IconRefresh size={16} />}
-            onClick={() => syncMutation.mutate()}
-            loading={syncMutation.isPending}
-          >
-            Sync Transactions
-          </Button>
+          <Group>
+            <Button
+              leftSection={<IconDatabaseImport size={16} />}
+              onClick={() => setIsTransactionImportOpen(true)}
+              variant="light"
+            >
+              Import CSV
+            </Button>
+            <Button
+              leftSection={<IconRefresh size={16} />}
+              onClick={() => syncMutation.mutate()}
+              loading={syncMutation.isPending}
+            >
+              Sync Transactions
+            </Button>
+          </Group>
         </Group>
 
         {/* Bulk Edit Bar */}
@@ -1283,6 +1295,12 @@ export function EnhancedTransactions() {
         selectedCount={selectedTransactionIds.size}
         categories={categoryOptions}
         onConfirm={handleBulkEditConfirm}
+      />
+
+      {/* Transaction Import Modal */}
+      <TransactionImport
+        opened={isTransactionImportOpen}
+        onClose={() => setIsTransactionImportOpen(false)}
       />
     </Container>
     </>

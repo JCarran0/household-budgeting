@@ -131,6 +131,7 @@ class ApiClient {
     this.getTransactions = this.getTransactions.bind(this);
     this.getUncategorizedCount = this.getUncategorizedCount.bind(this);
     this.syncTransactions = this.syncTransactions.bind(this);
+    this.importTransactionsFromCSV = this.importTransactionsFromCSV.bind(this);
     
     // Category methods
     this.getCategories = this.getCategories.bind(this);
@@ -680,6 +681,27 @@ class ApiClient {
       recategorized: data.recategorized,
       total: data.total 
     };
+  }
+
+  // Transaction import endpoint
+  async importTransactionsFromCSV(csvContent: string, options: { preview?: boolean; skipDuplicates?: boolean } = {}): Promise<{
+    success: boolean;
+    message?: string;
+    error?: string;
+    details?: string[];
+    data?: {
+      imported: number;
+      skipped: number;
+      errors: string[];
+      warnings: string[];
+    };
+  }> {
+    const { data } = await this.client.post('/transactions/import-csv', {
+      csvContent,
+      preview: options.preview || false,
+      skipDuplicates: options.skipDuplicates !== false
+    });
+    return data;
   }
 }
 

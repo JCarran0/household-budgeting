@@ -290,8 +290,8 @@ export abstract class BaseCSVParser<T> {
   /**
    * Parse numeric values with validation
    */
-  protected parseNumber(value: string): number | null {
-    if (!value) return null;
+  protected parseNumber(value: string | undefined | null): number | null {
+    if (!value || typeof value !== 'string') return null;
     
     // Remove common formatting characters
     const cleaned = value.replace(/[$,]/g, '').trim();

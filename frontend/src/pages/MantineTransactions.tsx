@@ -34,7 +34,9 @@ import {
   IconArrowDownRight,
   IconChevronDown,
   IconChevronUp,
+  IconDatabaseImport,
 } from '@tabler/icons-react';
+import { TransactionImport } from '../components/transactions/TransactionImport';
 
 export function MantineTransactions() {
   const [searchTerm, setSearchTerm] = useState('');
@@ -47,6 +49,7 @@ export function MantineTransactions() {
     };
   });
   const [opened, { toggle }] = useDisclosure(false);
+  const [isTransactionImportOpen, setIsTransactionImportOpen] = useState(false);
   const [amountFilter, setAmountFilter] = useState({ min: null as number | null, max: null as number | null });
   const [amountSearchMode, setAmountSearchMode] = useState<'range' | 'exact'>('range');
   const [exactAmount, setExactAmount] = useState<number | null>(null);
@@ -146,7 +149,7 @@ export function MantineTransactions() {
       <div>
         <Title order={2}>Transactions</Title>
         <Text c="dimmed" size="sm">
-          View and manage your transaction history
+          View and manage your transaction history. Import CSV files to add transactions.
         </Text>
       </div>
 
@@ -158,6 +161,13 @@ export function MantineTransactions() {
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
         />
+        <Button
+          leftSection={<IconDatabaseImport size={16} />}
+          onClick={() => setIsTransactionImportOpen(true)}
+          variant="light"
+        >
+          Import CSV
+        </Button>
         <Button
           leftSection={<IconFilter size={16} />}
           rightSection={opened ? <IconChevronUp size={16} /> : <IconChevronDown size={16} />}
@@ -384,6 +394,11 @@ export function MantineTransactions() {
           </Center>
         )}
       </Card>
+      
+      <TransactionImport
+        opened={isTransactionImportOpen}
+        onClose={() => setIsTransactionImportOpen(false)}
+      />
     </Stack>
   );
 }
