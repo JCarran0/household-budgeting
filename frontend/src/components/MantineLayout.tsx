@@ -33,11 +33,13 @@ export function MantineLayout() {
   useEffect(() => {
     const fetchVersion = async () => {
       try {
+        console.log('Fetching version from backend...');
         const versionData = await api.getVersion();
+        console.log('Version received:', versionData);
         setVersion(versionData.current);
       } catch (error) {
         console.error('Failed to fetch version:', error);
-        // Silently fail - version is not critical
+        setVersion('error loading');
       }
     };
 
