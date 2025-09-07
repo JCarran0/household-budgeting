@@ -6,6 +6,7 @@
 
 import { DataService } from './dataService';
 import { StoredTransaction } from './transactionService';
+import { Category } from '../../../shared/types';
 import { format, startOfMonth, endOfMonth, subMonths, addMonths } from 'date-fns';
 
 // Report types
@@ -109,8 +110,8 @@ export class ReportService {
       const categories = await this.dataService.getCategories(userId);
 
       const categoryMap = new Map(categories.map(c => [c.id, c.name]));
-      // Create a set of hidden category IDs for efficient lookup
-      const hiddenCategoryIds = new Set(categories.filter(c => c.isHidden).map(c => c.id));
+      // Create a set of hidden category IDs including subcategories of hidden parents
+      const hiddenCategoryIds = this.getEffectivelyHiddenCategoryIds(categories);
       const trends: SpendingTrend[] = [];
 
       // Generate month list
@@ -182,8 +183,8 @@ export class ReportService {
       ) || [];
       
       const categories = await this.dataService.getCategories(userId);
-      // Create a set of hidden category IDs for efficient lookup
-      const hiddenCategoryIds = new Set(categories.filter(c => c.isHidden).map(c => c.id));
+      // Create a set of hidden category IDs including subcategories of hidden parents
+      const hiddenCategoryIds = this.getEffectivelyHiddenCategoryIds(categories);
 
       // Filter transactions for income (negative amounts, excluding hidden categories)
       const filteredTransactions = transactions.filter(t => 
@@ -308,8 +309,8 @@ export class ReportService {
       ) || [];
       
       const categories = await this.dataService.getCategories(userId);
-      // Create a set of hidden category IDs for efficient lookup
-      const hiddenCategoryIds = new Set(categories.filter(c => c.isHidden).map(c => c.id));
+      // Create a set of hidden category IDs including subcategories of hidden parents
+      const hiddenCategoryIds = this.getEffectivelyHiddenCategoryIds(categories);
 
       // Filter transactions (excluding hidden categories)
       const filteredTransactions = transactions.filter(t => 
@@ -433,8 +434,8 @@ export class ReportService {
       ) || [];
       
       const categories = await this.dataService.getCategories(userId);
-      // Create a set of hidden category IDs for efficient lookup
-      const hiddenCategoryIds = new Set(categories.filter(c => c.isHidden).map(c => c.id));
+      // Create a set of hidden category IDs including subcategories of hidden parents
+      const hiddenCategoryIds = this.getEffectivelyHiddenCategoryIds(categories);
 
       const months = this.getMonthRange(startMonth, endMonth);
       const summary: CashFlowSummary[] = [];
@@ -554,12 +555,15 @@ export class ReportService {
       ) || [];
       
       const categories = await this.dataService.getCategories(userId);
+      // Create a set of hidden category IDs including subcategories of hidden parents
+      const hiddenCategoryIds = this.getEffectivelyHiddenCategoryIds(categories);
 
       const ytdTransactions = transactions.filter(t => 
         t.date >= startDate && 
         t.date <= endDate && 
         !t.isHidden &&
-        !t.pending
+        !t.pending &&
+        (!t.categoryId || !hiddenCategoryIds.has(t.categoryId)) // Exclude hidden categories
       );
 
       const totalIncome = ytdTransactions
@@ -588,6 +592,7 @@ export class ReportService {
       }
 
       const topCategories = Array.from(categorySpending.entries())
+        .filter(([categoryId]) => !hiddenCategoryIds.has(categoryId)) // Exclude hidden categories
         .map(([categoryId, amount]) => {
           const category = categories.find(c => c.id === categoryId);
           return {
@@ -642,5 +647,25 @@ export class ReportService {
     const squaredDiffs = values.map(v => Math.pow(v - avg, 2));
     const avgSquaredDiff = squaredDiffs.reduce((sum, v) => sum + v, 0) / values.length;
     return Math.sqrt(avgSquaredDiff);
+  }
+
+  /**
+   * Helper: Get all category IDs that should be considered hidden
+   * Includes both directly hidden categories and subcategories of hidden parents
+   */
+  private getEffectivelyHiddenCategoryIds(categories: Category[]): Set<string> {
+    const hiddenIds = new Set<string>();
+    
+    // First, add directly hidden categories
+    categories.filter(c => c.isHidden).forEach(c => hiddenIds.add(c.id));
+    
+    // Then, add subcategories of hidden parents
+    categories.forEach(category => {
+      if (category.parentId && hiddenIds.has(category.parentId)) {
+        hiddenIds.add(category.id);
+      }
+    });
+    
+    return hiddenIds;
   }
 }
