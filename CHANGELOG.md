@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+### [1.3.1](https://github.com/JCarran0/household-budgeting/compare/v1.3.0...v1.3.1) (2025-09-07)
+
+
+### Bug Fixes
+
+* **api:** correct package.json path in version endpoint for production ([38d178e](https://github.com/JCarran0/household-budgeting/commit/38d178eea7e9aa494a123db0f4502899f9eb0e13))
+* **budget:** prevent monthly calculations from including next month's transactions ([97c8bf9](https://github.com/JCarran0/household-budgeting/commit/97c8bf9f2058c1facd5b864a06f03e2c1b23f189))
+
 ## [1.3.0](https://github.com/JCarran0/household-budgeting/compare/v1.2.2...v1.3.0) (2025-09-07)
 
 
