@@ -98,7 +98,7 @@ app.use(`${apiPrefix}/autocategorize`, autoCategorizeRoutes);
 
 // Version endpoint under API prefix
 app.get(`${apiPrefix}/version`, (_req: Request, res: Response) => {
-  const pkg = require('../../package.json');
+  const pkg = require('../package.json');
   const fs = require('fs');
   const path = require('path');
   
