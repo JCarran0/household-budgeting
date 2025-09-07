@@ -29,6 +29,7 @@ interface CategoryTreeProps {
   categories: CategoryWithChildren[];
   onEdit: (category: Category) => void;
   onDelete: (categoryId: string) => void;
+  transactionCounts?: Record<string, number>;
 }
 
 interface CategoryNodeProps {
@@ -36,11 +37,13 @@ interface CategoryNodeProps {
   onEdit: (category: Category) => void;
   onDelete: (categoryId: string) => void;
   level?: number;
+  transactionCounts?: Record<string, number>;
 }
 
-function CategoryNode({ category, onEdit, onDelete, level = 0 }: CategoryNodeProps) {
+function CategoryNode({ category, onEdit, onDelete, level = 0, transactionCounts }: CategoryNodeProps) {
   const [isExpanded, setIsExpanded] = useState<boolean>(true);
   const hasChildren = category.children && category.children.length > 0;
+  const transactionCount = transactionCounts?.[category.id] || 0;
   const isSubcategory = level > 0;
 
   const handleToggle = (): void => {
@@ -137,6 +140,17 @@ function CategoryNode({ category, onEdit, onDelete, level = 0 }: CategoryNodePro
                   </Badge>
                 </Tooltip>
               )}
+              {transactionCounts && transactionCount > 0 && (
+                <Tooltip label={`${transactionCount} transaction${transactionCount === 1 ? '' : 's'}`}>
+                  <Badge
+                    size="xs"
+                    variant="filled"
+                    color="blue"
+                  >
+                    {transactionCount}
+                  </Badge>
+                </Tooltip>
+              )}
             </Group>
           </Group>
 
@@ -181,6 +195,7 @@ function CategoryNode({ category, onEdit, onDelete, level = 0 }: CategoryNodePro
                 onEdit={onEdit}
                 onDelete={onDelete}
                 level={level + 1}
+                transactionCounts={transactionCounts}
               />
             ))}
           </Stack>
@@ -190,7 +205,7 @@ function CategoryNode({ category, onEdit, onDelete, level = 0 }: CategoryNodePro
   );
 }
 
-export function CategoryTree({ categories, onEdit, onDelete }: CategoryTreeProps) {
+export function CategoryTree({ categories, onEdit, onDelete, transactionCounts }: CategoryTreeProps) {
   return (
     <Stack gap="xs">
       {categories.map((category) => (
@@ -199,6 +214,7 @@ export function CategoryTree({ categories, onEdit, onDelete }: CategoryTreeProps
           category={category}
           onEdit={onEdit}
           onDelete={onDelete}
+          transactionCounts={transactionCounts}
         />
       ))}
     </Stack>

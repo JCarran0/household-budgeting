@@ -739,6 +739,39 @@ export class TransactionService {
   }
 
   /**
+   * Get transaction counts for all categories
+   * Returns a map of category IDs to their transaction counts
+   */
+  async getTransactionCountsByCategory(userId: string): Promise<Record<string, number>> {
+    try {
+      const transactions = await this.dataService.getData<StoredTransaction[]>(
+        `transactions_${userId}`
+      ) || [];
+
+      const counts: Record<string, number> = {};
+      
+      for (const transaction of transactions) {
+        // Skip removed or hidden transactions
+        if (transaction.status === 'removed' || transaction.isHidden) {
+          continue;
+        }
+        
+        // Use the categoryId field (which contains user-assigned or Plaid category)
+        const categoryId = transaction.categoryId;
+        
+        if (categoryId) {
+          counts[categoryId] = (counts[categoryId] || 0) + 1;
+        }
+      }
+      
+      return counts;
+    } catch (error) {
+      console.error('Error getting transaction counts by category:', error);
+      return {};
+    }
+  }
+
+  /**
    * Create a transaction for testing purposes
    * This method bypasses normal Plaid sync flow and creates a transaction directly
    */

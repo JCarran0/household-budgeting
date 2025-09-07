@@ -29,6 +29,7 @@ import {
   IconRobot,
   IconList,
   IconFileUpload,
+  IconHash,
 } from '@tabler/icons-react';
 import { api, type CategoryWithChildren } from '../lib/api';
 import { CategoryTree } from '../components/categories/CategoryTree';
@@ -43,6 +44,7 @@ export function Categories() {
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [hasInitialized, setHasInitialized] = useState<boolean>(false);
   const [isCSVImportOpen, setIsCSVImportOpen] = useState<boolean>(false);
+  const [showTransactionCounts, setShowTransactionCounts] = useState<boolean>(false);
   const queryClient = useQueryClient();
 
   // Fetch categories
@@ -57,6 +59,13 @@ export function Categories() {
         throw err;
       }
     },
+  });
+
+  // Fetch transaction counts
+  const { data: transactionCounts, isLoading: isLoadingCounts } = useQuery({
+    queryKey: ['categories', 'transaction-counts'],
+    queryFn: api.getCategoryTransactionCounts,
+    enabled: showTransactionCounts,
   });
 
   // Initialize default categories if none exist
@@ -213,6 +222,14 @@ export function Categories() {
                 <Text size="lg" fw={500}>Manage Categories</Text>
                 <Group>
                   <Button
+                    leftSection={<IconHash size={16} />}
+                    onClick={() => setShowTransactionCounts(!showTransactionCounts)}
+                    variant={showTransactionCounts ? "filled" : "light"}
+                    loading={isLoadingCounts}
+                  >
+                    {showTransactionCounts ? 'Hide Counts' : 'Show Transaction Counts'}
+                  </Button>
+                  <Button
                     leftSection={<IconFileUpload size={16} />}
                     onClick={() => setIsCSVImportOpen(true)}
                     variant="light"
@@ -292,6 +309,7 @@ export function Categories() {
                   categories={filteredCategories}
                   onEdit={handleEdit}
                   onDelete={handleDelete}
+                  transactionCounts={showTransactionCounts ? transactionCounts : undefined}
                 />
               ) : (
                 <Text c="dimmed" ta="center" py="xl">

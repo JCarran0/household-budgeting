@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { z } from 'zod';
-import { categoryService } from '../services';
+import { categoryService, transactionService } from '../services';
 import { authMiddleware } from '../middleware/authMiddleware';
 
 const router = Router();
@@ -53,6 +53,22 @@ router.get('/tree', async (req: Request, res: Response) => {
   } catch (error) {
     console.error('Error fetching category tree:', error);
     res.status(500).json({ error: 'Failed to fetch category tree' });
+  }
+});
+
+// GET /api/categories/transaction-counts - Get transaction counts for all categories
+router.get('/transaction-counts', async (req: Request, res: Response) => {
+  try {
+    const userId = req.user?.userId;
+    if (!userId) {
+      res.status(401).json({ error: 'User not authenticated' });
+      return;
+    }
+    const counts = await transactionService.getTransactionCountsByCategory(userId);
+    res.json(counts);
+  } catch (error) {
+    console.error('Error fetching transaction counts by category:', error);
+    res.status(500).json({ error: 'Failed to fetch transaction counts' });
   }
 });
 

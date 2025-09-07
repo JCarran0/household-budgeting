@@ -144,6 +144,7 @@ class ApiClient {
     this.deleteCategory = this.deleteCategory.bind(this);
     this.initializeDefaultCategories = this.initializeDefaultCategories.bind(this);
     this.importCategoriesFromCSV = this.importCategoriesFromCSV.bind(this);
+    this.getCategoryTransactionCounts = this.getCategoryTransactionCounts.bind(this);
     
     // Budget methods
     this.getBudgets = this.getBudgets.bind(this);
@@ -401,6 +402,11 @@ class ApiClient {
       importedCount?: number;
       errors?: string[];
     }>('/categories/import-csv', { csvContent });
+    return data;
+  }
+  
+  async getCategoryTransactionCounts(): Promise<Record<string, number>> {
+    const { data } = await this.client.get<Record<string, number>>('/categories/transaction-counts');
     return data;
   }
 
