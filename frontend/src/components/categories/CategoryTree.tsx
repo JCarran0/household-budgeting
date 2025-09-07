@@ -24,12 +24,14 @@ import {
 } from '@tabler/icons-react';
 import type { CategoryWithChildren } from '../../lib/api';
 import type { Category } from '../../../../shared/types';
+import { TransactionPreviewTrigger } from '../transactions/TransactionPreviewTrigger';
 
 interface CategoryTreeProps {
   categories: CategoryWithChildren[];
   onEdit: (category: Category) => void;
   onDelete: (categoryId: string) => void;
   transactionCounts?: Record<string, number>;
+  dateRange?: { startDate: string; endDate: string };
 }
 
 interface CategoryNodeProps {
@@ -38,9 +40,10 @@ interface CategoryNodeProps {
   onDelete: (categoryId: string) => void;
   level?: number;
   transactionCounts?: Record<string, number>;
+  dateRange?: { startDate: string; endDate: string };
 }
 
-function CategoryNode({ category, onEdit, onDelete, level = 0, transactionCounts }: CategoryNodeProps) {
+function CategoryNode({ category, onEdit, onDelete, level = 0, transactionCounts, dateRange }: CategoryNodeProps) {
   const [isExpanded, setIsExpanded] = useState<boolean>(true);
   const hasChildren = category.children && category.children.length > 0;
   const transactionCount = transactionCounts?.[category.id] || 0;
@@ -140,7 +143,23 @@ function CategoryNode({ category, onEdit, onDelete, level = 0, transactionCounts
                   </Badge>
                 </Tooltip>
               )}
-              {transactionCounts && transactionCount > 0 && (
+              {transactionCounts && transactionCount > 0 && dateRange ? (
+                <TransactionPreviewTrigger
+                  categoryId={category.id}
+                  categoryName={category.name}
+                  dateRange={dateRange}
+                  tooltipText={`Click to preview ${transactionCount} transaction${transactionCount === 1 ? '' : 's'}`}
+                >
+                  <Badge
+                    size="xs"
+                    variant="filled"
+                    color="blue"
+                    style={{ cursor: 'pointer' }}
+                  >
+                    {transactionCount}
+                  </Badge>
+                </TransactionPreviewTrigger>
+              ) : transactionCounts && transactionCount > 0 ? (
                 <Tooltip label={`${transactionCount} transaction${transactionCount === 1 ? '' : 's'}`}>
                   <Badge
                     size="xs"
@@ -150,7 +169,7 @@ function CategoryNode({ category, onEdit, onDelete, level = 0, transactionCounts
                     {transactionCount}
                   </Badge>
                 </Tooltip>
-              )}
+              ) : null}
             </Group>
           </Group>
 
@@ -196,6 +215,7 @@ function CategoryNode({ category, onEdit, onDelete, level = 0, transactionCounts
                 onDelete={onDelete}
                 level={level + 1}
                 transactionCounts={transactionCounts}
+                dateRange={dateRange}
               />
             ))}
           </Stack>
@@ -205,7 +225,7 @@ function CategoryNode({ category, onEdit, onDelete, level = 0, transactionCounts
   );
 }
 
-export function CategoryTree({ categories, onEdit, onDelete, transactionCounts }: CategoryTreeProps) {
+export function CategoryTree({ categories, onEdit, onDelete, transactionCounts, dateRange }: CategoryTreeProps) {
   return (
     <Stack gap="xs">
       {categories.map((category) => (
@@ -215,6 +235,7 @@ export function CategoryTree({ categories, onEdit, onDelete, transactionCounts }
           onEdit={onEdit}
           onDelete={onDelete}
           transactionCounts={transactionCounts}
+          dateRange={dateRange}
         />
       ))}
     </Stack>

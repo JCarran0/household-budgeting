@@ -303,7 +303,7 @@ export function TransactionPreviewModal({
                     onClick={navigateToTransactionsWithFilter}
                     size="md"
                   >
-                    View All {totalCount} Transactions
+                    View Transactions
                   </Button>
                 </Group>
               </>

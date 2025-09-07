@@ -17,6 +17,7 @@ import {
   Divider,
   Tabs,
 } from '@mantine/core';
+import { format } from 'date-fns';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { notifications } from '@mantine/notifications';
 import {
@@ -46,6 +47,18 @@ export function Categories() {
   const [isCSVImportOpen, setIsCSVImportOpen] = useState<boolean>(false);
   const [showTransactionCounts, setShowTransactionCounts] = useState<boolean>(false);
   const queryClient = useQueryClient();
+
+  // Helper function to get current year date range for transaction previews
+  const getCurrentYearDateRange = (): { startDate: string; endDate: string } => {
+    const now = new Date();
+    const startOfYear = new Date(now.getFullYear(), 0, 1);
+    return {
+      startDate: format(startOfYear, 'yyyy-MM-dd'),
+      endDate: format(now, 'yyyy-MM-dd')
+    };
+  };
+
+  const dateRange = getCurrentYearDateRange();
 
   // Fetch categories
   const { data: categories, isLoading, error } = useQuery({
@@ -310,6 +323,7 @@ export function Categories() {
                   onEdit={handleEdit}
                   onDelete={handleDelete}
                   transactionCounts={showTransactionCounts ? transactionCounts : undefined}
+                  dateRange={showTransactionCounts ? dateRange : undefined}
                 />
               ) : (
                 <Text c="dimmed" ta="center" py="xl">
