@@ -146,6 +146,9 @@ router.post('/import-csv', async (req: Request, res: Response) => {
       return;
     }
 
+    // Set a longer timeout for this specific endpoint
+    res.setTimeout(5 * 60 * 1000); // 5 minutes
+
     const result = await categoryService.importFromCSV(csvContent, userId);
     
     if (result.success) {

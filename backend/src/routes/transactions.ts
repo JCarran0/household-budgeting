@@ -631,6 +631,9 @@ router.post('/import-csv', authMiddleware, async (req: AuthRequest, res: Respons
       return res.status(401).json({ success: false, error: 'User not authenticated' });
     }
 
+    // Set a longer timeout for this import endpoint
+    res.setTimeout(5 * 60 * 1000); // 5 minutes
+
     // Validate request body
     const validationResult = transactionImportSchema.safeParse(req.body);
     if (!validationResult.success) {

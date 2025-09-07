@@ -168,8 +168,8 @@ export class ImportService {
     let imported = 0;
     let skipped = 0;
 
-    // Process in batches if specified
-    const batchSize = options.batchSize || parseResult.data.length;
+    // Process in smaller batches to avoid timeouts and provide progress feedback
+    const batchSize = options.batchSize || Math.min(50, parseResult.data.length);
     
     for (let i = 0; i < parseResult.data.length; i += batchSize) {
       const batch = parseResult.data.slice(i, Math.min(i + batchSize, parseResult.data.length));
@@ -258,10 +258,24 @@ export class ImportService {
         job.progress = Math.round((job.processedRows / job.totalRows) * 100);
       }
 
-      // Save batch if not in dry run mode
-      if (!options.dryRun && categoriesToAdd.length > 0) {
+      // Save batch incrementally if not in dry run mode
+      // This improves performance and provides better progress feedback
+      if (!options.dryRun && categoriesToAdd.length > 0 && (categoriesToAdd.length >= batchSize || i + batchSize >= parseResult.data.length)) {
         const allCategories = [...existingCategories, ...categoriesToAdd];
         await this.dataService.saveCategories(allCategories, userId);
+        
+        // Update existing categories for next batch
+        existingCategories.push(...categoriesToAdd);
+        categoriesToAdd.forEach(cat => {
+          const key = `${cat.parentId || 'root'}:${cat.name}`;
+          existingNames.set(key, cat);
+        });
+        
+        // Clear the batch
+        categoriesToAdd.length = 0;
+        
+        // Log progress for monitoring
+        console.log(`Import progress: ${job.processedRows}/${job.totalRows} rows processed (${job.progress}%)`)
       }
     }
 
