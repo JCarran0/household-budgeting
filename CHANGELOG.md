@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.0](https://github.com/JCarran0/household-budgeting/compare/v1.2.2...v1.3.0) (2025-09-07)
+
+
+### Features
+
+* **transaction:** add bulk hide/unhide transactions functionality ([c9684f7](https://github.com/JCarran0/household-budgeting/commit/c9684f7d3b8b2b85f9c4934561d060b6e3bf962b))
+
+
+### Bug Fixes
+
+* **budget:** exclude subcategories of hidden parents from budget calculations ([acb27fc](https://github.com/JCarran0/household-budgeting/commit/acb27fc2f7658481184fb96db152c0fce1c1e1c0))
+* **transaction:** implement functional "Hide from budgets" toggle ([9113b67](https://github.com/JCarran0/household-budgeting/commit/9113b67feb83cc88677d155848f8d673096c650f))
+* **ui:** restore version display error handling in user menu ([acb7833](https://github.com/JCarran0/household-budgeting/commit/acb7833c19c0afd4c1f0129c51313c1b65884cca))
+
 ### [1.2.2](https://github.com/JCarran0/household-budgeting/compare/v1.2.1...v1.2.2) (2025-09-07)
 
 
