@@ -23,6 +23,7 @@ import {
 import { MonthPickerInput } from '@mantine/dates';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { notifications } from '@mantine/notifications';
+import { modals } from '@mantine/modals';
 import {
   IconPlus,
   IconCopy,
@@ -201,9 +202,17 @@ export function Budgets() {
   const handleCopyFromMonth = (fromMonth: string): void => {
     const fromDate = parseISO(fromMonth + '-01');
     const fromDisplayMonth = format(fromDate, 'MMMM yyyy');
-    if (window.confirm(`Copy all budgets from ${fromDisplayMonth} to ${displayMonth}?`)) {
-      copyMutation.mutate({ fromMonth, toMonth: selectedMonth });
-    }
+    modals.openConfirmModal({
+      title: 'Copy Budgets',
+      children: (
+        <Text size="sm">
+          Copy all budgets from {fromDisplayMonth} to {displayMonth}?
+        </Text>
+      ),
+      labels: { confirm: 'Copy', cancel: 'Cancel' },
+      confirmProps: { color: 'blue' },
+      onConfirm: () => copyMutation.mutate({ fromMonth, toMonth: selectedMonth }),
+    });
   };
 
   const handleEdit = (budget: MonthlyBudget): void => {

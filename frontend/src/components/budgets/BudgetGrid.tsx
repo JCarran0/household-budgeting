@@ -12,6 +12,7 @@ import { IconEdit, IconTrash, IconDeviceFloppy, IconX } from '@tabler/icons-reac
 import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { notifications } from '@mantine/notifications';
+import { modals } from '@mantine/modals';
 import { api } from '../../lib/api';
 import { formatCurrency } from '../../utils/formatters';
 import type { MonthlyBudget, Category } from '../../../../shared/types';
@@ -225,9 +226,17 @@ export function BudgetGrid({ budgets, categories, month, onEdit }: BudgetGridPro
   };
 
   const handleDelete = (budgetId: string): void => {
-    if (window.confirm('Are you sure you want to delete this budget?')) {
-      deleteMutation.mutate(budgetId);
-    }
+    modals.openConfirmModal({
+      title: 'Delete Budget',
+      children: (
+        <Text size="sm">
+          Are you sure you want to delete this budget? This action cannot be undone.
+        </Text>
+      ),
+      labels: { confirm: 'Delete', cancel: 'Cancel' },
+      confirmProps: { color: 'red' },
+      onConfirm: () => deleteMutation.mutate(budgetId),
+    });
   };
 
   // Separate orphaned budgets from categorized budgets
