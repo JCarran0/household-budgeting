@@ -9,6 +9,7 @@ import {
 import {
   IconCategory,
   IconEdit,
+  IconEyeOff,
   IconX,
 } from '@tabler/icons-react';
 
@@ -17,6 +18,7 @@ interface BulkEditBarProps {
   selectedAmount: number;
   onEditCategory: () => void;
   onEditDescription: () => void;
+  onEditHidden: () => void;
   onClearSelection: () => void;
 }
 
@@ -25,6 +27,7 @@ export function BulkEditBar({
   selectedAmount,
   onEditCategory,
   onEditDescription,
+  onEditHidden,
   onClearSelection,
 }: BulkEditBarProps) {
   const isVisible = selectedCount > 0;
@@ -73,6 +76,15 @@ export function BulkEditBar({
                 onClick={onEditDescription}
               >
                 Edit Description
+              </Button>
+              
+              <Button
+                leftSection={<IconEyeOff size={16} />}
+                variant="filled"
+                size="sm"
+                onClick={onEditHidden}
+              >
+                Hide/Unhide
               </Button>
               
               <Button

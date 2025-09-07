@@ -18,7 +18,7 @@ import { IconAlertCircle } from '@tabler/icons-react';
 interface BulkEditModalProps {
   opened: boolean;
   onClose: () => void;
-  mode: 'category' | 'description';
+  mode: 'category' | 'description' | 'hidden';
   selectedCount: number;
   categories: Array<{ value: string; label: string; group?: string }>;
   onConfirm: (updates: BulkEditUpdates) => void;
@@ -28,6 +28,7 @@ export interface BulkEditUpdates {
   categoryId?: string | null;
   userDescription?: string | null;
   descriptionMode?: 'replace' | 'clear';
+  isHidden?: boolean;
 }
 
 export function BulkEditModal({
@@ -41,6 +42,7 @@ export function BulkEditModal({
   const [categoryId, setCategoryId] = useState<string | null>(null);
   const [descriptionMode, setDescriptionMode] = useState<'replace' | 'clear'>('replace');
   const [description, setDescription] = useState('');
+  const [hiddenMode, setHiddenMode] = useState<'hide' | 'unhide'>('hide');
   
   const handleConfirm = () => {
     const updates: BulkEditUpdates = {};
@@ -56,6 +58,8 @@ export function BulkEditModal({
       } else if (descriptionMode === 'clear') {
         updates.userDescription = null;
       }
+    } else if (mode === 'hidden') {
+      updates.isHidden = hiddenMode === 'hide';
     }
     
     onConfirm(updates);
@@ -66,6 +70,7 @@ export function BulkEditModal({
     setCategoryId(null);
     setDescriptionMode('replace');
     setDescription('');
+    setHiddenMode('hide');
     onClose();
   };
   
@@ -77,6 +82,8 @@ export function BulkEditModal({
         return description.trim().length > 0;
       }
       return true; // 'clear' mode is always valid
+    } else if (mode === 'hidden') {
+      return true; // hidden mode is always valid
     }
     return false;
   };
@@ -88,7 +95,7 @@ export function BulkEditModal({
       title={
         <Group>
           <Text fw={600}>
-            Bulk Edit {mode === 'category' ? 'Category' : 'Description'}
+            Bulk Edit {mode === 'category' ? 'Category' : mode === 'description' ? 'Description' : 'Visibility'}
           </Text>
           <Badge variant="filled" size="lg">
             {selectedCount} selected
@@ -102,7 +109,9 @@ export function BulkEditModal({
           This action will update {selectedCount} transaction{selectedCount !== 1 ? 's' : ''}.
           {mode === 'category' 
             ? ' All selected transactions will be assigned to the chosen category.'
-            : ' Choose how to update the descriptions below.'}
+            : mode === 'description'
+            ? ' Choose how to update the descriptions below.'
+            : ' Choose whether to hide or unhide the selected transactions.'}
         </Alert>
         
         {mode === 'category' ? (
@@ -116,7 +125,7 @@ export function BulkEditModal({
             clearable
             required
           />
-        ) : (
+        ) : mode === 'description' ? (
           <Stack gap="md">
             <RadioGroup
               label="Choose Action"
@@ -138,6 +147,16 @@ export function BulkEditModal({
               />
             )}
           </Stack>
+        ) : (
+          <RadioGroup
+            label="Choose Action"
+            value={hiddenMode}
+            onChange={(value) => setHiddenMode(value as 'hide' | 'unhide')}
+            required
+          >
+            <Radio value="hide" label="Hide selected transactions from budgets and reports" />
+            <Radio value="unhide" label="Unhide selected transactions (include in budgets and reports)" />
+          </RadioGroup>
         )}
         
         <Divider />

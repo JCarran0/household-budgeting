@@ -286,7 +286,7 @@ class ApiClient {
     }
   }
   
-  async bulkUpdateTransactions(transactionIds: string[], updates: { categoryId?: string | null; userDescription?: string | null }): Promise<{ updated: number; failed: number; errors?: string[] }> {
+  async bulkUpdateTransactions(transactionIds: string[], updates: { categoryId?: string | null; userDescription?: string | null; isHidden?: boolean }): Promise<{ updated: number; failed: number; errors?: string[] }> {
     const response = await this.client.put('/transactions/bulk', { transactionIds, updates });
     if (!response.data.success) {
       throw new Error(response.data.error || 'Failed to perform bulk update');

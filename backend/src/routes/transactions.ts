@@ -94,6 +94,7 @@ const bulkUpdateSchema = z.object({
   updates: z.object({
     categoryId: z.union([z.string().min(1), z.null()]).optional(),
     userDescription: z.union([z.string(), z.null()]).optional(),
+    isHidden: z.boolean().optional(),
   }).refine(data => Object.keys(data).length > 0, {
     message: 'At least one update field must be provided',
   }),
@@ -516,6 +517,20 @@ router.put('/bulk', authMiddleware, async (req: AuthRequest, res: Response): Pro
             req.user.userId,
             transactionId,
             updates.userDescription
+          );
+          if (!result.success) {
+            failedCount++;
+            errors.push(`Transaction ${transactionId}: ${result.error}`);
+            continue;
+          }
+        }
+        
+        // Update hidden status if provided
+        if (updates.isHidden !== undefined) {
+          const result = await transactionService.updateTransactionHidden(
+            req.user.userId,
+            transactionId,
+            updates.isHidden
           );
           if (!result.success) {
             failedCount++;

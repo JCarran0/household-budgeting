@@ -122,7 +122,7 @@ export function EnhancedTransactions() {
   // Bulk selection state
   const [selectedTransactionIds, setSelectedTransactionIds] = useState<Set<string>>(new Set());
   const [lastClickedId, setLastClickedId] = useState<string | null>(null);
-  const [bulkEditMode, setBulkEditMode] = useState<'category' | 'description' | null>(null);
+  const [bulkEditMode, setBulkEditMode] = useState<'category' | 'description' | 'hidden' | null>(null);
   
   const queryClient = useQueryClient();
   
@@ -521,6 +521,10 @@ export function EnhancedTransactions() {
     setBulkEditMode('description');
   };
   
+  const handleBulkEditHidden = () => {
+    setBulkEditMode('hidden');
+  };
+  
   const handleClearSelection = () => {
     setSelectedTransactionIds(new Set());
     setLastClickedId(null);
@@ -539,7 +543,7 @@ export function EnhancedTransactions() {
     
     try {
       // Build the updates object based on the mode
-      const apiUpdates: { categoryId?: string | null; userDescription?: string | null } = {};
+      const apiUpdates: { categoryId?: string | null; userDescription?: string | null; isHidden?: boolean } = {};
       
       if (updates.categoryId !== undefined) {
         apiUpdates.categoryId = updates.categoryId;
@@ -549,6 +553,10 @@ export function EnhancedTransactions() {
         apiUpdates.userDescription = updates.userDescription;
       } else if (updates.descriptionMode === 'clear') {
         apiUpdates.userDescription = null;
+      }
+      
+      if (updates.isHidden !== undefined) {
+        apiUpdates.isHidden = updates.isHidden;
       }
       
       // Only make the API call if there are actual updates
@@ -678,6 +686,7 @@ export function EnhancedTransactions() {
           selectedAmount={selectedAmount}
           onEditCategory={handleBulkEditCategory}
           onEditDescription={handleBulkEditDescription}
+          onEditHidden={handleBulkEditHidden}
           onClearSelection={handleClearSelection}
         />
 
