@@ -576,10 +576,57 @@ export class ReportService {
 
       const netIncome = totalIncome - totalExpenses;
       
-      // Calculate months elapsed
-      const monthsElapsed = new Date().getMonth() + 1;
-      const averageMonthlyIncome = totalIncome / monthsElapsed;
-      const averageMonthlyExpenses = totalExpenses / monthsElapsed;
+      // Calculate months with complete data
+      let monthsWithData = 0;
+      let averageMonthlyIncome = 0;
+      let averageMonthlyExpenses = 0;
+
+      if (ytdTransactions.length > 0) {
+        // Group transactions by month to identify which months have data
+        const monthsWithTransactions = new Set<string>();
+        const monthlyTotals = new Map<string, { income: number; expenses: number }>();
+        
+        for (const txn of ytdTransactions) {
+          const monthKey = txn.date.substring(0, 7); // YYYY-MM format
+          monthsWithTransactions.add(monthKey);
+          
+          const current = monthlyTotals.get(monthKey) || { income: 0, expenses: 0 };
+          if (txn.amount < 0) {
+            current.income += Math.abs(txn.amount);
+          } else {
+            current.expenses += txn.amount;
+          }
+          monthlyTotals.set(monthKey, current);
+        }
+        
+        // Determine which months are complete
+        const currentDate = new Date();
+        const currentMonth = format(currentDate, 'yyyy-MM');
+        
+        // Count complete months (exclude current month as it's partial)
+        let completeMonthsIncome = 0;
+        let completeMonthsExpenses = 0;
+        
+        for (const [month, totals] of monthlyTotals) {
+          if (month < currentMonth) {
+            // This is a complete month
+            monthsWithData++;
+            completeMonthsIncome += totals.income;
+            completeMonthsExpenses += totals.expenses;
+          }
+          // Current month data is included in totals but not in averages
+        }
+        
+        // Calculate averages based on complete months only
+        if (monthsWithData > 0) {
+          averageMonthlyIncome = completeMonthsIncome / monthsWithData;
+          averageMonthlyExpenses = completeMonthsExpenses / monthsWithData;
+        } else {
+          // No complete months - don't show averages
+          averageMonthlyIncome = 0;
+          averageMonthlyExpenses = 0;
+        }
+      }
       const savingsRate = totalIncome > 0 ? (netIncome / totalIncome) * 100 : 0;
 
       // Get top spending categories
