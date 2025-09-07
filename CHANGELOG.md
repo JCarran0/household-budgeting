@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.6.0](https://github.com/JCarran0/household-budgeting/compare/v1.5.0...v1.6.0) (2025-09-07)
+
+
+### Features
+
+* **categories:** add transaction count display feature ([4d240c4](https://github.com/JCarran0/household-budgeting/commit/4d240c4d25e09915991924e1859beded442e3726))
+
+
+### Bug Fixes
+
+* **import:** optimize CSV import to prevent 504 timeouts ([937c7f2](https://github.com/JCarran0/household-budgeting/commit/937c7f2de1054d1cfa0ce3cf9badebdd3c015a8d))
+* **reports:** calculate YTD averages using only complete months ([4d2da34](https://github.com/JCarran0/household-budgeting/commit/4d2da34fcf9326b05f0b68a486300801cd7f3fe8))
+
 ## [1.5.0](https://github.com/JCarran0/household-budgeting/compare/v1.4.0...v1.5.0) (2025-09-07)
 
 
