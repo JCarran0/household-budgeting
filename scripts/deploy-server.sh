@@ -83,12 +83,12 @@ rm -rf "$APP_DIR/frontend.old"
 [ -d "$APP_DIR/frontend" ] && mv "$APP_DIR/frontend" "$APP_DIR/frontend.old"
 mv "$DEPLOYMENT_DIR/frontend" "$APP_DIR/frontend"
 
-# Deploy shared utilities to /home/appuser/shared (for backend imports)
+# Deploy shared utilities to /home/appuser/app/shared (for backend imports)
 if [ -d "$DEPLOYMENT_DIR/shared" ]; then
     echo "📚 Deploying shared utilities..."
-    rm -rf "/home/appuser/shared.old"
-    [ -d "/home/appuser/shared" ] && mv "/home/appuser/shared" "/home/appuser/shared.old"
-    mv "$DEPLOYMENT_DIR/shared" "/home/appuser/shared"
+    rm -rf "$APP_DIR/shared.old"
+    [ -d "$APP_DIR/shared" ] && mv "$APP_DIR/shared" "$APP_DIR/shared.old"
+    mv "$DEPLOYMENT_DIR/shared" "$APP_DIR/shared"
 fi
 
 # Ensure ecosystem.config.js exists
