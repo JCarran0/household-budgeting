@@ -42,11 +42,15 @@ jobs:
       - name: Create deployment package
         run: |
           # Create package structure
-          mkdir -p deployment/backend deployment/frontend
+          mkdir -p deployment/backend deployment/frontend deployment/shared
           
           # Copy backend - preserve directory structure
           cp -r backend/dist deployment/backend/
           cp backend/package*.json deployment/backend/
+          
+          # Copy shared utilities to root level for import compatibility
+          # This ensures ../../../shared/utils/ imports work correctly in production
+          cp -r backend/dist/shared/* deployment/shared/
           
           # Copy frontend
           cp -r frontend/dist/* deployment/frontend/
@@ -76,6 +80,14 @@ jobs:
           # Add metadata
           echo "$GITHUB_SHA" > deployment/REVISION
           echo "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > deployment/TIMESTAMP
+          
+          # Validate deployment package structure
+          echo "🔍 Validating deployment package..."
+          test -f deployment/backend/dist/index.js || (echo "❌ Backend entry point missing" && exit 1)
+          test -d deployment/shared/utils || (echo "❌ Shared utilities directory missing" && exit 1)
+          test -f deployment/shared/utils/categoryHelpers.js || (echo "❌ CategoryHelpers missing from shared utilities" && exit 1)
+          grep -q "createCategoryLookup" deployment/shared/utils/categoryHelpers.js || (echo "❌ createCategoryLookup function missing" && exit 1)
+          echo "✅ Deployment package validation passed"
           
           # Create tarball
           tar -czf deployment.tar.gz deployment/

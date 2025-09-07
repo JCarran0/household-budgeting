@@ -609,6 +609,23 @@ If deployment issues persist:
 
 ### Common Deployment Pitfalls
 
+#### 0. Shared Utilities Import Resolution Issue
+**Problem**: Backend imports shared utilities using relative path `../../../shared/utils/categoryHelpers` but deployment process only copies them to `backend/dist/shared/`
+```bash
+# ❌ Wrong - shared utils only in backend/dist
+# Backend imports: ../../../shared/utils/categoryHelpers
+# Resolves to: /home/appuser/app/shared/utils/ (missing)
+# Actual location: /home/appuser/app/backend/dist/shared/utils/ (not found)
+
+# ✅ Fixed - shared utils copied to root level
+cp -r backend/dist/shared/* deployment/shared/
+# Now resolves correctly to /home/appuser/app/shared/utils/
+```
+**Impact**: Runtime errors like "createCategoryLookup is not a function" in production
+**Root Cause**: TypeScript compilation includes shared files in backend/dist/shared/, but import paths expect them at project root level
+**Solution**: Deploy shared utilities to both locations and add validation
+**Prevention**: Added deployment validation checks to catch this in CI/CD pipeline
+
 #### 1. Directory Structure Flattening Issue
 **Problem**: Copying `dist/*` instead of `dist` flattens the compiled TypeScript output
 ```bash
@@ -676,6 +693,7 @@ curl -s http://localhost:3001/health | grep -q "ok" && echo "✅ Health check pa
 
 | Issue | Priority | Effort | Impact | Solution |
 |-------|----------|--------|--------|----------|
+| Shared utilities import resolution | High | Low | Production runtime errors | ✅ **Fixed**: Deploy shared utilities to root level with validation |
 | Manual deployment structure fixes | High | Low | Deployment failures | Fixed in GitHub Actions |
 | No automated deployment validation | Medium | Low | Silent failures | Add post-deploy checks |
 | PM2 configuration scattered | Medium | Low | Confusion | Centralize in ecosystem.config.js |

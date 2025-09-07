@@ -89,6 +89,15 @@ if [ -d "$DEPLOYMENT_DIR/shared" ]; then
     rm -rf "$APP_DIR/shared.old"
     [ -d "$APP_DIR/shared" ] && mv "$APP_DIR/shared" "$APP_DIR/shared.old"
     mv "$DEPLOYMENT_DIR/shared" "$APP_DIR/shared"
+    
+    # Validate shared utilities deployment
+    echo "🔍 Validating shared utilities deployment..."
+    test -d "$APP_DIR/shared/utils" || (echo "❌ Shared utils directory missing after deployment" && exit 1)
+    test -f "$APP_DIR/shared/utils/categoryHelpers.js" || (echo "❌ CategoryHelpers missing after deployment" && exit 1)
+    grep -q "createCategoryLookup" "$APP_DIR/shared/utils/categoryHelpers.js" || (echo "❌ createCategoryLookup function missing after deployment" && exit 1)
+    echo "✅ Shared utilities validation passed"
+else
+    echo "⚠️  Warning: No shared utilities found in deployment package"
 fi
 
 # Ensure ecosystem.config.js exists
