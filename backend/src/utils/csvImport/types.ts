@@ -38,6 +38,7 @@ export interface ImportOptions {
   skipDuplicates?: boolean;
   batchSize?: number;
   dryRun?: boolean;
+  updateCategoriesOnly?: boolean;
   columnMapping?: Record<string, string>;
 }
 

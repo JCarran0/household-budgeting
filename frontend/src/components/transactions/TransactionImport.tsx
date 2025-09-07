@@ -30,6 +30,7 @@ import {
   IconEye,
   IconDatabaseImport,
   IconRefresh,
+  IconEdit,
 } from '@tabler/icons-react';
 import { api } from '../../lib/api';
 
@@ -51,12 +52,17 @@ export function TransactionImport({ opened, onClose }: TransactionImportProps) {
   const [previewResult, setPreviewResult] = useState<ImportPreviewResult | null>(null);
   const [errors, setErrors] = useState<string[]>([]);
   const [showPreview, setShowPreview] = useState(false);
+  const [previewMode, setPreviewMode] = useState<'import' | 'updateCategories'>('import');
   const fileInputRef = useRef<HTMLInputElement>(null);
   const queryClient = useQueryClient();
 
   // Preview mutation (dry run)
   const previewMutation = useMutation({
-    mutationFn: (content: string) => api.importTransactionsFromCSV(content, { preview: true }),
+    mutationFn: ({ content, mode }: { content: string; mode: 'import' | 'updateCategories' }) => 
+      api.importTransactionsFromCSV(content, { 
+        preview: true, 
+        updateCategoriesOnly: mode === 'updateCategories' 
+      }),
     onSuccess: (result) => {
       if (result.success) {
         setPreviewResult({
@@ -105,6 +111,30 @@ export function TransactionImport({ opened, onClose }: TransactionImportProps) {
     },
   });
 
+  // Update categories mutation (only update categories on matched transactions)
+  const updateCategoriesMutation = useMutation({
+    mutationFn: (content: string) => api.importTransactionsFromCSV(content, { updateCategoriesOnly: true }),
+    onSuccess: (result) => {
+      if (result.success) {
+        notifications.show({
+          title: 'Categories Updated',
+          message: result.message || 'Transaction categories updated successfully',
+          color: 'green',
+          icon: <IconCheck size={16} />
+        });
+        
+        // Close modal and reset state
+        handleClose();
+      } else {
+        setErrors([result.error || 'Unknown error', ...(result.details || [])]);
+      }
+    },
+    onError: (error: unknown) => {
+      const message = error instanceof Error ? error.message : 'Failed to update categories';
+      setErrors([message]);
+    },
+  });
+
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -135,13 +165,14 @@ export function TransactionImport({ opened, onClose }: TransactionImportProps) {
     reader.readAsText(file);
   };
 
-  const handlePreview = () => {
+  const handlePreview = (mode: 'import' | 'updateCategories' = 'import') => {
     if (!csvContent.trim()) {
       setErrors(['Please select a file or enter CSV content']);
       return;
     }
 
-    previewMutation.mutate(csvContent);
+    setPreviewMode(mode);
+    previewMutation.mutate({ content: csvContent, mode });
   };
 
   const handleImport = () => {
@@ -151,6 +182,15 @@ export function TransactionImport({ opened, onClose }: TransactionImportProps) {
     }
 
     importMutation.mutate(csvContent);
+  };
+
+  const handleUpdateCategories = () => {
+    if (!csvContent.trim()) {
+      setErrors(['Please select a file or enter CSV content']);
+      return;
+    }
+
+    updateCategoriesMutation.mutate(csvContent);
   };
 
   const handleClose = () => {
@@ -271,20 +311,30 @@ export function TransactionImport({ opened, onClose }: TransactionImportProps) {
             <Stack gap="md">
               <Group>
                 <IconEye size={20} />
-                <Text fw={600}>Import Preview</Text>
+                <Text fw={600}>
+                  {previewMode === 'updateCategories' ? 'Category Update Preview' : 'Import Preview'}
+                </Text>
               </Group>
 
               <SimpleGrid cols={2} spacing="md">
                 <Paper p="md" withBorder>
                   <Group justify="space-between">
-                    <Text size="sm" c="dimmed">New Transactions</Text>
-                    <Badge color="green" size="lg">{previewResult.imported}</Badge>
+                    <Text size="sm" c="dimmed">
+                      {previewMode === 'updateCategories' ? 'Categories to Update' : 'New Transactions'}
+                    </Text>
+                    <Badge color={previewMode === 'updateCategories' ? 'orange' : 'green'} size="lg">
+                      {previewMode === 'updateCategories' ? previewResult.skipped : previewResult.imported}
+                    </Badge>
                   </Group>
                 </Paper>
                 <Paper p="md" withBorder>
                   <Group justify="space-between">
-                    <Text size="sm" c="dimmed">Potential Duplicates</Text>
-                    <Badge color="orange" size="lg">{previewResult.skipped}</Badge>
+                    <Text size="sm" c="dimmed">
+                      {previewMode === 'updateCategories' ? 'Transactions Unchanged' : 'Potential Duplicates'}
+                    </Text>
+                    <Badge color={previewMode === 'updateCategories' ? 'gray' : 'orange'} size="lg">
+                      {previewMode === 'updateCategories' ? 0 : previewResult.skipped}
+                    </Badge>
                   </Group>
                 </Paper>
               </SimpleGrid>
@@ -324,19 +374,31 @@ export function TransactionImport({ opened, onClose }: TransactionImportProps) {
 
           <Group>
             {!showPreview ? (
-              <Button
-                leftSection={<IconEye size={16} />}
-                onClick={handlePreview}
-                loading={previewMutation.isPending}
-                disabled={!csvContent.trim()}
-                variant="outline"
-              >
-                Preview Import
-              </Button>
+              <Group>
+                <Button
+                  leftSection={<IconEye size={16} />}
+                  onClick={() => handlePreview('import')}
+                  loading={previewMutation.isPending}
+                  disabled={!csvContent.trim()}
+                  variant="outline"
+                >
+                  Preview Import
+                </Button>
+                <Button
+                  leftSection={<IconEye size={16} />}
+                  onClick={() => handlePreview('updateCategories')}
+                  loading={previewMutation.isPending}
+                  disabled={!csvContent.trim()}
+                  variant="outline"
+                  color="orange"
+                >
+                  Preview Categories Update
+                </Button>
+              </Group>
             ) : (
               <Button
                 leftSection={<IconRefresh size={16} />}
-                onClick={handlePreview}
+                onClick={() => handlePreview(previewMode)}
                 loading={previewMutation.isPending}
                 variant="outline"
                 size="sm"
@@ -353,10 +415,21 @@ export function TransactionImport({ opened, onClose }: TransactionImportProps) {
             >
               Import Transactions
             </Button>
+
+            <Button
+              leftSection={<IconEdit size={16} />}
+              onClick={handleUpdateCategories}
+              loading={updateCategoriesMutation.isPending}
+              disabled={!csvContent.trim()}
+              variant="outline"
+              color="orange"
+            >
+              Update Categories
+            </Button>
           </Group>
         </Group>
 
-        {(previewMutation.isPending || importMutation.isPending) && (
+        {(previewMutation.isPending || importMutation.isPending || updateCategoriesMutation.isPending) && (
           <Progress value={100} animated />
         )}
       </Stack>

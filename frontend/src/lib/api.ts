@@ -684,7 +684,7 @@ class ApiClient {
   }
 
   // Transaction import endpoint
-  async importTransactionsFromCSV(csvContent: string, options: { preview?: boolean; skipDuplicates?: boolean } = {}): Promise<{
+  async importTransactionsFromCSV(csvContent: string, options: { preview?: boolean; skipDuplicates?: boolean; updateCategoriesOnly?: boolean } = {}): Promise<{
     success: boolean;
     message?: string;
     error?: string;
@@ -699,7 +699,8 @@ class ApiClient {
     const { data } = await this.client.post('/transactions/import-csv', {
       csvContent,
       preview: options.preview || false,
-      skipDuplicates: options.skipDuplicates !== false
+      skipDuplicates: options.skipDuplicates !== false,
+      updateCategoriesOnly: options.updateCategoriesOnly || false
     });
     return data;
   }

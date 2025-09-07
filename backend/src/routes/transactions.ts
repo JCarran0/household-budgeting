@@ -618,6 +618,7 @@ const transactionImportSchema = z.object({
   csvContent: z.string().min(1, 'CSV content is required'),
   preview: z.boolean().optional().default(false),
   skipDuplicates: z.boolean().optional().default(true),
+  updateCategoriesOnly: z.boolean().optional().default(false),
 });
 
 /**
@@ -643,7 +644,7 @@ router.post('/import-csv', authMiddleware, async (req: AuthRequest, res: Respons
       });
     }
 
-    const { csvContent, preview, skipDuplicates } = validationResult.data;
+    const { csvContent, preview, skipDuplicates, updateCategoriesOnly } = validationResult.data;
 
     // Import transactions via ImportService
     const result = await importService.importCSV(
@@ -652,7 +653,8 @@ router.post('/import-csv', authMiddleware, async (req: AuthRequest, res: Respons
       csvContent,
       {
         dryRun: preview,
-        skipDuplicates
+        skipDuplicates,
+        updateCategoriesOnly
       }
     );
 
