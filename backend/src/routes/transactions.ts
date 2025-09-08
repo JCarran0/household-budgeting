@@ -6,6 +6,7 @@ import { Router, Request, Response } from 'express';
 import { transactionService, accountService, importService } from '../services';
 import { authMiddleware } from '../middleware/authMiddleware';
 import { z } from 'zod';
+import { calculateIncome, calculateExpenses, calculateNetCashFlow } from '../../../shared/utils/transactionCalculations';
 
 const router = Router();
 
@@ -57,7 +58,7 @@ const transactionFilterSchema = z.object({
     if (typeof val === 'string') return parseFloat(val);
     return val;
   }),
-  transactionType: z.enum(['income', 'expense', 'all']).optional(),
+  transactionType: z.enum(['income', 'expense', 'transfer', 'all']).optional(),
 });
 
 const updateCategorySchema = z.object({
@@ -585,17 +586,10 @@ router.get('/summary', authMiddleware, async (req: AuthRequest, res: Response): 
       return;
     }
 
-    // Calculate summary
-    let totalIncome = 0;
-    let totalExpenses = 0;
-    
-    for (const txn of result.transactions) {
-      if (txn.amount < 0) {
-        totalIncome += Math.abs(txn.amount);
-      } else {
-        totalExpenses += txn.amount;
-      }
-    }
+    // Calculate summary (excluding transfers)
+    const totalIncome = calculateIncome(result.transactions);
+    const totalExpenses = calculateExpenses(result.transactions);
+    const netIncome = calculateNetCashFlow(result.transactions);
 
     res.json({
       success: true,
@@ -603,7 +597,7 @@ router.get('/summary', authMiddleware, async (req: AuthRequest, res: Response): 
         month: `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`,
         totalIncome,
         totalExpenses,
-        netIncome: totalIncome - totalExpenses,
+        netIncome,
         transactionCount: result.transactions.length,
       },
     });

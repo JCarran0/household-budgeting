@@ -9,6 +9,7 @@ import { PlaidService, Transaction as PlaidTransaction } from './plaidService';
 import { DataService } from './dataService';
 import { StoredAccount } from './accountService';
 import { encryptionService } from '../utils/encryption';
+import { isTransferCategory } from '../../../shared/utils/categoryHelpers';
 
 // Transaction status
 export type TransactionStatus = 'posted' | 'pending' | 'removed';
@@ -65,7 +66,7 @@ export interface TransactionFilter {
   maxAmount?: number;
   exactAmount?: number;
   amountTolerance?: number;
-  transactionType?: 'income' | 'expense' | 'all'; // Filter by income vs expense
+  transactionType?: 'income' | 'expense' | 'transfer' | 'all'; // Filter by income vs expense vs transfers
 }
 
 // Result types
@@ -496,13 +497,26 @@ export class TransactionService {
         );
       }
 
-      // Filter by income vs expense
+      // Filter by income vs expense vs transfers
       if (filter.transactionType && filter.transactionType !== 'all') {
         filtered = filtered.filter((txn: StoredTransaction) => {
-          // In Plaid, positive amounts are debits (expenses), negative amounts are credits (income)
-          // Zero amounts are treated as expenses (non-income)
-          const isExpense = txn.amount >= 0;
-          return filter.transactionType === 'expense' ? isExpense : !isExpense;
+          // Check if this is a transfer transaction
+          const isTransfer = txn.categoryId ? isTransferCategory(txn.categoryId) : false;
+          
+          if (filter.transactionType === 'transfer') {
+            // Show only transfers
+            return isTransfer;
+          } else if (filter.transactionType === 'income' || filter.transactionType === 'expense') {
+            // Exclude transfers from income/expense filters
+            if (isTransfer) return false;
+            
+            // In Plaid, positive amounts are debits (expenses), negative amounts are credits (income)
+            // Zero amounts are treated as expenses (non-income)
+            const isExpense = txn.amount >= 0;
+            return filter.transactionType === 'expense' ? isExpense : !isExpense;
+          }
+          
+          return true;
         });
       }
 

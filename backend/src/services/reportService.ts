@@ -8,6 +8,7 @@ import { DataService } from './dataService';
 import { StoredTransaction } from './transactionService';
 import { Category } from '../../../shared/types';
 import { format, startOfMonth, endOfMonth, subMonths, addMonths } from 'date-fns';
+import { calculateIncome, calculateExpenses, calculateNetCashFlow, calculateSavingsRate } from '../../../shared/utils/transactionCalculations';
 
 // Report types
 export interface SpendingTrend {
@@ -452,16 +453,11 @@ export class ReportService {
           (!t.categoryId || !hiddenCategoryIds.has(t.categoryId)) // Exclude hidden categories
         );
 
-        const income = monthTransactions
-          .filter(t => t.amount < 0) // Negative amounts are income
-          .reduce((sum, t) => sum + Math.abs(t.amount), 0);
-
-        const expenses = monthTransactions
-          .filter(t => t.amount > 0) // Positive amounts are expenses
-          .reduce((sum, t) => sum + t.amount, 0);
-
-        const netFlow = income - expenses;
-        const savingsRate = income > 0 ? (netFlow / income) * 100 : 0;
+        // Calculate using shared utilities (excludes transfers)
+        const income = calculateIncome(monthTransactions);
+        const expenses = calculateExpenses(monthTransactions);
+        const netFlow = calculateNetCashFlow(monthTransactions);
+        const savingsRate = calculateSavingsRate(monthTransactions);
 
         summary.push({
           month,
@@ -566,15 +562,10 @@ export class ReportService {
         (!t.categoryId || !hiddenCategoryIds.has(t.categoryId)) // Exclude hidden categories
       );
 
-      const totalIncome = ytdTransactions
-        .filter(t => t.amount < 0)
-        .reduce((sum, t) => sum + Math.abs(t.amount), 0);
-
-      const totalExpenses = ytdTransactions
-        .filter(t => t.amount > 0)
-        .reduce((sum, t) => sum + t.amount, 0);
-
-      const netIncome = totalIncome - totalExpenses;
+      // Calculate using shared utilities (excludes transfers)
+      const totalIncome = calculateIncome(ytdTransactions);
+      const totalExpenses = calculateExpenses(ytdTransactions);
+      const netIncome = calculateNetCashFlow(ytdTransactions);
       
       // Calculate months with complete data
       let monthsWithData = 0;
