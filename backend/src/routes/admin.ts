@@ -1,5 +1,5 @@
 import express from 'express';
-import { categoryService, transactionService } from '../services';
+import { categoryService, dataService } from '../services';
 import { authMiddleware } from '../middleware/authMiddleware';
 
 const router = express.Router();
@@ -129,8 +129,7 @@ router.post('/clean-location-data', async (req, res) => {
     console.log(`Starting location data cleanup for user ${userId}`);
 
     // Get all transactions for the user directly from data service to manipulate raw data
-    const dataService = (transactionService as any).dataService;
-    const transactions = await dataService.getTransactions(userId);
+    const transactions = await dataService.getData<any[]>(`transactions_${userId}`) || [];
     let cleanedCount = 0;
 
     // Helper function to check if location has any non-null data
@@ -159,7 +158,7 @@ router.post('/clean-location-data', async (req, res) => {
 
     // Save all cleaned transactions back
     if (cleanedCount > 0) {
-      await dataService.saveTransactions(cleanedTransactions, userId);
+      await dataService.saveData(`transactions_${userId}`, cleanedTransactions);
     }
 
     const result: MigrationResult = {
@@ -198,8 +197,7 @@ router.get('/location-cleanup-status', async (req, res) => {
     }
 
     // Get transactions directly from data service to check raw data
-    const dataService = (transactionService as any).dataService;
-    const transactions = await dataService.getTransactions(userId);
+    const transactions = await dataService.getData<any[]>(`transactions_${userId}`) || [];
 
     // Helper function to check if location has any non-null data
     const hasLocationData = (location: any): boolean => {
