@@ -94,7 +94,15 @@ if [ -d "$DEPLOYMENT_DIR/shared" ]; then
     echo "🔍 Validating shared utilities deployment..."
     test -d "$APP_DIR/shared/utils" || (echo "❌ Shared utils directory missing after deployment" && exit 1)
     test -f "$APP_DIR/shared/utils/categoryHelpers.js" || (echo "❌ CategoryHelpers missing after deployment" && exit 1)
+    
+    # Validate all required category helper functions are present
+    echo "  Checking for required functions in categoryHelpers.js..."
     grep -q "createCategoryLookup" "$APP_DIR/shared/utils/categoryHelpers.js" || (echo "❌ createCategoryLookup function missing after deployment" && exit 1)
+    grep -q "isBudgetableCategory" "$APP_DIR/shared/utils/categoryHelpers.js" || (echo "❌ isBudgetableCategory function missing after deployment" && exit 1)
+    grep -q "getBudgetType" "$APP_DIR/shared/utils/categoryHelpers.js" || (echo "❌ getBudgetType function missing after deployment" && exit 1)
+    grep -q "isIncomeCategoryHierarchical" "$APP_DIR/shared/utils/categoryHelpers.js" || (echo "❌ isIncomeCategoryHierarchical function missing after deployment" && exit 1)
+    grep -q "isExpenseCategoryHierarchical" "$APP_DIR/shared/utils/categoryHelpers.js" || (echo "❌ isExpenseCategoryHierarchical function missing after deployment" && exit 1)
+    
     echo "✅ Shared utilities validation passed"
 else
     echo "⚠️  Warning: No shared utilities found in deployment package"
@@ -135,16 +143,37 @@ pm2 delete budget-backend 2>/dev/null || true
 pm2 start ecosystem.config.js
 pm2 save
 
-# Health check
+# Health check with more detailed logging and longer timeout
 echo "🏥 Running health check..."
 sleep 5
-for i in {1..10}; do
+
+# First check if PM2 process is running
+echo "📊 Checking PM2 status..."
+pm2 status budget-backend
+
+# Check logs for startup errors
+echo "📋 Recent PM2 logs:"
+pm2 logs budget-backend --lines 5 --nostream
+
+# Health check with longer timeout
+echo "🩺 Testing health endpoint..."
+for i in {1..15}; do
     if curl -f http://localhost:3001/health 2>/dev/null; then
         echo "✅ Health check passed!"
+        echo "📋 Application details:"
+        curl -s http://localhost:3001/health | jq '.' 2>/dev/null || curl -s http://localhost:3001/health
         break
     fi
-    echo "Waiting for application... ($i/10)"
-    sleep 2
+    if [ $i -eq 15 ]; then
+        echo "❌ Health check failed after 15 attempts"
+        echo "📋 Final PM2 status:"
+        pm2 status budget-backend
+        echo "📋 Final logs:"
+        pm2 logs budget-backend --lines 20 --nostream
+        exit 1
+    fi
+    echo "Retry $i/15..."
+    sleep 3
 done
 
 # Cleanup
