@@ -22,6 +22,16 @@
 - A user should be able to change their password while logged in
 - A user should be protected from brute force attacks (rate limiting after 5 failed attempts)
 
+### Password Recovery
+- A user should be able to request a password reset when locked out of their account
+- A user should be able to generate a secure reset token through the system
+- A user should be able to retrieve the reset token from server logs (single-user access model)
+- A user should be able to use the reset token to set a new password
+- A user should have reset tokens expire after 15 minutes for security
+- A user should have reset tokens invalidated after single use
+- A user should be rate limited to prevent abuse (5-minute cooldown between reset requests)
+- A user should be protected from username enumeration attacks during reset
+
 ### Security
 - A user should be automatically logged out after 60 minutes (JWT expiration)
 - A user should have their password securely hashed (bcrypt)

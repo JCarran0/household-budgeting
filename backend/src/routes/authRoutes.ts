@@ -10,6 +10,8 @@ import {
   loginSchema,
   changePasswordSchema,
   tokenRefreshSchema,
+  resetRequestSchema,
+  resetPasswordSchema,
 } from '../validators/authValidators';
 
 const router = Router();
@@ -216,6 +218,66 @@ router.post(
       success: true,
       message: 'Logged out successfully',
     });
+  }
+);
+
+/**
+ * @route POST /api/v1/auth/request-reset
+ * @desc Request password reset token
+ * @access Public
+ */
+router.post(
+  '/request-reset',
+  rateLimitAuth,
+  validateBody(resetRequestSchema),
+  async (req: Request, res: Response): Promise<void> => {
+    try {
+      const { username } = req.body;
+      
+      const result = await authService.requestPasswordReset(username);
+      
+      if (result.success) {
+        res.json(result);
+      } else {
+        res.status(400).json(result);
+      }
+    } catch (error) {
+      console.error('Password reset request error:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Reset request failed',
+      });
+    }
+  }
+);
+
+/**
+ * @route POST /api/v1/auth/reset-password
+ * @desc Reset password with token
+ * @access Public
+ */
+router.post(
+  '/reset-password',
+  rateLimitAuth,
+  validateBody(resetPasswordSchema),
+  async (req: Request, res: Response): Promise<void> => {
+    try {
+      const { username, token, newPassword } = req.body;
+      
+      const result = await authService.resetPassword(username, token, newPassword);
+      
+      if (result.success) {
+        res.json(result);
+      } else {
+        res.status(400).json(result);
+      }
+    } catch (error) {
+      console.error('Password reset error:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Password reset failed',
+      });
+    }
   }
 );
 

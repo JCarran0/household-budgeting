@@ -149,6 +149,7 @@ scripts/               # Deployment scripts
 - ✅ User can register with 15+ character passphrase
 - ✅ JWT authentication with rate limiting
 - ✅ Account lockout after failed attempts
+- ✅ Password reset flow with secure token delivery via server logs
 
 ### 2. Plaid Account Linking  
 **User Story**: As a user, I can connect my Bank of America and Capital One accounts
@@ -485,6 +486,7 @@ Having issues?
 - **Financial calculations**: Always use shared utilities from `shared/utils/transactionCalculations.ts` to exclude transfers
 - **Create a release**: Run `npm run release:prepare` and follow prompts
 - **Check version**: Visit `/version` endpoint or run `curl localhost:3001/version`
+- **Password reset recovery**: If locked out, request reset and check server logs: `pm2 logs budget-backend | grep "RESET TOKEN"`
 - **⚠️ Category Migration**: Before deploying Plaid PFC changes, delete existing category data: `rm backend/data/categories_*.json`
 
 ## Deployment

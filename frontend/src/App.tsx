@@ -11,6 +11,8 @@ import '@mantine/notifications/styles.css';
 
 import { LoginForm } from './components/auth/LoginForm';
 import { RegisterForm } from './components/auth/RegisterForm';
+import { ResetRequestForm } from './components/auth/ResetRequestForm';
+import { ResetPasswordForm } from './components/auth/ResetPasswordForm';
 import { ProtectedRoute } from './components/ProtectedRoute';
 import { MantineLayout } from './components/MantineLayout';
 import { MantineDashboard } from './pages/MantineDashboard';
@@ -44,6 +46,8 @@ function App() {
               <Routes>
                 <Route path="/login" element={<LoginForm />} />
                 <Route path="/register" element={<RegisterForm />} />
+                <Route path="/request-reset" element={<ResetRequestForm />} />
+                <Route path="/reset-password" element={<ResetPasswordForm />} />
                 <Route element={<ProtectedRoute />}>
                   <Route element={<MantineLayout />}>
                     <Route path="/dashboard" element={

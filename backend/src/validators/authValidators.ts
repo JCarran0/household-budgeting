@@ -63,9 +63,26 @@ export const jwtPayloadSchema = z.object({
   exp: z.number().optional(),
 });
 
+// Password reset schemas
+export const resetRequestSchema = z.object({
+  username: z.string().min(1, 'Username is required'),
+});
+
+export const resetPasswordSchema = z.object({
+  username: z.string().min(1, 'Username is required'),
+  token: z.string().min(1, 'Reset token is required'),
+  newPassword: passwordSchema,
+  confirmPassword: z.string().min(1, 'Password confirmation is required'),
+}).refine((data) => data.newPassword === data.confirmPassword, {
+  message: 'Passwords do not match',
+  path: ['confirmPassword'],
+});
+
 // Type exports
 export type RegistrationInput = z.infer<typeof registrationSchema>;
 export type LoginInput = z.infer<typeof loginSchema>;
 export type ChangePasswordInput = z.infer<typeof changePasswordSchema>;
 export type TokenRefreshInput = z.infer<typeof tokenRefreshSchema>;
+export type ResetRequestInput = z.infer<typeof resetRequestSchema>;
+export type ResetPasswordInput = z.infer<typeof resetPasswordSchema>;
 export type JWTPayload = z.infer<typeof jwtPayloadSchema>;

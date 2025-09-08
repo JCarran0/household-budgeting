@@ -215,6 +215,27 @@ class ApiClient {
     };
   }
 
+  async requestPasswordReset(username: string): Promise<{ success: boolean; message: string }> {
+    const { data } = await this.client.post<unknown>('/auth/request-reset', { username });
+    if (!isValidApiResponse(data)) {
+      throw new Error('Invalid response format from server');
+    }
+    return data as { success: boolean; message: string };
+  }
+
+  async resetPassword(params: {
+    username: string;
+    token: string;
+    newPassword: string;
+    confirmPassword: string;
+  }): Promise<{ success: boolean; message: string }> {
+    const { data } = await this.client.post<unknown>('/auth/reset-password', params);
+    if (!isValidApiResponse(data)) {
+      throw new Error('Invalid response format from server');
+    }
+    return data as { success: boolean; message: string };
+  }
+
   // Version endpoint
   async getVersion(): Promise<VersionResponse> {
     const { data } = await this.client.get<VersionResponse>('/version');

@@ -53,15 +53,25 @@ household-budgeting/
 ### Backend Services (Singleton Pattern)
 
 #### 1. AuthService (`backend/src/services/authService.ts`)
-- **Purpose**: User authentication and JWT management
+- **Purpose**: User authentication, JWT management, and password recovery
 - **Key Methods**:
   - `register()`: Create new user with passphrase (15+ chars)
   - `login()`: Validate credentials, return JWT
-  - `verifyToken()`: Validate JWT for protected routes
+  - `changePassword()`: Update password with current password verification
+  - `requestPasswordReset()`: Generate secure reset token (15-min expiry)
+  - `resetPassword()`: Reset password using valid token
+  - `validateToken()`: Validate JWT for protected routes
 - **Security Features**:
   - Rate limiting (5 attempts per 15 min)
   - Account lockout after failed attempts
   - Bcrypt password hashing
+  - **Password Reset Security**:
+    - Cryptographically secure tokens (crypto.randomBytes)
+    - 15-minute token expiration
+    - Single-use tokens (invalidated after use)
+    - Rate limiting (5-minute cooldown between requests)
+    - Server log token delivery (no email required)
+    - Username enumeration protection
 
 #### 2. PlaidService (`backend/src/services/plaidService.ts`)
 - **Purpose**: Plaid API integration for bank connections
@@ -492,6 +502,14 @@ const autoCategorizeService = new AutoCategorizeService(dataService, categorySer
 - **Frontend Component**: `CSVImport.tsx` with file upload and text paste support
 - **API Client**: `importCategoriesFromCSV()` method in `frontend/src/lib/api.ts`
 
+#### Example: Password Reset Endpoints
+- **Routes**: `POST /api/v1/auth/request-reset` and `POST /api/v1/auth/reset-password` in `backend/src/routes/authRoutes.ts`
+- **Service Methods**: `AuthService.requestPasswordReset()` and `AuthService.resetPassword()`
+- **Frontend Components**: `ResetRequestForm.tsx` and `ResetPasswordForm.tsx` in `frontend/src/components/auth/`
+- **API Client**: `requestPasswordReset()` and `resetPassword()` methods in `frontend/src/lib/api.ts`
+- **Security Features**: Rate limiting, token expiration, server log token delivery
+- **User Flow**: Request token → Check server logs → Reset password with token
+
 ### To Add a New CSV Import Type
 1. **Create Type-Specific Parser**: Extend `BaseCSVParser<T>` in `backend/src/utils/csvImport/`
    ```typescript
@@ -751,6 +769,30 @@ if (syncedAccountIds.has(existing.accountId)) { /* check for removal */ }
 - Backend: `backend/src/services/authService.ts`
 - Middleware: `backend/src/middleware/authMiddleware.ts`
 - Frontend: `frontend/src/stores/authStore.ts`
+
+#### Authentication Flows
+
+**Standard Login Flow**:
+1. User submits username/password
+2. AuthService validates credentials and generates JWT
+3. Frontend stores token and navigates to dashboard
+
+**Password Reset Flow** (Single-user optimized):
+1. User requests reset via `/request-reset` 
+2. AuthService generates secure token and logs to server
+3. User SSH access server to retrieve token from PM2 logs
+4. User submits token + new password via `/reset-password`
+5. AuthService validates token and updates password
+6. Token is invalidated after successful use
+
+**Security Measures**:
+- Rate limiting on auth endpoints (rateLimitAuth middleware)
+- Account lockout after 5 failed attempts (15-minute lockout)
+- JWT expiration (7 days default)
+- Password strength validation (15+ characters)
+- Reset token expiration (15 minutes)
+- Single-use reset tokens
+- Username enumeration protection
 
 ### Auto-Categorization
 - Backend Service: `backend/src/services/autoCategorizeService.ts`

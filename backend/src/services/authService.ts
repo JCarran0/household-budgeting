@@ -1,6 +1,7 @@
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { v4 as uuidv4 } from 'uuid';
+import crypto from 'crypto';
 import { DataService, User } from './dataService';
 
 interface AuthResult {
@@ -39,6 +40,7 @@ interface SecurityEventDetails {
   reason?: string;
   ip?: string;
   userAgent?: string;
+  tokenExpires?: string;
 }
 
 interface SecurityEvent {
@@ -49,6 +51,13 @@ interface SecurityEvent {
   details: SecurityEventDetails;
 }
 
+interface ResetToken {
+  token: string;
+  username: string;
+  expiresAt: Date;
+  used: boolean;
+}
+
 export class AuthService {
   private dataService: DataService;
   private failedAttempts: Map<string, number> = new Map();
@@ -56,6 +65,10 @@ export class AuthService {
   private readonly maxFailedAttempts = 5;
   private readonly lockoutDuration = 15 * 60 * 1000; // 15 minutes
   private securityLogs: SecurityEvent[] = [];
+  private resetTokens: Map<string, ResetToken> = new Map();
+  private resetRequestTime: Map<string, Date> = new Map();
+  private readonly resetTokenExpiry = 15 * 60 * 1000; // 15 minutes
+  private readonly resetRequestCooldown = 5 * 60 * 1000; // 5 minutes between requests
 
   constructor(dataService: DataService) {
     this.dataService = dataService;
@@ -347,6 +360,213 @@ export class AuthService {
       return {
         success: false,
         error: 'Password change failed',
+      };
+    }
+  }
+
+  async requestPasswordReset(username: string): Promise<AuthResult> {
+    try {
+      // Check if user exists
+      const user = await this.dataService.getUserByUsername(username);
+      if (!user) {
+        // Don't reveal if user exists or not
+        this.logSecurityEvent({
+          event: 'PASSWORD_RESET_REQUESTED',
+          username,
+          timestamp: new Date(),
+          details: { reason: 'User not found' },
+        });
+        return {
+          success: true,
+          message: 'If the username exists, a reset token has been generated. Check server logs.',
+        };
+      }
+
+      // Check rate limiting
+      const lastRequest = this.resetRequestTime.get(username);
+      if (lastRequest && new Date().getTime() - lastRequest.getTime() < this.resetRequestCooldown) {
+        this.logSecurityEvent({
+          event: 'PASSWORD_RESET_RATE_LIMITED',
+          username,
+          userId: user.id,
+          timestamp: new Date(),
+          details: { reason: 'Too many requests' },
+        });
+        return {
+          success: false,
+          error: 'Please wait before requesting another reset token.',
+        };
+      }
+
+      // Generate secure reset token
+      const resetToken = crypto.randomBytes(32).toString('hex');
+      const expiresAt = new Date(Date.now() + this.resetTokenExpiry);
+
+      // Store reset token
+      this.resetTokens.set(resetToken, {
+        token: resetToken,
+        username,
+        expiresAt,
+        used: false,
+      });
+
+      // Update request time
+      this.resetRequestTime.set(username, new Date());
+
+      // Log the token to server logs (this is how you'll access it)
+      console.log('');
+      console.log('='.repeat(80));
+      console.log('🔐 PASSWORD RESET TOKEN GENERATED');
+      console.log('='.repeat(80));
+      console.log(`Username: ${username}`);
+      console.log(`Reset Token: ${resetToken}`);
+      console.log(`Expires At: ${expiresAt.toISOString()}`);
+      console.log(`Valid for: 15 minutes`);
+      console.log('='.repeat(80));
+      console.log('');
+
+      this.logSecurityEvent({
+        event: 'PASSWORD_RESET_REQUESTED',
+        username,
+        userId: user.id,
+        timestamp: new Date(),
+        details: { tokenExpires: expiresAt.toISOString() },
+      });
+
+      return {
+        success: true,
+        message: 'Reset token generated successfully. Check server logs for the token.',
+      };
+    } catch (error) {
+      console.error('Password reset request error:', error);
+      return {
+        success: false,
+        error: 'Reset request failed. Please try again.',
+      };
+    }
+  }
+
+  async resetPassword(
+    username: string,
+    token: string,
+    newPassword: string
+  ): Promise<AuthResult> {
+    try {
+      // Find reset token
+      const resetToken = this.resetTokens.get(token);
+      if (!resetToken) {
+        this.logSecurityEvent({
+          event: 'PASSWORD_RESET_FAILED',
+          username,
+          timestamp: new Date(),
+          details: { reason: 'Invalid token' },
+        });
+        return {
+          success: false,
+          error: 'Invalid or expired reset token.',
+        };
+      }
+
+      // Check if token matches username
+      if (resetToken.username !== username) {
+        this.logSecurityEvent({
+          event: 'PASSWORD_RESET_FAILED',
+          username,
+          timestamp: new Date(),
+          details: { reason: 'Token username mismatch' },
+        });
+        return {
+          success: false,
+          error: 'Invalid reset token.',
+        };
+      }
+
+      // Check if token is expired
+      if (new Date() > resetToken.expiresAt) {
+        this.resetTokens.delete(token);
+        this.logSecurityEvent({
+          event: 'PASSWORD_RESET_FAILED',
+          username,
+          timestamp: new Date(),
+          details: { reason: 'Token expired' },
+        });
+        return {
+          success: false,
+          error: 'Reset token has expired.',
+        };
+      }
+
+      // Check if token is already used
+      if (resetToken.used) {
+        this.logSecurityEvent({
+          event: 'PASSWORD_RESET_FAILED',
+          username,
+          timestamp: new Date(),
+          details: { reason: 'Token already used' },
+        });
+        return {
+          success: false,
+          error: 'Reset token has already been used.',
+        };
+      }
+
+      // Get user
+      const user = await this.dataService.getUserByUsername(username);
+      if (!user) {
+        this.resetTokens.delete(token);
+        this.logSecurityEvent({
+          event: 'PASSWORD_RESET_FAILED',
+          username,
+          timestamp: new Date(),
+          details: { reason: 'User not found' },
+        });
+        return {
+          success: false,
+          error: 'User not found.',
+        };
+      }
+
+      // Validate new password
+      const passwordValidation = this.validatePasswordStrength(newPassword);
+      if (!passwordValidation.isValid) {
+        return {
+          success: false,
+          error: passwordValidation.errors?.[0] || 'Invalid password',
+        };
+      }
+
+      // Hash new password
+      const newPasswordHash = await bcrypt.hash(newPassword, 10);
+
+      // Update password
+      await this.dataService.updateUser(user.id, {
+        passwordHash: newPasswordHash,
+      });
+
+      // Mark token as used and remove it
+      resetToken.used = true;
+      this.resetTokens.delete(token);
+
+      // Clear any failed login attempts for this user
+      this.resetFailedAttempts(username);
+
+      this.logSecurityEvent({
+        event: 'PASSWORD_RESET_COMPLETED',
+        username,
+        userId: user.id,
+        timestamp: new Date(),
+        details: {},
+      });
+
+      return {
+        success: true,
+        message: 'Password has been reset successfully. You can now log in with your new password.',
+      };
+    } catch (error) {
+      console.error('Password reset error:', error);
+      return {
+        success: false,
+        error: 'Password reset failed. Please try again.',
       };
     }
   }

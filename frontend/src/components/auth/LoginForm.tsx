@@ -12,7 +12,6 @@ import {
   Stack,
   Alert,
   Anchor,
-  Center,
 } from '@mantine/core';
 import { IconAlertCircle, IconLogin } from '@tabler/icons-react';
 
@@ -83,14 +82,19 @@ export function LoginForm() {
           </Stack>
         </form>
 
-        <Center mt="xl">
+        <Stack mt="xl" gap="sm" align="center">
           <Text c="dimmed" size="sm">
             Don't have an account?{' '}
             <Anchor component={Link} to="/register" size="sm" fw={500}>
               Create account
             </Anchor>
           </Text>
-        </Center>
+          <Text c="dimmed" size="sm">
+            <Anchor component={Link} to="/request-reset" size="sm">
+              Forgot password?
+            </Anchor>
+          </Text>
+        </Stack>
       </Paper>
     </Container>
   );
