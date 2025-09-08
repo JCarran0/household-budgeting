@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.11.0](https://github.com/JCarran0/household-budgeting/compare/v1.10.3...v1.11.0) (2025-09-08)
+
+
+### Features
+
+* **auth:** add secure password reset flow for single-user recovery ([716d728](https://github.com/JCarran0/household-budgeting/commit/716d7284a7a49682822e0c94c03697794e4f8917))
+* **budgets:** add unified budget summary cards across all tabs ([6645aa9](https://github.com/JCarran0/household-budgeting/commit/6645aa962ee7ff0544be79e568442338ca30acec))
+* **ui:** enhance reports and transactions with improved UX features ([023244e](https://github.com/JCarran0/household-budgeting/commit/023244e9cef8fd5177a95ff327629b4ccc42f68d))
+
+
+### Bug Fixes
+
+* **deploy:** improve shared utilities validation and health check ([5f0cc49](https://github.com/JCarran0/household-budgeting/commit/5f0cc49159e536d9d67b52cf9789d58e3fdfa8a4))
+
+
+### Code Refactoring
+
+* **frontend:** standardize money formatting across application ([52ef3e0](https://github.com/JCarran0/household-budgeting/commit/52ef3e0a9c455b8fbf1cdd7ab1a5c0fd31ab2087))
+
 ### [1.10.3](https://github.com/JCarran0/household-budgeting/compare/v1.10.2...v1.10.3) (2025-09-08)
 
 
