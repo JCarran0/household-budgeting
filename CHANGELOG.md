@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.9.0](https://github.com/JCarran0/household-budgeting/compare/v1.8.0...v1.9.0) (2025-09-08)
+
+
+### Features
+
+* **budgets:** improve budget display with currency formatting and cashflow metrics ([871cfee](https://github.com/JCarran0/household-budgeting/commit/871cfee2445af52384d23f96234c5de87e2bd120))
+
+
+### Bug Fixes
+
+* **admin:** correct dataService access for location cleanup endpoints ([9d3b0b6](https://github.com/JCarran0/household-budgeting/commit/9d3b0b6967e71de8ce4f2a86cd147d737a20c872))
+
 ## [1.8.0](https://github.com/JCarran0/household-budgeting/compare/v1.7.0...v1.8.0) (2025-09-07)
 
 
