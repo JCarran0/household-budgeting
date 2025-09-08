@@ -435,7 +435,7 @@ export function EnhancedTransactions() {
     { value: 'all', label: 'All Accounts' },
     ...(accounts?.map(acc => ({
       value: acc.id,
-      label: `${acc.officialName || acc.accountName} (${acc.institutionName})`,
+      label: `${acc.nickname || acc.officialName || acc.accountName} (${acc.institutionName})`,
     })) || []),
   ];
 
@@ -675,8 +675,8 @@ export function EnhancedTransactions() {
     const getAccountInfo = (accountId: string) => {
       const account = accounts?.find(a => a.id === accountId);
       return {
-        accountName: account?.nickname || account?.name || 'Unknown',
-        institution: account?.institution || 'Unknown'
+        accountName: account?.nickname || account?.officialName || account?.accountName || account?.name || 'Unknown',
+        institution: account?.institutionName || account?.institution || 'Unknown'
       };
     };
 
@@ -728,6 +728,11 @@ export function EnhancedTransactions() {
   };
 
   const transactions = transactionData?.transactions || [];
+  
+  // Calculate filtered total
+  const filteredTotal = useMemo(() => {
+    return transactions.reduce((sum, t) => sum + t.amount, 0);
+  }, [transactions]);
   
   // Paginate transactions
   const totalPages = Math.ceil(transactions.length / TRANSACTIONS_PER_PAGE);
@@ -1075,9 +1080,14 @@ export function EnhancedTransactions() {
               {showSkeletons ? (
                 <Skeleton height={16} width={200} />
               ) : (
-                <Text size="sm" c="dimmed">
-                  Showing {paginatedTransactions.length} of {transactions.length} transactions (Page {currentPage}/{totalPages})
-                </Text>
+                <Stack gap={4}>
+                  <Text size="sm" c="dimmed">
+                    Showing {paginatedTransactions.length} of {transactions.length} transactions (Page {currentPage}/{totalPages})
+                  </Text>
+                  <Text size="sm" fw={500} c={filteredTotal >= 0 ? 'red' : 'green'}>
+                    Filtered Total: {filteredTotal >= 0 ? '-' : '+'}{formatCurrency(Math.abs(filteredTotal))}
+                  </Text>
+                </Stack>
               )}
               <Group gap="xs">
                 <Button 

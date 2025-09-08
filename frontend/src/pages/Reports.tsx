@@ -751,7 +751,7 @@ export function Reports() {
                   <Stack gap="sm">
                     {categoryView === 'income' ? (
                       // Show top income categories from current breakdown data
-                      pieChartData.slice(0, 5).map((category, index) => (
+                      pieChartData.slice(0, 10).map((category, index) => (
                         <TransactionPreviewTrigger
                           key={category.id || category.name}
                           categoryId={category.id || null}
