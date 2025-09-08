@@ -48,7 +48,8 @@ import { BudgetComparison } from '../components/budgets/BudgetComparison';
 // import { FinancialErrorBoundary, FormErrorBoundary, AsyncErrorBoundary } from '../components/ErrorBoundary';
 import type { MonthlyBudget } from '../../../shared/types';
 import { 
-  isBudgetableCategory
+  isBudgetableCategory,
+  isIncomeCategoryWithCategories
 } from '../../../shared/utils/categoryHelpers';
 
 export function Budgets() {
@@ -232,6 +233,21 @@ export function Budgets() {
     queryClient.invalidateQueries({ queryKey: ['budgets'] });
   };
 
+  // Calculate income and expense budgets separately
+  const budgetedIncome = useMemo(() => {
+    if (!budgetData?.budgets || !categories) return 0;
+    return budgetData.budgets
+      .filter(b => isIncomeCategoryWithCategories(b.categoryId, categories))
+      .reduce((sum, b) => sum + b.amount, 0);
+  }, [budgetData, categories]);
+  
+  const budgetedSpending = useMemo(() => {
+    if (!budgetData?.budgets || !categories) return 0;
+    return budgetData.budgets
+      .filter(b => !isIncomeCategoryWithCategories(b.categoryId, categories))
+      .reduce((sum, b) => sum + b.amount, 0);
+  }, [budgetData, categories]);
+
   if (budgetsLoading) {
     return (
       <Center h={400}>
@@ -241,6 +257,7 @@ export function Budgets() {
   }
 
   const hasBudgets = budgetData && budgetData.budgets.length > 0;
+  
   const totalBudget = budgetData?.total || 0;
   const totalActual = comparisonData?.totals.actual || 0;
   const totalRemaining = comparisonData?.totals.remaining || 0;
@@ -370,19 +387,53 @@ export function Budgets() {
           </Group>
 
           <Grid mb="lg">
-            <Grid.Col span={{ base: 12, sm: 4 }}>
-              <Card>
-                <Group gap="xs">
-                  <ThemeIcon color="blue" variant="light" size="lg">
-                    <IconCurrencyDollar size={20} />
-                  </ThemeIcon>
-                  <div>
-                    <Text size="xs" c="dimmed">Total Budget</Text>
-                    <Text fw={600} size="lg">{formatCurrency(totalBudget)}</Text>
-                  </div>
-                </Group>
-              </Card>
-            </Grid.Col>
+            {activeTab === 'budget' ? (
+              // Budget Setup tab: Show Income and Spending
+              <>
+                <Grid.Col span={{ base: 12, sm: 6 }}>
+                  <Card>
+                    <Group gap="xs">
+                      <ThemeIcon color="green" variant="light" size="lg">
+                        <IconTrendingUp size={20} />
+                      </ThemeIcon>
+                      <div>
+                        <Text size="xs" c="dimmed">Budgeted Income</Text>
+                        <Text fw={600} size="lg">{formatCurrency(budgetedIncome)}</Text>
+                      </div>
+                    </Group>
+                  </Card>
+                </Grid.Col>
+                
+                <Grid.Col span={{ base: 12, sm: 6 }}>
+                  <Card>
+                    <Group gap="xs">
+                      <ThemeIcon color="blue" variant="light" size="lg">
+                        <IconCurrencyDollar size={20} />
+                      </ThemeIcon>
+                      <div>
+                        <Text size="xs" c="dimmed">Budgeted Spending</Text>
+                        <Text fw={600} size="lg">{formatCurrency(budgetedSpending)}</Text>
+                      </div>
+                    </Group>
+                  </Card>
+                </Grid.Col>
+              </>
+            ) : (
+              // Comparison tab: Keep existing Total Budget
+              <Grid.Col span={{ base: 12, sm: 4 }}>
+                <Card>
+                  <Group gap="xs">
+                    <ThemeIcon color="blue" variant="light" size="lg">
+                      <IconCurrencyDollar size={20} />
+                    </ThemeIcon>
+                    <div>
+                      <Text size="xs" c="dimmed">Total Budget</Text>
+                      <Text fw={600} size="lg">{formatCurrency(totalBudget)}</Text>
+                    </div>
+                  </Group>
+                </Card>
+              </Grid.Col>
+            )}
             
             {activeTab === 'comparison' && (
               <>

@@ -8,7 +8,6 @@ import {
   Stack,
   Paper,
   Title,
-  ThemeIcon,
   Tooltip,
   Button,
   Box,
@@ -18,7 +17,6 @@ import {
   IconTrendingDown,
   IconAlertCircle,
   IconDownload,
-  IconCheck,
 } from '@tabler/icons-react';
 import { format, startOfMonth, endOfMonth } from 'date-fns';
 import type { BudgetComparisonResponse } from '../../lib/api';
@@ -49,6 +47,41 @@ interface HierarchicalComparison {
 }
 
 export function BudgetComparison({ comparison, categories }: BudgetComparisonProps) {
+  // Format currency with commas and round to nearest dollar
+  const formatCurrency = (amount: number): string => {
+    return Math.round(Math.abs(amount)).toLocaleString('en-US');
+  };
+  
+  // Calculate income and expense totals for cashflow
+  const { incomeTotal, expenseTotal, budgetedCashflow, actualCashflow } = useMemo(() => {
+    let budgetedIncome = 0;
+    let actualIncome = 0;
+    let budgetedExpense = 0;
+    let actualExpense = 0;
+    
+    comparison.comparisons.forEach(comp => {
+      const category = categories.find(c => c.id === comp.categoryId);
+      const typedComp = comp as BudgetComparisonType;
+      const isIncome = typedComp.isIncomeCategory || 
+        (category && category.id.startsWith('INCOME'));
+      
+      if (isIncome) {
+        budgetedIncome += comp.budgeted;
+        actualIncome += comp.actual;
+      } else {
+        budgetedExpense += comp.budgeted;
+        actualExpense += comp.actual;
+      }
+    });
+    
+    return {
+      incomeTotal: { budgeted: budgetedIncome, actual: actualIncome },
+      expenseTotal: { budgeted: budgetedExpense, actual: actualExpense },
+      budgetedCashflow: budgetedIncome - budgetedExpense,
+      actualCashflow: actualIncome - actualExpense,
+    };
+  }, [comparison, categories]);
+
   const getCategoryName = (categoryId: string): string => {
     const category = categories.find(c => c.id === categoryId);
     if (!category) return 'Unknown Category';
@@ -289,51 +322,53 @@ export function BudgetComparison({ comparison, categories }: BudgetComparisonPro
         
         <Group grow>
           <Stack gap="xs">
-            <Text size="sm" c="dimmed">Total Budgeted</Text>
-            <Text size="xl" fw={600}>
-              ${comparison.totals.budgeted.toFixed(2)}
-            </Text>
-          </Stack>
-          
-          <Stack gap="xs">
-            <Text size="sm" c="dimmed">Total Spent</Text>
+            <Text size="sm" c="dimmed">Budgeted Cashflow</Text>
             <Text 
               size="xl" 
               fw={600}
-              c={comparison.totals.isOverBudget ? 'red' : undefined}
+              c={budgetedCashflow < 0 ? 'red' : 'green'}
             >
-              ${comparison.totals.actual.toFixed(2)}
+              {budgetedCashflow < 0 ? '-' : '+'}
+              ${formatCurrency(budgetedCashflow)}
             </Text>
           </Stack>
           
           <Stack gap="xs">
-            <Text size="sm" c="dimmed">Remaining</Text>
+            <Text size="sm" c="dimmed">Actual Cashflow</Text>
             <Text 
               size="xl" 
               fw={600}
-              c={comparison.totals.remaining < 0 ? 'red' : 'green'}
+              c={actualCashflow < 0 ? 'red' : 'green'}
             >
-              {comparison.totals.remaining < 0 ? '-' : '+'}
-              ${Math.abs(comparison.totals.remaining).toFixed(2)}
+              {actualCashflow < 0 ? '-' : '+'}
+              ${formatCurrency(actualCashflow)}
             </Text>
           </Stack>
           
           <Stack gap="xs">
-            <Text size="sm" c="dimmed">Overall Usage</Text>
-            <Group gap="xs">
-              <Text size="xl" fw={600}>
-                {comparison.totals.percentUsed}%
-              </Text>
-              {comparison.totals.isOverBudget ? (
-                <ThemeIcon color="red" size="sm">
-                  <IconAlertCircle size={16} />
-                </ThemeIcon>
-              ) : (
-                <ThemeIcon color="green" size="sm">
-                  <IconCheck size={16} />
-                </ThemeIcon>
-              )}
-            </Group>
+            <Text size="sm" c="dimmed">Income vs Budget</Text>
+            <Text 
+              size="xl" 
+              fw={600}
+              c={incomeTotal.budgeted === 0 ? 'dimmed' : 
+                incomeTotal.actual < incomeTotal.budgeted ? 'orange' : 'green'}
+            >
+              {incomeTotal.budgeted === 0 ? 'N/A' : 
+                `${Math.round((incomeTotal.actual / incomeTotal.budgeted) * 100)}%`}
+            </Text>
+          </Stack>
+          
+          <Stack gap="xs">
+            <Text size="sm" c="dimmed">Spending vs Budget</Text>
+            <Text 
+              size="xl" 
+              fw={600}
+              c={expenseTotal.budgeted === 0 ? 'dimmed' : 
+                expenseTotal.actual > expenseTotal.budgeted ? 'red' : 'green'}
+            >
+              {expenseTotal.budgeted === 0 ? 'N/A' : 
+                `${Math.round((expenseTotal.actual / expenseTotal.budgeted) * 100)}%`}
+            </Text>
           </Stack>
         </Group>
         
@@ -408,11 +443,11 @@ export function BudgetComparison({ comparison, categories }: BudgetComparisonPro
                 </Table.Td>
                 
                 <Table.Td>
-                  <Text>${comp.budgeted.toFixed(2)}</Text>
+                  <Text>${formatCurrency(comp.budgeted)}</Text>
                 </Table.Td>
                 
                 <Table.Td>
-                  <Text fw={500}>${comp.actual.toFixed(2)}</Text>
+                  <Text fw={500}>${formatCurrency(comp.actual)}</Text>
                 </Table.Td>
                 
                 <Table.Td>
@@ -424,7 +459,7 @@ export function BudgetComparison({ comparison, categories }: BudgetComparisonPro
                     }
                   >
                     {comp.remaining < 0 ? '-' : '+'}
-                    ${Math.abs(comp.remaining).toFixed(2)}
+                    ${formatCurrency(comp.remaining)}
                   </Text>
                 </Table.Td>
                 
@@ -478,7 +513,7 @@ export function BudgetComparison({ comparison, categories }: BudgetComparisonPro
                     )
                   ) : (
                     // Expense category logic: normal budget logic
-                    comp.isOverBudget ? (
+                    comp.percentUsed > 102 ? (
                       <Tooltip label={`${comp.percentUsed - 100}% over budget`}>
                         <Badge
                           color="red"
@@ -486,6 +521,16 @@ export function BudgetComparison({ comparison, categories }: BudgetComparisonPro
                           leftSection={<IconTrendingUp size={12} />}
                         >
                           Over Budget
+                        </Badge>
+                      </Tooltip>
+                    ) : comp.percentUsed > 100 ? (
+                      <Tooltip label={`${comp.percentUsed - 100}% over budget (within 2% tolerance)`}>
+                        <Badge
+                          color="yellow"
+                          variant="light"
+                          leftSection={<IconAlertCircle size={12} />}
+                        >
+                          Warning
                         </Badge>
                       </Tooltip>
                     ) : comp.percentUsed > 80 ? (
