@@ -28,10 +28,15 @@ export function BudgetSummaryCards({
   const spendingDifference = actualSpending - budgetedSpending;
   const incomeDifference = actualIncome - budgetedIncome;
   
-  // Color logic for differences
+  // Color logic and fun messages for differences
   const getCashflowColor = (difference: number): string => {
     // For cashflow: positive difference (actual > planned) is good (green)
     return difference >= 0 ? 'green' : 'red';
+  };
+  
+  const getCashflowMessage = (difference: number): string => {
+    // For cashflow: positive difference (actual > planned) is good
+    return difference >= 0 ? 'Nice!' : 'Uh oh';
   };
   
   const getSpendingColor = (difference: number): string => {
@@ -39,9 +44,19 @@ export function BudgetSummaryCards({
     return difference <= 0 ? 'green' : 'red';
   };
   
+  const getSpendingMessage = (difference: number): string => {
+    // For spending: negative difference (actual < planned) is good
+    return difference <= 0 ? 'Nice!' : 'Uh oh';
+  };
+  
   const getIncomeColor = (difference: number): string => {
     // For income: positive difference (actual > planned) is good (green)
     return difference >= 0 ? 'green' : 'red';
+  };
+  
+  const getIncomeMessage = (difference: number): string => {
+    // For income: positive difference (actual > planned) is good
+    return difference >= 0 ? 'Nice!' : 'Uh oh';
   };
 
   return (
@@ -71,14 +86,22 @@ export function BudgetSummaryCards({
               </div>
             </Group>
             
-            <Text 
-              size="sm" 
-              fw={600}
-              c={getCashflowColor(cashflowDifference)}
-              ta="center"
-            >
-              {cashflowDifference >= 0 ? '+' : ''}{formatCurrency(cashflowDifference)} difference
-            </Text>
+            <div style={{ textAlign: 'center' }}>
+              <Text 
+                size="sm" 
+                fw={500}
+                c={getCashflowColor(cashflowDifference)}
+              >
+                {cashflowDifference >= 0 ? '+' : ''}{formatCurrency(cashflowDifference)}
+              </Text>
+              <Text 
+                size="xs" 
+                fw={600}
+                c={getCashflowColor(cashflowDifference)}
+              >
+                {getCashflowMessage(cashflowDifference)}
+              </Text>
+            </div>
           </Stack>
         </Card>
       </Grid.Col>
@@ -108,14 +131,22 @@ export function BudgetSummaryCards({
               </div>
             </Group>
             
-            <Text 
-              size="sm" 
-              fw={600}
-              c={getSpendingColor(spendingDifference)}
-              ta="center"
-            >
-              {spendingDifference >= 0 ? '+' : ''}{formatCurrency(spendingDifference)} difference
-            </Text>
+            <div style={{ textAlign: 'center' }}>
+              <Text 
+                size="sm" 
+                fw={500}
+                c={getSpendingColor(spendingDifference)}
+              >
+                {spendingDifference >= 0 ? '+' : ''}{formatCurrency(spendingDifference)}
+              </Text>
+              <Text 
+                size="xs" 
+                fw={600}
+                c={getSpendingColor(spendingDifference)}
+              >
+                {getSpendingMessage(spendingDifference)}
+              </Text>
+            </div>
           </Stack>
         </Card>
       </Grid.Col>
@@ -145,14 +176,22 @@ export function BudgetSummaryCards({
               </div>
             </Group>
             
-            <Text 
-              size="sm" 
-              fw={600}
-              c={getIncomeColor(incomeDifference)}
-              ta="center"
-            >
-              {incomeDifference >= 0 ? '+' : ''}{formatCurrency(incomeDifference)} difference
-            </Text>
+            <div style={{ textAlign: 'center' }}>
+              <Text 
+                size="sm" 
+                fw={500}
+                c={getIncomeColor(incomeDifference)}
+              >
+                {incomeDifference >= 0 ? '+' : ''}{formatCurrency(incomeDifference)}
+              </Text>
+              <Text 
+                size="xs" 
+                fw={600}
+                c={getIncomeColor(incomeDifference)}
+              >
+                {getIncomeMessage(incomeDifference)}
+              </Text>
+            </div>
           </Stack>
         </Card>
       </Grid.Col>

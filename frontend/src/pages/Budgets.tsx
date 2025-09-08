@@ -45,7 +45,8 @@ import { BudgetSummaryCards } from '../components/budgets/BudgetSummaryCards';
 import type { MonthlyBudget } from '../../../shared/types';
 import { 
   isBudgetableCategory,
-  isIncomeCategoryWithCategories
+  isIncomeCategoryWithCategories,
+  isTransferCategory
 } from '../../../shared/utils/categoryHelpers';
 
 export function Budgets() {
@@ -239,7 +240,10 @@ export function Budgets() {
   const budgetedSpending = useMemo(() => {
     if (!budgetData?.budgets || !categories) return 0;
     return budgetData.budgets
-      .filter(b => !isIncomeCategoryWithCategories(b.categoryId, categories))
+      .filter(b => 
+        !isIncomeCategoryWithCategories(b.categoryId, categories) && 
+        !isTransferCategory(b.categoryId)
+      )
       .reduce((sum, b) => sum + b.amount, 0);
   }, [budgetData, categories]);
 
@@ -293,7 +297,8 @@ export function Budgets() {
         !transaction.isHidden && 
         !hiddenCategoryIds.has(transaction.categoryId) &&
         isBudgetableCategory(transaction.categoryId, categories) &&
-        !isIncomeCategoryWithCategories(transaction.categoryId, categories)
+        !isIncomeCategoryWithCategories(transaction.categoryId, categories) &&
+        !isTransferCategory(transaction.categoryId)
       )
       .reduce((sum, transaction) => sum + Math.abs(transaction.amount), 0);
   }, [transactionData, categories]);

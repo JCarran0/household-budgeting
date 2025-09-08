@@ -7,6 +7,7 @@ import {
   Group,
   Badge,
   Tooltip,
+  Title,
 } from '@mantine/core';
 import { IconEdit, IconTrash, IconDeviceFloppy, IconX } from '@tabler/icons-react';
 import { useState } from 'react';
@@ -16,6 +17,10 @@ import { modals } from '@mantine/modals';
 import { api } from '../../lib/api';
 import { formatCurrency } from '../../utils/formatters';
 import type { MonthlyBudget, Category } from '../../../../shared/types';
+import { 
+  isIncomeCategoryWithCategories, 
+  isTransferCategory 
+} from '../../../../shared/utils/categoryHelpers';
 
 interface BudgetGridProps {
   budgets: MonthlyBudget[];
@@ -244,20 +249,51 @@ export function BudgetGrid({ budgets, categories, month, onEdit }: BudgetGridPro
     !categories.find(c => c.id === budget.categoryId)
   );
   
-  // Group non-orphaned visible budgets by parent category
-  const budgetsByParent = visibleBudgets.reduce<Record<string, MonthlyBudget[]>>((acc, budget) => {
+  // Group budgets by type (Income, Expense, Transfer)
+  const budgetsByType = visibleBudgets.reduce<{
+    income: MonthlyBudget[],
+    expense: MonthlyBudget[],
+    transfer: MonthlyBudget[]
+  }>((acc, budget) => {
     const category = categories.find(c => c.id === budget.categoryId);
     if (category) {
-      const parentId = category.parentId || category.id;
-      if (!acc[parentId]) acc[parentId] = [];
-      acc[parentId].push(budget);
+      if (isIncomeCategoryWithCategories(budget.categoryId, categories)) {
+        acc.income.push(budget);
+      } else if (isTransferCategory(budget.categoryId)) {
+        acc.transfer.push(budget);
+      } else {
+        acc.expense.push(budget);
+      }
     }
     return acc;
-  }, {});
+  }, { income: [], expense: [], transfer: [] });
+  
+  // Helper function to group budgets by parent category within each type
+  const groupBudgetsByParent = (budgets: MonthlyBudget[]): Record<string, MonthlyBudget[]> => {
+    return budgets.reduce<Record<string, MonthlyBudget[]>>((acc, budget) => {
+      const category = categories.find(c => c.id === budget.categoryId);
+      if (category) {
+        const parentId = category.parentId || category.id;
+        if (!acc[parentId]) acc[parentId] = [];
+        acc[parentId].push(budget);
+      }
+      return acc;
+    }, {});
+  };
 
-  // Get parent categories that have budgets
-  const parentCategories = categories.filter(cat => 
-    !cat.parentId && budgetsByParent[cat.id]
+  const incomeBudgetsByParent = groupBudgetsByParent(budgetsByType.income);
+  const expenseBudgetsByParent = groupBudgetsByParent(budgetsByType.expense);
+  const transferBudgetsByParent = groupBudgetsByParent(budgetsByType.transfer);
+  
+  // Get parent categories for each type
+  const incomeParentCategories = categories.filter(cat => 
+    !cat.parentId && incomeBudgetsByParent[cat.id]
+  );
+  const expenseParentCategories = categories.filter(cat => 
+    !cat.parentId && expenseBudgetsByParent[cat.id]
+  );
+  const transferParentCategories = categories.filter(cat => 
+    !cat.parentId && transferBudgetsByParent[cat.id]
   );
 
   return (
@@ -270,76 +306,168 @@ export function BudgetGrid({ budgets, categories, month, onEdit }: BudgetGridPro
         </Table.Tr>
       </Table.Thead>
       <Table.Tbody>
-        {parentCategories.map(parent => (
-          <React.Fragment key={parent.id}>
-            {/* Parent category budgets */}
-            {budgetsByParent[parent.id]
-              .filter(b => b.categoryId === parent.id)
-              .map(budget => (
-                <BudgetRow
-                  key={budget.id}
-                  budget={budget}
-                  category={parent}
-                  month={month}
-                  onEdit={onEdit}
-                  onDelete={handleDelete}
-                  onUpdate={handleUpdate}
-                />
-              ))}
-            
-            {/* Subcategory budgets */}
-            {budgetsByParent[parent.id]
-              .filter(b => b.categoryId !== parent.id)
-              .map(budget => {
-                const subcategory = categories.find(c => c.id === budget.categoryId);
-                return (
-                  <BudgetRow
-                    key={budget.id}
-                    budget={budget}
-                    category={subcategory}
-                    month={month}
-                    onEdit={onEdit}
-                    onDelete={handleDelete}
-                    onUpdate={handleUpdate}
-                  />
-                );
-              })}
-          </React.Fragment>
-        ))}
-        
-        {/* Visible budgets without parent categories */}
-        {visibleBudgets
-          .filter(budget => {
-            const category = categories.find(c => c.id === budget.categoryId);
-            return category && !category.parentId && !budgetsByParent[category.id];
-          })
-          .map(budget => {
-            const category = categories.find(c => c.id === budget.categoryId);
-            return (
+        {/* Income Section */}
+        {incomeParentCategories.length > 0 && (
+          <>
+            <Table.Tr>
+              <Table.Td colSpan={3}>
+                <Title order={5} c="green" mb="xs">Income</Title>
+              </Table.Td>
+            </Table.Tr>
+            {incomeParentCategories.map(parent => (
+              <React.Fragment key={`income-${parent.id}`}>
+                {/* Parent category budgets */}
+                {incomeBudgetsByParent[parent.id]
+                  .filter(b => b.categoryId === parent.id)
+                  .map(budget => (
+                    <BudgetRow
+                      key={budget.id}
+                      budget={budget}
+                      category={parent}
+                      month={month}
+                      onEdit={onEdit}
+                      onDelete={handleDelete}
+                      onUpdate={handleUpdate}
+                    />
+                  ))}
+                
+                {/* Subcategory budgets */}
+                {incomeBudgetsByParent[parent.id]
+                  .filter(b => b.categoryId !== parent.id)
+                  .map(budget => {
+                    const subcategory = categories.find(c => c.id === budget.categoryId);
+                    return (
+                      <BudgetRow
+                        key={budget.id}
+                        budget={budget}
+                        category={subcategory}
+                        month={month}
+                        onEdit={onEdit}
+                        onDelete={handleDelete}
+                        onUpdate={handleUpdate}
+                      />
+                    );
+                  })}
+              </React.Fragment>
+            ))}
+          </>
+        )}
+
+        {/* Expense Section */}
+        {expenseParentCategories.length > 0 && (
+          <>
+            <Table.Tr>
+              <Table.Td colSpan={3}>
+                <Title order={5} c="red" mb="xs">Expenses</Title>
+              </Table.Td>
+            </Table.Tr>
+            {expenseParentCategories.map(parent => (
+              <React.Fragment key={`expense-${parent.id}`}>
+                {/* Parent category budgets */}
+                {expenseBudgetsByParent[parent.id]
+                  .filter(b => b.categoryId === parent.id)
+                  .map(budget => (
+                    <BudgetRow
+                      key={budget.id}
+                      budget={budget}
+                      category={parent}
+                      month={month}
+                      onEdit={onEdit}
+                      onDelete={handleDelete}
+                      onUpdate={handleUpdate}
+                    />
+                  ))}
+                
+                {/* Subcategory budgets */}
+                {expenseBudgetsByParent[parent.id]
+                  .filter(b => b.categoryId !== parent.id)
+                  .map(budget => {
+                    const subcategory = categories.find(c => c.id === budget.categoryId);
+                    return (
+                      <BudgetRow
+                        key={budget.id}
+                        budget={budget}
+                        category={subcategory}
+                        month={month}
+                        onEdit={onEdit}
+                        onDelete={handleDelete}
+                        onUpdate={handleUpdate}
+                      />
+                    );
+                  })}
+              </React.Fragment>
+            ))}
+          </>
+        )}
+
+        {/* Transfer Section */}
+        {transferParentCategories.length > 0 && (
+          <>
+            <Table.Tr>
+              <Table.Td colSpan={3}>
+                <Title order={5} c="blue" mb="xs">Transfers</Title>
+              </Table.Td>
+            </Table.Tr>
+            {transferParentCategories.map(parent => (
+              <React.Fragment key={`transfer-${parent.id}`}>
+                {/* Parent category budgets */}
+                {transferBudgetsByParent[parent.id]
+                  .filter(b => b.categoryId === parent.id)
+                  .map(budget => (
+                    <BudgetRow
+                      key={budget.id}
+                      budget={budget}
+                      category={parent}
+                      month={month}
+                      onEdit={onEdit}
+                      onDelete={handleDelete}
+                      onUpdate={handleUpdate}
+                    />
+                  ))}
+                
+                {/* Subcategory budgets */}
+                {transferBudgetsByParent[parent.id]
+                  .filter(b => b.categoryId !== parent.id)
+                  .map(budget => {
+                    const subcategory = categories.find(c => c.id === budget.categoryId);
+                    return (
+                      <BudgetRow
+                        key={budget.id}
+                        budget={budget}
+                        category={subcategory}
+                        month={month}
+                        onEdit={onEdit}
+                        onDelete={handleDelete}
+                        onUpdate={handleUpdate}
+                      />
+                    );
+                  })}
+              </React.Fragment>
+            ))}
+          </>
+        )}
+          
+        {/* Orphaned budgets (categories that no longer exist) */}
+        {orphanedBudgets.length > 0 && (
+          <>
+            <Table.Tr>
+              <Table.Td colSpan={3}>
+                <Title order={5} c="gray" mb="xs">Unknown Categories</Title>
+              </Table.Td>
+            </Table.Tr>
+            {orphanedBudgets.map(budget => (
               <BudgetRow
                 key={budget.id}
                 budget={budget}
-                category={category}
+                category={undefined}
                 month={month}
                 onEdit={onEdit}
                 onDelete={handleDelete}
                 onUpdate={handleUpdate}
               />
-            );
-          })}
-          
-        {/* Orphaned budgets (categories that no longer exist) */}
-        {orphanedBudgets.map(budget => (
-          <BudgetRow
-            key={budget.id}
-            budget={budget}
-            category={undefined}
-            month={month}
-            onEdit={onEdit}
-            onDelete={handleDelete}
-            onUpdate={handleUpdate}
-          />
-        ))}
+            ))}
+          </>
+        )}
       </Table.Tbody>
     </Table>
   );
