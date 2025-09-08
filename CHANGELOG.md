@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.10.0](https://github.com/JCarran0/household-budgeting/compare/v1.9.0...v1.10.0) (2025-09-08)
+
+
+### Features
+
+* add transfer transaction filtering and shared calculation utilities ([be35ec5](https://github.com/JCarran0/household-budgeting/commit/be35ec56addeca003caf76098b020eba2ae42b0c))
+* complete transfer filtering implementation across frontend and docs ([0c68b7f](https://github.com/JCarran0/household-budgeting/commit/0c68b7f7f7cdb248aa8c4b18cb7b96503d59a0d1))
+
+
+### Bug Fixes
+
+* **ci:** prevent deployment when tests fail and add comprehensive validation ([6030262](https://github.com/JCarran0/household-budgeting/commit/6030262b40e5a3503340c640c6b1a48f294a0db5))
+
 ## [1.9.0](https://github.com/JCarran0/household-budgeting/compare/v1.8.0...v1.9.0) (2025-09-08)
 
 
