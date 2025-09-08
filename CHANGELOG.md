@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.12.0](https://github.com/JCarran0/household-budgeting/compare/v1.11.0...v1.12.0) (2025-09-08)
+
+
+### Features
+
+* **budgets:** enhance budget page with corrected calculations and improved UX ([c5ff754](https://github.com/JCarran0/household-budgeting/commit/c5ff75412d4e95fa4e7f71ea977e4b0e17a95efe))
+
 ## [1.11.0](https://github.com/JCarran0/household-budgeting/compare/v1.10.3...v1.11.0) (2025-09-08)
 
 
