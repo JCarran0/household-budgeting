@@ -208,10 +208,12 @@ jobs:
   deploy:
     needs: [release, validate_deploy_only]
     # Run if either path succeeded (release path or deploy-only path)
+    # IMPORTANT: Do NOT use always() - we must not deploy if validation fails
     if: |
-      always() && 
       (needs.release.result == 'success' || needs.release.result == 'skipped') &&
-      (needs.validate_deploy_only.result == 'success' || needs.validate_deploy_only.result == 'skipped')
+      (needs.validate_deploy_only.result == 'success' || needs.validate_deploy_only.result == 'skipped') &&
+      !contains(needs.*.result, 'failure') &&
+      !contains(needs.*.result, 'cancelled')
     runs-on: ubuntu-latest
     name: Deploy to Production
     environment:
@@ -262,6 +264,8 @@ jobs:
           # Copy shared utilities to root level (matches import path ../../../shared)
           if [ -d backend/dist/shared ]; then
             cp -r backend/dist/shared deployment/shared
+          else
+            echo "⚠️ Warning: No shared utilities found in backend/dist/shared"
           fi
           
           # Copy frontend
@@ -294,6 +298,22 @@ jobs:
           echo "$GITHUB_SHA" > deployment/REVISION
           echo "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > deployment/TIMESTAMP
           echo "${{ steps.deploy_version.outputs.version }}" > deployment/VERSION
+          
+          # Validate deployment package structure
+          echo "🔍 Validating deployment package..."
+          test -f deployment/backend/dist/index.js || (echo "❌ Backend entry point missing" && exit 1)
+          test -d deployment/shared/utils || (echo "❌ Shared utilities directory missing" && exit 1)
+          test -f deployment/shared/utils/categoryHelpers.js || (echo "❌ CategoryHelpers missing from shared utilities" && exit 1)
+          
+          # Validate all required category helper functions are present
+          echo "  Checking for required functions in categoryHelpers.js..."
+          grep -q "createCategoryLookup" deployment/shared/utils/categoryHelpers.js || (echo "❌ createCategoryLookup function missing" && exit 1)
+          grep -q "isBudgetableCategory" deployment/shared/utils/categoryHelpers.js || (echo "❌ isBudgetableCategory function missing" && exit 1)
+          grep -q "getBudgetType" deployment/shared/utils/categoryHelpers.js || (echo "❌ getBudgetType function missing" && exit 1)
+          grep -q "isIncomeCategoryHierarchical" deployment/shared/utils/categoryHelpers.js || (echo "❌ isIncomeCategoryHierarchical function missing" && exit 1)
+          grep -q "isExpenseCategoryHierarchical" deployment/shared/utils/categoryHelpers.js || (echo "❌ isExpenseCategoryHierarchical function missing" && exit 1)
+          
+          echo "✅ Deployment package validation passed"
           
           # Create tarball
           tar -czf deployment.tar.gz deployment/
