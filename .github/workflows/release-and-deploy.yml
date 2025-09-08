@@ -208,11 +208,16 @@ jobs:
   deploy:
     needs: [release, validate_deploy_only]
     # Run if either path succeeded (release path or deploy-only path)
-    # IMPORTANT: Do NOT use always() - we must not deploy if validation fails
+    # IMPORTANT: Must use always() because only one of the needed jobs runs in each scenario
+    # GitHub Actions skips jobs when any dependency doesn't run, even with conditional logic
     if: |
+      always() &&
       !contains(needs.*.result, 'failure') &&
       !contains(needs.*.result, 'cancelled') &&
-      (needs.release.result == 'success' || needs.validate_deploy_only.result == 'success')
+      (
+        (github.event.inputs.skip_release != 'true' && needs.release.result == 'success') ||
+        (github.event.inputs.skip_release == 'true' && needs.validate_deploy_only.result == 'success')
+      )
     runs-on: ubuntu-latest
     name: Deploy to Production
     environment:
