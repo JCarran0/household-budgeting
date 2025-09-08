@@ -11,8 +11,6 @@ import {
   Center,
   Alert,
   Text,
-  Grid,
-  Card,
   ThemeIcon,
   ActionIcon,
   Tooltip,
@@ -30,8 +28,6 @@ import {
   IconChartBar,
   IconAlertCircle,
   IconCurrencyDollar,
-  IconTrendingUp,
-  IconTrendingDown,
   IconChevronLeft,
   IconChevronRight,
   IconRefresh,
@@ -40,10 +36,10 @@ import {
 } from '@tabler/icons-react';
 import { format, addMonths, subMonths, startOfMonth, parseISO } from 'date-fns';
 import { api } from '../lib/api';
-import { formatCurrency } from '../utils/formatters';
 import { BudgetGrid } from '../components/budgets/BudgetGrid';
 import { BudgetForm } from '../components/budgets/BudgetForm';
 import { BudgetComparison } from '../components/budgets/BudgetComparison';
+import { BudgetSummaryCards } from '../components/budgets/BudgetSummaryCards';
 // Error boundaries available for use when needed
 // import { FinancialErrorBoundary, FormErrorBoundary, AsyncErrorBoundary } from '../components/ErrorBoundary';
 import type { MonthlyBudget } from '../../../shared/types';
@@ -109,14 +105,13 @@ export function Budgets() {
     },
   });
 
-  // Fetch transactions for the month to calculate actuals
+  // Fetch transactions for the month to calculate actuals (always enabled for unified summary)
   const { data: transactionData } = useQuery({
     queryKey: ['transactions', selectedMonth],
     queryFn: () => api.getTransactions({
       startDate: format(selectedDate, 'yyyy-MM-01'),
       endDate: format(addMonths(startOfMonth(selectedDate), 1).getTime() - 1, 'yyyy-MM-dd'),
     }),
-    enabled: activeTab === 'comparison',
   });
 
   // Calculate actuals from transactions
@@ -248,6 +243,61 @@ export function Budgets() {
       .reduce((sum, b) => sum + b.amount, 0);
   }, [budgetData, categories]);
 
+  // Calculate actual income and spending from transactions
+  const actualIncome = useMemo(() => {
+    if (!transactionData?.transactions || !categories) return 0;
+    
+    // Create a set of hidden category IDs for efficient lookup
+    const hiddenCategoryIds = new Set<string>();
+    categories.forEach(cat => {
+      if (cat.isHidden) {
+        hiddenCategoryIds.add(cat.id);
+      } else if (cat.parentId) {
+        const parent = categories.find(p => p.id === cat.parentId);
+        if (parent?.isHidden) {
+          hiddenCategoryIds.add(cat.id);
+        }
+      }
+    });
+    
+    return transactionData.transactions
+      .filter(transaction => 
+        transaction.categoryId && 
+        !transaction.isHidden && 
+        !hiddenCategoryIds.has(transaction.categoryId) &&
+        isBudgetableCategory(transaction.categoryId, categories) &&
+        isIncomeCategoryWithCategories(transaction.categoryId, categories)
+      )
+      .reduce((sum, transaction) => sum + Math.abs(transaction.amount), 0);
+  }, [transactionData, categories]);
+
+  const actualSpending = useMemo(() => {
+    if (!transactionData?.transactions || !categories) return 0;
+    
+    // Create a set of hidden category IDs for efficient lookup
+    const hiddenCategoryIds = new Set<string>();
+    categories.forEach(cat => {
+      if (cat.isHidden) {
+        hiddenCategoryIds.add(cat.id);
+      } else if (cat.parentId) {
+        const parent = categories.find(p => p.id === cat.parentId);
+        if (parent?.isHidden) {
+          hiddenCategoryIds.add(cat.id);
+        }
+      }
+    });
+    
+    return transactionData.transactions
+      .filter(transaction => 
+        transaction.categoryId && 
+        !transaction.isHidden && 
+        !hiddenCategoryIds.has(transaction.categoryId) &&
+        isBudgetableCategory(transaction.categoryId, categories) &&
+        !isIncomeCategoryWithCategories(transaction.categoryId, categories)
+      )
+      .reduce((sum, transaction) => sum + Math.abs(transaction.amount), 0);
+  }, [transactionData, categories]);
+
   if (budgetsLoading) {
     return (
       <Center h={400}>
@@ -257,10 +307,6 @@ export function Budgets() {
   }
 
   const hasBudgets = budgetData && budgetData.budgets.length > 0;
-  
-  const totalBudget = budgetData?.total || 0;
-  const totalActual = comparisonData?.totals.actual || 0;
-  const totalRemaining = comparisonData?.totals.remaining || 0;
 
   return (
     <Container size="lg" py="xl">
@@ -386,105 +432,12 @@ export function Budgets() {
             </Group>
           </Group>
 
-          <Grid mb="lg">
-            {activeTab === 'budget' ? (
-              // Budget Setup tab: Show Income and Spending
-              <>
-                <Grid.Col span={{ base: 12, sm: 6 }}>
-                  <Card>
-                    <Group gap="xs">
-                      <ThemeIcon color="green" variant="light" size="lg">
-                        <IconTrendingUp size={20} />
-                      </ThemeIcon>
-                      <div>
-                        <Text size="xs" c="dimmed">Budgeted Income</Text>
-                        <Text fw={600} size="lg">{formatCurrency(budgetedIncome)}</Text>
-                      </div>
-                    </Group>
-                  </Card>
-                </Grid.Col>
-                
-                <Grid.Col span={{ base: 12, sm: 6 }}>
-                  <Card>
-                    <Group gap="xs">
-                      <ThemeIcon color="blue" variant="light" size="lg">
-                        <IconCurrencyDollar size={20} />
-                      </ThemeIcon>
-                      <div>
-                        <Text size="xs" c="dimmed">Budgeted Spending</Text>
-                        <Text fw={600} size="lg">{formatCurrency(budgetedSpending)}</Text>
-                      </div>
-                    </Group>
-                  </Card>
-                </Grid.Col>
-              </>
-            ) : (
-              // Comparison tab: Keep existing Total Budget
-              <Grid.Col span={{ base: 12, sm: 4 }}>
-                <Card>
-                  <Group gap="xs">
-                    <ThemeIcon color="blue" variant="light" size="lg">
-                      <IconCurrencyDollar size={20} />
-                    </ThemeIcon>
-                    <div>
-                      <Text size="xs" c="dimmed">Total Budget</Text>
-                      <Text fw={600} size="lg">{formatCurrency(totalBudget)}</Text>
-                    </div>
-                  </Group>
-                </Card>
-              </Grid.Col>
-            )}
-            
-            {activeTab === 'comparison' && (
-              <>
-                <Grid.Col span={{ base: 12, sm: 4 }}>
-                  <Card>
-                    <Group gap="xs">
-                      <ThemeIcon 
-                        color={totalActual > totalBudget ? "red" : "green"} 
-                        variant="light" 
-                        size="lg"
-                      >
-                        {totalActual > totalBudget ? 
-                          <IconTrendingUp size={20} /> : 
-                          <IconTrendingDown size={20} />
-                        }
-                      </ThemeIcon>
-                      <div>
-                        <Text size="xs" c="dimmed">Total Spent</Text>
-                        <Text fw={600} size="lg">{formatCurrency(totalActual)}</Text>
-                      </div>
-                    </Group>
-                  </Card>
-                </Grid.Col>
-                
-                <Grid.Col span={{ base: 12, sm: 4 }}>
-                  <Card>
-                    <Group gap="xs">
-                      <ThemeIcon 
-                        color={totalRemaining < 0 ? "red" : "green"} 
-                        variant="light" 
-                        size="lg"
-                      >
-                        <IconChartBar size={20} />
-                      </ThemeIcon>
-                      <div>
-                        <Text size="xs" c="dimmed">Remaining</Text>
-                        <Text 
-                          fw={600} 
-                          size="lg"
-                          c={totalRemaining < 0 ? "red" : undefined}
-                        >
-                          {formatCurrency(Math.abs(totalRemaining))}
-                          {totalRemaining < 0 && " over"}
-                        </Text>
-                      </div>
-                    </Group>
-                  </Card>
-                </Grid.Col>
-              </>
-            )}
-          </Grid>
+          <BudgetSummaryCards
+            budgetedIncome={budgetedIncome}
+            actualIncome={actualIncome}
+            budgetedSpending={budgetedSpending}
+            actualSpending={actualSpending}
+          />
 
           <Tabs value={activeTab} onChange={(value) => setActiveTab(value || 'budget')}>
             <Tabs.List>
