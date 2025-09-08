@@ -212,10 +212,7 @@ jobs:
     if: |
       !contains(needs.*.result, 'failure') &&
       !contains(needs.*.result, 'cancelled') &&
-      (
-        (github.event.inputs.skip_release != 'true' && needs.release.result == 'success') ||
-        (github.event.inputs.skip_release == 'true' && needs.validate_deploy_only.result == 'success')
-      )
+      (needs.release.result == 'success' || needs.validate_deploy_only.result == 'success')
     runs-on: ubuntu-latest
     name: Deploy to Production
     environment:
