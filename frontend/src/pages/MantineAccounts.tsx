@@ -34,6 +34,7 @@ import {
   IconEdit,
 } from '@tabler/icons-react';
 import { AccountNicknameModal } from '../components/accounts/AccountNicknameModal';
+import { formatCurrency } from '../utils/formatters';
 
 export function MantineAccounts() {
   const queryClient = useQueryClient();
@@ -249,12 +250,12 @@ export function MantineAccounts() {
                   <div style={{ textAlign: 'right' }}>
                     <Text size="sm" c="dimmed">Current Balance</Text>
                     <Text size="xl" fw={700}>
-                      ${account.currentBalance.toFixed(2)}
+                      {formatCurrency(account.currentBalance)}
                     </Text>
                     {account.availableBalance !== null && 
                      account.availableBalance !== account.currentBalance && (
                       <Text size="sm" c="dimmed">
-                        Available: ${account.availableBalance.toFixed(2)}
+                        Available: {formatCurrency(account.availableBalance)}
                       </Text>
                     )}
                   </div>

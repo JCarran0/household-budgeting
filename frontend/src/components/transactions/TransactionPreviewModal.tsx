@@ -27,6 +27,7 @@ import {
 import { format } from 'date-fns';
 import { api } from '../../lib/api';
 import type { Transaction } from '../../../../shared/types';
+import { formatCurrency } from '../../utils/formatters';
 
 interface TransactionPreviewModalProps {
   opened: boolean;
@@ -282,7 +283,7 @@ export function TransactionPreviewModal({
                             fw={500} 
                             c={transaction.amount > 0 ? 'red' : 'green'}
                           >
-                            ${Math.abs(transaction.amount).toFixed(2)}
+                            {formatCurrency(Math.abs(transaction.amount))}
                           </Text>
                         </Group>
                       </Table.Td>

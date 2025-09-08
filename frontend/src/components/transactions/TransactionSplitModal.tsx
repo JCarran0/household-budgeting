@@ -18,6 +18,7 @@ import {
 import { useForm } from '@mantine/form';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { notifications } from '@mantine/notifications';
+import { formatCurrency } from '../../utils/formatters';
 import { 
   IconAlertCircle, 
   IconPlus, 
@@ -228,7 +229,7 @@ export function TransactionSplitModal({
               <Group justify="space-between">
                 <Text size="sm" c="dimmed">Total Amount</Text>
                 <Badge size="lg" color={transaction.amount > 0 ? 'red' : 'green'}>
-                  ${Math.abs(transaction.amount).toFixed(2)}
+                  {formatCurrency(Math.abs(transaction.amount))}
                 </Badge>
               </Group>
               <Group justify="space-between">
@@ -313,7 +314,7 @@ export function TransactionSplitModal({
           {Math.abs(remainingAmount) > 0.01 && (
             <Alert icon={<IconAlertCircle size={16} />} color="yellow">
               Split amounts must equal the original transaction amount.
-              You have ${Math.abs(remainingAmount).toFixed(2)} remaining to allocate.
+              You have {formatCurrency(Math.abs(remainingAmount))} remaining to allocate.
             </Alert>
           )}
 

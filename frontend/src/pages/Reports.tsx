@@ -2,6 +2,7 @@ import { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useReportsFilters } from '../hooks/usePersistedFilters';
 import { notifications } from '@mantine/notifications';
+import { formatCurrency } from '../utils/formatters';
 import { 
   Container, 
   Title, 
@@ -472,7 +473,7 @@ export function Reports() {
                   Net Income
                 </Text>
                 <Text fw={700} size="xl" c={ytd?.netIncome && ytd.netIncome > 0 ? 'green' : 'red'}>
-                  {ytd?.netIncome ? (ytd.netIncome < 0 ? '-' : '') + '$' + Math.ceil(Math.abs(ytd.netIncome)).toLocaleString() : '$0'}
+                  {ytd?.netIncome ? (ytd.netIncome < 0 ? '-' : '') + formatCurrency(Math.abs(ytd.netIncome)) : formatCurrency(0)}
                 </Text>
                 <Text size="xs" c="dimmed" mt={7}>
                   This year

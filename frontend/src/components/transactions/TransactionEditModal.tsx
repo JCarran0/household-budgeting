@@ -21,6 +21,7 @@ import { notifications } from '@mantine/notifications';
 import { IconAlertCircle, IconTag, IconCategory } from '@tabler/icons-react';
 import { api } from '../../lib/api';
 import type { Transaction } from '../../../../shared/types';
+import { formatCurrency } from '../../utils/formatters';
 
 interface TransactionEditModalProps {
   opened: boolean;
@@ -293,7 +294,7 @@ export function TransactionEditModal({
             <Group justify="space-between">
               <Text size="sm" c="dimmed">Amount</Text>
               <Text fw={500} c={transaction.amount > 0 ? 'red' : 'green'}>
-                ${Math.abs(transaction.amount).toFixed(2)}
+                {formatCurrency(Math.abs(transaction.amount))}
               </Text>
             </Group>
             

@@ -12,6 +12,7 @@ import {
   IconEyeOff,
   IconX,
 } from '@tabler/icons-react';
+import { formatCurrency } from '../../utils/formatters';
 
 interface BulkEditBarProps {
   selectedCount: number;
@@ -55,7 +56,7 @@ export function BulkEditBar({
                 {selectedCount} selected
               </Badge>
               <Text size="sm" c="dimmed">
-                Total: ${Math.abs(selectedAmount).toFixed(2)}
+                Total: {formatCurrency(Math.abs(selectedAmount))}
               </Text>
             </Group>
             

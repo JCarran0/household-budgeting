@@ -5,6 +5,7 @@ import { api, type ExtendedPlaidAccount } from '../lib/api';
 import { format, startOfMonth, endOfMonth, startOfYear, subMonths } from 'date-fns';
 import type { Transaction } from '../../../shared/types';
 import { useTransactionFilters } from '../hooks/usePersistedFilters';
+import { formatCurrency } from '../utils/formatters';
 import {
   Container,
   Stack,
@@ -690,7 +691,7 @@ export function EnhancedTransactions() {
       return [
         escapeCSV(transaction.date),
         escapeCSV(description),
-        escapeCSV(transaction.amount.toFixed(2)),
+        escapeCSV(formatCurrency(transaction.amount, true).replace('$', '')),
         escapeCSV(categoryDisplay),
         escapeCSV(accountName),
         escapeCSV(institution),
@@ -1019,7 +1020,7 @@ export function EnhancedTransactions() {
                       </Group>
                       
                       <Box>
-                        <Text size="sm" mb={4}>Tolerance: ±${amountTolerance.toFixed(2)}</Text>
+                        <Text size="sm" mb={4}>Tolerance: ±{formatCurrency(amountTolerance, true)}</Text>
                         <Slider
                           value={amountTolerance}
                           onChange={setAmountTolerance}
@@ -1284,7 +1285,7 @@ export function EnhancedTransactions() {
                   
                   <Table.Td>
                     <Tooltip
-                      label={`$${Math.abs(transaction.amount).toFixed(2)}`}
+                      label={formatCurrency(Math.abs(transaction.amount), true)}
                       openDelay={1000}
                       closeDelay={200}
                     >
@@ -1301,7 +1302,7 @@ export function EnhancedTransactions() {
                           )}
                         </ThemeIcon>
                         <Text fw={500} c={transaction.amount > 0 ? 'red' : 'green'}>
-                          ${Math.round(Math.abs(transaction.amount))}
+                          {formatCurrency(Math.abs(transaction.amount))}
                         </Text>
                       </Group>
                     </Tooltip>

@@ -22,6 +22,7 @@ import { format, startOfMonth, endOfMonth } from 'date-fns';
 import type { BudgetComparisonResponse } from '../../lib/api';
 import type { Category, BudgetComparison as BudgetComparisonType } from '../../../../shared/types';
 import { TransactionPreviewTrigger } from '../transactions/TransactionPreviewTrigger';
+import { formatCurrency } from '../../utils/formatters';
 
 interface BudgetComparisonProps {
   comparison: BudgetComparisonResponse;
@@ -47,10 +48,7 @@ interface HierarchicalComparison {
 }
 
 export function BudgetComparison({ comparison, categories }: BudgetComparisonProps) {
-  // Format currency with commas and round to nearest dollar
-  const formatCurrency = (amount: number): string => {
-    return Math.round(Math.abs(amount)).toLocaleString('en-US');
-  };
+  // Using shared formatCurrency utility from utils/formatters
   
   // Calculate income and expense totals for cashflow
   const { incomeTotal, expenseTotal, budgetedCashflow, actualCashflow } = useMemo(() => {
@@ -329,7 +327,7 @@ export function BudgetComparison({ comparison, categories }: BudgetComparisonPro
               c={budgetedCashflow < 0 ? 'red' : 'green'}
             >
               {budgetedCashflow < 0 ? '-' : '+'}
-              ${formatCurrency(budgetedCashflow)}
+              {formatCurrency(budgetedCashflow)}
             </Text>
           </Stack>
           
@@ -341,7 +339,7 @@ export function BudgetComparison({ comparison, categories }: BudgetComparisonPro
               c={actualCashflow < 0 ? 'red' : 'green'}
             >
               {actualCashflow < 0 ? '-' : '+'}
-              ${formatCurrency(actualCashflow)}
+              {formatCurrency(actualCashflow)}
             </Text>
           </Stack>
           
@@ -443,11 +441,11 @@ export function BudgetComparison({ comparison, categories }: BudgetComparisonPro
                 </Table.Td>
                 
                 <Table.Td>
-                  <Text>${formatCurrency(comp.budgeted)}</Text>
+                  <Text>{formatCurrency(comp.budgeted)}</Text>
                 </Table.Td>
                 
                 <Table.Td>
-                  <Text fw={500}>${formatCurrency(comp.actual)}</Text>
+                  <Text fw={500}>{formatCurrency(comp.actual)}</Text>
                 </Table.Td>
                 
                 <Table.Td>
@@ -459,7 +457,7 @@ export function BudgetComparison({ comparison, categories }: BudgetComparisonPro
                     }
                   >
                     {comp.remaining < 0 ? '-' : '+'}
-                    ${formatCurrency(comp.remaining)}
+                    {formatCurrency(comp.remaining)}
                   </Text>
                 </Table.Td>
                 

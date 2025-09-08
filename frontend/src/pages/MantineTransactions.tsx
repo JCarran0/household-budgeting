@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { api } from '../lib/api';
 import { format, startOfMonth, endOfMonth, subMonths } from 'date-fns';
 import type { Transaction } from '../../../shared/types';
+import { formatCurrency } from '../utils/formatters';
 import {
   Stack,
   Group,
@@ -264,7 +265,7 @@ export function MantineTransactions() {
                     />
                     
                     <Box>
-                      <Text size="sm" mb={4}>Tolerance: ±${amountTolerance.toFixed(2)}</Text>
+                      <Text size="sm" mb={4}>Tolerance: ±{formatCurrency(amountTolerance, true)}</Text>
                       <Slider
                         value={amountTolerance}
                         onChange={setAmountTolerance}
@@ -318,13 +319,13 @@ export function MantineTransactions() {
               <div>
                 <Text size="xs" c="dimmed">Total Spent</Text>
                 <Text size="lg" fw={700} c="red">
-                  -${totalSpent.toFixed(2)}
+                  -{formatCurrency(totalSpent)}
                 </Text>
               </div>
               <div>
                 <Text size="xs" c="dimmed">Total Earned</Text>
                 <Text size="lg" fw={700} c="green">
-                  +${totalEarned.toFixed(2)}
+                  +{formatCurrency(totalEarned)}
                 </Text>
               </div>
             </Group>
@@ -378,8 +379,8 @@ export function MantineTransactions() {
                           fw={600}
                           c={transaction.amount < 0 ? 'red' : 'green'}
                         >
-                          {transaction.amount < 0 ? '-' : '+'}$
-                          {Math.abs(transaction.amount).toFixed(2)}
+                          {transaction.amount < 0 ? '-' : '+'}
+                          {formatCurrency(Math.abs(transaction.amount))}
                         </Text>
                       </Group>
                     </Paper>

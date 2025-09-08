@@ -452,7 +452,7 @@ export function Budgets() {
                       </ThemeIcon>
                       <div>
                         <Text size="xs" c="dimmed">Total Spent</Text>
-                        <Text fw={600} size="lg">${totalActual.toFixed(2)}</Text>
+                        <Text fw={600} size="lg">{formatCurrency(totalActual)}</Text>
                       </div>
                     </Group>
                   </Card>
@@ -475,7 +475,7 @@ export function Budgets() {
                           size="lg"
                           c={totalRemaining < 0 ? "red" : undefined}
                         >
-                          ${Math.abs(totalRemaining).toFixed(2)}
+                          {formatCurrency(Math.abs(totalRemaining))}
                           {totalRemaining < 0 && " over"}
                         </Text>
                       </div>
