@@ -44,6 +44,8 @@ household-budgeting/
 └── shared/
     ├── types/               # Shared TypeScript types
     └── utils/               # Shared utility functions
+        ├── categoryHelpers.ts   # Category type checking
+        └── transactionCalculations.ts  # Financial calculations
 ```
 
 ## Key Services Architecture
@@ -102,6 +104,38 @@ household-budgeting/
   - Transaction tagging and hiding
   - Split transaction support
   - Support for orphaned category ID detection and handling
+  - Transaction type filtering (all, income, expense, transfer)
+
+### Shared Utilities (`shared/utils/`)
+
+#### Transaction Calculations (`shared/utils/transactionCalculations.ts`)
+- **Purpose**: Consistent financial calculations that exclude transfer transactions
+- **Key Functions**:
+  - `calculateIncome(transactions)`: Sum negative amounts excluding transfers
+  - `calculateExpenses(transactions)`: Sum positive amounts excluding transfers
+  - `calculateNetCashFlow(transactions)`: Net income - expenses excluding transfers
+  - `calculateSavingsRate(transactions)`: Savings rate as percentage
+  - `categorizeTransactions(transactions)`: Separate into income, expenses, transfers
+- **Transfer Exclusion**: All calculations automatically exclude `TRANSFER_IN` and `TRANSFER_OUT` categories and their subcategories
+- **Usage Pattern**: Always use these utilities instead of manual `filter + reduce` to ensure consistency
+
+```typescript
+// Don't do this (doesn't exclude transfers):
+const income = transactions.filter(t => t.amount < 0).reduce((sum, t) => sum + Math.abs(t.amount), 0);
+
+// Do this instead (automatically excludes transfers):
+import { calculateIncome } from 'shared/utils/transactionCalculations';
+const income = calculateIncome(transactions);
+```
+
+#### Category Helpers (`shared/utils/categoryHelpers.ts`)
+- **Purpose**: Category type detection and validation
+- **Key Functions**:
+  - `isTransferCategory(categoryId)`: Detects transfer categories and subcategories
+  - `isIncomeCategory(categoryId)`: Detects income categories
+  - `isBudgetableCategory(categoryId)`: Excludes transfers from budgeting
+  - `getBudgetType(categoryId)`: Returns 'income' or 'expense' for budget logic
+- **Pattern**: Uses `startsWith()` for subcategory detection (e.g., `TRANSFER_IN_DEPOSIT`)
 
 #### 5. CategoryService (`backend/src/services/categoryService.ts`)
 - **Purpose**: Two-level category hierarchy management with Plaid PFC integration

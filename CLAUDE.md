@@ -482,6 +482,7 @@ Having issues?
 - **Create new page**: See architecture guide section "To Add a New Page"
 - **Debug Plaid issues**: Check troubleshooting in architecture guide
 - **Handle auth errors**: Review JWT middleware patterns
+- **Financial calculations**: Always use shared utilities from `shared/utils/transactionCalculations.ts` to exclude transfers
 - **Create a release**: Run `npm run release:prepare` and follow prompts
 - **Check version**: Visit `/version` endpoint or run `curl localhost:3001/version`
 - **⚠️ Category Migration**: Before deploying Plaid PFC changes, delete existing category data: `rm backend/data/categories_*.json`
@@ -577,6 +578,7 @@ Track important decisions that affect how the codebase should be modified.
 
 | Date | Decision | Rationale | Impact |
 |------|----------|-----------|--------|
+| 2025-09 | Shared transaction calculation utilities | Consistent transfer exclusion across app | Created shared/utils/transactionCalculations.ts for all financial calculations |
 | 2025-09 | Field migration pattern with Admin UI | Safe data migrations with user control | Direct dataService access with destructuring for clean field removal |
 | 2025-09 | Rename "savings" to "rollover" | Avoid confusion with future savings features | Updated all references from isSavings to isRollover across codebase |
 | 2025-09 | Generalized CSV import framework | Support multiple CSV import types beyond categories | Created extensible BaseCSVParser system with ImportService for future transaction/mapping imports |

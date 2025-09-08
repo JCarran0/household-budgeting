@@ -958,11 +958,12 @@ export function EnhancedTransactions() {
               <Text size="sm" fw={500}>Transaction Type</Text>
               <SegmentedControl
                 value={transactionType}
-                onChange={(value) => setTransactionType(value as 'all' | 'income' | 'expense')}
+                onChange={(value) => setTransactionType(value as 'all' | 'income' | 'expense' | 'transfer')}
                 data={[
                   { label: 'All Transactions', value: 'all' },
                   { label: 'Income', value: 'income' },
                   { label: 'Expenses', value: 'expense' },
+                  { label: 'Transfers', value: 'transfer' },
                 ]}
               />
             </Stack>

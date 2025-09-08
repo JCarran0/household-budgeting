@@ -16,7 +16,7 @@ interface TransactionFilters {
   amountSearchMode: 'range' | 'exact';
   exactAmount: number | null;
   amountTolerance: number;
-  transactionType: 'all' | 'income' | 'expense';
+  transactionType: 'all' | 'income' | 'expense' | 'transfer';
 }
 
 interface BudgetFilters {
@@ -118,7 +118,7 @@ const validateStoredFilters = (stored: unknown): Partial<FilterStore> => {
       amountSearchMode: (t.amountSearchMode === 'range' || t.amountSearchMode === 'exact') ? t.amountSearchMode : defaultTransactionFilters.amountSearchMode,
       exactAmount: typeof t.exactAmount === 'number' || t.exactAmount === null ? t.exactAmount : defaultTransactionFilters.exactAmount,
       amountTolerance: typeof t.amountTolerance === 'number' ? t.amountTolerance : defaultTransactionFilters.amountTolerance,
-      transactionType: (t.transactionType === 'all' || t.transactionType === 'income' || t.transactionType === 'expense') ? t.transactionType : defaultTransactionFilters.transactionType,
+      transactionType: (t.transactionType === 'all' || t.transactionType === 'income' || t.transactionType === 'expense' || t.transactionType === 'transfer') ? t.transactionType : defaultTransactionFilters.transactionType,
     };
   }
   

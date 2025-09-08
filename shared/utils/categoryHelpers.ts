@@ -16,10 +16,10 @@ export function isIncomeCategory(categoryId: string): boolean {
 
 /**
  * Check if a category is a transfer category (should be excluded from most reports)
- * Transfer categories are TRANSFER_IN and TRANSFER_OUT
+ * Transfer categories are TRANSFER_IN and TRANSFER_OUT and their subcategories
  */
 export function isTransferCategory(categoryId: string): boolean {
-  return categoryId === 'TRANSFER_IN' || categoryId === 'TRANSFER_OUT';
+  return categoryId.startsWith('TRANSFER_IN') || categoryId.startsWith('TRANSFER_OUT');
 }
 
 /**

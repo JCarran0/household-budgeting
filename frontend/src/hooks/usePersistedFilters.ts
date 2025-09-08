@@ -22,7 +22,7 @@ interface TransactionFilterState {
   amountSearchMode: 'range' | 'exact';
   exactAmount: number | null;
   amountTolerance: number;
-  transactionType: 'all' | 'income' | 'expense';
+  transactionType: 'all' | 'income' | 'expense' | 'transfer';
 }
 
 interface TransactionFilterActions {
@@ -38,7 +38,7 @@ interface TransactionFilterActions {
   setAmountSearchMode: (value: 'range' | 'exact') => void;
   setExactAmount: (value: number | null) => void;
   setAmountTolerance: (value: number) => void;
-  setTransactionType: (value: 'all' | 'income' | 'expense') => void;
+  setTransactionType: (value: 'all' | 'income' | 'expense' | 'transfer') => void;
   resetFilters: () => void;
   debouncedSearchTerm: string;
 }
@@ -65,7 +65,7 @@ export function useTransactionFilters(): TransactionFilterState & TransactionFil
   const amountSearchMode = (transactionFilters?.amountSearchMode || 'range') as 'range' | 'exact';
   const exactAmount = transactionFilters?.exactAmount ?? null;
   const amountTolerance = transactionFilters?.amountTolerance ?? 0.50;
-  const transactionType = (transactionFilters?.transactionType || 'all') as 'all' | 'income' | 'expense';
+  const transactionType = (transactionFilters?.transactionType || 'all') as 'all' | 'income' | 'expense' | 'transfer';
   
   const [debouncedSearchTerm] = useDebouncedValue(searchInput, 300);
   
@@ -121,7 +121,7 @@ export function useTransactionFilters(): TransactionFilterState & TransactionFil
     setTransactionFilters({ amountTolerance: value });
   }, [setTransactionFilters]);
   
-  const setTransactionType = useCallback((value: 'all' | 'income' | 'expense') => {
+  const setTransactionType = useCallback((value: 'all' | 'income' | 'expense' | 'transfer') => {
     setTransactionFilters({ transactionType: value });
   }, [setTransactionFilters]);
   

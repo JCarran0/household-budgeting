@@ -33,6 +33,7 @@ import { api } from '../lib/api';
 import { formatDistanceToNow } from 'date-fns';
 import { Link, useNavigate } from 'react-router-dom';
 import { formatCurrency } from '../utils/formatters';
+import { isTransferCategory } from '../../../shared/utils/categoryHelpers';
 
 export function MantineDashboard() {
   const navigate = useNavigate();
@@ -73,11 +74,16 @@ export function MantineDashboard() {
 
   const recentTransactions = transactionData?.transactions || [];
 
-  const monthlySpending = recentTransactions
+  // Filter out transfers from income/expense calculations
+  const nonTransferTransactions = recentTransactions.filter(t => 
+    !t.categoryId || !isTransferCategory(t.categoryId)
+  );
+
+  const monthlySpending = nonTransferTransactions
     .filter(t => t.amount < 0)
     .reduce((sum, t) => sum + Math.abs(t.amount), 0);
 
-  const monthlyIncome = recentTransactions
+  const monthlyIncome = nonTransferTransactions
     .filter(t => t.amount > 0)
     .reduce((sum, t) => sum + t.amount, 0);
 

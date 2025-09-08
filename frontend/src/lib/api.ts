@@ -275,7 +275,7 @@ class ApiClient {
     onlyUncategorized?: boolean;
     minAmount?: number;
     maxAmount?: number;
-    transactionType?: 'all' | 'income' | 'expense';
+    transactionType?: 'all' | 'income' | 'expense' | 'transfer';
   }): Promise<{ transactions: Transaction[]; total: number }> {
     const { data } = await this.client.get('/transactions', { params });
     return data;

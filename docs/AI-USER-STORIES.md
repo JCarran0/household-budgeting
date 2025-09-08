@@ -104,6 +104,9 @@
 - A user should be able to filter to show/hide hidden transactions
 - A user should be able to filter to show only uncategorized transactions
 - A user should be able to combine the uncategorized filter with other filters
+- A user should be able to filter transactions by type (All, Income, Expense, Transfer)
+- A user should be able to view only transfer transactions (money moving between accounts)
+- A user should see transfers excluded from income/expense totals to avoid double-counting
 - A user should be able to see transaction details (amount, date, merchant, account)
 - A user should see the correct total count of transactions (not 0)
 - A user should not see transactions from other users' accounts
