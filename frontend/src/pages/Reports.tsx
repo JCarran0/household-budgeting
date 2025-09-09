@@ -55,6 +55,7 @@ import {
 } from '@tabler/icons-react';
 import { format, subMonths, startOfMonth, endOfMonth, startOfYear, endOfYear, addMonths } from 'date-fns';
 import { api } from '../lib/api';
+import type { MonthlyBudget } from '../../../shared/types';
 import { TransactionPreviewTrigger } from '../components/transactions';
 
 // Color palette for charts (used for both income and expenses)
@@ -262,7 +263,7 @@ export function Reports() {
             budgets: budgetData.budgets,
             total: budgetData.total
           };
-        } catch (error) {
+        } catch {
           return { monthKey: monthStr, month: monthStr, budgets: [], total: 0 };
         }
       });
@@ -620,12 +621,12 @@ export function Reports() {
       
       // Calculate total budgeted amounts by type
       const budgetedIncome = monthData.budgets
-        .filter((b: any) => b.categoryId?.startsWith('INCOME'))
-        .reduce((sum: number, b: any) => sum + b.amount, 0);
+        .filter((b: MonthlyBudget) => b.categoryId?.startsWith('INCOME'))
+        .reduce((sum: number, b: MonthlyBudget) => sum + b.amount, 0);
       
       const budgetedExpenses = monthData.budgets
-        .filter((b: any) => !b.categoryId?.startsWith('INCOME') && !b.categoryId?.includes('TRANSFER'))
-        .reduce((sum: number, b: any) => sum + b.amount, 0);
+        .filter((b: MonthlyBudget) => !b.categoryId?.startsWith('INCOME') && !b.categoryId?.includes('TRANSFER'))
+        .reduce((sum: number, b: MonthlyBudget) => sum + b.amount, 0);
       
       return {
         month: format(new Date(monthData.month + '-01'), 'MMM'),
