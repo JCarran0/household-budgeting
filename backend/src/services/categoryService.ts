@@ -140,6 +140,11 @@ export class CategoryService {
       throw new Error('Category not found');
     }
     
+    // Prevent deletion of the Savings parent category
+    if (id === 'CUSTOM_SAVINGS') {
+      throw new Error('Cannot delete the Savings category as it is required for the system');
+    }
+    
     // Check if category has subcategories
     const hasSubcategories = categories.some(cat => cat.parentId === id);
     if (hasSubcategories) {

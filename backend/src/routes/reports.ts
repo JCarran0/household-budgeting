@@ -270,6 +270,51 @@ router.get('/income-breakdown', authMiddleware, async (req: AuthRequest, res: Re
 });
 
 /**
+ * GET /api/v1/reports/savings-breakdown
+ * Get savings category breakdown for a period
+ */
+router.get('/savings-breakdown', authMiddleware, async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    if (!req.user) {
+      res.status(401).json({ success: false, error: 'Unauthorized' });
+      return;
+    }
+
+    const validation = categoryBreakdownSchema.safeParse(req.query);
+    if (!validation.success) {
+      res.status(400).json({ 
+        success: false, 
+        error: 'Invalid parameters',
+        details: validation.error.format(),
+      });
+      return;
+    }
+
+    const { startDate, endDate } = validation.data;
+
+    const result = await reportService.getSavingsCategoryBreakdown(
+      req.user.userId,
+      startDate,
+      endDate
+    );
+
+    if (!result.success) {
+      res.status(500).json({ success: false, error: result.error });
+      return;
+    }
+
+    res.json({
+      success: true,
+      breakdown: result.breakdown,
+      total: result.total,
+    });
+  } catch (error) {
+    console.error('Error getting savings breakdown:', error);
+    res.status(500).json({ success: false, error: 'Failed to get savings breakdown' });
+  }
+});
+
+/**
  * GET /api/v1/reports/year-to-date
  * Get year-to-date summary
  */

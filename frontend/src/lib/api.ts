@@ -569,6 +569,22 @@ class ApiClient {
     return data;
   }
 
+  async getSavingsCategoryBreakdown(startDate: string, endDate: string): Promise<{
+    breakdown: Array<{
+      categoryId: string;
+      categoryName: string;
+      amount: number;
+      percentage: number;
+      transactionCount: number;
+    }>;
+    total: number;
+  }> {
+    const { data } = await this.client.get('/reports/savings-breakdown', {
+      params: { startDate, endDate }
+    });
+    return data;
+  }
+
   async getCashFlow(startMonth: string, endMonth: string): Promise<{
     summary: Array<{
       month: string;

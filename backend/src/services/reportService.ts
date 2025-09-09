@@ -296,7 +296,7 @@ export class ReportService {
   }
 
   /**
-   * Get category breakdown for a period
+   * Get category breakdown for a period (excludes savings subcategories)
    */
   async getCategoryBreakdown(
     userId: string,
@@ -312,15 +312,18 @@ export class ReportService {
       const categories = await this.dataService.getCategories(userId);
       // Create a set of hidden category IDs including subcategories of hidden parents
       const hiddenCategoryIds = this.getEffectivelyHiddenCategoryIds(categories);
+      // Also exclude savings subcategories from spending breakdown
+      const savingsSubcategoryIds = this.getSavingsSubcategoryIds(categories);
 
-      // Filter transactions (excluding hidden categories)
+      // Filter transactions (excluding hidden categories and savings subcategories)
       const filteredTransactions = transactions.filter(t => 
         t.date >= startDate && 
         t.date <= endDate && 
         !t.isHidden &&
         !t.pending &&
         t.amount > 0 && // Expenses only
-        (!t.categoryId || !hiddenCategoryIds.has(t.categoryId)) // Exclude hidden categories
+        (!t.categoryId || !hiddenCategoryIds.has(t.categoryId)) && // Exclude hidden categories
+        (!t.categoryId || !savingsSubcategoryIds.has(t.categoryId)) // Exclude savings subcategories
       );
 
       // Calculate total
@@ -418,6 +421,71 @@ export class ReportService {
     } catch (error) {
       console.error('Error getting category breakdown:', error);
       return { success: false, error: 'Failed to get category breakdown' };
+    }
+  }
+
+  /**
+   * Get savings category breakdown for a period (only savings subcategories)
+   */
+  async getSavingsCategoryBreakdown(
+    userId: string,
+    startDate: string,
+    endDate: string
+  ): Promise<CategoryBreakdownResult> {
+    try {
+      const transactions = await this.dataService.getData<StoredTransaction[]>(
+        `transactions_${userId}`
+      ) || [];
+      
+      const categories = await this.dataService.getCategories(userId);
+      // Get savings subcategories
+      const savingsSubcategoryIds = this.getSavingsSubcategoryIds(categories);
+
+      // Filter transactions for savings subcategories only
+      const filteredTransactions = transactions.filter(t => 
+        t.date >= startDate && 
+        t.date <= endDate && 
+        !t.isHidden &&
+        !t.pending &&
+        t.amount > 0 && // Expenses only (savings contributions are positive)
+        t.categoryId && savingsSubcategoryIds.has(t.categoryId) // Only savings subcategories
+      );
+
+      // Calculate total
+      const total = filteredTransactions.reduce((sum, t) => sum + t.amount, 0);
+
+      // Group by category
+      const categorySpending = new Map<string, { amount: number; count: number }>();
+
+      for (const txn of filteredTransactions) {
+        const categoryId = txn.categoryId!; // We know it exists from filter
+        const current = categorySpending.get(categoryId) || { amount: 0, count: 0 };
+        categorySpending.set(categoryId, {
+          amount: current.amount + txn.amount,
+          count: current.count + 1
+        });
+      }
+
+      // Build flat breakdown (savings are all subcategories)
+      const breakdown: CategoryBreakdown[] = [];
+      for (const [categoryId, data] of categorySpending) {
+        const category = categories.find(c => c.id === categoryId);
+        breakdown.push({
+          categoryId,
+          categoryName: category?.name || 'Unknown Savings',
+          amount: data.amount,
+          percentage: total > 0 ? (data.amount / total) * 100 : 0,
+          transactionCount: data.count
+        });
+      }
+
+      // Sort by amount descending
+      breakdown.sort((a, b) => b.amount - a.amount);
+
+      return { success: true, breakdown, total };
+    } catch (error) {
+      console.error('Error getting savings breakdown:', error);
+      return { success: false, error: 'Failed to get savings breakdown' };
     }
   }
 
@@ -705,5 +773,21 @@ export class ReportService {
     });
     
     return hiddenIds;
+  }
+
+  /**
+   * Helper: Get all savings subcategory IDs
+   */
+  private getSavingsSubcategoryIds(categories: Category[]): Set<string> {
+    const savingsSubcategoryIds = new Set<string>();
+    
+    // Find all subcategories of the CUSTOM_SAVINGS parent category
+    categories.forEach(category => {
+      if (category.parentId === 'CUSTOM_SAVINGS') {
+        savingsSubcategoryIds.add(category.id);
+      }
+    });
+    
+    return savingsSubcategoryIds;
   }
 }
