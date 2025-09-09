@@ -252,21 +252,18 @@ export const useFilterStore = create<FilterStore>()(
 export const parseDateFromStorage = (dateString: string | null): Date | null => {
   if (!dateString) return null;
   try {
-    // Handle ISO date strings by parsing them in local timezone
-    // to avoid timezone conversion issues
-    if (dateString.includes('T')) {
-      // ISO format - parse and convert to local date
+    if (dateString.match(/^\d{4}-\d{2}-\d{2}$/)) {
+      // YYYY-MM-DD format - parse as local date (primary format)
+      const [year, month, day] = dateString.split('-').map(Number);
+      return new Date(year, month - 1, day);
+    } else if (dateString.includes('T')) {
+      // Legacy ISO format - parse and convert to local date
       const tempDate = new Date(dateString);
-      // Create a new date using local timezone values
       return new Date(
         tempDate.getFullYear(),
         tempDate.getMonth(),
         tempDate.getDate()
       );
-    } else if (dateString.match(/^\d{4}-\d{2}-\d{2}$/)) {
-      // YYYY-MM-DD format - parse as local date
-      const [year, month, day] = dateString.split('-').map(Number);
-      return new Date(year, month - 1, day);
     } else {
       // Fallback to default parsing
       const date = new Date(dateString);
@@ -281,7 +278,11 @@ export const parseDateFromStorage = (dateString: string | null): Date | null => 
 export const formatDateForStorage = (date: Date | null): string | null => {
   if (!date) return null;
   try {
-    return date.toISOString();
+    // Use YYYY-MM-DD format to avoid timezone issues
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
   } catch {
     return null;
   }
