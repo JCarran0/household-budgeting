@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.13.0](https://github.com/JCarran0/household-budgeting/compare/v1.12.0...v1.13.0) (2025-09-09)
+
+
+### Features
+
+* **export:** enhance TSV exports with category type and properties metadata ([d27dd86](https://github.com/JCarran0/household-budgeting/commit/d27dd86cdbe357a3db97bf4a999bceac2119cf03))
+* **reports:** add savings category breakdown reporting ([fe4464e](https://github.com/JCarran0/household-budgeting/commit/fe4464e88acd7a471b1f068cd41c0e1a550568d5))
+* **reports:** enhance pie chart with dynamic 90% threshold and Other category drill-down ([4f6e61b](https://github.com/JCarran0/household-budgeting/commit/4f6e61bb0fd754564e50a0a97fabdfa02a9bb97c))
+
+
+### Bug Fixes
+
+* **reports:** correct income category filtering and improve chart tooltips ([d80be0e](https://github.com/JCarran0/household-budgeting/commit/d80be0e28a6e7a91ae29040252a26dc5197c207f))
+
 ## [1.12.0](https://github.com/JCarran0/household-budgeting/compare/v1.11.0...v1.12.0) (2025-09-08)
 
 
