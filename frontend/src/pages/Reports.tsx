@@ -31,8 +31,6 @@ import {
 import { 
   LineChart, 
   Line, 
-  BarChart, 
-  Bar, 
   PieChart, 
   Pie, 
   Cell,
@@ -55,7 +53,7 @@ import {
   IconFilterOff,
   IconArrowLeft,
 } from '@tabler/icons-react';
-import { format, subMonths, startOfMonth, endOfMonth, startOfYear, endOfYear } from 'date-fns';
+import { format, subMonths, startOfMonth, endOfMonth, startOfYear, endOfYear, addMonths } from 'date-fns';
 import { api } from '../lib/api';
 import { TransactionPreviewTrigger } from '../components/transactions';
 
@@ -239,6 +237,38 @@ export function Reports() {
   const { data: projectionsData, isLoading: projectionsLoading } = useQuery({
     queryKey: ['reports', 'projections'],
     queryFn: () => api.getProjections(6),
+  });
+
+  // Fetch budget data for comparison dashboards
+  const { data: budgetMonthlyData, isLoading: budgetLoading } = useQuery({
+    queryKey: ['budgetComparison', startMonth, endMonth],
+    queryFn: async () => {
+      // Get budget data for each month in range
+      const months = [];
+      let currentMonth = new Date(startMonth + '-01');
+      const endMonthDate = new Date(endMonth + '-01');
+      
+      while (currentMonth <= endMonthDate) {
+        months.push(format(currentMonth, 'yyyy-MM'));
+        currentMonth = addMonths(currentMonth, 1);
+      }
+      
+      const budgetPromises = months.map(async monthStr => {
+        try {
+          const budgetData = await api.getMonthlyBudgets(monthStr);
+          return { 
+            monthKey: monthStr, 
+            month: budgetData.month,
+            budgets: budgetData.budgets,
+            total: budgetData.total
+          };
+        } catch (error) {
+          return { monthKey: monthStr, month: monthStr, budgets: [], total: 0 };
+        }
+      });
+      
+      return await Promise.all(budgetPromises);
+    },
   });
 
   // Process and aggregate category data for drill-down
@@ -556,7 +586,62 @@ export function Reports() {
   // Use the calculated pie chart data
   const pieChartData = calculatedPieChartData;
 
-  const isLoading = ytdLoading || cashFlowLoading || trendsLoading || breakdownLoading || projectionsLoading;
+  // Process spending trends by month (moved here to be available for other useMemo hooks)
+  const trendsByMonth = new Map<string, { [category: string]: number }>();
+  trendsData?.trends?.forEach(trend => {
+    if (!trendsByMonth.has(trend.month)) {
+      trendsByMonth.set(trend.month, {});
+    }
+    const monthData = trendsByMonth.get(trend.month)!;
+    monthData[trend.categoryName] = trend.amount;
+  });
+
+  const spendingTrendsData = Array.from(trendsByMonth.entries())
+    .map(([month, categories]) => ({
+      month: format(new Date(month + '-01'), 'MMM'),
+      ...categories,
+    }))
+    .sort((a, b) => {
+      const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      return months.indexOf(a.month) - months.indexOf(b.month);
+    });
+
+  // Get unique categories for the trends chart (moved here to be available for other useMemo hooks)
+  const uniqueCategories = new Set<string>();
+  trendsData?.trends?.forEach(trend => uniqueCategories.add(trend.categoryName));
+  const categoryNames = Array.from(uniqueCategories).slice(0, 8); // Limit to top 8 for visibility
+
+  // Process budget vs actual data for dashboards
+  const budgetVsActualData = useMemo(() => {
+    if (!budgetMonthlyData || !cashFlowData?.summary) return null;
+    
+    return budgetMonthlyData.map(monthData => {
+      const cashFlowMonth = cashFlowData.summary?.find(cf => cf.month === monthData.month);
+      
+      // Calculate total budgeted amounts by type
+      const budgetedIncome = monthData.budgets
+        .filter((b: any) => b.categoryId?.startsWith('INCOME'))
+        .reduce((sum: number, b: any) => sum + b.amount, 0);
+      
+      const budgetedExpenses = monthData.budgets
+        .filter((b: any) => !b.categoryId?.startsWith('INCOME') && !b.categoryId?.includes('TRANSFER'))
+        .reduce((sum: number, b: any) => sum + b.amount, 0);
+      
+      return {
+        month: format(new Date(monthData.month + '-01'), 'MMM'),
+        budgetedIncome,
+        actualIncome: cashFlowMonth?.income || 0,
+        budgetedExpenses,
+        actualExpenses: cashFlowMonth?.expenses || 0,
+        budgetedNetFlow: budgetedIncome - budgetedExpenses,
+        actualNetFlow: cashFlowMonth?.netFlow || 0,
+        budgets: monthData.budgets
+      };
+    });
+  }, [budgetMonthlyData, cashFlowData]);
+
+
+  const isLoading = ytdLoading || cashFlowLoading || trendsLoading || breakdownLoading || projectionsLoading || budgetLoading;
 
   if (isLoading) {
     return (
@@ -582,30 +667,6 @@ export function Reports() {
     expenses: item.projectedExpenses,
   })) || [];
 
-  // Process spending trends by month
-  const trendsByMonth = new Map<string, { [category: string]: number }>();
-  trendsData?.trends?.forEach(trend => {
-    if (!trendsByMonth.has(trend.month)) {
-      trendsByMonth.set(trend.month, {});
-    }
-    const monthData = trendsByMonth.get(trend.month)!;
-    monthData[trend.categoryName] = trend.amount;
-  });
-
-  const spendingTrendsData = Array.from(trendsByMonth.entries())
-    .map(([month, categories]) => ({
-      month: format(new Date(month + '-01'), 'MMM'),
-      ...categories,
-    }))
-    .sort((a, b) => {
-      const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-      return months.indexOf(a.month) - months.indexOf(b.month);
-    });
-
-  // Get unique categories for the trends chart
-  const uniqueCategories = new Set<string>();
-  trendsData?.trends?.forEach(trend => uniqueCategories.add(trend.categoryName));
-  const categoryNames = Array.from(uniqueCategories).slice(0, 8); // Limit to top 8 for visibility
   
   // Handle pie slice click
   const handleSliceClick = (data: PieChartEntry) => {
@@ -946,58 +1007,99 @@ export function Reports() {
                 </Paper>
               </Grid.Col>
 
-              <Grid.Col span={12}>
-                <Paper withBorder p="md">
-                  <Text size="lg" fw={600} mb="md">Net Cash Flow</Text>
-                  {cashFlowChartData.length > 0 ? (
-                    <ResponsiveContainer width="100%" height={200}>
-                      <BarChart data={cashFlowChartData}>
+
+              {/* Budget vs Actual Dashboard */}
+              {budgetVsActualData && budgetVsActualData.length > 0 && (
+                <Grid.Col span={12}>
+                  <Paper withBorder p="md">
+                    <Text size="lg" fw={600} mb="md">Planned vs Actual Cash Flow</Text>
+                    <ResponsiveContainer width="100%" height={300}>
+                      <AreaChart data={budgetVsActualData}>
                         <CartesianGrid strokeDasharray="3 3" />
                         <XAxis dataKey="month" />
                         <YAxis />
                         <RechartsTooltip content={<CustomAreaTooltip />} />
-                        <Bar 
-                          dataKey="netFlow" 
-                          fill="#4f46e5"
-                        >
-                          {cashFlowChartData.map((entry, index) => (
-                            <Cell key={`cell-${index}`} fill={entry.netFlow >= 0 ? '#10b981' : '#ef4444'} />
-                          ))}
-                        </Bar>
-                      </BarChart>
+                        <Legend />
+                        <Area 
+                          type="monotone" 
+                          dataKey="budgetedNetFlow" 
+                          stroke="#4f46e5" 
+                          fill="#4f46e5" 
+                          fillOpacity={0.6}
+                          name="Planned Net Flow"
+                        />
+                        <Area 
+                          type="monotone" 
+                          dataKey="actualNetFlow" 
+                          stroke="#10b981" 
+                          fill="#10b981" 
+                          fillOpacity={0.6}
+                          name="Actual Net Flow"
+                        />
+                      </AreaChart>
                     </ResponsiveContainer>
-                  ) : (
-                    <Center h={200}>
-                      <Text c="dimmed">No data available for the selected period</Text>
-                    </Center>
-                  )}
-                </Paper>
-              </Grid.Col>
+                  </Paper>
+                </Grid.Col>
+              )}
             </Grid>
           </Tabs.Panel>
 
           <Tabs.Panel value="spending" pt="xl">
-            <Paper withBorder p="md">
-              <Text size="lg" fw={600} mb="md">Spending by Category Over Time</Text>
-              <ResponsiveContainer width="100%" height={400}>
-                <LineChart data={spendingTrendsData}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="month" />
-                  <YAxis />
-                  <RechartsTooltip content={<CustomLineTooltip />} />
-                  <Legend />
-                  {categoryNames.map((category, index) => (
-                    <Line
-                      key={category}
-                      type="monotone"
-                      dataKey={category}
-                      stroke={COLORS[index % COLORS.length]}
-                      strokeWidth={2}
-                    />
-                  ))}
-                </LineChart>
-              </ResponsiveContainer>
-            </Paper>
+            <Stack gap="md">
+              <Paper withBorder p="md">
+                <Text size="lg" fw={600} mb="md">Spending by Category Over Time</Text>
+                <ResponsiveContainer width="100%" height={400}>
+                  <LineChart data={spendingTrendsData}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="month" />
+                    <YAxis />
+                    <RechartsTooltip content={<CustomLineTooltip />} />
+                    <Legend />
+                    {categoryNames.map((category, index) => (
+                      <Line
+                        key={category}
+                        type="monotone"
+                        dataKey={category}
+                        stroke={COLORS[index % COLORS.length]}
+                        strokeWidth={2}
+                      />
+                    ))}
+                  </LineChart>
+                </ResponsiveContainer>
+              </Paper>
+
+              {/* Budget vs Actual Spending */}
+              {budgetVsActualData && budgetVsActualData.length > 0 && (
+                <Paper withBorder p="md">
+                  <Text size="lg" fw={600} mb="md">Planned vs Actual Spending</Text>
+                  <ResponsiveContainer width="100%" height={300}>
+                    <AreaChart data={budgetVsActualData}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="month" />
+                      <YAxis />
+                      <RechartsTooltip content={<CustomAreaTooltip />} />
+                      <Legend />
+                      <Area 
+                        type="monotone" 
+                        dataKey="budgetedExpenses" 
+                        stroke="#ef4444" 
+                        fill="#ef4444" 
+                        fillOpacity={0.6}
+                        name="Planned Spending"
+                      />
+                      <Area 
+                        type="monotone" 
+                        dataKey="actualExpenses" 
+                        stroke="#dc2626" 
+                        fill="#dc2626" 
+                        fillOpacity={0.6}
+                        name="Actual Spending"
+                      />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                </Paper>
+              )}
+            </Stack>
           </Tabs.Panel>
 
           <Tabs.Panel value="categories" pt="xl">
