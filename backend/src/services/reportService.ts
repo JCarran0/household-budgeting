@@ -187,13 +187,32 @@ export class ReportService {
       // Create a set of hidden category IDs including subcategories of hidden parents
       const hiddenCategoryIds = this.getEffectivelyHiddenCategoryIds(categories);
 
-      // Filter transactions for income (negative amounts, excluding hidden categories)
+      // Find the Income parent category (Plaid PFC standard category)
+      const incomeParentCategory = categories.find(c => 
+        !c.parentId && 
+        (c.name.toLowerCase().includes('income') || c.id.includes('INCOME') || c.id === 'INCOME')
+      );
+      
+      if (!incomeParentCategory) {
+        // If no Income parent category found, return empty result
+        return { success: true, breakdown: [], total: 0 };
+      }
+      
+      // Get all income category IDs (parent + children)
+      const incomeSubcategories = categories.filter(c => c.parentId === incomeParentCategory.id);
+      const incomeCategoryIds = new Set([
+        incomeParentCategory.id,
+        ...incomeSubcategories.map(c => c.id)
+      ]);
+
+      // Filter transactions for income (negative amounts from income categories only, excluding hidden categories)
       const filteredTransactions = transactions.filter(t => 
         t.date >= startDate && 
         t.date <= endDate && 
         !t.isHidden &&
         !t.pending &&
         t.amount < 0 && // Income only (negative amounts)
+        t.categoryId && incomeCategoryIds.has(t.categoryId) && // Only income category transactions
         (!t.categoryId || !hiddenCategoryIds.has(t.categoryId)) // Exclude hidden categories
       );
 
@@ -216,48 +235,45 @@ export class ReportService {
       const breakdown: CategoryBreakdown[] = [];
       
       if (includeSubcategories) {
-        // Group by parent categories
-        const parentCategories = categories.filter(c => !c.parentId);
-        
-        for (const parent of parentCategories) {
-          const subcategories = categories.filter(c => c.parentId === parent.id);
-          const subcategoryBreakdown: CategoryBreakdown[] = [];
-          let parentAmount = 0;
-          let parentCount = 0;
+        // Process only the Income parent category
+        const parent = incomeParentCategory;
+        const subcategories = incomeSubcategories;
+        const subcategoryBreakdown: CategoryBreakdown[] = [];
+        let parentAmount = 0;
+        let parentCount = 0;
 
-          // Add parent's own income if any
-          const parentIncome = categoryIncome.get(parent.id);
-          if (parentIncome) {
-            parentAmount += parentIncome.amount;
-            parentCount += parentIncome.count;
-          }
+        // Add parent's own income if any
+        const parentIncome = categoryIncome.get(parent.id);
+        if (parentIncome) {
+          parentAmount += parentIncome.amount;
+          parentCount += parentIncome.count;
+        }
 
-          // Add subcategories
-          for (const sub of subcategories) {
-            const subIncome = categoryIncome.get(sub.id);
-            if (subIncome) {
-              parentAmount += subIncome.amount;
-              parentCount += subIncome.count;
-              subcategoryBreakdown.push({
-                categoryId: sub.id,
-                categoryName: sub.name,
-                amount: subIncome.amount,
-                percentage: total > 0 ? (subIncome.amount / total) * 100 : 0,
-                transactionCount: subIncome.count
-              });
-            }
-          }
-
-          if (parentAmount > 0) {
-            breakdown.push({
-              categoryId: parent.id,
-              categoryName: parent.name,
-              amount: parentAmount,
-              percentage: total > 0 ? (parentAmount / total) * 100 : 0,
-              transactionCount: parentCount,
-              subcategories: subcategoryBreakdown.length > 0 ? subcategoryBreakdown : undefined
+        // Add subcategories
+        for (const sub of subcategories) {
+          const subIncome = categoryIncome.get(sub.id);
+          if (subIncome) {
+            parentAmount += subIncome.amount;
+            parentCount += subIncome.count;
+            subcategoryBreakdown.push({
+              categoryId: sub.id,
+              categoryName: sub.name,
+              amount: subIncome.amount,
+              percentage: total > 0 ? (subIncome.amount / total) * 100 : 0,
+              transactionCount: subIncome.count
             });
           }
+        }
+
+        if (parentAmount > 0) {
+          breakdown.push({
+            categoryId: parent.id,
+            categoryName: parent.name,
+            amount: parentAmount,
+            percentage: total > 0 ? (parentAmount / total) * 100 : 0,
+            transactionCount: parentCount,
+            subcategories: subcategoryBreakdown.length > 0 ? subcategoryBreakdown : undefined
+          });
         }
 
         // Add uncategorized income if any

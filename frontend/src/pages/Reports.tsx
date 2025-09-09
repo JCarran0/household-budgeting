@@ -344,36 +344,174 @@ export function Reports() {
         childCount: item.childCount
       }));
       
-      // Create "Other" category if we have remaining categories
-      if (otherSlices.length > 0) {
+      // Create "Other" category if we have remaining categories with significant value
+      if (otherSlices.length > 1) { // Only create "Other" if there are multiple categories to group
         const otherTotal = otherSlices.reduce((sum, cat) => sum + cat.value, 0);
         const otherPercentage = otherSlices.reduce((sum, cat) => sum + cat.percentage, 0);
         
+        // Only create "Other" if it has meaningful value (at least 1% or $1)
+        if (otherTotal > 1 && otherPercentage > 1) {
+          result.push({
+            id: 'other',
+            name: `Other (${otherSlices.length} categories)`,
+            value: otherTotal,
+            percentage: otherPercentage,
+            clickable: true,
+            hasChildren: true,
+            childCount: otherSlices.length,
+            isOther: true
+          });
+        } else {
+          // If "Other" would be insignificant, add categories back to main slices
+          result.push(...otherSlices.map((item: ProcessedParentData) => ({
+            id: item.id,
+            name: item.name,
+            value: item.value,
+            percentage: item.percentage,
+            clickable: item.hasChildren,
+            hasChildren: item.hasChildren,
+            childCount: item.childCount
+          })));
+          // Clear otherSlices since we're not creating an "Other" category
+          otherSlices.length = 0;
+        }
+      } else if (otherSlices.length === 1) {
+        // If there's only one category in "Other", just add it to main slices
+        const item = otherSlices[0];
         result.push({
-          id: 'other',
-          name: `Other (${otherSlices.length} categories)`,
-          value: otherTotal,
-          percentage: otherPercentage,
-          clickable: true,
-          hasChildren: true,
-          childCount: otherSlices.length,
-          isOther: true
+          id: item.id,
+          name: item.name,
+          value: item.value,
+          percentage: item.percentage,
+          clickable: item.hasChildren,
+          hasChildren: item.hasChildren,
+          childCount: item.childCount
         });
+        // Clear otherSlices since we're not creating an "Other" category
+        otherSlices.length = 0;
       }
       
       return { pieChartData: result, otherCategoriesData: otherSlices };
     } else {
-      // Show children of selected parent (existing logic)
-      const children = processedCategoryData.childData.get(drillDownState.parentId || '');
-      const childData = (children || [])
-        .filter((child: ProcessedChildData) => !hiddenCategories[child.id])
-        .map((child: ProcessedChildData) => ({
-          ...child,
-          clickable: false, // Children are not clickable for drill-down
-          hasChildren: false
-        }));
+      // Check if we're viewing the "Other" breakdown in child view
+      if (drillDownState.parentId === 'other-child') {
+        // Show pie of just the "other" child categories with percentages relative to "other" total
+        const otherTotal = otherCategories.reduce((sum, cat) => sum + cat.value, 0);
+        return {
+          pieChartData: otherCategories
+            .filter((item: ProcessedParentData) => !hiddenCategories[item.id])
+            .map((item: ProcessedParentData) => ({
+              id: item.id,
+              name: item.name,
+              value: item.value,
+              percentage: otherTotal > 0 ? (item.value / otherTotal) * 100 : 0,
+              clickable: false, // Child categories are not clickable for further drill-down
+              hasChildren: false,
+              childCount: 0
+            })),
+          otherCategoriesData: otherCategories
+        };
+      }
       
-      return { pieChartData: childData, otherCategoriesData: [] };
+      // Show children of selected parent with "Other" category logic
+      const children = processedCategoryData.childData.get(drillDownState.parentId || '') || [];
+      const availableChildren = children.filter((child: ProcessedChildData) => !hiddenCategories[child.id]);
+      
+      if (availableChildren.length === 0) {
+        return { pieChartData: [], otherCategoriesData: [] };
+      }
+      
+      // Apply 90% threshold logic to child categories too
+      let cumulativePercentage = 0;
+      const threshold = 90;
+      const mainSlices: ProcessedChildData[] = [];
+      const otherSlices: ProcessedChildData[] = [];
+      
+      // Sort children by value descending for consistent ordering
+      const sortedChildren = availableChildren.sort((a: ProcessedChildData, b: ProcessedChildData) => b.value - a.value);
+      
+      // Accumulate categories until we reach the threshold
+      for (const child of sortedChildren) {
+        if (cumulativePercentage < threshold && mainSlices.length < sortedChildren.length - 1) {
+          // Add to main slices if under threshold and not the last category
+          mainSlices.push(child);
+          cumulativePercentage += child.percentage;
+        } else {
+          // Add remaining categories to "Other"
+          otherSlices.push(child);
+        }
+      }
+      
+      // If we only have otherSlices (edge case), move some back to mainSlices
+      if (mainSlices.length === 0 && otherSlices.length > 0) {
+        mainSlices.push(...otherSlices.splice(0, Math.min(3, otherSlices.length)));
+      }
+      
+      const result: PieChartEntry[] = mainSlices.map((child: ProcessedChildData) => ({
+        id: child.id,
+        name: child.name,
+        value: child.value,
+        percentage: child.percentage,
+        clickable: false, // Children are not clickable for drill-down
+        hasChildren: false
+      }));
+      
+      // Create "Other" category if we have remaining children with significant value
+      if (otherSlices.length > 1) { // Only create "Other" if there are multiple categories to group
+        const otherTotal = otherSlices.reduce((sum, cat) => sum + cat.value, 0);
+        const otherPercentage = otherSlices.reduce((sum, cat) => sum + cat.percentage, 0);
+        
+        // Only create "Other" if it has meaningful value (at least 1% or $1)
+        if (otherTotal > 1 && otherPercentage > 1) {
+          result.push({
+            id: 'other-child',
+            name: `Other (${otherSlices.length} categories)`,
+            value: otherTotal,
+            percentage: otherPercentage,
+            clickable: true,
+            hasChildren: true,
+            childCount: otherSlices.length,
+            isOther: true
+          });
+        } else {
+          // If "Other" would be insignificant, add categories back to main slices
+          result.push(...otherSlices.map((child: ProcessedChildData) => ({
+            id: child.id,
+            name: child.name,
+            value: child.value,
+            percentage: child.percentage,
+            clickable: false,
+            hasChildren: false
+          })));
+          // Clear otherSlices since we're not creating an "Other" category
+          otherSlices.length = 0;
+        }
+      } else if (otherSlices.length === 1) {
+        // If there's only one category in "Other", just add it to main slices
+        const child = otherSlices[0];
+        result.push({
+          id: child.id,
+          name: child.name,
+          value: child.value,
+          percentage: child.percentage,
+          clickable: false,
+          hasChildren: false
+        });
+        // Clear otherSlices since we're not creating an "Other" category
+        otherSlices.length = 0;
+      }
+      
+      // Convert otherSlices to the format expected by otherCategoriesData
+      const otherCategoriesForChild = otherSlices.map(child => ({
+        id: child.id,
+        name: child.name,
+        value: child.value,
+        percentage: child.percentage,
+        hasChildren: false,
+        childCount: 0
+      }));
+      
+      return { pieChartData: result, otherCategoriesData: otherCategoriesForChild };
     }
   }, [drillDownState, processedCategoryData, hiddenCategories, otherCategories]);
   
@@ -395,6 +533,25 @@ export function Reports() {
       setOtherCategories(otherCategoriesData);
     }
   }, [otherCategoriesData]);
+  
+  // Automatically drill down to subcategories for income view when there's only one parent with few children
+  useEffect(() => {
+    if (categoryView === 'income' && 
+        drillDownState.level === 'parent' && 
+        !drillDownState.parentId && // Only when we're at the top level
+        processedCategoryData.parentData.length === 1) {
+      
+      const parentWithChildren = processedCategoryData.parentData[0];
+      // Always auto-drill for income since there's typically only one Income parent category
+      if (parentWithChildren.hasChildren) {
+        setDrillDownState({
+          level: 'child',
+          parentId: parentWithChildren.id,
+          parentName: parentWithChildren.name
+        });
+      }
+    }
+  }, [categoryView, processedCategoryData.parentData, drillDownState.level, drillDownState.parentId]);
   
   // Use the calculated pie chart data
   const pieChartData = calculatedPieChartData;
@@ -471,11 +628,18 @@ export function Reports() {
         setHiddenCategories({}); // Reset hidden categories when drilling down
       }
     } else {
-      // In child view, open transaction preview for subcategory
-      if (data.id) {
+      // In child view
+      if (data.id === 'other-child' && data.isOther) {
+        // Special handling for "Other" in child view - show breakdown of other child categories
+        setDrillDownState({
+          level: 'child', // Stay at child level but show "Other" breakdown
+          parentId: 'other-child',
+          parentName: data.name
+        });
+        setHiddenCategories({}); // Reset hidden categories
+      } else if (data.id) {
+        // Normal transaction preview for subcategory
         // Trigger transaction preview by finding and clicking the corresponding legend item
-        
-        // Find and click the corresponding legend item that has the TransactionPreviewTrigger
         const legendItems = document.querySelectorAll('[data-category-id="' + data.id + '"]');
         if (legendItems.length > 0) {
           (legendItems[0] as HTMLElement).click();
@@ -498,6 +662,11 @@ export function Reports() {
     if (drillDownState.parentId === 'other') {
       // If we're in "Other" view, go back to main parent view
       setDrillDownState({ level: 'parent' });
+    } else if (drillDownState.parentId === 'other-child') {
+      // If we're in "Other" child view, go back to the parent child view
+      // We need to get the original parent ID - this is tricky since we don't store it
+      // For now, just go back to parent level and let the auto-drill logic handle it
+      setDrillDownState({ level: 'parent' });
     } else {
       // If we're in child view, go back to parent view
       setDrillDownState({ level: 'parent' });
@@ -506,7 +675,7 @@ export function Reports() {
   };
   
   // Custom tooltip for pie chart
-  const CustomTooltip = ({ active, payload }: { active?: boolean; payload?: Array<{ payload: PieChartEntry }> }) => {
+  const CustomPieTooltip = ({ active, payload }: { active?: boolean; payload?: Array<{ payload: PieChartEntry }> }) => {
     if (active && payload && payload[0]) {
       const data = payload[0].payload;
       return (
@@ -517,6 +686,79 @@ export function Reports() {
           </Text>
         </Paper>
       );
+    }
+    return null;
+  };
+
+  // Custom tooltip for line charts - shows only the hovered line's data
+  const CustomLineTooltip = ({ active, payload, label }: { 
+    active?: boolean; 
+    payload?: Array<{ name: string; value: number; dataKey: string; color: string }>; 
+    label?: string 
+  }) => {
+    if (active && payload && payload.length > 0) {
+      // For line charts, recharts typically provides only the data for the line being hovered
+      // But if multiple lines are provided, show only the ones with values
+      const activeItems = payload.filter(item => item.value > 0);
+      if (activeItems.length === 1) {
+        const data = activeItems[0];
+        return (
+          <Paper p="xs" withBorder shadow="sm">
+            <Text size="sm" fw={600}>{label}</Text>
+            <Text size="xs" c="dimmed">
+              {data.dataKey}: ${data.value.toFixed(0)}
+            </Text>
+          </Paper>
+        );
+      } else if (activeItems.length > 1) {
+        // If multiple categories have values, show them all
+        return (
+          <Paper p="xs" withBorder shadow="sm">
+            <Text size="sm" fw={600}>{label}</Text>
+            {activeItems.map((item, index) => (
+              <Text key={index} size="xs" c="dimmed">
+                {item.dataKey}: ${item.value.toFixed(0)}
+              </Text>
+            ))}
+          </Paper>
+        );
+      }
+    }
+    return null;
+  };
+
+  // Custom tooltip for area/bar charts
+  const CustomAreaTooltip = ({ active, payload, label }: { 
+    active?: boolean; 
+    payload?: Array<{ name: string; value: number; dataKey: string }>; 
+    label?: string 
+  }) => {
+    if (active && payload && payload.length > 0) {
+      // For area/bar charts, show the specific data being hovered
+      const activeItems = payload.filter(item => item.value !== undefined && item.value !== null);
+      if (activeItems.length === 1) {
+        const data = activeItems[0];
+        return (
+          <Paper p="xs" withBorder shadow="sm">
+            <Text size="sm" fw={600}>{label}</Text>
+            <Text size="xs" c="dimmed">
+              {data.dataKey}: ${data.value.toFixed(0)}
+            </Text>
+          </Paper>
+        );
+      } else if (activeItems.length > 1) {
+        // Show multiple values if they exist
+        return (
+          <Paper p="xs" withBorder shadow="sm">
+            <Text size="sm" fw={600}>{label}</Text>
+            {activeItems.map((item, index) => (
+              <Text key={index} size="xs" c="dimmed">
+                {item.dataKey}: ${item.value.toFixed(0)}
+              </Text>
+            ))}
+          </Paper>
+        );
+      }
     }
     return null;
   };
@@ -678,7 +920,7 @@ export function Reports() {
                         <CartesianGrid strokeDasharray="3 3" />
                         <XAxis dataKey="month" />
                         <YAxis />
-                        <RechartsTooltip formatter={(value: number) => `$${value.toFixed(0)}`} />
+                        <RechartsTooltip content={<CustomAreaTooltip />} />
                         <Legend />
                         <Area 
                           type="monotone" 
@@ -713,7 +955,7 @@ export function Reports() {
                         <CartesianGrid strokeDasharray="3 3" />
                         <XAxis dataKey="month" />
                         <YAxis />
-                        <RechartsTooltip formatter={(value: number) => `$${value.toFixed(0)}`} />
+                        <RechartsTooltip content={<CustomAreaTooltip />} />
                         <Bar 
                           dataKey="netFlow" 
                           fill="#4f46e5"
@@ -742,7 +984,7 @@ export function Reports() {
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis dataKey="month" />
                   <YAxis />
-                  <RechartsTooltip formatter={(value: number) => `$${value.toFixed(0)}`} />
+                  <RechartsTooltip content={<CustomLineTooltip />} />
                   <Legend />
                   {categoryNames.map((category, index) => (
                     <Line
@@ -787,7 +1029,7 @@ export function Reports() {
                         <Text size="lg" fw={600}>
                           {categoryView === 'income' ? 'Income' : 'Expense'} Breakdown
                         </Text>
-                        {(drillDownState.level === 'child' || drillDownState.parentId === 'other') && (
+                        {(drillDownState.level === 'child' || drillDownState.parentId === 'other' || drillDownState.parentId === 'other-child') && (
                           <Breadcrumbs mt={4}>
                             <Anchor 
                               size="sm" 
@@ -799,13 +1041,16 @@ export function Reports() {
                             {drillDownState.parentId === 'other' && (
                               <Text size="sm">{drillDownState.parentName}</Text>
                             )}
-                            {drillDownState.level === 'child' && drillDownState.parentId !== 'other' && (
+                            {drillDownState.parentId === 'other-child' && (
+                              <Text size="sm">{drillDownState.parentName}</Text>
+                            )}
+                            {drillDownState.level === 'child' && drillDownState.parentId !== 'other' && drillDownState.parentId !== 'other-child' && (
                               <Text size="sm">{drillDownState.parentName}</Text>
                             )}
                           </Breadcrumbs>
                         )}
                       </div>
-                      {(drillDownState.level === 'child' || drillDownState.parentId === 'other') && (
+                      {(drillDownState.level === 'child' || drillDownState.parentId === 'other' || drillDownState.parentId === 'other-child') && (
                         <ActionIcon
                           variant="subtle"
                           onClick={navigateToParent}
@@ -852,7 +1097,7 @@ export function Reports() {
                           />
                         ))}
                       </Pie>
-                      <RechartsTooltip content={<CustomTooltip />} />
+                      <RechartsTooltip content={<CustomPieTooltip />} />
                     </PieChart>
                   </ResponsiveContainer>
                   
@@ -1046,7 +1291,7 @@ export function Reports() {
                       <CartesianGrid strokeDasharray="3 3" />
                       <XAxis dataKey="month" />
                       <YAxis />
-                      <RechartsTooltip formatter={(value: number) => `$${value.toFixed(0)}`} />
+                      <RechartsTooltip content={<CustomAreaTooltip />} />
                       <Legend />
                       <Area
                         type="monotone"
