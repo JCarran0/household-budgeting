@@ -6,6 +6,7 @@ import { format, startOfMonth, endOfMonth, startOfYear, subMonths } from 'date-f
 import type { Transaction } from '../../../shared/types';
 import { useTransactionFilters } from '../hooks/usePersistedFilters';
 import { formatCurrency } from '../utils/formatters';
+import { parseDateFromStorage } from '../stores/filterStore';
 import { 
   isIncomeCategoryHierarchical, 
   isTransferCategory, 
@@ -35,7 +36,6 @@ import {
   Menu,
   rem,
   SegmentedControl,
-  Collapse,
   Skeleton,
   LoadingOverlay,
   Pagination,
@@ -128,6 +128,21 @@ export function EnhancedTransactions() {
   const [splittingTransaction, setSplittingTransaction] = useState<Transaction | null>(null);
   const [isSplitModalOpen, setIsSplitModalOpen] = useState(false);
   const [showCustomDatePicker, setShowCustomDatePicker] = useState(false);
+  
+  // Local state for temporary date selection (not persisted until applied)
+  // DatePickerInput expects string values, not Date objects
+  const [tempCustomDateRange, setTempCustomDateRange] = useState<[string | null, string | null]>([null, null]);
+  
+  // Initialize temp date range when custom picker opens
+  useEffect(() => {
+    if (showCustomDatePicker) {
+      // Convert Date objects to strings for DatePickerInput
+      setTempCustomDateRange([
+        customDateRange[0] ? format(customDateRange[0], 'yyyy-MM-dd') : null,
+        customDateRange[1] ? format(customDateRange[1], 'yyyy-MM-dd') : null
+      ]);
+    }
+  }, [showCustomDatePicker, customDateRange]);
   
   // Bulk selection state
   const [selectedTransactionIds, setSelectedTransactionIds] = useState<Set<string>>(new Set());
@@ -255,18 +270,18 @@ export function EnhancedTransactions() {
     const now = new Date();
     
     if (dateFilterOption === 'this-month') {
-      return [startOfMonth(now), endOfMonth(now)];
+      return [startOfMonth(now), endOfMonth(now)] as [Date, Date];
     } else if (dateFilterOption === 'ytd') {
-      return [startOfYear(now), endOfMonth(now)];
+      return [startOfYear(now), endOfMonth(now)] as [Date, Date];
     } else if (dateFilterOption === 'custom') {
       return customDateRange;
     } else if (dateFilterOption.match(/^\d{4}-\d{2}$/)) {
       // Specific month selected (e.g., '2025-01')
       const [year, month] = dateFilterOption.split('-').map(Number);
       const monthDate = new Date(year, month - 1, 1);
-      return [startOfMonth(monthDate), endOfMonth(monthDate)];
+      return [startOfMonth(monthDate), endOfMonth(monthDate)] as [Date, Date];
     }
-    return [startOfMonth(now), endOfMonth(now)];
+    return [startOfMonth(now), endOfMonth(now)] as [Date, Date];
   }, [dateFilterOption, customDateRange]);
   
   // Generate month options for current year
@@ -355,8 +370,8 @@ export function EnhancedTransactions() {
     queryKey: ['transactions', queryParams],
     queryFn: () => api.getTransactions(queryParams),
     refetchOnWindowFocus: false,
-    staleTime: 0, // Always consider data stale so it refetches on invalidation
-    gcTime: 10 * 60 * 1000,    // 10 minutes - cache persists (was cacheTime in v4)
+    staleTime: 5 * 60 * 1000, // 5 minutes - prevent aggressive refetching on every filter change
+    gcTime: 10 * 60 * 1000,   // 10 minutes - cache persists (was cacheTime in v4)
     retry: 1,
   });
   
@@ -882,7 +897,10 @@ export function EnhancedTransactions() {
                 <SegmentedControl
                   value={dateFilterOption === 'custom' || monthOptions.some(m => m.value === dateFilterOption) ? 'custom' : dateFilterOption}
                   onChange={(value) => {
-                    if (value !== 'custom') {
+                    if (value === 'custom') {
+                      setDateFilterOption('custom');
+                      setShowCustomDatePicker(true);
+                    } else {
                       setDateFilterOption(value as DateFilterOption);
                       setShowCustomDatePicker(false);
                     }
@@ -919,26 +937,72 @@ export function EnhancedTransactions() {
                     onClick={() => setShowCustomDatePicker(!showCustomDatePicker)}
                     leftSection={<IconCalendar size={14} />}
                   >
-                    {dateRange[0] && dateRange[1]
-                      ? `${format(dateRange[0], 'MMM d')} - ${format(dateRange[1], 'MMM d, yyyy')}`
+                    {customDateRange[0] && customDateRange[1]
+                      ? `${format(customDateRange[0], 'MMM d')} - ${format(customDateRange[1], 'MMM d, yyyy')}`
                       : 'Select dates'}
                   </Button>
                 )}
               </Group>
               
-              <Collapse in={showCustomDatePicker}>
-                <DatePickerInput
-                  type="range"
-                  placeholder="Select custom date range"
-                  value={customDateRange}
-                  onChange={(value) => {
-                    setCustomDateRange(value as [Date | null, Date | null]);
-                    setDateFilterOption('custom');
-                  }}
-                  leftSection={<IconCalendar size={16} />}
+              <Box
+                style={{
+                  overflow: showCustomDatePicker ? 'visible' : 'hidden',
+                  transition: 'max-height 200ms ease-out, opacity 200ms ease-out',
+                  maxHeight: showCustomDatePicker ? '300px' : '0px',
+                  opacity: showCustomDatePicker ? 1 : 0,
+                }}
+              >
+                <Stack 
+                  gap="xs" 
                   mt="xs"
-                />
-              </Collapse>
+                  style={{
+                    visibility: showCustomDatePicker ? 'visible' : 'hidden',
+                    pointerEvents: showCustomDatePicker ? 'auto' : 'none',
+                  }}
+                >
+                  <DatePickerInput
+                    type="range"
+                    placeholder="Select custom date range"
+                    value={tempCustomDateRange}
+                    onChange={(value) => {
+                      setTempCustomDateRange(value as [string | null, string | null]);
+                    }}
+                    leftSection={<IconCalendar size={16} />}
+                    clearable
+                    popoverProps={{ withinPortal: true, zIndex: 1000 }}
+                  />
+                  <Group gap="xs" justify="flex-end">
+                    <Button
+                      size="xs"
+                      variant="subtle"
+                      onClick={() => {
+                        setShowCustomDatePicker(false);
+                        setTempCustomDateRange([null, null]);
+                      }}
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      size="xs"
+                      onClick={() => {
+                        if (tempCustomDateRange[0] && tempCustomDateRange[1]) {
+                          const startDate = parseDateFromStorage(tempCustomDateRange[0]);
+                          const endDate = parseDateFromStorage(tempCustomDateRange[1]);
+                          
+                          if (startDate && endDate) {
+                            setCustomDateRange([startDate, endDate]);
+                            setDateFilterOption('custom');
+                          }
+                        }
+                        setShowCustomDatePicker(false);
+                      }}
+                      disabled={!tempCustomDateRange[0] || !tempCustomDateRange[1]}
+                    >
+                      Apply
+                    </Button>
+                  </Group>
+                </Stack>
+              </Box>
             </Stack>
             
             <Grid>
