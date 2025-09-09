@@ -16,10 +16,12 @@ import {
 import { useAuthStore } from '../stores/authStore';
 import { api } from '../lib/api';
 import { useState, useEffect } from 'react';
+import { ChangelogModal } from './ChangelogModal';
 
 export function MantineLayout() {
   const [mobileOpened, { toggle: toggleMobile }] = useDisclosure();
   const [desktopOpened, { toggle: toggleDesktop }] = useDisclosure(true);
+  const [changelogOpened, { open: openChangelog, close: closeChangelog }] = useDisclosure(false);
   const [version, setVersion] = useState<string | null>(null);
   const navigate = useNavigate();
   const location = useLocation();
@@ -137,7 +139,10 @@ export function MantineLayout() {
               {version && (
                 <>
                   <Menu.Divider />
-                  <Menu.Item component="div" c="dimmed">
+                  <Menu.Item 
+                    onClick={openChangelog}
+                    style={{ cursor: 'pointer' }}
+                  >
                     <Text size="xs" c="dimmed">
                       v{version}
                     </Text>
@@ -181,6 +186,11 @@ export function MantineLayout() {
       <AppShell.Main>
         <Outlet />
       </AppShell.Main>
+
+      <ChangelogModal 
+        opened={changelogOpened} 
+        onClose={closeChangelog}
+      />
     </AppShell>
   );
 }

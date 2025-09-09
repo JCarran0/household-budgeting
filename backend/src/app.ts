@@ -126,6 +126,29 @@ app.get(`${apiPrefix}/version`, (_req: Request, res: Response) => {
   });
 });
 
+// Changelog endpoint under API prefix
+app.get(`${apiPrefix}/changelog`, (_req: Request, res: Response) => {
+  const fs = require('fs');
+  const path = require('path');
+  
+  try {
+    const changelogPath = path.join(__dirname, '../../CHANGELOG.md');
+    const changelog = fs.readFileSync(changelogPath, 'utf-8');
+    
+    res.json({
+      success: true,
+      content: changelog,
+    });
+  } catch (error) {
+    console.error('Error reading changelog:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to read changelog',
+      content: '# Changelog\n\nChangelog is currently unavailable.',
+    });
+  }
+});
+
 // 404 handler
 app.use((req: Request, res: Response) => {
   res.status(404).json({

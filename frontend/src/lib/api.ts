@@ -38,6 +38,12 @@ export interface VersionResponse {
   unreleased: string;
 }
 
+export interface ChangelogResponse {
+  success: boolean;
+  content: string;
+  error?: string;
+}
+
 export interface CreateCategoryDto {
   name: string;
   parentId: string | null;
@@ -122,6 +128,7 @@ class ApiClient {
     
     // Bind methods to ensure 'this' context is preserved
     this.getVersion = this.getVersion.bind(this);
+    this.getChangelog = this.getChangelog.bind(this);
     this.createLinkToken = this.createLinkToken.bind(this);
     this.exchangePublicToken = this.exchangePublicToken.bind(this);
     this.connectAccount = this.connectAccount.bind(this);
@@ -239,6 +246,12 @@ class ApiClient {
   // Version endpoint
   async getVersion(): Promise<VersionResponse> {
     const { data } = await this.client.get<VersionResponse>('/version');
+    return data;
+  }
+
+  // Changelog endpoint
+  async getChangelog(): Promise<ChangelogResponse> {
+    const { data } = await this.client.get<ChangelogResponse>('/changelog');
     return data;
   }
 

@@ -452,6 +452,23 @@
 - A user should be able to see which page they're currently on
 - A user should be able to access all major features from the navigation
 
+### Version Information & Changelog
+- A user should be able to see the current application version in the user profile menu
+- A user should be able to click the version number in the user profile menu to view the changelog
+- A user should see a modal displaying the complete changelog with proper formatting
+- A user should see version headers as clickable links to GitHub release comparisons
+- A user should see feature descriptions with bold component names (e.g., **budgets:**)
+- A user should see commit references as clickable links to GitHub commits
+- A user should be able to scroll through the entire version history in the modal
+- A user should see properly formatted markdown content including:
+  - Version numbers as green headers with clickable GitHub links
+  - Section headers (Features, Bug Fixes) in orange
+  - Bullet points with proper indentation and formatting
+  - Working external links that open in new tabs
+- A user should be able to close the changelog modal via close button, ESC key, or clicking outside
+- A user should see loading states while changelog content is being fetched
+- A user should see error handling if changelog content fails to load
+
 ### Inter-Page Filter Synchronization
 - A user should experience seamless filter preservation when navigating between Reports and Transactions pages
 - A user should see the same time range context maintained across page transitions
