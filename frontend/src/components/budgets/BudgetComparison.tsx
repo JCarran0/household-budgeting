@@ -23,6 +23,11 @@ import type { BudgetComparisonResponse } from '../../lib/api';
 import type { Category, BudgetComparison as BudgetComparisonType } from '../../../../shared/types';
 import { TransactionPreviewTrigger } from '../transactions/TransactionPreviewTrigger';
 import { formatCurrency } from '../../utils/formatters';
+import { 
+  isIncomeCategoryHierarchical, 
+  isTransferCategory, 
+  createCategoryLookup 
+} from '../../../../shared/utils/categoryHelpers';
 
 interface BudgetComparisonProps {
   comparison: BudgetComparisonResponse;
@@ -108,27 +113,55 @@ export function BudgetComparison({ comparison, categories }: BudgetComparisonPro
     }
   };
 
-  const exportToCSV = (): void => {
-    const headers = ['Category', 'Budgeted', 'Actual', 'Remaining', 'Percent Used', 'Status'];
-    const rows = comparison.comparisons.map(comp => [
-      getCategoryName(comp.categoryId),
-      comp.budgeted.toFixed(2),
-      comp.actual.toFixed(2),
-      comp.remaining.toFixed(2),
-      `${comp.percentUsed}%`,
-      comp.isOverBudget ? 'Over Budget' : 'On Track'
-    ]);
+  const exportToTSV = (): void => {
+    // Create category lookup for efficient hierarchical checks
+    const categoryLookup = createCategoryLookup(categories);
+    
+    // Helper function to escape TSV values
+    const escapeTSV = (value: string | null | undefined): string => {
+      if (value == null) return '';
+      const str = String(value);
+      // Replace tabs and newlines with spaces for TSV format
+      return str.replace(/\t/g, ' ').replace(/\n/g, ' ').replace(/\r/g, '');
+    };
+    
+    const headers = ['Category', 'Type', 'Category Hidden', 'Category Rollover', 'Budgeted', 'Actual', 'Remaining', 'Percent Used', 'Status'];
+    const rows = comparison.comparisons.map(comp => {
+      // Find the category for property lookups
+      const category = categories.find(c => c.id === comp.categoryId);
+      
+      // Determine category type - use existing isIncomeCategory from comparison if available, otherwise calculate
+      const typedComp = comp as BudgetComparisonType;
+      const categoryType = typedComp.isIncomeCategory || isIncomeCategoryHierarchical(comp.categoryId, categoryLookup) ? 'Income' :
+        isTransferCategory(comp.categoryId) ? 'Transfer' : 'Expense';
+      
+      // Get category properties
+      const categoryHidden = category?.isHidden ? 'Yes' : 'No';
+      const categoryRollover = category?.isRollover ? 'Yes' : 'No';
+      
+      return [
+        escapeTSV(getCategoryName(comp.categoryId)),
+        escapeTSV(categoryType),
+        escapeTSV(categoryHidden),
+        escapeTSV(categoryRollover),
+        escapeTSV(comp.budgeted.toFixed(2)),
+        escapeTSV(comp.actual.toFixed(2)),
+        escapeTSV(comp.remaining.toFixed(2)),
+        escapeTSV(`${comp.percentUsed}%`),
+        escapeTSV(comp.isOverBudget ? 'Over Budget' : 'On Track')
+      ].join('\t');
+    });
 
-    const csvContent = [
-      headers.join(','),
-      ...rows.map(row => row.join(','))
+    const tsvContent = [
+      headers.join('\t'),
+      ...rows
     ].join('\n');
 
-    const blob = new Blob([csvContent], { type: 'text/csv' });
+    const blob = new Blob([tsvContent], { type: 'text/tab-separated-values;charset=utf-8;' });
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `budget-comparison-${comparison.month}.csv`;
+    a.download = `budget-comparison-${comparison.month}.tsv`;
     a.click();
     window.URL.revokeObjectURL(url);
   };
@@ -312,9 +345,9 @@ export function BudgetComparison({ comparison, categories }: BudgetComparisonPro
             variant="light"
             size="sm"
             leftSection={<IconDownload size={16} />}
-            onClick={exportToCSV}
+            onClick={exportToTSV}
           >
-            Export CSV
+            Export TSV
           </Button>
         </Group>
         

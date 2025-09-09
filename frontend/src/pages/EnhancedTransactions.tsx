@@ -6,6 +6,11 @@ import { format, startOfMonth, endOfMonth, startOfYear, subMonths } from 'date-f
 import type { Transaction } from '../../../shared/types';
 import { useTransactionFilters } from '../hooks/usePersistedFilters';
 import { formatCurrency } from '../utils/formatters';
+import { 
+  isIncomeCategoryHierarchical, 
+  isTransferCategory, 
+  createCategoryLookup 
+} from '../../../shared/utils/categoryHelpers';
 import {
   Container,
   Stack,
@@ -636,7 +641,7 @@ export function EnhancedTransactions() {
       : category.name;
   };
 
-  const exportToCSV = () => {
+  const exportToTSV = () => {
     if (!transactionData?.transactions || transactionData.transactions.length === 0) {
       notifications.show({
         title: 'No Data',
@@ -652,23 +657,23 @@ export function EnhancedTransactions() {
       'Description',
       'Amount',
       'Category',
+      'Type',
+      'Category Hidden',
+      'Category Rollover',
       'Account',
       'Institution',
       'Merchant',
       'Tags',
       'Notes',
-      'Status'
+      'Transaction Hidden'
     ];
 
-    // Helper function to escape CSV values
-    const escapeCSV = (value: string | null | undefined): string => {
+    // Helper function to escape TSV values
+    const escapeTSV = (value: string | null | undefined): string => {
       if (value == null) return '';
       const str = String(value);
-      // If the value contains comma, quotes, or newline, wrap in quotes and escape internal quotes
-      if (str.includes(',') || str.includes('"') || str.includes('\n')) {
-        return `"${str.replace(/"/g, '""')}"`;
-      }
-      return str;
+      // Replace tabs and newlines with spaces for TSV format
+      return str.replace(/\t/g, ' ').replace(/\n/g, ' ').replace(/\r/g, '');
     };
 
     // Get account info for each transaction
@@ -680,40 +685,60 @@ export function EnhancedTransactions() {
       };
     };
 
-    // Build CSV rows from all transactions (not just current page)
+    // Create category lookup for efficient hierarchical checks
+    const categoryLookup = categories ? createCategoryLookup(categories) : new Map();
+
+    // Build TSV rows from all transactions (not just current page)
     const rows = transactionData.transactions.map(transaction => {
       const { accountName, institution } = getAccountInfo(transaction.accountId);
       const categoryDisplay = getCategoryDisplay(transaction) || 'Uncategorized';
       const description = transaction.userDescription || transaction.name;
       const tags = transaction.tags?.join('; ') || '';
-      const status = transaction.isHidden ? 'Hidden' : 'Visible';
+      const transactionHidden = transaction.isHidden ? 'Yes' : 'No';
+      
+      // Find the category for property lookups
+      const category = transaction.categoryId && categories 
+        ? categories.find(c => c.id === transaction.categoryId)
+        : null;
+      
+      // Determine category type
+      const categoryType = !transaction.categoryId ? 'Uncategorized' :
+        isIncomeCategoryHierarchical(transaction.categoryId, categoryLookup) ? 'Income' :
+        isTransferCategory(transaction.categoryId) ? 'Transfer' : 'Expense';
+      
+      // Get category properties
+      const categoryHidden = category?.isHidden ? 'Yes' : 'No';
+      const categoryRollover = category?.isRollover ? 'Yes' : 'No';
       
       return [
-        escapeCSV(transaction.date),
-        escapeCSV(description),
-        escapeCSV(formatCurrency(transaction.amount, true).replace('$', '')),
-        escapeCSV(categoryDisplay),
-        escapeCSV(accountName),
-        escapeCSV(institution),
-        escapeCSV(transaction.merchantName),
-        escapeCSV(tags),
-        escapeCSV(transaction.notes),
-        escapeCSV(status)
-      ].join(',');
+        escapeTSV(transaction.date),
+        escapeTSV(description),
+        escapeTSV(formatCurrency(transaction.amount, true).replace('$', '')),
+        escapeTSV(categoryDisplay),
+        escapeTSV(categoryType),
+        escapeTSV(categoryHidden),
+        escapeTSV(categoryRollover),
+        escapeTSV(accountName),
+        escapeTSV(institution),
+        escapeTSV(transaction.merchantName),
+        escapeTSV(tags),
+        escapeTSV(transaction.notes),
+        escapeTSV(transactionHidden)
+      ].join('\t');
     });
 
-    // Combine headers and rows into CSV content
-    const csvContent = [headers.join(','), ...rows].join('\n');
+    // Combine headers and rows into TSV content
+    const tsvContent = [headers.join('\t'), ...rows].join('\n');
 
     // Create blob and download
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const blob = new Blob([tsvContent], { type: 'text/tab-separated-values;charset=utf-8;' });
     const url = window.URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
     
     // Generate filename with current date
     const today = format(new Date(), 'yyyy-MM-dd');
-    link.download = `transactions-export-${today}.csv`;
+    link.download = `transactions-export-${today}.tsv`;
     
     document.body.appendChild(link);
     link.click();
@@ -722,7 +747,7 @@ export function EnhancedTransactions() {
 
     notifications.show({
       title: 'Export Complete',
-      message: `Exported ${transactionData.transactions.length} transactions to CSV`,
+      message: `Exported ${transactionData.transactions.length} transactions to TSV`,
       color: 'green',
     });
   };
@@ -782,11 +807,11 @@ export function EnhancedTransactions() {
             </Button>
             <Button
               leftSection={<IconDownload size={16} />}
-              onClick={exportToCSV}
+              onClick={exportToTSV}
               variant="light"
               disabled={!transactionData?.transactions || transactionData.transactions.length === 0}
             >
-              Export CSV
+              Export TSV
             </Button>
             <Button
               leftSection={<IconRefresh size={16} />}
