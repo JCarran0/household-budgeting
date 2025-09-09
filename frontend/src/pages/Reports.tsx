@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useReportsFilters } from '../hooks/usePersistedFilters';
 import { notifications } from '@mantine/notifications';
@@ -148,6 +148,11 @@ interface DrillDownState {
   parentName?: string;
 }
 
+// Type for hidden categories state
+interface HiddenCategoriesState {
+  [categoryId: string]: boolean;
+}
+
 // Types for pie chart data
 interface PieChartEntry {
   id?: string;
@@ -157,6 +162,7 @@ interface PieChartEntry {
   clickable?: boolean;
   hasChildren?: boolean;
   childCount?: number;
+  isOther?: boolean; // Special flag for "Other" category
 }
 
 interface ProcessedParentData {
@@ -185,6 +191,12 @@ export function Reports() {
   const [drillDownState, setDrillDownState] = useState<DrillDownState>({
     level: 'parent'
   });
+  
+  // State for hidden categories in pie chart
+  const [hiddenCategories, setHiddenCategories] = useState<HiddenCategoriesState>({});
+  
+  // State for storing categories that are grouped into "Other"
+  const [otherCategories, setOtherCategories] = useState<ProcessedParentData[]>([]);
   
   // State for income vs expense view
   const [categoryView, setCategoryView] = useState<'expenses' | 'income'>('expenses');
@@ -270,30 +282,122 @@ export function Reports() {
     return { parentData, childData };
   }, [breakdownData]);
   
-  // Get current pie chart data based on drill-down state
-  const pieChartData: PieChartEntry[] = useMemo(() => {
+  // Calculate pie chart data and other categories in one go
+  const { pieChartData: calculatedPieChartData, otherCategoriesData } = useMemo(() => {
     if (drillDownState.level === 'parent') {
-      // Show parent categories
-      return processedCategoryData.parentData
-        .slice(0, 8) // Top 8 categories
-        .map(item => ({
-          // Use child ID for single-child categories, parent ID otherwise
-          id: item.singleChildId || item.id,
-          name: item.childCount === 1 && item.singleChildName 
-            ? `${item.name} (${item.singleChildName})`
-            : item.name,
-          value: item.value,
-          percentage: item.percentage,
-          clickable: item.childCount > 1, // Only clickable if multiple children
-          hasChildren: item.hasChildren,
-          childCount: item.childCount
-        }));
+      // Check if we're viewing the "Other" breakdown
+      if (drillDownState.parentId === 'other') {
+        // Show pie of just the "other" categories with percentages relative to "other" total
+        const otherTotal = otherCategories.reduce((sum, cat) => sum + cat.value, 0);
+        return {
+          pieChartData: otherCategories
+            .filter((item: ProcessedParentData) => !hiddenCategories[item.id])
+            .map((item: ProcessedParentData) => ({
+              id: item.id,
+              name: item.name,
+              value: item.value,
+              percentage: otherTotal > 0 ? (item.value / otherTotal) * 100 : 0,
+              clickable: item.hasChildren,
+              hasChildren: item.hasChildren,
+              childCount: item.childCount
+            })),
+          otherCategoriesData: otherCategories
+        };
+      }
+      
+      // Normal parent view - implement 90% threshold logic
+      const availableCategories = processedCategoryData.parentData.filter((item: ProcessedParentData) => !hiddenCategories[item.id]);
+      
+      if (availableCategories.length === 0) {
+        return { pieChartData: [], otherCategoriesData: [] };
+      }
+      
+      let cumulativePercentage = 0;
+      const threshold = 90;
+      const mainSlices: ProcessedParentData[] = [];
+      const otherSlices: ProcessedParentData[] = [];
+      
+      // Accumulate categories until we reach the threshold
+      for (const category of availableCategories) {
+        if (cumulativePercentage < threshold && mainSlices.length < availableCategories.length - 1) {
+          // Add to main slices if under threshold and not the last category
+          mainSlices.push(category);
+          cumulativePercentage += category.percentage;
+        } else {
+          // Add remaining categories to "Other"
+          otherSlices.push(category);
+        }
+      }
+      
+      // If we only have otherSlices (edge case), move some back to mainSlices
+      if (mainSlices.length === 0 && otherSlices.length > 0) {
+        mainSlices.push(...otherSlices.splice(0, Math.min(3, otherSlices.length)));
+      }
+      
+      const result: PieChartEntry[] = mainSlices.map((item: ProcessedParentData) => ({
+        id: item.id,
+        name: item.name,
+        value: item.value,
+        percentage: item.percentage,
+        clickable: item.hasChildren,
+        hasChildren: item.hasChildren,
+        childCount: item.childCount
+      }));
+      
+      // Create "Other" category if we have remaining categories
+      if (otherSlices.length > 0) {
+        const otherTotal = otherSlices.reduce((sum, cat) => sum + cat.value, 0);
+        const otherPercentage = otherSlices.reduce((sum, cat) => sum + cat.percentage, 0);
+        
+        result.push({
+          id: 'other',
+          name: `Other (${otherSlices.length} categories)`,
+          value: otherTotal,
+          percentage: otherPercentage,
+          clickable: true,
+          hasChildren: true,
+          childCount: otherSlices.length,
+          isOther: true
+        });
+      }
+      
+      return { pieChartData: result, otherCategoriesData: otherSlices };
     } else {
-      // Show children of selected parent
+      // Show children of selected parent (existing logic)
       const children = processedCategoryData.childData.get(drillDownState.parentId || '');
-      return children || [];
+      const childData = (children || [])
+        .filter((child: ProcessedChildData) => !hiddenCategories[child.id])
+        .map((child: ProcessedChildData) => ({
+          ...child,
+          clickable: false, // Children are not clickable for drill-down
+          hasChildren: false
+        }));
+      
+      return { pieChartData: childData, otherCategoriesData: [] };
     }
-  }, [drillDownState, processedCategoryData]);
+  }, [drillDownState, processedCategoryData, hiddenCategories, otherCategories]);
+  
+  // Use a ref to track the current other categories to prevent unnecessary state updates
+  const otherCategoriesRef = useRef<ProcessedParentData[]>([]);
+  
+  // Update otherCategories state only when the data actually changes
+  useEffect(() => {
+    // Compare array contents, not references
+    const hasChanged = otherCategoriesData.length !== otherCategoriesRef.current.length ||
+      otherCategoriesData.some((item, index) => 
+        !otherCategoriesRef.current[index] || 
+        item.id !== otherCategoriesRef.current[index].id ||
+        item.value !== otherCategoriesRef.current[index].value
+      );
+    
+    if (hasChanged) {
+      otherCategoriesRef.current = otherCategoriesData;
+      setOtherCategories(otherCategoriesData);
+    }
+  }, [otherCategoriesData]);
+  
+  // Use the calculated pie chart data
+  const pieChartData = calculatedPieChartData;
 
   const isLoading = ytdLoading || cashFlowLoading || trendsLoading || breakdownLoading || projectionsLoading;
 
@@ -346,24 +450,59 @@ export function Reports() {
   trendsData?.trends?.forEach(trend => uniqueCategories.add(trend.categoryName));
   const categoryNames = Array.from(uniqueCategories).slice(0, 8); // Limit to top 8 for visibility
   
-  // Handle pie slice click - drill down to subcategories
+  // Handle pie slice click
   const handleSliceClick = (data: PieChartEntry) => {
-    if (!data.clickable) return; // Don't drill down if not clickable
-    
-    if (drillDownState.level === 'parent' && data.childCount && data.childCount > 1) {
-      // Drill down to children
-      setDrillDownState({
-        level: 'child',
-        parentId: data.id || '',
-        parentName: data.name
-      });
+    if (drillDownState.level === 'parent') {
+      if (data.isOther) {
+        // Special handling for "Other" category - drill down to show other categories
+        setDrillDownState({
+          level: 'parent', // Stay at parent level but show "Other" breakdown
+          parentId: 'other',
+          parentName: data.name
+        });
+        setHiddenCategories({}); // Reset hidden categories
+      } else if (data.hasChildren) {
+        // Normal drill down to subcategories
+        setDrillDownState({
+          level: 'child',
+          parentId: data.id || '',
+          parentName: data.name
+        });
+        setHiddenCategories({}); // Reset hidden categories when drilling down
+      }
+    } else {
+      // In child view, open transaction preview for subcategory
+      if (data.id) {
+        // Trigger transaction preview by finding and clicking the corresponding legend item
+        
+        // Find and click the corresponding legend item that has the TransactionPreviewTrigger
+        const legendItems = document.querySelectorAll('[data-category-id="' + data.id + '"]');
+        if (legendItems.length > 0) {
+          (legendItems[0] as HTMLElement).click();
+        }
+      }
     }
+  };
+  
+  // Toggle category visibility in pie chart
+  const toggleCategoryVisibility = (categoryId: string) => {
+    setHiddenCategories(prev => ({
+      ...prev,
+      [categoryId]: !prev[categoryId]
+    }));
   };
   
   
   // Navigate back to parent view
   const navigateToParent = () => {
-    setDrillDownState({ level: 'parent' });
+    if (drillDownState.parentId === 'other') {
+      // If we're in "Other" view, go back to main parent view
+      setDrillDownState({ level: 'parent' });
+    } else {
+      // If we're in child view, go back to parent view
+      setDrillDownState({ level: 'parent' });
+    }
+    setHiddenCategories({}); // Reset hidden categories when navigating back
   };
   
   // Custom tooltip for pie chart
@@ -376,9 +515,6 @@ export function Reports() {
           <Text size="xs" c="dimmed">
             ${data.value.toFixed(0)} ({data.percentage.toFixed(1)}%)
           </Text>
-          {data.clickable && (
-            <Text size="xs" c="blue" mt={4}>Click to view subcategories</Text>
-          )}
         </Paper>
       );
     }
@@ -630,8 +766,10 @@ export function Reports() {
                   value={categoryView}
                   onChange={(value: string) => {
                     setCategoryView(value as 'expenses' | 'income');
-                    // Reset drill-down when switching views
+                    // Reset drill-down, hidden categories, and other categories when switching views
                     setDrillDownState({ level: 'parent' });
+                    setHiddenCategories({});
+                    setOtherCategories([]);
                   }}
                   data={[
                     { label: 'Expenses', value: 'expenses' },
@@ -647,9 +785,9 @@ export function Reports() {
                     <Group justify="space-between" mb="md">
                       <div>
                         <Text size="lg" fw={600}>
-                          {categoryView === 'income' ? 'Income' : 'Category'} Breakdown
+                          {categoryView === 'income' ? 'Income' : 'Expense'} Breakdown
                         </Text>
-                        {drillDownState.level === 'child' && (
+                        {(drillDownState.level === 'child' || drillDownState.parentId === 'other') && (
                           <Breadcrumbs mt={4}>
                             <Anchor 
                               size="sm" 
@@ -658,11 +796,16 @@ export function Reports() {
                             >
                               All Categories
                             </Anchor>
-                            <Text size="sm">{drillDownState.parentName}</Text>
+                            {drillDownState.parentId === 'other' && (
+                              <Text size="sm">{drillDownState.parentName}</Text>
+                            )}
+                            {drillDownState.level === 'child' && drillDownState.parentId !== 'other' && (
+                              <Text size="sm">{drillDownState.parentName}</Text>
+                            )}
                           </Breadcrumbs>
                         )}
                       </div>
-                      {drillDownState.level === 'child' && (
+                      {(drillDownState.level === 'child' || drillDownState.parentId === 'other') && (
                         <ActionIcon
                           variant="subtle"
                           onClick={navigateToParent}
@@ -715,30 +858,114 @@ export function Reports() {
                   
                   {/* Legend */}
                   <SimpleGrid cols={2} spacing="xs" mt="md">
-                    {pieChartData.map((entry: PieChartEntry, index: number) => (
-                      <TransactionPreviewTrigger
-                        key={entry.name}
-                        categoryId={entry.id || null}
-                        categoryName={entry.name}
-                        dateRange={{ startDate, endDate }}
-                        tooltipText="Click to preview transactions"
-                        timeRangeFilter={timeRange}
-                      >
-                        <Group gap="xs" style={{ borderRadius: 'var(--mantine-radius-sm)', padding: '4px' }}>
+                    {/* Show all categories for current view level, including hidden ones */}
+                    {(() => {
+                      if (drillDownState.level === 'parent' && drillDownState.parentId === 'other') {
+                        // Show "other" categories
+                        return otherCategories;
+                      } else if (drillDownState.level === 'parent') {
+                        // Show main parent categories (now dynamically calculated based on pieChartData)
+                        return pieChartData.filter((item: PieChartEntry) => !item.isOther).map((item: PieChartEntry) => {
+                          // Find the original category data
+                          const originalCategory = processedCategoryData.parentData.find(cat => cat.id === item.id);
+                          return originalCategory || {
+                            id: item.id || '',
+                            name: item.name,
+                            value: item.value,
+                            percentage: item.percentage,
+                            hasChildren: item.hasChildren || false,
+                            childCount: item.childCount || 0
+                          };
+                        }).concat(
+                          // Add "Other" category if it exists in pieChartData
+                          pieChartData.filter((item: PieChartEntry) => item.isOther).map((item: PieChartEntry) => ({
+                            id: 'other',
+                            name: item.name,
+                            value: item.value,
+                            percentage: item.percentage,
+                            hasChildren: true,
+                            childCount: item.childCount || 0
+                          }))
+                        );
+                      } else {
+                        // Child view
+                        return processedCategoryData.childData.get(drillDownState.parentId || '') || [];
+                      }
+                    })().map((entry: ProcessedParentData | ProcessedChildData | { id: string; name: string; value: number; percentage: number; hasChildren: boolean; childCount: number }, index: number) => {
+                      const isHidden = hiddenCategories[entry.id];
+                      const isSubcategory = drillDownState.level === 'child';
+                      
+                      return (
+                        <Group 
+                          key={entry.id || entry.name}
+                          gap="xs" 
+                          style={{ 
+                            borderRadius: 'var(--mantine-radius-sm)', 
+                            padding: '4px',
+                            cursor: 'pointer',
+                            opacity: isHidden ? 0.5 : 1,
+                            transition: 'opacity 0.2s'
+                          }}
+                          onClick={() => {
+                            if (isSubcategory) {
+                              // For subcategories, open transaction preview
+                              const previewElement = document.querySelector(`[data-category-id="${entry.id}"]`);
+                              if (previewElement) {
+                                (previewElement as HTMLElement).click();
+                              }
+                            } else if (entry.id === 'other') {
+                              // For "Other" category, don't toggle visibility (it's synthetic)
+                              // Could add special handling here if needed
+                            } else {
+                              // For regular parent categories, toggle visibility
+                              toggleCategoryVisibility(entry.id);
+                            }
+                          }}
+                        >
                           <div
                             style={{
                               width: 12,
                               height: 12,
                               backgroundColor: COLORS[index % COLORS.length],
                               borderRadius: 2,
+                              border: isHidden ? '2px solid transparent' : 'none',
+                              opacity: isHidden ? 0.3 : 1
                             }}
                           />
-                          <Text size="sm" truncate>
+                          <Text 
+                            size="sm" 
+                            truncate
+                            td={isHidden ? 'line-through' : 'none'}
+                          >
                             {entry.name}
                           </Text>
+                          {!isSubcategory && entry.id !== 'other' && (
+                            <Text size="xs" c="dimmed">
+                              {isHidden ? 'Show' : 'Hide'}
+                            </Text>
+                          )}
                         </Group>
-                      </TransactionPreviewTrigger>
-                    ))}
+                      );
+                    })}
+                    
+                    {/* Hidden transaction preview triggers for subcategories */}
+                    {drillDownState.level === 'child' && 
+                      (processedCategoryData.childData.get(drillDownState.parentId || '') || []).map((entry: ProcessedChildData) => (
+                        <TransactionPreviewTrigger
+                          key={`hidden-${entry.id}`}
+                          categoryId={entry.id}
+                          categoryName={entry.name}
+                          dateRange={{ startDate, endDate }}
+                          tooltipText="Click to preview transactions"
+                          timeRangeFilter={timeRange}
+                        >
+                          <div 
+                            data-category-id={entry.id}
+                            style={{ display: 'none' }}
+                          />
+                        </TransactionPreviewTrigger>
+                      ))
+                    }
                   </SimpleGrid>
                 </Paper>
               </Grid.Col>
@@ -751,7 +978,7 @@ export function Reports() {
                   <Stack gap="sm">
                     {categoryView === 'income' ? (
                       // Show top income categories from current breakdown data
-                      pieChartData.slice(0, 10).map((category, index) => (
+                      pieChartData.slice(0, 10).map((category: PieChartEntry, index: number) => (
                         <TransactionPreviewTrigger
                           key={category.id || category.name}
                           categoryId={category.id || null}
@@ -777,7 +1004,7 @@ export function Reports() {
                       ))
                     ) : (
                       // Show YTD top spending categories
-                      ytd?.topCategories.map((category, index) => (
+                      ytd?.topCategories.slice(0, 10).map((category, index) => (
                         <TransactionPreviewTrigger
                           key={category.categoryId}
                           categoryId={category.categoryId}
