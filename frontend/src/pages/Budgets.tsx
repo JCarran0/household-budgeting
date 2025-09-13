@@ -232,17 +232,39 @@ export function Budgets() {
   // Calculate income and expense budgets separately
   const budgetedIncome = useMemo(() => {
     if (!budgetData?.budgets || !categories) return 0;
+
+    // Build a set of child category IDs to exclude from totals to avoid double-counting
+    const childCategoryIds = new Set<string>();
+    categories.forEach(category => {
+      if (category.parentId) {
+        childCategoryIds.add(category.id);
+      }
+    });
+
     return budgetData.budgets
-      .filter(b => isIncomeCategoryWithCategories(b.categoryId, categories))
+      .filter(b =>
+        isIncomeCategoryWithCategories(b.categoryId, categories) &&
+        !childCategoryIds.has(b.categoryId) // Exclude child categories to avoid double-counting
+      )
       .reduce((sum, b) => sum + b.amount, 0);
   }, [budgetData, categories]);
   
   const budgetedSpending = useMemo(() => {
     if (!budgetData?.budgets || !categories) return 0;
+
+    // Build a set of child category IDs to exclude from totals to avoid double-counting
+    const childCategoryIds = new Set<string>();
+    categories.forEach(category => {
+      if (category.parentId) {
+        childCategoryIds.add(category.id);
+      }
+    });
+
     return budgetData.budgets
-      .filter(b => 
-        !isIncomeCategoryWithCategories(b.categoryId, categories) && 
-        !isTransferCategory(b.categoryId)
+      .filter(b =>
+        !isIncomeCategoryWithCategories(b.categoryId, categories) &&
+        !isTransferCategory(b.categoryId) &&
+        !childCategoryIds.has(b.categoryId) // Exclude child categories to avoid double-counting
       )
       .reduce((sum, b) => sum + b.amount, 0);
   }, [budgetData, categories]);
