@@ -638,6 +638,9 @@ export function Reports() {
         actualNetFlow: cashFlowMonth?.netFlow || 0,
         budgets: monthData.budgets
       };
+    }).sort((a, b) => {
+      const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      return months.indexOf(a.month) - months.indexOf(b.month);
     });
   }, [budgetMonthlyData, cashFlowData]);
 
@@ -653,12 +656,15 @@ export function Reports() {
   }
 
   // Process data for charts
-  const cashFlowChartData = cashFlowData?.summary?.map(item => ({
+  const cashFlowChartData = (cashFlowData?.summary?.map(item => ({
     month: format(new Date(item.month + '-01'), 'MMM'),
     income: item.income,
     expenses: item.expenses,
     netFlow: item.netFlow,
-  })) || [];
+  })) || []).sort((a, b) => {
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    return months.indexOf(a.month) - months.indexOf(b.month);
+  });
 
   const projectionsChartData = projectionsData?.projections?.map(item => ({
     month: format(new Date(item.month + '-01'), 'MMM'),
