@@ -21,6 +21,7 @@ Before committing, I'll:
 - ✅ Run linting on changed files
 - ✅ Ensure the build succeeds (if applicable)
 - ✅ Check for any unintended changes from other work
+- ✅ Cleanup any changes related to testing, such as console logs or the like
 
 ### Step 3: Create Atomic Commit
 Following our conventional commit format:

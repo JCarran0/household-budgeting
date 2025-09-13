@@ -55,9 +55,9 @@ function BudgetRow({ budget, category, onDelete, onUpdate }: BudgetRowProps) {
 
   // Display orphaned budgets as "Unknown Category"
   const isOrphaned = !category;
-  const isSubcategory = category?.parentId !== undefined;
-  const isParent = !isSubcategory;
   const isVirtual = budget.id.startsWith('virtual-'); // Check if this is a virtual parent
+  const isSubcategory = !isVirtual && category?.parentId !== undefined;
+  const isParent = !isSubcategory;
 
   // Get budget type icon and determine category name like BudgetComparison
   let budgetTypeIcon = '💳 '; // Default to expense icon
@@ -400,82 +400,31 @@ export function BudgetGrid({ budgets, categories, month, onEdit }: BudgetGridPro
     return finalResult;
   }, [visibleBudgets, categories]);
 
-  // Diagnostic information about category structure
-  const diagnosticInfo = useMemo(() => {
-    const parentCategories = categories.filter(c => !c.parentId);
-    const childCategories = categories.filter(c => c.parentId);
-    const categoriesWithBudgets = categories.filter(c =>
-      visibleBudgets.some(b => b.categoryId === c.id)
-    );
-
-    return {
-      totalCategories: categories.length,
-      parentCategories: parentCategories.length,
-      childCategories: childCategories.length,
-      categoriesWithBudgets: categoriesWithBudgets.length,
-      hierarchicalStructure: parentCategories.map(parent => ({
-        parent: parent.name,
-        children: childCategories
-          .filter(child => child.parentId === parent.id)
-          .map(child => child.name)
-      })).filter(item => item.children.length > 0)
-    };
-  }, [categories, visibleBudgets]);
-
   return (
-    <div>
-      {/* Temporary diagnostic panel */}
-      <div style={{
-        background: '#f0f0f0',
-        padding: '10px',
-        margin: '10px 0',
-        borderRadius: '4px',
-        fontSize: '12px'
-      }}>
-        <strong>Category Structure Diagnostic:</strong><br/>
-        Total Categories: {diagnosticInfo.totalCategories}<br/>
-        Parent Categories: {diagnosticInfo.parentCategories}<br/>
-        Child Categories: {diagnosticInfo.childCategories}<br/>
-        Categories with Budgets: {diagnosticInfo.categoriesWithBudgets}<br/>
-        {diagnosticInfo.hierarchicalStructure.length > 0 ? (
-          <>
-            <strong>Hierarchical Structure:</strong><br/>
-            {diagnosticInfo.hierarchicalStructure.map((item, index) => (
-              <div key={index}>
-                {item.parent}: [{item.children.join(', ')}]
-              </div>
-            ))}
-          </>
-        ) : (
-          <strong style={{color: 'orange'}}>No hierarchical structure found - all categories are standalone</strong>
-        )}
-      </div>
-
-      <Table striped highlightOnHover>
-        <Table.Thead>
-          <Table.Tr>
-            <Table.Th>Category</Table.Th>
-            <Table.Th>Budget Amount</Table.Th>
-            <Table.Th>Actions</Table.Th>
-          </Table.Tr>
-        </Table.Thead>
-        <Table.Tbody>
-          {hierarchicalBudgets.map((budget) => {
-            const category = categories.find(c => c.id === budget.categoryId);
-            return (
-              <BudgetRow
-                key={budget.id}
-                budget={budget}
-                category={category}
-                month={month}
-                onEdit={onEdit}
-                onDelete={handleDelete}
-                onUpdate={handleUpdate}
-              />
-            );
-          })}
-        </Table.Tbody>
-      </Table>
-    </div>
+    <Table striped highlightOnHover>
+      <Table.Thead>
+        <Table.Tr>
+          <Table.Th>Category</Table.Th>
+          <Table.Th>Budget Amount</Table.Th>
+          <Table.Th>Actions</Table.Th>
+        </Table.Tr>
+      </Table.Thead>
+      <Table.Tbody>
+        {hierarchicalBudgets.map((budget) => {
+          const category = categories.find(c => c.id === budget.categoryId);
+          return (
+            <BudgetRow
+              key={budget.id}
+              budget={budget}
+              category={category}
+              month={month}
+              onEdit={onEdit}
+              onDelete={handleDelete}
+              onUpdate={handleUpdate}
+            />
+          );
+        })}
+      </Table.Tbody>
+    </Table>
   );
 }
