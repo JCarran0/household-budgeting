@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.16.0](https://github.com/JCarran0/household-budgeting/compare/v1.15.0...v1.16.0) (2025-09-13)
+
+
+### Features
+
+* **budgets:** add toggle to show/hide debug component ([b8a9067](https://github.com/JCarran0/household-budgeting/commit/b8a9067ae08b5fb6cab478c30898afbd59d21007))
+* **feedback:** add user feedback submission via GitHub issues ([2661836](https://github.com/JCarran0/household-budgeting/commit/2661836ca7821b11289b79e765d19a141cc110f6))
+
+
+### Bug Fixes
+
+* **budgets:** correct spending widget calculation using hierarchical income detection ([8dc4b1a](https://github.com/JCarran0/household-budgeting/commit/8dc4b1a81fd953ffaf0dad56945c4a7ac8454d7a))
+* **feedback:** resolve Jest ES module issues and improve UX ([d6f7325](https://github.com/JCarran0/household-budgeting/commit/d6f7325b77a9b1c5b86fdf8f5dd01b4bb58106d7))
+
 ## [1.15.0](https://github.com/JCarran0/household-budgeting/compare/v1.14.0...v1.15.0) (2025-09-13)
 
 
