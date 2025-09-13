@@ -83,6 +83,13 @@ rm -rf "$APP_DIR/frontend.old"
 [ -d "$APP_DIR/frontend" ] && mv "$APP_DIR/frontend" "$APP_DIR/frontend.old"
 mv "$DEPLOYMENT_DIR/frontend" "$APP_DIR/frontend"
 
+# Deploy CHANGELOG.md to app root (for changelog endpoint)
+if [ -f "$DEPLOYMENT_DIR/CHANGELOG.md" ]; then
+    echo "📄 Deploying CHANGELOG.md..."
+    [ -f "$APP_DIR/CHANGELOG.md" ] && mv "$APP_DIR/CHANGELOG.md" "$APP_DIR/CHANGELOG.md.old"
+    cp "$DEPLOYMENT_DIR/CHANGELOG.md" "$APP_DIR/CHANGELOG.md"
+fi
+
 # Deploy shared utilities to /home/appuser/app/shared (for backend imports)
 if [ -d "$DEPLOYMENT_DIR/shared" ]; then
     echo "📚 Deploying shared utilities..."
@@ -106,6 +113,13 @@ if [ -d "$DEPLOYMENT_DIR/shared" ]; then
     echo "✅ Shared utilities validation passed"
 else
     echo "⚠️  Warning: No shared utilities found in deployment package"
+fi
+
+# Validate CHANGELOG.md deployment
+if [ -f "$APP_DIR/CHANGELOG.md" ]; then
+    echo "✅ CHANGELOG.md deployed successfully"
+else
+    echo "⚠️  Warning: CHANGELOG.md not found - changelog endpoint may not work"
 fi
 
 # Ensure ecosystem.config.js exists

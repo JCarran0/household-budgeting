@@ -47,7 +47,10 @@ jobs:
           # Copy backend - preserve directory structure
           cp -r backend/dist deployment/backend/
           cp backend/package*.json deployment/backend/
-          
+
+          # Copy CHANGELOG.md to deployment root for changelog endpoint
+          cp CHANGELOG.md deployment/
+
           # Copy shared utilities to root level for import compatibility
           # This ensures ../../../shared/utils/ imports work correctly in production
           cp -r backend/dist/shared/* deployment/shared/
@@ -86,6 +89,7 @@ jobs:
           test -f deployment/backend/dist/index.js || (echo "❌ Backend entry point missing" && exit 1)
           test -d deployment/shared/utils || (echo "❌ Shared utilities directory missing" && exit 1)
           test -f deployment/shared/utils/categoryHelpers.js || (echo "❌ CategoryHelpers missing from shared utilities" && exit 1)
+          test -f deployment/CHANGELOG.md || (echo "❌ CHANGELOG.md missing from deployment package" && exit 1)
           
           # Validate all required category helper functions are present
           echo "  Checking for required functions in categoryHelpers.js..."
