@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+### [1.16.2](https://github.com/JCarran0/household-budgeting/compare/v1.16.1...v1.16.2) (2025-09-13)
+
+
+### Bug Fixes
+
+* **budgets:** revert child category exclusion in BudgetSummaryCards ([bd18eec](https://github.com/JCarran0/household-budgeting/commit/bd18eec969a899c78f774e0a2f56732e351409c4))
+
 ### [1.16.1](https://github.com/JCarran0/household-budgeting/compare/v1.16.0...v1.16.1) (2025-09-13)
 
 
