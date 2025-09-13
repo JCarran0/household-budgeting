@@ -21,26 +21,26 @@ import { Category, MonthlyBudget, Transaction } from '../../../../shared/types';
 describe('Budget Calculation Utilities', () => {
   const mockCategories: Category[] = [
     // Root categories
-    { id: 'INCOME', name: 'Income', parentId: null, isCustom: false, isHidden: false, isRollover: false },
-    { id: 'FOOD_AND_DRINK', name: 'Food and Drink', parentId: null, isCustom: false, isHidden: false, isRollover: false },
-    { id: 'ENTERTAINMENT', name: 'Entertainment', parentId: null, isCustom: false, isHidden: false, isRollover: false },
-    { id: 'TRANSFER_IN', name: 'Transfer In', parentId: null, isCustom: false, isHidden: false, isRollover: false },
-    { id: 'TRANSFER_OUT', name: 'Transfer Out', parentId: null, isCustom: false, isHidden: false, isRollover: false },
+    { id: 'INCOME', name: 'Income', parentId: null, isCustom: false, isHidden: false, isRollover: false, isIncome: true },
+    { id: 'FOOD_AND_DRINK', name: 'Food and Drink', parentId: null, isCustom: false, isHidden: false, isRollover: false, isIncome: false },
+    { id: 'ENTERTAINMENT', name: 'Entertainment', parentId: null, isCustom: false, isHidden: false, isRollover: false, isIncome: false },
+    { id: 'TRANSFER_IN', name: 'Transfer In', parentId: null, isCustom: false, isHidden: false, isRollover: false, isIncome: false },
+    { id: 'TRANSFER_OUT', name: 'Transfer Out', parentId: null, isCustom: false, isHidden: false, isRollover: false, isIncome: false },
 
     // Income subcategories
-    { id: 'INCOME_WAGES', name: 'Wages', parentId: 'INCOME', isCustom: false, isHidden: false, isRollover: false },
-    { id: 'CUSTOM_SALARY', name: 'Salary', parentId: 'INCOME', isCustom: true, isHidden: false, isRollover: false },
+    { id: 'INCOME_WAGES', name: 'Wages', parentId: 'INCOME', isCustom: false, isHidden: false, isRollover: false, isIncome: true },
+    { id: 'CUSTOM_SALARY', name: 'Salary', parentId: 'INCOME', isCustom: true, isHidden: false, isRollover: false, isIncome: true },
 
     // Expense subcategories
-    { id: 'FOOD_AND_DRINK_COFFEE', name: 'Coffee', parentId: 'FOOD_AND_DRINK', isCustom: false, isHidden: false, isRollover: false },
-    { id: 'CUSTOM_GROCERIES', name: 'Groceries', parentId: 'FOOD_AND_DRINK', isCustom: true, isHidden: false, isRollover: false },
-    { id: 'CUSTOM_MOVIES', name: 'Movies', parentId: 'ENTERTAINMENT', isCustom: true, isHidden: false, isRollover: false },
+    { id: 'FOOD_AND_DRINK_COFFEE', name: 'Coffee', parentId: 'FOOD_AND_DRINK', isCustom: false, isHidden: false, isRollover: false, isIncome: false },
+    { id: 'CUSTOM_GROCERIES', name: 'Groceries', parentId: 'FOOD_AND_DRINK', isCustom: true, isHidden: false, isRollover: false, isIncome: false },
+    { id: 'CUSTOM_MOVIES', name: 'Movies', parentId: 'ENTERTAINMENT', isCustom: true, isHidden: false, isRollover: false, isIncome: false },
 
     // Hidden categories
-    { id: 'HIDDEN_CATEGORY', name: 'Hidden Category', parentId: null, isCustom: true, isHidden: true, isRollover: false },
-    { id: 'CHILD_OF_HIDDEN', name: 'Child of Hidden', parentId: 'HIDDEN_CATEGORY', isCustom: true, isHidden: false, isRollover: false },
-    { id: 'VISIBLE_PARENT', name: 'Visible Parent', parentId: null, isCustom: true, isHidden: false, isRollover: false },
-    { id: 'HIDDEN_CHILD', name: 'Hidden Child', parentId: 'VISIBLE_PARENT', isCustom: true, isHidden: true, isRollover: false },
+    { id: 'HIDDEN_CATEGORY', name: 'Hidden Category', parentId: null, isCustom: true, isHidden: true, isRollover: false, isIncome: false },
+    { id: 'CHILD_OF_HIDDEN', name: 'Child of Hidden', parentId: 'HIDDEN_CATEGORY', isCustom: true, isHidden: false, isRollover: false, isIncome: false },
+    { id: 'VISIBLE_PARENT', name: 'Visible Parent', parentId: null, isCustom: true, isHidden: false, isRollover: false, isIncome: false },
+    { id: 'HIDDEN_CHILD', name: 'Hidden Child', parentId: 'VISIBLE_PARENT', isCustom: true, isHidden: true, isRollover: false, isIncome: false },
   ];
 
   const mockBudgets: MonthlyBudget[] = [
@@ -471,6 +471,181 @@ describe('Budget Calculation Utilities', () => {
     });
   });
 
+  describe('Income Category Identification', () => {
+    describe('calculateBudgetTotals with isIncome property', () => {
+      test('should correctly categorize income categories', () => {
+        const budgets: MonthlyBudget[] = [
+          { id: '1', categoryId: 'INCOME', month: '2025-01', amount: 5000 },
+          { id: '2', categoryId: 'CUSTOM_SALARY', month: '2025-01', amount: 3000 },
+          { id: '3', categoryId: 'FOOD_AND_DRINK', month: '2025-01', amount: 800 },
+        ];
+
+        const totals = calculateBudgetTotals(budgets, mockCategories);
+        expect(totals.income).toBe(8000); // INCOME + CUSTOM_SALARY
+        expect(totals.expense).toBe(800); // FOOD_AND_DRINK
+      });
+
+      test('should correctly categorize expense categories', () => {
+        const budgets: MonthlyBudget[] = [
+          { id: '1', categoryId: 'FOOD_AND_DRINK_COFFEE', month: '2025-01', amount: 200 },
+          { id: '2', categoryId: 'ENTERTAINMENT', month: '2025-01', amount: 300 },
+          { id: '3', categoryId: 'CUSTOM_MOVIES', month: '2025-01', amount: 150 },
+        ];
+
+        const totals = calculateBudgetTotals(budgets, mockCategories);
+        expect(totals.income).toBe(0);
+        expect(totals.expense).toBe(650); // All expense categories
+      });
+
+      test('should handle mixed income and expense budgets', () => {
+        const budgets: MonthlyBudget[] = [
+          { id: '1', categoryId: 'INCOME', month: '2025-01', amount: 5000 },
+          { id: '2', categoryId: 'FOOD_AND_DRINK', month: '2025-01', amount: 800 },
+          { id: '3', categoryId: 'CUSTOM_SALARY', month: '2025-01', amount: 2000 },
+          { id: '4', categoryId: 'ENTERTAINMENT', month: '2025-01', amount: 300 },
+        ];
+
+        const totals = calculateBudgetTotals(budgets, mockCategories);
+        expect(totals.income).toBe(7000); // INCOME + CUSTOM_SALARY
+        expect(totals.expense).toBe(1100); // FOOD_AND_DRINK + ENTERTAINMENT
+      });
+    });
+
+    describe('calculateActualTotals with isIncome property', () => {
+      test('should correctly categorize income transactions', () => {
+        const transactions: Transaction[] = [
+          {
+            id: '1', plaidTransactionId: '1', accountId: 'acc1', amount: -5000, date: '2025-01-15',
+            name: 'Salary', userDescription: null, merchantName: null, category: [], plaidCategoryId: null,
+            categoryId: 'INCOME', pending: false, tags: [], notes: null, isHidden: false,
+            isManual: false, isSplit: false, parentTransactionId: null, splitTransactionIds: [],
+            createdAt: '2025-01-15', updatedAt: '2025-01-15'
+          },
+          {
+            id: '2', plaidTransactionId: '2', accountId: 'acc1', amount: -3000, date: '2025-01-15',
+            name: 'Freelance', userDescription: null, merchantName: null, category: [], plaidCategoryId: null,
+            categoryId: 'CUSTOM_SALARY', pending: false, tags: [], notes: null, isHidden: false,
+            isManual: false, isSplit: false, parentTransactionId: null, splitTransactionIds: [],
+            createdAt: '2025-01-15', updatedAt: '2025-01-15'
+          }
+        ];
+
+        const totals = calculateActualTotals(transactions, mockCategories);
+        expect(totals.income).toBe(8000); // Both income transactions (absolute values)
+        expect(totals.expense).toBe(0);
+      });
+
+      test('should correctly categorize expense transactions', () => {
+        const transactions: Transaction[] = [
+          {
+            id: '1', plaidTransactionId: '1', accountId: 'acc1', amount: 800, date: '2025-01-20',
+            name: 'Grocery Store', userDescription: null, merchantName: null, category: [], plaidCategoryId: null,
+            categoryId: 'FOOD_AND_DRINK', pending: false, tags: [], notes: null, isHidden: false,
+            isManual: false, isSplit: false, parentTransactionId: null, splitTransactionIds: [],
+            createdAt: '2025-01-20', updatedAt: '2025-01-20'
+          },
+          {
+            id: '2', plaidTransactionId: '2', accountId: 'acc1', amount: 150, date: '2025-01-22',
+            name: 'Movie Tickets', userDescription: null, merchantName: null, category: [], plaidCategoryId: null,
+            categoryId: 'CUSTOM_MOVIES', pending: false, tags: [], notes: null, isHidden: false,
+            isManual: false, isSplit: false, parentTransactionId: null, splitTransactionIds: [],
+            createdAt: '2025-01-22', updatedAt: '2025-01-22'
+          }
+        ];
+
+        const totals = calculateActualTotals(transactions, mockCategories);
+        expect(totals.income).toBe(0);
+        expect(totals.expense).toBe(950); // Both expense transactions (absolute values)
+      });
+    });
+
+    describe('calculateEnhancedParentTotals with isIncome property', () => {
+      test('should correctly identify parent as income category', () => {
+        const children = [
+          { categoryId: 'INCOME_WAGES', budgeted: 2000, actual: 1800, isIncomeCategory: true },
+          { categoryId: 'CUSTOM_SALARY', budgeted: 3000, actual: 3200, isIncomeCategory: true }
+        ];
+
+        const result = calculateEnhancedParentTotals(
+          'INCOME',
+          children,
+          undefined,
+          mockCategories
+        );
+
+        expect(result.isIncomeCategory).toBe(true);
+        expect(result.budgeted).toBe(5000);
+        expect(result.actual).toBe(5000);
+        // For income: remaining = actual - budgeted, positive is good
+        expect(result.remaining).toBe(0); // 5000 - 5000
+        expect(result.isOverBudget).toBe(false); // actual >= budgeted for income
+      });
+
+      test('should correctly identify parent as expense category', () => {
+        const children = [
+          { categoryId: 'FOOD_AND_DRINK_COFFEE', budgeted: 200, actual: 180, isIncomeCategory: false },
+          { categoryId: 'CUSTOM_GROCERIES', budgeted: 600, actual: 650, isIncomeCategory: false }
+        ];
+
+        const result = calculateEnhancedParentTotals(
+          'FOOD_AND_DRINK',
+          children,
+          undefined,
+          mockCategories
+        );
+
+        expect(result.isIncomeCategory).toBe(false);
+        expect(result.budgeted).toBe(800);
+        expect(result.actual).toBe(830);
+        // For expense: remaining = budgeted - actual, positive is good
+        expect(result.remaining).toBe(-30); // 800 - 830
+        expect(result.isOverBudget).toBe(true); // actual > budgeted for expense
+      });
+
+      test('should handle mixed parent with existing budget', () => {
+        const children = [
+          { categoryId: 'INCOME_WAGES', budgeted: 2000, actual: 1800, isIncomeCategory: true }
+        ];
+        const existingParent = { budgeted: 3000, actual: 3200, isIncomeCategory: true };
+
+        const result = calculateEnhancedParentTotals(
+          'INCOME',
+          children,
+          existingParent,
+          mockCategories
+        );
+
+        expect(result.isIncomeCategory).toBe(true);
+        expect(result.budgeted).toBe(5000); // child + parent
+        expect(result.actual).toBe(5000); // child + parent
+        expect(result.originalBudget).toBe(3000);
+        expect(result.originalActual).toBe(3200);
+      });
+    });
+
+    describe('Fallback behavior for categories without isIncome property', () => {
+      test('should handle categories missing isIncome property', () => {
+        const categoriesWithoutIsIncome: Category[] = [
+          // Simulate old data without isIncome property
+          { id: 'INCOME', name: 'Income', parentId: null, isCustom: false, isHidden: false, isRollover: false } as Category,
+          { id: 'FOOD_AND_DRINK', name: 'Food and Drink', parentId: null, isCustom: false, isHidden: false, isRollover: false } as Category,
+          { id: 'CUSTOM_SALARY', name: 'Salary', parentId: 'INCOME', isCustom: true, isHidden: false, isRollover: false } as Category,
+        ];
+
+        const budgets: MonthlyBudget[] = [
+          { id: '1', categoryId: 'INCOME', month: '2025-01', amount: 5000 },
+          { id: '2', categoryId: 'CUSTOM_SALARY', month: '2025-01', amount: 3000 },
+          { id: '3', categoryId: 'FOOD_AND_DRINK', month: '2025-01', amount: 800 },
+        ];
+
+        // Should fall back to hierarchical detection
+        const totals = calculateBudgetTotals(budgets, categoriesWithoutIsIncome);
+        expect(totals.income).toBe(8000); // Should still detect INCOME and CUSTOM_SALARY
+        expect(totals.expense).toBe(800); // Should still detect FOOD_AND_DRINK as expense
+      });
+    });
+  });
+
   describe('Edge Cases', () => {
     test('should handle empty arrays gracefully', () => {
       expect(getHiddenCategoryIds([])).toEqual(new Set());
@@ -486,7 +661,7 @@ describe('Budget Calculation Utilities', () => {
 
     test('should handle categories with missing parents', () => {
       const orphanCategories: Category[] = [
-        { id: 'ORPHAN', name: 'Orphan', parentId: 'MISSING_PARENT', isCustom: true, isHidden: false, isRollover: false }
+        { id: 'ORPHAN', name: 'Orphan', parentId: 'MISSING_PARENT', isCustom: true, isHidden: false, isRollover: false, isIncome: false }
       ];
 
       const hiddenIds = getHiddenCategoryIds(orphanCategories);
@@ -495,8 +670,8 @@ describe('Budget Calculation Utilities', () => {
 
     test('should handle circular parent references', () => {
       const circularCategories: Category[] = [
-        { id: 'A', name: 'Category A', parentId: 'B', isCustom: true, isHidden: false, isRollover: false },
-        { id: 'B', name: 'Category B', parentId: 'A', isCustom: true, isHidden: false, isRollover: false }
+        { id: 'A', name: 'Category A', parentId: 'B', isCustom: true, isHidden: false, isRollover: false, isIncome: false },
+        { id: 'B', name: 'Category B', parentId: 'A', isCustom: true, isHidden: false, isRollover: false, isIncome: false }
       ];
 
       // Should not crash and should not consider them hidden

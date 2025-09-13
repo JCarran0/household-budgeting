@@ -18,27 +18,27 @@ import { Category } from '../../../../shared/types';
 describe('Category Helper Functions', () => {
   const mockCategories: Category[] = [
     // Root INCOME category
-    { id: 'INCOME', name: 'Income', parentId: null, isCustom: false, isHidden: false, isRollover: false },
-    
+    { id: 'INCOME', name: 'Income', parentId: null, isCustom: false, isHidden: false, isRollover: false, isIncome: true },
+
     // Income subcategories (should be detected as income)
-    { id: 'INCOME_WAGES', name: 'Wages', parentId: 'INCOME', isCustom: false, isHidden: false, isRollover: false },
-    { id: 'CUSTOM_SALARY', name: 'Salary', parentId: 'INCOME', isCustom: true, isHidden: false, isRollover: false },
-    { id: 'CUSTOM_FREELANCE', name: 'Freelance', parentId: 'INCOME', isCustom: true, isHidden: false, isRollover: false },
-    
+    { id: 'INCOME_WAGES', name: 'Wages', parentId: 'INCOME', isCustom: false, isHidden: false, isRollover: false, isIncome: true },
+    { id: 'CUSTOM_SALARY', name: 'Salary', parentId: 'INCOME', isCustom: true, isHidden: false, isRollover: false, isIncome: true },
+    { id: 'CUSTOM_FREELANCE', name: 'Freelance', parentId: 'INCOME', isCustom: true, isHidden: false, isRollover: false, isIncome: true },
+
     // Deep nested income subcategories
-    { id: 'CUSTOM_BONUS', name: 'Bonus', parentId: 'INCOME_WAGES', isCustom: true, isHidden: false, isRollover: false },
-    
+    { id: 'CUSTOM_BONUS', name: 'Bonus', parentId: 'INCOME_WAGES', isCustom: true, isHidden: false, isRollover: false, isIncome: true },
+
     // Non-income categories
-    { id: 'FOOD_AND_DRINK', name: 'Food and Drink', parentId: null, isCustom: false, isHidden: false, isRollover: false },
-    { id: 'FOOD_AND_DRINK_COFFEE', name: 'Coffee', parentId: 'FOOD_AND_DRINK', isCustom: false, isHidden: false, isRollover: false },
-    { id: 'CUSTOM_GROCERIES', name: 'Groceries', parentId: 'FOOD_AND_DRINK', isCustom: true, isHidden: false, isRollover: false },
-    
+    { id: 'FOOD_AND_DRINK', name: 'Food and Drink', parentId: null, isCustom: false, isHidden: false, isRollover: false, isIncome: false },
+    { id: 'FOOD_AND_DRINK_COFFEE', name: 'Coffee', parentId: 'FOOD_AND_DRINK', isCustom: false, isHidden: false, isRollover: false, isIncome: false },
+    { id: 'CUSTOM_GROCERIES', name: 'Groceries', parentId: 'FOOD_AND_DRINK', isCustom: true, isHidden: false, isRollover: false, isIncome: false },
+
     // Transfer categories
-    { id: 'TRANSFER_IN', name: 'Transfer In', parentId: null, isCustom: false, isHidden: false, isRollover: false },
-    { id: 'TRANSFER_OUT', name: 'Transfer Out', parentId: null, isCustom: false, isHidden: false, isRollover: false },
-    
+    { id: 'TRANSFER_IN', name: 'Transfer In', parentId: null, isCustom: false, isHidden: false, isRollover: false, isIncome: false },
+    { id: 'TRANSFER_OUT', name: 'Transfer Out', parentId: null, isCustom: false, isHidden: false, isRollover: false, isIncome: false },
+
     // Custom non-income categories
-    { id: 'CUSTOM_ENTERTAINMENT', name: 'Entertainment', parentId: null, isCustom: true, isHidden: false, isRollover: false },
+    { id: 'CUSTOM_ENTERTAINMENT', name: 'Entertainment', parentId: null, isCustom: true, isHidden: false, isRollover: false, isIncome: false },
   ];
 
   describe('Legacy Functions (deprecated)', () => {
@@ -151,8 +151,8 @@ describe('Category Helper Functions', () => {
       test('should prevent infinite loops with circular references', () => {
         // Create a circular reference scenario
         const circularCategories: Category[] = [
-          { id: 'A', name: 'Category A', parentId: 'B', isCustom: true, isHidden: false, isRollover: false },
-          { id: 'B', name: 'Category B', parentId: 'A', isCustom: true, isHidden: false, isRollover: false },
+          { id: 'A', name: 'Category A', parentId: 'B', isCustom: true, isHidden: false, isRollover: false, isIncome: false },
+          { id: 'B', name: 'Category B', parentId: 'A', isCustom: true, isHidden: false, isRollover: false, isIncome: false },
         ];
         const circularLookup = createCategoryLookup(circularCategories);
         
@@ -216,7 +216,7 @@ describe('Category Helper Functions', () => {
 
     test('should handle categories with null parentId', () => {
       const rootCategories: Category[] = [
-        { id: 'ROOT_EXPENSE', name: 'Root Expense', parentId: null, isCustom: true, isHidden: false, isRollover: false },
+        { id: 'ROOT_EXPENSE', name: 'Root Expense', parentId: null, isCustom: true, isHidden: false, isRollover: false, isIncome: false },
       ];
       const lookup = createCategoryLookup(rootCategories);
       
@@ -226,7 +226,7 @@ describe('Category Helper Functions', () => {
 
     test('should handle orphaned categories (parent not found)', () => {
       const orphanedCategories: Category[] = [
-        { id: 'ORPHAN', name: 'Orphaned Category', parentId: 'MISSING_PARENT', isCustom: true, isHidden: false, isRollover: false },
+        { id: 'ORPHAN', name: 'Orphaned Category', parentId: 'MISSING_PARENT', isCustom: true, isHidden: false, isRollover: false, isIncome: false },
       ];
       const lookup = createCategoryLookup(orphanedCategories);
       
@@ -239,7 +239,7 @@ describe('Category Helper Functions', () => {
     test('should handle large category hierarchies efficiently', () => {
       // Create a deep hierarchy: INCOME -> Level1 -> Level2 -> ... -> Level10
       const deepCategories: Category[] = [
-        { id: 'INCOME', name: 'Income', parentId: null, isCustom: false, isHidden: false, isRollover: false }
+        { id: 'INCOME', name: 'Income', parentId: null, isCustom: false, isHidden: false, isRollover: false, isIncome: true }
       ];
       
       let parentId = 'INCOME';
@@ -251,7 +251,8 @@ describe('Category Helper Functions', () => {
           parentId,
           isCustom: true,
           isHidden: false,
-          isRollover: false
+          isRollover: false,
+          isIncome: false
         });
         parentId = categoryId;
       }

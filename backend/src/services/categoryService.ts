@@ -16,6 +16,7 @@ export interface CreateCategoryDto {
   description?: string;
   isHidden: boolean;
   isRollover: boolean;
+  // isIncome is computed automatically based on parentId
 }
 
 export interface UpdateCategoryDto {
@@ -33,6 +34,31 @@ export class CategoryService {
     private transactionService?: TransactionService,
     private importService?: ImportService
   ) {}
+
+  /**
+   * Determine if a category should be marked as income based on its hierarchy
+   */
+  private isIncomeCategory(categoryId: string, parentId: string | null, categories: Category[]): boolean {
+    // Root INCOME categories
+    if (categoryId.startsWith('INCOME')) {
+      return true;
+    }
+
+    // Child categories under INCOME parent
+    if (parentId === 'INCOME') {
+      return true;
+    }
+
+    // Check if parent is an income category (for deeply nested cases)
+    if (parentId) {
+      const parent = categories.find(cat => cat.id === parentId);
+      if (parent && parent.isIncome) {
+        return true;
+      }
+    }
+
+    return false;
+  }
 
   /**
    * Generate a SNAKE_CASE ID for custom categories
@@ -105,7 +131,8 @@ export class CategoryService {
       description: data.description || undefined,
       isCustom: true, // User-created categories are always custom
       isHidden: data.isHidden,
-      isRollover: data.isRollover
+      isRollover: data.isRollover,
+      isIncome: this.isIncomeCategory(categoryId, data.parentId, categories)
     };
 
     categories.push(newCategory);
@@ -232,7 +259,8 @@ export class CategoryService {
         description: undefined,
         isCustom: false,
         isHidden: ['TRANSFER_IN', 'TRANSFER_OUT'].includes(primaryId),
-        isRollover: false
+        isRollover: false,
+        isIncome: primaryId.startsWith('INCOME')
       });
 
       // Add all subcategories for this primary category
@@ -244,7 +272,8 @@ export class CategoryService {
           description: subcategory.description,
           isCustom: false,
           isHidden: false,
-          isRollover: false
+          isRollover: false,
+          isIncome: primaryId.startsWith('INCOME')
         });
       });
     });
@@ -257,13 +286,41 @@ export class CategoryService {
       description: 'Money set aside for future use',
       isCustom: true,
       isHidden: false,
-      isRollover: true
+      isRollover: true,
+      isIncome: false
     });
 
     await this.dataService.saveCategories(defaultCategories, userId);
   }
 
-  async importFromCSV(csvContent: string, userId: string): Promise<{ 
+  /**
+   * Migration method to add isIncome property to existing categories
+   * This should be called once to migrate existing data
+   */
+  async migrateIsIncomeProperty(userId: string): Promise<{ migrated: number; skipped: number }> {
+    const categories = await this.dataService.getCategories(userId);
+    let migrated = 0;
+    let skipped = 0;
+
+    // First pass: ensure all categories have isIncome property
+    categories.forEach(category => {
+      if (category.isIncome === undefined) {
+        // Determine isIncome based on current hierarchy logic
+        category.isIncome = this.isIncomeCategory(category.id, category.parentId, categories);
+        migrated++;
+      } else {
+        skipped++;
+      }
+    });
+
+    if (migrated > 0) {
+      await this.dataService.saveCategories(categories, userId);
+    }
+
+    return { migrated, skipped };
+  }
+
+  async importFromCSV(csvContent: string, userId: string): Promise<{
     success: boolean; 
     importedCount: number; 
     message: string;

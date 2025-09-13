@@ -237,4 +237,92 @@ router.get('/location-cleanup-status', async (req, res) => {
   }
 });
 
+/**
+ * Migrate categories to add isIncome property
+ * This adds explicit isIncome property to existing categories based on hierarchy
+ */
+router.post('/migrate-is-income', async (req, res) => {
+  try {
+    const userId = req.user?.userId;
+    if (!userId) {
+      res.status(401).json({ error: 'User not authenticated' });
+      return;
+    }
+
+    console.log(`Starting isIncome migration for user ${userId}`);
+
+    const result = await categoryService.migrateIsIncomeProperty(userId);
+
+    const migrationResult: MigrationResult = {
+      success: true,
+      message: `Successfully migrated ${result.migrated} categories to have explicit isIncome property`,
+      migratedCount: result.migrated,
+      totalCount: result.migrated + result.skipped
+    };
+
+    console.log(`isIncome migration completed: ${result.migrated} migrated, ${result.skipped} already had property`);
+
+    res.json(migrationResult);
+  } catch (error) {
+    console.error('isIncome migration failed:', error);
+
+    const result: MigrationResult = {
+      success: false,
+      message: `isIncome migration failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      migratedCount: 0,
+      totalCount: 0
+    };
+
+    res.status(500).json(result);
+  }
+});
+
+/**
+ * Get isIncome migration status - check if categories have explicit isIncome property
+ */
+router.get('/is-income-migration-status', async (req, res) => {
+  try {
+    const userId = req.user?.userId;
+    if (!userId) {
+      res.status(401).json({ error: 'User not authenticated' });
+      return;
+    }
+
+    // Get categories directly from data service to check raw data
+    const dataService = (categoryService as any).dataService;
+    const categories = await dataService.getCategories(userId);
+
+    let withIsIncomeProperty = 0;
+    let missingIsIncomeProperty = 0;
+    let incomeCategories = 0;
+    let expenseCategories = 0;
+
+    categories.forEach((cat: any) => {
+      if (cat.hasOwnProperty('isIncome') && cat.isIncome !== undefined) {
+        withIsIncomeProperty++;
+        if (cat.isIncome) {
+          incomeCategories++;
+        } else {
+          expenseCategories++;
+        }
+      } else {
+        missingIsIncomeProperty++;
+      }
+    });
+
+    res.json({
+      totalCategories: categories.length,
+      categoriesWithIsIncomeProperty: withIsIncomeProperty,
+      categoriesMissingIsIncomeProperty: missingIsIncomeProperty,
+      incomeCategories,
+      expenseCategories,
+      migrationNeeded: missingIsIncomeProperty > 0,
+      migrationComplete: missingIsIncomeProperty === 0 && withIsIncomeProperty > 0
+    });
+  } catch (error) {
+    console.error('Failed to get isIncome migration status:', error);
+    res.status(500).json({ error: 'Failed to get isIncome migration status' });
+  }
+});
+
 export default router;

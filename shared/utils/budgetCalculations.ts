@@ -84,6 +84,21 @@ export function getParentCategoryIds(categories: Category[]): Set<string> {
 }
 
 /**
+ * Determine if a category is income using explicit property with fallback
+ * This is the preferred method for budget calculations
+ */
+function isIncomeCategory(categoryId: string, categories: Category[]): boolean {
+  // First try to use explicit isIncome property for performance
+  const category = categories.find(cat => cat.id === categoryId);
+  if (category && category.isIncome !== undefined) {
+    return category.isIncome;
+  }
+
+  // Fallback to hierarchy-based detection for backward compatibility
+  return isIncomeCategoryWithCategories(categoryId, categories);
+}
+
+/**
  * Calculate budget totals from budgets array
  *
  * @param budgets Array of monthly budgets
@@ -125,7 +140,7 @@ export function calculateBudgetTotals(
       if (!excludeTransfers) {
         transfer += budget.amount;
       }
-    } else if (isIncomeCategoryWithCategories(budget.categoryId, categories)) {
+    } else if (isIncomeCategory(budget.categoryId, categories)) {
       income += budget.amount;
     } else {
       expense += budget.amount;
@@ -194,7 +209,7 @@ export function calculateActualTotals(
       if (!excludeTransfers) {
         transfer += amount;
       }
-    } else if (isIncomeCategoryWithCategories(transaction.categoryId, categories)) {
+    } else if (isIncomeCategory(transaction.categoryId, categories)) {
       income += amount;
     } else {
       expense += amount;
@@ -339,9 +354,9 @@ export function calculateEnhancedParentTotals(
   const childActualSum = children.reduce((sum, child) => sum + child.actual, 0);
 
   // Determine if this is an income category
-  const isIncomeCategory = existingParent?.isIncomeCategory ||
+  const isIncomeCategoryResult = existingParent?.isIncomeCategory ||
     (children.length > 0 && children[0].isIncomeCategory) ||
-    isIncomeCategoryWithCategories(parentId, categories);
+    isIncomeCategory(parentId, categories);
 
   // Calculate budgeted amount (additive approach for both income and expense)
   const budgeted = existingParent
@@ -357,7 +372,7 @@ export function calculateEnhancedParentTotals(
   let remaining: number;
   let isOverBudget: boolean;
 
-  if (isIncomeCategory) {
+  if (isIncomeCategoryResult) {
     // Income: positive remaining = exceeding target (good)
     remaining = actual - budgeted;
     isOverBudget = actual < budgeted; // Under target is "over budget" for income
@@ -376,7 +391,7 @@ export function calculateEnhancedParentTotals(
     remaining,
     percentUsed,
     isOverBudget,
-    isIncomeCategory,
+    isIncomeCategory: isIncomeCategoryResult,
     isCalculated: !existingParent || (childBudgetSum > 0), // Flag if includes child data
     childrenIds: children.map(c => c.categoryId),
     originalBudget: existingParent?.budgeted,

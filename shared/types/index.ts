@@ -72,6 +72,7 @@ export interface Category {
   isCustom: boolean;           // true for user-created categories
   isHidden: boolean;
   isRollover: boolean;
+  isIncome: boolean;           // true for income categories (computed from hierarchy)
 }
 
 export interface MonthlyBudget {

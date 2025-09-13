@@ -41,24 +41,33 @@ export function createCategoryLookup(categories: Category[]): Map<string, Catego
 /**
  * Check if a category or any of its ancestors is an income category
  * This properly handles subcategories under INCOME parent categories
+ * @deprecated Use category.isIncome property directly for better performance
  */
 export function isIncomeCategoryHierarchical(
   categoryId: string,
   categoryLookup: Map<string, Category>
 ): boolean {
+  const category = categoryLookup.get(categoryId);
+
+  // If category has explicit isIncome property, use it
+  if (category && category.isIncome !== undefined) {
+    return category.isIncome;
+  }
+
+  // Fallback to legacy hierarchy traversal for backward compatibility
   const visited = new Set<string>(); // Prevent infinite loops
   let currentId: string | null = categoryId;
-  
+
   while (currentId && !visited.has(currentId)) {
     visited.add(currentId);
-    
+
     // Check if current category is a root income category
     if (currentId.startsWith('INCOME')) {
       // Only return true if the category actually exists in the lookup
       // This prevents false positives for non-existent INCOME_ categories
       return categoryLookup.has(currentId);
     }
-    
+
     // Move up to parent
     const category = categoryLookup.get(currentId);
     if (!category) {
@@ -67,7 +76,7 @@ export function isIncomeCategoryHierarchical(
     }
     currentId = category.parentId;
   }
-  
+
   return false;
 }
 
@@ -106,6 +115,41 @@ export function isExpenseCategoryWithCategories(
 }
 
 /**
+ * Check if a category is an income category using explicit property
+ * This is the preferred method for performance
+ */
+export function isIncomeCategoryExplicit(
+  categoryId: string,
+  categories: Category[]
+): boolean {
+  const category = categories.find(cat => cat.id === categoryId);
+  return category?.isIncome ?? false;
+}
+
+/**
+ * Check if a category should be included in expense budgeting using explicit property
+ * This is the preferred method for performance
+ */
+export function isExpenseCategoryExplicit(
+  categoryId: string,
+  categories: Category[]
+): boolean {
+  // Check if it's a transfer category first
+  if (isTransferCategory(categoryId)) {
+    return false;
+  }
+
+  // Use explicit isIncome property
+  const category = categories.find(cat => cat.id === categoryId);
+  if (category && category.isIncome !== undefined) {
+    return !category.isIncome;
+  }
+
+  // Fallback to hierarchy-based detection
+  return isExpenseCategoryWithCategories(categoryId, categories);
+}
+
+/**
  * Determine the budget type for a given category
  * Income categories should use inverse budget logic (over = good, under = bad)
  * Expense categories use normal budget logic (over = bad, under = good)
@@ -114,6 +158,13 @@ export function getBudgetType(
   categoryId: string,
   categories: Category[]
 ): BudgetType {
+  // Use explicit isIncome property for performance
+  const category = categories.find(cat => cat.id === categoryId);
+  if (category && category.isIncome !== undefined) {
+    return category.isIncome ? 'income' : 'expense';
+  }
+
+  // Fallback to hierarchy-based detection for backward compatibility
   const lookup = createCategoryLookup(categories);
   return isIncomeCategoryHierarchical(categoryId, lookup) ? 'income' : 'expense';
 }
