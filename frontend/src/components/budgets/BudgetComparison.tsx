@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import {
   Table,
   Text,
@@ -17,6 +17,8 @@ import {
   IconTrendingDown,
   IconAlertCircle,
   IconDownload,
+  IconBug,
+  IconBugOff,
 } from '@tabler/icons-react';
 import { format, startOfMonth, endOfMonth } from 'date-fns';
 import type { BudgetComparisonResponse } from '../../lib/api';
@@ -55,6 +57,7 @@ interface HierarchicalComparison {
 
 export function BudgetComparison({ comparison, categories }: BudgetComparisonProps) {
   // Using shared formatCurrency utility from utils/formatters
+  const [showDebugger, setShowDebugger] = useState(false);
   
   // Calculate income and expense totals for cashflow
   const { incomeTotal, expenseTotal, budgetedCashflow, actualCashflow } = useMemo(() => {
@@ -359,14 +362,25 @@ export function BudgetComparison({ comparison, categories }: BudgetComparisonPro
       <Paper p="md" withBorder>
         <Group justify="space-between" mb="md">
           <Title order={4}>Budget Performance Summary</Title>
-          <Button
-            variant="light"
-            size="sm"
-            leftSection={<IconDownload size={16} />}
-            onClick={exportToTSV}
-          >
-            Export TSV
-          </Button>
+          <Group>
+            <Button
+              variant="light"
+              size="sm"
+              leftSection={showDebugger ? <IconBugOff size={16} /> : <IconBug size={16} />}
+              onClick={() => setShowDebugger(!showDebugger)}
+              color={showDebugger ? "orange" : "gray"}
+            >
+              {showDebugger ? "Hide Debug" : "Debug"}
+            </Button>
+            <Button
+              variant="light"
+              size="sm"
+              leftSection={<IconDownload size={16} />}
+              onClick={exportToTSV}
+            >
+              Export TSV
+            </Button>
+          </Group>
         </Group>
         
         <Group grow>
@@ -430,7 +444,9 @@ export function BudgetComparison({ comparison, categories }: BudgetComparisonPro
       </Paper>
 
       {/* Debug component to analyze calculation differences */}
-      <BudgetDebugger comparison={comparison} categories={categories} />
+      {showDebugger && (
+        <BudgetDebugger comparison={comparison} categories={categories} />
+      )}
 
       <Table striped highlightOnHover>
         <Table.Thead>
