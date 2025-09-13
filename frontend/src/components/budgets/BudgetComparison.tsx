@@ -61,13 +61,27 @@ export function BudgetComparison({ comparison, categories }: BudgetComparisonPro
     let actualIncome = 0;
     let budgetedExpense = 0;
     let actualExpense = 0;
-    
+
+    // Build a set of child category IDs to exclude from totals
+    const childCategoryIds = new Set<string>();
+    categories.forEach(category => {
+      if (category.parentId) {
+        childCategoryIds.add(category.id);
+      }
+    });
+
     comparison.comparisons.forEach(comp => {
+      // Skip child categories to avoid double-counting
+      // (parent totals already include children in the backend)
+      if (childCategoryIds.has(comp.categoryId)) {
+        return;
+      }
+
       const category = categories.find(c => c.id === comp.categoryId);
       const typedComp = comp as BudgetComparisonType;
-      const isIncome = typedComp.isIncomeCategory || 
+      const isIncome = typedComp.isIncomeCategory ||
         (category && category.id.startsWith('INCOME'));
-      
+
       if (isIncome) {
         budgetedIncome += comp.budgeted;
         actualIncome += comp.actual;
@@ -76,7 +90,7 @@ export function BudgetComparison({ comparison, categories }: BudgetComparisonPro
         actualExpense += comp.actual;
       }
     });
-    
+
     return {
       incomeTotal: { budgeted: budgetedIncome, actual: actualIncome },
       expenseTotal: { budgeted: budgetedExpense, actual: actualExpense },
