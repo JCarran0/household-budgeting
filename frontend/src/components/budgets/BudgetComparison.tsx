@@ -202,13 +202,13 @@ export function BudgetComparison({ comparison, categories }: BudgetComparisonPro
       let budgeted: number;
       if (isIncomeCategory) {
         // Income: additive approach - parent budget adds to children
-        budgeted = existingParent 
+        budgeted = existingParent
           ? childBudgetSum + existingParent.budgeted
           : childBudgetSum;
       } else {
-        // Expense: max approach - prevent double counting
-        budgeted = existingParent 
-          ? Math.max(childBudgetSum, existingParent.budgeted)
+        // Expense: additive approach - parent budget adds to children
+        budgeted = existingParent
+          ? childBudgetSum + existingParent.budgeted
           : childBudgetSum;
       }
       
@@ -409,7 +409,6 @@ export function BudgetComparison({ comparison, categories }: BudgetComparisonPro
           size="lg"
           mt="md"
           striped={comparison.totals.isOverBudget}
-          animated={comparison.totals.isOverBudget}
         />
       </Paper>
 

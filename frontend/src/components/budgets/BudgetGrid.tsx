@@ -1,4 +1,3 @@
-import React from 'react';
 import {
   Table,
   Text,
@@ -7,19 +6,19 @@ import {
   Group,
   Badge,
   Tooltip,
-  Title,
+  Box,
 } from '@mantine/core';
 import { IconEdit, IconTrash, IconDeviceFloppy, IconX } from '@tabler/icons-react';
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { notifications } from '@mantine/notifications';
 import { modals } from '@mantine/modals';
 import { api } from '../../lib/api';
 import { formatCurrency } from '../../utils/formatters';
 import type { MonthlyBudget, Category } from '../../../../shared/types';
-import { 
-  isIncomeCategoryWithCategories, 
-  isTransferCategory 
+import {
+  isIncomeCategoryWithCategories,
+  isTransferCategory
 } from '../../../../shared/utils/categoryHelpers';
 
 interface BudgetGridProps {
@@ -56,35 +55,62 @@ function BudgetRow({ budget, category, onDelete, onUpdate }: BudgetRowProps) {
 
   // Display orphaned budgets as "Unknown Category"
   const isOrphaned = !category;
-  const displayName = isOrphaned ? 'Unknown Category' : category.name;
+  const isSubcategory = category?.parentId !== undefined;
+  const isParent = !isSubcategory;
+  const isVirtual = budget.id.startsWith('virtual-'); // Check if this is a virtual parent
+
+  // Get budget type icon and determine category name like BudgetComparison
+  let budgetTypeIcon = '💳 '; // Default to expense icon
+  let displayName = isOrphaned ? 'Unknown Category' : category.name;
+
+  if (!isOrphaned) {
+    // Determine if it's income category
+    const isIncomeCategory = isIncomeCategoryWithCategories(category.id, [category]);
+    budgetTypeIcon = isIncomeCategory ? '💰 ' :
+                     isTransferCategory(category.id) ? '🔄 ' : '💳 ';
+
+    // For subcategories, show just the name (parent info will be in hierarchy)
+    displayName = category.name;
+  }
+
+  const fullDisplayName = budgetTypeIcon + displayName;
 
   return (
     <Table.Tr>
       <Table.Td>
-        <Group gap="xs">
-          <Text fw={500} c={isOrphaned ? 'dimmed' : undefined}>
-            {displayName}
-          </Text>
-          {isOrphaned && (
-            <Badge size="xs" variant="light" color="red">
-              Orphaned
-            </Badge>
-          )}
-          {category?.isHidden && (
-            <Badge size="xs" variant="light" color="gray">
-              Hidden
-            </Badge>
-          )}
-          {category?.isRollover && (
-            <Badge size="xs" variant="light" color="yellow">
-              Rollover
-            </Badge>
-          )}
-        </Group>
+        <Box pl={isSubcategory ? 24 : 0}>
+          <Group gap="xs">
+            <Text
+              fw={isParent ? 600 : 500}
+              size={isSubcategory ? 'sm' : 'md'}
+              c={isOrphaned ? 'dimmed' : isVirtual ? 'blue' : undefined}
+              fs={isVirtual ? 'italic' : undefined}
+            >
+              {fullDisplayName}
+            </Text>
+            {isOrphaned && (
+              <Badge size="xs" variant="light" color="red">
+                Orphaned
+              </Badge>
+            )}
+            {category?.isHidden && (
+              <Badge size="xs" variant="light" color="gray">
+                Hidden
+              </Badge>
+            )}
+            {category?.isRollover && (
+              <Badge size="xs" variant="light" color="yellow">
+                Rollover
+              </Badge>
+            )}
+          </Group>
+        </Box>
       </Table.Td>
       
       <Table.Td width={200}>
-        {isEditing ? (
+        {isVirtual ? (
+          <Text c="dimmed" fs="italic">No budget set</Text>
+        ) : isEditing ? (
           <NumberInput
             value={editAmount}
             onChange={(value) => setEditAmount(Number(value))}
@@ -105,7 +131,10 @@ function BudgetRow({ budget, category, onDelete, onUpdate }: BudgetRowProps) {
       
       <Table.Td width={100}>
         <Group gap={4}>
-          {isEditing ? (
+          {isVirtual ? (
+            // Virtual parents have no actions
+            null
+          ) : isEditing ? (
             <>
               <Tooltip label="Save">
                 <ActionIcon
@@ -244,231 +273,209 @@ export function BudgetGrid({ budgets, categories, month, onEdit }: BudgetGridPro
     });
   };
 
-  // Separate orphaned budgets from categorized budgets
-  const orphanedBudgets = visibleBudgets.filter(budget => 
-    !categories.find(c => c.id === budget.categoryId)
-  );
-  
-  // Group budgets by type (Income, Expense, Transfer)
-  const budgetsByType = visibleBudgets.reduce<{
-    income: MonthlyBudget[],
-    expense: MonthlyBudget[],
-    transfer: MonthlyBudget[]
-  }>((acc, budget) => {
-    const category = categories.find(c => c.id === budget.categoryId);
-    if (category) {
-      if (isIncomeCategoryWithCategories(budget.categoryId, categories)) {
-        acc.income.push(budget);
-      } else if (isTransferCategory(budget.categoryId)) {
-        acc.transfer.push(budget);
-      } else {
-        acc.expense.push(budget);
-      }
-    }
-    return acc;
-  }, { income: [], expense: [], transfer: [] });
-  
-  // Helper function to group budgets by parent category within each type
-  const groupBudgetsByParent = (budgets: MonthlyBudget[]): Record<string, MonthlyBudget[]> => {
-    return budgets.reduce<Record<string, MonthlyBudget[]>>((acc, budget) => {
-      const category = categories.find(c => c.id === budget.categoryId);
-      if (category) {
-        const parentId = category.parentId || category.id;
-        if (!acc[parentId]) acc[parentId] = [];
-        acc[parentId].push(budget);
-      }
-      return acc;
-    }, {});
-  };
+  // Create hierarchical organization similar to BudgetComparison
+  const hierarchicalBudgets = useMemo(() => {
+    // Separate orphaned budgets
+    const orphanedBudgets = visibleBudgets.filter(budget =>
+      !categories.find(c => c.id === budget.categoryId)
+    );
 
-  const incomeBudgetsByParent = groupBudgetsByParent(budgetsByType.income);
-  const expenseBudgetsByParent = groupBudgetsByParent(budgetsByType.expense);
-  const transferBudgetsByParent = groupBudgetsByParent(budgetsByType.transfer);
-  
-  // Get parent categories for each type
-  const incomeParentCategories = categories.filter(cat => 
-    !cat.parentId && incomeBudgetsByParent[cat.id]
-  );
-  const expenseParentCategories = categories.filter(cat => 
-    !cat.parentId && expenseBudgetsByParent[cat.id]
-  );
-  const transferParentCategories = categories.filter(cat => 
-    !cat.parentId && transferBudgetsByParent[cat.id]
-  );
+    // Group by parent category
+    const parentCategoryIds = new Set<string>();
+    const childrenByParent = new Map<string, MonthlyBudget[]>();
+    const parentBudgets = new Map<string, MonthlyBudget>();
+    const standaloneBudgets: MonthlyBudget[] = [];
+
+    // Identify parents and group children
+    categories.forEach(category => {
+      if (category.parentId) {
+        parentCategoryIds.add(category.parentId);
+      }
+    });
+
+    // Separate budgets into parents and children
+    visibleBudgets.forEach(budget => {
+      const category = categories.find(c => c.id === budget.categoryId);
+      if (!category) return; // Skip orphaned budgets
+
+      if (category.parentId) {
+        // It's a child category
+        if (!childrenByParent.has(category.parentId)) {
+          childrenByParent.set(category.parentId, []);
+        }
+        childrenByParent.get(category.parentId)!.push(budget);
+      } else if (parentCategoryIds.has(budget.categoryId)) {
+        // It's a parent category that has children
+        parentBudgets.set(budget.categoryId, budget);
+      } else {
+        // It's a standalone category (no parent, no children)
+        standaloneBudgets.push(budget);
+      }
+    });
+
+    // Helper function to get category type for sorting
+    const getCategoryType = (budget: MonthlyBudget): string => {
+      if (isIncomeCategoryWithCategories(budget.categoryId, categories)) return 'income';
+      if (isTransferCategory(budget.categoryId)) return 'transfer';
+      return 'expense';
+    };
+
+    // Helper function to get category name for sorting
+    const getCategoryName = (budget: MonthlyBudget): string => {
+      const category = categories.find(c => c.id === budget.categoryId);
+      return category?.name || '';
+    };
+
+    // Sort parent categories by type and name
+    const sortedParentCategories = Array.from(parentCategoryIds)
+      .map(parentId => ({
+        parentId,
+        category: categories.find(c => c.id === parentId)!,
+        budget: parentBudgets.get(parentId),
+        children: childrenByParent.get(parentId) || []
+      }))
+      .filter(item => item.children.length > 0) // Only include parents with children that have budgets
+      .sort((a, b) => {
+        // Sort by type first
+        const typeA = isIncomeCategoryWithCategories(a.parentId, categories) ? 'income' :
+                     isTransferCategory(a.parentId) ? 'transfer' : 'expense';
+        const typeB = isIncomeCategoryWithCategories(b.parentId, categories) ? 'income' :
+                     isTransferCategory(b.parentId) ? 'transfer' : 'expense';
+
+        const typeOrder = { income: 1, expense: 2, transfer: 3 };
+        if (typeA !== typeB) {
+          return typeOrder[typeA as keyof typeof typeOrder] - typeOrder[typeB as keyof typeof typeOrder];
+        }
+
+        // Then by name
+        return a.category.name.localeCompare(b.category.name);
+      });
+
+    // Sort standalone categories by type and name
+    const sortedStandaloneBudgets = standaloneBudgets.sort((a, b) => {
+      const typeA = getCategoryType(a);
+      const typeB = getCategoryType(b);
+
+      const typeOrder = { income: 1, expense: 2, transfer: 3 };
+      if (typeA !== typeB) {
+        return typeOrder[typeA as keyof typeof typeOrder] - typeOrder[typeB as keyof typeof typeOrder];
+      }
+
+      return getCategoryName(a).localeCompare(getCategoryName(b));
+    });
+
+    // Build final hierarchy
+    const finalResult: MonthlyBudget[] = [];
+
+    // Add parent categories with their children
+    sortedParentCategories.forEach(({ parentId, budget, children }) => {
+      // Always show parent category if it has children with budgets
+      // If parent has no budget, create a "virtual" parent for display only
+      if (budget) {
+        // Parent has its own budget
+        finalResult.push(budget);
+      } else if (children.length > 0) {
+        // Parent has no budget but has children with budgets - create virtual parent for hierarchy display
+        const virtualParent: MonthlyBudget = {
+          id: `virtual-${parentId}`,
+          categoryId: parentId,
+          month: children[0].month,
+          amount: 0, // Virtual parent has no budget amount
+        };
+        finalResult.push(virtualParent);
+      }
+
+      // Sort and add children
+      children
+        .sort((a, b) => getCategoryName(a).localeCompare(getCategoryName(b)))
+        .forEach(child => finalResult.push(child));
+    });
+
+    // Add standalone categories
+    finalResult.push(...sortedStandaloneBudgets);
+
+    // Add orphaned budgets at the end
+    finalResult.push(...orphanedBudgets);
+
+    return finalResult;
+  }, [visibleBudgets, categories]);
+
+  // Diagnostic information about category structure
+  const diagnosticInfo = useMemo(() => {
+    const parentCategories = categories.filter(c => !c.parentId);
+    const childCategories = categories.filter(c => c.parentId);
+    const categoriesWithBudgets = categories.filter(c =>
+      visibleBudgets.some(b => b.categoryId === c.id)
+    );
+
+    return {
+      totalCategories: categories.length,
+      parentCategories: parentCategories.length,
+      childCategories: childCategories.length,
+      categoriesWithBudgets: categoriesWithBudgets.length,
+      hierarchicalStructure: parentCategories.map(parent => ({
+        parent: parent.name,
+        children: childCategories
+          .filter(child => child.parentId === parent.id)
+          .map(child => child.name)
+      })).filter(item => item.children.length > 0)
+    };
+  }, [categories, visibleBudgets]);
 
   return (
-    <Table striped highlightOnHover>
-      <Table.Thead>
-        <Table.Tr>
-          <Table.Th>Category</Table.Th>
-          <Table.Th>Budget Amount</Table.Th>
-          <Table.Th>Actions</Table.Th>
-        </Table.Tr>
-      </Table.Thead>
-      <Table.Tbody>
-        {/* Income Section */}
-        {incomeParentCategories.length > 0 && (
+    <div>
+      {/* Temporary diagnostic panel */}
+      <div style={{
+        background: '#f0f0f0',
+        padding: '10px',
+        margin: '10px 0',
+        borderRadius: '4px',
+        fontSize: '12px'
+      }}>
+        <strong>Category Structure Diagnostic:</strong><br/>
+        Total Categories: {diagnosticInfo.totalCategories}<br/>
+        Parent Categories: {diagnosticInfo.parentCategories}<br/>
+        Child Categories: {diagnosticInfo.childCategories}<br/>
+        Categories with Budgets: {diagnosticInfo.categoriesWithBudgets}<br/>
+        {diagnosticInfo.hierarchicalStructure.length > 0 ? (
           <>
-            <Table.Tr>
-              <Table.Td colSpan={3}>
-                <Title order={5} c="green" mb="xs">Income</Title>
-              </Table.Td>
-            </Table.Tr>
-            {incomeParentCategories.map(parent => (
-              <React.Fragment key={`income-${parent.id}`}>
-                {/* Parent category budgets */}
-                {incomeBudgetsByParent[parent.id]
-                  .filter(b => b.categoryId === parent.id)
-                  .map(budget => (
-                    <BudgetRow
-                      key={budget.id}
-                      budget={budget}
-                      category={parent}
-                      month={month}
-                      onEdit={onEdit}
-                      onDelete={handleDelete}
-                      onUpdate={handleUpdate}
-                    />
-                  ))}
-                
-                {/* Subcategory budgets */}
-                {incomeBudgetsByParent[parent.id]
-                  .filter(b => b.categoryId !== parent.id)
-                  .map(budget => {
-                    const subcategory = categories.find(c => c.id === budget.categoryId);
-                    return (
-                      <BudgetRow
-                        key={budget.id}
-                        budget={budget}
-                        category={subcategory}
-                        month={month}
-                        onEdit={onEdit}
-                        onDelete={handleDelete}
-                        onUpdate={handleUpdate}
-                      />
-                    );
-                  })}
-              </React.Fragment>
+            <strong>Hierarchical Structure:</strong><br/>
+            {diagnosticInfo.hierarchicalStructure.map((item, index) => (
+              <div key={index}>
+                {item.parent}: [{item.children.join(', ')}]
+              </div>
             ))}
           </>
+        ) : (
+          <strong style={{color: 'orange'}}>No hierarchical structure found - all categories are standalone</strong>
         )}
+      </div>
 
-        {/* Expense Section */}
-        {expenseParentCategories.length > 0 && (
-          <>
-            <Table.Tr>
-              <Table.Td colSpan={3}>
-                <Title order={5} c="red" mb="xs">Expenses</Title>
-              </Table.Td>
-            </Table.Tr>
-            {expenseParentCategories.map(parent => (
-              <React.Fragment key={`expense-${parent.id}`}>
-                {/* Parent category budgets */}
-                {expenseBudgetsByParent[parent.id]
-                  .filter(b => b.categoryId === parent.id)
-                  .map(budget => (
-                    <BudgetRow
-                      key={budget.id}
-                      budget={budget}
-                      category={parent}
-                      month={month}
-                      onEdit={onEdit}
-                      onDelete={handleDelete}
-                      onUpdate={handleUpdate}
-                    />
-                  ))}
-                
-                {/* Subcategory budgets */}
-                {expenseBudgetsByParent[parent.id]
-                  .filter(b => b.categoryId !== parent.id)
-                  .map(budget => {
-                    const subcategory = categories.find(c => c.id === budget.categoryId);
-                    return (
-                      <BudgetRow
-                        key={budget.id}
-                        budget={budget}
-                        category={subcategory}
-                        month={month}
-                        onEdit={onEdit}
-                        onDelete={handleDelete}
-                        onUpdate={handleUpdate}
-                      />
-                    );
-                  })}
-              </React.Fragment>
-            ))}
-          </>
-        )}
-
-        {/* Transfer Section */}
-        {transferParentCategories.length > 0 && (
-          <>
-            <Table.Tr>
-              <Table.Td colSpan={3}>
-                <Title order={5} c="blue" mb="xs">Transfers</Title>
-              </Table.Td>
-            </Table.Tr>
-            {transferParentCategories.map(parent => (
-              <React.Fragment key={`transfer-${parent.id}`}>
-                {/* Parent category budgets */}
-                {transferBudgetsByParent[parent.id]
-                  .filter(b => b.categoryId === parent.id)
-                  .map(budget => (
-                    <BudgetRow
-                      key={budget.id}
-                      budget={budget}
-                      category={parent}
-                      month={month}
-                      onEdit={onEdit}
-                      onDelete={handleDelete}
-                      onUpdate={handleUpdate}
-                    />
-                  ))}
-                
-                {/* Subcategory budgets */}
-                {transferBudgetsByParent[parent.id]
-                  .filter(b => b.categoryId !== parent.id)
-                  .map(budget => {
-                    const subcategory = categories.find(c => c.id === budget.categoryId);
-                    return (
-                      <BudgetRow
-                        key={budget.id}
-                        budget={budget}
-                        category={subcategory}
-                        month={month}
-                        onEdit={onEdit}
-                        onDelete={handleDelete}
-                        onUpdate={handleUpdate}
-                      />
-                    );
-                  })}
-              </React.Fragment>
-            ))}
-          </>
-        )}
-          
-        {/* Orphaned budgets (categories that no longer exist) */}
-        {orphanedBudgets.length > 0 && (
-          <>
-            <Table.Tr>
-              <Table.Td colSpan={3}>
-                <Title order={5} c="gray" mb="xs">Unknown Categories</Title>
-              </Table.Td>
-            </Table.Tr>
-            {orphanedBudgets.map(budget => (
+      <Table striped highlightOnHover>
+        <Table.Thead>
+          <Table.Tr>
+            <Table.Th>Category</Table.Th>
+            <Table.Th>Budget Amount</Table.Th>
+            <Table.Th>Actions</Table.Th>
+          </Table.Tr>
+        </Table.Thead>
+        <Table.Tbody>
+          {hierarchicalBudgets.map((budget) => {
+            const category = categories.find(c => c.id === budget.categoryId);
+            return (
               <BudgetRow
                 key={budget.id}
                 budget={budget}
-                category={undefined}
+                category={category}
                 month={month}
                 onEdit={onEdit}
                 onDelete={handleDelete}
                 onUpdate={handleUpdate}
               />
-            ))}
-          </>
-        )}
-      </Table.Tbody>
-    </Table>
+            );
+          })}
+        </Table.Tbody>
+      </Table>
+    </div>
   );
 }
