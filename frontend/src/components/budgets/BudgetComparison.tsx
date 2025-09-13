@@ -63,6 +63,9 @@ export function BudgetComparison({ comparison, categories }: BudgetComparisonPro
     let budgetedExpense = 0;
     let actualExpense = 0;
 
+    // Create category lookup for hierarchical income detection
+    const categoryLookup = createCategoryLookup(categories);
+
     // Build a set of child category IDs to exclude from totals
     const childCategoryIds = new Set<string>();
     categories.forEach(category => {
@@ -78,10 +81,10 @@ export function BudgetComparison({ comparison, categories }: BudgetComparisonPro
         return;
       }
 
-      const category = categories.find(c => c.id === comp.categoryId);
       const typedComp = comp as BudgetComparisonType;
+      // Use hierarchical income detection to properly classify income categories
       const isIncome = typedComp.isIncomeCategory ||
-        (category && category.id.startsWith('INCOME'));
+        isIncomeCategoryHierarchical(comp.categoryId, categoryLookup);
 
       if (isIncome) {
         budgetedIncome += comp.budgeted;
