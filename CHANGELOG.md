@@ -5,6 +5,35 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.14.0](https://github.com/JCarran0/household-budgeting/compare/v1.13.0...v1.14.0) (2025-09-13)
+
+
+### Features
+
+* **budgets:** implement hierarchical display for budget setup tab ([40ac31c](https://github.com/JCarran0/household-budgeting/commit/40ac31ceb972d616ff04c86a06ca07018bd31631))
+* **reports:** add budget vs actual dashboards to cash flow and spending trends tabs ([780b78d](https://github.com/JCarran0/household-budgeting/commit/780b78dd29df8ab1765355be34129622ea4dad31))
+* **ui:** add clickable version number with changelog display ([57d17ed](https://github.com/JCarran0/household-budgeting/commit/57d17eddda1b582a8aa60862be111a8d92373ea2))
+
+
+### Bug Fixes
+
+* **budgets:** include parent category budgets in hierarchical totals ([2d1d5f3](https://github.com/JCarran0/household-budgeting/commit/2d1d5f3260ad49cf7819ee2eda9c4ab6acf952c9))
+* **budgets:** prevent double-counting in spending widget totals ([2ca7887](https://github.com/JCarran0/household-budgeting/commit/2ca788749e418632b28136e36b8da7669c9997cc))
+* **deploy:** include CHANGELOG.md in production deployment package ([b39c3c0](https://github.com/JCarran0/household-budgeting/commit/b39c3c0cf0040c6ead5298533d6e10c42346f22c))
+* **filters:** enhance date parsing and storage to prevent timezone shifts ([0104622](https://github.com/JCarran0/household-budgeting/commit/0104622334c97761c50d7fc9afae206c5c930e8b))
+* **reports:** align dashboard date ranges to start from January ([f362a1b](https://github.com/JCarran0/household-budgeting/commit/f362a1be0342f62deec69c02375115e802295e38))
+* **transactions:** resolve custom date range picker functionality ([dbf51a4](https://github.com/JCarran0/household-budgeting/commit/dbf51a4ca10fddd3e4b2f67269e068542316bd16))
+
+
+### Code Refactoring
+
+* **reports:** replace any types with proper MonthlyBudget interface ([b3f5b99](https://github.com/JCarran0/household-budgeting/commit/b3f5b9934319c34654b31bf485858cb73c0f52e4))
+
+
+### Chores
+
+* **ui:** remove debug console logs from version fetching ([008b238](https://github.com/JCarran0/household-budgeting/commit/008b238c07393cdf93da25a024d3a2ebada75e5e))
+
 ## [1.13.0](https://github.com/JCarran0/household-budgeting/compare/v1.12.0...v1.13.0) (2025-09-09)
 
 
