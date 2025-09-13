@@ -124,3 +124,33 @@ export interface AutoCategorizeRule {
   createdAt: string;
   updatedAt: string;
 }
+
+// Feedback types
+export type FeedbackType = 'bug' | 'feature';
+
+export interface ApplicationState {
+  route: string;
+  searchParams: string;
+  userAgent: string;
+  timestamp: string;
+  username: string;
+  windowSize: {
+    width: number;
+    height: number;
+  };
+  filters?: Record<string, unknown>;
+}
+
+export interface FeedbackSubmission {
+  type: FeedbackType;
+  title: string;
+  description: string;
+  email?: string;
+  applicationState?: ApplicationState;
+}
+
+export interface FeedbackResponse {
+  success: boolean;
+  issueUrl?: string;
+  error?: string;
+}

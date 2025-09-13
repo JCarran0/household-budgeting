@@ -1,16 +1,18 @@
 import axios, { type AxiosError, type AxiosInstance } from 'axios';
-import type { 
-  AuthResponse, 
-  LoginCredentials, 
-  RegisterCredentials, 
-  PlaidAccount, 
-  Transaction, 
-  LinkTokenResponse, 
+import type {
+  AuthResponse,
+  LoginCredentials,
+  RegisterCredentials,
+  PlaidAccount,
+  Transaction,
+  LinkTokenResponse,
   ExchangeTokenRequest,
   Category,
   MonthlyBudget,
   AutoCategorizeRule,
-  User
+  User,
+  FeedbackSubmission,
+  FeedbackResponse
 } from '../../../shared/types';
 
 // Use relative URL in production, localhost in development
@@ -164,6 +166,9 @@ class ApiClient {
     this.getBudgetComparison = this.getBudgetComparison.bind(this);
     this.getBudgetHistory = this.getBudgetHistory.bind(this);
     this.deleteBudget = this.deleteBudget.bind(this);
+
+    // Feedback methods
+    this.submitFeedback = this.submitFeedback.bind(this);
 
     // Request interceptor to add auth token
     this.client.interceptors.request.use(
@@ -803,6 +808,22 @@ class ApiClient {
   }> {
     const { data } = await this.client.get('/admin/location-cleanup-status');
     return data;
+  }
+
+  // Feedback methods
+  async submitFeedback(feedback: FeedbackSubmission): Promise<FeedbackResponse> {
+    try {
+      const { data } = await this.client.post<FeedbackResponse>('/feedback/submit', feedback);
+      return data;
+    } catch (error) {
+      if (axios.isAxiosError(error) && error.response?.data) {
+        return {
+          success: false,
+          error: error.response.data.error || 'Failed to submit feedback'
+        };
+      }
+      throw error;
+    }
   }
 }
 

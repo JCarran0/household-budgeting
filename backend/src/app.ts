@@ -10,6 +10,7 @@ import budgetRoutes from './routes/budgets';
 import reportRoutes from './routes/reports';
 import autoCategorizeRoutes from './routes/autoCategorize';
 import adminRoutes from './routes/admin';
+import feedbackRoutes from './routes/feedback';
 
 // Load environment variables (skip in test mode as it's loaded in setup.ts)
 if (process.env.NODE_ENV !== 'test') {
@@ -97,6 +98,7 @@ app.use(`${apiPrefix}/budgets`, budgetRoutes);
 app.use(`${apiPrefix}/reports`, reportRoutes);
 app.use(`${apiPrefix}/autocategorize`, autoCategorizeRoutes);
 app.use(`${apiPrefix}/admin`, adminRoutes);
+app.use(`${apiPrefix}/feedback`, feedbackRoutes);
 
 // Version endpoint under API prefix
 app.get(`${apiPrefix}/version`, (_req: Request, res: Response) => {

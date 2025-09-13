@@ -1,9 +1,9 @@
 import { AppShell, Burger, Group, NavLink, Text, ActionIcon, Avatar, Menu, rem, Tooltip, Kbd } from '@mantine/core';
 import { useDisclosure, useHotkeys } from '@mantine/hooks';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
-import { 
-  IconHome, 
-  IconReceipt, 
+import {
+  IconHome,
+  IconReceipt,
   IconCreditCard,
   IconLogout,
   IconUser,
@@ -11,17 +11,20 @@ import {
   IconChevronRight,
   IconCategory,
   IconChartBar,
-  IconSettings
+  IconSettings,
+  IconMessageReport
 } from '@tabler/icons-react';
 import { useAuthStore } from '../stores/authStore';
 import { api } from '../lib/api';
 import { useState, useEffect } from 'react';
 import { ChangelogModal } from './ChangelogModal';
+import { FeedbackModal } from './feedback/FeedbackModal';
 
 export function MantineLayout() {
   const [mobileOpened, { toggle: toggleMobile }] = useDisclosure();
   const [desktopOpened, { toggle: toggleDesktop }] = useDisclosure(true);
   const [changelogOpened, { open: openChangelog, close: closeChangelog }] = useDisclosure(false);
+  const [feedbackOpened, { open: openFeedback, close: closeFeedback }] = useDisclosure(false);
   const [version, setVersion] = useState<string | null>(null);
   const navigate = useNavigate();
   const location = useLocation();
@@ -125,7 +128,14 @@ export function MantineLayout() {
               </Menu.Item>
               
               <Menu.Divider />
-              
+
+              <Menu.Item
+                leftSection={<IconMessageReport style={{ width: rem(14), height: rem(14) }} />}
+                onClick={openFeedback}
+              >
+                Send Feedback
+              </Menu.Item>
+
               <Menu.Item
                 color="red"
                 leftSection={<IconLogout style={{ width: rem(14), height: rem(14) }} />}
@@ -185,9 +195,14 @@ export function MantineLayout() {
         <Outlet />
       </AppShell.Main>
 
-      <ChangelogModal 
-        opened={changelogOpened} 
+      <ChangelogModal
+        opened={changelogOpened}
         onClose={closeChangelog}
+      />
+
+      <FeedbackModal
+        opened={feedbackOpened}
+        onClose={closeFeedback}
       />
     </AppShell>
   );
