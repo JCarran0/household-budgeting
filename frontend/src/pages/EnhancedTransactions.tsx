@@ -426,28 +426,105 @@ export function EnhancedTransactions() {
     return Array.from(tags);
   }, [transactionData]);
 
+  // Helper function to build grouped category options with parent selection
+  const buildGroupedCategoryOptions = useCallback(() => {
+    if (!categories) return [];
+
+    const grouped = [];
+
+    // Add uncategorized first
+    grouped.push({ value: 'uncategorized', label: 'Uncategorized' });
+
+    // Group categories by parent
+    const parentCategories = categories.filter(c => !c.parentId);
+    const childrenByParent = new Map<string, typeof categories>();
+
+    categories.forEach(cat => {
+      if (cat.parentId) {
+        if (!childrenByParent.has(cat.parentId)) {
+          childrenByParent.set(cat.parentId, []);
+        }
+        childrenByParent.get(cat.parentId)?.push(cat);
+      }
+    });
+
+    // Build grouped structure
+    parentCategories.forEach(parent => {
+      const children = childrenByParent.get(parent.id) || [];
+      if (children.length > 0) {
+        // Sort children alphabetically
+        children.sort((a: typeof categories[0], b: typeof categories[0]) => a.name.localeCompare(b.name));
+
+        const parentLabel = parent.isHidden
+          ? `👁️‍🗨️ ${parent.name} (Excluded from budgets)`
+          : parent.name;
+
+        grouped.push({
+          group: parentLabel,
+          items: [
+            {
+              value: `${parent.id}:all`,
+              label: `✓ All ${parent.name}`,
+            },
+            ...children.map((child: typeof categories[0]) => {
+              const childLabel = child.isHidden
+                ? `👁️‍🗨️ ${child.name} (Excluded from budgets)`
+                : child.name;
+              return {
+                value: child.id,
+                label: childLabel,
+              };
+            })
+          ]
+        });
+      } else {
+        // Parent with no children - add as regular option
+        const parentLabel = parent.isHidden
+          ? `👁️‍🗨️ ${parent.name} (Excluded from budgets)`
+          : parent.name;
+        grouped.push({ value: parent.id, label: parentLabel });
+      }
+    });
+
+    return grouped;
+  }, [categories]);
+
+  // Handler for category selection changes with parent expansion
+  const handleCategorySelectionChange = useCallback((values: string[]) => {
+    const expandedValues: string[] = [];
+    const parentSelectionsToExpand: string[] = [];
+
+    values.forEach(value => {
+      if (value.endsWith(':all')) {
+        const parentId = value.replace(':all', '');
+        parentSelectionsToExpand.push(parentId);
+      } else {
+        expandedValues.push(value);
+      }
+    });
+
+    // Expand parent selections to include parent AND all children
+    parentSelectionsToExpand.forEach(parentId => {
+      // Add the parent ID itself
+      expandedValues.push(parentId);
+
+      // Add all children of this parent
+      if (categories) {
+        categories
+          .filter(c => c.parentId === parentId)
+          .forEach(child => expandedValues.push(child.id));
+      }
+    });
+
+    // Remove duplicates and update state
+    const uniqueValues = [...new Set(expandedValues)];
+    setSelectedCategories(uniqueValues);
+  }, [categories, setSelectedCategories]);
+
   // Category options for filter
-  const categoryOptions = [
-    // Add uncategorized option at the top
-    { value: 'uncategorized', label: 'Uncategorized' },
-    // Existing category options
-    ...(categories?.map(cat => {
-      const parentCategory = cat.parentId
-        ? categories.find(p => p.id === cat.parentId)
-        : null;
-      const baseLabel = parentCategory 
-        ? `${parentCategory.name} → ${cat.name}` 
-        : cat.name;
-      // Add indicator for hidden categories with visual icon
-      const label = cat.isHidden 
-        ? `👁️‍🗨️ ${baseLabel} (Excluded from budgets)`
-        : baseLabel;
-      return {
-        value: cat.id,
-        label: label,
-      };
-    }).sort((a, b) => a.label.localeCompare(b.label)) || [])
-  ];
+  const categoryOptions = useMemo(() => {
+    return buildGroupedCategoryOptions();
+  }, [buildGroupedCategoryOptions]);
   
 
   // Account options for filter
@@ -1030,7 +1107,7 @@ export function EnhancedTransactions() {
                   placeholder="Filter by categories"
                   data={categoryOptions}
                   value={selectedCategories}
-                  onChange={setSelectedCategories}
+                  onChange={handleCategorySelectionChange}
                   clearable
                   searchable
                 />
