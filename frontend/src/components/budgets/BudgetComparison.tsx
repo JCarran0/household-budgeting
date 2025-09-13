@@ -23,11 +23,12 @@ import type { BudgetComparisonResponse } from '../../lib/api';
 import type { Category, BudgetComparison as BudgetComparisonType } from '../../../../shared/types';
 import { TransactionPreviewTrigger } from '../transactions/TransactionPreviewTrigger';
 import { formatCurrency } from '../../utils/formatters';
-import { 
-  isIncomeCategoryHierarchical, 
-  isTransferCategory, 
-  createCategoryLookup 
+import {
+  isIncomeCategoryHierarchical,
+  isTransferCategory,
+  createCategoryLookup
 } from '../../../../shared/utils/categoryHelpers';
+import { BudgetDebugger } from './BudgetDebugger';
 
 interface BudgetComparisonProps {
   comparison: BudgetComparisonResponse;
@@ -424,6 +425,9 @@ export function BudgetComparison({ comparison, categories }: BudgetComparisonPro
           mt="md"
         />
       </Paper>
+
+      {/* Debug component to analyze calculation differences */}
+      <BudgetDebugger comparison={comparison} categories={categories} />
 
       <Table striped highlightOnHover>
         <Table.Thead>
