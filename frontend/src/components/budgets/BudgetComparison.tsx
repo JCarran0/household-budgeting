@@ -422,7 +422,6 @@ export function BudgetComparison({ comparison, categories }: BudgetComparisonPro
           color={getProgressColor(comparison.totals.percentUsed, false)} // Totals use expense logic for now
           size="lg"
           mt="md"
-          striped={comparison.totals.isOverBudget}
         />
       </Paper>
 
@@ -513,7 +512,6 @@ export function BudgetComparison({ comparison, categories }: BudgetComparisonPro
                       value={Math.min(comp.percentUsed, 100)}
                       color={progressColor}
                       size="sm"
-                      striped={comp.isOverBudget}
                     />
                     <Text size="xs" c="dimmed" ta="center">
                       {comp.percentUsed}%
