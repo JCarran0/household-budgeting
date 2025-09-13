@@ -43,11 +43,14 @@ import { BudgetSummaryCards } from '../components/budgets/BudgetSummaryCards';
 // Error boundaries available for use when needed
 // import { FinancialErrorBoundary, FormErrorBoundary, AsyncErrorBoundary } from '../components/ErrorBoundary';
 import type { MonthlyBudget } from '../../../shared/types';
-import { 
-  isBudgetableCategory,
-  isIncomeCategoryWithCategories,
-  isTransferCategory
+import {
+  isBudgetableCategory
 } from '../../../shared/utils/categoryHelpers';
+import {
+  getHiddenCategoryIds,
+  calculateBudgetTotals,
+  calculateActualTotals
+} from '../../../shared/utils/budgetCalculations';
 
 export function Budgets() {
   // Use persisted filters from localStorage
@@ -115,44 +118,34 @@ export function Budgets() {
     }),
   });
 
-  // Calculate actuals from transactions
+  // Calculate actuals from transactions using shared utilities
   const actuals = useMemo<Record<string, number>>(() => {
     if (!transactionData?.transactions || !categories) return {};
-    
-    // Create a set of hidden category IDs for efficient lookup
-    // Include categories that are either directly hidden or have a hidden parent
-    const hiddenCategoryIds = new Set<string>();
-    categories.forEach(cat => {
-      if (cat.isHidden) {
-        hiddenCategoryIds.add(cat.id);
-      } else if (cat.parentId) {
-        const parent = categories.find(p => p.id === cat.parentId);
-        if (parent?.isHidden) {
-          hiddenCategoryIds.add(cat.id);
-        }
+
+    // Filter transactions to only budgetable ones (excludes transfers) with hidden categories excluded
+    const filteredTransactions = transactionData.transactions.filter(transaction => {
+      // Exclude hidden transactions
+      if (transaction.isHidden || !transaction.categoryId) {
+        return false;
       }
+
+      // Include budgetable transactions (excludes transfers)
+      return isBudgetableCategory(transaction.categoryId, categories);
     });
-    
+
+    // Use shared utility to get hidden category IDs
+    const hiddenCategoryIds = getHiddenCategoryIds(categories);
+
     const actualsByCategory: Record<string, number> = {};
-    transactionData.transactions.forEach(transaction => {
-      // Exclude hidden transactions and transactions in hidden categories
-      if (transaction.categoryId && 
-          !transaction.isHidden && 
-          !hiddenCategoryIds.has(transaction.categoryId)) {
-        
-        // Include both income and expense categories in budget comparisons (exclude only transfers)
-        if (isBudgetableCategory(transaction.categoryId, categories)) {
-          // For income categories: Plaid amounts are negative (money coming in)
-          // For expense categories: Plaid amounts are positive (money going out)
-          // We store the absolute amount but track the sign for proper calculations
-          const amount = Math.abs(transaction.amount);
-          
-          actualsByCategory[transaction.categoryId] = 
-            (actualsByCategory[transaction.categoryId] || 0) + amount;
-        }
+    filteredTransactions.forEach(transaction => {
+      // Exclude transactions in hidden categories
+      if (transaction.categoryId && !hiddenCategoryIds.has(transaction.categoryId)) {
+        const amount = Math.abs(transaction.amount);
+        actualsByCategory[transaction.categoryId] =
+          (actualsByCategory[transaction.categoryId] || 0) + amount;
       }
     });
-    
+
     return actualsByCategory;
   }, [transactionData, categories]);
 
@@ -229,111 +222,29 @@ export function Budgets() {
     queryClient.invalidateQueries({ queryKey: ['budgets'] });
   };
 
-  // Calculate income and expense budgets separately
-  const budgetedIncome = useMemo(() => {
-    if (!budgetData?.budgets || !categories) return 0;
+  // Calculate income and expense budgets using shared utilities
+  const budgetTotals = useMemo(() => {
+    if (!budgetData?.budgets || !categories) {
+      return { income: 0, expense: 0, transfer: 0, total: 0 };
+    }
 
-    // Create a set of hidden category IDs for efficient lookup
-    const hiddenCategoryIds = new Set<string>();
-    categories.forEach(cat => {
-      if (cat.isHidden) {
-        hiddenCategoryIds.add(cat.id);
-      } else if (cat.parentId) {
-        const parent = categories.find(p => p.id === cat.parentId);
-        if (parent?.isHidden) {
-          hiddenCategoryIds.add(cat.id);
-        }
-      }
-    });
-
-    return budgetData.budgets
-      .filter(b =>
-        isIncomeCategoryWithCategories(b.categoryId, categories) &&
-        !hiddenCategoryIds.has(b.categoryId) // Exclude hidden categories
-      )
-      .reduce((sum, b) => sum + b.amount, 0);
-  }, [budgetData, categories]);
-  
-  const budgetedSpending = useMemo(() => {
-    if (!budgetData?.budgets || !categories) return 0;
-
-    // Create a set of hidden category IDs for efficient lookup
-    const hiddenCategoryIds = new Set<string>();
-    categories.forEach(cat => {
-      if (cat.isHidden) {
-        hiddenCategoryIds.add(cat.id);
-      } else if (cat.parentId) {
-        const parent = categories.find(p => p.id === cat.parentId);
-        if (parent?.isHidden) {
-          hiddenCategoryIds.add(cat.id);
-        }
-      }
-    });
-
-    return budgetData.budgets
-      .filter(b =>
-        !isIncomeCategoryWithCategories(b.categoryId, categories) &&
-        !isTransferCategory(b.categoryId) &&
-        !hiddenCategoryIds.has(b.categoryId) // Exclude hidden categories
-      )
-      .reduce((sum, b) => sum + b.amount, 0);
+    return calculateBudgetTotals(budgetData.budgets, categories, { excludeHidden: true });
   }, [budgetData, categories]);
 
-  // Calculate actual income and spending from transactions
-  const actualIncome = useMemo(() => {
-    if (!transactionData?.transactions || !categories) return 0;
-    
-    // Create a set of hidden category IDs for efficient lookup
-    const hiddenCategoryIds = new Set<string>();
-    categories.forEach(cat => {
-      if (cat.isHidden) {
-        hiddenCategoryIds.add(cat.id);
-      } else if (cat.parentId) {
-        const parent = categories.find(p => p.id === cat.parentId);
-        if (parent?.isHidden) {
-          hiddenCategoryIds.add(cat.id);
-        }
-      }
-    });
-    
-    return transactionData.transactions
-      .filter(transaction => 
-        transaction.categoryId && 
-        !transaction.isHidden && 
-        !hiddenCategoryIds.has(transaction.categoryId) &&
-        isBudgetableCategory(transaction.categoryId, categories) &&
-        isIncomeCategoryWithCategories(transaction.categoryId, categories)
-      )
-      .reduce((sum, transaction) => sum + Math.abs(transaction.amount), 0);
+  const budgetedIncome = budgetTotals.income;
+  const budgetedSpending = budgetTotals.expense;
+
+  // Calculate actual income and spending using shared utilities
+  const actualTotals = useMemo(() => {
+    if (!transactionData?.transactions || !categories) {
+      return { income: 0, expense: 0, transfer: 0, total: 0 };
+    }
+
+    return calculateActualTotals(transactionData.transactions, categories, { excludeHidden: true });
   }, [transactionData, categories]);
 
-  const actualSpending = useMemo(() => {
-    if (!transactionData?.transactions || !categories) return 0;
-    
-    // Create a set of hidden category IDs for efficient lookup
-    const hiddenCategoryIds = new Set<string>();
-    categories.forEach(cat => {
-      if (cat.isHidden) {
-        hiddenCategoryIds.add(cat.id);
-      } else if (cat.parentId) {
-        const parent = categories.find(p => p.id === cat.parentId);
-        if (parent?.isHidden) {
-          hiddenCategoryIds.add(cat.id);
-        }
-      }
-    });
-    
-    return transactionData.transactions
-      .filter(transaction => 
-        transaction.categoryId && 
-        !transaction.isHidden && 
-        !hiddenCategoryIds.has(transaction.categoryId) &&
-        isBudgetableCategory(transaction.categoryId, categories) &&
-        !isIncomeCategoryWithCategories(transaction.categoryId, categories) &&
-        !isTransferCategory(transaction.categoryId)
-      )
-      .reduce((sum, transaction) => sum + Math.abs(transaction.amount), 0);
-  }, [transactionData, categories]);
+  const actualIncome = actualTotals.income;
+  const actualSpending = actualTotals.expense;
 
   if (budgetsLoading) {
     return (

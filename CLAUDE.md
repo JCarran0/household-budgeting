@@ -85,6 +85,7 @@ Building a personal budgeting app for 2 users with Plaid integration. Using Risk
 | **Plaid connection errors** | Check PLAID_PRODUCTS doesn't include "accounts" | [Architecture Guide](docs/AI-APPLICATION-ARCHITECTURE.md#common-plaid-issues) |
 | **Auth failures** | Verify JWT_SECRET is set, check token expiration | [Architecture Guide](docs/AI-APPLICATION-ARCHITECTURE.md#authentication-flow) |
 | **S3 storage issues** | Verify STORAGE_TYPE=s3 and bucket permissions | [Deployment Guide](docs/AI-DEPLOYMENTS.md#storage-configuration) |
+| **Budget calculation inconsistencies** | Use shared utilities from `shared/utils/budgetCalculations.ts` instead of duplicate logic | [Architecture Guide](docs/AI-APPLICATION-ARCHITECTURE.md#budget-calculation-utilities) |
 | **TypeScript errors** | Never use `any`, use `unknown` with type guards | See TypeScript section below |
 
 ### File Locations Quick Reference
@@ -229,6 +230,7 @@ scripts/               # Deployment scripts
 - **Type all function parameters and returns**
 - **Create domain types** for business entities
 - **Use discriminated unions** for complex state
+- **Use shared calculation utilities** - Always use functions from `shared/utils/` instead of duplicating logic
 
 ### Type-Safe Error Handling
 ```typescript
@@ -483,7 +485,7 @@ Having issues?
 - **Create new page**: See architecture guide section "To Add a New Page"
 - **Debug Plaid issues**: Check troubleshooting in architecture guide
 - **Handle auth errors**: Review JWT middleware patterns
-- **Financial calculations**: Always use shared utilities from `shared/utils/transactionCalculations.ts` to exclude transfers
+- **Financial calculations**: Always use shared utilities from `shared/utils/transactionCalculations.ts` to exclude transfers and `shared/utils/budgetCalculations.ts` for budget calculations
 - **Create a release**: Run `npm run release:prepare` and follow prompts
 - **Check version**: Visit `/version` endpoint or run `curl localhost:3001/version`
 - **Password reset recovery**: If locked out, request reset and check server logs: `pm2 logs budget-backend | grep "RESET TOKEN"`

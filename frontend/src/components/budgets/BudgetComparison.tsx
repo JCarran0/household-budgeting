@@ -30,6 +30,7 @@ import {
   isTransferCategory,
   createCategoryLookup
 } from '../../../../shared/utils/categoryHelpers';
+import { getChildCategoryIds } from '../../../../shared/utils/budgetCalculations';
 import { BudgetDebugger } from './BudgetDebugger';
 
 interface BudgetComparisonProps {
@@ -69,13 +70,8 @@ export function BudgetComparison({ comparison, categories }: BudgetComparisonPro
     // Create category lookup for hierarchical income detection
     const categoryLookup = createCategoryLookup(categories);
 
-    // Build a set of child category IDs to exclude from totals
-    const childCategoryIds = new Set<string>();
-    categories.forEach(category => {
-      if (category.parentId) {
-        childCategoryIds.add(category.id);
-      }
-    });
+    // Use shared utility to get child category IDs for exclusion from totals
+    const childCategoryIds = getChildCategoryIds(categories);
 
     comparison.comparisons.forEach(comp => {
       // Skip child categories to avoid double-counting

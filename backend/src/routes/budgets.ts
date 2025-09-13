@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import { z } from 'zod';
 import { budgetService, categoryService } from '../services';
 import { authMiddleware } from '../middleware/authMiddleware';
+import { getHiddenCategoryIds } from '../../../shared/utils/budgetCalculations';
 
 const router = Router();
 
@@ -194,21 +195,9 @@ router.post('/comparison/:month', async (req: Request, res: Response): Promise<v
     const { month } = req.params;
     const validatedData = budgetVsActualSchema.parse(req.body);
     
-    // Fetch categories to identify hidden ones
+    // Fetch categories and use shared utility to identify hidden ones
     const categories = await categoryService.getAllCategories(userId);
-    const hiddenCategoryIds = new Set<string>();
-    
-    // Include categories that are either directly hidden or have a hidden parent
-    categories.forEach((cat: any) => {
-      if (cat.isHidden) {
-        hiddenCategoryIds.add(cat.id);
-      } else if (cat.parentId) {
-        const parent = categories.find((p: any) => p.id === cat.parentId);
-        if (parent?.isHidden) {
-          hiddenCategoryIds.add(cat.id);
-        }
-      }
-    });
+    const hiddenCategoryIds = getHiddenCategoryIds(categories);
     
     const actuals = new Map(Object.entries(validatedData.actuals));
     const comparisons = await budgetService.getMonthlyBudgetVsActual(month, actuals, userId, hiddenCategoryIds);

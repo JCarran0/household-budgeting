@@ -44,8 +44,9 @@ household-budgeting/
 └── shared/
     ├── types/               # Shared TypeScript types
     └── utils/               # Shared utility functions
-        ├── categoryHelpers.ts   # Category type checking
-        └── transactionCalculations.ts  # Financial calculations
+        ├── categoryHelpers.ts         # Category type checking
+        ├── transactionCalculations.ts # Financial calculations
+        └── budgetCalculations.ts      # Budget calculation utilities
 ```
 
 ## Key Services Architecture
@@ -295,6 +296,46 @@ const income = calculateIncome(transactions);
 - **Usage Pattern**: Import and use these helpers instead of duplicating category type logic
 - **Plaid Convention**: Leverages Plaid's category ID structure for automatic classification
 
+### Budget Calculation Utilities (`shared/utils/budgetCalculations.ts`)
+- **Purpose**: Centralized budget calculation utilities to eliminate code duplication and ensure consistency
+- **Critical Problem Solved**: Addresses architectural debt from 6+ instances of duplicate hidden category logic across components
+- **Shared Between**: Frontend and backend for consistent budget calculations
+- **Key Functions**:
+  - `getHiddenCategoryIds(categories)`: Identifies categories that are hidden or have hidden parents
+  - `getChildCategoryIds(categories)`: Returns set of all child category IDs
+  - `getParentCategoryIds(categories)`: Returns set of all parent category IDs
+  - `calculateBudgetTotals(budgets, categories, options)`: Calculate income/expense/transfer budget totals
+  - `calculateActualTotals(transactions, categories, options)`: Calculate actual totals from transactions
+  - `createActualsMap(transactions, categories, options)`: Create category-to-amount mapping
+  - `calculateBudgetVsActual(budgetTotals, actualTotals)`: Compare budgets vs actuals with variance
+- **Filtering Options**: `excludeHidden`, `excludeChildren`, `excludeTransfers`
+- **Usage Pattern**: Always use these utilities instead of duplicate filtering logic
+
+```typescript
+// ❌ Don't do this (duplicates hidden category logic):
+const hiddenCategoryIds = new Set<string>();
+categories.forEach(cat => {
+  if (cat.isHidden) {
+    hiddenCategoryIds.add(cat.id);
+  } else if (cat.parentId) {
+    const parent = categories.find(p => p.id === cat.parentId);
+    if (parent?.isHidden) {
+      hiddenCategoryIds.add(cat.id);
+    }
+  }
+});
+
+// ✅ Use the shared utility:
+const hiddenCategoryIds = getHiddenCategoryIds(categories);
+
+// ✅ For budget totals with proper filtering:
+const budgetTotals = calculateBudgetTotals(budgets, categories, { excludeHidden: true });
+const actualTotals = calculateActualTotals(transactions, categories, { excludeHidden: true });
+```
+
+- **Components Using**: Budgets.tsx, BudgetComparison.tsx, BudgetDebugger.tsx, backend budgets.ts
+- **Test Coverage**: Comprehensive unit tests with 37 test cases covering edge cases and options
+
 ## Frontend Architecture
 
 ### Key Components
@@ -541,6 +582,16 @@ const autoCategorizeService = new AutoCategorizeService(dataService, categorySer
 2. Update shared types if exposed to frontend
 3. Consider migration for existing data
 4. Update tests if critical path
+
+### To Implement Budget Calculations
+1. **Always use shared utilities** from `shared/utils/budgetCalculations.ts`
+2. **Never duplicate filtering logic** - especially for hidden categories
+3. **Key functions to use**:
+   - `getHiddenCategoryIds(categories)` - for hidden category filtering
+   - `calculateBudgetTotals(budgets, categories, options)` - for budget aggregation
+   - `calculateActualTotals(transactions, categories, options)` - for transaction totals
+4. **Common options**: `{ excludeHidden: true, excludeChildren: false, excludeTransfers: true }`
+5. **Add tests** if creating new calculation patterns
 
 ## Testing Strategy
 

@@ -3,6 +3,7 @@ import { Paper, Title, Text, Stack, Group, Badge, Divider } from '@mantine/core'
 import type { BudgetComparisonResponse } from '../../lib/api';
 import type { Category, BudgetComparison as BudgetComparisonType } from '../../../../shared/types';
 import { formatCurrency } from '../../utils/formatters';
+import { getChildCategoryIds, getParentCategoryIds } from '../../../../shared/utils/budgetCalculations';
 
 interface BudgetDebuggerProps {
   comparison: BudgetComparisonResponse;
@@ -11,10 +12,10 @@ interface BudgetDebuggerProps {
 
 export function BudgetDebugger({ comparison, categories }: BudgetDebuggerProps) {
   const debugData = useMemo(() => {
-    // Build category hierarchy map
+    // Build category hierarchy map using shared utilities
     const categoryMap = new Map(categories.map(cat => [cat.id, cat]));
-    const childCategoryIds = new Set(categories.filter(cat => cat.parentId).map(cat => cat.id));
-    const parentCategoryIds = new Set(categories.filter(cat => !cat.parentId).map(cat => cat.id));
+    const childCategoryIds = getChildCategoryIds(categories);
+    const parentCategoryIds = getParentCategoryIds(categories);
 
     // Analyze each comparison
     const comparisonAnalysis = comparison.comparisons.map(comp => {
