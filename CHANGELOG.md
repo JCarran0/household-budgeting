@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.15.0](https://github.com/JCarran0/household-budgeting/compare/v1.14.0...v1.15.0) (2025-09-13)
+
+
+### Features
+
+* **budgets:** add debug component for troubleshooting calculation issues ([343965b](https://github.com/JCarran0/household-budgeting/commit/343965bbed0adfcaee642018a07222e415f30c44))
+
+
+### Bug Fixes
+
+* **budgets:** remove animated striped progress bars in budget comparison ([c3c20f6](https://github.com/JCarran0/household-budgeting/commit/c3c20f6f7bec5d8b358dd7e8a8e59cdb54e5e2fc))
+
 ## [1.14.0](https://github.com/JCarran0/household-budgeting/compare/v1.13.0...v1.14.0) (2025-09-13)
 
 
