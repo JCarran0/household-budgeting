@@ -55,8 +55,8 @@ import {
 } from '@tabler/icons-react';
 import { format, subMonths, startOfMonth, endOfMonth, startOfYear, endOfYear, addMonths } from 'date-fns';
 import { api } from '../lib/api';
-import type { MonthlyBudget } from '../../../shared/types';
 import { TransactionPreviewTrigger } from '../components/transactions';
+import { calculateBudgetTotals } from '../../../shared/utils/budgetCalculations';
 
 // Color palette for charts (used for both income and expenses)
 const COLORS = [
@@ -238,6 +238,12 @@ export function Reports() {
   const { data: projectionsData, isLoading: projectionsLoading } = useQuery({
     queryKey: ['reports', 'projections'],
     queryFn: () => api.getProjections(6),
+  });
+
+  // Fetch categories for standardized calculations
+  const { data: categories } = useQuery({
+    queryKey: ['categories'],
+    queryFn: api.getCategories,
   });
 
   // Fetch budget data for comparison dashboards
@@ -614,27 +620,21 @@ export function Reports() {
 
   // Process budget vs actual data for dashboards
   const budgetVsActualData = useMemo(() => {
-    if (!budgetMonthlyData || !cashFlowData?.summary) return null;
-    
+    if (!budgetMonthlyData || !cashFlowData?.summary || !categories) return null;
+
     return budgetMonthlyData.map(monthData => {
       const cashFlowMonth = cashFlowData.summary?.find(cf => cf.month === monthData.month);
-      
-      // Calculate total budgeted amounts by type
-      const budgetedIncome = monthData.budgets
-        .filter((b: MonthlyBudget) => b.categoryId?.startsWith('INCOME'))
-        .reduce((sum: number, b: MonthlyBudget) => sum + b.amount, 0);
-      
-      const budgetedExpenses = monthData.budgets
-        .filter((b: MonthlyBudget) => !b.categoryId?.startsWith('INCOME') && !b.categoryId?.includes('TRANSFER'))
-        .reduce((sum: number, b: MonthlyBudget) => sum + b.amount, 0);
-      
+
+      // Use standardized calculation method for budget totals
+      const budgetTotals = calculateBudgetTotals(monthData.budgets, categories, { excludeHidden: false });
+
       return {
         month: format(new Date(monthData.month + '-01'), 'MMM'),
-        budgetedIncome,
+        budgetedIncome: budgetTotals.income,
         actualIncome: cashFlowMonth?.income || 0,
-        budgetedExpenses,
+        budgetedExpenses: budgetTotals.expense,
         actualExpenses: cashFlowMonth?.expenses || 0,
-        budgetedNetFlow: budgetedIncome - budgetedExpenses,
+        budgetedNetFlow: budgetTotals.income - budgetTotals.expense,
         actualNetFlow: cashFlowMonth?.netFlow || 0,
         budgets: monthData.budgets
       };
@@ -642,7 +642,7 @@ export function Reports() {
       const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
       return months.indexOf(a.month) - months.indexOf(b.month);
     });
-  }, [budgetMonthlyData, cashFlowData]);
+  }, [budgetMonthlyData, cashFlowData, categories]);
 
 
   const isLoading = ytdLoading || cashFlowLoading || trendsLoading || breakdownLoading || projectionsLoading || budgetLoading;
