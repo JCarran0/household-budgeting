@@ -250,11 +250,16 @@ export function Reports() {
   const { data: budgetMonthlyData, isLoading: budgetLoading } = useQuery({
     queryKey: ['budgetComparison', startMonth, endMonth],
     queryFn: async () => {
-      // Get budget data for each month in range
+      // Get budget data for each month in range using proper date parsing
       const months = [];
-      let currentMonth = new Date(startMonth + '-01');
-      const endMonthDate = new Date(endMonth + '-01');
-      
+
+      // Parse months properly - split by dash and create date
+      const [startYear, startMonthNum] = startMonth.split('-').map(Number);
+      const [endYear, endMonthNum] = endMonth.split('-').map(Number);
+
+      let currentMonth = new Date(startYear, startMonthNum - 1, 1); // Month is 0-based
+      const endMonthDate = new Date(endYear, endMonthNum - 1, 1);
+
       while (currentMonth <= endMonthDate) {
         months.push(format(currentMonth, 'yyyy-MM'));
         currentMonth = addMonths(currentMonth, 1);
@@ -593,43 +598,79 @@ export function Reports() {
   // Use the calculated pie chart data
   const pieChartData = calculatedPieChartData;
 
-  // Process spending trends by month (moved here to be available for other useMemo hooks)
-  const trendsByMonth = new Map<string, { [category: string]: number }>();
-  trendsData?.trends?.forEach(trend => {
-    if (!trendsByMonth.has(trend.month)) {
-      trendsByMonth.set(trend.month, {});
-    }
-    const monthData = trendsByMonth.get(trend.month)!;
-    monthData[trend.categoryName] = trend.amount;
-  });
+  // Process spending trends by month with consistent timeline
+  const spendingTrendsData = useMemo(() => {
+    // Generate expected months based on time range using proper date parsing
+    const expectedMonths = [];
 
-  const spendingTrendsData = Array.from(trendsByMonth.entries())
-    .map(([month, categories]) => ({
-      month: format(new Date(month + '-01'), 'MMM'),
-      ...categories,
-    }))
-    .sort((a, b) => {
-      const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-      return months.indexOf(a.month) - months.indexOf(b.month);
+    // Parse months properly - split by dash and create date
+    const [startYear, startMonthNum] = startMonth.split('-').map(Number);
+    const [endYear, endMonthNum] = endMonth.split('-').map(Number);
+
+    const startMonthDate = new Date(startYear, startMonthNum - 1, 1); // Month is 0-based
+    const endMonthDate = new Date(endYear, endMonthNum - 1, 1);
+
+    let currentMonth = startMonthDate;
+    while (currentMonth <= endMonthDate) {
+      expectedMonths.push(format(currentMonth, 'yyyy-MM'));
+      currentMonth = addMonths(currentMonth, 1);
+    }
+
+    // Process trends data by month
+    const trendsByMonth = new Map<string, { [category: string]: number }>();
+    trendsData?.trends?.forEach(trend => {
+      if (!trendsByMonth.has(trend.month)) {
+        trendsByMonth.set(trend.month, {});
+      }
+      const monthData = trendsByMonth.get(trend.month)!;
+      monthData[trend.categoryName] = trend.amount;
     });
 
+    // Get all unique categories
+    const allCategories = new Set<string>();
+    trendsData?.trends?.forEach(trend => allCategories.add(trend.categoryName));
+
+    // Create data with all expected months
+    return expectedMonths.map(month => {
+      const monthData = trendsByMonth.get(month) || {};
+      const [year, monthNum] = month.split('-').map(Number);
+      const result: { month: string; [category: string]: number | string } = {
+        month: format(new Date(year, monthNum - 1, 1), 'MMM'),
+      };
+
+      // Add all categories with 0 default
+      allCategories.forEach(category => {
+        result[category] = monthData[category] || 0;
+      });
+
+      return result;
+    });
+  }, [trendsData, startMonth, endMonth]);
+
   // Get unique categories for the trends chart (moved here to be available for other useMemo hooks)
-  const uniqueCategories = new Set<string>();
-  trendsData?.trends?.forEach(trend => uniqueCategories.add(trend.categoryName));
-  const categoryNames = Array.from(uniqueCategories).slice(0, 8); // Limit to top 8 for visibility
+  const categoryNames = useMemo(() => {
+    const uniqueCategories = new Set<string>();
+    trendsData?.trends?.forEach(trend => uniqueCategories.add(trend.categoryName));
+    return Array.from(uniqueCategories).slice(0, 8); // Limit to top 8 for visibility
+  }, [trendsData]);
 
   // Process budget vs actual data for dashboards
   const budgetVsActualData = useMemo(() => {
     if (!budgetMonthlyData || !cashFlowData?.summary || !categories) return null;
 
-    return budgetMonthlyData.map(monthData => {
+    const result = budgetMonthlyData.map(monthData => {
       const cashFlowMonth = cashFlowData.summary?.find(cf => cf.month === monthData.month);
 
-      // Use standardized calculation method for budget totals
-      const budgetTotals = calculateBudgetTotals(monthData.budgets, categories, { excludeHidden: false });
+      // Only calculate budget totals if there are actual budgets for this month
+      const budgetTotals = monthData.budgets.length > 0
+        ? calculateBudgetTotals(monthData.budgets, categories, { excludeHidden: false })
+        : { income: 0, expense: 0 }; // Show 0 for months without budgets
 
       return {
-        month: format(new Date(monthData.month + '-01'), 'MMM'),
+        month: (() => {
+          const [year, monthNum] = monthData.month.split('-').map(Number);
+          return format(new Date(year, monthNum - 1, 1), 'MMM');
+        })(),
         budgetedIncome: budgetTotals.income,
         actualIncome: cashFlowMonth?.income || 0,
         budgetedExpenses: budgetTotals.expense,
@@ -642,8 +683,51 @@ export function Reports() {
       const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
       return months.indexOf(a.month) - months.indexOf(b.month);
     });
+
+    return result;
   }, [budgetMonthlyData, cashFlowData, categories]);
 
+
+  // Process data for charts with consistent timeline
+  const cashFlowChartData = useMemo(() => {
+    // Generate expected months based on time range using proper date parsing
+    const expectedMonths = [];
+
+    // Parse months properly - split by dash and create date
+    const [startYear, startMonthNum] = startMonth.split('-').map(Number);
+    const [endYear, endMonthNum] = endMonth.split('-').map(Number);
+
+    const startMonthDate = new Date(startYear, startMonthNum - 1, 1); // Month is 0-based
+    const endMonthDate = new Date(endYear, endMonthNum - 1, 1);
+
+    let currentMonth = startMonthDate;
+    while (currentMonth <= endMonthDate) {
+      expectedMonths.push(format(currentMonth, 'yyyy-MM'));
+      currentMonth = addMonths(currentMonth, 1);
+    }
+
+    // Create data with all expected months
+    const dataMap = new Map();
+    cashFlowData?.summary?.forEach(item => {
+      dataMap.set(item.month, {
+        income: item.income,
+        expenses: item.expenses,
+        netFlow: item.netFlow,
+      });
+    });
+
+    const result = expectedMonths.map(month => {
+      const [year, monthNum] = month.split('-').map(Number);
+      return {
+        month: format(new Date(year, monthNum - 1, 1), 'MMM'),
+        income: dataMap.get(month)?.income || 0,
+        expenses: dataMap.get(month)?.expenses || 0,
+        netFlow: dataMap.get(month)?.netFlow || 0,
+      };
+    });
+
+    return result;
+  }, [cashFlowData, startMonth, endMonth]);
 
   const isLoading = ytdLoading || cashFlowLoading || trendsLoading || breakdownLoading || projectionsLoading || budgetLoading;
 
@@ -654,17 +738,6 @@ export function Reports() {
       </Center>
     );
   }
-
-  // Process data for charts
-  const cashFlowChartData = (cashFlowData?.summary?.map(item => ({
-    month: format(new Date(item.month + '-01'), 'MMM'),
-    income: item.income,
-    expenses: item.expenses,
-    netFlow: item.netFlow,
-  })) || []).sort((a, b) => {
-    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-    return months.indexOf(a.month) - months.indexOf(b.month);
-  });
 
   const projectionsChartData = projectionsData?.projections?.map(item => ({
     month: format(new Date(item.month + '-01'), 'MMM'),

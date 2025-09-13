@@ -119,8 +119,10 @@ export class ReportService {
       const months = this.getMonthRange(startMonth, endMonth);
 
       for (const month of months) {
-        const monthStart = startOfMonth(new Date(month + '-01')).toISOString().split('T')[0];
-        const monthEnd = endOfMonth(new Date(month + '-01')).toISOString().split('T')[0];
+        // Parse month properly
+        const [year, monthNum] = month.split('-').map(Number);
+        const monthStart = startOfMonth(new Date(year, monthNum - 1, 1)).toISOString().split('T')[0];
+        const monthEnd = endOfMonth(new Date(year, monthNum - 1, 1)).toISOString().split('T')[0];
 
         // Filter transactions for this month (excluding hidden categories)
         const monthTransactions = transactions.filter(t => 
@@ -526,12 +528,14 @@ export class ReportService {
       const summary: CashFlowSummary[] = [];
 
       for (const month of months) {
-        const monthStart = startOfMonth(new Date(month + '-01')).toISOString().split('T')[0];
-        const monthEnd = endOfMonth(new Date(month + '-01')).toISOString().split('T')[0];
+        // Parse month properly
+        const [year, monthNum] = month.split('-').map(Number);
+        const monthStart = startOfMonth(new Date(year, monthNum - 1, 1)).toISOString().split('T')[0];
+        const monthEnd = endOfMonth(new Date(year, monthNum - 1, 1)).toISOString().split('T')[0];
 
-        const monthTransactions = transactions.filter(t => 
-          t.date >= monthStart && 
-          t.date <= monthEnd && 
+        const monthTransactions = transactions.filter(t =>
+          t.date >= monthStart &&
+          t.date <= monthEnd &&
           !t.isHidden &&
           !t.pending &&
           (!t.categoryId || !hiddenCategoryIds.has(t.categoryId)) // Exclude hidden categories
@@ -750,8 +754,13 @@ export class ReportService {
    */
   private getMonthRange(startMonth: string, endMonth: string): string[] {
     const months: string[] = [];
-    let current = new Date(startMonth + '-01');
-    const end = new Date(endMonth + '-01');
+
+    // Parse months properly - split by dash and create date
+    const [startYear, startMonthNum] = startMonth.split('-').map(Number);
+    const [endYear, endMonthNum] = endMonth.split('-').map(Number);
+
+    let current = new Date(startYear, startMonthNum - 1, 1); // Month is 0-based
+    const end = new Date(endYear, endMonthNum - 1, 1);
 
     while (current <= end) {
       months.push(format(current, 'yyyy-MM'));
