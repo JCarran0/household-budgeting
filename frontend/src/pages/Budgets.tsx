@@ -232,17 +232,49 @@ export function Budgets() {
   // Calculate income and expense budgets separately
   const budgetedIncome = useMemo(() => {
     if (!budgetData?.budgets || !categories) return 0;
+
+    // Create a set of hidden category IDs for efficient lookup
+    const hiddenCategoryIds = new Set<string>();
+    categories.forEach(cat => {
+      if (cat.isHidden) {
+        hiddenCategoryIds.add(cat.id);
+      } else if (cat.parentId) {
+        const parent = categories.find(p => p.id === cat.parentId);
+        if (parent?.isHidden) {
+          hiddenCategoryIds.add(cat.id);
+        }
+      }
+    });
+
     return budgetData.budgets
-      .filter(b => isIncomeCategoryWithCategories(b.categoryId, categories))
+      .filter(b =>
+        isIncomeCategoryWithCategories(b.categoryId, categories) &&
+        !hiddenCategoryIds.has(b.categoryId) // Exclude hidden categories
+      )
       .reduce((sum, b) => sum + b.amount, 0);
   }, [budgetData, categories]);
   
   const budgetedSpending = useMemo(() => {
     if (!budgetData?.budgets || !categories) return 0;
+
+    // Create a set of hidden category IDs for efficient lookup
+    const hiddenCategoryIds = new Set<string>();
+    categories.forEach(cat => {
+      if (cat.isHidden) {
+        hiddenCategoryIds.add(cat.id);
+      } else if (cat.parentId) {
+        const parent = categories.find(p => p.id === cat.parentId);
+        if (parent?.isHidden) {
+          hiddenCategoryIds.add(cat.id);
+        }
+      }
+    });
+
     return budgetData.budgets
       .filter(b =>
         !isIncomeCategoryWithCategories(b.categoryId, categories) &&
-        !isTransferCategory(b.categoryId)
+        !isTransferCategory(b.categoryId) &&
+        !hiddenCategoryIds.has(b.categoryId) // Exclude hidden categories
       )
       .reduce((sum, b) => sum + b.amount, 0);
   }, [budgetData, categories]);
