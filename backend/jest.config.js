@@ -19,5 +19,6 @@ module.exports = {
   moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/src/$1',
     '^@shared/(.*)$': '<rootDir>/../shared/$1',
+    '@octokit/rest': '<rootDir>/src/__tests__/__mocks__/@octokit/rest.ts',
   },
 };

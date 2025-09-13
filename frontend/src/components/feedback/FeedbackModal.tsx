@@ -104,10 +104,10 @@ export function FeedbackModal({ opened, onClose }: FeedbackModalProps) {
     }
   }, [opened]);
 
-  // Update description template when feedback type changes
+  // Clear description when feedback type changes if it was a template
   useEffect(() => {
-    if (description === '' || description === BUG_TEMPLATE || description === FEATURE_TEMPLATE) {
-      setDescription(feedbackType === 'bug' ? BUG_TEMPLATE : FEATURE_TEMPLATE);
+    if (description === BUG_TEMPLATE || description === FEATURE_TEMPLATE) {
+      setDescription('');
     }
   }, [feedbackType, description]);
 
@@ -256,7 +256,7 @@ export function FeedbackModal({ opened, onClose }: FeedbackModalProps) {
           {/* Helpful Guidelines */}
           <Alert
             variant="light"
-            color={feedbackType === 'bug' ? 'red' : 'blue'}
+            color={feedbackType === 'bug' ? 'orange' : 'blue'}
             title={feedbackType === 'bug' ? 'Bug Report Guidelines' : 'Feature Request Guidelines'}
             icon={<IconInfoCircle size={16} />}
           >
@@ -316,12 +316,14 @@ export function FeedbackModal({ opened, onClose }: FeedbackModalProps) {
           {feedbackType === 'bug' && (
             <div>
               <Group justify="space-between" align="center" mb="xs">
-                <Text size="sm" fw={500}>
-                  Application State
-                  <Badge size="xs" variant="light" color="blue" ml="xs">
+                <Group gap="xs" align="center">
+                  <Text size="sm" fw={500}>
+                    Application State
+                  </Text>
+                  <Badge size="xs" variant="light" color="blue">
                     Auto-captured
                   </Badge>
-                </Text>
+                </Group>
                 <Tooltip label={showStatePreview ? 'Hide details' : 'Show details'}>
                   <ActionIcon
                     variant="subtle"
