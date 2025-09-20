@@ -15,7 +15,7 @@ import { CategoryCSVParser, ParsedCategory } from '../utils/csvImport/CategoryCS
 import { TransactionCSVParser, ParsedTransaction } from '../utils/csvImport/TransactionCSVParser';
 import { MappingCSVParser, ParsedMapping } from '../utils/csvImport/MappingCSVParser';
 import { TransactionMatcher, TransactionMatch } from './transactionMatcher';
-import { Category } from '../../../shared/types';
+import { Category } from '../shared/types';
 
 /**
  * Unified service for handling all CSV imports

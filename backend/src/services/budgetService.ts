@@ -1,11 +1,11 @@
 import { v4 as uuidv4 } from 'uuid';
-import { MonthlyBudget, Category, BudgetType } from '../../../shared/types';
+import { MonthlyBudget, Category, BudgetType } from '../shared/types';
 import { DataService } from './dataService';
-import { 
+import {
   createCategoryLookup,
   getBudgetType,
   isBudgetableCategory
-} from '../../../shared/utils/categoryHelpers';
+} from '../shared/utils/categoryHelpers';
 
 // Stored budget structure with user isolation
 export interface StoredBudget extends MonthlyBudget {

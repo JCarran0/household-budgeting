@@ -1,6 +1,6 @@
 import { CategoryService } from '../categoryService';
 import { InMemoryDataService } from '../dataService';
-import { Category } from '../../../../shared/types';
+import { Category } from '../../shared/types';
 
 describe('CategoryService', () => {
   let categoryService: CategoryService;

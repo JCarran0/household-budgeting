@@ -6,7 +6,7 @@
 import request from 'supertest';
 import app from '../../index';
 import { authService, dataService } from '../../services';
-import type { Transaction } from '../../../../shared/types';
+import type { Transaction } from '../../shared/types';
 
 
 describe('Transaction CSV Export', () => {

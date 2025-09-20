@@ -6,7 +6,7 @@
 import { ReportService } from '../../services/reportService';
 import { DataService } from '../../services/dataService';
 import { StoredTransaction } from '../../services/transactionService';
-import { Category } from '../../../../shared/types';
+import { Category } from '../../shared/types';
 
 describe('YTD Calculation - Complete Month Logic', () => {
   let reportService: ReportService;

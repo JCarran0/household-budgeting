@@ -7,7 +7,7 @@
 import { v4 as uuidv4 } from 'uuid';
 import { DataService } from './dataService';
 import { StoredTransaction } from './transactionService';
-import { AutoCategorizeRule, Category } from '../../../shared/types';
+import { AutoCategorizeRule, Category } from '../shared/types';
 import { CategoryService } from './categoryService';
 
 export interface StoredAutoCategorizeRule extends Omit<AutoCategorizeRule, 'patterns'> {

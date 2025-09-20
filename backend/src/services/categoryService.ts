@@ -1,4 +1,4 @@
-import { Category } from '../../../shared/types';
+import { Category } from '../shared/types';
 import { DataService } from './dataService';
 import { PLAID_CATEGORIES } from '../constants/plaidCategories';
 import { BudgetService } from './budgetService';

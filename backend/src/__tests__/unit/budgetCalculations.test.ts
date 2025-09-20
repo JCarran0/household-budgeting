@@ -15,8 +15,8 @@ import {
   getBudgetableTransactions,
   shouldExcludeCategory,
   type BudgetTotals
-} from '../../../../shared/utils/budgetCalculations';
-import { Category, MonthlyBudget, Transaction } from '../../../../shared/types';
+} from '../../shared/utils/budgetCalculations';
+import { Category, MonthlyBudget, Transaction } from '../../shared/types';
 
 describe('Budget Calculation Utilities', () => {
   const mockCategories: Category[] = [
@@ -428,17 +428,17 @@ describe('Budget Calculation Utilities', () => {
         const budgetable = getBudgetableTransactions(mockTransactions, mockCategories);
 
         expect(budgetable.length).toBe(7); // 9 total - 1 transfer - 1 hidden = 7
-        expect(budgetable.find(t => t.categoryId === 'TRANSFER_IN')).toBeUndefined();
-        expect(budgetable.find(t => t.isHidden)).toBeUndefined();
+        expect(budgetable.find((t: Transaction) => t.categoryId === 'TRANSFER_IN')).toBeUndefined();
+        expect(budgetable.find((t: Transaction) => t.isHidden)).toBeUndefined();
       });
 
       test('should include both income and expense transactions', () => {
         const budgetable = getBudgetableTransactions(mockTransactions, mockCategories);
 
-        expect(budgetable.find(t => t.categoryId === 'INCOME')).toBeTruthy();
-        expect(budgetable.find(t => t.categoryId === 'CUSTOM_SALARY')).toBeTruthy();
-        expect(budgetable.find(t => t.categoryId === 'FOOD_AND_DRINK')).toBeTruthy();
-        expect(budgetable.find(t => t.categoryId === 'ENTERTAINMENT')).toBeTruthy();
+        expect(budgetable.find((t: Transaction) => t.categoryId === 'INCOME')).toBeTruthy();
+        expect(budgetable.find((t: Transaction) => t.categoryId === 'CUSTOM_SALARY')).toBeTruthy();
+        expect(budgetable.find((t: Transaction) => t.categoryId === 'FOOD_AND_DRINK')).toBeTruthy();
+        expect(budgetable.find((t: Transaction) => t.categoryId === 'ENTERTAINMENT')).toBeTruthy();
       });
     });
 

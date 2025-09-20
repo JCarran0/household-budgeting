@@ -3,7 +3,7 @@
  * Tests that transfer transactions are properly filtered from income/expense views
  */
 
-import { isTransferCategory } from '../../../../shared/utils/categoryHelpers';
+import { isTransferCategory } from '../../shared/utils/categoryHelpers';
 
 describe('Transfer Category Detection', () => {
   describe('isTransferCategory', () => {

@@ -1,4 +1,4 @@
-import { Category } from '../../../shared/types';
+import { Category } from '../shared/types';
 import { StorageAdapter, StorageFactory } from './storage';
 
 export interface User {

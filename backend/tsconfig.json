@@ -28,16 +28,10 @@
     "emitDecoratorMetadata": true,
     "experimentalDecorators": true,
     "types": ["node", "jest"],
-    "baseUrl": ".",
-    "paths": {
-      "@/*": ["src/*"],
-      "@shared/*": ["../shared/*"]
-    }
+    "baseUrl": "."
   },
   "include": [
-    "src/**/*",
-    "../shared/types/**/*",
-    "../shared/utils/**/*"
+    "src/**/*"
   ],
   "exclude": [
     "node_modules",

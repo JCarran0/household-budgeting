@@ -19,6 +19,12 @@ module.exports = {
   moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/src/$1',
     '^@shared/(.*)$': '<rootDir>/../shared/$1',
+    // Map all possible relative shared paths to the actual shared directory
+    '^\\.\\./shared/(.*)$': '<rootDir>/../shared/$1',
+    '^\\.\\./\\.\\./shared/(.*)$': '<rootDir>/../shared/$1',
+    '^\\.\\./\\.\\./\\.\\./shared/(.*)$': '<rootDir>/../shared/$1',
+    // Also handle absolute shared paths that might appear
+    '^shared/(.*)$': '<rootDir>/../shared/$1',
     '@octokit/rest': '<rootDir>/src/__tests__/__mocks__/@octokit/rest.ts',
   },
 };

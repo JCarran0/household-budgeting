@@ -2,7 +2,7 @@ import { Router, Request, Response } from 'express';
 import { feedbackService } from '../services/feedbackService';
 import { authenticate, validateBody, rateLimitAuth } from '../middleware/authMiddleware';
 import { feedbackSchema } from '../validators/feedbackValidators';
-import type { FeedbackSubmission } from '../../../shared/types';
+import type { FeedbackSubmission } from '../shared/types';
 
 const router = Router();
 

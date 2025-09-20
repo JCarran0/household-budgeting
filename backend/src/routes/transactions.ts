@@ -6,7 +6,7 @@ import { Router, Request, Response } from 'express';
 import { transactionService, accountService, importService } from '../services';
 import { authMiddleware } from '../middleware/authMiddleware';
 import { z } from 'zod';
-import { calculateIncome, calculateExpenses, calculateNetCashFlow } from '../../../shared/utils/transactionCalculations';
+import { calculateIncome, calculateExpenses, calculateNetCashFlow } from '../shared/utils/transactionCalculations';
 
 const router = Router();
 

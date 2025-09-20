@@ -3,7 +3,7 @@ import type {
   FeedbackSubmission,
   FeedbackResponse,
   ApplicationState
-} from '../../../shared/types';
+} from '../shared/types';
 
 interface GitHubConfig {
   token: string;

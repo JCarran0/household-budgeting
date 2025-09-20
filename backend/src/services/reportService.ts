@@ -6,9 +6,9 @@
 
 import { DataService } from './dataService';
 import { StoredTransaction } from './transactionService';
-import { Category } from '../../../shared/types';
+import { Category } from '../shared/types';
 import { format, startOfMonth, endOfMonth, subMonths, addMonths } from 'date-fns';
-import { calculateIncome, calculateExpenses, calculateNetCashFlow, calculateSavingsRate } from '../../../shared/utils/transactionCalculations';
+import { calculateIncome, calculateExpenses, calculateNetCashFlow, calculateSavingsRate } from '../shared/utils/transactionCalculations';
 
 // Report types
 export interface SpendingTrend {

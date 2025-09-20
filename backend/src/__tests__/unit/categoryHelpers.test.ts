@@ -12,8 +12,8 @@ import {
   isExpenseCategoryHierarchical,
   isIncomeCategoryWithCategories,
   isExpenseCategoryWithCategories
-} from '../../../../shared/utils/categoryHelpers';
-import { Category } from '../../../../shared/types';
+} from '../../shared/utils/categoryHelpers';
+import { Category } from '../../shared/types';
 
 describe('Category Helper Functions', () => {
   const mockCategories: Category[] = [

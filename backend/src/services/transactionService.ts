@@ -9,7 +9,7 @@ import { PlaidService, Transaction as PlaidTransaction } from './plaidService';
 import { DataService } from './dataService';
 import { StoredAccount } from './accountService';
 import { encryptionService } from '../utils/encryption';
-import { isTransferCategory } from '../../../shared/utils/categoryHelpers';
+import { isTransferCategory } from '../shared/utils/categoryHelpers';
 
 // Transaction status
 export type TransactionStatus = 'posted' | 'pending' | 'removed';

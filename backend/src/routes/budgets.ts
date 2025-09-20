@@ -2,7 +2,7 @@ import { Router, Request, Response } from 'express';
 import { z } from 'zod';
 import { budgetService, categoryService } from '../services';
 import { authMiddleware } from '../middleware/authMiddleware';
-import { getHiddenCategoryIds } from '../../../shared/utils/budgetCalculations';
+import { getHiddenCategoryIds } from '../shared/utils/budgetCalculations';
 
 const router = Router();
 
