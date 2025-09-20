@@ -90,30 +90,7 @@ if [ -f "$DEPLOYMENT_DIR/CHANGELOG.md" ]; then
     cp "$DEPLOYMENT_DIR/CHANGELOG.md" "$APP_DIR/CHANGELOG.md"
 fi
 
-# Deploy shared utilities to /home/appuser/app/shared (for backend imports)
-if [ -d "$DEPLOYMENT_DIR/shared" ]; then
-    echo "📚 Deploying shared utilities..."
-    rm -rf "$APP_DIR/shared.old"
-    [ -d "$APP_DIR/shared" ] && mv "$APP_DIR/shared" "$APP_DIR/shared.old"
-    mv "$DEPLOYMENT_DIR/shared" "$APP_DIR/shared"
-    
-    # Validate shared utilities deployment
-    echo "🔍 Validating shared utilities deployment..."
-    test -d "$APP_DIR/shared/utils" || (echo "❌ Shared utils directory missing after deployment" && exit 1)
-    test -f "$APP_DIR/shared/utils/categoryHelpers.js" || (echo "❌ CategoryHelpers missing after deployment" && exit 1)
-    
-    # Validate all required category helper functions are present
-    echo "  Checking for required functions in categoryHelpers.js..."
-    grep -q "createCategoryLookup" "$APP_DIR/shared/utils/categoryHelpers.js" || (echo "❌ createCategoryLookup function missing after deployment" && exit 1)
-    grep -q "isBudgetableCategory" "$APP_DIR/shared/utils/categoryHelpers.js" || (echo "❌ isBudgetableCategory function missing after deployment" && exit 1)
-    grep -q "getBudgetType" "$APP_DIR/shared/utils/categoryHelpers.js" || (echo "❌ getBudgetType function missing after deployment" && exit 1)
-    grep -q "isIncomeCategoryHierarchical" "$APP_DIR/shared/utils/categoryHelpers.js" || (echo "❌ isIncomeCategoryHierarchical function missing after deployment" && exit 1)
-    grep -q "isExpenseCategoryHierarchical" "$APP_DIR/shared/utils/categoryHelpers.js" || (echo "❌ isExpenseCategoryHierarchical function missing after deployment" && exit 1)
-    
-    echo "✅ Shared utilities validation passed"
-else
-    echo "⚠️  Warning: No shared utilities found in deployment package"
-fi
+# Note: Shared utilities are now bundled within the backend dist directory
 
 # Validate CHANGELOG.md deployment
 if [ -f "$APP_DIR/CHANGELOG.md" ]; then

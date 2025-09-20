@@ -42,18 +42,14 @@ jobs:
       - name: Create deployment package
         run: |
           # Create package structure
-          mkdir -p deployment/backend deployment/frontend deployment/shared
-          
-          # Copy backend - preserve directory structure
+          mkdir -p deployment/backend deployment/frontend
+
+          # Copy backend - preserve directory structure (shared utilities now bundled within)
           cp -r backend/dist deployment/backend/
           cp backend/package*.json deployment/backend/
 
           # Copy CHANGELOG.md to deployment root for changelog endpoint
           cp CHANGELOG.md deployment/
-
-          # Copy shared utilities to root level for import compatibility
-          # This ensures ../../../shared/utils/ imports work correctly in production
-          cp -r backend/dist/shared/* deployment/shared/
           
           # Copy frontend
           cp -r frontend/dist/* deployment/frontend/
@@ -87,19 +83,19 @@ jobs:
           # Validate deployment package structure
           echo "🔍 Validating deployment package..."
           test -f deployment/backend/dist/index.js || (echo "❌ Backend entry point missing" && exit 1)
-          test -d deployment/shared/utils || (echo "❌ Shared utilities directory missing" && exit 1)
-          test -f deployment/shared/utils/categoryHelpers.js || (echo "❌ CategoryHelpers missing from shared utilities" && exit 1)
+          test -d deployment/backend/dist/shared/utils || (echo "❌ Shared utilities directory missing from backend" && exit 1)
+          test -f deployment/backend/dist/shared/utils/categoryHelpers.js || (echo "❌ CategoryHelpers missing from backend shared utilities" && exit 1)
           test -f deployment/CHANGELOG.md || (echo "❌ CHANGELOG.md missing from deployment package" && exit 1)
-          
-          # Validate all required category helper functions are present
-          echo "  Checking for required functions in categoryHelpers.js..."
-          grep -q "createCategoryLookup" deployment/shared/utils/categoryHelpers.js || (echo "❌ createCategoryLookup function missing" && exit 1)
-          grep -q "isBudgetableCategory" deployment/shared/utils/categoryHelpers.js || (echo "❌ isBudgetableCategory function missing" && exit 1)
-          grep -q "getBudgetType" deployment/shared/utils/categoryHelpers.js || (echo "❌ getBudgetType function missing" && exit 1)
-          grep -q "isIncomeCategoryHierarchical" deployment/shared/utils/categoryHelpers.js || (echo "❌ isIncomeCategoryHierarchical function missing" && exit 1)
-          grep -q "isExpenseCategoryHierarchical" deployment/shared/utils/categoryHelpers.js || (echo "❌ isExpenseCategoryHierarchical function missing" && exit 1)
-          
-          echo "✅ Deployment package validation passed"
+
+          # Validate all required category helper functions are present in backend's bundled shared utilities
+          echo "  Checking for required functions in backend's bundled categoryHelpers.js..."
+          grep -q "createCategoryLookup" deployment/backend/dist/shared/utils/categoryHelpers.js || (echo "❌ createCategoryLookup function missing" && exit 1)
+          grep -q "isBudgetableCategory" deployment/backend/dist/shared/utils/categoryHelpers.js || (echo "❌ isBudgetableCategory function missing" && exit 1)
+          grep -q "getBudgetType" deployment/backend/dist/shared/utils/categoryHelpers.js || (echo "❌ getBudgetType function missing" && exit 1)
+          grep -q "isIncomeCategoryHierarchical" deployment/backend/dist/shared/utils/categoryHelpers.js || (echo "❌ isIncomeCategoryHierarchical function missing" && exit 1)
+          grep -q "isExpenseCategoryHierarchical" deployment/backend/dist/shared/utils/categoryHelpers.js || (echo "❌ isExpenseCategoryHierarchical function missing" && exit 1)
+
+          echo "✅ Deployment package validation passed (backend is now self-contained)"
           
           # Create tarball
           tar -czf deployment.tar.gz deployment/
