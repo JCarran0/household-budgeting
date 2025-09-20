@@ -33,6 +33,7 @@ import {
   IconRefresh,
   IconFilterOff,
   IconChevronDown,
+  IconCalendar,
 } from '@tabler/icons-react';
 import { format, addMonths, subMonths, startOfMonth, parseISO } from 'date-fns';
 import { api } from '../lib/api';
@@ -40,6 +41,7 @@ import { BudgetGrid } from '../components/budgets/BudgetGrid';
 import { BudgetForm } from '../components/budgets/BudgetForm';
 import { BudgetComparison } from '../components/budgets/BudgetComparison';
 import { BudgetSummaryCards } from '../components/budgets/BudgetSummaryCards';
+import { YearlyBudgetGrid } from '../components/budgets/YearlyBudgetGrid';
 // Error boundaries available for use when needed
 // import { FinancialErrorBoundary, FormErrorBoundary, AsyncErrorBoundary } from '../components/ErrorBoundary';
 import type { MonthlyBudget } from '../../../shared/types';
@@ -89,6 +91,7 @@ export function Budgets() {
   
   const [isFormOpen, setIsFormOpen] = useState<boolean>(false);
   const [editingBudget, setEditingBudget] = useState<MonthlyBudget | null>(null);
+  const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
   const queryClient = useQueryClient();
 
   const selectedMonth = format(selectedDate, 'yyyy-MM');
@@ -156,6 +159,13 @@ export function Budgets() {
     enabled: activeTab === 'comparison' && Object.keys(actuals).length > 0,
   });
 
+  // Fetch yearly budgets
+  const { data: yearlyBudgetData, isLoading: yearlyBudgetsLoading } = useQuery({
+    queryKey: ['budgets', 'year', selectedYear],
+    queryFn: () => api.getYearlyBudgets(selectedYear),
+    enabled: activeTab === 'yearly',
+  });
+
   // Copy budgets mutation
   const copyMutation = useMutation({
     mutationFn: ({ fromMonth, toMonth }: { fromMonth: string; toMonth: string }) =>
@@ -183,6 +193,14 @@ export function Budgets() {
 
   const handleNextMonth = (): void => {
     handleDateChange(addMonths(selectedDate, 1));
+  };
+
+  const handlePreviousYear = (): void => {
+    setSelectedYear(selectedYear - 1);
+  };
+
+  const handleNextYear = (): void => {
+    setSelectedYear(selectedYear + 1);
   };
 
   // Fetch available budget months
@@ -395,6 +413,9 @@ export function Budgets() {
               <Tabs.Tab value="comparison" leftSection={<IconChartBar size={16} />}>
                 Budget vs Actual
               </Tabs.Tab>
+              <Tabs.Tab value="yearly" leftSection={<IconCalendar size={16} />}>
+                Yearly View
+              </Tabs.Tab>
             </Tabs.List>
 
             <Tabs.Panel value="budget" pt="md">
@@ -496,6 +517,58 @@ export function Budgets() {
                   No transaction data available for comparison
                 </Alert>
               )}
+            </Tabs.Panel>
+
+            <Tabs.Panel value="yearly" pt="md">
+              <Stack gap="md">
+                <Group justify="space-between">
+                  <Group>
+                    <ActionIcon onClick={handlePreviousYear} size="lg" variant="default">
+                      <IconChevronLeft size={16} />
+                    </ActionIcon>
+
+                    <Text size="lg" fw={600}>
+                      {selectedYear}
+                    </Text>
+
+                    <ActionIcon onClick={handleNextYear} size="lg" variant="default">
+                      <IconChevronRight size={16} />
+                    </ActionIcon>
+                  </Group>
+
+                  <Group>
+                    <Tooltip label="Reset to current year">
+                      <ActionIcon
+                        onClick={() => {
+                          setSelectedYear(new Date().getFullYear());
+                          notifications.show({
+                            title: 'View Reset',
+                            message: 'Reset to current year view',
+                            color: 'blue',
+                          });
+                        }}
+                        size="lg"
+                        variant="default"
+                      >
+                        <IconFilterOff size={16} />
+                      </ActionIcon>
+                    </Tooltip>
+                  </Group>
+                </Group>
+
+                {yearlyBudgetsLoading ? (
+                  <Center h={400}>
+                    <Loader size="lg" />
+                  </Center>
+                ) : (
+                  <YearlyBudgetGrid
+                    budgets={yearlyBudgetData?.budgets || []}
+                    categories={categories || []}
+                    year={selectedYear}
+                    isLoading={yearlyBudgetsLoading}
+                  />
+                )}
+              </Stack>
             </Tabs.Panel>
           </Tabs>
         </Paper>

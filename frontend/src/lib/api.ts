@@ -166,6 +166,10 @@ class ApiClient {
     this.getBudgetComparison = this.getBudgetComparison.bind(this);
     this.getBudgetHistory = this.getBudgetHistory.bind(this);
     this.deleteBudget = this.deleteBudget.bind(this);
+    this.deleteCategoryBudgets = this.deleteCategoryBudgets.bind(this);
+    this.applyRollover = this.applyRollover.bind(this);
+    this.getYearlyBudgets = this.getYearlyBudgets.bind(this);
+    this.batchUpdateBudgets = this.batchUpdateBudgets.bind(this);
 
     // Feedback methods
     this.submitFeedback = this.submitFeedback.bind(this);
@@ -522,6 +526,24 @@ class ApiClient {
       toMonth,
       actualSpent
     });
+    return data;
+  }
+
+  async getYearlyBudgets(year: number): Promise<{
+    year: number;
+    budgets: MonthlyBudget[];
+    count: number;
+  }> {
+    const { data } = await this.client.get(`/budgets/year/${year}`);
+    return data;
+  }
+
+  async batchUpdateBudgets(updates: CreateBudgetDto[]): Promise<{
+    message: string;
+    budgets: MonthlyBudget[];
+    count: number;
+  }> {
+    const { data } = await this.client.post('/budgets/batch', { updates });
     return data;
   }
 

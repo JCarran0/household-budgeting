@@ -22,6 +22,10 @@ const budgetVsActualSchema = z.object({
   actuals: z.record(z.string(), z.number())
 });
 
+const batchUpdateBudgetsSchema = z.object({
+  updates: z.array(createBudgetSchema)
+});
+
 // All routes require authentication
 router.use(authMiddleware);
 
@@ -357,6 +361,71 @@ router.post('/rollover', async (req: Request, res: Response): Promise<void> => {
     }
     console.error('Error applying rollover:', error);
     res.status(500).json({ error: 'Failed to apply rollover' });
+  }
+});
+
+// GET /api/budgets/year/:year - Get all budgets for a specific year
+router.get('/year/:year', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const userId = req.user?.userId;
+    if (!userId) {
+      res.status(401).json({ error: 'User not authenticated' });
+      return;
+    }
+
+    const year = parseInt(req.params.year, 10);
+    if (isNaN(year)) {
+      res.status(400).json({ error: 'Invalid year format. Year must be a number' });
+      return;
+    }
+
+    const budgets = await budgetService.getYearlyBudgets(year, userId);
+
+    res.json({
+      year,
+      budgets,
+      count: budgets.length
+    });
+  } catch (error) {
+    if (error instanceof Error && error.message.includes('Invalid year')) {
+      res.status(400).json({ error: error.message });
+      return;
+    }
+    console.error('Error fetching yearly budgets:', error);
+    res.status(500).json({ error: 'Failed to fetch yearly budgets' });
+  }
+});
+
+// POST /api/budgets/batch - Batch update multiple budgets
+router.post('/batch', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const userId = req.user?.userId;
+    if (!userId) {
+      res.status(401).json({ error: 'User not authenticated' });
+      return;
+    }
+
+    const validatedData = batchUpdateBudgetsSchema.parse(req.body);
+    const updatedBudgets = await budgetService.batchUpdateBudgets(validatedData.updates, userId);
+
+    res.json({
+      message: `Successfully updated ${updatedBudgets.length} budgets`,
+      budgets: updatedBudgets,
+      count: updatedBudgets.length
+    });
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      res.status(400).json({ error: 'Invalid request data', details: error.format() });
+      return;
+    }
+    if (error instanceof Error &&
+        (error.message.includes('Invalid month format') ||
+         error.message.includes('cannot be negative'))) {
+      res.status(400).json({ error: error.message });
+      return;
+    }
+    console.error('Error batch updating budgets:', error);
+    res.status(500).json({ error: 'Failed to batch update budgets' });
   }
 });
 

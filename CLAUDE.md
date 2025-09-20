@@ -194,10 +194,11 @@ scripts/               # Deployment scripts
 2. **Frontend Foundation**: React + Mantine UI, responsive design
 3. **Account Management**: Connect, sync, and disconnect bank accounts
 4. **Transaction Sync**: Full pagination, 730-day history request
-5. **Budget Tracking**: Monthly budgets with comparison views
+5. **Budget Tracking**: Monthly budgets with comparison views and yearly grid view
 6. **Security**: AES-256 encryption, rate limiting, passphrase auth
 7. **Income Analytics**: Category dashboards with income/expense toggle views
 8. **Admin Panel**: Data migration tools, system monitoring, batch operations
+9. **Yearly Budget Grid**: Comprehensive yearly budget planning with inline editing and auto-save
 
 ### 🚧 Next Priorities
 1. **Rollover categories for budget carryover**

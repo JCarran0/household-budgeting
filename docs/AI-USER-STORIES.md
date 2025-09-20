@@ -359,6 +359,28 @@
 - A user should be able to see color coding (green/yellow/red) for budget status
 - A user should be able to see budget totals and summaries
 
+### Yearly Budget View
+- A user should be able to view all their budgets for an entire year in a grid format
+- A user should be able to see category names in the first column of the yearly grid
+- A user should be able to see 12 additional columns for January through December
+- A user should be able to see existing budget values displayed in the appropriate month columns
+- A user should be able to see all categories represented in the grid, even those without budgets set
+- A user should be able to edit budget values directly in the grid cells with inline editing
+- A user should be able to save budget changes automatically without clicking a save button
+- A user should be able to see visual feedback for pending changes (highlighted cells, save indicators)
+- A user should be able to have multiple budget changes batched and saved efficiently
+- A user should be able to see budget changes debounced to prevent excessive API calls during rapid editing
+- A user should be able to navigate to the yearly view via a dedicated tab in the budgets page
+- A user should be able to select different years to view historical or future budget planning
+- A user should be limited to viewing years between 2020 and 5 years in the future for practical budgeting
+- A user should be able to see categories organized hierarchically with parent/child relationships
+- A user should be able to see category type icons (💰 for income, 💳 for expense, 🔄 for transfer)
+- A user should be able to see hidden categories marked with appropriate badges
+- A user should be able to see rollover categories marked with appropriate badges
+- A user should be able to use keyboard navigation (Enter/Escape) when editing budget values
+- A user should be able to see sticky headers for better navigation in large budget grids
+- A user should be able to see a count of pending updates with auto-save status messages
+
 ## Reporting & Analytics
 
 ### Dashboard

@@ -191,13 +191,25 @@ const income = calculateIncome(transactions);
 - **Features**: Excludes hidden categories from reports, supports date ranges
 
 #### 7. BudgetService (`backend/src/services/budgetService.ts`)
-- **Purpose**: Monthly budget management (expense categories only)
+- **Purpose**: Monthly and yearly budget management (expense categories only)
 - **Key Methods**:
   - `setBudget()`: Set monthly budget for category
   - `copyBudgets()`: Copy from previous month
   - `getBudgetComparison()`: Budget vs actual spending
   - `getBudgetVsActual()`: Returns `null` for income categories (excluded from budget tracking)
   - `hasBudgetsForCategory()`: Check if category has any budgets (for deletion protection)
+  - `getYearlyBudgets(year, userId)`: Get all budgets for a specific year
+  - `batchUpdateBudgets(updates[], userId)`: Efficiently update multiple budgets at once
+- **Yearly Budget Operations**:
+  - Year validation: 2020 to current year + 5 years
+  - Batch updates support zero amounts (deletes budget if amount is 0)
+  - Single query optimization for yearly data retrieval
+  - Automatic sorting by month for consistent display
+- **Batch Update Pattern**:
+  - Validates all updates before processing any
+  - Processes updates sequentially to maintain data consistency
+  - Supports delete operations via zero amounts
+  - Returns only created/updated budgets (excludes deletions)
 - **Income Category Exclusion**:
   - Income categories (starting with "INCOME") are excluded from budget comparisons
   - `getBudgetVsActual()` returns `null` for income categories instead of comparison data
@@ -345,10 +357,11 @@ const actualTotals = calculateActualTotals(transactions, categories, { excludeHi
 - **MantineAccounts**: Account management with Plaid Link
 - **EnhancedTransactions**: Transaction list with filtering and inline category editing
 - **Categories**: Category hierarchy management with auto-categorization rules
-- **Budgets**: Monthly budget interface with expense category filtering
+- **Budgets**: Monthly and yearly budget interface with expense category filtering
   - Budget forms filter categories to only show expense categories (excludes income)
   - Actual spending calculations exclude income transactions from budget comparisons
   - Uses `isExpenseCategory()` helper for consistent filtering
+  - **Yearly View**: Grid interface with inline editing and auto-save functionality
 - **Reports**: Financial analysis with:
   - Income/expense toggle for category breakdowns
   - Interactive drill-down pie charts
@@ -391,6 +404,24 @@ const actualTotals = calculateActualTotals(transactions, categories, { excludeHi
 - **TransactionPreviewTrigger**: Wrapper component making any content clickable for transaction preview
 - **Features**: Navigation to transactions page with filters applied
 - **Integration**: Used throughout Reports page for category breakdown exploration
+
+#### Budget Components (`frontend/src/components/budgets/`)
+- **YearlyBudgetGrid**: Advanced grid component for yearly budget management
+- **Debounced Auto-save Pattern**:
+  ```typescript
+  const [pendingUpdates, setPendingUpdates] = useState<Map<string, CreateBudgetDto>>(new Map());
+  const [debouncedUpdates] = useDebouncedValue(pendingUpdates, 1000);
+
+  // Process debounced updates with batch API call
+  useMemo(() => {
+    if (debouncedUpdates.size > 0) {
+      const updates = Array.from(debouncedUpdates.values());
+      batchUpdateMutation.mutate(updates);
+    }
+  }, [debouncedUpdates, batchUpdateMutation]);
+  ```
+- **Key Features**: Inline editing, sticky headers, visual feedback for pending updates, hierarchical category display
+- **Performance**: Batch API calls, optimistic updates, efficient re-rendering
 
 ## Critical Data Flow Patterns
 
@@ -550,6 +581,14 @@ const autoCategorizeService = new AutoCategorizeService(dataService, categorySer
 - **API Client**: `requestPasswordReset()` and `resetPassword()` methods in `frontend/src/lib/api.ts`
 - **Security Features**: Rate limiting, token expiration, server log token delivery
 - **User Flow**: Request token → Check server logs → Reset password with token
+
+#### Example: Yearly Budget Endpoints
+- **Routes**: `GET /api/v1/budgets/year/:year` and `POST /api/v1/budgets/batch` in `backend/src/routes/budgets.ts`
+- **Service Methods**: `BudgetService.getYearlyBudgets(year, userId)` and `BudgetService.batchUpdateBudgets(updates[], userId)`
+- **Frontend Component**: `YearlyBudgetGrid.tsx` with inline editing and auto-save
+- **API Client**: `getYearlyBudgets(year)` and `batchUpdateBudgets(updates[])` methods in `frontend/src/lib/api.ts`
+- **Key Features**: Year validation, batch processing, debounced auto-save, zero-amount deletion
+- **User Flow**: Select year → View/edit grid → Auto-save changes → Batch API calls
 
 ### To Add a New CSV Import Type
 1. **Create Type-Specific Parser**: Extend `BaseCSVParser<T>` in `backend/src/utils/csvImport/`

@@ -367,20 +367,65 @@ export class BudgetService {
 
   async getDistinctBudgetMonths(userId: string): Promise<{ month: string; count: number }[]> {
     const budgets = await this.getAllBudgets(userId);
-    
+
     // Group budgets by month and count them
     const monthMap = new Map<string, number>();
     budgets.forEach(budget => {
       const count = monthMap.get(budget.month) || 0;
       monthMap.set(budget.month, count + 1);
     });
-    
+
     // Convert to array and sort by month descending (most recent first)
     const months = Array.from(monthMap.entries())
       .map(([month, count]) => ({ month, count }))
       .sort((a, b) => b.month.localeCompare(a.month));
-    
+
     return months;
+  }
+
+  async getYearlyBudgets(year: number, userId: string): Promise<StoredBudget[]> {
+    // Validate year
+    const currentYear = new Date().getFullYear();
+    if (year < 2020 || year > currentYear + 5) {
+      throw new Error('Invalid year. Year must be between 2020 and 5 years in the future');
+    }
+
+    const budgets = await this.getAllBudgets(userId);
+
+    // Filter budgets for the specified year
+    const yearString = year.toString();
+    return budgets
+      .filter(b => b.month.startsWith(yearString))
+      .sort((a, b) => a.month.localeCompare(b.month));
+  }
+
+  async batchUpdateBudgets(updates: CreateBudgetDto[], userId: string): Promise<StoredBudget[]> {
+    // Validate all updates first
+    for (const update of updates) {
+      this.validateMonth(update.month);
+      if (update.amount < 0) {
+        throw new Error('Budget amount cannot be negative');
+      }
+    }
+
+    const updatedBudgets: StoredBudget[] = [];
+
+    // Process updates one by one to maintain data consistency
+    for (const update of updates) {
+      if (update.amount === 0) {
+        // If amount is 0, delete the budget if it exists
+        const existingBudget = await this.getBudget(update.categoryId, update.month, userId);
+        if (existingBudget) {
+          await this.deleteBudget(existingBudget.id, userId);
+        }
+      } else {
+        // Create or update the budget
+        const budget = await this.createOrUpdateBudget(update, userId);
+        updatedBudgets.push(budget);
+      }
+    }
+
+    return updatedBudgets;
   }
 }
 
