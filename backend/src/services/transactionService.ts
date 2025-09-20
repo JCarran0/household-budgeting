@@ -771,6 +771,45 @@ export class TransactionService {
   }
 
   /**
+   * Get details about transactions that would block category deletion
+   * Returns transaction count and sample transaction details for error messages
+   */
+  async getBlockingTransactionDetails(categoryId: string, userId: string): Promise<{
+    count: number;
+    sampleTransactions: Array<{
+      id: string;
+      description: string;
+      amount: number;
+      date: string;
+      accountId: string;
+    }>;
+  }> {
+    const transactions = await this.dataService.getData<StoredTransaction[]>(
+      `transactions_${userId}`
+    ) || [];
+
+    const blockingTransactions = transactions.filter(t =>
+      t.categoryId === categoryId &&
+      t.status !== 'removed' &&
+      !t.isHidden
+    );
+
+    // Get up to 3 sample transactions for the error message
+    const sampleTransactions = blockingTransactions.slice(0, 3).map(t => ({
+      id: t.id,
+      description: t.userDescription || t.name || 'Unknown transaction',
+      amount: t.amount,
+      date: t.date,
+      accountId: t.accountId
+    }));
+
+    return {
+      count: blockingTransactions.length,
+      sampleTransactions
+    };
+  }
+
+  /**
    * Get transaction counts for all categories
    * Returns a map of category IDs to their transaction counts
    */

@@ -235,7 +235,22 @@ describe('Category Deletion Protection', () => {
       // Should not be able to delete category
       await expect(categoryService.deleteCategory(category.id, testUserId))
         .rejects
-        .toThrow('Cannot delete category with associated transactions. Please recategorize the transactions first.');
+        .toThrow(/Cannot delete category with 1 associated transaction\./);
+
+      // Verify the error message includes transaction details
+      try {
+        await categoryService.deleteCategory(category.id, testUserId);
+        fail('Expected error to be thrown');
+      } catch (error: unknown) {
+        if (error instanceof Error) {
+          expect(error.message).toContain('Sample transactions that need to be recategorized:');
+          expect(error.message).toContain('Test Transaction');
+          expect(error.message).toContain('$50.00');
+          expect(error.message).toContain('Please recategorize these transactions first.');
+        } else {
+          fail('Expected Error instance');
+        }
+      }
     });
     
     it('should allow deletion after recategorizing transactions', async () => {

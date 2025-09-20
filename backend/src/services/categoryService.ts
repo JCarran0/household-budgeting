@@ -198,7 +198,28 @@ export class CategoryService {
     if (this.transactionService) {
       const hasTransactions = await this.transactionService.hasTransactionsForCategory(id, userId);
       if (hasTransactions) {
-        throw new Error('Cannot delete category with associated transactions. Please recategorize the transactions first.');
+        const blockingDetails = await this.transactionService.getBlockingTransactionDetails(id, userId);
+
+        let errorMessage = `Cannot delete category with ${blockingDetails.count} associated transaction${blockingDetails.count > 1 ? 's' : ''}.`;
+
+        if (blockingDetails.sampleTransactions.length > 0) {
+          errorMessage += '\n\nSample transactions that need to be recategorized:';
+          blockingDetails.sampleTransactions.forEach((tx, index) => {
+            const formattedAmount = new Intl.NumberFormat('en-US', {
+              style: 'currency',
+              currency: 'USD'
+            }).format(tx.amount);
+            errorMessage += `\n${index + 1}. ${tx.description} - ${formattedAmount} (${tx.date}) [Account: ${tx.accountId}]`;
+          });
+
+          if (blockingDetails.count > blockingDetails.sampleTransactions.length) {
+            errorMessage += `\n... and ${blockingDetails.count - blockingDetails.sampleTransactions.length} more transaction${blockingDetails.count - blockingDetails.sampleTransactions.length > 1 ? 's' : ''}.`;
+          }
+        }
+
+        errorMessage += '\n\nPlease recategorize these transactions first.';
+
+        throw new Error(errorMessage);
       }
     }
     
