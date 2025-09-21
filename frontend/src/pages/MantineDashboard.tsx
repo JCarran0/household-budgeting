@@ -1,9 +1,9 @@
-import { 
-  Grid, 
-  Card, 
-  Text, 
-  Title, 
-  Group, 
+import {
+  Grid,
+  Card,
+  Text,
+  Title,
+  Group,
   Stack,
   Button,
   Badge,
@@ -16,6 +16,7 @@ import {
   Alert,
   Tooltip
 } from '@mantine/core';
+import { useMemo } from 'react';
 import { 
   IconCash, 
   IconWallet, 
@@ -33,7 +34,8 @@ import { api } from '../lib/api';
 import { formatDistanceToNow } from 'date-fns';
 import { Link, useNavigate } from 'react-router-dom';
 import { formatCurrency } from '../utils/formatters';
-import { isTransferCategory } from '../../../shared/utils/categoryHelpers';
+import { calculateActualTotals } from '../../../shared/utils/budgetCalculations';
+import { format, startOfMonth, addMonths } from 'date-fns';
 
 export function MantineDashboard() {
   const navigate = useNavigate();
@@ -43,9 +45,27 @@ export function MantineDashboard() {
     queryFn: api.getAccounts,
   });
 
-  const { data: transactionData, isLoading: transactionsLoading } = useQuery({
+  // Fetch recent transactions for display (limit 10)
+  const { data: recentTransactionData, isLoading: transactionsLoading } = useQuery({
     queryKey: ['transactions', 'recent'],
     queryFn: () => api.getTransactions({ limit: 10 }),
+  });
+
+  // Fetch current month's transactions for accurate calculations
+  const currentDate = new Date();
+  const currentMonth = startOfMonth(currentDate);
+  const { data: monthlyTransactionData } = useQuery({
+    queryKey: ['transactions', format(currentMonth, 'yyyy-MM')],
+    queryFn: () => api.getTransactions({
+      startDate: format(currentMonth, 'yyyy-MM-01'),
+      endDate: format(addMonths(currentMonth, 1).getTime() - 1, 'yyyy-MM-dd'),
+    }),
+  });
+
+  // Fetch categories for calculation utilities
+  const { data: categories } = useQuery({
+    queryKey: ['categories'],
+    queryFn: api.getCategories,
   });
 
   const { data: uncategorizedData } = useQuery({
@@ -54,10 +74,10 @@ export function MantineDashboard() {
   });
 
   // Fetch current month's budgets to show actual budget vs spending
-  const currentMonth = new Date().toISOString().slice(0, 7); // YYYY-MM format
+  const currentMonthStr = new Date().toISOString().slice(0, 7); // YYYY-MM format
   const { data: budgetData } = useQuery({
-    queryKey: ['budgets', 'month', currentMonth],
-    queryFn: () => api.getMonthlyBudgets(currentMonth),
+    queryKey: ['budgets', 'month', currentMonthStr],
+    queryFn: () => api.getMonthlyBudgets(currentMonthStr),
   });
 
   const isLoading = accountsLoading || transactionsLoading;
@@ -72,20 +92,19 @@ export function MantineDashboard() {
     0
   ) || 0;
 
-  const recentTransactions = transactionData?.transactions || [];
+  const recentTransactions = recentTransactionData?.transactions || [];
 
-  // Filter out transfers from income/expense calculations
-  const nonTransferTransactions = recentTransactions.filter(t => 
-    !t.categoryId || !isTransferCategory(t.categoryId)
-  );
+  // Calculate monthly income and spending using shared utilities
+  const actualTotals = useMemo(() => {
+    if (!monthlyTransactionData?.transactions || !categories) {
+      return { income: 0, expense: 0, transfer: 0, total: 0 };
+    }
 
-  const monthlySpending = nonTransferTransactions
-    .filter(t => t.amount < 0)
-    .reduce((sum, t) => sum + Math.abs(t.amount), 0);
+    return calculateActualTotals(monthlyTransactionData.transactions, categories, { excludeHidden: true });
+  }, [monthlyTransactionData, categories]);
 
-  const monthlyIncome = nonTransferTransactions
-    .filter(t => t.amount > 0)
-    .reduce((sum, t) => sum + t.amount, 0);
+  const monthlySpending = actualTotals.expense;
+  const monthlyIncome = actualTotals.income;
 
   // Calculate budget progress - compare spending against actual budget, not income
   const totalBudget = budgetData?.total || 0;
