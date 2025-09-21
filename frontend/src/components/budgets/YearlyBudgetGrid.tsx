@@ -11,8 +11,8 @@ import {
   Stack,
   ThemeIcon,
 } from '@mantine/core';
-import { useMemo, useState, useCallback, useEffect } from 'react';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMemo, useState, useCallback, useEffect, useRef } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { notifications } from '@mantine/notifications';
 import { useDebouncedValue } from '@mantine/hooks';
 import { IconDeviceFloppy } from '@tabler/icons-react';
@@ -71,12 +71,17 @@ export function YearlyBudgetGrid({ budgets, categories, year, isLoading }: Yearl
   const [editingCell, setEditingCell] = useState<EditingCell | null>(null);
   const [pendingUpdates, setPendingUpdates] = useState<Map<string, CreateBudgetDto>>(new Map());
   const [debouncedUpdates] = useDebouncedValue(pendingUpdates, 1000);
+  const processingRef = useRef<boolean>(false);
   const queryClient = useQueryClient();
 
-  // Batch update mutation
-  const batchUpdateMutation = useMutation({
-    mutationFn: (updates: CreateBudgetDto[]) => api.batchUpdateBudgets(updates),
-    onSuccess: (data) => {
+  // Stable batch update function
+  const performBatchUpdate = useCallback(async (updates: CreateBudgetDto[]) => {
+    if (processingRef.current || updates.length === 0) return;
+
+    processingRef.current = true;
+    try {
+      const data = await api.batchUpdateBudgets(updates);
+
       // Only show notification if we actually updated budgets
       if (data.budgets && data.budgets.length > 0) {
         notifications.show({
@@ -88,10 +93,10 @@ export function YearlyBudgetGrid({ budgets, categories, year, isLoading }: Yearl
           autoClose: 2000,
         });
       }
+
       queryClient.invalidateQueries({ queryKey: ['budgets', 'year', year] });
       setPendingUpdates(new Map());
-    },
-    onError: () => {
+    } catch {
       notifications.show({
         id: 'budget-error', // Use ID to prevent duplicates
         title: 'Save Failed',
@@ -99,16 +104,18 @@ export function YearlyBudgetGrid({ budgets, categories, year, isLoading }: Yearl
         color: 'red',
         autoClose: 3000,
       });
-    },
-  });
+    } finally {
+      processingRef.current = false;
+    }
+  }, [queryClient, year]);
 
   // Process debounced updates
   useEffect(() => {
-    if (debouncedUpdates.size > 0 && !batchUpdateMutation.isPending) {
+    if (debouncedUpdates.size > 0) {
       const updates = Array.from(debouncedUpdates.values());
-      batchUpdateMutation.mutate(updates);
+      performBatchUpdate(updates);
     }
-  }, [debouncedUpdates, batchUpdateMutation]);
+  }, [debouncedUpdates, performBatchUpdate]);
 
   // Organize categories hierarchically and create budget data
   const categoryBudgetData = useMemo<CategoryBudgetData[]>(() => {
