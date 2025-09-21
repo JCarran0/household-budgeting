@@ -11,7 +11,7 @@ import {
   Stack,
   ThemeIcon,
 } from '@mantine/core';
-import { useMemo, useState, useCallback } from 'react';
+import { useMemo, useState, useCallback, useEffect } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { notifications } from '@mantine/notifications';
 import { useDebouncedValue } from '@mantine/hooks';
@@ -77,27 +77,34 @@ export function YearlyBudgetGrid({ budgets, categories, year, isLoading }: Yearl
   const batchUpdateMutation = useMutation({
     mutationFn: (updates: CreateBudgetDto[]) => api.batchUpdateBudgets(updates),
     onSuccess: (data) => {
-      notifications.show({
-        title: 'Budgets Updated',
-        message: data.message,
-        color: 'green',
-        icon: <IconDeviceFloppy size={16} />,
-      });
+      // Only show notification if we actually updated budgets
+      if (data.budgets && data.budgets.length > 0) {
+        notifications.show({
+          id: 'budget-update', // Use ID to prevent duplicates
+          title: 'Budgets Saved',
+          message: `Updated ${data.budgets.length} budget${data.budgets.length === 1 ? '' : 's'}`,
+          color: 'green',
+          icon: <IconDeviceFloppy size={16} />,
+          autoClose: 2000,
+        });
+      }
       queryClient.invalidateQueries({ queryKey: ['budgets', 'year', year] });
       setPendingUpdates(new Map());
     },
     onError: () => {
       notifications.show({
-        title: 'Error',
-        message: 'Failed to update budgets',
+        id: 'budget-error', // Use ID to prevent duplicates
+        title: 'Save Failed',
+        message: 'Failed to save budget changes',
         color: 'red',
+        autoClose: 3000,
       });
     },
   });
 
   // Process debounced updates
-  useMemo(() => {
-    if (debouncedUpdates.size > 0) {
+  useEffect(() => {
+    if (debouncedUpdates.size > 0 && !batchUpdateMutation.isPending) {
       const updates = Array.from(debouncedUpdates.values());
       batchUpdateMutation.mutate(updates);
     }
