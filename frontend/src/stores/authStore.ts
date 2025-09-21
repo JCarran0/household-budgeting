@@ -37,7 +37,6 @@ export const useAuthStore = create<AuthState>()(
           const response = await api.login(credentials);
           // Backend returns {success, token, user}
           if (response.token && response.user) {
-            localStorage.setItem('token', response.token);
             set({
               user: response.user,
               token: response.token,
@@ -67,7 +66,6 @@ export const useAuthStore = create<AuthState>()(
           const response = await api.register(credentials);
           // Backend returns {success, token, user}
           if (response.token && response.user) {
-            localStorage.setItem('token', response.token);
             set({
               user: response.user,
               token: response.token,
@@ -88,15 +86,17 @@ export const useAuthStore = create<AuthState>()(
       },
 
       logout: () => {
+        // Clean up both storage keys for backward compatibility
         localStorage.removeItem('token');
-        
+        localStorage.removeItem('auth-storage');
+
         // Clear all cached data when logging out
         queryClient.cancelQueries();
         queryClient.clear();
-        
+
         // Clear user filter preferences on logout
         useFilterStore.getState().clearUserFilters();
-        
+
         set({
           user: null,
           token: null,

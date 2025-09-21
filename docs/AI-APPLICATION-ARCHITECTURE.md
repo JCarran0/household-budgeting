@@ -810,6 +810,30 @@ if (syncedAccountIds.has(existing.accountId)) { /* check for removal */ }
 4. Rule priority order is correct
 **Solution**: Use preview functionality to debug rule matching
 
+### Issue: JWT token storage conflict causing 401 errors appearing as 503
+**Cause**: Duplicate token storage between Zustand persistence and direct localStorage access
+**Symptoms**:
+- 503 Service Unavailable errors in browser console for authenticated endpoints
+- Actual server responses are 401 Unauthorized
+- Works immediately after login but fails after page refresh
+- API interceptor can't find token despite successful login
+
+**Diagnosis**:
+1. Check browser DevTools → Application → localStorage
+2. Look for both `auth-storage` (JSON) and `token` (string) keys
+3. Verify API interceptor token retrieval logic
+4. Check if Zustand store rehydration is working
+
+**Solution**: Ensure single source of truth for token storage
+- API interceptor should read from Zustand's persisted storage
+- Remove duplicate localStorage.setItem calls from auth actions
+- Clean up both storage keys on logout/401 errors
+```typescript
+// API interceptor should read from Zustand storage
+const authStorage = localStorage.getItem('auth-storage');
+const token = authStorage ? JSON.parse(authStorage).state?.token : null;
+```
+
 ### Issue: Transactions show as "uncategorized" but can't be categorized
 **Cause**: Transactions have orphaned category IDs (e.g., old `plaid_*` IDs)
 **Solution**: Use "Recategorize all transactions" option to fix orphaned categories

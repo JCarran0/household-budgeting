@@ -177,7 +177,19 @@ class ApiClient {
     // Request interceptor to add auth token
     this.client.interceptors.request.use(
       (config) => {
-        const token = localStorage.getItem('token');
+        // Try to get token from Zustand's persisted storage first
+        let token = null;
+        try {
+          const authStorage = localStorage.getItem('auth-storage');
+          if (authStorage) {
+            const authData = JSON.parse(authStorage);
+            token = authData?.state?.token;
+          }
+        } catch {
+          // Fallback to direct localStorage access for backward compatibility
+          token = localStorage.getItem('token');
+        }
+
         if (token) {
           config.headers.Authorization = `Bearer ${token}`;
         }
@@ -193,8 +205,9 @@ class ApiClient {
       (response) => response,
       (error: AxiosError) => {
         if (error.response?.status === 401) {
-          // Token expired or invalid
+          // Token expired or invalid - clean up both storage keys
           localStorage.removeItem('token');
+          localStorage.removeItem('auth-storage');
           window.location.href = '/login';
         }
         return Promise.reject(error);
