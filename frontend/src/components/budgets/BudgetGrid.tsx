@@ -401,30 +401,32 @@ export function BudgetGrid({ budgets, categories, month, onEdit }: BudgetGridPro
   }, [visibleBudgets, categories]);
 
   return (
-    <Table striped highlightOnHover>
-      <Table.Thead>
-        <Table.Tr>
-          <Table.Th>Category</Table.Th>
-          <Table.Th>Budget Amount</Table.Th>
-          <Table.Th>Actions</Table.Th>
-        </Table.Tr>
-      </Table.Thead>
-      <Table.Tbody>
-        {hierarchicalBudgets.map((budget) => {
-          const category = categories.find(c => c.id === budget.categoryId);
-          return (
-            <BudgetRow
-              key={budget.id}
-              budget={budget}
-              category={category}
-              month={month}
-              onEdit={onEdit}
-              onDelete={handleDelete}
-              onUpdate={handleUpdate}
-            />
-          );
-        })}
-      </Table.Tbody>
-    </Table>
+    <Table.ScrollContainer minWidth={600} maxHeight="calc(100vh - 350px)">
+      <Table striped highlightOnHover stickyHeader>
+        <Table.Thead>
+          <Table.Tr>
+            <Table.Th>Category</Table.Th>
+            <Table.Th>Budget Amount</Table.Th>
+            <Table.Th>Actions</Table.Th>
+          </Table.Tr>
+        </Table.Thead>
+        <Table.Tbody>
+          {hierarchicalBudgets.map((budget) => {
+            const category = categories.find(c => c.id === budget.categoryId);
+            return (
+              <BudgetRow
+                key={budget.id}
+                budget={budget}
+                category={category}
+                month={month}
+                onEdit={onEdit}
+                onDelete={handleDelete}
+                onUpdate={handleUpdate}
+              />
+            );
+          })}
+        </Table.Tbody>
+      </Table>
+    </Table.ScrollContainer>
   );
 }

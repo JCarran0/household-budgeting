@@ -444,39 +444,40 @@ export function BudgetComparison({ comparison, categories }: BudgetComparisonPro
         <BudgetDebugger comparison={comparison} categories={categories} />
       )}
 
-      <Table striped highlightOnHover>
-        <Table.Thead>
-          <Table.Tr>
-            <Table.Th>Category</Table.Th>
-            <Table.Th>Budgeted</Table.Th>
-            <Table.Th>Actual</Table.Th>
-            <Table.Th>Remaining</Table.Th>
-            <Table.Th>Progress</Table.Th>
-            <Table.Th>Status</Table.Th>
-          </Table.Tr>
-        </Table.Thead>
-        <Table.Tbody>
-          {hierarchicalComparisons.map((comp) => {
-            const category = categories.find(c => c.id === comp.categoryId);
-            const categoryName = category ? (
-              comp.isChild && category.parentId ? category.name : getCategoryName(comp.categoryId)
-            ) : 'Unknown Category';
-            const progressColor = getProgressColor(comp.percentUsed, comp.isIncomeCategory);
-            
-            // Enhanced category name with budget type indicator
-            const budgetTypeIcon = comp.isIncomeCategory ? '💰 ' : '💳 ';
-            const displayName = budgetTypeIcon + categoryName;
-            
-            const tooltipText = comp.isCalculated && comp.isParent
-              ? "Aggregated total from subcategories - click to view all related transactions"
-              : "Click to view transactions";
-            
-            return (
-              <Table.Tr key={comp.categoryId}>
-                <Table.Td>
-                  <Box pl={comp.isChild ? 24 : 0}>
-                    <TransactionPreviewTrigger
-                      categoryId={comp.categoryId}
+      <Table.ScrollContainer minWidth={800} maxHeight="calc(100vh - 400px)">
+        <Table striped highlightOnHover stickyHeader>
+          <Table.Thead>
+            <Table.Tr>
+              <Table.Th>Category</Table.Th>
+              <Table.Th>Budgeted</Table.Th>
+              <Table.Th>Actual</Table.Th>
+              <Table.Th>Remaining</Table.Th>
+              <Table.Th>Progress</Table.Th>
+              <Table.Th>Status</Table.Th>
+            </Table.Tr>
+          </Table.Thead>
+          <Table.Tbody>
+            {hierarchicalComparisons.map((comp) => {
+              const category = categories.find(c => c.id === comp.categoryId);
+              const categoryName = category ? (
+                comp.isChild && category.parentId ? category.name : getCategoryName(comp.categoryId)
+              ) : 'Unknown Category';
+              const progressColor = getProgressColor(comp.percentUsed, comp.isIncomeCategory);
+
+              // Enhanced category name with budget type indicator
+              const budgetTypeIcon = comp.isIncomeCategory ? '💰 ' : '💳 ';
+              const displayName = budgetTypeIcon + categoryName;
+
+              const tooltipText = comp.isCalculated && comp.isParent
+                ? "Aggregated total from subcategories - click to view all related transactions"
+                : "Click to view transactions";
+
+              return (
+                <Table.Tr key={comp.categoryId}>
+                  <Table.Td>
+                    <Box pl={comp.isChild ? 24 : 0}>
+                      <TransactionPreviewTrigger
+                        categoryId={comp.categoryId}
                       categoryName={getCategoryName(comp.categoryId)}
                       dateRange={dateRange}
                       showTooltip={true}
@@ -620,8 +621,9 @@ export function BudgetComparison({ comparison, categories }: BudgetComparisonPro
               </Table.Tr>
             );
           })}
-        </Table.Tbody>
-      </Table>
+          </Table.Tbody>
+        </Table>
+      </Table.ScrollContainer>
     </Stack>
   );
 }

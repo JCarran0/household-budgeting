@@ -5,7 +5,6 @@ import {
   Group,
   Badge,
   Box,
-  ScrollArea,
   Loader,
   Center,
   Stack,
@@ -346,7 +345,7 @@ export function YearlyBudgetGrid({ budgets, categories, year, isLoading }: Yearl
 
     return (
       <Table.Tr key={category.id}>
-        <Table.Td style={{ position: 'sticky', left: 0, background: 'var(--mantine-color-body)', zIndex: 1 }}>
+        <Table.Td style={{ position: 'sticky', left: 0, background: 'var(--mantine-color-body)', zIndex: 2 }}>
           <Box pl={isChild ? 24 : 0}>
             <Group gap="xs">
               <Text
@@ -473,11 +472,11 @@ export function YearlyBudgetGrid({ budgets, categories, year, isLoading }: Yearl
 
   return (
     <Stack gap="md">
-      <ScrollArea>
-        <Table striped highlightOnHover>
+      <Table.ScrollContainer minWidth={1200} maxHeight="calc(100vh - 300px)">
+        <Table striped highlightOnHover stickyHeader>
           <Table.Thead>
             <Table.Tr>
-              <Table.Th style={{ position: 'sticky', left: 0, background: 'var(--mantine-color-body)', zIndex: 2 }}>
+              <Table.Th style={{ position: 'sticky', left: 0, background: 'var(--mantine-color-body)', zIndex: 3 }}>
                 Category
               </Table.Th>
               {MONTHS.map((month) => (
@@ -494,7 +493,7 @@ export function YearlyBudgetGrid({ budgets, categories, year, isLoading }: Yearl
             ]).flat()}
           </Table.Tbody>
         </Table>
-      </ScrollArea>
+      </Table.ScrollContainer>
 
       {pendingUpdates.size > 0 && (
         <Group justify="center" gap="md">
