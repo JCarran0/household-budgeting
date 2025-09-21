@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.18.0](https://github.com/JCarran0/household-budgeting/compare/v1.17.0...v1.18.0) (2025-09-21)
+
+
+### Features
+
+* **budgets:** add sticky headers to all budget grid components ([f288250](https://github.com/JCarran0/household-budgeting/commit/f288250e1d44a917813e74aee42d2b9f4c2a00f1))
+
+
+### Bug Fixes
+
+* **auth:** resolve JWT token storage conflict causing authentication failures ([cb5e28c](https://github.com/JCarran0/household-budgeting/commit/cb5e28cab0611826ce9da1ce6272e247c5ac3147))
+
 ## [1.17.0](https://github.com/JCarran0/household-budgeting/compare/v1.16.3...v1.17.0) (2025-09-21)
 
 
