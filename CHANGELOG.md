@@ -5,6 +5,33 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.17.0](https://github.com/JCarran0/household-budgeting/compare/v1.16.3...v1.17.0) (2025-09-21)
+
+
+### Features
+
+* **budgets:** add yearly budget grid view with inline editing and auto-save ([c127fce](https://github.com/JCarran0/household-budgeting/commit/c127fce6cfa8d5ee9ec4ccba435f4aea630e184e))
+* **budgets:** implement true batch editing with smart UX for yearly budget grid ([8d393cb](https://github.com/JCarran0/household-budgeting/commit/8d393cbec34b111a9697202c60d8bcde401d6ca8))
+* **categories:** add explicit isIncome property with performance optimization ([a6e8a21](https://github.com/JCarran0/household-budgeting/commit/a6e8a21f6226a1e08d2adcfbc800a95771af622a))
+* **categories:** enhance error messages for category deletion with transaction details ([b40813c](https://github.com/JCarran0/household-budgeting/commit/b40813ca80a077bbf5bd54156f2394fa21309adb))
+* **transactions:** add grouped category filter with parent selection ([56f3145](https://github.com/JCarran0/household-budgeting/commit/56f314573b1bcb2ebf1e50c8deb2be1af570269c))
+
+
+### Bug Fixes
+
+* **budgets:** eliminate excessive API calls in yearly budget grid auto-save ([bc2113f](https://github.com/JCarran0/household-budgeting/commit/bc2113fda237abf89775730d21b9729079a0682b))
+* **budgets:** prevent duplicate toast notifications in yearly budget grid ([2bed3b1](https://github.com/JCarran0/household-budgeting/commit/2bed3b16b4348980de2976e20f2421f23409d808))
+* **build:** resolve shared utilities import path issues causing deployment failures ([a14b33d](https://github.com/JCarran0/household-budgeting/commit/a14b33da6559916ec930508868e4ac565ad5e2ad))
+* **deploy:** update deployment workflows for bundled shared utilities ([f426a62](https://github.com/JCarran0/household-budgeting/commit/f426a62a4679955b944aec63a95a48415aa1278c))
+* **reports:** resolve JavaScript Date parsing inconsistencies causing incorrect timeline displays ([0ed889d](https://github.com/JCarran0/household-budgeting/commit/0ed889dd75e989c8878bf5cfcd0942b14cdf89c3))
+* **reports:** use standardized calculation methods for budget vs actual ([3cc9b31](https://github.com/JCarran0/household-budgeting/commit/3cc9b311e61bb1ce3e76935ed1481d8ed5ec8270))
+* **terraform:** add Authorization header forwarding to nginx proxy config ([a489351](https://github.com/JCarran0/household-budgeting/commit/a48935123173cf781f0c139c1bb3057c8c4c7360))
+
+
+### Code Refactoring
+
+* consolidate budget calculation logic into shared utilities ([f566a76](https://github.com/JCarran0/household-budgeting/commit/f566a7613bae232adac795d4ea0050aceae63afb))
+
 ### [1.16.3](https://github.com/JCarran0/household-budgeting/compare/v1.16.2...v1.16.3) (2025-09-13)
 
 
