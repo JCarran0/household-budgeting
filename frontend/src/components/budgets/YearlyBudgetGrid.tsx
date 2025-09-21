@@ -10,6 +10,7 @@ import {
   Center,
   Stack,
   ThemeIcon,
+  Button,
 } from '@mantine/core';
 import { useMemo, useState, useCallback, useEffect, useRef } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
@@ -70,8 +71,11 @@ const MONTHS = [
 export function YearlyBudgetGrid({ budgets, categories, year, isLoading }: YearlyBudgetGridProps) {
   const [editingCell, setEditingCell] = useState<EditingCell | null>(null);
   const [pendingUpdates, setPendingUpdates] = useState<Map<string, CreateBudgetDto>>(new Map());
-  const [debouncedUpdates] = useDebouncedValue(pendingUpdates, 1000);
+  const [debouncedUpdates] = useDebouncedValue(pendingUpdates, 5000);
+  const [isBatchMode, setIsBatchMode] = useState<boolean>(false);
+  const [lastEditTime, setLastEditTime] = useState<number>(0);
   const processingRef = useRef<boolean>(false);
+  const batchModeTimerRef = useRef<number | null>(null);
   const queryClient = useQueryClient();
 
   // Stable batch update function
@@ -109,6 +113,14 @@ export function YearlyBudgetGrid({ budgets, categories, year, isLoading }: Yearl
     }
   }, [queryClient, year]);
 
+  // Manual save function
+  const handleManualSave = useCallback(() => {
+    if (pendingUpdates.size > 0) {
+      const updates = Array.from(pendingUpdates.values());
+      performBatchUpdate(updates);
+    }
+  }, [pendingUpdates, performBatchUpdate]);
+
   // Process debounced updates
   useEffect(() => {
     if (debouncedUpdates.size > 0) {
@@ -116,6 +128,51 @@ export function YearlyBudgetGrid({ budgets, categories, year, isLoading }: Yearl
       performBatchUpdate(updates);
     }
   }, [debouncedUpdates, performBatchUpdate]);
+
+  // Global keyboard shortcut for manual save (Ctrl/Cmd+S)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+        e.preventDefault();
+        handleManualSave();
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [handleManualSave]);
+
+  // Cleanup batch mode timer on unmount
+  useEffect(() => {
+    return () => {
+      if (batchModeTimerRef.current) {
+        window.clearTimeout(batchModeTimerRef.current);
+      }
+    };
+  }, []);
+
+  // Detect batch editing patterns
+  const detectBatchMode = useCallback(() => {
+    const now = Date.now();
+    const timeSinceLastEdit = now - lastEditTime;
+
+    // If this is a second edit within 3 seconds, enter batch mode
+    if (timeSinceLastEdit < 3000 && timeSinceLastEdit > 0) {
+      setIsBatchMode(true);
+    }
+
+    setLastEditTime(now);
+
+    // Clear existing timer
+    if (batchModeTimerRef.current) {
+      window.clearTimeout(batchModeTimerRef.current);
+    }
+
+    // Exit batch mode after 10 seconds of inactivity
+    batchModeTimerRef.current = window.setTimeout(() => {
+      setIsBatchMode(false);
+    }, 10000);
+  }, [lastEditTime]);
 
   // Organize categories hierarchically and create budget data
   const categoryBudgetData = useMemo<CategoryBudgetData[]>(() => {
@@ -198,11 +255,68 @@ export function YearlyBudgetGrid({ budgets, categories, year, isLoading }: Yearl
     return result;
   }, [categories, budgets, year]);
 
+  // Helper function to get all editable cells in order
+  const getAllEditableCells = useMemo(() => {
+    const cells: { categoryId: string; month: string }[] = [];
+
+    // Get flattened category data in display order
+    const flatCategories: CategoryBudgetData[] = [];
+    categoryBudgetData.forEach(data => {
+      flatCategories.push(data);
+      if (data.children) {
+        flatCategories.push(...data.children);
+      }
+    });
+
+    // Add all cells in row-major order (category by category, then months)
+    flatCategories.forEach(data => {
+      MONTHS.forEach(month => {
+        cells.push({ categoryId: data.category.id, month: month.key });
+      });
+    });
+
+    return cells;
+  }, [categoryBudgetData]);
+
+  // Navigation helpers
+  const findNextCell = useCallback((currentCategoryId: string, currentMonth: string, direction: 'next' | 'prev') => {
+    const cells = getAllEditableCells;
+    const currentIndex = cells.findIndex(
+      cell => cell.categoryId === currentCategoryId && cell.month === currentMonth
+    );
+
+    if (currentIndex === -1) return null;
+
+    const nextIndex = direction === 'next'
+      ? currentIndex + 1
+      : currentIndex - 1;
+
+    if (nextIndex >= 0 && nextIndex < cells.length) {
+      return cells[nextIndex];
+    }
+
+    return null;
+  }, [getAllEditableCells]);
+
+  const navigateToCell = useCallback((categoryId: string, month: string, currentValue?: number) => {
+    // Find the current value for the target cell
+    const targetCategoryData = categoryBudgetData
+      .flatMap(data => [data, ...(data.children || [])])
+      .find(data => data.category.id === categoryId);
+
+    const value = currentValue ?? (targetCategoryData?.budgets[month] || 0);
+
+    setEditingCell({ categoryId, month, value });
+  }, [categoryBudgetData]);
+
   const handleCellEdit = useCallback((categoryId: string, month: string, value: number) => {
     const monthKey = `${year}-${month}`;
     const updateKey = `${categoryId}_${monthKey}`;
 
     setEditingCell({ categoryId, month, value });
+
+    // Detect batch editing patterns
+    detectBatchMode();
 
     // Update pending updates
     setPendingUpdates(prev => {
@@ -218,7 +332,7 @@ export function YearlyBudgetGrid({ budgets, categories, year, isLoading }: Yearl
       }
       return newUpdates;
     });
-  }, [year]);
+  }, [year, detectBatchMode]);
 
   const renderCategoryRow = (data: CategoryBudgetData) => {
     const { category, budgets: categoryBudgets, isParent, isChild } = data;
@@ -278,10 +392,33 @@ export function YearlyBudgetGrid({ budgets, categories, year, isLoading }: Yearl
                     }
                   }}
                   onKeyDown={(e) => {
-                    if (e.key === 'Enter' || e.key === 'Escape') {
-                      if (e.key === 'Enter' && editingCell) {
-                        handleCellEdit(editingCell.categoryId, editingCell.month, editingCell.value);
+                    if (!editingCell) return;
+
+                    if (e.key === 'Tab') {
+                      e.preventDefault();
+                      // Save current cell first
+                      handleCellEdit(editingCell.categoryId, editingCell.month, editingCell.value);
+
+                      // Navigate to next/previous cell
+                      const direction = e.shiftKey ? 'prev' : 'next';
+                      const nextCell = findNextCell(editingCell.categoryId, editingCell.month, direction);
+
+                      if (nextCell) {
+                        navigateToCell(nextCell.categoryId, nextCell.month);
+                      } else {
+                        setEditingCell(null);
                       }
+                    } else if (e.key === 'Enter') {
+                      handleCellEdit(editingCell.categoryId, editingCell.month, editingCell.value);
+
+                      // Navigate to cell below (next row, same column)
+                      const nextCell = findNextCell(editingCell.categoryId, editingCell.month, 'next');
+                      if (nextCell) {
+                        navigateToCell(nextCell.categoryId, nextCell.month);
+                      } else {
+                        setEditingCell(null);
+                      }
+                    } else if (e.key === 'Escape') {
                       setEditingCell(null);
                     }
                   }}
@@ -360,10 +497,26 @@ export function YearlyBudgetGrid({ budgets, categories, year, isLoading }: Yearl
       </ScrollArea>
 
       {pendingUpdates.size > 0 && (
-        <Group justify="center">
-          <Badge variant="light" color="yellow" size="sm">
-            {pendingUpdates.size} pending update{pendingUpdates.size !== 1 ? 's' : ''} - saving automatically...
-          </Badge>
+        <Group justify="center" gap="md">
+          {isBatchMode ? (
+            <Badge variant="filled" color="blue" size="md">
+              🚀 Batch Editing Mode - {pendingUpdates.size} change{pendingUpdates.size !== 1 ? 's' : ''} pending
+            </Badge>
+          ) : (
+            <Badge variant="light" color="yellow" size="sm">
+              {pendingUpdates.size} pending update{pendingUpdates.size !== 1 ? 's' : ''} - auto-saving in 5 seconds...
+            </Badge>
+          )}
+          <Button
+            size={isBatchMode ? "sm" : "xs"}
+            variant={isBatchMode ? "filled" : "light"}
+            color="green"
+            leftSection={<IconDeviceFloppy size={14} />}
+            onClick={handleManualSave}
+            loading={processingRef.current}
+          >
+            {isBatchMode ? "Save All Changes" : "Save Now"}
+          </Button>
         </Group>
       )}
     </Stack>
