@@ -32,6 +32,12 @@ Building a personal budgeting app for 2 users with Plaid integration. Using Risk
 - Troubleshooting production issues
 - Monitoring and logging
 
+**[docs/AWS-LOCAL-SETUP.md](docs/AWS-LOCAL-SETUP.md)** - Local development with production data
+- AWS credentials setup for developers
+- Production data sync utilities
+- Security best practices for handling production data
+- Troubleshooting AWS authentication issues
+
 **[docs/AI-Architecture-Plan.md](docs/AI-Architecture-Plan.md)** - Strategic planning
 - Cost analysis and projections ($10/month target)
 - Architecture Decision Records (ADRs)
@@ -491,6 +497,8 @@ Having issues?
 - **Check version**: Visit `/version` endpoint or run `curl localhost:3001/version`
 - **Password reset recovery**: If locked out, request reset and check server logs: `pm2 logs budget-backend | grep "RESET TOKEN"`
 - **⚠️ Category Migration**: Before deploying Plaid PFC changes, delete existing category data: `rm backend/data/categories_*.json`
+- **Production data debugging**: Sync production data locally: `npm run sync:production:dry-run` (preview) or `npm run sync:production` (actual sync)
+- **Local data backup**: Create backup before sync: `npm run backup:local`, restore with: `npm run backup:restore`
 
 ## Deployment
 

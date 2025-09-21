@@ -28,7 +28,14 @@
     "reset:dev": "ts-node src/scripts/reset-app.ts",
     "reset:dev:force": "ts-node src/scripts/reset-app.ts --force",
     "reset": "node scripts/reset-app.js",
-    "reset:force": "node scripts/reset-app.js --force"
+    "reset:force": "node scripts/reset-app.js --force",
+    "sync:production": "ts-node src/scripts/sync-production-data.ts",
+    "sync:production:dry-run": "ts-node src/scripts/sync-production-data.ts --dry-run",
+    "sync:production:user": "ts-node src/scripts/sync-production-data.ts",
+    "backup:local": "ts-node src/scripts/backup-local-data.ts",
+    "backup:restore": "ts-node src/scripts/backup-local-data.ts --restore",
+    "backup:list": "ts-node src/scripts/backup-local-data.ts --list",
+    "backup:cleanup": "ts-node src/scripts/backup-local-data.ts --cleanup"
   },
   "keywords": [],
   "author": "",
