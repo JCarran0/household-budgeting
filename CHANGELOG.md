@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.19.0](https://github.com/JCarran0/household-budgeting/compare/v1.18.0...v1.19.0) (2025-09-21)
+
+
+### Features
+
+* **dev:** add production data sync utility for local debugging ([91f4ab9](https://github.com/JCarran0/household-budgeting/commit/91f4ab9b1044fb5fb3bc44d557f535da2c220642))
+
+
+### Bug Fixes
+
+* **accounts:** map institutionName to institution for frontend compatibility ([bd9d5b1](https://github.com/JCarran0/household-budgeting/commit/bd9d5b171c01763e709a8e6ddd7cb94b83548592))
+* **dashboard:** correct monthly spending calculation using shared utilities ([ed1d769](https://github.com/JCarran0/household-budgeting/commit/ed1d76901db4b8b9bb0957a0d728ebfdffca6398))
+
 ## [1.18.0](https://github.com/JCarran0/household-budgeting/compare/v1.17.0...v1.18.0) (2025-09-21)
 
 
