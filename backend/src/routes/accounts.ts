@@ -92,9 +92,15 @@ router.get('/', authMiddleware, async (req: AuthRequest, res: Response): Promise
       return;
     }
 
+    // Map institutionName to institution to match PlaidAccount interface
+    const mappedAccounts = result.accounts?.map(account => ({
+      ...account,
+      institution: account.institutionName, // Map institutionName to institution
+    })) || [];
+
     res.json({
       success: true,
-      accounts: result.accounts,
+      accounts: mappedAccounts,
     });
   } catch (error) {
     console.error('Error fetching accounts:', error);
