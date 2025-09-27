@@ -132,11 +132,22 @@ app.get(`${apiPrefix}/version`, (_req: Request, res: Response) => {
 app.get(`${apiPrefix}/changelog`, (_req: Request, res: Response) => {
   const fs = require('fs');
   const path = require('path');
-  
+
   try {
     const changelogPath = path.join(__dirname, '../../CHANGELOG.md');
+
+    // Check if file exists first
+    if (!fs.existsSync(changelogPath)) {
+      console.warn('CHANGELOG.md not found at:', changelogPath);
+      res.json({
+        success: true,
+        content: '# Changelog\n\nChangelog is currently unavailable. Please check back after the next deployment.',
+      });
+      return;
+    }
+
     const changelog = fs.readFileSync(changelogPath, 'utf-8');
-    
+
     res.json({
       success: true,
       content: changelog,
