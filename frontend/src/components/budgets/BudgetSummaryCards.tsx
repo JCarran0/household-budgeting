@@ -6,6 +6,22 @@ import {
 } from '@tabler/icons-react';
 import { formatCurrency } from '../../utils/formatters';
 
+// Fun message arrays for budget feedback
+const POSITIVE_MESSAGES = ['Nice!', 'Slay!', 'Fire!', 'Gucci!', 'Lit!', 'Bussin\'!'];
+const NEUTRAL_MESSAGES = ['Mid', 'Meh', 'It\'s fine'];
+const NEGATIVE_MESSAGES = ['Uh oh', 'Not great', 'Yeesh', 'Yikes', 'Cooked', 'Cringe', 'Chopped'];
+
+// Helper function to get a random message from an array
+const getRandomMessage = (messages: string[]): string => {
+  return messages[Math.floor(Math.random() * messages.length)];
+};
+
+// Helper function to determine if a difference is within 5% tolerance
+const isWithinTolerance = (actual: number, planned: number): boolean => {
+  if (planned === 0) return actual === 0;
+  return Math.abs(actual - planned) / Math.abs(planned) <= 0.05;
+};
+
 interface BudgetSummaryCardsProps {
   budgetedIncome: number;
   actualIncome: number;
@@ -31,32 +47,44 @@ export function BudgetSummaryCards({
   // Color logic and fun messages for differences
   const getCashflowColor = (difference: number): string => {
     // For cashflow: positive difference (actual > planned) is good (green)
-    return difference >= 0 ? 'green' : 'red';
+    if (difference >= 0) return 'green';
+    if (isWithinTolerance(actualCashflow, plannedCashflow)) return 'yellow';
+    return 'red';
   };
   
   const getCashflowMessage = (difference: number): string => {
     // For cashflow: positive difference (actual > planned) is good
-    return difference >= 0 ? 'Nice!' : 'Uh oh';
+    if (difference >= 0) return getRandomMessage(POSITIVE_MESSAGES);
+    if (isWithinTolerance(actualCashflow, plannedCashflow)) return getRandomMessage(NEUTRAL_MESSAGES);
+    return getRandomMessage(NEGATIVE_MESSAGES);
   };
   
   const getSpendingColor = (difference: number): string => {
     // For spending: negative difference (actual < planned) is good (green)
-    return difference <= 0 ? 'green' : 'red';
+    if (difference <= 0) return 'green';
+    if (isWithinTolerance(actualSpending, budgetedSpending)) return 'yellow';
+    return 'red';
   };
   
   const getSpendingMessage = (difference: number): string => {
     // For spending: negative difference (actual < planned) is good
-    return difference <= 0 ? 'Nice!' : 'Uh oh';
+    if (difference <= 0) return getRandomMessage(POSITIVE_MESSAGES);
+    if (isWithinTolerance(actualSpending, budgetedSpending)) return getRandomMessage(NEUTRAL_MESSAGES);
+    return getRandomMessage(NEGATIVE_MESSAGES);
   };
   
   const getIncomeColor = (difference: number): string => {
     // For income: positive difference (actual > planned) is good (green)
-    return difference >= 0 ? 'green' : 'red';
+    if (difference >= 0) return 'green';
+    if (isWithinTolerance(actualIncome, budgetedIncome)) return 'yellow';
+    return 'red';
   };
   
   const getIncomeMessage = (difference: number): string => {
     // For income: positive difference (actual > planned) is good
-    return difference >= 0 ? 'Nice!' : 'Uh oh';
+    if (difference >= 0) return getRandomMessage(POSITIVE_MESSAGES);
+    if (isWithinTolerance(actualIncome, budgetedIncome)) return getRandomMessage(NEUTRAL_MESSAGES);
+    return getRandomMessage(NEGATIVE_MESSAGES);
   };
 
   return (
