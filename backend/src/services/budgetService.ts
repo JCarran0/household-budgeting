@@ -6,6 +6,10 @@ import {
   getBudgetType,
   isBudgetableCategory
 } from '../shared/utils/categoryHelpers';
+import {
+  calculateBudgetTotals,
+  BudgetTotals
+} from '../shared/utils/budgetCalculations';
 
 // Stored budget structure with user isolation
 export interface StoredBudget extends MonthlyBudget {
@@ -119,6 +123,19 @@ export class BudgetService {
   async getTotalMonthlyBudget(month: string, userId: string): Promise<number> {
     const monthlyBudgets = await this.getMonthlyBudgets(month, userId);
     return monthlyBudgets.reduce((total, budget) => total + budget.amount, 0);
+  }
+
+  async getMonthlyBudgetTotals(month: string, userId: string): Promise<BudgetTotals> {
+    const monthlyBudgets = await this.getMonthlyBudgets(month, userId);
+
+    // Get categories to properly filter the budgets
+    const categories = this.getCategoriesCallback ? await this.getCategoriesCallback(userId) : [];
+
+    // Use shared utility to calculate proper budget totals
+    return calculateBudgetTotals(monthlyBudgets, categories, {
+      excludeHidden: true,
+      excludeTransfers: true
+    });
   }
 
   async copyBudgets(fromMonth: string, toMonth: string, userId: string): Promise<StoredBudget[]> {

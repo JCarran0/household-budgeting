@@ -86,10 +86,18 @@ export interface BudgetComparison {
   isOverBudget: boolean;
 }
 
+interface BudgetTotals {
+  income: number;
+  expense: number;
+  transfer: number;
+  total: number;
+}
+
 export interface MonthlyBudgetResponse {
   month: string;
   budgets: MonthlyBudget[];
-  total: number;
+  total: number;  // Legacy field for backward compatibility
+  totals: BudgetTotals;  // New detailed breakdown
 }
 
 export interface BudgetComparisonResponse {

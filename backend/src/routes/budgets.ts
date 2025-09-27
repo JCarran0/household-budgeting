@@ -71,12 +71,13 @@ router.get('/month/:month', async (req: Request, res: Response): Promise<void> =
     }
     const { month } = req.params;
     const budgets = await budgetService.getMonthlyBudgets(month, userId);
-    const total = await budgetService.getTotalMonthlyBudget(month, userId);
-    
+    const totals = await budgetService.getMonthlyBudgetTotals(month, userId);
+
     res.json({
       month,
       budgets,
-      total
+      total: totals.total,  // Keep backward compatibility
+      totals              // New breakdown structure
     });
   } catch (error) {
     if (error instanceof Error && error.message.includes('Invalid month format')) {

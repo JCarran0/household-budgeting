@@ -106,8 +106,8 @@ export function MantineDashboard() {
   const monthlySpending = actualTotals.expense;
   const monthlyIncome = actualTotals.income;
 
-  // Calculate budget progress - compare spending against actual budget, not income
-  const totalBudget = budgetData?.total || 0;
+  // Calculate budget progress - compare spending against actual expense budget only
+  const totalBudget = budgetData?.totals?.expense || 0;
   const hasBudget = totalBudget > 0;
   const budgetProgress = hasBudget ? (monthlySpending / totalBudget) * 100 : 0;
   
