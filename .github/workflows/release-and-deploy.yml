@@ -347,12 +347,14 @@ jobs:
       - name: Deploy via SSM
         run: |
           echo "🚀 Triggering deployment on EC2..."
-          
-          # Simple SSM command - just call the deploy script with S3 path
+
+          # Upload the correct deployment script and execute it
+          SCRIPT_CONTENT=$(base64 -w 0 scripts/deploy-server.sh)
+
           COMMAND_ID=$(aws ssm send-command \
             --instance-ids "${{ vars.PRODUCTION_EC2_INSTANCE_ID }}" \
             --document-name "AWS-RunShellScript" \
-            --parameters "commands=[\"sudo -u appuser /home/appuser/deploy.sh ${{ steps.upload.outputs.s3_path }}\"]" \
+            --parameters "commands=[\"echo '$SCRIPT_CONTENT' | base64 -d > /tmp/deploy-server.sh && chmod +x /tmp/deploy-server.sh && sudo -u appuser /tmp/deploy-server.sh ${{ steps.upload.outputs.s3_path }}\"]" \
             --output text \
             --query "Command.CommandId")
           
