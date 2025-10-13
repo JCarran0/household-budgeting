@@ -43,8 +43,8 @@ import {
   Area,
   AreaChart,
 } from 'recharts';
-import { 
-  IconTrendingUp, 
+import {
+  IconTrendingUp,
   IconCash,
   IconChartBar,
   IconChartPie,
@@ -52,11 +52,13 @@ import {
   IconArrowDownRight,
   IconFilterOff,
   IconArrowLeft,
+  IconSettings,
 } from '@tabler/icons-react';
 import { format, subMonths, startOfMonth, endOfMonth, startOfYear, endOfYear, addMonths } from 'date-fns';
 import { api } from '../lib/api';
 import { TransactionPreviewTrigger } from '../components/transactions';
 import { calculateBudgetTotals } from '../../../shared/utils/budgetCalculations';
+import { ReportSettings } from '../components/reports/ReportSettings';
 
 // Color palette for charts (used for both income and expenses)
 const COLORS = [
@@ -1048,6 +1050,9 @@ export function Reports() {
             <Tabs.Tab value="projections" leftSection={<IconTrendingUp size={16} />}>
               Projections
             </Tabs.Tab>
+            <Tabs.Tab value="settings" leftSection={<IconSettings size={16} />}>
+              Settings
+            </Tabs.Tab>
           </Tabs.List>
 
           <Tabs.Panel value="cashflow" pt="xl">
@@ -1537,6 +1542,17 @@ export function Reports() {
                 </Paper>
               </Grid.Col>
             </Grid>
+          </Tabs.Panel>
+
+          <Tabs.Panel value="settings" pt="xl">
+            <Paper withBorder p="md">
+              <Text size="lg" fw={600} mb="md">Report Settings</Text>
+              <Text size="sm" c="dimmed" mb="lg">
+                Configure manual income and expense totals for historical months where transaction data is incomplete.
+              </Text>
+
+              <ReportSettings />
+            </Paper>
           </Tabs.Panel>
         </Tabs>
       </Stack>

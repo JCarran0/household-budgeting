@@ -5,6 +5,7 @@
  */
 
 import { DataService } from './dataService';
+import { ActualsOverrideService } from './actualsOverrideService';
 import { StoredTransaction } from './transactionService';
 import { Category } from '../shared/types';
 import { format, startOfMonth, endOfMonth, subMonths, addMonths } from 'date-fns';
@@ -92,7 +93,10 @@ export interface YTDResult {
 }
 
 export class ReportService {
-  constructor(private dataService: DataService) {}
+  constructor(
+    private dataService: DataService,
+    private actualsOverrideService?: ActualsOverrideService
+  ) {}
 
   /**
    * Get spending trends by category over time
@@ -528,24 +532,61 @@ export class ReportService {
       const summary: CashFlowSummary[] = [];
 
       for (const month of months) {
-        // Parse month properly
-        const [year, monthNum] = month.split('-').map(Number);
-        const monthStart = startOfMonth(new Date(year, monthNum - 1, 1)).toISOString().split('T')[0];
-        const monthEnd = endOfMonth(new Date(year, monthNum - 1, 1)).toISOString().split('T')[0];
+        // Check if there's an override for this month
+        let income: number;
+        let expenses: number;
+        let netFlow: number;
+        let savingsRate: number;
 
-        const monthTransactions = transactions.filter(t =>
-          t.date >= monthStart &&
-          t.date <= monthEnd &&
-          !t.isHidden &&
-          !t.pending &&
-          (!t.categoryId || !hiddenCategoryIds.has(t.categoryId)) // Exclude hidden categories
-        );
+        if (this.actualsOverrideService) {
+          const monthlyActuals = await this.actualsOverrideService.getMonthlyActuals(userId, month);
 
-        // Calculate using shared utilities (excludes transfers)
-        const income = calculateIncome(monthTransactions);
-        const expenses = calculateExpenses(monthTransactions);
-        const netFlow = calculateNetCashFlow(monthTransactions);
-        const savingsRate = calculateSavingsRate(monthTransactions);
+          if (monthlyActuals.hasOverride) {
+            // Use override values
+            income = monthlyActuals.totalIncome;
+            expenses = monthlyActuals.totalExpenses;
+            netFlow = income - expenses;
+            savingsRate = income > 0 ? ((income - expenses) / income) * 100 : 0;
+          } else {
+            // Calculate from transactions
+            const [year, monthNum] = month.split('-').map(Number);
+            const monthStart = startOfMonth(new Date(year, monthNum - 1, 1)).toISOString().split('T')[0];
+            const monthEnd = endOfMonth(new Date(year, monthNum - 1, 1)).toISOString().split('T')[0];
+
+            const monthTransactions = transactions.filter(t =>
+              t.date >= monthStart &&
+              t.date <= monthEnd &&
+              !t.isHidden &&
+              !t.pending &&
+              (!t.categoryId || !hiddenCategoryIds.has(t.categoryId)) // Exclude hidden categories
+            );
+
+            // Calculate using shared utilities (excludes transfers)
+            income = calculateIncome(monthTransactions);
+            expenses = calculateExpenses(monthTransactions);
+            netFlow = calculateNetCashFlow(monthTransactions);
+            savingsRate = calculateSavingsRate(monthTransactions);
+          }
+        } else {
+          // Fallback: calculate from transactions (no override service available)
+          const [year, monthNum] = month.split('-').map(Number);
+          const monthStart = startOfMonth(new Date(year, monthNum - 1, 1)).toISOString().split('T')[0];
+          const monthEnd = endOfMonth(new Date(year, monthNum - 1, 1)).toISOString().split('T')[0];
+
+          const monthTransactions = transactions.filter(t =>
+            t.date >= monthStart &&
+            t.date <= monthEnd &&
+            !t.isHidden &&
+            !t.pending &&
+            (!t.categoryId || !hiddenCategoryIds.has(t.categoryId)) // Exclude hidden categories
+          );
+
+          // Calculate using shared utilities (excludes transfers)
+          income = calculateIncome(monthTransactions);
+          expenses = calculateExpenses(monthTransactions);
+          netFlow = calculateNetCashFlow(monthTransactions);
+          savingsRate = calculateSavingsRate(monthTransactions);
+        }
 
         summary.push({
           month,
@@ -631,71 +672,41 @@ export class ReportService {
   async getYearToDateSummary(userId: string): Promise<YTDResult> {
     try {
       const currentYear = new Date().getFullYear();
-      const startDate = `${currentYear}-01-01`;
-      const endDate = new Date().toISOString().split('T')[0];
+      const startMonth = `${currentYear}-01`;
+      const currentDate = new Date();
+      const currentMonth = format(currentDate, 'yyyy-MM');
 
-      const transactions = await this.dataService.getData<StoredTransaction[]>(
-        `transactions_${userId}`
-      ) || [];
-      
-      const categories = await this.dataService.getCategories(userId);
-      // Create a set of hidden category IDs including subcategories of hidden parents
-      const hiddenCategoryIds = this.getEffectivelyHiddenCategoryIds(categories);
+      // Use getCashFlowSummary which already handles overrides
+      const cashFlowResult = await this.getCashFlowSummary(userId, startMonth, currentMonth);
+      if (!cashFlowResult.success || !cashFlowResult.summary) {
+        return { success: false, error: 'Failed to get cash flow data for YTD summary' };
+      }
 
-      const ytdTransactions = transactions.filter(t => 
-        t.date >= startDate && 
-        t.date <= endDate && 
-        !t.isHidden &&
-        !t.pending &&
-        (!t.categoryId || !hiddenCategoryIds.has(t.categoryId)) // Exclude hidden categories
-      );
+      // Calculate totals from cash flow summary (which includes overrides)
+      const totalIncome = cashFlowResult.summary.reduce((sum, month) => sum + month.income, 0);
+      const totalExpenses = cashFlowResult.summary.reduce((sum, month) => sum + month.expenses, 0);
+      const netIncome = totalIncome - totalExpenses;
 
-      // Calculate using shared utilities (excludes transfers)
-      const totalIncome = calculateIncome(ytdTransactions);
-      const totalExpenses = calculateExpenses(ytdTransactions);
-      const netIncome = calculateNetCashFlow(ytdTransactions);
-      
-      // Calculate months with complete data
+      // Calculate months with complete data from cash flow summary
       let monthsWithData = 0;
       let averageMonthlyIncome = 0;
       let averageMonthlyExpenses = 0;
 
-      if (ytdTransactions.length > 0) {
-        // Group transactions by month to identify which months have data
-        const monthsWithTransactions = new Set<string>();
-        const monthlyTotals = new Map<string, { income: number; expenses: number }>();
-        
-        for (const txn of ytdTransactions) {
-          const monthKey = txn.date.substring(0, 7); // YYYY-MM format
-          monthsWithTransactions.add(monthKey);
-          
-          const current = monthlyTotals.get(monthKey) || { income: 0, expenses: 0 };
-          if (txn.amount < 0) {
-            current.income += Math.abs(txn.amount);
-          } else {
-            current.expenses += txn.amount;
-          }
-          monthlyTotals.set(monthKey, current);
-        }
-        
-        // Determine which months are complete
-        const currentDate = new Date();
-        const currentMonth = format(currentDate, 'yyyy-MM');
-        
+      if (cashFlowResult.summary.length > 0) {
         // Count complete months (exclude current month as it's partial)
         let completeMonthsIncome = 0;
         let completeMonthsExpenses = 0;
-        
-        for (const [month, totals] of monthlyTotals) {
-          if (month < currentMonth) {
+
+        for (const monthData of cashFlowResult.summary) {
+          if (monthData.month < currentMonth) {
             // This is a complete month
             monthsWithData++;
-            completeMonthsIncome += totals.income;
-            completeMonthsExpenses += totals.expenses;
+            completeMonthsIncome += monthData.income;
+            completeMonthsExpenses += monthData.expenses;
           }
           // Current month data is included in totals but not in averages
         }
-        
+
         // Calculate averages based on complete months only
         if (monthsWithData > 0) {
           averageMonthlyIncome = completeMonthsIncome / monthsWithData;
@@ -708,9 +719,29 @@ export class ReportService {
       }
       const savingsRate = totalIncome > 0 ? (netIncome / totalIncome) * 100 : 0;
 
-      // Get top spending categories
+      // Get top spending categories (still need raw transaction data for this)
+      // Note: This part doesn't use overrides because overrides are totals, not category breakdowns
+      const startDate = `${currentYear}-01-01`;
+      const endDate = new Date().toISOString().split('T')[0];
+
+      const transactions = await this.dataService.getData<StoredTransaction[]>(
+        `transactions_${userId}`
+      ) || [];
+
+      const categories = await this.dataService.getCategories(userId);
+      // Create a set of hidden category IDs including subcategories of hidden parents
+      const hiddenCategoryIds = this.getEffectivelyHiddenCategoryIds(categories);
+
+      const ytdTransactions = transactions.filter(t =>
+        t.date >= startDate &&
+        t.date <= endDate &&
+        !t.isHidden &&
+        !t.pending &&
+        (!t.categoryId || !hiddenCategoryIds.has(t.categoryId)) // Exclude hidden categories
+      );
+
       const categorySpending = new Map<string, number>();
-      
+
       for (const txn of ytdTransactions.filter(t => t.amount > 0)) {
         const categoryId = txn.categoryId || 'uncategorized';
         const current = categorySpending.get(categoryId) || 0;

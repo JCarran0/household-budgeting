@@ -11,6 +11,8 @@ import reportRoutes from './routes/reports';
 import autoCategorizeRoutes from './routes/autoCategorize';
 import adminRoutes from './routes/admin';
 import feedbackRoutes from './routes/feedback';
+import actualsOverrideRoutes from './routes/actualsOverrides';
+// import themeRoutes from './routes/themes'; // TODO: Uncomment when themes routes file is created
 
 // Load environment variables (skip in test mode as it's loaded in setup.ts)
 if (process.env.NODE_ENV !== 'test') {
@@ -99,6 +101,8 @@ app.use(`${apiPrefix}/reports`, reportRoutes);
 app.use(`${apiPrefix}/autocategorize`, autoCategorizeRoutes);
 app.use(`${apiPrefix}/admin`, adminRoutes);
 app.use(`${apiPrefix}/feedback`, feedbackRoutes);
+app.use(`${apiPrefix}/actuals-overrides`, actualsOverrideRoutes);
+// app.use(`${apiPrefix}/themes`, themeRoutes); // TODO: Uncomment when themes routes file is created
 
 // Version endpoint under API prefix
 app.get(`${apiPrefix}/version`, (_req: Request, res: Response) => {

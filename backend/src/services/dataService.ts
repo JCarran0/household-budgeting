@@ -19,11 +19,11 @@ export interface DataService {
   createUser(user: User): Promise<User>;
   updateUser(id: string, updates: Partial<User>): Promise<User | null>;
   getAllUsers(): Promise<User[]>;
-  
+
   // Category methods
   getCategories(userId: string): Promise<Category[]>;
   saveCategories(categories: Category[], userId: string): Promise<void>;
-  
+
   // Generic data storage methods
   getData<T>(key: string): Promise<T | null>;
   saveData<T>(key: string, data: T): Promise<void>;

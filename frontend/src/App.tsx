@@ -1,7 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
-import { MantineProvider, createTheme } from '@mantine/core';
 import { Notifications } from '@mantine/notifications';
 import { ModalsProvider } from '@mantine/modals';
 import '@mantine/core/styles.css';
@@ -23,11 +22,12 @@ import { Budgets } from './pages/Budgets';
 import { Reports } from './pages/Reports';
 import { Admin } from './pages/Admin';
 import { PlaidLinkProvider } from './providers/PlaidLinkProvider';
+import { MantineProvider, createTheme } from '@mantine/core';
 import { queryClient } from './lib/queryClient';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { RouteErrorBoundary } from './components/RouteErrorBoundary';
 
-// Mantine theme configuration
+// Default theme configuration
 const theme = createTheme({
   primaryColor: 'yellow',
   defaultRadius: 'md',
@@ -37,11 +37,11 @@ const theme = createTheme({
 function App() {
   return (
     <ErrorBoundary level="app">
-      <MantineProvider theme={theme} defaultColorScheme="dark">
-        <ModalsProvider>
-          <Notifications position="top-right" />
-          <QueryClientProvider client={queryClient}>
-          <PlaidLinkProvider>
+      <QueryClientProvider client={queryClient}>
+        <MantineProvider theme={theme} defaultColorScheme="dark">
+          <ModalsProvider>
+            <Notifications position="top-right" />
+            <PlaidLinkProvider>
             <BrowserRouter>
               <Routes>
                 <Route path="/login" element={<LoginForm />} />
@@ -89,12 +89,12 @@ function App() {
                 </Route>
                 <Route path="/" element={<Navigate to="/dashboard" replace />} />
               </Routes>
-            </BrowserRouter>
-          </PlaidLinkProvider>
-          <ReactQueryDevtools initialIsOpen={false} />
-        </QueryClientProvider>
-        </ModalsProvider>
-      </MantineProvider>
+              </BrowserRouter>
+            </PlaidLinkProvider>
+            <ReactQueryDevtools initialIsOpen={false} />
+          </ModalsProvider>
+        </MantineProvider>
+      </QueryClientProvider>
     </ErrorBoundary>
   );
 }
