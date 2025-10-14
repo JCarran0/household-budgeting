@@ -11,7 +11,7 @@ import {
   authenticatedPost,
   authenticatedPut,
 } from '../helpers/apiHelper';
-import { authService, dataService, categoryService, transactionService } from '../../services';
+import { authService, dataService, transactionService } from '../../services';
 import { StoredTransaction } from '../../services/transactionService';
 
 describe('User Story: Hidden Categories', () => {
@@ -35,9 +35,6 @@ describe('User Story: Hidden Categories', () => {
   
   describe('As a user, I can use hidden categories to exclude transactions from budgets', () => {
     test('I can create a hidden category for transfers', async () => {
-      // Initialize default categories to get system categories
-      await categoryService.initializeDefaultCategories(userId);
-      
       // Create a custom hidden category
       const response = await authenticatedPost(
         '/api/v1/categories',
@@ -49,22 +46,28 @@ describe('User Story: Hidden Categories', () => {
           isRollover: false
         }
       );
-      
+
       expect(response.status).toBe(201);
       expect(response.body.isHidden).toBe(true);
     });
-    
+
     test('I can categorize transactions with hidden categories', async () => {
-      // Initialize default categories to get system Transfer category
-      await categoryService.initializeDefaultCategories(userId);
-      
-      // Get the system Transfer Out category (which is hidden)
-      const categories = await categoryService.getAllCategories(userId);
-      const transferCategory = categories.find(c => c.name === 'Transfer Out');
-      expect(transferCategory).toBeDefined();
-      expect(transferCategory?.isHidden).toBe(true);
-      
-      const hiddenCategoryId = transferCategory!.id;
+      // Create a hidden Transfer Out category
+      const transferCategoryResponse = await authenticatedPost(
+        '/api/v1/categories',
+        authToken,
+        {
+          name: 'Transfer Out',
+          parentId: null,
+          isHidden: true,
+          isRollover: false
+        }
+      );
+
+      expect(transferCategoryResponse.status).toBe(201);
+      expect(transferCategoryResponse.body.isHidden).toBe(true);
+
+      const hiddenCategoryId = transferCategoryResponse.body.id;
       
       // Create a test transaction using dataService
       const existingTransactions = await dataService.getData<StoredTransaction[]>(
@@ -161,17 +164,29 @@ describe('User Story: Hidden Categories', () => {
     });
     
     test('Hidden categories should NOT appear in budget endpoints', async () => {
-      // Initialize default categories (includes hidden Transfer category)
-      await categoryService.initializeDefaultCategories(userId);
-      
+      // Create hidden Transfer categories
+      await authenticatedPost('/api/v1/categories', authToken, {
+        name: 'Transfer In',
+        parentId: null,
+        isHidden: true,
+        isRollover: false
+      });
+
+      await authenticatedPost('/api/v1/categories', authToken, {
+        name: 'Transfer Out',
+        parentId: null,
+        isHidden: true,
+        isRollover: false
+      });
+
       // Get all categories
       const allCategoriesResponse = await authenticatedGet('/api/v1/categories', authToken);
       expect(allCategoriesResponse.status).toBe(200);
-      
+
       // Should include hidden categories in general category list
       const hiddenCategories = allCategoriesResponse.body.filter((c: any) => c.isHidden);
       expect(hiddenCategories.length).toBeGreaterThan(0);
-      
+
       // Verify Transfer In and Transfer Out categories exist and are hidden
       const transferInCategory = allCategoriesResponse.body.find((c: any) => c.name === 'Transfer In');
       const transferOutCategory = allCategoriesResponse.body.find((c: any) => c.name === 'Transfer Out');
@@ -182,19 +197,30 @@ describe('User Story: Hidden Categories', () => {
     });
     
     test('Subcategories of hidden parents should be excluded from budget calculations', async () => {
-      // Initialize default categories to get system Transfer categories
-      await categoryService.initializeDefaultCategories(userId);
-      
-      // Get the Transfer Out parent category (hidden) and Account Transfer subcategory (not directly hidden)
-      const categories = await categoryService.getAllCategories(userId);
-      const transferOutParent = categories.find(c => c.id === 'TRANSFER_OUT');
-      const accountTransferSub = categories.find(c => c.id === 'TRANSFER_OUT_ACCOUNT_TRANSFER');
-      
+      // Create hidden parent category
+      const transferOutResponse = await authenticatedPost('/api/v1/categories', authToken, {
+        name: 'Transfer Out',
+        parentId: null,
+        isHidden: true,
+        isRollover: false
+      });
+
+      // Create non-hidden subcategory under hidden parent
+      const accountTransferResponse = await authenticatedPost('/api/v1/categories', authToken, {
+        name: 'Account Transfer',
+        parentId: transferOutResponse.body.id,
+        isHidden: false,
+        isRollover: false
+      });
+
+      const transferOutParent = transferOutResponse.body;
+      const accountTransferSub = accountTransferResponse.body;
+
       expect(transferOutParent).toBeDefined();
       expect(accountTransferSub).toBeDefined();
-      expect(transferOutParent?.isHidden).toBe(true);
-      expect(accountTransferSub?.isHidden).toBe(false); // Subcategory is not directly hidden
-      expect(accountTransferSub?.parentId).toBe('TRANSFER_OUT'); // But parent is hidden
+      expect(transferOutParent.isHidden).toBe(true);
+      expect(accountTransferSub.isHidden).toBe(false); // Subcategory is not directly hidden
+      expect(accountTransferSub.parentId).toBe(transferOutParent.id); // But parent is hidden
       
       // Create a test transaction with the subcategory
       const testTransaction: StoredTransaction = {
@@ -207,9 +233,9 @@ describe('User Story: Hidden Categories', () => {
         date: '2025-01-15',
         name: 'Account Transfer',
         merchantName: null,
-        category: ['TRANSFER_OUT', 'TRANSFER_OUT_ACCOUNT_TRANSFER'],
-        plaidCategoryId: '21005000',
-        categoryId: 'TRANSFER_OUT_ACCOUNT_TRANSFER', // Using the subcategory
+        category: null,
+        plaidCategoryId: null,
+        categoryId: accountTransferSub.id, // Using the subcategory
         status: 'posted',
         pending: false,
         isoCurrencyCode: 'USD',
@@ -228,37 +254,49 @@ describe('User Story: Hidden Categories', () => {
       await dataService.saveData(`transactions_${userId}`, [testTransaction]);
       
       // Create actuals map (simulating frontend calculation that should exclude hidden subcategories)
-      const actuals = { 'TRANSFER_OUT_ACCOUNT_TRANSFER': 250 };
-      
+      const actuals: Record<string, number> = {};
+      actuals[accountTransferSub.id] = 250;
+
       // Call budget comparison endpoint (this should exclude the subcategory because parent is hidden)
       const comparisonResponse = await authenticatedPost(
         `/api/v1/budgets/comparison/2025-01`,
         authToken,
         { actuals }
       );
-      
+
       expect(comparisonResponse.status).toBe(200);
-      
+
       // The comparison should NOT include the transfer subcategory
       // because its parent is hidden, even though the subcategory itself isn't directly hidden
       const comparisons = comparisonResponse.body.comparisons;
-      const transferComparison = comparisons.find((c: any) => c.categoryId === 'TRANSFER_OUT_ACCOUNT_TRANSFER');
+      const transferComparison = comparisons.find((c: any) => c.categoryId === accountTransferSub.id);
       
       expect(transferComparison).toBeUndefined(); // Should be excluded due to hidden parent
       expect(comparisons.length).toBe(0); // No budget comparisons should be created
     });
 
     test('Budget grid should not display budgets for subcategories of hidden parents', async () => {
-      // Initialize default categories
-      await categoryService.initializeDefaultCategories(userId);
-      
-      // Get the Account Transfer subcategory (child of hidden TRANSFER_OUT)
-      const categories = await categoryService.getAllCategories(userId);
-      const accountTransferSub = categories.find(c => c.id === 'TRANSFER_OUT_ACCOUNT_TRANSFER');
-      
+      // Create hidden parent category
+      const transferOutResponse = await authenticatedPost('/api/v1/categories', authToken, {
+        name: 'Transfer Out',
+        parentId: null,
+        isHidden: true,
+        isRollover: false
+      });
+
+      // Create non-hidden subcategory under hidden parent
+      const accountTransferResponse = await authenticatedPost('/api/v1/categories', authToken, {
+        name: 'Account Transfer',
+        parentId: transferOutResponse.body.id,
+        isHidden: false,
+        isRollover: false
+      });
+
+      const accountTransferSub = accountTransferResponse.body;
+
       expect(accountTransferSub).toBeDefined();
-      expect(accountTransferSub?.parentId).toBe('TRANSFER_OUT');
-      
+      expect(accountTransferSub.parentId).toBe(transferOutResponse.body.id);
+
       // Try to create a budget for the subcategory (this might fail, which is correct)
       // But if it succeeds, it should still be filtered from the grid
       try {
@@ -266,7 +304,7 @@ describe('User Story: Hidden Categories', () => {
           '/api/v1/budgets',
           authToken,
           {
-            categoryId: 'TRANSFER_OUT_ACCOUNT_TRANSFER',
+            categoryId: accountTransferSub.id,
             month: '2025-01',
             amount: 100
           }
@@ -284,7 +322,7 @@ describe('User Story: Hidden Categories', () => {
           // The budget should not appear in the monthly budget list
           // because the frontend BudgetGrid filters out subcategories of hidden parents
           const budgets = monthlyResponse.body.budgets;
-          const transferBudget = budgets.find((b: any) => b.categoryId === 'TRANSFER_OUT_ACCOUNT_TRANSFER');
+          const transferBudget = budgets.find((b: any) => b.categoryId === accountTransferSub.id);
           
           // Note: This test validates the API response, but the frontend filtering
           // is what actually hides it from the user in the BudgetGrid component

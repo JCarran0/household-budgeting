@@ -1,6 +1,5 @@
 import { Category } from '../shared/types';
 import { DataService } from './dataService';
-import { PLAID_CATEGORIES } from '../constants/plaidCategories';
 import { BudgetService } from './budgetService';
 import { AutoCategorizeService } from './autoCategorizeService';
 import { TransactionService } from './transactionService';
@@ -160,18 +159,13 @@ export class CategoryService {
 
   async deleteCategory(id: string, userId: string): Promise<void> {
     const categories = await this.dataService.getCategories(userId);
-    
+
     // Find the category to delete
     const categoryToDelete = categories.find(cat => cat.id === id);
     if (!categoryToDelete) {
       throw new Error('Category not found');
     }
-    
-    // Prevent deletion of the Savings parent category
-    if (id === 'CUSTOM_SAVINGS') {
-      throw new Error('Cannot delete the Savings category as it is required for the system');
-    }
-    
+
     // Check if category has subcategories
     const hasSubcategories = categories.some(cat => cat.parentId === id);
     if (hasSubcategories) {
@@ -260,58 +254,11 @@ export class CategoryService {
     return categories.filter(cat => cat.isRollover);
   }
 
-  async initializeDefaultCategories(userId: string): Promise<void> {
-    const categories = await this.dataService.getCategories(userId);
-    
-    // Only initialize if no categories exist
-    if (categories.length > 0) {
-      return;
-    }
-
-    const defaultCategories: Category[] = [];
-
-    // Create all Plaid primary and subcategories
-    Object.entries(PLAID_CATEGORIES).forEach(([primaryId, primary]) => {
-      // Add primary category
-      defaultCategories.push({
-        id: primaryId,
-        name: primary.name,
-        parentId: null,
-        description: undefined,
-        isCustom: false,
-        isHidden: ['TRANSFER_IN', 'TRANSFER_OUT'].includes(primaryId),
-        isRollover: false,
-        isIncome: primaryId.startsWith('INCOME')
-      });
-
-      // Add all subcategories for this primary category
-      Object.entries(primary.subcategories).forEach(([subcategoryId, subcategory]) => {
-        defaultCategories.push({
-          id: subcategoryId,
-          name: subcategory.name,
-          parentId: primaryId,
-          description: subcategory.description,
-          isCustom: false,
-          isHidden: false,
-          isRollover: false,
-          isIncome: primaryId.startsWith('INCOME')
-        });
-      });
-    });
-
-    // Add a custom Savings category that's not in Plaid taxonomy
-    defaultCategories.push({
-      id: 'CUSTOM_SAVINGS',
-      name: 'Savings',
-      parentId: null,
-      description: 'Money set aside for future use',
-      isCustom: true,
-      isHidden: false,
-      isRollover: true,
-      isIncome: false
-    });
-
-    await this.dataService.saveCategories(defaultCategories, userId);
+  async initializeDefaultCategories(_userId: string): Promise<void> {
+    // No longer initialize any default categories
+    // Users must create their own category taxonomy
+    // This method is kept for backward compatibility but does nothing
+    return;
   }
 
   /**

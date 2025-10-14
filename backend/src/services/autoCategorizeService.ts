@@ -240,34 +240,33 @@ export class AutoCategorizeService {
 
     for (const transaction of transactions) {
       // Check if transaction has a valid category
-      const validCategory = transaction.categoryId ? 
+      const validCategory = transaction.categoryId ?
         categories.find(cat => cat.id === transaction.categoryId) : null;
       const hadValidCategory = !!validCategory;
-      
+
       // Skip if already has valid category and we're not force recategorizing
       if (!forceRecategorize && hadValidCategory) {
         continue;
       }
-      
-      let matched = false;
+
       const originalCategoryId = transaction.categoryId;
-      
-      // Step 1: Try user-defined rules first
+
+      // Try user-defined rules
       // Check userDescription first (user override), then merchantName (cleaner), then name (raw)
       const description = (
-        transaction.userDescription || 
-        transaction.merchantName || 
-        transaction.name || 
+        transaction.userDescription ||
+        transaction.merchantName ||
+        transaction.name ||
         ''
       ).toLowerCase();
-      
+
       for (const rule of activeRules) {
         // Check if any pattern matches (OR logic)
         const matches = rule.patterns.some(pattern => {
           const lowerPattern = pattern.toLowerCase();
           return rule.matchType === 'contains' && description.includes(lowerPattern);
         });
-        
+
         if (matches) {
           transaction.categoryId = rule.categoryId;
           // Apply user description if provided by the rule
@@ -275,42 +274,14 @@ export class AutoCategorizeService {
             transaction.userDescription = rule.userDescription;
           }
           transaction.updatedAt = new Date();
-          
+
           if (hadValidCategory && originalCategoryId !== rule.categoryId) {
             recategorized++;
           } else if (!hadValidCategory) {
             categorized++;
           }
-          
-          matched = true;
+
           break; // Stop after first match
-        }
-      }
-      
-      // Step 2: If no user rule matched and transaction has Plaid categories,
-      // try to match with user's categories by name
-      if (!matched && transaction.category && transaction.category.length > 0) {
-        // Get the primary category from Plaid (first element)
-        const plaidPrimaryCategory = transaction.category[0]
-          ?.replace(/_/g, ' ')  // Convert FOOD_AND_DRINK to Food and Drink
-          ?.split(' ')
-          ?.map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
-          ?.join(' ');
-        
-        // Look for a user category with matching name (case-insensitive)
-        const matchingCategory = categories.find(cat => 
-          cat.name.toLowerCase() === plaidPrimaryCategory?.toLowerCase()
-        );
-        
-        if (matchingCategory) {
-          transaction.categoryId = matchingCategory.id;
-          transaction.updatedAt = new Date();
-          
-          if (hadValidCategory && originalCategoryId !== matchingCategory.id) {
-            recategorized++;
-          } else if (!hadValidCategory) {
-            categorized++;
-          }
         }
       }
     }

@@ -308,8 +308,8 @@ export class TransactionService {
       merchantName: plaidTxn.merchantName,
       category: plaidTxn.category,
       plaidCategoryId: plaidTxn.categoryId,
-      // Use Plaid's detailed category ID directly, or primary if no detailed exists
-      categoryId: plaidTxn.category?.[1] || plaidTxn.category?.[0] || null,
+      // Do not automatically assign Plaid categories - user must categorize manually
+      categoryId: null,
       status: plaidTxn.pending ? 'pending' : 'posted',
       pending: plaidTxn.pending,
       isoCurrencyCode: plaidTxn.isoCurrencyCode,
@@ -321,7 +321,7 @@ export class TransactionService {
       splitTransactionIds: [],
       location: (() => {
         if (!plaidTxn.location) return null;
-        
+
         const locationData = {
           address: plaidTxn.location.address || null,
           city: plaidTxn.location.city || null,
@@ -331,7 +331,7 @@ export class TransactionService {
           lat: null,
           lon: null,
         };
-        
+
         return this.hasLocationData(locationData) ? locationData : null;
       })(),
       createdAt: new Date(),
@@ -370,22 +370,13 @@ export class TransactionService {
       changed = true;
     }
 
-    // Update category if Plaid's category changed (but preserve user's manual override if they set one)
-    const newPlaidCategoryId = plaidTxn.category?.[1] || plaidTxn.category?.[0] || null;
-    const oldPlaidCategoryId = existing.category?.[1] || existing.category?.[0] || null;
+    // Update Plaid category metadata for reference, but don't auto-assign to categoryId
     const plaidCategoryChanged = JSON.stringify(existing.category) !== JSON.stringify(plaidTxn.category);
-    
+
     if (plaidCategoryChanged) {
       existing.category = plaidTxn.category;
       existing.plaidCategoryId = plaidTxn.categoryId;
-      
-      // Only update categoryId if user hasn't manually set a custom category
-      // If the current categoryId matches the old Plaid category, update it to the new one
-      // If it's different (user override), preserve it
-      if (!existing.categoryId || existing.categoryId === oldPlaidCategoryId) {
-        existing.categoryId = newPlaidCategoryId;
-      }
-      
+      // Do NOT update categoryId - preserve user's manual categorization
       changed = true;
     }
 
