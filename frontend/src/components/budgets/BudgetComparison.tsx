@@ -30,12 +30,15 @@ import {
   isTransferCategory,
   createCategoryLookup
 } from '../../../../shared/utils/categoryHelpers';
-import { getChildCategoryIds } from '../../../../shared/utils/budgetCalculations';
 import { BudgetDebugger } from './BudgetDebugger';
 
 interface BudgetComparisonProps {
   comparison: BudgetComparisonResponse;
   categories: Category[];
+  budgetedIncome: number;
+  actualIncome: number;
+  budgetedSpending: number;
+  actualSpending: number;
 }
 
 interface HierarchicalComparison {
@@ -56,51 +59,24 @@ interface HierarchicalComparison {
   originalActual?: number; // Store original parent actual before aggregation
 }
 
-export function BudgetComparison({ comparison, categories }: BudgetComparisonProps) {
+export function BudgetComparison({
+  comparison,
+  categories,
+  budgetedIncome,
+  actualIncome,
+  budgetedSpending,
+  actualSpending
+}: BudgetComparisonProps) {
   // Using shared formatCurrency utility from utils/formatters
   const [showDebugger, setShowDebugger] = useState(false);
-  
-  // Calculate income and expense totals for cashflow
-  const { incomeTotal, expenseTotal, budgetedCashflow, actualCashflow } = useMemo(() => {
-    let budgetedIncome = 0;
-    let actualIncome = 0;
-    let budgetedExpense = 0;
-    let actualExpense = 0;
 
-    // Create category lookup for hierarchical income detection
-    const categoryLookup = createCategoryLookup(categories);
+  // Calculate cashflow from passed props (already calculated by parent using shared utilities)
+  const budgetedCashflow = budgetedIncome - budgetedSpending;
+  const actualCashflow = actualIncome - actualSpending;
 
-    // Use shared utility to get child category IDs for exclusion from totals
-    const childCategoryIds = getChildCategoryIds(categories);
-
-    comparison.comparisons.forEach(comp => {
-      // Skip child categories to avoid double-counting
-      // (parent totals already include children in the backend)
-      if (childCategoryIds.has(comp.categoryId)) {
-        return;
-      }
-
-      const typedComp = comp as BudgetComparisonType;
-      // Use hierarchical income detection to properly classify income categories
-      const isIncome = typedComp.isIncomeCategory ||
-        isIncomeCategoryHierarchical(comp.categoryId, categoryLookup);
-
-      if (isIncome) {
-        budgetedIncome += comp.budgeted;
-        actualIncome += comp.actual;
-      } else {
-        budgetedExpense += comp.budgeted;
-        actualExpense += comp.actual;
-      }
-    });
-
-    return {
-      incomeTotal: { budgeted: budgetedIncome, actual: actualIncome },
-      expenseTotal: { budgeted: budgetedExpense, actual: actualExpense },
-      budgetedCashflow: budgetedIncome - budgetedExpense,
-      actualCashflow: actualIncome - actualExpense,
-    };
-  }, [comparison, categories]);
+  // Create income and expense totals objects for compatibility with existing code
+  const incomeTotal = { budgeted: budgetedIncome, actual: actualIncome };
+  const expenseTotal = { budgeted: budgetedSpending, actual: actualSpending };
 
   const getCategoryName = (categoryId: string): string => {
     const category = categories.find(c => c.id === categoryId);

@@ -511,6 +511,10 @@ export function Budgets() {
                 <BudgetComparison
                   comparison={comparisonData}
                   categories={categories || []}
+                  budgetedIncome={budgetedIncome}
+                  actualIncome={actualIncome}
+                  budgetedSpending={budgetedSpending}
+                  actualSpending={actualSpending}
                 />
               ) : (
                 <Alert icon={<IconAlertCircle size={16} />} color="yellow">
