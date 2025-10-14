@@ -698,8 +698,8 @@ export class ReportService {
         let completeMonthsExpenses = 0;
 
         for (const monthData of cashFlowResult.summary) {
-          if (monthData.month < currentMonth) {
-            // This is a complete month
+          if (monthData.month < currentMonth && (monthData.income > 0 || monthData.expenses > 0)) {
+            // This is a complete month with actual data
             monthsWithData++;
             completeMonthsIncome += monthData.income;
             completeMonthsExpenses += monthData.expenses;
