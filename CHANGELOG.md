@@ -5,6 +5,28 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.20.0](https://github.com/JCarran0/household-budgeting/compare/v1.19.0...v1.20.0) (2025-10-14)
+
+
+### Features
+
+* **budget:** enhance budget feedback with fun messages and 3-tier tolerance system ([ac2fd14](https://github.com/JCarran0/household-budgeting/commit/ac2fd14b1c0d3d88945e7cf1648c19dc066f7513))
+
+
+### Bug Fixes
+
+* **actuals-override:** fix timezone bugs causing month offset and display issues ([0a3806d](https://github.com/JCarran0/household-budgeting/commit/0a3806de08b46de0c7c9c3e698b539cf120eebf2))
+* **api:** handle missing CHANGELOG.md gracefully in changelog endpoint ([e80f26b](https://github.com/JCarran0/household-budgeting/commit/e80f26b3b109343c4da16359a246bb45692bce02))
+* **dashboard:** correct budget calculation using shared utilities for expense-only totals ([ca27880](https://github.com/JCarran0/household-budgeting/commit/ca27880e955f44727d9b5944d130fa74b63bf771))
+* **deploy:** consolidate deployment scripts and use correct CHANGELOG.md logic ([b3b3ff7](https://github.com/JCarran0/household-budgeting/commit/b3b3ff79beaeaddba9f98729e2580da15453e945))
+* **reports:** correct YTD average calculation to only count months with data ([a0e7a26](https://github.com/JCarran0/household-budgeting/commit/a0e7a2604dc0a156575979f9dcfc25694c962fa1))
+
+
+### Chores
+
+* convert backend/src/shared symlink to actual directory ([f68ceef](https://github.com/JCarran0/household-budgeting/commit/f68ceef3aeb94822e79d0b954d66a93265bffaa9))
+* restore backend/src/shared as symlink ([dd1cbd9](https://github.com/JCarran0/household-budgeting/commit/dd1cbd9a69a020da1f8a5a8674c01af1bd8a8e83))
+
 ## [1.19.0](https://github.com/JCarran0/household-budgeting/compare/v1.18.0...v1.19.0) (2025-09-21)
 
 
