@@ -688,11 +688,12 @@ class ApiClient {
   async getProjections(monthsToProject = 6): Promise<{
     projections: Array<{
       month: string;
-      projectedIncome: number;
-      projectedExpenses: number;
-      projectedNetFlow: number;
-      confidence: 'high' | 'medium' | 'low';
+      budgetedCashflow: number | null;
+      isBudgetExtrapolated: boolean;
+      priorYearCashflow: number | null;
+      averageCashflow: number;
     }>;
+    hasPriorYearData: boolean;
   }> {
     const { data } = await this.client.get('/reports/projections', {
       params: { monthsToProject }

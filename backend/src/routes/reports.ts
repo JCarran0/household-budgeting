@@ -193,8 +193,8 @@ router.get('/projections', authMiddleware, async (req: AuthRequest, res: Respons
 
     const validation = projectionsSchema.safeParse(req.query);
     if (!validation.success) {
-      res.status(400).json({ 
-        success: false, 
+      res.status(400).json({
+        success: false,
         error: 'Invalid parameters',
         details: validation.error.format(),
       });
@@ -203,7 +203,7 @@ router.get('/projections', authMiddleware, async (req: AuthRequest, res: Respons
 
     const { monthsToProject = 6 } = validation.data;
 
-    const result = await reportService.generateProjections(
+    const result = await reportService.generateCashFlowProjections(
       req.user.userId,
       monthsToProject
     );
@@ -216,6 +216,7 @@ router.get('/projections', authMiddleware, async (req: AuthRequest, res: Respons
     res.json({
       success: true,
       projections: result.projections,
+      hasPriorYearData: result.hasPriorYearData,
     });
   } catch (error) {
     console.error('Error generating projections:', error);

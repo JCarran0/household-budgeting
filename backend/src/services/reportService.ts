@@ -7,9 +7,10 @@
 import { DataService } from './dataService';
 import { ActualsOverrideService } from './actualsOverrideService';
 import { StoredTransaction } from './transactionService';
-import { Category } from '../shared/types';
+import { Category, MonthlyBudget } from '../shared/types';
 import { format, startOfMonth, endOfMonth, subMonths, addMonths } from 'date-fns';
 import { calculateIncome, calculateExpenses, calculateNetCashFlow, calculateSavingsRate } from '../shared/utils/transactionCalculations';
+import { calculateBudgetTotals } from '../shared/utils/budgetCalculations';
 
 // Report types
 export interface SpendingTrend {
@@ -43,6 +44,21 @@ export interface CashFlowProjection {
   projectedExpenses: number;
   projectedNetFlow: number;
   confidence: 'high' | 'medium' | 'low';
+}
+
+export interface CashFlowOutlookProjection {
+  month: string;
+  budgetedCashflow: number | null;
+  isBudgetExtrapolated: boolean;
+  priorYearCashflow: number | null;
+  averageCashflow: number;
+}
+
+export interface CashFlowOutlookResult {
+  success: boolean;
+  projections?: CashFlowOutlookProjection[];
+  hasPriorYearData?: boolean;
+  error?: string;
 }
 
 export interface YearToDateSummary {
@@ -663,6 +679,109 @@ export class ReportService {
     } catch (error) {
       console.error('Error generating projections:', error);
       return { success: false, error: 'Failed to generate projections' };
+    }
+  }
+
+  /**
+   * Generate cash flow outlook with budget comparison
+   */
+  async generateCashFlowProjections(
+    userId: string,
+    monthsToProject: number = 6
+  ): Promise<CashFlowOutlookResult> {
+    try {
+      const today = new Date();
+      const categories = await this.dataService.getCategories(userId);
+
+      // Get last known budget for extrapolation
+      let lastKnownBudget: MonthlyBudget[] | null = null;
+
+      // Search backwards to find last month with budgets (up to 12 months)
+      for (let i = 0; i <= 12; i++) {
+        const monthToCheck = format(subMonths(today, i), 'yyyy-MM');
+        const budgetsKey = `budgets_${userId}_${monthToCheck}`;
+        const budgets = await this.dataService.getData<MonthlyBudget[]>(budgetsKey) || [];
+
+        if (budgets.length > 0) {
+          lastKnownBudget = budgets;
+          break;
+        }
+      }
+
+      // Calculate average cashflow from last 6 months
+      const sixMonthsAgo = format(subMonths(today, 6), 'yyyy-MM');
+      const lastMonth = format(subMonths(today, 1), 'yyyy-MM');
+
+      const historicalResult = await this.getCashFlowSummary(userId, sixMonthsAgo, lastMonth);
+      if (!historicalResult.success || !historicalResult.summary) {
+        return { success: false, error: 'Failed to get historical data for average calculation' };
+      }
+
+      const avgNetFlow = historicalResult.summary.reduce((sum, m) => sum + m.netFlow, 0) / historicalResult.summary.length;
+
+      // Check if we have any prior year data
+      const oneYearAgo = format(subMonths(addMonths(today, 1), 12), 'yyyy-MM');
+      const checkPriorYearEnd = format(subMonths(addMonths(today, monthsToProject), 12), 'yyyy-MM');
+
+      const priorYearResult = await this.getCashFlowSummary(userId, oneYearAgo, checkPriorYearEnd);
+      const hasPriorYearData = priorYearResult.success &&
+                               priorYearResult.summary &&
+                               priorYearResult.summary.some(m => m.income > 0 || m.expenses > 0);
+
+      // Generate projections for each month
+      const projections: CashFlowOutlookProjection[] = [];
+
+      for (let i = 1; i <= monthsToProject; i++) {
+        const projMonth = format(addMonths(today, i), 'yyyy-MM');
+
+        // 1. Get budgeted cashflow
+        const budgetsKey = `budgets_${userId}_${projMonth}`;
+        let monthBudgets = await this.dataService.getData<MonthlyBudget[]>(budgetsKey) || [];
+        let isBudgetExtrapolated = false;
+
+        if (monthBudgets.length === 0 && lastKnownBudget) {
+          // No budget for this month, copy from last known
+          monthBudgets = lastKnownBudget;
+          isBudgetExtrapolated = true;
+        }
+
+        let budgetedCashflow: number | null = null;
+        if (monthBudgets.length > 0) {
+          const totals = calculateBudgetTotals(monthBudgets, categories, { excludeHidden: false });
+          budgetedCashflow = totals.income - totals.expense;
+        }
+
+        // 2. Get prior year same month actual cashflow
+        const priorYearMonth = format(subMonths(addMonths(today, i), 12), 'yyyy-MM');
+        let priorYearCashflow: number | null = null;
+
+        if (hasPriorYearData && priorYearResult.summary) {
+          const priorYearData = priorYearResult.summary.find(m => m.month === priorYearMonth);
+          if (priorYearData) {
+            priorYearCashflow = priorYearData.netFlow;
+          }
+        }
+
+        // 3. Average cashflow (already calculated)
+        const averageCashflow = avgNetFlow;
+
+        projections.push({
+          month: projMonth,
+          budgetedCashflow,
+          isBudgetExtrapolated,
+          priorYearCashflow,
+          averageCashflow
+        });
+      }
+
+      return {
+        success: true,
+        projections,
+        hasPriorYearData
+      };
+    } catch (error) {
+      console.error('Error generating cash flow projections:', error);
+      return { success: false, error: 'Failed to generate cash flow projections' };
     }
   }
 
