@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.21.0](https://github.com/JCarran0/household-budgeting/compare/v1.20.2...v1.21.0) (2025-10-15)
+
+
+### Features
+
+* **reports:** overhaul cash flow projections with budget comparison ([594432c](https://github.com/JCarran0/household-budgeting/commit/594432c8d1b09682a33f54d85f146cfe650d280f))
+
+
+### Bug Fixes
+
+* **budgets:** correct Budget Performance Summary calculations ([5b982f8](https://github.com/JCarran0/household-budgeting/commit/5b982f89e5979f05fe2682656fb66fdfe4821e3c))
+
 ### [1.20.2](https://github.com/JCarran0/household-budgeting/compare/v1.20.1...v1.20.2) (2025-10-14)
 
 
