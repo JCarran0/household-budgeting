@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useReportsFilters } from '../hooks/usePersistedFilters';
 import { notifications } from '@mantine/notifications';
-import { formatCurrency } from '../utils/formatters';
+import { formatCurrency, parseMonthString } from '../utils/formatters';
 import { 
   Container, 
   Title, 
@@ -747,7 +747,7 @@ export function Reports() {
   }
 
   const projectionsChartData = projectionsData?.projections?.map(item => ({
-    month: format(new Date(item.month + '-01'), 'MMM'),
+    month: format(parseMonthString(item.month), 'MMM'),
     budgeted: item.budgetedCashflow,
     priorYear: item.priorYearCashflow,
     average: item.averageCashflow,
@@ -1604,7 +1604,7 @@ export function Reports() {
 
                         return (
                           <Table.Tr key={projection.month}>
-                            <Table.Td>{format(new Date(projection.month + '-01'), 'MMM yyyy')}</Table.Td>
+                            <Table.Td>{format(parseMonthString(projection.month), 'MMM yyyy')}</Table.Td>
                             <Table.Td>
                               {projection.budgetedCashflow !== null ? (
                                 <Group gap={4}>
