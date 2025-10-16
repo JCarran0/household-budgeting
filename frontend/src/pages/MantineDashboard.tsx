@@ -82,15 +82,23 @@ export function MantineDashboard() {
 
   const isLoading = accountsLoading || transactionsLoading;
 
-  const totalBalance = accounts?.reduce(
-    (sum, account) => sum + (account.currentBalance || 0),
-    0
-  ) || 0;
+  // Calculate net worth: assets minus liabilities
+  // Loan accounts (mortgage, auto, student) and credit cards are liabilities
+  const totalBalance = accounts?.reduce((sum, account) => {
+    const balance = account.currentBalance || 0;
+    const isLiability = account.type === 'loan' || account.type === 'credit';
+    // For liabilities, subtract the balance (what you owe)
+    // For assets, add the balance (what you have)
+    return sum + (isLiability ? -balance : balance);
+  }, 0) || 0;
 
-  const totalAvailable = accounts?.reduce(
-    (sum, account) => sum + (account.availableBalance || account.currentBalance || 0),
-    0
-  ) || 0;
+  // Available balance: only count asset accounts (not loans)
+  const totalAvailable = accounts?.reduce((sum, account) => {
+    const available = account.availableBalance || account.currentBalance || 0;
+    const isLiability = account.type === 'loan' || account.type === 'credit';
+    // Only include assets in "available" calculation
+    return sum + (isLiability ? 0 : available);
+  }, 0) || 0;
 
   const recentTransactions = recentTransactionData?.transactions || [];
 
@@ -124,12 +132,12 @@ export function MantineDashboard() {
 
   const stats = [
     {
-      title: 'Total Balance',
+      title: 'Net Worth',
       value: formatCurrency(totalBalance),
       exactValue: formatCurrency(totalBalance, true),
       icon: IconWallet,
-      color: 'yellow',
-      description: 'All accounts combined',
+      color: totalBalance >= 0 ? 'yellow' : 'red',
+      description: 'Assets minus liabilities',
     },
     {
       title: 'Available',
@@ -137,7 +145,7 @@ export function MantineDashboard() {
       exactValue: formatCurrency(totalAvailable, true),
       icon: IconCash,
       color: 'green',
-      description: 'Ready to spend',
+      description: 'In asset accounts',
     },
     {
       title: 'Monthly Spending',

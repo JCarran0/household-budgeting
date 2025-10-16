@@ -720,6 +720,7 @@ export class ReportService {
       const avgNetFlow = historicalResult.summary.reduce((sum, m) => sum + m.netFlow, 0) / historicalResult.summary.length;
 
       // Check if we have any prior year data
+      // Start from 1 year before next month (to align with i=1 being first projection month)
       const oneYearAgo = format(subMonths(addMonths(today, 1), 12), 'yyyy-MM');
       const checkPriorYearEnd = format(subMonths(addMonths(today, monthsToProject), 12), 'yyyy-MM');
 
