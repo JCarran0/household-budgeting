@@ -10,12 +10,14 @@ import {
   Stack,
   ThemeIcon,
   Button,
+  ActionIcon,
+  Tooltip,
 } from '@mantine/core';
 import { useMemo, useState, useCallback, useEffect, useRef } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { notifications } from '@mantine/notifications';
 import { useDebouncedValue } from '@mantine/hooks';
-import { IconDeviceFloppy } from '@tabler/icons-react';
+import { IconDeviceFloppy, IconChevronLeft, IconChevronRight, IconFilterOff } from '@tabler/icons-react';
 import { api } from '../../lib/api';
 import { formatCurrency } from '../../utils/formatters';
 import type { MonthlyBudget, Category } from '../../../../shared/types';
@@ -36,6 +38,9 @@ interface YearlyBudgetGridProps {
   categories: Category[];
   year: number;
   isLoading?: boolean;
+  onPreviousYear: () => void;
+  onNextYear: () => void;
+  onResetYear: () => void;
 }
 
 interface CategoryBudgetData {
@@ -67,14 +72,24 @@ const MONTHS = [
   { key: '12', name: 'Dec' },
 ];
 
-export function YearlyBudgetGrid({ budgets, categories, year, isLoading }: YearlyBudgetGridProps) {
+export function YearlyBudgetGrid({
+  budgets,
+  categories,
+  year,
+  isLoading,
+  onPreviousYear,
+  onNextYear,
+  onResetYear,
+}: YearlyBudgetGridProps) {
   const [editingCell, setEditingCell] = useState<EditingCell | null>(null);
   const [pendingUpdates, setPendingUpdates] = useState<Map<string, CreateBudgetDto>>(new Map());
   const [debouncedUpdates] = useDebouncedValue(pendingUpdates, 5000);
   const [isBatchMode, setIsBatchMode] = useState<boolean>(false);
   const [lastEditTime, setLastEditTime] = useState<number>(0);
+  const [yearPickerHeight, setYearPickerHeight] = useState<number>(60);
   const processingRef = useRef<boolean>(false);
   const batchModeTimerRef = useRef<number | null>(null);
+  const yearPickerRef = useRef<HTMLDivElement>(null);
   const queryClient = useQueryClient();
 
   // Stable batch update function
@@ -148,6 +163,21 @@ export function YearlyBudgetGrid({ budgets, categories, year, isLoading }: Yearl
         window.clearTimeout(batchModeTimerRef.current);
       }
     };
+  }, []);
+
+  // Measure year picker height for table header offset
+  useEffect(() => {
+    if (yearPickerRef.current) {
+      const updateHeight = () => {
+        const height = yearPickerRef.current?.offsetHeight || 60;
+        setYearPickerHeight(height);
+      };
+
+      updateHeight();
+      window.addEventListener('resize', updateHeight);
+
+      return () => window.removeEventListener('resize', updateHeight);
+    }
   }, []);
 
   // Detect batch editing patterns
@@ -484,6 +514,43 @@ export function YearlyBudgetGrid({ budgets, categories, year, isLoading }: Yearl
 
   return (
     <Stack gap="md">
+      {/* Sticky year picker controls */}
+      <Group
+        ref={yearPickerRef}
+        justify="space-between"
+        style={{
+          position: 'sticky',
+          top: 0,
+          background: 'var(--mantine-color-body)',
+          zIndex: 100,
+          padding: '12px 0',
+          marginTop: '-12px',
+          marginBottom: '12px',
+        }}
+      >
+        <Group>
+          <ActionIcon onClick={onPreviousYear} size="lg" variant="default">
+            <IconChevronLeft size={16} />
+          </ActionIcon>
+
+          <Text size="lg" fw={600}>
+            {year}
+          </Text>
+
+          <ActionIcon onClick={onNextYear} size="lg" variant="default">
+            <IconChevronRight size={16} />
+          </ActionIcon>
+        </Group>
+
+        <Group>
+          <Tooltip label="Reset to current year">
+            <ActionIcon onClick={onResetYear} size="lg" variant="default">
+              <IconFilterOff size={16} />
+            </ActionIcon>
+          </Tooltip>
+        </Group>
+      </Group>
+
       <Table.ScrollContainer minWidth={1200} maxHeight="calc(100vh - 300px)">
         <Table
           striped
@@ -496,6 +563,10 @@ export function YearlyBudgetGrid({ budgets, categories, year, isLoading }: Yearl
             th: {
               fontSize: '12px',
               padding: '6px 8px',
+              position: 'sticky',
+              top: `${yearPickerHeight}px`,
+              background: 'var(--mantine-color-body)',
+              zIndex: 10,
             },
             td: {
               padding: '4px 8px',
@@ -504,7 +575,7 @@ export function YearlyBudgetGrid({ budgets, categories, year, isLoading }: Yearl
         >
           <Table.Thead>
             <Table.Tr>
-              <Table.Th style={{ position: 'sticky', left: 0, background: 'var(--mantine-color-body)', zIndex: 3 }}>
+              <Table.Th style={{ position: 'sticky', left: 0, background: 'var(--mantine-color-body)', zIndex: 11 }}>
                 Category
               </Table.Th>
               {MONTHS.map((month) => (

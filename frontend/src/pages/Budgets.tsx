@@ -524,55 +524,28 @@ export function Budgets() {
             </Tabs.Panel>
 
             <Tabs.Panel value="yearly" pt="md">
-              <Stack gap="md">
-                <Group justify="space-between">
-                  <Group>
-                    <ActionIcon onClick={handlePreviousYear} size="lg" variant="default">
-                      <IconChevronLeft size={16} />
-                    </ActionIcon>
-
-                    <Text size="lg" fw={600}>
-                      {selectedYear}
-                    </Text>
-
-                    <ActionIcon onClick={handleNextYear} size="lg" variant="default">
-                      <IconChevronRight size={16} />
-                    </ActionIcon>
-                  </Group>
-
-                  <Group>
-                    <Tooltip label="Reset to current year">
-                      <ActionIcon
-                        onClick={() => {
-                          setSelectedYear(new Date().getFullYear());
-                          notifications.show({
-                            title: 'View Reset',
-                            message: 'Reset to current year view',
-                            color: 'blue',
-                          });
-                        }}
-                        size="lg"
-                        variant="default"
-                      >
-                        <IconFilterOff size={16} />
-                      </ActionIcon>
-                    </Tooltip>
-                  </Group>
-                </Group>
-
-                {yearlyBudgetsLoading ? (
-                  <Center h={400}>
-                    <Loader size="lg" />
-                  </Center>
-                ) : (
-                  <YearlyBudgetGrid
-                    budgets={yearlyBudgetData?.budgets || []}
-                    categories={categories || []}
-                    year={selectedYear}
-                    isLoading={yearlyBudgetsLoading}
-                  />
-                )}
-              </Stack>
+              {yearlyBudgetsLoading ? (
+                <Center h={400}>
+                  <Loader size="lg" />
+                </Center>
+              ) : (
+                <YearlyBudgetGrid
+                  budgets={yearlyBudgetData?.budgets || []}
+                  categories={categories || []}
+                  year={selectedYear}
+                  isLoading={yearlyBudgetsLoading}
+                  onPreviousYear={handlePreviousYear}
+                  onNextYear={handleNextYear}
+                  onResetYear={() => {
+                    setSelectedYear(new Date().getFullYear());
+                    notifications.show({
+                      title: 'View Reset',
+                      message: 'Reset to current year view',
+                      color: 'blue',
+                    });
+                  }}
+                />
+              )}
             </Tabs.Panel>
           </Tabs>
         </Paper>
