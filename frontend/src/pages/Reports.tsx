@@ -1169,19 +1169,19 @@ export function Reports() {
                       <YAxis />
                       <RechartsTooltip content={<CustomAreaTooltip />} />
                       <Legend />
-                      <Area 
-                        type="monotone" 
-                        dataKey="budgetedExpenses" 
-                        stroke="#ef4444" 
-                        fill="#ef4444" 
+                      <Area
+                        type="monotone"
+                        dataKey="budgetedExpenses"
+                        stroke="#4ad4cf"
+                        fill="#4ad4cf"
                         fillOpacity={0.6}
                         name="Planned Spending"
                       />
-                      <Area 
-                        type="monotone" 
-                        dataKey="actualExpenses" 
-                        stroke="#dc2626" 
-                        fill="#dc2626" 
+                      <Area
+                        type="monotone"
+                        dataKey="actualExpenses"
+                        stroke="#60e0fa"
+                        fill="#60e0fa"
                         fillOpacity={0.6}
                         name="Actual Spending"
                       />
