@@ -345,24 +345,36 @@ export function YearlyBudgetGrid({ budgets, categories, year, isLoading }: Yearl
 
     return (
       <Table.Tr key={category.id}>
-        <Table.Td style={{ position: 'sticky', left: 0, background: 'var(--mantine-color-body)', zIndex: 2 }}>
+        <Table.Td
+          style={{
+            position: 'sticky',
+            left: 0,
+            background: 'var(--mantine-color-body)',
+            zIndex: 2,
+            minWidth: 200,
+            maxWidth: 200,
+            width: 200,
+          }}
+        >
           <Box pl={isChild ? 24 : 0}>
-            <Group gap="xs">
+            <Group gap="xs" wrap="nowrap">
               <Text
                 fw={isParent ? 600 : 500}
-                size={isChild ? 'sm' : 'md'}
+                size="xs"
                 c={category.isHidden ? 'dimmed' : undefined}
+                style={{
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                  flex: 1,
+                }}
+                title={displayName}
               >
                 {displayName}
               </Text>
               {category.isHidden && (
                 <Badge size="xs" variant="light" color="gray">
                   Hidden
-                </Badge>
-              )}
-              {category.isRollover && (
-                <Badge size="xs" variant="light" color="yellow">
-                  Rollover
                 </Badge>
               )}
             </Group>
@@ -433,14 +445,14 @@ export function YearlyBudgetGrid({ budgets, categories, year, isLoading }: Yearl
                   style={{
                     cursor: 'pointer',
                     textAlign: 'center',
-                    padding: '4px',
+                    padding: '2px',
                     borderRadius: '4px',
                     backgroundColor: hasPendingUpdate ? 'var(--mantine-color-yellow-light)' : 'transparent',
                     position: 'relative'
                   }}
                   onClick={() => setEditingCell({ categoryId: category.id, month: month.key, value: currentValue })}
                 >
-                  <Text size="sm" fw={currentValue > 0 ? 500 : 400} c={currentValue > 0 ? undefined : 'dimmed'}>
+                  <Text size="xs" fw={currentValue > 0 ? 500 : 400} c={currentValue > 0 ? undefined : 'dimmed'}>
                     {currentValue > 0 ? formatCurrency(currentValue) : '—'}
                   </Text>
                   {hasPendingUpdate && (
@@ -473,7 +485,23 @@ export function YearlyBudgetGrid({ budgets, categories, year, isLoading }: Yearl
   return (
     <Stack gap="md">
       <Table.ScrollContainer minWidth={1200} maxHeight="calc(100vh - 300px)">
-        <Table striped highlightOnHover stickyHeader>
+        <Table
+          striped
+          highlightOnHover
+          stickyHeader
+          styles={{
+            table: {
+              fontSize: '12px',
+            },
+            th: {
+              fontSize: '12px',
+              padding: '6px 8px',
+            },
+            td: {
+              padding: '4px 8px',
+            },
+          }}
+        >
           <Table.Thead>
             <Table.Tr>
               <Table.Th style={{ position: 'sticky', left: 0, background: 'var(--mantine-color-body)', zIndex: 3 }}>
