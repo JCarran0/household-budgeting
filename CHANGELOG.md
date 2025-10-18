@@ -5,6 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.22.0](https://github.com/JCarran0/household-budgeting/compare/v1.21.0...v1.22.0) (2025-10-18)
+
+
+### Features
+
+* **budgets:** implement proper sticky header for yearly view table ([5ec8a7b](https://github.com/JCarran0/household-budgeting/commit/5ec8a7bc7665031dda8059273b53d96ae6a9866b))
+
+
+### Bug Fixes
+
+* **dashboard:** correct net worth calculation to account for liabilities ([2b94ecb](https://github.com/JCarran0/household-budgeting/commit/2b94ecb5f80f0e7099f2a60f6e1ed71697178f0a))
+* **layout:** remove excessive left margin by removing AppShell padding ([05f0de3](https://github.com/JCarran0/household-budgeting/commit/05f0de3766eb8aa263417c3e1114d48b76fd1ac1))
+* **reports:** correct timezone bug in cash flow projections display ([5cef8fd](https://github.com/JCarran0/household-budgeting/commit/5cef8fdf28a4e95d6a1c40c6a987c3fb24e386f8))
+
+
+### Styling
+
+* **budgets:** improve yearly view table styling and layout ([ee84383](https://github.com/JCarran0/household-budgeting/commit/ee84383a33d98630214ddc7d626e9f8cd1a77e28))
+* **reports:** update Planned vs Actual Spending colors to light blue ([0fd0b1e](https://github.com/JCarran0/household-budgeting/commit/0fd0b1efdb5816b9758ed825ebc187f2089ec498)), closes [#ef4444](https://github.com/JCarran0/household-budgeting/issues/ef4444) [#4ad4](https://github.com/JCarran0/household-budgeting/issues/4ad4) [#dc2626](https://github.com/JCarran0/household-budgeting/issues/dc2626) [#60e0](https://github.com/JCarran0/household-budgeting/issues/60e0)
+
 ## [1.21.0](https://github.com/JCarran0/household-budgeting/compare/v1.20.2...v1.21.0) (2025-10-15)
 
 
