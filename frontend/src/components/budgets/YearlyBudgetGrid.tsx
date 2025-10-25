@@ -86,10 +86,8 @@ export function YearlyBudgetGrid({
   const [debouncedUpdates] = useDebouncedValue(pendingUpdates, 5000);
   const [isBatchMode, setIsBatchMode] = useState<boolean>(false);
   const [lastEditTime, setLastEditTime] = useState<number>(0);
-  const [yearPickerHeight, setYearPickerHeight] = useState<number>(60);
   const processingRef = useRef<boolean>(false);
   const batchModeTimerRef = useRef<number | null>(null);
-  const yearPickerRef = useRef<HTMLDivElement>(null);
   const queryClient = useQueryClient();
 
   // Stable batch update function
@@ -163,21 +161,6 @@ export function YearlyBudgetGrid({
         window.clearTimeout(batchModeTimerRef.current);
       }
     };
-  }, []);
-
-  // Measure year picker height for table header offset
-  useEffect(() => {
-    if (yearPickerRef.current) {
-      const updateHeight = () => {
-        const height = yearPickerRef.current?.offsetHeight || 60;
-        setYearPickerHeight(height);
-      };
-
-      updateHeight();
-      window.addEventListener('resize', updateHeight);
-
-      return () => window.removeEventListener('resize', updateHeight);
-    }
   }, []);
 
   // Detect batch editing patterns
@@ -516,7 +499,6 @@ export function YearlyBudgetGrid({
     <Stack gap="md">
       {/* Sticky year picker controls */}
       <Group
-        ref={yearPickerRef}
         justify="space-between"
         style={{
           position: 'sticky',
@@ -524,8 +506,6 @@ export function YearlyBudgetGrid({
           background: 'var(--mantine-color-body)',
           zIndex: 100,
           padding: '12px 0',
-          marginTop: '-12px',
-          marginBottom: '12px',
         }}
       >
         <Group>
@@ -551,35 +531,52 @@ export function YearlyBudgetGrid({
         </Group>
       </Group>
 
-      <Table.ScrollContainer minWidth={1200} maxHeight="calc(100vh - 300px)">
+      <Box
+        style={{
+          overflowX: 'auto',
+          overflowY: 'auto',
+          maxHeight: 'calc(100vh - 250px)',
+          position: 'relative',
+        }}
+      >
         <Table
           striped
           highlightOnHover
-          stickyHeader
           styles={{
             table: {
               fontSize: '12px',
+              minWidth: 1200,
             },
             th: {
               fontSize: '12px',
               padding: '6px 8px',
-              position: 'sticky',
-              top: `${yearPickerHeight}px`,
-              background: 'var(--mantine-color-body)',
-              zIndex: 10,
             },
             td: {
               padding: '4px 8px',
             },
           }}
         >
-          <Table.Thead>
+          <Table.Thead
+            style={{
+              position: 'sticky',
+              top: 0,
+              zIndex: 10,
+              backgroundColor: 'var(--mantine-color-body)',
+            }}
+          >
             <Table.Tr>
-              <Table.Th style={{ position: 'sticky', left: 0, background: 'var(--mantine-color-body)', zIndex: 11 }}>
+              <Table.Th style={{ position: 'sticky', left: 0, backgroundColor: 'var(--mantine-color-body)', zIndex: 100 }}>
                 Category
               </Table.Th>
               {MONTHS.map((month) => (
-                <Table.Th key={month.key} style={{ textAlign: 'center', minWidth: 100 }}>
+                <Table.Th
+                  key={month.key}
+                  style={{
+                    textAlign: 'center',
+                    minWidth: 100,
+                    backgroundColor: 'var(--mantine-color-body)',
+                  }}
+                >
                   {month.name}
                 </Table.Th>
               ))}
@@ -592,7 +589,7 @@ export function YearlyBudgetGrid({
             ]).flat()}
           </Table.Tbody>
         </Table>
-      </Table.ScrollContainer>
+      </Box>
 
       {pendingUpdates.size > 0 && (
         <Group justify="center" gap="md">
