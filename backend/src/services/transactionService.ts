@@ -762,6 +762,42 @@ export class TransactionService {
   }
 
   /**
+   * Bulk recategorize all transactions from one category to another
+   * Used during category deletion workflow
+   * @param oldCategoryId Category to move from
+   * @param newCategoryId Category to move to (null for uncategorized)
+   * @param userId User ID
+   * @returns Count of transactions updated
+   */
+  async bulkRecategorizeByCategory(
+    oldCategoryId: string,
+    newCategoryId: string | null,
+    userId: string
+  ): Promise<number> {
+    const transactions = await this.dataService.getData<StoredTransaction[]>(
+      `transactions_${userId}`
+    ) || [];
+
+    let updateCount = 0;
+    const updatedTransactions = transactions.map(transaction => {
+      if (transaction.categoryId === oldCategoryId) {
+        updateCount++;
+        return {
+          ...transaction,
+          categoryId: newCategoryId
+        };
+      }
+      return transaction;
+    });
+
+    if (updateCount > 0) {
+      await this.dataService.saveData(`transactions_${userId}`, updatedTransactions);
+    }
+
+    return updateCount;
+  }
+
+  /**
    * Get details about transactions that would block category deletion
    * Returns transaction count and sample transaction details for error messages
    */

@@ -382,6 +382,24 @@ export class BudgetService {
     return budgets.some(b => b.categoryId === categoryId);
   }
 
+  /**
+   * Delete all budgets for a specific category
+   * Used during category deletion workflow
+   * @returns Count of budgets deleted
+   */
+  async deleteBudgetsForCategory(categoryId: string, userId: string): Promise<number> {
+    const budgets = await this.getAllBudgets(userId);
+    const budgetsToDelete = budgets.filter(b => b.categoryId === categoryId);
+    const deleteCount = budgetsToDelete.length;
+
+    if (deleteCount > 0) {
+      const remainingBudgets = budgets.filter(b => b.categoryId !== categoryId);
+      await this.dataService.saveData(`budgets_${userId}`, remainingBudgets);
+    }
+
+    return deleteCount;
+  }
+
   async getDistinctBudgetMonths(userId: string): Promise<{ month: string; count: number }[]> {
     const budgets = await this.getAllBudgets(userId);
 

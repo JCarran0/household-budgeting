@@ -466,4 +466,29 @@ export class AutoCategorizeService {
     const rules = await this.getRules(userId);
     return rules.some(r => r.categoryId === categoryId);
   }
+
+  /**
+   * Delete all auto-categorization rules for a specific category
+   * Used during category deletion workflow
+   * @returns Count of rules deleted
+   */
+  async deleteRulesForCategory(categoryId: string, userId: string): Promise<number> {
+    const rules = await this.getRules(userId);
+    const rulesToDelete = rules.filter(r => r.categoryId === categoryId);
+    const deleteCount = rulesToDelete.length;
+
+    if (deleteCount > 0) {
+      const remainingRules = rules.filter(r => r.categoryId !== categoryId);
+
+      // Re-prioritize remaining rules to close gaps
+      const reprioritizedRules = remainingRules.map((rule, index) => ({
+        ...rule,
+        priority: index + 1
+      }));
+
+      await this.dataService.saveData(`autocategorize_rules_${userId}`, reprioritizedRules);
+    }
+
+    return deleteCount;
+  }
 }

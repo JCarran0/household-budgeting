@@ -29,7 +29,7 @@ import { TransactionPreviewTrigger } from '../transactions/TransactionPreviewTri
 interface CategoryTreeProps {
   categories: CategoryWithChildren[];
   onEdit: (category: Category) => void;
-  onDelete: (categoryId: string) => void;
+  onDelete: (category: Category) => void;
   transactionCounts?: Record<string, number>;
   dateRange?: { startDate: string; endDate: string };
 }
@@ -37,7 +37,7 @@ interface CategoryTreeProps {
 interface CategoryNodeProps {
   category: CategoryWithChildren;
   onEdit: (category: Category) => void;
-  onDelete: (categoryId: string) => void;
+  onDelete: (category: Category) => void;
   level?: number;
   transactionCounts?: Record<string, number>;
   dateRange?: { startDate: string; endDate: string };
@@ -62,7 +62,7 @@ function CategoryNode({ category, onEdit, onDelete, level = 0, transactionCounts
 
   const handleDelete = (e: React.MouseEvent): void => {
     e.stopPropagation();
-    onDelete(category.id);
+    onDelete(category);
   };
 
   return (

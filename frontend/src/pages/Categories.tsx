@@ -19,7 +19,6 @@ import {
 } from '@mantine/core';
 import { format } from 'date-fns';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { notifications } from '@mantine/notifications';
 import {
   IconPlus,
   IconSearch,
@@ -37,6 +36,7 @@ import { CategoryTree } from '../components/categories/CategoryTree';
 import { CategoryForm } from '../components/categories/CategoryForm';
 import { AutoCategorization } from '../components/categories/AutoCategorization';
 import { CSVImport } from '../components/categories/CSVImport';
+import { CategoryDeletionModal } from '../components/categories/CategoryDeletionModal';
 import type { Category } from '../../../shared/types';
 
 export function Categories() {
@@ -46,6 +46,8 @@ export function Categories() {
   const [hasInitialized, setHasInitialized] = useState<boolean>(false);
   const [isCSVImportOpen, setIsCSVImportOpen] = useState<boolean>(false);
   const [showTransactionCounts, setShowTransactionCounts] = useState<boolean>(false);
+  const [deletingCategory, setDeletingCategory] = useState<Category | null>(null);
+  const [isDeletionModalOpen, setIsDeletionModalOpen] = useState<boolean>(false);
   const queryClient = useQueryClient();
 
   // Helper function to get current year date range for transaction previews
@@ -103,37 +105,19 @@ export function Categories() {
   }, [categories, isLoading, hasInitialized, initializeMutation]);
 
 
-  // Delete category mutation
-  const deleteMutation = useMutation({
-    mutationFn: api.deleteCategory,
-    onSuccess: () => {
-      notifications.show({
-        title: 'Category Deleted',
-        message: 'Category has been deleted successfully',
-        color: 'green',
-      });
-      queryClient.invalidateQueries({ queryKey: ['categories'] });
-    },
-    onError: (error: unknown) => {
-      const errorMessage = 
-        (error as { response?: { data?: { error?: string } } })?.response?.data?.error || 
-        'Failed to delete category';
-      notifications.show({
-        title: 'Cannot Delete Category',
-        message: errorMessage,
-        color: 'red',
-        autoClose: false, // Keep error visible so user can read the instructions
-      });
-    },
-  });
-
   const handleEdit = (category: Category): void => {
     setEditingCategory(category);
     setIsFormOpen(true);
   };
 
-  const handleDelete = (categoryId: string): void => {
-    deleteMutation.mutate(categoryId);
+  const handleDelete = (category: Category): void => {
+    setDeletingCategory(category);
+    setIsDeletionModalOpen(true);
+  };
+
+  const handleDeletionModalClose = (): void => {
+    setIsDeletionModalOpen(false);
+    setDeletingCategory(null);
   };
 
   const handleFormClose = (): void => {
@@ -360,10 +344,16 @@ export function Categories() {
                 category={editingCategory}
                 onSuccess={handleFormSuccess}
               />
-              
+
               <CSVImport
                 opened={isCSVImportOpen}
                 onClose={() => setIsCSVImportOpen(false)}
+              />
+
+              <CategoryDeletionModal
+                category={deletingCategory}
+                opened={isDeletionModalOpen}
+                onClose={handleDeletionModalClose}
               />
             </Stack>
           </Tabs.Panel>

@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { z } from 'zod';
-import { categoryService, transactionService } from '../services';
+import { categoryService, transactionService, budgetService, autoCategorizeService } from '../services';
 import { authMiddleware } from '../middleware/authMiddleware';
 
 const router = Router();
@@ -278,6 +278,67 @@ router.put('/:id', async (req: Request, res: Response) => {
     }
     console.error('Error updating category:', error);
     res.status(500).json({ error: 'Failed to update category' });
+  }
+});
+
+// POST /api/categories/:id/delete-budgets - Delete all budgets for a category
+router.post('/:id/delete-budgets', async (req: Request, res: Response) => {
+  try {
+    const userId = req.user?.userId;
+    if (!userId) {
+      res.status(401).json({ error: 'User not authenticated' });
+      return;
+    }
+    const deletedCount = await budgetService.deleteBudgetsForCategory(req.params.id, userId);
+    res.json({ success: true, deleted: deletedCount });
+  } catch (error) {
+    console.error('Error deleting budgets for category:', error);
+    res.status(500).json({ error: 'Failed to delete budgets' });
+  }
+});
+
+// POST /api/categories/:id/delete-rules - Delete all auto-categorization rules for a category
+router.post('/:id/delete-rules', async (req: Request, res: Response) => {
+  try {
+    const userId = req.user?.userId;
+    if (!userId) {
+      res.status(401).json({ error: 'User not authenticated' });
+      return;
+    }
+    const deletedCount = await autoCategorizeService.deleteRulesForCategory(req.params.id, userId);
+    res.json({ success: true, deleted: deletedCount });
+  } catch (error) {
+    console.error('Error deleting rules for category:', error);
+    res.status(500).json({ error: 'Failed to delete rules' });
+  }
+});
+
+// POST /api/categories/:id/recategorize-transactions - Recategorize all transactions from one category to another
+router.post('/:id/recategorize-transactions', async (req: Request, res: Response) => {
+  try {
+    const userId = req.user?.userId;
+    if (!userId) {
+      res.status(401).json({ error: 'User not authenticated' });
+      return;
+    }
+
+    const { newCategoryId } = req.body;
+
+    // Validate newCategoryId (can be null for uncategorized or a valid category ID string)
+    if (newCategoryId !== null && typeof newCategoryId !== 'string') {
+      res.status(400).json({ error: 'Invalid newCategoryId. Must be a string or null.' });
+      return;
+    }
+
+    const updatedCount = await transactionService.bulkRecategorizeByCategory(
+      req.params.id,
+      newCategoryId,
+      userId
+    );
+    res.json({ success: true, updated: updatedCount });
+  } catch (error) {
+    console.error('Error recategorizing transactions:', error);
+    res.status(500).json({ error: 'Failed to recategorize transactions' });
   }
 });
 

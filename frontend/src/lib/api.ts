@@ -473,6 +473,25 @@ class ApiClient {
     await this.client.delete(`/categories/${id}`);
   }
 
+  // Category deletion workflow methods
+  async deleteCategoryBudgets(categoryId: string): Promise<{ deleted: number }> {
+    const { data } = await this.client.post<{ success: boolean; deleted: number }>(`/categories/${categoryId}/delete-budgets`);
+    return { deleted: data.deleted };
+  }
+
+  async deleteCategoryRules(categoryId: string): Promise<{ deleted: number }> {
+    const { data } = await this.client.post<{ success: boolean; deleted: number }>(`/categories/${categoryId}/delete-rules`);
+    return { deleted: data.deleted };
+  }
+
+  async recategorizeCategoryTransactions(categoryId: string, newCategoryId: string | null): Promise<{ updated: number }> {
+    const { data } = await this.client.post<{ success: boolean; updated: number }>(
+      `/categories/${categoryId}/recategorize-transactions`,
+      { newCategoryId }
+    );
+    return { updated: data.updated };
+  }
+
   async initializeDefaultCategories(): Promise<{ message: string; categories: Category[] }> {
     const { data } = await this.client.post<{ message: string; categories: Category[] }>('/categories/initialize');
     return data;
@@ -551,10 +570,6 @@ class ApiClient {
 
   async deleteBudget(id: string): Promise<void> {
     await this.client.delete(`/budgets/${id}`);
-  }
-
-  async deleteCategoryBudgets(categoryId: string): Promise<void> {
-    await this.client.delete(`/budgets/category/${categoryId}`);
   }
 
   async applyRollover(categoryId: string, fromMonth: string, toMonth: string, actualSpent: number): Promise<{
