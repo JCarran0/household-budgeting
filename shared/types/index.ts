@@ -34,6 +34,7 @@ export interface PlaidAccount {
   currentBalance: number;
   availableBalance: number | null;
   isActive: boolean;
+  status: 'active' | 'inactive' | 'requires_reauth';
   lastSynced: string | null;
   createdAt: string;
   updatedAt: string;

@@ -186,6 +186,27 @@ export function MantineDashboard() {
         )}
       </Group>
 
+      {/* Accounts Needing Reconnection Alert */}
+      {accounts && accounts.filter(a => a.status === 'requires_reauth').length > 0 && (
+        <Alert
+          icon={<IconAlertCircle size={20} />}
+          title="Account Reconnection Required"
+          color="orange"
+          variant="filled"
+          styles={{
+            root: { cursor: 'pointer' },
+          }}
+          onClick={() => navigate('/accounts')}
+        >
+          <Text size="sm">
+            {accounts.filter(a => a.status === 'requires_reauth').length === 1
+              ? `${accounts.find(a => a.status === 'requires_reauth')?.nickname || accounts.find(a => a.status === 'requires_reauth')?.name} needs to be reconnected to continue syncing.`
+              : `${accounts.filter(a => a.status === 'requires_reauth').length} accounts need to be reconnected to continue syncing.`}
+            {' '}Click here to reconnect.
+          </Text>
+        </Alert>
+      )}
+
       {/* Uncategorized Transactions Alert */}
       {uncategorizedData && uncategorizedData.count > 0 && (
         <Alert
@@ -200,7 +221,7 @@ export function MantineDashboard() {
         >
           <Group justify="space-between">
             <Text size="sm">
-              You have {uncategorizedData.count} uncategorized transaction{uncategorizedData.count !== 1 ? 's' : ''} 
+              You have {uncategorizedData.count} uncategorized transaction{uncategorizedData.count !== 1 ? 's' : ''}
               {' '}({Math.round((uncategorizedData.count / uncategorizedData.total) * 100)}% of total).
               Click here to categorize them.
             </Text>

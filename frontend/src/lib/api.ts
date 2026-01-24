@@ -374,11 +374,12 @@ class ApiClient {
     return data;
   }
 
-  async syncTransactions(accountId?: string): Promise<{ 
-    added: number; 
-    modified: number; 
-    removed: number; 
+  async syncTransactions(accountId?: string): Promise<{
+    added: number;
+    modified: number;
+    removed: number;
     hasMore: boolean;
+    warning?: string;
   }> {
     const { data } = await this.client.post('/transactions/sync', { accountId });
     return data;

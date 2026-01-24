@@ -55,16 +55,27 @@ export function MantineAccounts() {
 
   const syncMutation = useMutation({
     mutationFn: (accountId: string) => api.syncTransactions(accountId),
-    onSuccess: () => {
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['accounts'] });
       queryClient.invalidateQueries({ queryKey: ['transactions'] });
       setSyncingAccount(null);
-      notifications.show({
-        title: 'Success',
-        message: 'Transactions synced successfully',
-        color: 'green',
-        icon: <IconCheck size={16} />,
-      });
+
+      if (data.warning) {
+        notifications.show({
+          title: 'Sync Partially Completed',
+          message: data.warning,
+          color: 'yellow',
+          icon: <IconAlertCircle size={16} />,
+          autoClose: 10000,
+        });
+      } else {
+        notifications.show({
+          title: 'Success',
+          message: 'Transactions synced successfully',
+          color: 'green',
+          icon: <IconCheck size={16} />,
+        });
+      }
     },
     onError: (error: unknown) => {
       setSyncingAccount(null);
@@ -170,10 +181,21 @@ export function MantineAccounts() {
       {accounts && accounts.length > 0 ? (
         <SimpleGrid cols={{ base: 1, md: 2 }} spacing="lg">
           {accounts.map((account) => (
-            <Card key={account.id} padding="lg" radius="md" withBorder>
+            <Card
+              key={account.id}
+              padding="lg"
+              radius="md"
+              withBorder
+              style={account.status === 'requires_reauth' ? { borderColor: 'var(--mantine-color-orange-6)', borderWidth: 2 } : undefined}
+            >
+              {account.status === 'requires_reauth' && (
+                <Badge color="orange" variant="filled" size="sm" mb="sm" leftSection={<IconAlertCircle size={12} />}>
+                  Reconnection Required
+                </Badge>
+              )}
               <Group justify="space-between" mb="md">
                 <Group>
-                  <ThemeIcon color="blue" variant="light" size="xl" radius="md">
+                  <ThemeIcon color={account.status === 'requires_reauth' ? 'orange' : 'blue'} variant="light" size="xl" radius="md">
                     <IconCreditCard size={24} />
                   </ThemeIcon>
                   <div>
