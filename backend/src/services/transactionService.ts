@@ -752,13 +752,19 @@ export class TransactionService {
   }
 
   /**
-   * Check if any transactions are associated with a category
+   * Check if any active transactions are associated with a category
+   * Uses same filtering logic as getBlockingTransactionDetails to avoid
+   * "Cannot delete category with 0 associated transactions" error
    */
   async hasTransactionsForCategory(categoryId: string, userId: string): Promise<boolean> {
     const transactions = await this.dataService.getData<StoredTransaction[]>(
       `transactions_${userId}`
     ) || [];
-    return transactions.some(t => t.categoryId === categoryId);
+    return transactions.some(t =>
+      t.categoryId === categoryId &&
+      t.status !== 'removed' &&
+      !t.isHidden
+    );
   }
 
   /**
