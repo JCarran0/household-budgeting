@@ -346,6 +346,65 @@ export class AccountService {
   }
 
   /**
+   * Create a link token for re-authentication (update mode)
+   * This allows users to sign in again without disconnecting
+   */
+  async createUpdateLinkToken(userId: string, accountId: string): Promise<{ success: boolean; linkToken?: string; expiration?: string; error?: string }> {
+    try {
+      const account = await this.getAccount(userId, accountId);
+
+      if (!account) {
+        return { success: false, error: 'Account not found' };
+      }
+
+      const accessToken = this.decryptToken(account.plaidAccessToken);
+      const result = await this.plaidService.createUpdateLinkToken(userId, accessToken);
+
+      if (!result.success) {
+        return { success: false, error: result.error };
+      }
+
+      return {
+        success: true,
+        linkToken: result.linkToken,
+        expiration: result.expiration,
+      };
+    } catch (error) {
+      console.error('Error creating update link token:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to create update link token',
+      };
+    }
+  }
+
+  /**
+   * Mark account as active after successful re-authentication
+   */
+  async markAccountActive(userId: string, accountId: string): Promise<{ success: boolean; error?: string }> {
+    try {
+      const account = await this.getAccount(userId, accountId);
+
+      if (!account) {
+        return { success: false, error: 'Account not found' };
+      }
+
+      account.status = 'active';
+      account.lastSynced = new Date();
+      account.updatedAt = new Date();
+      await this.saveAccount(account);
+
+      return { success: true };
+    } catch (error) {
+      console.error('Error marking account active:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to update account status',
+      };
+    }
+  }
+
+  /**
    * Encrypt access token for storage using AES-256-GCM
    */
   private encryptToken(token: string): string {

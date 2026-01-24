@@ -163,6 +163,8 @@ class ApiClient {
     this.getAccounts = this.getAccounts.bind(this);
     this.disconnectAccount = this.disconnectAccount.bind(this);
     this.updateAccountNickname = this.updateAccountNickname.bind(this);
+    this.createUpdateLinkToken = this.createUpdateLinkToken.bind(this);
+    this.completeReauth = this.completeReauth.bind(this);
     this.getTransactions = this.getTransactions.bind(this);
     this.getUncategorizedCount = this.getUncategorizedCount.bind(this);
     this.syncTransactions = this.syncTransactions.bind(this);
@@ -346,6 +348,21 @@ class ApiClient {
     const { data } = await this.client.put(`/accounts/${accountId}`, { nickname });
     if (!data.success) {
       throw new Error(data.error || 'Failed to update account nickname');
+    }
+  }
+
+  async createUpdateLinkToken(accountId: string): Promise<{ link_token: string; expiration: string }> {
+    const { data } = await this.client.post(`/accounts/${accountId}/link-token`);
+    if (!data.success) {
+      throw new Error(data.error || 'Failed to create link token');
+    }
+    return { link_token: data.link_token, expiration: data.expiration };
+  }
+
+  async completeReauth(accountId: string): Promise<void> {
+    const { data } = await this.client.post(`/accounts/${accountId}/reauth-complete`);
+    if (!data.success) {
+      throw new Error(data.error || 'Failed to complete re-authentication');
     }
   }
 

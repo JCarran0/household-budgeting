@@ -222,6 +222,43 @@ export class PlaidService {
   }
 
   /**
+   * Create a link token for Plaid Link update mode (re-authentication)
+   * This allows users to re-authenticate with their bank without creating a new Item
+   */
+  async createUpdateLinkToken(userId: string, accessToken: string): Promise<LinkTokenResult> {
+    try {
+      const countryCodes = (process.env.PLAID_COUNTRY_CODES || 'US')
+        .split(',')
+        .map(c => c.trim() as CountryCode);
+
+      const request: LinkTokenCreateRequest = {
+        user: {
+          client_user_id: userId,
+        },
+        client_name: this.clientName,
+        country_codes: countryCodes,
+        language: 'en',
+        access_token: accessToken, // This puts Plaid Link in update mode
+      };
+
+      // Add redirect URI if configured
+      if (this.redirectUri) {
+        request.redirect_uri = this.redirectUri;
+      }
+
+      const response = await this.client.linkTokenCreate(request);
+
+      return {
+        success: true,
+        linkToken: response.data.link_token,
+        expiration: response.data.expiration,
+      };
+    } catch (error) {
+      return this.handleError(error);
+    }
+  }
+
+  /**
    * Exchange a public token for an access token
    */
   async exchangePublicToken(publicToken: string): Promise<TokenExchangeResult> {

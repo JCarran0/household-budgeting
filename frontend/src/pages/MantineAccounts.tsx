@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api, type ExtendedPlaidAccount } from '../lib/api';
 import { PlaidButton } from '../components/PlaidButton';
+import { usePlaid } from '../hooks/usePlaidLink';
 import { formatDistanceToNow } from 'date-fns';
 import { useState } from 'react';
 import {
@@ -32,12 +33,14 @@ import {
   IconTrash,
   IconAlertCircle,
   IconEdit,
+  IconLogin,
 } from '@tabler/icons-react';
 import { AccountNicknameModal } from '../components/accounts/AccountNicknameModal';
 import { formatCurrency } from '../utils/formatters';
 
 export function MantineAccounts() {
   const queryClient = useQueryClient();
+  const { openPlaidUpdate } = usePlaid();
   const [syncingAccount, setSyncingAccount] = useState<string | null>(null);
   const [accountToDisconnect, setAccountToDisconnect] = useState<{
     id: string;
@@ -52,6 +55,10 @@ export function MantineAccounts() {
     queryKey: ['accounts'],
     queryFn: api.getAccounts,
   });
+
+  const handleReauth = (accountId: string) => {
+    openPlaidUpdate(accountId);
+  };
 
   const syncMutation = useMutation({
     mutationFn: (accountId: string) => api.syncTransactions(accountId),
@@ -190,7 +197,7 @@ export function MantineAccounts() {
             >
               {account.status === 'requires_reauth' && (
                 <Badge color="orange" variant="filled" size="sm" mb="sm" leftSection={<IconAlertCircle size={12} />}>
-                  Reconnection Required
+                  Sign-in Required
                 </Badge>
               )}
               <Group justify="space-between" mb="md">
@@ -248,6 +255,15 @@ export function MantineAccounts() {
                       </ActionIcon>
                     </Menu.Target>
                     <Menu.Dropdown>
+                      {account.status === 'requires_reauth' && (
+                        <Menu.Item
+                          color="orange"
+                          leftSection={<IconLogin size={16} />}
+                          onClick={() => handleReauth(account.id)}
+                        >
+                          Sign in to Bank
+                        </Menu.Item>
+                      )}
                       <Menu.Item
                         color="red"
                         leftSection={<IconTrash size={16} />}

@@ -192,6 +192,68 @@ router.post('/:accountId/sync-transactions', authMiddleware, async (req: AuthReq
 });
 
 /**
+ * POST /api/v1/accounts/:accountId/link-token
+ * Create a link token for re-authentication (update mode)
+ */
+router.post('/:accountId/link-token', authMiddleware, async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    if (!req.user) {
+      res.status(401).json({ success: false, error: 'Unauthorized' });
+      return;
+    }
+
+    const { accountId } = req.params;
+    const result = await accountService.createUpdateLinkToken(req.user.userId, accountId);
+
+    if (!result.success) {
+      res.status(result.error === 'Account not found' ? 404 : 500).json({
+        success: false,
+        error: result.error,
+      });
+      return;
+    }
+
+    res.json({
+      success: true,
+      link_token: result.linkToken,
+      expiration: result.expiration,
+    });
+  } catch (error) {
+    console.error('Error creating update link token:', error);
+    res.status(500).json({ success: false, error: 'Failed to create link token' });
+  }
+});
+
+/**
+ * POST /api/v1/accounts/:accountId/reauth-complete
+ * Mark account as active after successful re-authentication
+ */
+router.post('/:accountId/reauth-complete', authMiddleware, async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    if (!req.user) {
+      res.status(401).json({ success: false, error: 'Unauthorized' });
+      return;
+    }
+
+    const { accountId } = req.params;
+    const result = await accountService.markAccountActive(req.user.userId, accountId);
+
+    if (!result.success) {
+      res.status(result.error === 'Account not found' ? 404 : 500).json({
+        success: false,
+        error: result.error,
+      });
+      return;
+    }
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error completing re-authentication:', error);
+    res.status(500).json({ success: false, error: 'Failed to complete re-authentication' });
+  }
+});
+
+/**
  * PUT /api/v1/accounts/:accountId
  * Update account details (currently only nickname)
  */

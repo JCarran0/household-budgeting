@@ -186,11 +186,11 @@ export function MantineDashboard() {
         )}
       </Group>
 
-      {/* Accounts Needing Reconnection Alert */}
+      {/* Accounts Needing Sign-in Alert */}
       {accounts && accounts.filter(a => a.status === 'requires_reauth').length > 0 && (
         <Alert
           icon={<IconAlertCircle size={20} />}
-          title="Account Reconnection Required"
+          title="Bank Sign-in Required"
           color="orange"
           variant="filled"
           styles={{
@@ -200,9 +200,9 @@ export function MantineDashboard() {
         >
           <Text size="sm">
             {accounts.filter(a => a.status === 'requires_reauth').length === 1
-              ? `${accounts.find(a => a.status === 'requires_reauth')?.nickname || accounts.find(a => a.status === 'requires_reauth')?.name} needs to be reconnected to continue syncing.`
-              : `${accounts.filter(a => a.status === 'requires_reauth').length} accounts need to be reconnected to continue syncing.`}
-            {' '}Click here to reconnect.
+              ? `${accounts.find(a => a.status === 'requires_reauth')?.nickname || accounts.find(a => a.status === 'requires_reauth')?.name} requires you to sign in again to continue syncing.`
+              : `${accounts.filter(a => a.status === 'requires_reauth').length} accounts require you to sign in again to continue syncing.`}
+            {' '}Click here to sign in.
           </Text>
         </Alert>
       )}

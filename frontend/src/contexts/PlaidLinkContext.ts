@@ -2,6 +2,7 @@ import { createContext } from 'react';
 
 export interface PlaidLinkContextType {
   openPlaid: () => void;
+  openPlaidUpdate: (accountId: string) => void;
   isLoading: boolean;
   error: string | null;
 }

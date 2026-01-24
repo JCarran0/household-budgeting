@@ -39,16 +39,16 @@ export function PlaidLinkProvider({ children }: { children: React.ReactNode }) {
   const [token, setToken] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [updateAccountId, setUpdateAccountId] = useState<string | null>(null);
   const openRef = useRef<(() => void) | null>(null);
 
-  // Connect account mutation
+  // Connect account mutation (for new accounts)
   const connectAccountMutation = useMutation({
     mutationFn: api.connectAccount,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['accounts'] });
       queryClient.invalidateQueries({ queryKey: ['transactions'] });
       setIsLoading(false);
-      // Reset token after successful connection
       setToken(null);
       openRef.current = null;
     },
@@ -59,14 +59,38 @@ export function PlaidLinkProvider({ children }: { children: React.ReactNode }) {
     },
   });
 
+  // Complete reauth mutation (for existing accounts)
+  const completeReauthMutation = useMutation({
+    mutationFn: api.completeReauth,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['accounts'] });
+      queryClient.invalidateQueries({ queryKey: ['transactions'] });
+      setIsLoading(false);
+      setToken(null);
+      setUpdateAccountId(null);
+      openRef.current = null;
+    },
+    onError: (error) => {
+      console.error('Failed to complete re-authentication:', error);
+      setIsLoading(false);
+      setError(error instanceof Error ? error.message : 'Failed to complete re-authentication');
+    },
+  });
+
   const handleSuccess = useCallback<PlaidLinkOnSuccess>((public_token, metadata) => {
     setIsLoading(true);
-    connectAccountMutation.mutate({
-      publicToken: public_token,
-      institutionId: metadata.institution?.institution_id || '',
-      institutionName: metadata.institution?.name || '',
-    });
-  }, [connectAccountMutation]);
+    if (updateAccountId) {
+      // Update mode - just mark the account as active
+      completeReauthMutation.mutate(updateAccountId);
+    } else {
+      // New account mode
+      connectAccountMutation.mutate({
+        publicToken: public_token,
+        institutionId: metadata.institution?.institution_id || '',
+        institutionName: metadata.institution?.name || '',
+      });
+    }
+  }, [connectAccountMutation, completeReauthMutation, updateAccountId]);
 
   const handleExit = useCallback<PlaidLinkOnExit>((error) => {
     if (error) {
@@ -74,8 +98,8 @@ export function PlaidLinkProvider({ children }: { children: React.ReactNode }) {
       setError(error.error_message || 'Plaid Link error');
     }
     setIsLoading(false);
-    // Clear token on exit to allow retry
     setToken(null);
+    setUpdateAccountId(null);
     openRef.current = null;
   }, []);
 
@@ -86,20 +110,18 @@ export function PlaidLinkProvider({ children }: { children: React.ReactNode }) {
 
   const openPlaid = useCallback(async () => {
     if (openRef.current) {
-      // Plaid is already initialized and ready, just open it
       openRef.current();
       return;
     }
 
     if (!token) {
-      // Fetch token which will trigger PlaidLinkComponent to render
       setIsLoading(true);
       setError(null);
-      
+      setUpdateAccountId(null);
+
       try {
         const result = await api.createLinkToken();
         setToken(result.link_token);
-        // PlaidLinkComponent will render and auto-open when ready
       } catch (err) {
         console.error('Failed to fetch link token:', err);
         setError(err instanceof Error ? err.message : 'Failed to fetch link token');
@@ -108,10 +130,30 @@ export function PlaidLinkProvider({ children }: { children: React.ReactNode }) {
     }
   }, [token]);
 
+  const openPlaidUpdate = useCallback(async (accountId: string) => {
+    if (openRef.current) {
+      openRef.current();
+      return;
+    }
+
+    setIsLoading(true);
+    setError(null);
+    setUpdateAccountId(accountId);
+
+    try {
+      const result = await api.createUpdateLinkToken(accountId);
+      setToken(result.link_token);
+    } catch (err) {
+      console.error('Failed to fetch update link token:', err);
+      setError(err instanceof Error ? err.message : 'Failed to fetch link token');
+      setIsLoading(false);
+      setUpdateAccountId(null);
+    }
+  }, []);
+
   return (
-    <PlaidLinkContext.Provider value={{ openPlaid, isLoading, error }}>
+    <PlaidLinkContext.Provider value={{ openPlaid, openPlaidUpdate, isLoading, error }}>
       {children}
-      {/* Only render PlaidLinkComponent when we have a valid token */}
       {token && (
         <PlaidLinkComponent
           token={token}
