@@ -60,6 +60,17 @@
 - A user should see account nicknames in transaction tooltips for easy identification
 - A user should be limited to 50 characters for account nicknames
 
+### Account Re-authentication
+- A user should see a visual indicator when an account needs sign-in (badge with "Sign-in Required")
+- A user should see accounts needing sign-in with a distinct border color (orange)
+- A user should see an alert banner on the dashboard when accounts need sign-in
+- A user should be able to click "Sign in to Bank" from the account menu to re-authenticate
+- A user should be taken through the Plaid Link flow to sign in to their bank
+- A user should have their account automatically marked as active after successful sign-in
+- A user should see their account sync resume normally after re-authentication
+- A user should see a success notification after completing re-authentication
+- A user should see informative error messages if re-authentication fails
+
 ### Account Types
 - A user should be able to connect checking accounts
 - A user should be able to connect bank accounts (checking, savings, credit cards)
@@ -396,6 +407,8 @@
 - A user should be able to see "Monthly Budget Status" only when budgets are created
 - A user should NOT see "Over Budget" status when no budget has been created
 - A user should be able to see a link to create budgets when none exist
+- A user should see an alert banner when accounts need bank sign-in
+- A user should be able to click the sign-in alert to navigate to the accounts page
 
 ### Year-to-Date Summary
 - A user should be able to see YTD total income

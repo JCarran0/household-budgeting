@@ -94,6 +94,8 @@ Building a personal budgeting app for 2 users with Plaid integration. Using Risk
 | **S3 storage issues** | Verify STORAGE_TYPE=s3 and bucket permissions | [Deployment Guide](docs/AI-DEPLOYMENTS.md#storage-configuration) |
 | **Budget calculation inconsistencies** | Use shared utilities from `shared/utils/budgetCalculations.ts` instead of duplicate logic | [Architecture Guide](docs/AI-APPLICATION-ARCHITECTURE.md#budget-calculation-utilities) |
 | **TypeScript errors** | Never use `any`, use `unknown` with type guards | See TypeScript section below |
+| **Account shows "requires_reauth"** | User needs to re-authenticate via "Sign in to Bank" in account menu | [Architecture Guide](docs/AI-APPLICATION-ARCHITECTURE.md#re-authentication-flow) |
+| **Sync shows success but account not updated** | Check for `warning` field in response - some accounts may need re-auth | [Architecture Guide](docs/AI-APPLICATION-ARCHITECTURE.md#account-management) |
 
 ### File Locations Quick Reference
 ```
@@ -584,7 +586,7 @@ Track active problems that AI agents should be aware of when working on the code
 |-------|--------|------------|----------|
 | Frontend TypeScript errors | Build warnings | Fix types as encountered | Medium |
 | Some components use `any` type | Type safety compromised | Replace with proper types | High |
-| Expired Plaid token recovery | User must manually reconnect | Implement refresh mechanism | Medium |
+| Expired Plaid token recovery | User can re-authenticate via account menu | Plaid Link update mode implemented | Resolved ✅ |
 | Performance with 800+ transactions | Slow page load | Pagination implemented (50/page) | Resolved ✅ |
 
 ### 📝 Recent Architecture Decisions
@@ -592,6 +594,7 @@ Track important decisions that affect how the codebase should be modified.
 
 | Date | Decision | Rationale | Impact |
 |------|----------|-----------|--------|
+| 2026-01 | Plaid Link update mode for re-authentication | Allow users to re-authenticate expired bank connections | New endpoints, PlaidLinkContext update mode, visual indicators on accounts page and dashboard |
 | 2025-09 | Shared transaction calculation utilities | Consistent transfer exclusion across app | Created shared/utils/transactionCalculations.ts for all financial calculations |
 | 2025-09 | Field migration pattern with Admin UI | Safe data migrations with user control | Direct dataService access with destructuring for clean field removal |
 | 2025-09 | Rename "savings" to "rollover" | Avoid confusion with future savings features | Updated all references from isSavings to isRollover across codebase |
@@ -621,4 +624,3 @@ Quick summary of high-priority items:
 - Frontend has TypeScript `any` types that need proper typing
 - Some components use `any` type that need proper typing
 - Test coverage could be improved for UI components
-- Need better error recovery for expired Plaid tokens

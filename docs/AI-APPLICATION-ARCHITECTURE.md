@@ -77,7 +77,8 @@ household-budgeting/
 #### 2. PlaidService (`backend/src/services/plaidService.ts`)
 - **Purpose**: Plaid API integration for bank connections
 - **Key Methods**:
-  - `createLinkToken()`: Initialize Plaid Link flow
+  - `createLinkToken()`: Initialize Plaid Link flow for new account connection
+  - `createUpdateLinkToken()`: Initialize Plaid Link in update mode for re-authentication
   - `exchangePublicToken()`: Convert public to access token
   - `getAccounts()`: Fetch bank account details
   - `getTransactions()`: Fetch transactions with pagination
@@ -86,6 +87,7 @@ household-budgeting/
   - Automatic pagination for all transactions
   - 730-day history request (bank-limited)
   - Sandbox/development/production environment support
+  - **Re-authentication Flow**: When a bank connection expires (status: `requires_reauth`), use `createUpdateLinkToken()` with the existing access token to put Plaid Link in update mode
 
 #### 3. AccountService (`backend/src/services/accountService.ts`)
 - **Purpose**: Manage bank account connections and data
@@ -94,6 +96,12 @@ household-budgeting/
   - `getUserAccounts()`: Get all user's accounts
   - `syncAccountBalances()`: Update account balances
   - `disconnectAccount()`: Mark account as inactive and remove from Plaid
+  - `createUpdateLinkToken()`: Create Plaid Link token for re-authentication
+  - `markAccountActive()`: Reset account status to 'active' after successful re-auth
+- **Account Status**: Accounts have a `status` field with values:
+  - `active`: Normal operating state, syncing works
+  - `inactive`: Account has been disconnected
+  - `requires_reauth`: Bank connection expired, user needs to sign in again
 - **Data Model**: `StoredAccount` interface with encrypted access tokens
 - **Security**: AES-256-GCM encryption for Plaid access tokens
 
@@ -496,11 +504,13 @@ User clicks category in reports
 - Enhanced reports with updated date range options (This Month, This Year, etc.)
 - Responsive UI with dark theme
 - Inline transaction category editing
+- Account re-authentication via Plaid Link update mode
+- Visual indicators for accounts needing sign-in (badge, dashboard alert)
+- Per-account transaction sync (vs sync all)
 
 ### ⚠️ Known Issues
 1. **No Account Removal UI**: Backend has `disconnectAccount()` method but frontend lacks UI
-2. **Limited Error Recovery**: No UI for re-authentication when Plaid token expires
-3. **No Transaction Edit History**: Changes aren't tracked
+2. **No Transaction Edit History**: Changes aren't tracked
 4. **Single User Testing**: Multi-user scenarios not fully tested
 
 ### 🚧 In Progress
@@ -868,6 +878,20 @@ const token = authStorage ? JSON.parse(authStorage).state?.token : null;
 - Backend: `backend/src/services/accountService.ts`
 - Routes: `backend/src/routes/accounts.ts`
 - Frontend: `frontend/src/pages/MantineAccounts.tsx`
+
+#### Re-authentication Flow
+When a bank connection expires (Plaid returns `ITEM_LOGIN_REQUIRED` error), accounts are marked with `status: 'requires_reauth'`. The re-authentication flow:
+
+1. **Frontend Detection**: MantineAccounts.tsx shows "Sign-in Required" badge and menu option
+2. **Create Update Token**: `POST /api/v1/accounts/:accountId/link-token` creates Plaid Link token in update mode
+3. **User Re-authenticates**: PlaidLinkProvider opens Plaid Link with update token
+4. **Complete Re-auth**: `POST /api/v1/accounts/:accountId/reauth-complete` marks account as active
+5. **Sync Resumes**: Normal transaction syncing works again
+
+Key files:
+- `frontend/src/contexts/PlaidLinkContext.ts`: Defines `openPlaidUpdate(accountId)` method
+- `frontend/src/providers/PlaidLinkProvider.tsx`: Implements update mode flow
+- `backend/src/routes/accounts.ts`: `/link-token` and `/reauth-complete` endpoints
 
 ### Transaction Management
 - Backend: `backend/src/services/transactionService.ts`
