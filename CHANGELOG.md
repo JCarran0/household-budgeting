@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.23.0](https://github.com/JCarran0/household-budgeting/compare/v1.22.0...v1.23.0) (2026-01-24)
+
+
+### Features
+
+* **accounts:** add bank sign-in flow for re-authentication ([a374b1b](https://github.com/JCarran0/household-budgeting/commit/a374b1bb599e26ded16c716be89c9ca68bf23319))
+* **accounts:** add visual indicators for accounts requiring reconnection ([69b5efb](https://github.com/JCarran0/household-budgeting/commit/69b5efb25eb9cb573b84ebba5aae69aeb0bbc530))
+* **categories:** add guided deletion workflow with dependency cleanup ([7845f9d](https://github.com/JCarran0/household-budgeting/commit/7845f9dda5bdd0475248abea1f7f5da529a72644))
+
+
+### Bug Fixes
+
+* **budgets:** correct sticky header behavior in yearly budget grid ([7b71887](https://github.com/JCarran0/household-budgeting/commit/7b71887a98d95e44dd5680bec06ce700106b3da3))
+
 ## [1.22.0](https://github.com/JCarran0/household-budgeting/compare/v1.21.0...v1.22.0) (2025-10-18)
 
 
