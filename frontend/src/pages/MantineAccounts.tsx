@@ -60,8 +60,34 @@ export function MantineAccounts() {
     openPlaidUpdate(accountId);
   };
 
-  const syncMutation = useMutation({
-    mutationFn: (accountId: string) => api.syncTransactions(accountId),
+  // Mutation for syncing a single account
+  const syncAccountMutation = useMutation({
+    mutationFn: (accountId: string) => api.syncAccountTransactions(accountId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['accounts'] });
+      queryClient.invalidateQueries({ queryKey: ['transactions'] });
+      setSyncingAccount(null);
+      notifications.show({
+        title: 'Success',
+        message: 'Account synced successfully',
+        color: 'green',
+        icon: <IconCheck size={16} />,
+      });
+    },
+    onError: (error: unknown) => {
+      setSyncingAccount(null);
+      notifications.show({
+        title: 'Sync Failed',
+        message: (error as { message?: string })?.message || 'Failed to sync account',
+        color: 'red',
+        icon: <IconX size={16} />,
+      });
+    },
+  });
+
+  // Mutation for syncing all accounts
+  const syncAllMutation = useMutation({
+    mutationFn: () => api.syncTransactions(),
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['accounts'] });
       queryClient.invalidateQueries({ queryKey: ['transactions'] });
@@ -78,7 +104,7 @@ export function MantineAccounts() {
       } else {
         notifications.show({
           title: 'Success',
-          message: 'Transactions synced successfully',
+          message: 'All accounts synced successfully',
           color: 'green',
           icon: <IconCheck size={16} />,
         });
@@ -88,7 +114,7 @@ export function MantineAccounts() {
       setSyncingAccount(null);
       notifications.show({
         title: 'Sync Failed',
-        message: (error as { message?: string })?.message || 'Failed to sync transactions',
+        message: (error as { message?: string })?.message || 'Failed to sync accounts',
         color: 'red',
         icon: <IconX size={16} />,
       });
@@ -120,12 +146,12 @@ export function MantineAccounts() {
 
   const handleSync = (accountId: string) => {
     setSyncingAccount(accountId);
-    syncMutation.mutate(accountId);
+    syncAccountMutation.mutate(accountId);
   };
 
   const handleSyncAll = () => {
     setSyncingAccount('all');
-    syncMutation.mutate(undefined as unknown as string);
+    syncAllMutation.mutate();
   };
 
   const handleDisconnectClick = (account: { id: string; name: string; institution: string }) => {

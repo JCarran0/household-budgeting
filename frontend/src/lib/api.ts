@@ -168,6 +168,7 @@ class ApiClient {
     this.getTransactions = this.getTransactions.bind(this);
     this.getUncategorizedCount = this.getUncategorizedCount.bind(this);
     this.syncTransactions = this.syncTransactions.bind(this);
+    this.syncAccountTransactions = this.syncAccountTransactions.bind(this);
     this.importTransactionsFromCSV = this.importTransactionsFromCSV.bind(this);
     
     // Category methods
@@ -391,14 +392,26 @@ class ApiClient {
     return data;
   }
 
-  async syncTransactions(accountId?: string): Promise<{
+  async syncTransactions(): Promise<{
     added: number;
     modified: number;
     removed: number;
     hasMore: boolean;
     warning?: string;
   }> {
-    const { data } = await this.client.post('/transactions/sync', { accountId });
+    const { data } = await this.client.post('/transactions/sync');
+    return data;
+  }
+
+  async syncAccountTransactions(accountId: string): Promise<{
+    added: number;
+    modified: number;
+    removed: number;
+  }> {
+    const { data } = await this.client.post(`/accounts/${accountId}/sync-transactions`);
+    if (!data.success) {
+      throw new Error(data.error || 'Failed to sync account transactions');
+    }
     return data;
   }
 

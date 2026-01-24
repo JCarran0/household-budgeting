@@ -398,7 +398,9 @@ export function EnhancedTransactions() {
 
   // Sync transactions mutation
   const syncMutation = useMutation({
-    mutationFn: () => api.syncTransactions(selectedAccount === 'all' ? undefined : selectedAccount),
+    mutationFn: () => selectedAccount === 'all'
+      ? api.syncTransactions()
+      : api.syncAccountTransactions(selectedAccount),
     onSuccess: (data) => {
       notifications.show({
         title: 'Sync Complete',
