@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+### [1.23.1](https://github.com/JCarran0/household-budgeting/compare/v1.23.0...v1.23.1) (2026-02-16)
+
+
+### Bug Fixes
+
+* **accounts:** use single-account sync endpoint for per-account sync button ([dadf865](https://github.com/JCarran0/household-budgeting/commit/dadf8658cd78312c0a57ca6d6f3d9eb93faa72c0))
+* **categories:** fix "0 associated transactions" deletion error ([43d4977](https://github.com/JCarran0/household-budgeting/commit/43d49774cc3791b3d0ba7d13594ed9e3eccd782f))
+* **transactions:** send empty object body in sync request to satisfy backend validation ([cb1746a](https://github.com/JCarran0/household-budgeting/commit/cb1746ae39f6d777bbd63fe186931a66ae7162a7))
+
+
+### Documentation
+
+* add re-authentication flow documentation ([3cc96bd](https://github.com/JCarran0/household-budgeting/commit/3cc96bde052ac77c0709e76bbc2ef6583aa28591))
+
 ## [1.23.0](https://github.com/JCarran0/household-budgeting/compare/v1.22.0...v1.23.0) (2026-01-24)
 
 
