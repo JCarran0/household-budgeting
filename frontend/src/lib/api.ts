@@ -399,7 +399,7 @@ class ApiClient {
     hasMore: boolean;
     warning?: string;
   }> {
-    const { data } = await this.client.post('/transactions/sync');
+    const { data } = await this.client.post('/transactions/sync', {});
     return data;
   }
 
