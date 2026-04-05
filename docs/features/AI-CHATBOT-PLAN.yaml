@@ -769,13 +769,13 @@ phase_4_routes:
 # PHASE 5: Frontend — API Client
 # =============================================================================
 phase_5_api_client:
-  status: not_started
+  status: completed
   description: Add chatbot methods to the frontend API client.
 
   tasks:
     - id: "5.1"
       task: Add chatbot methods to frontend/src/lib/api.ts
-      status: not_started
+      status: completed
       details: |
         Methods to add (follow existing bound method pattern):
         - sendChatMessage(request: ChatRequest): Promise<ChatResponse>

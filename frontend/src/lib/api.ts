@@ -16,7 +16,10 @@ import type {
   StoredTrip,
   TripSummary,
   CreateTripDto,
-  UpdateTripDto
+  UpdateTripDto,
+  ChatRequest,
+  ChatResponse,
+  GitHubIssueDraft,
 } from '../../../shared/types';
 
 // Use relative URL in production, localhost in development
@@ -221,6 +224,11 @@ class ApiClient {
     this.getTripsSummaries = this.getTripsSummaries.bind(this);
     this.updateTrip = this.updateTrip.bind(this);
     this.deleteTrip = this.deleteTrip.bind(this);
+
+    // Chatbot
+    this.sendChatMessage = this.sendChatMessage.bind(this);
+    this.getChatUsage = this.getChatUsage.bind(this);
+    this.confirmGitHubIssue = this.confirmGitHubIssue.bind(this);
 
     // Request interceptor to add auth token
     this.client.interceptors.request.use(
@@ -1059,6 +1067,25 @@ class ApiClient {
 
   async deleteTrip(id: string): Promise<void> {
     await this.client.delete(`/trips/${id}`);
+  }
+
+  // =========================================================================
+  // Chatbot
+  // =========================================================================
+
+  async sendChatMessage(request: ChatRequest): Promise<ChatResponse> {
+    const { data } = await this.client.post<{ success: boolean } & ChatResponse>('/chatbot/message', request);
+    return data;
+  }
+
+  async getChatUsage(): Promise<{ monthlySpend: number; monthlyLimit: number; remainingBudget: number }> {
+    const { data } = await this.client.get<{ success: boolean; monthlySpend: number; monthlyLimit: number; remainingBudget: number }>('/chatbot/usage');
+    return data;
+  }
+
+  async confirmGitHubIssue(draft: GitHubIssueDraft): Promise<{ issueUrl: string }> {
+    const { data } = await this.client.post<{ success: boolean; issueUrl: string }>('/chatbot/confirm-issue', { draft });
+    return data;
   }
 }
 
