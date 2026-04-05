@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+### [1.23.2](https://github.com/JCarran0/household-budgeting/compare/v1.23.1...v1.23.2) (2026-04-05)
+
+
+### Bug Fixes
+
+* **transactions:** include parent name in filter subcategory labels ([ec7b9e7](https://github.com/JCarran0/household-budgeting/commit/ec7b9e7ca44214472ca0e382b7dabd34f69f5c3a))
+* **transactions:** use flat category options for inline picker and bulk edit ([2c27b54](https://github.com/JCarran0/household-budgeting/commit/2c27b5484fd494ad7eeddf7bc1efb97a98b82c88))
+
 ### [1.23.1](https://github.com/JCarran0/household-budgeting/compare/v1.23.0...v1.23.1) (2026-02-16)
 
 
