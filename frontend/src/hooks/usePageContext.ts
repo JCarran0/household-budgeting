@@ -30,6 +30,7 @@ function formatMonth(monthStr: string): string {
 }
 
 const TIME_RANGE_LABELS: Record<string, string> = {
+  // Reports time ranges
   thisMonth: 'this month',
   lastMonth: 'last month',
   thisYear: 'this year',
@@ -37,6 +38,10 @@ const TIME_RANGE_LABELS: Record<string, string> = {
   last3: 'last 3 months',
   last6: 'last 6 months',
   last12: 'last 12 months',
+  // Transaction date filters
+  'this-month': 'this month',
+  ytd: 'year to date',
+  custom: 'custom date range',
 };
 
 function buildDescription(path: string, pageName: string, params: Record<string, string>): string {
@@ -53,9 +58,18 @@ function buildDescription(path: string, pageName: string, params: Record<string,
     }
     if (params.tab && params.tab !== 'cashflow') parts.push(`${params.tab} tab`);
   } else if (path === '/transactions') {
+    if (params.search) parts.push(`searching "${params.search}"`);
     if (params.categoryIds) parts.push('filtered by category');
     if (params.tags) parts.push(`tagged ${params.tags}`);
-    if (params.startDate && params.endDate) parts.push(`${params.startDate} to ${params.endDate}`);
+    if (params.txnType) parts.push(`${params.txnType} only`);
+    if (params.uncategorized === 'true') parts.push('uncategorized only');
+    if (params.dateFilter === 'custom' && params.startDate && params.endDate) {
+      parts.push(`${params.startDate} to ${params.endDate}`);
+    } else if (params.dateFilter) {
+      const label = TIME_RANGE_LABELS[params.dateFilter] || params.dateFilter;
+      parts.push(`for ${label}`);
+    }
+    if (params.accountId) parts.push('filtered by account');
   }
 
   return parts.join(', ');

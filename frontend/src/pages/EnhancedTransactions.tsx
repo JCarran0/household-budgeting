@@ -84,7 +84,7 @@ const TRANSACTIONS_PER_PAGE = 50;
 
 export function EnhancedTransactions() {
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null);
   const [selectedCategoryValue, setSelectedCategoryValue] = useState<string | null>(null);
   const [isTransactionImportOpen, setIsTransactionImportOpen] = useState(false);
@@ -236,7 +236,32 @@ export function EnhancedTransactions() {
       }
     }
   }, [searchParams, hasInitialized, setSelectedCategories, setSelectedTags, setOnlyUncategorized, setCustomDateRange, setDateFilterOption]);
-  
+
+  // Sync filter state to URL params so chatbot (and bookmarks) can read current context
+  useEffect(() => {
+    if (!hasInitialized) return;
+
+    setSearchParams((prev) => {
+      // Clear old params and rebuild from current filter state
+      const keysToManage = ['search', 'accountId', 'categoryIds', 'tags', 'dateFilter', 'startDate', 'endDate', 'txnType', 'uncategorized'];
+      keysToManage.forEach((k) => prev.delete(k));
+
+      if (debouncedSearchTerm) prev.set('search', debouncedSearchTerm);
+      if (selectedAccount && selectedAccount !== 'all') prev.set('accountId', selectedAccount);
+      if (selectedCategories.length > 0) prev.set('categoryIds', selectedCategories.join(','));
+      if (selectedTags.length > 0) prev.set('tags', selectedTags.join(','));
+      if (dateFilterOption) prev.set('dateFilter', dateFilterOption);
+      if (dateFilterOption === 'custom') {
+        if (customDateRange[0]) prev.set('startDate', format(customDateRange[0], 'yyyy-MM-dd'));
+        if (customDateRange[1]) prev.set('endDate', format(customDateRange[1], 'yyyy-MM-dd'));
+      }
+      if (transactionType && transactionType !== 'all') prev.set('txnType', transactionType);
+      if (onlyUncategorized) prev.set('uncategorized', 'true');
+
+      return prev;
+    }, { replace: true });
+  }, [hasInitialized, debouncedSearchTerm, selectedAccount, selectedCategories, selectedTags, dateFilterOption, customDateRange, transactionType, onlyUncategorized, setSearchParams]);
+
   // Update category mutation
   const updateCategoryMutation = useMutation({
     mutationFn: ({ transactionId, categoryId }: { transactionId: string; categoryId: string | null }) =>
