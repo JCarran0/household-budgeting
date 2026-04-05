@@ -1,4 +1,5 @@
-import { useState, useMemo, useEffect, useRef } from 'react';
+import { useState, useMemo, useEffect, useRef, useCallback } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { useReportsFilters } from '../hooks/usePersistedFilters';
 import { notifications } from '@mantine/notifications';
@@ -177,25 +178,75 @@ interface ProcessedChildData {
 }
 
 export function Reports() {
-  // Use persisted filters from localStorage
-  const { timeRange, setTimeRange, resetFilters } = useReportsFilters();
-  
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  // Use persisted filters from localStorage as fallback
+  const { timeRange: storedTimeRange, setTimeRange: setStoredTimeRange, resetFilters: resetStoredFilters } = useReportsFilters();
+
+  // Valid values for URL params
+  const validTimeRanges = ['thisMonth', 'lastMonth', 'thisYear', 'yearToDate', 'last3', 'last6', 'last12'];
+  const validTypes = ['expenses', 'income'] as const;
+  const validTabs = ['cashflow', 'breakdown', 'trends'];
+
+  // URL params are source of truth, falling back to localStorage/defaults
+  const timeRange = validTimeRanges.includes(searchParams.get('timeRange') || '')
+    ? searchParams.get('timeRange')!
+    : storedTimeRange;
+  const categoryView: 'expenses' | 'income' = validTypes.includes(searchParams.get('type') as typeof validTypes[number])
+    ? (searchParams.get('type') as 'expenses' | 'income')
+    : 'expenses';
+  const activeTab: string | null = validTabs.includes(searchParams.get('tab') || '')
+    ? searchParams.get('tab')
+    : 'cashflow';
+
+  // Sync URL params on mount if they're missing
+  useEffect(() => {
+    const hasTimeRange = searchParams.has('timeRange');
+    const hasType = searchParams.has('type');
+    const hasTab = searchParams.has('tab');
+    if (!hasTimeRange || !hasType || !hasTab) {
+      setSearchParams((prev) => {
+        if (!hasTimeRange) prev.set('timeRange', timeRange);
+        if (!hasType) prev.set('type', categoryView);
+        if (!hasTab) prev.set('tab', activeTab || 'cashflow');
+        return prev;
+      }, { replace: true });
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const setTimeRange = useCallback((range: string) => {
+    setSearchParams((prev) => { prev.set('timeRange', range); return prev; }, { replace: true });
+    setStoredTimeRange(range);
+  }, [setSearchParams, setStoredTimeRange]);
+
+  const setCategoryView = useCallback((view: 'expenses' | 'income') => {
+    setSearchParams((prev) => { prev.set('type', view); return prev; }, { replace: true });
+  }, [setSearchParams]);
+
+  const setActiveTab = useCallback((tab: string | null) => {
+    setSearchParams((prev) => { prev.set('tab', tab || 'cashflow'); return prev; }, { replace: true });
+  }, [setSearchParams]);
+
+  const resetFilters = useCallback(() => {
+    setSearchParams((prev) => {
+      prev.set('timeRange', 'thisMonth');
+      prev.set('type', 'expenses');
+      prev.set('tab', 'cashflow');
+      return prev;
+    }, { replace: true });
+    resetStoredFilters();
+  }, [setSearchParams, resetStoredFilters]);
+
   // Drill-down state for category breakdown
   const [drillDownState, setDrillDownState] = useState<DrillDownState>({
     level: 'parent'
   });
-  
+
   // State for hidden categories in pie chart
   const [hiddenCategories, setHiddenCategories] = useState<HiddenCategoriesState>({});
-  
+
   // State for storing categories that are grouped into "Other"
   const [otherCategories, setOtherCategories] = useState<ProcessedParentData[]>([]);
-  
-  // State for income vs expense view
-  const [categoryView, setCategoryView] = useState<'expenses' | 'income'>('expenses');
-  
-  // State for active tab
-  const [activeTab, setActiveTab] = useState<string | null>('cashflow');
 
   // State for projection line toggles
   const [showBudgetedLine, setShowBudgetedLine] = useState(true);

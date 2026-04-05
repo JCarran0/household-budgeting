@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect, useCallback } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useBudgetFilters } from '../hooks/usePersistedFilters';
 import {
   Container,
@@ -55,39 +56,66 @@ import {
 } from '../../../shared/utils/budgetCalculations';
 
 export function Budgets() {
-  // Use persisted filters from localStorage
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  // Use persisted filters from localStorage as fallback
   const {
     selectedDate: storedDate,
-    activeTab,
+    activeTab: storedActiveTab,
     setSelectedDate: setStoredDate,
-    setActiveTab,
+    setActiveTab: setStoredActiveTab,
     resetFilters: resetStoredFilters,
   } = useBudgetFilters();
-  
-  // Use local state that syncs with store
-  const [selectedDate, setSelectedDate] = useState<Date>(storedDate);
-  
-  // Sync local state with store when store changes
+
+  // URL params are source of truth, falling back to localStorage
+  const selectedDate = useMemo(() => {
+    const monthParam = searchParams.get('month');
+    if (monthParam && /^\d{4}-\d{2}$/.test(monthParam)) {
+      const [year, month] = monthParam.split('-').map(Number);
+      return new Date(year, month - 1, 1);
+    }
+    return storedDate;
+  }, [searchParams, storedDate]);
+
+  const activeTab = searchParams.get('view') || storedActiveTab;
+
+  // Sync URL params on mount if they're missing (populate from localStorage)
   useEffect(() => {
-    setSelectedDate(storedDate);
-  }, [storedDate]);
-  
-  // Update both local state and store when date changes
+    const monthParam = searchParams.get('month');
+    const viewParam = searchParams.get('view');
+    if (!monthParam || !viewParam) {
+      setSearchParams((prev) => {
+        if (!monthParam) prev.set('month', format(selectedDate, 'yyyy-MM'));
+        if (!viewParam) prev.set('view', activeTab);
+        return prev;
+      }, { replace: true });
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Update both URL and localStorage when date changes
   const handleDateChange = useCallback((date: Date | string) => {
     let dateObj: Date;
     if (typeof date === 'string') {
-      // Parse the date string properly to avoid timezone issues
-      // MonthPickerInput returns 'YYYY-MM-DD' format
       const [year, month, day] = date.split('-').map(Number);
-      // Create date using local timezone (month is 0-indexed in JS Date)
       dateObj = new Date(year, month - 1, day || 1);
     } else {
       dateObj = date;
     }
-    
-    setSelectedDate(dateObj);
+
+    setSearchParams((prev) => {
+      prev.set('month', format(dateObj, 'yyyy-MM'));
+      return prev;
+    }, { replace: true });
     setStoredDate(dateObj);
-  }, [setStoredDate]);
+  }, [setSearchParams, setStoredDate]);
+
+  const setActiveTab = useCallback((tab: string) => {
+    setSearchParams((prev) => {
+      prev.set('view', tab);
+      return prev;
+    }, { replace: true });
+    setStoredActiveTab(tab);
+  }, [setSearchParams, setStoredActiveTab]);
   
   const [isFormOpen, setIsFormOpen] = useState<boolean>(false);
   const [editingBudget, setEditingBudget] = useState<MonthlyBudget | null>(null);
@@ -382,6 +410,7 @@ export function Budgets() {
                   onClick={() => {
                     const currentMonth = startOfMonth(new Date());
                     handleDateChange(currentMonth);
+                    setActiveTab('budget');
                     resetStoredFilters();
                     notifications.show({
                       title: 'View Reset',
