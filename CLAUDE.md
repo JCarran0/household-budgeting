@@ -500,7 +500,9 @@ Having issues?
 - **Check version**: Visit `/version` endpoint or run `curl localhost:3001/version`
 - **Password reset recovery**: If locked out, request reset and check server logs: `pm2 logs budget-backend | grep "RESET TOKEN"`
 - **⚠️ Category Migration**: Before deploying Plaid PFC changes, delete existing category data: `rm backend/data/categories_*.json`
-- **Production data debugging**: Sync production data locally: `npm run sync:production:dry-run` (preview) or `npm run sync:production` (actual sync)
+- **Production data debugging**: Sync production data locally (must run from `backend/` with `budget-app-prod` AWS profile):
+  - Preview: `cd backend && AWS_PROFILE=budget-app-prod npm run sync:production:dry-run`
+  - Sync: `cd backend && AWS_PROFILE=budget-app-prod npm run sync:production`
 - **Local data backup**: Create backup before sync: `npm run backup:local`, restore with: `npm run backup:restore`
 
 ## Deployment

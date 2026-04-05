@@ -523,11 +523,37 @@ export function EnhancedTransactions() {
     setSelectedCategories(uniqueValues);
   }, [categories, setSelectedCategories]);
 
-  // Category options for filter
+  // Grouped category options for MultiSelect filter only
   const categoryOptions = useMemo(() => {
     return buildGroupedCategoryOptions();
   }, [buildGroupedCategoryOptions]);
-  
+
+  // Flat category options for single-value Select (inline picker, bulk edit)
+  const flatCategoryOptions = useMemo(() => {
+    if (!categories) return [];
+
+    const options: Array<{ value: string; label: string }> = [
+      { value: 'uncategorized', label: 'Uncategorized' },
+    ];
+
+    categories.forEach(cat => {
+      const parentCategory = cat.parentId
+        ? categories.find(p => p.id === cat.parentId)
+        : null;
+      const baseLabel = parentCategory
+        ? `${parentCategory.name} → ${cat.name}`
+        : cat.name || '';
+      const label = cat.isHidden
+        ? `${baseLabel} (Excluded from budgets)`
+        : baseLabel;
+      if (cat.id && label) {
+        options.push({ value: cat.id, label });
+      }
+    });
+
+    return options.sort((a, b) => a.label.localeCompare(b.label));
+  }, [categories]);
+
 
   // Account options for filter
   const accountOptions = [
@@ -1369,7 +1395,7 @@ export function EnhancedTransactions() {
                   <Table.Td>
                     {editingCategoryId === transaction.id ? (
                       <Select
-                        data={categoryOptions}
+                        data={flatCategoryOptions}
                         value={selectedCategoryValue}
                         onChange={(value) => {
                           // Update state
@@ -1573,7 +1599,7 @@ export function EnhancedTransactions() {
         onClose={() => setBulkEditMode(null)}
         mode={bulkEditMode || 'category'}
         selectedCount={selectedTransactionIds.size}
-        categories={categoryOptions}
+        categories={flatCategoryOptions}
         onConfirm={handleBulkEditConfirm}
       />
 
