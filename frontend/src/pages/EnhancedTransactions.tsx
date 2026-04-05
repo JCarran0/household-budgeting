@@ -466,12 +466,12 @@ export function EnhancedTransactions() {
           items: [
             {
               value: `${parent.id}:all`,
-              label: `✓ All ${parent.name}`,
+              label: `All ${parent.name}`,
             },
             ...children.map((child: typeof categories[0]) => {
               const childLabel = child.isHidden
-                ? `👁️‍🗨️ ${child.name} (Excluded from budgets)`
-                : child.name;
+                ? `${parent.name} → 👁️‍🗨️ ${child.name} (Excluded from budgets)`
+                : `${parent.name} → ${child.name}`;
               return {
                 value: child.id,
                 label: childLabel,
