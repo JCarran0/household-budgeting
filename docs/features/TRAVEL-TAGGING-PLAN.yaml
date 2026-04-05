@@ -2,7 +2,7 @@
 # Travel Tagging & Trip Management — Implementation Plan
 # =============================================================================
 # BRD: docs/features/TRAVEL-TAGGING-BRD.md
-# Status: In Progress
+# Status: Complete
 # Last Updated: 2026-04-05
 # =============================================================================
 
@@ -84,6 +84,30 @@ decisions:
       containing colons would break parsing. Slugification must explicitly strip
       colons. Uniqueness must be checked on the generated tag, not the trip name,
       since different names can produce the same slug.
+
+  - id: D8
+    date: 2026-04-05
+    decision: Trip spending uses signed amounts (not absolute values)
+    rationale: |
+      Deposits (negative amounts) should offset expenses (positive amounts) in
+      trip totals. Using Math.abs() treated everything as an expense, inflating
+      totals when a mix of debits and credits were tagged.
+
+  - id: D9
+    date: 2026-04-05
+    decision: Total budget must be >= sum of category budgets
+    rationale: |
+      Prevents inconsistent budget state where category allocations exceed the
+      overall trip budget. Enforced on both frontend (form validation) and
+      backend (Zod refinement on create and update schemas).
+
+  - id: D10
+    date: 2026-04-05
+    decision: Bulk tag add/remove via existing bulk edit flow
+    rationale: |
+      Rather than building a separate tagging UI, extended the existing bulk
+      edit bar and modal with an "Edit Tags" mode that supports add or remove.
+      Backend uses append/remove semantics (not replace-all) for bulk operations.
 
 # =============================================================================
 # PHASE 1: Shared Types & Data Model
@@ -392,7 +416,7 @@ phase_4_frontend:
 # PHASE 5: Transaction Integration
 # =============================================================================
 phase_5_transaction_integration:
-  status: needs_manual_verification
+  status: completed
   description: |
     Ensure trip tags flow correctly through existing transaction UX.
     No new tagging UI is needed — users apply trip tags via existing mechanisms.
@@ -400,7 +424,7 @@ phase_5_transaction_integration:
   tasks:
     - id: "5.1"
       task: Verify trip tags work with existing tag input
-      status: needs_manual_verification
+      status: completed
       details: |
         TransactionEditModal already has TagsInput with suggestions from
         existing tags. Trip tags (trip:costa-rica:2026) should appear in
@@ -413,7 +437,7 @@ phase_5_transaction_integration:
 
     - id: "5.2"
       task: Verify Transactions page tag filter works with trip tags
-      status: needs_manual_verification
+      status: completed
       details: |
         EnhancedTransactions already has selectedTags filter with multi-select.
         Trip tags should appear in the dropdown and filter correctly.
@@ -425,7 +449,7 @@ phase_5_transaction_integration:
 # PHASE 6: Testing
 # =============================================================================
 phase_6_testing:
-  status: in_progress
+  status: completed
   description: |
     Follow risk-based testing strategy. Focus on critical paths:
     tag generation, spending calculations, tag propagation on rename/delete.
@@ -459,21 +483,21 @@ phase_6_testing:
 
     - id: "6.3"
       task: Manual testing checklist
-      status: not_started
+      status: completed
       details: |
-        - [ ] Create trip via form, verify tag preview
-        - [ ] Tag transactions via edit modal with trip tag
-        - [ ] Bulk-tag transactions for a trip
-        - [ ] View trip card grid with correct totals
-        - [ ] Expand trip to see category breakdown
-        - [ ] Click category to open TransactionPreviewModal
-        - [ ] "View All" navigates to Transactions with correct filters
-        - [ ] Edit trip name, verify tag updates on transactions
-        - [ ] Delete trip, verify tags removed from transactions
-        - [ ] Year filter on card grid
-        - [ ] Both users see same trip with combined transactions
-        - [ ] Pre-trip transaction (date before startDate) included in totals
-        - [ ] Rating and notes editable at any time
+        - [x] Create trip via form, verify tag preview
+        - [x] Tag transactions via edit modal with trip tag
+        - [x] Bulk-tag transactions for a trip
+        - [x] View trip card grid with correct totals
+        - [x] Expand trip to see category breakdown
+        - [x] Click category to open TransactionPreviewModal
+        - [x] "View All" navigates to Transactions with correct filters
+        - [x] Edit trip name, verify tag updates on transactions
+        - [x] Delete trip, verify tags removed from transactions
+        - [x] Year filter on card grid
+        - [x] Both users see same trip with combined transactions
+        - [x] Pre-trip transaction (date before startDate) included in totals
+        - [x] Rating and notes editable at any time
 
 # =============================================================================
 # IMPLEMENTATION ORDER
