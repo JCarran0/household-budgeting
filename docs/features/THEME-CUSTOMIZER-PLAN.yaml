@@ -1,0 +1,215 @@
+# =============================================================================
+# Admin Theme Customizer — Implementation Plan
+# =============================================================================
+# Prerequisite: feat(theme) commit — centralized color config (colorConfig.ts)
+# Status: Planned
+# Last Updated: 2026-04-05
+# =============================================================================
+
+overview:
+  description: |
+    Add an Admin UI that lets users customize the app's color palette via color
+    pickers. Colors are persisted per-user on the backend and loaded on app init.
+    The existing colorConfig.ts already provides defaultPalette, mergePalette(),
+    and buildTheme() — this feature wires those into a live-editable UI with
+    backend persistence.
+  key_files:
+    color_config: frontend/src/theme/colorConfig.ts
+    theme_builder: frontend/src/theme/theme.ts
+    theme_barrel: frontend/src/theme/index.ts
+    admin_page: frontend/src/pages/Admin.tsx
+    admin_components: frontend/src/components/admin/
+    api_client: frontend/src/lib/api.ts
+    app_entry: frontend/src/App.tsx
+    backend_app: backend/src/app.ts
+    backend_routes: backend/src/routes/
+    data_service: backend/src/services/dataService.ts
+
+# =============================================================================
+# DECISIONS LOG
+# =============================================================================
+decisions:
+  - id: D1
+    date: 2026-04-05
+    decision: Override-only persistence — save the diff, not the full palette
+    rationale: |
+      mergePalette() deep-merges user overrides with defaultPalette. This means
+      code-level palette updates (e.g., adding a new chart color) automatically
+      apply unless the user has explicitly overridden that specific value.
+      Storage stays small and forward-compatible.
+
+  - id: D2
+    date: 2026-04-05
+    decision: Use Mantine ColorInput over ColorPicker
+    rationale: |
+      ColorInput provides both a visual color swatch with dropdown picker AND
+      a hex text input for precise entry. More practical for design work than
+      the standalone ColorPicker component.
+
+  - id: D3
+    date: 2026-04-05
+    decision: Live preview before save
+    rationale: |
+      Color changes apply immediately to the running app via React state.
+      Only clicking "Save" persists to backend. "Reset" reverts to defaults.
+      This lets users experiment without committing.
+
+  - id: D4
+    date: 2026-04-05
+    decision: Group pickers by purpose, not by Mantine scale name
+    rationale: |
+      Users see "Backgrounds", "Primary Accent", "Semantic Colors", "Chart Colors"
+      — not raw Mantine index numbers. This makes the UI accessible to non-developers.
+
+  - id: D5
+    date: 2026-04-05
+    decision: Backend placeholder already exists in app.ts (line 107, commented out)
+    rationale: |
+      app.ts has `// app.use(\`${apiPrefix}/themes\`, themeRoutes);` ready to
+      uncomment. The route file just needs to be created.
+
+# =============================================================================
+# IMPLEMENTATION PHASES
+# =============================================================================
+phases:
+  - id: P1
+    name: Backend Theme Preferences API
+    status: planned
+    tasks:
+      - id: P1.T1
+        description: Create backend/src/routes/themes.ts
+        details: |
+          Three endpoints, all behind authMiddleware:
+          - GET  /themes/preferences — returns saved DeepPartial<ColorPalette> or null
+          - PUT  /themes/preferences — validates with Zod, saves via dataService
+          - DELETE /themes/preferences — resets to defaults (deletes stored prefs)
+          Storage key: theme_preferences_{userId}
+          Uses dataService.getData() / saveData() / deleteData()
+        files:
+          - backend/src/routes/themes.ts (new)
+
+      - id: P1.T2
+        description: Uncomment theme routes in app.ts
+        details: |
+          Uncomment import on line 16 and route registration on line 107.
+          Update import path to match new file location.
+        files:
+          - backend/src/app.ts
+
+  - id: P2
+    name: Frontend API Client Methods
+    status: planned
+    tasks:
+      - id: P2.T1
+        description: Add theme preference methods to api.ts
+        details: |
+          Three new methods on the ApiClient class:
+          - getThemePreferences(): GET /themes/preferences
+          - saveThemePreferences(overrides): PUT /themes/preferences
+          - resetThemePreferences(): DELETE /themes/preferences
+        files:
+          - frontend/src/lib/api.ts
+
+  - id: P3
+    name: ThemeProvider Context
+    status: planned
+    tasks:
+      - id: P3.T1
+        description: Create frontend/src/providers/ThemeProvider.tsx
+        details: |
+          React context provider that:
+          1. Wraps MantineProvider
+          2. Loads saved theme overrides from API on mount (useQuery)
+          3. Maintains palette overrides in React state
+          4. Exposes updatePalette(overrides) for live preview
+          5. Exposes resetPalette() to clear overrides
+          6. Calls mergePalette() + buildTheme() to produce Mantine theme
+          7. Passes built theme to MantineProvider
+        files:
+          - frontend/src/providers/ThemeProvider.tsx (new)
+
+      - id: P3.T2
+        description: Update App.tsx to use ThemeProvider
+        details: |
+          Replace direct MantineProvider with ThemeProvider.
+          ThemeProvider internally renders MantineProvider with the
+          dynamically-built theme. Remove static theme import.
+        files:
+          - frontend/src/App.tsx
+
+  - id: P4
+    name: ThemeCustomizer Admin Component
+    status: planned
+    tasks:
+      - id: P4.T1
+        description: Create frontend/src/components/admin/ThemeCustomizer.tsx
+        details: |
+          Card component matching existing Admin page patterns. Contains:
+
+          Color picker groups:
+          - Backgrounds: dark[6] (surfaces), dark[7] (main bg), dark[8] (deep bg), dark[9] (darkest)
+          - Primary Accent: yellow[5] (main accent shade)
+          - Semantic Colors: red[5] (error), orange[5] (warning), green[5] (success), blue[5] (info)
+          - Chart Colors: series array, income, expense, budgeted, priorYear
+
+          Each picker uses Mantine ColorInput component.
+
+          Buttons:
+          - Save: persists current overrides to backend via useMutation
+          - Reset to Defaults: calls DELETE endpoint, clears local state
+
+          Uses useTheme() context from ThemeProvider for live preview.
+          Uses useMutation/useQuery matching existing Admin patterns.
+        files:
+          - frontend/src/components/admin/ThemeCustomizer.tsx (new)
+
+      - id: P4.T2
+        description: Add ThemeCustomizer to Admin.tsx
+        details: |
+          Replace the "Coming Soon" placeholder card (lines 301-313)
+          with the ThemeCustomizer component import.
+        files:
+          - frontend/src/pages/Admin.tsx
+
+# =============================================================================
+# HELPER FUNCTION — Shade regeneration (future enhancement)
+# =============================================================================
+future_enhancements:
+  - id: F1
+    description: Auto-generate full 10-shade scale from a single picked color
+    details: |
+      Currently, picking yellow[5] only changes shade 5. A future enhancement
+      could auto-generate all 10 shades (lighter and darker variants) from the
+      picked color using HSL interpolation. This would make the color picker
+      more intuitive — pick one color, get a full harmonious scale.
+
+  - id: F2
+    description: Preset theme gallery
+    details: |
+      Offer 3-4 pre-built palettes (Sage & Stone, Ocean, Warm Neutral, Classic Dark)
+      that users can select as a starting point before customizing individual colors.
+
+  - id: F3
+    description: Export/import theme as JSON
+    details: |
+      Let users export their theme overrides as JSON and import them back,
+      enabling theme sharing between users or backup/restore.
+
+# =============================================================================
+# VERIFICATION
+# =============================================================================
+verification:
+  build:
+    - cd backend && npx tsc --noEmit
+    - cd frontend && npx tsc --noEmit
+  tests:
+    - cd backend && npm test
+  manual:
+    - Start dev servers (backend + frontend)
+    - Navigate to Admin page
+    - Verify ThemeCustomizer card appears with color pickers
+    - Change a background color — verify UI updates live
+    - Change primary accent — verify header icon and nav highlight change
+    - Click Save — refresh page — verify colors persist
+    - Click Reset to Defaults — verify Sage & Stone palette restored
+    - Verify auth pages (login/register) also reflect theme changes
