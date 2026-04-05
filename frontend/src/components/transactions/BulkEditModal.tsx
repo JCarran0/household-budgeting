@@ -6,6 +6,7 @@ import {
   RadioGroup,
   Radio,
   TextInput,
+  TagsInput,
   Text,
   Group,
   Button,
@@ -18,9 +19,10 @@ import { IconAlertCircle } from '@tabler/icons-react';
 interface BulkEditModalProps {
   opened: boolean;
   onClose: () => void;
-  mode: 'category' | 'description' | 'hidden';
+  mode: 'category' | 'description' | 'hidden' | 'tags';
   selectedCount: number;
   categories: Array<{ value: string; label: string; group?: string }>;
+  existingTags?: string[];
   onConfirm: (updates: BulkEditUpdates) => void;
 }
 
@@ -29,6 +31,9 @@ export interface BulkEditUpdates {
   userDescription?: string | null;
   descriptionMode?: 'replace' | 'clear';
   isHidden?: boolean;
+  tagsToAdd?: string[];
+  tagsToRemove?: string[];
+  tagsMode?: 'add' | 'remove';
 }
 
 export function BulkEditModal({
@@ -37,16 +42,19 @@ export function BulkEditModal({
   mode,
   selectedCount,
   categories,
+  existingTags = [],
   onConfirm,
 }: BulkEditModalProps) {
   const [categoryId, setCategoryId] = useState<string | null>(null);
   const [descriptionMode, setDescriptionMode] = useState<'replace' | 'clear'>('replace');
   const [description, setDescription] = useState('');
   const [hiddenMode, setHiddenMode] = useState<'hide' | 'unhide'>('hide');
-  
+  const [tagsMode, setTagsMode] = useState<'add' | 'remove'>('add');
+  const [tagValues, setTagValues] = useState<string[]>([]);
+
   const handleConfirm = () => {
     const updates: BulkEditUpdates = {};
-    
+
     if (mode === 'category') {
       if (categoryId !== null) {
         updates.categoryId = categoryId === 'uncategorized' ? null : categoryId;
@@ -60,20 +68,29 @@ export function BulkEditModal({
       }
     } else if (mode === 'hidden') {
       updates.isHidden = hiddenMode === 'hide';
+    } else if (mode === 'tags') {
+      updates.tagsMode = tagsMode;
+      if (tagsMode === 'add') {
+        updates.tagsToAdd = tagValues;
+      } else {
+        updates.tagsToRemove = tagValues;
+      }
     }
-    
+
     onConfirm(updates);
     handleClose();
   };
-  
+
   const handleClose = () => {
     setCategoryId(null);
     setDescriptionMode('replace');
     setDescription('');
     setHiddenMode('hide');
+    setTagsMode('add');
+    setTagValues([]);
     onClose();
   };
-  
+
   const isValid = () => {
     if (mode === 'category') {
       return categoryId !== null;
@@ -81,9 +98,11 @@ export function BulkEditModal({
       if (descriptionMode === 'replace') {
         return description.trim().length > 0;
       }
-      return true; // 'clear' mode is always valid
+      return true;
     } else if (mode === 'hidden') {
-      return true; // hidden mode is always valid
+      return true;
+    } else if (mode === 'tags') {
+      return tagValues.length > 0;
     }
     return false;
   };
@@ -95,7 +114,7 @@ export function BulkEditModal({
       title={
         <Group>
           <Text fw={600}>
-            Bulk Edit {mode === 'category' ? 'Category' : mode === 'description' ? 'Description' : 'Visibility'}
+            Bulk Edit {mode === 'category' ? 'Category' : mode === 'description' ? 'Description' : mode === 'tags' ? 'Tags' : 'Visibility'}
           </Text>
           <Badge variant="filled" size="lg">
             {selectedCount} selected
@@ -107,10 +126,12 @@ export function BulkEditModal({
       <Stack gap="md">
         <Alert icon={<IconAlertCircle size={16} />} variant="light">
           This action will update {selectedCount} transaction{selectedCount !== 1 ? 's' : ''}.
-          {mode === 'category' 
+          {mode === 'category'
             ? ' All selected transactions will be assigned to the chosen category.'
             : mode === 'description'
             ? ' Choose how to update the descriptions below.'
+            : mode === 'tags'
+            ? ' Choose whether to add or remove tags below.'
             : ' Choose whether to hide or unhide the selected transactions.'}
         </Alert>
         
@@ -146,6 +167,30 @@ export function BulkEditModal({
                 required
               />
             )}
+          </Stack>
+        ) : mode === 'tags' ? (
+          <Stack gap="md">
+            <RadioGroup
+              label="Choose Action"
+              value={tagsMode}
+              onChange={(value) => {
+                setTagsMode(value as 'add' | 'remove');
+                setTagValues([]);
+              }}
+              required
+            >
+              <Radio value="add" label="Add tags to selected transactions" />
+              <Radio value="remove" label="Remove tags from selected transactions" />
+            </RadioGroup>
+
+            <TagsInput
+              label={tagsMode === 'add' ? 'Tags to Add' : 'Tags to Remove'}
+              placeholder={tagsMode === 'add' ? 'Type a tag and press Enter' : 'Select tags to remove'}
+              data={existingTags}
+              value={tagValues}
+              onChange={setTagValues}
+              clearable
+            />
           </Stack>
         ) : (
           <RadioGroup

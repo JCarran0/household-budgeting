@@ -96,6 +96,8 @@ const bulkUpdateSchema = z.object({
     categoryId: z.union([z.string().min(1), z.null()]).optional(),
     userDescription: z.union([z.string(), z.null()]).optional(),
     isHidden: z.boolean().optional(),
+    tagsToAdd: z.array(z.string().min(1)).optional(),
+    tagsToRemove: z.array(z.string().min(1)).optional(),
   }).refine(data => Object.keys(data).length > 0, {
     message: 'At least one update field must be provided',
   }),
@@ -539,7 +541,35 @@ router.put('/bulk', authMiddleware, async (req: AuthRequest, res: Response): Pro
             continue;
           }
         }
-        
+
+        // Add tags if provided
+        if (updates.tagsToAdd && updates.tagsToAdd.length > 0) {
+          const result = await transactionService.appendTransactionTags(
+            req.user.userId,
+            transactionId,
+            updates.tagsToAdd
+          );
+          if (!result.success) {
+            failedCount++;
+            errors.push(`Transaction ${transactionId}: ${result.error}`);
+            continue;
+          }
+        }
+
+        // Remove tags if provided
+        if (updates.tagsToRemove && updates.tagsToRemove.length > 0) {
+          const result = await transactionService.removeTransactionTags(
+            req.user.userId,
+            transactionId,
+            updates.tagsToRemove
+          );
+          if (!result.success) {
+            failedCount++;
+            errors.push(`Transaction ${transactionId}: ${result.error}`);
+            continue;
+          }
+        }
+
         successCount++;
       } catch (error) {
         failedCount++;

@@ -148,7 +148,7 @@ export function EnhancedTransactions() {
   // Bulk selection state
   const [selectedTransactionIds, setSelectedTransactionIds] = useState<Set<string>>(new Set());
   const [lastClickedId, setLastClickedId] = useState<string | null>(null);
-  const [bulkEditMode, setBulkEditMode] = useState<'category' | 'description' | 'hidden' | null>(null);
+  const [bulkEditMode, setBulkEditMode] = useState<'category' | 'description' | 'hidden' | 'tags' | null>(null);
   
   const queryClient = useQueryClient();
   
@@ -641,7 +641,11 @@ export function EnhancedTransactions() {
   const handleBulkEditHidden = () => {
     setBulkEditMode('hidden');
   };
-  
+
+  const handleBulkEditTags = () => {
+    setBulkEditMode('tags');
+  };
+
   const handleClearSelection = () => {
     setSelectedTransactionIds(new Set());
     setLastClickedId(null);
@@ -660,20 +664,28 @@ export function EnhancedTransactions() {
     
     try {
       // Build the updates object based on the mode
-      const apiUpdates: { categoryId?: string | null; userDescription?: string | null; isHidden?: boolean } = {};
-      
+      const apiUpdates: { categoryId?: string | null; userDescription?: string | null; isHidden?: boolean; tagsToAdd?: string[]; tagsToRemove?: string[] } = {};
+
       if (updates.categoryId !== undefined) {
         apiUpdates.categoryId = updates.categoryId;
       }
-      
+
       if (updates.descriptionMode === 'replace' && updates.userDescription !== undefined) {
         apiUpdates.userDescription = updates.userDescription;
       } else if (updates.descriptionMode === 'clear') {
         apiUpdates.userDescription = null;
       }
-      
+
       if (updates.isHidden !== undefined) {
         apiUpdates.isHidden = updates.isHidden;
+      }
+
+      if (updates.tagsToAdd && updates.tagsToAdd.length > 0) {
+        apiUpdates.tagsToAdd = updates.tagsToAdd;
+      }
+
+      if (updates.tagsToRemove && updates.tagsToRemove.length > 0) {
+        apiUpdates.tagsToRemove = updates.tagsToRemove;
       }
       
       // Only make the API call if there are actual updates
@@ -937,6 +949,7 @@ export function EnhancedTransactions() {
           onEditCategory={handleBulkEditCategory}
           onEditDescription={handleBulkEditDescription}
           onEditHidden={handleBulkEditHidden}
+          onEditTags={handleBulkEditTags}
           onClearSelection={handleClearSelection}
         />
 
@@ -1587,6 +1600,7 @@ export function EnhancedTransactions() {
         mode={bulkEditMode || 'category'}
         selectedCount={selectedTransactionIds.size}
         categories={flatCategoryOptions}
+        existingTags={availableTags}
         onConfirm={handleBulkEditConfirm}
       />
 

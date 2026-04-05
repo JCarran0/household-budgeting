@@ -590,6 +590,73 @@ export class TransactionService {
   }
 
   /**
+   * Add tags to a transaction (merges with existing, no duplicates)
+   */
+  async appendTransactionTags(
+    userId: string,
+    transactionId: string,
+    tagsToAdd: string[]
+  ): Promise<{ success: boolean; error?: string }> {
+    try {
+      const transactions = await this.dataService.getData<StoredTransaction[]>(
+        `transactions_${userId}`
+      ) || [];
+
+      const transaction = transactions.find(t => t.id === transactionId);
+      if (!transaction) {
+        return { success: false, error: 'Transaction not found' };
+      }
+
+      const merged = Array.from(new Set([...transaction.tags, ...tagsToAdd]));
+      if (merged.length === transaction.tags.length) {
+        return { success: true }; // no change needed
+      }
+
+      transaction.tags = merged;
+      transaction.updatedAt = new Date();
+      await this.dataService.saveData(`transactions_${userId}`, transactions);
+
+      return { success: true };
+    } catch (error) {
+      return { success: false, error: 'Failed to add tags' };
+    }
+  }
+
+  /**
+   * Remove specific tags from a transaction
+   */
+  async removeTransactionTags(
+    userId: string,
+    transactionId: string,
+    tagsToRemove: string[]
+  ): Promise<{ success: boolean; error?: string }> {
+    try {
+      const transactions = await this.dataService.getData<StoredTransaction[]>(
+        `transactions_${userId}`
+      ) || [];
+
+      const transaction = transactions.find(t => t.id === transactionId);
+      if (!transaction) {
+        return { success: false, error: 'Transaction not found' };
+      }
+
+      const removeSet = new Set(tagsToRemove);
+      const filtered = transaction.tags.filter(t => !removeSet.has(t));
+      if (filtered.length === transaction.tags.length) {
+        return { success: true }; // no change needed
+      }
+
+      transaction.tags = filtered;
+      transaction.updatedAt = new Date();
+      await this.dataService.saveData(`transactions_${userId}`, transactions);
+
+      return { success: true };
+    } catch (error) {
+      return { success: false, error: 'Failed to remove tags' };
+    }
+  }
+
+  /**
    * Split a transaction into multiple parts
    */
   async splitTransaction(
