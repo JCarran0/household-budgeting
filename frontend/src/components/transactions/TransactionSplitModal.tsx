@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Modal,
   Stack,
@@ -16,7 +16,7 @@ import {
   Title,
 } from '@mantine/core';
 import { useForm } from '@mantine/form';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { notifications } from '@mantine/notifications';
 import { formatCurrency } from '../../utils/formatters';
 import { 
@@ -28,6 +28,7 @@ import {
 } from '@tabler/icons-react';
 import { api } from '../../lib/api';
 import type { Transaction } from '../../../../shared/types';
+import { useCategoryOptions } from '../../hooks/useCategoryOptions';
 
 interface TransactionSplitModalProps {
   opened: boolean;
@@ -54,39 +55,10 @@ export function TransactionSplitModal({
   const queryClient = useQueryClient();
   const [remainingAmount, setRemainingAmount] = useState(0);
 
-  // Fetch categories
-  const { data: categories } = useQuery({
-    queryKey: ['categories'],
-    queryFn: () => api.getCategories(),
+  // Category options for select
+  const { options: categoryOptions } = useCategoryOptions({
     enabled: opened,
   });
-
-  // Build category options
-  const categoryOptions = React.useMemo(() => {
-    if (!categories || categories.length === 0) {
-      return [];
-    }
-    
-    return categories
-      .map(cat => {
-        const parentCategory = cat.parentId
-          ? categories.find(p => p.id === cat.parentId)
-          : null;
-        const baseLabel = parentCategory 
-          ? `${parentCategory.name} → ${cat.name}` 
-          : cat.name || '';
-        // Add indicator for hidden categories
-        const label = cat.isHidden 
-          ? `${baseLabel} (Excluded from budgets)`
-          : baseLabel;
-        return {
-          value: cat.id || '',
-          label: label,
-        };
-      })
-      .filter(opt => opt.value && opt.label)
-      .sort((a, b) => a.label.localeCompare(b.label));
-  }, [categories]);
 
   const form = useForm<SplitFormValues>({
     initialValues: {

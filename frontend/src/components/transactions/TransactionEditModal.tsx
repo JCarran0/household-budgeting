@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Modal,
   Stack,
@@ -22,6 +22,7 @@ import { IconAlertCircle, IconTag, IconCategory } from '@tabler/icons-react';
 import { api } from '../../lib/api';
 import type { Transaction } from '../../../../shared/types';
 import { formatCurrency } from '../../utils/formatters';
+import { useCategoryOptions } from '../../hooks/useCategoryOptions';
 
 interface TransactionEditModalProps {
   opened: boolean;
@@ -45,12 +46,9 @@ export function TransactionEditModal({
   const queryClient = useQueryClient();
   const [availableTags, setAvailableTags] = useState<string[]>([]);
 
-  // Fetch categories
-  const { data: categories, isLoading: categoriesLoading, error: categoriesError } = useQuery({
-    queryKey: ['categories'],
-    queryFn: () => api.getCategories(),
+  // Category options for select
+  const { options: categoryOptions, isLoading: categoriesLoading, error: categoriesError } = useCategoryOptions({
     enabled: opened,
-    staleTime: 5 * 60 * 1000, // Consider data fresh for 5 minutes
   });
 
   // Fetch all transactions to extract unique tags
@@ -183,34 +181,6 @@ export function TransactionEditModal({
     },
   });
 
-  // Build category options - MUST be before any conditional returns
-  const categoryOptions = React.useMemo(() => {
-    if (!categories || categories.length === 0) {
-      return [];
-    }
-    
-    const options = categories
-      .map(cat => {
-        const parentCategory = cat.parentId
-          ? categories.find(p => p.id === cat.parentId)
-          : null;
-        const baseLabel = parentCategory 
-          ? `${parentCategory.name} → ${cat.name}` 
-          : cat.name || '';
-        // Add indicator for hidden categories
-        const label = cat.isHidden 
-          ? `${baseLabel} (Excluded from budgets)`
-          : baseLabel;
-        return {
-          value: cat.id || '',
-          label: label,
-        };
-      })
-      .filter(opt => opt.value && opt.label)
-      .sort((a, b) => a.label.localeCompare(b.label));
-    
-    return options;
-  }, [categories]);
 
   // Build tag options (existing tags)
   const tagOptions = availableTags.map(tag => tag);

@@ -8,9 +8,10 @@ This document outlines the implementation plan for a personal budgeting app with
 - **Strategy**: MVP-first, incremental feature development
 - **Tech Stack**: 
   - Backend: Node.js + Express + TypeScript
-  - Frontend: React 18 + TypeScript + Vite + Tailwind CSS
+  - Frontend: React 19 + TypeScript + Vite + Mantine UI 8
   - Testing: Jest + React Testing Library
   - Integration: Plaid API
+  - Infrastructure: AWS EC2 (t4g.micro) + S3 + Terraform + GitHub Actions
 
 ## Phase 1: Project Foundation & Backend Setup (Week 1) ✅ COMPLETE
 
@@ -261,7 +262,52 @@ This document outlines the implementation plan for a personal budgeting app with
 - ~~Performance optimization (React.memo, useMemo)~~
 - ~~Accessibility improvements~~
 
-## Phase 7: Multi-User Family Collaboration (Week 7) 🆕
+## Post-MVP Features ✅ COMPLETE
+
+Features delivered beyond the original plan:
+
+### Income Analytics ✅
+- [x] Income category dashboards with drill-down
+- [x] Toggle between income and expense views across reports
+
+### Yearly Budget Grid ✅ (v1.17.0)
+- [x] Comprehensive 12-month budget planning view
+- [x] Inline editing with auto-save
+- [x] Sticky headers for navigation
+
+### Admin Panel ✅
+- [x] Data migration tools (savings → rollover rename)
+- [x] System monitoring and batch operations
+- [x] Field migration pattern with destructuring for clean removal
+
+### CSV Import Framework ✅
+- [x] Extensible BaseCSVParser system
+- [x] Category and transaction import support
+- [x] ImportService for future import types
+
+### Rollover Categories ✅
+- [x] Renamed "savings" to "rollover" to avoid confusion
+- [x] Updated all references from `isSavings` to `isRollover`
+
+### Re-authentication Flow ✅ (v1.23.0)
+- [x] Plaid Link update mode for expired bank connections
+- [x] Visual indicators on accounts page and dashboard
+- [x] New endpoints for re-authentication token generation
+
+### Actuals Overrides ✅
+- [x] Override actual spending amounts for budget comparisons
+- [x] Modal UI for managing overrides
+
+### Transaction Pagination ✅
+- [x] 50 items per page for performance with 800+ transactions
+- [x] React Query staleTime/gcTime optimization
+
+### Versioning & Release System ✅
+- [x] Conventional commits with standard-version
+- [x] Automated CHANGELOG generation
+- [x] `/version` endpoint for deployment tracking
+
+## Phase 7: Multi-User Family Collaboration (Week 7) ⏳ NOT STARTED
 
 ### 7.1 Phase 1: Shared Family Account (Quick Implementation)
 - [ ] Add `primaryAccountId` and `role` fields to User model
@@ -295,100 +341,129 @@ This document outlines the implementation plan for a personal budgeting app with
 - [ ] Add integration tests for family workflows
 - [ ] Document known limitations
 
-## Phase 8: Production Architecture Setup (Week 8-9)
+## Phase 8: Production Architecture Setup (Week 8-9) ✅ COMPLETE
 
 **Reference**: See `docs/AI-Architecture-Plan.md` for complete architecture details
 
-### 8.1 GitHub Repository Configuration
-- [ ] Enable branch protection on main branch
-- [ ] Configure GitHub Secrets (EC2_SSH_KEY, EC2_HOST, JWT_SECRET, PLAID credentials)
-- [ ] Create `.github/workflows/test.yml` for PR validation
-- [ ] Create `.github/workflows/deploy.yml` for manual production deployment
-- [ ] Test GitHub Actions workflows with feature branch
+### 8.1 GitHub Repository Configuration ✅
+- [x] Enable branch protection on main branch
+- [x] Configure GitHub Secrets (EC2_SSH_KEY, EC2_HOST, JWT_SECRET, PLAID credentials)
+- [x] Create `.github/workflows/pr-validation.yml` for PR validation
+- [x] Create `.github/workflows/deploy-production.yml` for manual production deployment
+- [x] Create `.github/workflows/release-and-deploy.yml` for integrated release + deploy
+- [x] Create `.github/workflows/rollback.yml` for rollback capability
+- [x] Test GitHub Actions workflows with feature branch
 
-### 8.2 AWS Infrastructure Setup
-- [ ] Create AWS account and configure free tier
-- [ ] Generate SSH key pair for EC2 access
-- [ ] Create Terraform configuration files
-- [ ] Provision EC2 t4g.micro instance with Terraform
-- [ ] Configure Security Group with proper ingress rules
-- [ ] Allocate and associate Elastic IP
-- [ ] Create S3 bucket for backups
-- [ ] Set up AWS Budget alert at $10/month
+### 8.2 AWS Infrastructure Setup ✅
+- [x] Create AWS account and configure free tier
+- [x] Generate SSH key pair for EC2 access
+- [x] Create Terraform configuration files (`main.tf`, `s3-data.tf`, `github-actions-access.tf`, `ssm-setup.tf`)
+- [x] Provision EC2 t4g.micro instance with Terraform
+- [x] Configure Security Group with proper ingress rules
+- [x] Allocate and associate Elastic IP
+- [x] Create S3 bucket with versioning, encryption, and lifecycle policies
+- [x] Set up AWS Budget alert at $10/month (80% threshold notification)
+- [x] Configure IAM roles for GitHub Actions deployment
+- [x] Set up CloudWatch log group (7-day retention)
 
-### 8.3 Environment Configuration
-- [ ] Create production `.env` file with strong secrets
-- [ ] Update backend for production data directory path
-- [ ] Configure CORS for production domain/IP
-- [ ] Update frontend API URL for production
-- [ ] Test Plaid in production environment mode
+### 8.3 Environment Configuration ✅
+- [x] Create production `.env` file with strong secrets (managed via GitHub Secrets)
+- [x] Update backend for production data directory path (S3 via StorageFactory)
+- [x] Configure CORS for production domain (budget.jaredcarrano.com)
+- [x] Update frontend API URL for production
+- [x] Test Plaid in production environment mode
 
-## Phase 9: Production Deployment (Week 9-10)
+## Phase 9: Production Deployment (Week 9-10) ✅ COMPLETE
 
-### 9.1 Server Setup
-- [ ] SSH into EC2 and run initial updates
-- [ ] Install Node.js 20, nginx, PM2, git
-- [ ] Configure Ubuntu firewall (ufw) and fail2ban
-- [ ] Set up application directories structure
-- [ ] Clone repository to production server
-- [ ] Install and build both backend and frontend
+### 9.1 Server Setup ✅
+- [x] SSH into EC2 and run initial updates
+- [x] Install Node.js 20, nginx, PM2, git
+- [x] Configure Ubuntu firewall (ufw) and fail2ban
+- [x] Set up application directories structure
+- [x] Create `appuser` application user with appropriate permissions
+- [x] Configure SSH hardening (root login disabled, password auth disabled)
+- [x] Clone repository to production server
+- [x] Install and build both backend and frontend
 
-### 9.2 Application Configuration
-- [ ] Configure nginx as reverse proxy (see `docs/AI-Architecture-Plan.md`)
-- [ ] Set up PM2 ecosystem file for process management
-- [ ] Configure PM2 startup script for auto-restart
-- [ ] Set up Let's Encrypt SSL certificates
-- [ ] Test application is accessible via HTTPS
+### 9.2 Application Configuration ✅
+- [x] Configure nginx as reverse proxy with rate limiting and security headers
+- [x] Set up PM2 ecosystem file for process management (500MB memory restart)
+- [x] Configure PM2 startup script for auto-restart via systemd
+- [x] Set up Let's Encrypt SSL certificates
+- [x] Application accessible via HTTPS at budget.jaredcarrano.com
 
-### 9.3 Operational Setup
-- [ ] Create and test backup script to S3
-- [ ] Configure cron job for daily backups
-- [ ] Set up log rotation with logrotate
-- [ ] Configure UptimeRobot for external monitoring
-- [ ] Document restore procedure
-- [ ] Test full backup and restore process
+### 9.3 Operational Setup ✅
+- [x] Create and test backup script to S3
+- [x] Configure cron job for daily backups (2 AM, 7-day local retention)
+- [x] Set up log rotation with logrotate (daily, 7-day retention)
+- [x] Configure UptimeRobot for external monitoring
+- [x] Document restore procedure (`npm run backup:restore`)
+- [x] Test full backup and restore process
 
-## Phase 10: Production Stabilization (Week 10-11)
+## Phase 10: Production Stabilization (Week 10-11) ✅ COMPLETE
 
-### 10.1 Migration & Testing
-- [ ] Migrate existing local data to production
-- [ ] Complete end-to-end testing in production
-- [ ] Test Plaid account linking in production
-- [ ] Verify transaction sync is working
-- [ ] Test all CRUD operations
-- [ ] Verify backup automation is working
+### 10.1 Migration & Testing ✅
+- [x] Migrate existing local data to production (S3 sync utilities)
+- [x] Complete end-to-end testing in production
+- [x] Test Plaid account linking in production
+- [x] Verify transaction sync is working
+- [x] Test all CRUD operations
+- [x] Verify backup automation is working
 
-### 10.2 Monitoring & Optimization
-- [ ] Monitor AWS costs (should be $0 in free tier)
-- [ ] Review CloudWatch metrics
-- [ ] Check PM2 logs for any errors
-- [ ] Optimize nginx configuration if needed
-- [ ] Document any production-specific issues
-- [ ] Create runbook for common operations
+### 10.2 Monitoring & Optimization ✅
+- [x] Monitor AWS costs (budget alert at $10/month)
+- [x] Review CloudWatch metrics (basic monitoring)
+- [x] Check PM2 logs for errors
+- [x] Optimize nginx configuration (rate limit increased for Reports page)
+- [x] Document production-specific issues in CLAUDE.md
+- [x] Health check endpoints (`/health`, `/api/v1/version`)
 
-### 10.3 Documentation & Handoff
-- [ ] Update README with production access info
-- [ ] Document deployment process
-- [ ] Create troubleshooting guide
-- [ ] Document backup/restore procedures
-- [ ] Update CLAUDE.md with production learnings
+### 10.3 Documentation & Handoff ✅
+- [x] Update README with production access info
+- [x] Document deployment process (`docs/AI-DEPLOYMENTS.md`, 650+ lines)
+- [x] Create troubleshooting guide (CLAUDE.md + deployment docs)
+- [x] Document backup/restore procedures
+- [x] Update CLAUDE.md with production learnings and architecture decisions
 
-## Phase 11: Future Enhancements (Optional)
+## Phase 11: Category Options Consolidation (Refactor) ✅ COMPLETE
 
-### 11.1 Cost-Effective Improvements
+### 11.1 Create `useCategoryOptions` Hook ✅
+- [x] Create `frontend/src/hooks/useCategoryOptions.ts`
+- [x] Accept config: `{ categories?, includeUncategorized?, hiddenMode?, labelPrefix?, filter?, enabled? }`
+- [x] Return `{ options: Array<{ value, label }>, categories, isLoading, error }`
+- [x] Use existing `['categories']` React Query cache with 5-min staleTime
+- [x] Standardize on `"Parent → Child"` label format
+
+### 11.2 Consolidate Existing Category Option Builders ✅
+- [x] Replace inline builder in `TransactionEditModal` — removed local useQuery + 25-line builder
+- [x] Replace inline builder in `TransactionSplitModal` — removed local useQuery + 25-line builder
+- [x] Replace inline builder in `AutoCategorization` — removed local useQuery + 18-line builder
+- [x] Replace inline builder in `BudgetForm` — removed 40-line builder, uses `hiddenMode: 'exclude'`, `filter`, `labelPrefix`
+- [x] Replace `flatCategoryOptions` in `EnhancedTransactions` — uses `includeUncategorized: true`
+- [ ] Refactor `CategoryPicker` component to use `useCategoryOptions` internally (future — uses different indented label format)
+
+### 11.3 Verify & Clean Up ✅
+- [x] Ensure label format is consistent across all pickers (`"Parent → Child"`)
+- [x] Verify hidden category indicators display correctly everywhere
+- [x] Remove unused category option building code and clean up imports
+- [x] TypeScript compile check — 0 errors, 0 new warnings
+
+## Phase 12: Future Enhancements (Optional)
+
+### 12.1 Cost-Effective Improvements
 - [ ] Add custom domain with Route 53 ($12/year)
 - [ ] Implement CloudWatch detailed monitoring ($3/month)
 - [ ] Set up AWS Backup automation ($1/month)
 - [ ] Add more comprehensive health checks
 
-### 11.2 Database Migration (When Needed)
+### 12.2 Database Migration (When Needed)
 - [ ] Install PostgreSQL on same EC2 instance
 - [ ] Design optimized schema for relational data
 - [ ] Create migration scripts from JSON to PostgreSQL
 - [ ] Test thoroughly before switching over
 - [ ] Keep JSON export capability as backup
 
-### 11.3 Performance Enhancements (If Required)
+### 12.3 Performance Enhancements (If Required)
 - [ ] Implement Redis for session caching
 - [ ] Add nginx caching for static assets
 - [ ] Optimize frontend bundle size
@@ -400,21 +475,21 @@ This document outlines the implementation plan for a personal budgeting app with
 - [x] 90%+ test coverage on business logic (69 backend tests passing)
 - [x] All user stories have passing tests
 - [x] Authentication system fully functional
-- [x] Plaid integration working in sandbox mode
+- [x] Plaid integration working in production
 - [x] Transaction sync and categorization operational
-- [x] Budget creation and tracking functional
-- [x] Basic reporting available
-- [x] Frontend responsive and accessible
+- [x] Budget creation and tracking functional (monthly + yearly grid)
+- [x] Comprehensive reporting with multiple visualization tabs
+- [x] Frontend responsive and accessible (Mantine UI dark theme)
 
-### Production Deployment (Phases 8-10)
-- [ ] Application deployed to AWS EC2 instance
-- [ ] SSL certificates configured and working
-- [ ] Automated backups to S3 functioning
-- [ ] GitHub Actions CI/CD pipeline operational
-- [ ] Production costs under $10/month
-- [ ] Monitoring and alerting configured
-- [ ] Full documentation completed
-- [ ] Successful end-to-end testing in production
+### Production Deployment (Phases 8-10) ✅
+- [x] Application deployed to AWS EC2 instance
+- [x] SSL certificates configured and working (budget.jaredcarrano.com)
+- [x] Automated backups to S3 functioning (daily at 2 AM)
+- [x] GitHub Actions CI/CD pipeline operational (PR validation, deploy, rollback)
+- [x] Production costs under $10/month (budget alert configured)
+- [x] Monitoring and alerting configured (health checks, UptimeRobot, CloudWatch)
+- [x] Full documentation completed (6 AI docs, CLAUDE.md, deployment guide)
+- [x] Successful end-to-end testing in production
 
 ## Risk Mitigation
 - **Plaid API Limits**: Use sandbox mode initially, implement caching
@@ -426,58 +501,68 @@ This document outlines the implementation plan for a personal budgeting app with
 
 ### Backend (69 tests passing)
 - ✅ Complete authentication system with JWT, rate limiting, account lockout
-- ✅ Plaid service integration with sandbox testing
+- ✅ Plaid service integration (sandbox + production)
 - ✅ Account and transaction management with full CRUD operations
 - ✅ Transaction splitting functionality with parent-child relationships
-- ✅ Category service with hierarchy and Plaid mapping (17 tests)
-- ✅ Budget service with monthly management and comparisons (23 tests)
+- ✅ Category service with hierarchy and Plaid PFC mapping (17 tests)
+- ✅ Budget service with monthly + yearly grid management (23 tests)
 - ✅ Auto-categorization rules engine with pattern matching
-- ✅ Reporting service with comprehensive analytics:
-  - Spending trends by category over time
-  - Category breakdown with hierarchy support
-  - Cash flow summary and analysis
-  - Future projections with confidence levels
-  - Year-to-date performance metrics
+- ✅ Reporting service with comprehensive analytics
+- ✅ Admin tools for data migration and batch operations
+- ✅ CSV import framework (extensible BaseCSVParser)
+- ✅ Actuals override system for budget comparisons
+- ✅ Re-authentication flow for expired Plaid connections
 - ✅ Data persistence with JSON storage and S3 backup support
-- ✅ Reset script updated for user-scoped data architecture
+- ✅ Versioning system with conventional commits and CHANGELOG
 
 ### Frontend
-- ✅ Mantine UI with professional dark theme
+- ✅ Mantine UI with professional dark theme (React 19)
 - ✅ Complete authentication flow (login, register, protected routes)
-- ✅ Plaid Link integration for account connection
-- ✅ Account management with sync functionality
-- ✅ Enhanced transaction page with advanced filtering and search
+- ✅ Plaid Link integration with re-authentication support
+- ✅ Account management with per-account sync and re-auth indicators
+- ✅ Enhanced transaction page with advanced filtering, search, and pagination
 - ✅ Transaction edit modal with category and tag management
 - ✅ Transaction splitting modal for dividing transactions
 - ✅ Category management with tree view and CRUD operations
 - ✅ Budget management with month navigation and comparisons
-- ✅ Budget vs actual analysis with visual indicators
+- ✅ Yearly budget grid with inline editing and auto-save
+- ✅ Budget vs actual analysis with visual indicators and actuals overrides
+- ✅ Income analytics dashboards with income/expense toggle
 - ✅ Auto-categorization rules UI with rule management
+- ✅ Admin panel for data migrations and system monitoring
 - ✅ Comprehensive error boundary system with hierarchical protection
-- ✅ Comprehensive Reports page with multiple visualizations:
-  - Year-to-date summary with key metrics
-  - Cash flow analysis with income vs expenses charts
-  - Spending trends by category over time
-  - Category breakdown with top spending analysis
-  - Cash flow projections based on historical data
+- ✅ Comprehensive Reports page with multiple visualization tabs
+
+### Infrastructure
+- ✅ AWS EC2 (t4g.micro) with Terraform IaC
+- ✅ GitHub Actions CI/CD (PR validation, deploy, rollback)
+- ✅ nginx reverse proxy with rate limiting and security headers
+- ✅ PM2 process management with auto-restart
+- ✅ S3 storage with versioning, encryption, and lifecycle policies
+- ✅ Automated daily backups with S3 upload
+- ✅ HTTPS via Let's Encrypt at budget.jaredcarrano.com
+- ✅ Production sync utilities for local debugging
 
 ## Next Priority Actions
-1. ~~Enhance transaction features (categorization, splitting, tagging)~~ ✅ COMPLETE
-2. ~~Implement reporting dashboard with charts~~ ✅ COMPLETE
-3. ~~Implement error boundaries for resilience~~ ✅ COMPLETE
-4. ~~Add auto-categorization rules~~ ✅ COMPLETE
-5. **Implement multi-user family collaboration** (Phase 7) 🆕
-6. **Configure GitHub repository for production** (Phase 8.1)
-7. **Set up AWS infrastructure with Terraform** (Phase 8.2)
-8. **Deploy to production EC2 instance** (Phase 9)
-9. **Stabilize and monitor production** (Phase 10)
+1. ~~Enhance transaction features~~ ✅ COMPLETE
+2. ~~Implement reporting dashboard~~ ✅ COMPLETE
+3. ~~Error boundaries~~ ✅ COMPLETE
+4. ~~Auto-categorization rules~~ ✅ COMPLETE
+5. ~~Production deployment (Phases 8-10)~~ ✅ COMPLETE
+6. **Category options consolidation refactor** (Phase 11)
+7. **Multi-user family collaboration** (Phase 7)
+8. **Bill reminders and recurring transactions**
+9. **Enhanced reporting and visualizations**
+10. **Mobile app development**
 
-## Production Architecture
+## Production Architecture ✅ DEPLOYED
 - **Architecture Plan**: See `docs/AI-Architecture-Plan.md` for complete details
-- **Target Cost**: FREE (Year 1), <$10/month (Year 2+)
-- **Infrastructure**: Single EC2 t4g.micro with nginx + PM2
-- **Storage**: Local JSON files with S3 backups
-- **CI/CD**: GitHub Actions with manual deploy trigger
+- **Domain**: budget.jaredcarrano.com (HTTPS)
+- **Cost**: <$10/month (budget alert configured)
+- **Infrastructure**: EC2 t4g.micro + nginx + PM2 (Terraform-managed)
+- **Storage**: S3-backed JSON files with versioning and encryption
+- **CI/CD**: GitHub Actions (PR validation → release → deploy → rollback)
+- **Current Version**: 1.23.1 (384 commits)
 
 ## Notes
 - Focus on rapid feature delivery with critical path testing

@@ -36,6 +36,7 @@ import {
 } from '@tabler/icons-react';
 import { api } from '../../lib/api';
 import type { AutoCategorizeRule } from '../../../../shared/types';
+import { useCategoryOptions } from '../../hooks/useCategoryOptions';
 
 interface RuleFormValues {
   description: string;
@@ -58,11 +59,8 @@ export function AutoCategorization() {
     queryFn: () => api.getAutoCategorizeRules(),
   });
 
-  // Fetch categories for dropdown
-  const { data: categories = [], isLoading: categoriesLoading } = useQuery({
-    queryKey: ['categories'],
-    queryFn: () => api.getCategories(),
-  });
+  // Category options for dropdown
+  const { options: categoryOptions, categories = [], isLoading: categoriesLoading } = useCategoryOptions();
 
   // Create/Update form
   const form = useForm<RuleFormValues>({
@@ -330,25 +328,6 @@ export function AutoCategorization() {
     );
   });
 
-  // Build category options for select
-  const categoryOptions = categories
-    .map(cat => {
-      const parentCategory = cat.parentId
-        ? categories.find(p => p.id === cat.parentId)
-        : null;
-      const label = parentCategory 
-        ? `${parentCategory.name} → ${cat.name}` 
-        : cat.name;
-      // Add indicator for hidden categories
-      const displayLabel = cat.isHidden 
-        ? `${label} (Excluded from budgets)`
-        : label;
-      return {
-        value: cat.id,
-        label: displayLabel,
-      };
-    })
-    .sort((a, b) => a.label.localeCompare(b.label));
 
   const isLoading = createRuleMutation.isPending || updateRuleMutation.isPending;
 

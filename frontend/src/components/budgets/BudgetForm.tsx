@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import { useEffect } from 'react';
 import {
   Modal,
   Select,
@@ -14,10 +14,11 @@ import { notifications } from '@mantine/notifications';
 import { api, type CreateBudgetDto } from '../../lib/api';
 import { formatCurrency } from '../../utils/formatters';
 import type { MonthlyBudget, Category } from '../../../../shared/types';
-import { 
+import {
   isBudgetableCategory,
-  getBudgetType 
+  getBudgetType
 } from '../../../../shared/utils/categoryHelpers';
+import { useCategoryOptions } from '../../hooks/useCategoryOptions';
 
 interface BudgetFormProps {
   opened: boolean;
@@ -106,50 +107,13 @@ export function BudgetForm({
     });
   };
 
-  // Build category options with hierarchy (including both income and expense categories, excluding only transfers)
-  const categoryOptions = React.useMemo(() => {
-    if (!categories || categories.length === 0) {
-      return [];
-    }
-    
-    try {
-      const options = categories
-        .filter(cat => {
-          // Don't show hidden categories (including subcategories of hidden parents)
-          if (cat.isHidden) return false;
-          if (cat.parentId) {
-            const parent = categories.find(p => p.id === cat.parentId);
-            if (parent?.isHidden) return false;
-          }
-          return true;
-        })
-        .filter(cat => isBudgetableCategory(cat.id, categories)) // Include both income and expense, exclude only transfers
-        .map(cat => {
-          const parentCategory = cat.parentId ? 
-            categories.find(p => p.id === cat.parentId) : null;
-          const budgetType = getBudgetType(cat.id, categories);
-          const typeIndicator = budgetType === 'income' ? '💰' : '💳';
-          
-          // Ensure we return a valid option object
-          const baseName = parentCategory ? `${parentCategory.name} → ${cat.name}` : cat.name || '';
-          return {
-            value: cat.id || '',
-            label: `${typeIndicator} ${baseName}`,
-            // Note: Mantine Select doesn't support 'group' directly in option objects
-            // group: parentCategory?.name,
-          };
-        })
-        .filter(opt => opt.value && opt.label) // Filter out any invalid options
-        .sort((a, b) => {
-          // Sort alphabetically by label
-          return a.label.localeCompare(b.label);
-        });
-      return options;
-    } catch (error) {
-      console.error('[BudgetForm] Error building category options:', error);
-      return [];
-    }
-  }, [categories]);
+  // Category options with hierarchy (income and expense, excluding transfers and hidden)
+  const { options: categoryOptions } = useCategoryOptions({
+    categories,
+    hiddenMode: 'exclude',
+    filter: (cat) => isBudgetableCategory(cat.id, categories),
+    labelPrefix: (cat) => getBudgetType(cat.id, categories) === 'income' ? '💰 ' : '💳 ',
+  });
 
   const selectedCategory = categories?.find(c => c.id === form.values.categoryId);
 

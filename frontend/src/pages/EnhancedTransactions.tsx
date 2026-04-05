@@ -5,6 +5,7 @@ import { api, type ExtendedPlaidAccount } from '../lib/api';
 import { format, startOfMonth, endOfMonth, startOfYear, subMonths } from 'date-fns';
 import type { Transaction } from '../../../shared/types';
 import { useTransactionFilters } from '../hooks/usePersistedFilters';
+import { useCategoryOptions } from '../hooks/useCategoryOptions';
 import { formatCurrency } from '../utils/formatters';
 import { parseDateFromStorage } from '../stores/filterStore';
 import { 
@@ -529,30 +530,10 @@ export function EnhancedTransactions() {
   }, [buildGroupedCategoryOptions]);
 
   // Flat category options for single-value Select (inline picker, bulk edit)
-  const flatCategoryOptions = useMemo(() => {
-    if (!categories) return [];
-
-    const options: Array<{ value: string; label: string }> = [
-      { value: 'uncategorized', label: 'Uncategorized' },
-    ];
-
-    categories.forEach(cat => {
-      const parentCategory = cat.parentId
-        ? categories.find(p => p.id === cat.parentId)
-        : null;
-      const baseLabel = parentCategory
-        ? `${parentCategory.name} → ${cat.name}`
-        : cat.name || '';
-      const label = cat.isHidden
-        ? `${baseLabel} (Excluded from budgets)`
-        : baseLabel;
-      if (cat.id && label) {
-        options.push({ value: cat.id, label });
-      }
-    });
-
-    return options.sort((a, b) => a.label.localeCompare(b.label));
-  }, [categories]);
+  const { options: flatCategoryOptions } = useCategoryOptions({
+    categories,
+    includeUncategorized: true,
+  });
 
 
   // Account options for filter
