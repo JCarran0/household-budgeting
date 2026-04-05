@@ -623,7 +623,7 @@ function TripCard({ trip, onEdit, onDelete, onCategoryClick }: TripCardProps) {
                         style={{ cursor: 'pointer' }}
                         onClick={() =>
                           onCategoryClick({
-                            categoryId: row.categoryId,
+                            categoryId: row.categoryId === '__uncategorized__' ? null : row.categoryId,
                             categoryName: row.categoryName,
                             tripTag: trip.tag,
                           })

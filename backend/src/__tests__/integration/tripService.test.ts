@@ -659,6 +659,7 @@ describe('Trip Service Integration Tests', () => {
           name: 'Mexico',
           startDate: '2026-02-01',
           endDate: '2026-02-10',
+          totalBudget: 500,
           categoryBudgets: [{ categoryId: 'FOOD_AND_DRINK', amount: 200 }],
         })
         .expect(201);
@@ -696,6 +697,7 @@ describe('Trip Service Integration Tests', () => {
           name: 'Colombia',
           startDate: '2026-03-01',
           endDate: '2026-03-10',
+          totalBudget: 500,
           categoryBudgets: [
             { categoryId: 'FOOD_AND_DRINK', amount: 300 },
             { categoryId: 'ENTERTAINMENT', amount: 150 },

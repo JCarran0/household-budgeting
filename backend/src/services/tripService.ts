@@ -248,17 +248,16 @@ export class TripService {
     const transactions = result.transactions ?? [];
 
     // Accumulate spending per category
+    // Positive amounts = expenses (debits), negative = income (credits/deposits).
+    // We sum actual signed amounts so deposits offset expenses in trip totals.
     const spendingMap = new Map<string, number>();
     let totalSpent = 0;
 
     for (const txn of transactions) {
-      // Use absolute value so expenses (positive amounts in Plaid convention) and
-      // income (negative) both contribute meaningful totals for trip tracking.
-      const amount = Math.abs(txn.amount);
-      totalSpent += amount;
+      totalSpent += txn.amount;
 
       const catId = txn.categoryId ?? '__uncategorized__';
-      spendingMap.set(catId, (spendingMap.get(catId) ?? 0) + amount);
+      spendingMap.set(catId, (spendingMap.get(catId) ?? 0) + txn.amount);
     }
 
     // Build a name lookup from the provided categories list
