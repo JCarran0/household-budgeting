@@ -59,18 +59,10 @@ import { api } from '../lib/api';
 import { TransactionPreviewTrigger } from '../components/transactions';
 import { calculateBudgetTotals } from '../../../shared/utils/budgetCalculations';
 import { ReportSettings } from '../components/reports/ReportSettings';
+import { defaultPalette } from '../theme';
 
-// Color palette for charts (used for both income and expenses)
-const COLORS = [
-  '#4f46e5', // indigo
-  '#06b6d4', // cyan
-  '#10b981', // emerald
-  '#f59e0b', // amber
-  '#ef4444', // red
-  '#8b5cf6', // violet
-  '#ec4899', // pink
-  '#14b8a6', // teal
-];
+// Color palette for charts — sourced from centralized color config
+const COLORS = defaultPalette.chart.series;
 
 // Helper function to get date range based on option
 function getDateRange(option: string): { startDate: string; endDate: string; startMonth: string; endMonth: string } {
@@ -1075,16 +1067,16 @@ export function Reports() {
                         <Legend />
                         <Area 
                           type="monotone" 
-                          dataKey="income" 
-                          stroke="#10b981" 
-                          fill="#10b981" 
+                          dataKey="income"
+                          stroke={defaultPalette.chart.income}
+                          fill={defaultPalette.chart.income}
                           fillOpacity={0.6}
                         />
                         <Area 
                           type="monotone" 
-                          dataKey="expenses" 
-                          stroke="#ef4444" 
-                          fill="#ef4444" 
+                          dataKey="expenses"
+                          stroke={defaultPalette.chart.expense}
+                          fill={defaultPalette.chart.expense}
                           fillOpacity={0.6}
                         />
                       </AreaChart>
@@ -1112,17 +1104,17 @@ export function Reports() {
                         <Legend />
                         <Area 
                           type="monotone" 
-                          dataKey="budgetedNetFlow" 
-                          stroke="#4f46e5" 
-                          fill="#4f46e5" 
+                          dataKey="budgetedNetFlow"
+                          stroke={defaultPalette.chart.budgeted}
+                          fill={defaultPalette.chart.budgeted}
                           fillOpacity={0.6}
                           name="Planned Net Flow"
                         />
                         <Area 
                           type="monotone" 
-                          dataKey="actualNetFlow" 
-                          stroke="#10b981" 
-                          fill="#10b981" 
+                          dataKey="actualNetFlow"
+                          stroke={defaultPalette.chart.income}
+                          fill={defaultPalette.chart.income}
                           fillOpacity={0.6}
                           name="Actual Net Flow"
                         />
@@ -1172,16 +1164,16 @@ export function Reports() {
                       <Area
                         type="monotone"
                         dataKey="budgetedExpenses"
-                        stroke="#4ad4cf"
-                        fill="#4ad4cf"
+                        stroke={defaultPalette.chart.plannedSpending}
+                        fill={defaultPalette.chart.plannedSpending}
                         fillOpacity={0.6}
                         name="Planned Spending"
                       />
                       <Area
                         type="monotone"
                         dataKey="actualExpenses"
-                        stroke="#60e0fa"
-                        fill="#60e0fa"
+                        stroke={defaultPalette.chart.actualSpending}
+                        fill={defaultPalette.chart.actualSpending}
                         fillOpacity={0.6}
                         name="Actual Spending"
                       />
@@ -1262,7 +1254,7 @@ export function Reports() {
                         labelLine={false}
                         label={entry => `${entry.percentage.toFixed(0)}%`}
                         outerRadius={100}
-                        fill="#8884d8"
+                        fill={defaultPalette.chart.barFill}
                         dataKey="value"
                         onClick={handleSliceClick}
                         style={{ outline: 'none' }}
@@ -1529,7 +1521,7 @@ export function Reports() {
                         <Line
                           type="monotone"
                           dataKey="budgeted"
-                          stroke="#4f46e5"
+                          stroke={defaultPalette.chart.budgeted}
                           strokeWidth={2}
                           dot={{ r: 4 }}
                           name="Budgeted"
@@ -1543,7 +1535,7 @@ export function Reports() {
                         <Line
                           type="monotone"
                           dataKey="priorYear"
-                          stroke="#f59e0b"
+                          stroke={defaultPalette.chart.priorYear}
                           strokeWidth={2}
                           dot={{ r: 4 }}
                           name="Prior Year"
@@ -1556,7 +1548,7 @@ export function Reports() {
                         <Line
                           type="monotone"
                           dataKey="average"
-                          stroke="#10b981"
+                          stroke={defaultPalette.chart.average}
                           strokeWidth={2}
                           dot={{ r: 4 }}
                           name="6-Month Average"
@@ -1568,16 +1560,16 @@ export function Reports() {
                   {/* Legend Explanation */}
                   <Stack gap="xs" mt="md" style={{ fontSize: '0.85rem', color: 'var(--mantine-color-dimmed)' }}>
                     <Text size="xs">
-                      <strong style={{ color: '#4f46e5' }}>Budgeted:</strong> Your planned income minus expenses{' '}
+                      <strong style={{ color: defaultPalette.chart.budgeted }}>Budgeted:</strong> Your planned income minus expenses{' '}
                       <span style={{ fontSize: '0.75rem' }}>(dashed = copied from last budget)</span>
                     </Text>
                     {projectionsData?.hasPriorYearData && (
                       <Text size="xs">
-                        <strong style={{ color: '#f59e0b' }}>Prior Year:</strong> Actual cash flow from the same month last year
+                        <strong style={{ color: defaultPalette.chart.priorYear }}>Prior Year:</strong> Actual cash flow from the same month last year
                       </Text>
                     )}
                     <Text size="xs">
-                      <strong style={{ color: '#10b981' }}>6-Month Average:</strong> Rolling average of recent cash flow
+                      <strong style={{ color: defaultPalette.chart.average }}>6-Month Average:</strong> Rolling average of recent cash flow
                     </Text>
                   </Stack>
                 </Paper>

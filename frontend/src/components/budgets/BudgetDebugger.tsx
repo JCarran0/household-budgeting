@@ -4,6 +4,7 @@ import type { BudgetComparisonResponse } from '../../lib/api';
 import type { Category, BudgetComparison as BudgetComparisonType } from '../../../../shared/types';
 import { formatCurrency } from '../../utils/formatters';
 import { getChildCategoryIds, getParentCategoryIds } from '../../../../shared/utils/budgetCalculations';
+import { defaultPalette } from '../../theme';
 
 interface BudgetDebuggerProps {
   comparison: BudgetComparisonResponse;
@@ -152,7 +153,7 @@ export function BudgetDebugger({ comparison, categories }: BudgetDebuggerProps) 
   });
 
   return (
-    <Paper p="lg" withBorder style={{ backgroundColor: '#fff3cd', borderColor: '#ffeaa7' }}>
+    <Paper p="lg" withBorder style={{ backgroundColor: defaultPalette.debug.background, borderColor: defaultPalette.debug.border }}>
       <Stack gap="md">
         <Group>
           <Title order={4} c="orange">🔍 Budget Calculation Debugger</Title>

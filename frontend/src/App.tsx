@@ -23,17 +23,12 @@ import { Reports } from './pages/Reports';
 import { Admin } from './pages/Admin';
 import { Trips } from './pages/Trips';
 import { PlaidLinkProvider } from './providers/PlaidLinkProvider';
-import { MantineProvider, createTheme } from '@mantine/core';
+import { MantineProvider } from '@mantine/core';
+import { theme } from './theme';
 import { queryClient } from './lib/queryClient';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { RouteErrorBoundary } from './components/RouteErrorBoundary';
 
-// Default theme configuration
-const theme = createTheme({
-  primaryColor: 'yellow',
-  defaultRadius: 'md',
-  cursorType: 'pointer',
-});
 
 function App() {
   return (
