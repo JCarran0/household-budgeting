@@ -39,6 +39,7 @@ export const CHATBOT_TOOLS: Anthropic.Tool[] = [
         maxAmount: { type: 'number', description: 'Maximum absolute amount' },
         searchQuery: { type: 'string', description: 'Search transaction names, merchants, and descriptions' },
         status: { type: 'string', enum: ['pending', 'posted'], description: 'Filter by transaction status' },
+        onlyUncategorized: { type: 'boolean', description: 'If true, return only transactions with no category assigned' },
         limit: { type: 'number', description: 'Max number of results (default: all matching)' },
       },
       required: [],

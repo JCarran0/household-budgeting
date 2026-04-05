@@ -133,6 +133,9 @@ export class ChatbotDataService {
     if (filters.endDate) {
       results = results.filter(t => t.date <= filters.endDate!);
     }
+    if (filters.onlyUncategorized) {
+      results = results.filter(t => !t.categoryId);
+    }
     if (filters.categoryIds?.length) {
       const ids = new Set(filters.categoryIds);
       results = results.filter(t => t.categoryId && ids.has(t.categoryId));

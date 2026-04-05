@@ -308,6 +308,7 @@ export interface QueryTransactionsInput {
   maxAmount?: number;
   searchQuery?: string;
   status?: 'pending' | 'posted';
+  onlyUncategorized?: boolean;
   limit?: number;
 }
 

@@ -12,9 +12,9 @@ import type { ChatModel } from '../shared/types';
 
 // Cost per million tokens by model (update when pricing changes)
 const MODEL_PRICING: Record<ChatModel, { input: number; output: number }> = {
-  haiku: { input: 0.25, output: 1.25 },
+  haiku: { input: 1, output: 5 },
   sonnet: { input: 3, output: 15 },
-  opus: { input: 15, output: 75 },
+  opus: { input: 5, output: 25 },
 };
 
 interface CostRecord {

@@ -39,8 +39,8 @@ const MAX_HISTORY = 50; // REQ-028
 // Map ChatModel to Anthropic model IDs
 const MODEL_IDS: Record<ChatModel, string> = {
   haiku: 'claude-haiku-4-5-20251001',
-  sonnet: 'claude-sonnet-4-5-20241022',
-  opus: 'claude-opus-4-0-20250514',
+  sonnet: 'claude-sonnet-4-6',
+  opus: 'claude-opus-4-6',
 };
 
 interface ToolCallLog {
@@ -156,7 +156,17 @@ export class ChatbotService {
       };
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unknown error';
-      console.error('[ChatbotService] Error:', { userId, model: request.model, error: message, toolCallLogs });
+      // Log full error details for debugging
+      console.error('[ChatbotService] Error:', {
+        userId,
+        model: request.model,
+        error: message,
+        stack: error instanceof Error ? error.stack : undefined,
+        // Anthropic SDK errors include status and error details
+        status: (error as Record<string, unknown>)?.status,
+        errorBody: (error as Record<string, unknown>)?.error,
+        toolCallLogs,
+      });
 
       if (message === 'CHATBOT_REQUEST_TIMEOUT') {
         return this.errorResponse('That took too long — try a simpler question or a faster model.', budget);
