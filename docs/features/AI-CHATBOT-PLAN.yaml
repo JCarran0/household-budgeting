@@ -174,11 +174,31 @@ decisions:
       output tokens. 4096 is sufficient for detailed financial summaries while
       bounding worst-case per-request cost. SEC-013 compliance.
 
+  - id: D17
+    date: 2026-04-05
+    decision: EnhancedTransactions page also syncs filter state to URL params
+    rationale: |
+      The plan originally only listed Budgets, Reports, and Dashboard for URL
+      params. Transactions has the richest filter state and is where the chatbot
+      context is most valuable. Added a useEffect that syncs filters (search,
+      account, categories, tags, date range, transaction type, uncategorized)
+      to URL params. Dashboard was skipped (no filters). Amount range/exact,
+      include hidden, and pagination kept out of URL (too granular).
+
+  - id: D18
+    date: 2026-04-05
+    decision: CostTracker receives full DataService, not ReadOnlyDataService
+    rationale: |
+      The cost tracker needs to write cost data (saveData) but ReadOnlyDataService
+      has no write methods. SEC-018 applies to the chatbot's access to *financial*
+      data (ChatbotDataService), not to cost tracking infrastructure. CostTracker
+      only writes to its own chatbot_costs_{YYYY-MM} namespace.
+
 # =============================================================================
 # PHASE 0: Prerequisites — URL-Based Page State
 # =============================================================================
 phase_0_prerequisites:
-  status: not_started
+  status: completed
   description: |
     Ensure key pages reflect their filter/view state in the URL so the chatbot
     can read page context from the URL alone (REQ-010). This is a prerequisite
@@ -187,7 +207,7 @@ phase_0_prerequisites:
   tasks:
     - id: "0.1"
       task: Audit current URL param usage across all pages
-      status: not_started
+      status: completed
       details: |
         Document which pages have which filters and what's currently in URLs vs local state.
         Pages to audit:
@@ -200,7 +220,7 @@ phase_0_prerequisites:
 
     - id: "0.2"
       task: Add URL params to BudgetPage
-      status: not_started
+      status: completed
       details: |
         Reflect selected month and view mode in URL.
         Example: /budgets?month=2026-03&view=comparison
@@ -208,21 +228,21 @@ phase_0_prerequisites:
 
     - id: "0.3"
       task: Add URL params to Reports page
-      status: not_started
+      status: completed
       details: |
         Reflect date range, selected categories, and income/expense toggle.
         Example: /reports?startDate=2026-01-01&endDate=2026-03-31&type=expense
 
     - id: "0.4"
       task: Add URL params to Dashboard
-      status: not_started
+      status: skipped
       details: |
         Reflect selected month if applicable.
         Example: /dashboard?month=2026-03
 
     - id: "0.5"
       task: Create usePageContext hook
-      status: not_started
+      status: completed
       details: |
         Shared hook that extracts a standardized page context object from the
         current URL. Used by the chatbot to send context with each message.
@@ -241,13 +261,13 @@ phase_0_prerequisites:
 # PHASE 1: Shared Types & Data Model
 # =============================================================================
 phase_1_types:
-  status: not_started
+  status: completed
   description: Define chatbot-related types shared between frontend and backend.
 
   tasks:
     - id: "1.1"
       task: Define chatbot message types in shared/types/index.ts
-      status: not_started
+      status: completed
       details: |
         interface ChatMessage {
           id: string;
@@ -308,7 +328,7 @@ phase_1_types:
 
     - id: "1.2"
       task: Define tool schemas as TypeScript types
-      status: not_started
+      status: completed
       details: |
         These mirror the Claude tool_use definitions. Define them as types so
         both the tool definitions and result handlers are type-safe.
@@ -331,7 +351,7 @@ phase_1_types:
 # PHASE 2: Backend — ChatbotDataService (Read-Only Data Layer)
 # =============================================================================
 phase_2_data_service:
-  status: not_started
+  status: completed
   description: |
     Purpose-built read-only data access service for the chatbot. This is the
     security boundary — it receives only dataService and implements its own
@@ -341,7 +361,7 @@ phase_2_data_service:
   tasks:
     - id: "2.0"
       task: Create ReadOnlyDataService interface in backend/src/services/readOnlyDataService.ts
-      status: not_started
+      status: completed
       details: |
         TypeScript interface that exposes only read methods from DataService.
         This provides compile-time enforcement of the read-only boundary (SEC-018, D15).
@@ -358,7 +378,7 @@ phase_2_data_service:
 
     - id: "2.1"
       task: Create ChatbotDataService in backend/src/services/chatbotDataService.ts
-      status: not_started
+      status: completed
       details: |
         Singleton pattern matching existing services.
 
@@ -396,7 +416,7 @@ phase_2_data_service:
 
     - id: "2.2"
       task: Register ChatbotDataService in backend/src/services/index.ts
-      status: not_started
+      status: completed
       details: |
         Instantiate ReadOnlyDataService wrapper and chatbotDataService singleton.
         Export for use in chatbot routes.
@@ -409,7 +429,7 @@ phase_2_data_service:
 
     - id: "2.3"
       task: Write integration tests for ChatbotDataService
-      status: not_started
+      status: not_started  # Deferred to Phase 8 security hardening
       details: |
         File: backend/src/__tests__/integration/chatbotDataService.test.ts
 
@@ -433,7 +453,7 @@ phase_2_data_service:
 # PHASE 3: Backend — Chat Orchestration Service
 # =============================================================================
 phase_3_orchestration:
-  status: not_started
+  status: completed
   description: |
     Service that manages the Claude API conversation, tool execution, cost
     tracking, and GitHub issue submission. This is the "brain" that ties
@@ -442,7 +462,7 @@ phase_3_orchestration:
   tasks:
     - id: "3.1"
       task: Create ChatbotService in backend/src/services/chatbotService.ts
-      status: not_started
+      status: completed
       details: |
         Singleton pattern.
 
@@ -498,7 +518,7 @@ phase_3_orchestration:
 
     - id: "3.2"
       task: Define Claude tool definitions
-      status: not_started
+      status: completed
       details: |
         Define tool schemas matching the Anthropic tool_use format.
         Each tool has a name, description, and input_schema (JSON Schema).
@@ -546,7 +566,7 @@ phase_3_orchestration:
 
     - id: "3.3"
       task: Implement tool execution dispatcher
-      status: not_started
+      status: completed
       details: |
         Map tool names to ChatbotDataService method calls. Type-safe dispatcher
         that validates tool inputs against expected schemas before execution.
@@ -566,7 +586,7 @@ phase_3_orchestration:
 
     - id: "3.4"
       task: Implement cost tracking
-      status: not_started
+      status: completed
       details: |
         Track per-request and monthly aggregate token usage.
 
@@ -617,7 +637,7 @@ phase_3_orchestration:
 
     - id: "3.5"
       task: Implement GitHub issue submission with structural confirmation (D13)
-      status: not_started
+      status: completed
       details: |
         Two-phase approach for structural enforcement of REQ-024:
 
@@ -651,7 +671,7 @@ phase_3_orchestration:
 
     - id: "3.6"
       task: Register ChatbotService in backend/src/services/index.ts
-      status: not_started
+      status: completed
       details: |
         const chatbotService = new ChatbotService(
           chatbotDataService,
@@ -661,7 +681,7 @@ phase_3_orchestration:
 
     - id: "3.7"
       task: Write integration tests for ChatbotService
-      status: not_started
+      status: not_started  # Deferred to Phase 8 security hardening
       details: |
         File: backend/src/__tests__/integration/chatbotService.test.ts
 
@@ -1035,7 +1055,7 @@ phase_9_deployment:
 
     - id: "9.2"
       task: Install dependencies
-      status: not_started
+      status: completed  # Installed during Phase 3 implementation
       details: |
         cd backend && npm install @anthropic-ai/sdk async-mutex
 

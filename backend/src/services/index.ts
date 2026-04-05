@@ -18,6 +18,8 @@ import { ActualsOverrideService } from './actualsOverrideService';
 import { TripService, getTripService } from './tripService';
 import { ReadOnlyDataServiceImpl } from './readOnlyDataService';
 import { ChatbotDataService } from './chatbotDataService';
+import { ChatbotCostTracker } from './chatbotCostTracker';
+import { ChatbotService } from './chatbotService';
 
 // Create data service based on environment
 // Uses StorageFactory to automatically switch between filesystem and S3
@@ -53,6 +55,16 @@ export const tripService = getTripService(dataService, transactionService);
 // or any service with write methods. SEC-001/003/018 compliance.
 const readOnlyDataService = new ReadOnlyDataServiceImpl(dataService);
 export const chatbotDataService = new ChatbotDataService(readOnlyDataService);
+const chatbotCostTracker = new ChatbotCostTracker(
+  dataService,
+  Number(process.env.CHATBOT_MONTHLY_LIMIT) || 20,
+);
+export const chatbotService = new ChatbotService(
+  chatbotDataService,
+  chatbotCostTracker,
+  process.env.GITHUB_ISSUES_PAT || '',
+  process.env.ANTHROPIC_API_KEY || '',
+);
 
 // Export dataService for other services that need it
 export { dataService };
@@ -71,4 +83,5 @@ export {
   ActualsOverrideService,
   TripService,
   ChatbotDataService,
+  ChatbotService,
 };
