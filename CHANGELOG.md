@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+### [2.0.1](https://github.com/JCarran0/household-budgeting/compare/v2.0.0...v2.0.1) (2026-04-05)
+
+
+### Features
+
+* **transactions:** add bulk add/remove tags support ([e5ff9ed](https://github.com/JCarran0/household-budgeting/commit/e5ff9ed7daee168209bb6e48ebd7747e2531eb5a))
+
+
+### Bug Fixes
+
+* **transactions:** apply tags URL param to transaction filters ([e44b681](https://github.com/JCarran0/household-budgeting/commit/e44b6819a8c7d0d5d307f83eb176123c3b03535d))
+* **trips:** correct spending calculation and uncategorized drill-down ([4a727f6](https://github.com/JCarran0/household-budgeting/commit/4a727f63b1a98ec0d069ca9ac0c3bcb98c64c765))
+
+
+### Documentation
+
+* **chatbot:** add AI financial chatbot BRD ([2e00ccb](https://github.com/JCarran0/household-budgeting/commit/2e00ccb7dc92b8de9b32c75de275130f11ff0d84))
+
 ## [2.0.0](https://github.com/JCarran0/household-budgeting/compare/v1.23.2...v2.0.0) (2026-04-05)
 
 
