@@ -13,6 +13,7 @@ import adminRoutes from './routes/admin';
 import feedbackRoutes from './routes/feedback';
 import actualsOverrideRoutes from './routes/actualsOverrides';
 import tripRoutes from './routes/trips';
+import chatbotRoutes from './routes/chatbot';
 // import themeRoutes from './routes/themes'; // TODO: Uncomment when themes routes file is created
 
 // Load environment variables (skip in test mode as it's loaded in setup.ts)
@@ -104,6 +105,7 @@ app.use(`${apiPrefix}/admin`, adminRoutes);
 app.use(`${apiPrefix}/feedback`, feedbackRoutes);
 app.use(`${apiPrefix}/actuals-overrides`, actualsOverrideRoutes);
 app.use(`${apiPrefix}/trips`, tripRoutes);
+app.use(`${apiPrefix}/chatbot`, chatbotRoutes);
 // app.use(`${apiPrefix}/themes`, themeRoutes); // TODO: Uncomment when themes routes file is created
 
 // Version endpoint under API prefix

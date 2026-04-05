@@ -708,14 +708,14 @@ phase_3_orchestration:
 # PHASE 4: Backend — API Routes
 # =============================================================================
 phase_4_routes:
-  status: not_started
+  status: completed
   description: |
     Expose chatbot functionality via API endpoints. Protected by authMiddleware.
 
   tasks:
     - id: "4.1"
       task: Create chatbot routes in backend/src/routes/chatbot.ts
-      status: not_started
+      status: completed
       details: |
         Endpoints:
         - POST /api/v1/chatbot/message
@@ -744,13 +744,13 @@ phase_4_routes:
 
     - id: "4.2"
       task: Register chatbot routes in backend app
-      status: not_started
+      status: completed
       details: |
         Mount at /api/v1/chatbot. Follow existing route registration pattern.
 
     - id: "4.3"
       task: Write route-level tests
-      status: not_started
+      status: not_started  # Deferred to Phase 8 security hardening
       details: |
         File: backend/src/__tests__/integration/chatbotRoutes.test.ts
 
