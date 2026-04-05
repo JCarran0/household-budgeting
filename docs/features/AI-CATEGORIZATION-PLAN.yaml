@@ -1,0 +1,422 @@
+# =============================================================================
+# AI-Powered Bulk Categorization — Implementation Plan
+# =============================================================================
+# BRD: docs/features/AI-CATEGORIZATION-BRD.md
+# Status: Not Started
+# Last Updated: 2026-04-05
+# =============================================================================
+
+overview:
+  description: |
+    Implementation plan for the AI-powered bulk categorization feature. Users
+    trigger it from the Transactions page to classify uncategorized transactions
+    into suggested category buckets, review/edit each bucket, and optionally
+    create auto-categorization rules from discovered patterns. Uses the existing
+    chatbot infrastructure (cost tracking, Anthropic SDK) but has its own UI
+    flow (modal, not chat overlay).
+  key_files:
+    brd: docs/features/AI-CATEGORIZATION-BRD.md
+    shared_types: shared/types/index.ts
+    chatbot_cost_tracker: backend/src/services/chatbotCostTracker.ts
+    transaction_routes: backend/src/routes/transactions.ts
+    autocategorize_routes: backend/src/routes/autoCategorize.ts
+    transactions_page: frontend/src/pages/EnhancedTransactions.tsx
+    bulk_edit_modal: frontend/src/components/transactions/BulkEditModal.tsx
+    api_client: frontend/src/lib/api.ts
+
+# =============================================================================
+# DECISIONS LOG
+# =============================================================================
+decisions:
+  - id: D1
+    date: 2026-04-05
+    decision: Use Sonnet (hardcoded) for classification — no model selector
+    rationale: |
+      Sonnet is the right cost/quality balance for batch classification.
+      Haiku may miss nuance; Opus is overkill for pattern matching.
+      Unlike the chatbot, there's no conversational preference here.
+
+  - id: D2
+    date: 2026-04-05
+    decision: Share chatbot cost tracker and monthly cap
+    rationale: |
+      Both features use Claude API. A single $20/month household budget for
+      all AI features is simpler than separate caps. Classification costs
+      (~$0.20/session) are negligible compared to chat usage.
+
+  - id: D3
+    date: 2026-04-05
+    decision: Batch size of 50 transactions per Claude call
+    rationale: |
+      100 transactions + category context + few-shot examples approaches
+      context window limits and increases latency. 50 keeps each call
+      fast (~5s) while still being efficient. Multiple calls chain for
+      larger sets. Can tune after testing.
+
+  - id: D4
+    date: 2026-04-05
+    decision: Classification service is a new class, not part of ChatbotService
+    rationale: |
+      Different API pattern (single structured call vs conversational loop),
+      different prompt, different response handling. Shares cost tracker
+      and Anthropic client but has its own service class for clarity.
+
+  - id: D5
+    date: 2026-04-05
+    decision: Reuse existing PUT /transactions/bulk for applying categories
+    rationale: |
+      Already supports bulk categoryId updates (max 100 per request).
+      No new write endpoints needed. Frontend chains requests for > 100.
+
+# =============================================================================
+# PHASE 1: Shared Types
+# =============================================================================
+phase_1_types:
+  status: not_started
+  description: |
+    Define types for classification requests, responses, buckets, and
+    rule suggestions in shared/types/index.ts.
+
+  tasks:
+    - id: "1.1"
+      task: Define classification types in shared/types/index.ts
+      status: not_started
+      details: |
+        interface ClassificationResult {
+          transactionId: string;
+          suggestedCategoryId: string;
+          confidence: 'high' | 'medium' | 'low';
+          reasoning: string;
+        }
+
+        interface ClassificationBucket {
+          categoryId: string;
+          categoryName: string;
+          confidence: 'high' | 'medium' | 'low';
+          transactions: ClassifiedTransaction[];
+          totalAmount: number;
+        }
+
+        interface ClassifiedTransaction {
+          id: string;
+          date: string;
+          name: string;
+          merchantName: string | null;
+          amount: number;
+          suggestedCategoryId: string;
+          confidence: 'high' | 'medium' | 'low';
+          reasoning: string;
+          // User can override before applying:
+          selectedCategoryId: string | null;
+        }
+
+        interface ClassifyTransactionsResponse {
+          buckets: ClassificationBucket[];     // high/medium confidence, grouped
+          unsureBucket: ClassificationBucket;   // low confidence
+          totalClassified: number;
+          costUsed: number;
+        }
+
+        interface RuleSuggestion {
+          patterns: string[];
+          categoryId: string;
+          categoryName: string;
+          matchingTransactionCount: number;
+          exampleTransactions: string[];  // transaction names
+        }
+
+        interface SuggestRulesResponse {
+          suggestions: RuleSuggestion[];
+        }
+
+# =============================================================================
+# PHASE 2: Backend — Classification Service
+# =============================================================================
+phase_2_classification_service:
+  status: not_started
+  description: |
+    Service that calls Claude to classify uncategorized transactions against
+    the user's category hierarchy. Separate from ChatbotService but shares
+    cost tracking and Anthropic client.
+
+  tasks:
+    - id: "2.1"
+      task: Create CategorizationService in backend/src/services/categorizationService.ts
+      status: not_started
+      details: |
+        Constructor receives:
+        - chatbotDataService: ChatbotDataService (read-only data access)
+        - costTracker: ChatbotCostTracker (shared cost tracking)
+        - anthropicApiKey: string
+
+        Core methods:
+
+        classifyTransactions(userId, transactionIds?):
+          1. Check cost cap via costTracker.
+          2. Fetch uncategorized transactions (or specified IDs).
+          3. Fetch user's category hierarchy.
+          4. Fetch sample of categorized transactions as few-shot examples
+             (last 50 categorized, grouped by category — max 5 per category).
+          5. Fetch existing auto-categorize rules.
+          6. Batch transactions into groups of 50.
+          7. For each batch, call Claude with tool_use:
+             - System prompt: "You are a transaction classifier..."
+             - Tool: classify_transactions with structured output schema
+             - Input: transactions + categories + examples
+          8. Merge batch results. Group by suggested category.
+          9. Sort buckets: high confidence first, medium next, unsure last.
+          10. Record cost via costTracker.
+          11. Return ClassifyTransactionsResponse.
+
+        suggestRules(userId, categorizations):
+          1. Analyze the categorizations the user approved.
+          2. Find patterns (common merchant names, transaction name prefixes).
+          3. Filter out patterns already covered by existing rules.
+          4. Call Claude to refine pattern suggestions (optional — could be
+             pure heuristic too).
+          5. Return RuleSuggestion[].
+
+    - id: "2.2"
+      task: Write classification prompt and tool definition
+      status: not_started
+      details: |
+        File: backend/src/services/categorizationPrompt.ts
+
+        System prompt:
+        - You are a transaction classifier for a household budgeting app.
+        - Classify each transaction into the most appropriate category from
+          the user's category hierarchy.
+        - Use the provided examples of previously categorized transactions
+          as reference for the user's categorization preferences.
+        - Assign confidence: high (clear match), medium (reasonable guess),
+          low (uncertain).
+        - Provide brief reasoning for each classification.
+
+        Tool definition: classify_transactions
+        - input: { transactions: [...], categories: [...], examples: [...] }
+        - output: { classifications: ClassificationResult[] }
+
+    - id: "2.3"
+      task: Register CategorizationService in backend/src/services/index.ts
+      status: not_started
+      details: |
+        Instantiate with chatbotDataService, chatbotCostTracker, and API key.
+        Export as categorizationService singleton.
+
+# =============================================================================
+# PHASE 3: Backend — API Routes
+# =============================================================================
+phase_3_routes:
+  status: not_started
+  description: |
+    New endpoints for classification and rule suggestions. Protected by
+    auth and rate limiting. Mounted under /api/v1/chatbot/ to share
+    the chatbot's rate limiting and cost infrastructure.
+
+  tasks:
+    - id: "3.1"
+      task: Add classification endpoints to chatbot routes
+      status: not_started
+      details: |
+        POST /api/v1/chatbot/classify-transactions
+        - Auth: required
+        - Rate limit: shared with chatbot (5/min per user)
+        - Body: { transactionIds?: string[] }
+        - Response: ClassifyTransactionsResponse
+        - Validates body with Zod
+
+        POST /api/v1/chatbot/suggest-rules
+        - Auth: required
+        - Body: { categorizations: { transactionId: string, categoryId: string }[] }
+        - Response: SuggestRulesResponse
+        - Validates body with Zod
+
+    - id: "3.2"
+      task: Add Zod validators for new endpoints
+      status: not_started
+      details: |
+        Add to backend/src/validators/chatbotValidators.ts:
+
+        classifyTransactionsSchema:
+        - transactionIds: optional array of strings
+
+        suggestRulesSchema:
+        - categorizations: array of { transactionId: string, categoryId: string }
+        - min length 1
+
+# =============================================================================
+# PHASE 4: Frontend — API Client
+# =============================================================================
+phase_4_api_client:
+  status: not_started
+  description: Add classification methods to the frontend API client.
+
+  tasks:
+    - id: "4.1"
+      task: Add classification methods to frontend/src/lib/api.ts
+      status: not_started
+      details: |
+        - classifyTransactions(transactionIds?: string[]): Promise<ClassifyTransactionsResponse>
+        - suggestCategorizeRules(categorizations): Promise<SuggestRulesResponse>
+        - createAutoCategorizeRule(rule): already exists
+
+        Bind in constructor.
+
+# =============================================================================
+# PHASE 5: Frontend — Categorization Flow UI
+# =============================================================================
+phase_5_frontend:
+  status: not_started
+  description: |
+    The main UI: trigger button, classification loading, bucket review modal,
+    rule suggestions, and summary. Uses Mantine components.
+
+  tasks:
+    - id: "5.1"
+      task: Create AI Categorize button on Transactions page
+      status: not_started
+      details: |
+        Add to EnhancedTransactions.tsx near the filter controls:
+        - Button with IconSparkles or IconRobot icon
+        - Badge showing uncategorized count (from existing uncategorizedData query)
+        - Disabled when count is 0
+        - onClick opens the categorization flow
+
+    - id: "5.2"
+      task: Create CategorizationFlowModal component
+      status: not_started
+      details: |
+        File: frontend/src/components/transactions/CategorizationFlowModal.tsx
+
+        Top-level modal managing the multi-step flow:
+        - Step 1: Loading ("Analyzing N transactions...")
+        - Step 2: Bucket review (iterates through buckets)
+        - Step 3: Rule suggestions
+        - Step 4: Summary
+
+        State:
+        - currentStep: 'loading' | 'review' | 'rules' | 'summary'
+        - buckets: ClassificationBucket[]
+        - currentBucketIndex: number
+        - appliedCount: number
+        - skippedCount: number
+        - createdRules: number
+
+    - id: "5.3"
+      task: Create BucketReviewStep component
+      status: not_started
+      details: |
+        File: frontend/src/components/transactions/BucketReviewStep.tsx
+
+        Renders one bucket at a time:
+        - Header: "Suggestion: Categorize these N transactions as [Category]?"
+        - Progress: "Bucket 3 of 8"
+        - Table with columns: Date, Name/Merchant, Amount, Category (dropdown)
+        - Each row's category dropdown pre-selected to AI suggestion
+        - "Apply All" button: calls PUT /transactions/bulk with selected categories
+        - "Skip" button: advances to next bucket
+
+        The category dropdown uses the existing useCategoryOptions hook.
+        Rows where user changed the category are visually indicated.
+
+    - id: "5.4"
+      task: Create RuleSuggestionsStep component
+      status: not_started
+      details: |
+        File: frontend/src/components/transactions/RuleSuggestionsStep.tsx
+
+        After all buckets processed, shows rule suggestions:
+        - Card per suggestion: pattern, category, example transactions
+        - Each card has: "Create Rule" button, "Edit" button, "Dismiss" button
+        - Edit opens inline editing of pattern and category
+        - "Create Rule" calls POST /autocategorize/rules
+        - "Skip All" button to dismiss all and go to summary
+
+    - id: "5.5"
+      task: Create SummaryStep component
+      status: not_started
+      details: |
+        File: frontend/src/components/transactions/SummaryStep.tsx
+
+        Final screen:
+        - "Done! Categorized X of Y transactions."
+        - "Created Z new auto-categorization rules."
+        - "Skipped W transactions."
+        - "Close" button that closes the modal and invalidates transaction queries
+
+    - id: "5.6"
+      task: Handle loading, error, and cost cap states
+      status: not_started
+      details: |
+        - Loading: skeleton/spinner during classification API call
+        - Error: inline error message with retry option
+        - Cost cap: if costTracker says budget exhausted, show message and disable
+        - Partial failure: if bulk update fails for some transactions, show which
+          failed and allow retry
+
+# =============================================================================
+# PHASE 6: Testing & Polish
+# =============================================================================
+phase_6_testing:
+  status: not_started
+  description: Manual testing and UX polish.
+
+  tasks:
+    - id: "6.1"
+      task: Manual testing checklist
+      status: not_started
+      details: |
+        Entry point:
+        - [ ] AI Categorize button visible when uncategorized > 0
+        - [ ] Button disabled when uncategorized = 0
+        - [ ] Badge shows correct uncategorized count
+
+        Classification:
+        - [ ] Loading state shows transaction count
+        - [ ] Classification completes in < 10s for 50 transactions
+        - [ ] Buckets are grouped by category with correct transactions
+        - [ ] High confidence suggestions are accurate (>80% acceptance)
+
+        Bucket review:
+        - [ ] Each bucket shows correct category name and count
+        - [ ] Category dropdowns are pre-selected correctly
+        - [ ] User can change individual category selections
+        - [ ] "Apply All" saves categories via bulk API
+        - [ ] "Skip" advances without changes
+        - [ ] Progress indicator updates correctly
+        - [ ] Unsure bucket appears last with no pre-selection
+
+        Rule suggestions:
+        - [ ] Suggestions don't duplicate existing rules
+        - [ ] "Create Rule" creates via API and shows success
+        - [ ] "Dismiss" removes suggestion from list
+        - [ ] "Skip All" goes to summary
+
+        Summary:
+        - [ ] Correct counts for categorized, skipped, rules created
+        - [ ] Closing modal refreshes transaction list
+
+        Cost:
+        - [ ] Cost tracked in shared chatbot cost tracker
+        - [ ] Cost cap prevents classification when budget exhausted
+
+# =============================================================================
+# IMPLEMENTATION ORDER
+# =============================================================================
+implementation_order:
+  description: |
+    Linear implementation. Backend first (types → service → routes),
+    then frontend (API client → UI components).
+  sequence:
+    - phase: 1 — Shared Types
+      reason: Types needed by everything else
+    - phase: 2 — CategorizationService
+      reason: Core classification logic
+    - phase: 3 — API Routes
+      reason: Backend must be callable before frontend consumes it
+    - phase: 4 — API Client
+      reason: Frontend needs typed methods
+    - phase: 5 — Categorization Flow UI
+      reason: Main user-facing deliverable
+    - phase: 6 — Testing & Polish
+      reason: End-to-end verification
