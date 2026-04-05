@@ -2,7 +2,7 @@
 # Travel Tagging & Trip Management — Implementation Plan
 # =============================================================================
 # BRD: docs/features/TRAVEL-TAGGING-BRD.md
-# Status: Not Started
+# Status: In Progress
 # Last Updated: 2026-04-05
 # =============================================================================
 
@@ -89,13 +89,13 @@ decisions:
 # PHASE 1: Shared Types & Data Model
 # =============================================================================
 phase_1_data_model:
-  status: not_started
+  status: completed
   description: Define Trip types and extend existing types for trip support.
 
   tasks:
     - id: "1.1"
       task: Define Trip interface in shared/types/index.ts
-      status: not_started
+      status: completed
       details: |
         Follow existing entity patterns (MonthlyBudget, Transaction, etc.).
 
@@ -138,7 +138,7 @@ phase_1_data_model:
 
     - id: "1.2"
       task: Define Zod validation schemas for trip CRUD
-      status: not_started
+      status: completed
       details: |
         Create in backend route file or a shared schema file.
         - createTripSchema: name (required, max 100 chars), startDate, endDate,
@@ -151,7 +151,7 @@ phase_1_data_model:
 
     - id: "1.3"
       task: Add tag generation utility
-      status: not_started
+      status: completed
       details: |
         Utility function to generate trip tags from name + year.
         - Lowercase the name
@@ -167,7 +167,7 @@ phase_1_data_model:
 # PHASE 2: Backend Service & Routes
 # =============================================================================
 phase_2_backend:
-  status: not_started
+  status: completed
   description: |
     Create TripService and trip API routes following existing patterns
     (singleton service, Express routes with Zod validation, authMiddleware).
@@ -175,7 +175,7 @@ phase_2_backend:
   tasks:
     - id: "2.1"
       task: Create TripService in backend/src/services/tripService.ts
-      status: not_started
+      status: completed
       details: |
         Follow BudgetService/CategoryService singleton patterns.
         Storage key: "trips_{userId}" via dataService.
@@ -194,14 +194,14 @@ phase_2_backend:
 
     - id: "2.2"
       task: Register TripService in backend/src/services/index.ts
-      status: not_started
+      status: completed
       details: |
         Instantiate tripService singleton with dataService and transactionService
         dependencies. Export for use in routes.
 
     - id: "2.3"
       task: Create trip routes in backend/src/routes/trips.ts
-      status: not_started
+      status: completed
       details: |
         Follow budgets.ts route pattern with authMiddleware and Zod validation.
 
@@ -216,13 +216,13 @@ phase_2_backend:
 
     - id: "2.4"
       task: Register trip routes in backend/src/app.ts or main router
-      status: not_started
+      status: completed
       details: |
         Mount trip routes at /api/v1/trips. Follow existing pattern for route registration.
 
     - id: "2.5"
       task: Add tag-stripping logic to TransactionService
-      status: not_started
+      status: completed
       details: |
         TransactionService already has addTransactionTags (replaces full tag array).
         Add a method or extend existing logic to support:
@@ -243,13 +243,13 @@ phase_2_backend:
 # PHASE 3: API Client
 # =============================================================================
 phase_3_api_client:
-  status: not_started
+  status: completed
   description: Add trip methods to the frontend API client.
 
   tasks:
     - id: "3.1"
       task: Add trip CRUD methods to frontend/src/lib/api.ts
-      status: not_started
+      status: completed
       details: |
         Follow existing method patterns (bound methods, typed responses).
 
@@ -268,7 +268,7 @@ phase_3_api_client:
 # PHASE 4: Frontend — Trips Page & Navigation
 # =============================================================================
 phase_4_frontend:
-  status: not_started
+  status: completed
   description: |
     Build the Trips page with card grid, trip detail accordion, and Create Trip flow.
     Add sidebar navigation entry and route.
@@ -276,7 +276,7 @@ phase_4_frontend:
   tasks:
     - id: "4.1"
       task: Add Trips to sidebar navigation
-      status: not_started
+      status: completed
       details: |
         In frontend/src/components/MantineLayout.tsx, add to navItems array:
         { label: 'Trips', icon: IconPlane, path: '/trips' }
@@ -286,14 +286,14 @@ phase_4_frontend:
 
     - id: "4.2"
       task: Add /trips route to frontend/src/App.tsx
-      status: not_started
+      status: completed
       details: |
         Add protected route for the Trips page component.
         Follow existing route pattern with lazy loading if used elsewhere.
 
     - id: "4.3"
       task: Create Trips page — card grid view
-      status: not_started
+      status: completed
       details: |
         File: frontend/src/pages/Trips.tsx
 
@@ -322,7 +322,7 @@ phase_4_frontend:
 
     - id: "4.4"
       task: Create Trip detail — accordion expansion
-      status: not_started
+      status: completed
       details: |
         When a trip card is clicked, expand to show:
 
@@ -342,7 +342,7 @@ phase_4_frontend:
 
     - id: "4.5"
       task: Create Trip form — create/edit modal
-      status: not_started
+      status: completed
       details: |
         Mantine Modal with form fields:
         - Trip name (TextInput, required)
@@ -360,7 +360,7 @@ phase_4_frontend:
 
     - id: "4.6"
       task: Wire category drill-down using TransactionPreviewModal
-      status: not_started
+      status: completed
       details: |
         Reuse existing TransactionPreviewModal pattern from Reports page.
 
@@ -379,7 +379,7 @@ phase_4_frontend:
 
     - id: "4.7"
       task: Create trip deletion confirmation modal
-      status: not_started
+      status: completed
       details: |
         Mantine Modal confirming deletion.
         Message: "Delete {trip name}? This will remove the trip tag from all
@@ -392,7 +392,7 @@ phase_4_frontend:
 # PHASE 5: Transaction Integration
 # =============================================================================
 phase_5_transaction_integration:
-  status: not_started
+  status: needs_manual_verification
   description: |
     Ensure trip tags flow correctly through existing transaction UX.
     No new tagging UI is needed — users apply trip tags via existing mechanisms.
@@ -400,7 +400,7 @@ phase_5_transaction_integration:
   tasks:
     - id: "5.1"
       task: Verify trip tags work with existing tag input
-      status: not_started
+      status: needs_manual_verification
       details: |
         TransactionEditModal already has TagsInput with suggestions from
         existing tags. Trip tags (trip:costa-rica:2026) should appear in
@@ -413,7 +413,7 @@ phase_5_transaction_integration:
 
     - id: "5.2"
       task: Verify Transactions page tag filter works with trip tags
-      status: not_started
+      status: needs_manual_verification
       details: |
         EnhancedTransactions already has selectedTags filter with multi-select.
         Trip tags should appear in the dropdown and filter correctly.
@@ -425,7 +425,7 @@ phase_5_transaction_integration:
 # PHASE 6: Testing
 # =============================================================================
 phase_6_testing:
-  status: not_started
+  status: in_progress
   description: |
     Follow risk-based testing strategy. Focus on critical paths:
     tag generation, spending calculations, tag propagation on rename/delete.
@@ -433,7 +433,7 @@ phase_6_testing:
   tasks:
     - id: "6.1"
       task: Integration tests for TripService
-      status: not_started
+      status: completed
       details: |
         File: backend/src/__tests__/integration/tripService.test.ts
 
@@ -448,7 +448,7 @@ phase_6_testing:
 
     - id: "6.2"
       task: Route-level tests for trip API endpoints
-      status: not_started
+      status: completed
       details: |
         File: backend/src/__tests__/integration/tripRoutes.test.ts
 

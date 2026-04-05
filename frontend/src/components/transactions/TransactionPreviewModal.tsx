@@ -37,6 +37,7 @@ interface TransactionPreviewModalProps {
   dateRange: { startDate: string; endDate: string };
   limit?: number; // default 25
   timeRangeFilter?: string; // Reports page time range filter (e.g., 'thisMonth', 'yearToDate')
+  tags?: string[]; // Optional tag filter (e.g., trip tags)
 }
 
 export function TransactionPreviewModal({
@@ -47,12 +48,13 @@ export function TransactionPreviewModal({
   dateRange,
   limit = 25,
   timeRangeFilter,
+  tags,
 }: TransactionPreviewModalProps) {
   const navigate = useNavigate();
 
   // Fetch transaction preview data
   const { data: transactionData, isLoading, error } = useQuery({
-    queryKey: ['transaction-preview', categoryId, dateRange.startDate, dateRange.endDate, limit],
+    queryKey: ['transaction-preview', categoryId, dateRange.startDate, dateRange.endDate, limit, tags],
     queryFn: () => api.getTransactions({
       categoryIds: categoryId ? [categoryId] : undefined,
       onlyUncategorized: categoryId === null,
@@ -60,6 +62,7 @@ export function TransactionPreviewModal({
       endDate: dateRange.endDate,
       limit: limit,
       offset: 0,
+      tags,
     }),
     enabled: opened && categoryId !== undefined, // Only fetch when modal is open and categoryId is defined
     staleTime: 1000 * 60 * 5, // 5 minutes
@@ -95,7 +98,12 @@ export function TransactionPreviewModal({
     if (timeRangeFilter) {
       params.set('timeRangeFilter', timeRangeFilter);
     }
-    
+
+    // Include tag filters (e.g., trip tags)
+    if (tags && tags.length > 0) {
+      params.set('tags', tags.join(','));
+    }
+
     navigate(`/transactions?${params.toString()}`);
     onClose();
   };

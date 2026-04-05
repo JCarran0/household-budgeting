@@ -12,7 +12,8 @@ import {
   IconCategory,
   IconChartBar,
   IconSettings,
-  IconMessageReport
+  IconMessageReport,
+  IconMapPin
 } from '@tabler/icons-react';
 import { useAuthStore } from '../stores/authStore';
 import { api } from '../lib/api';
@@ -62,6 +63,7 @@ export function MantineLayout() {
     { label: 'Categories', icon: IconCategory, path: '/categories' },
     { label: 'Budgets', icon: IconPigMoney, path: '/budgets' },
     { label: 'Reports', icon: IconChartBar, path: '/reports' },
+    { label: 'Trips', icon: IconMapPin, path: '/trips' },
     { label: 'Admin', icon: IconSettings, path: '/admin' },
   ];
 

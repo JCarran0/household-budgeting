@@ -156,3 +156,60 @@ export interface FeedbackResponse {
   issueUrl?: string;
   error?: string;
 }
+
+// Trip types
+export interface Trip {
+  id: string;
+  name: string;
+  tag: string;
+  startDate: string;
+  endDate: string;
+  totalBudget: number | null;
+  categoryBudgets: TripCategoryBudget[];
+  rating: number | null;
+  notes: string;
+}
+
+export interface TripCategoryBudget {
+  categoryId: string;
+  amount: number;
+}
+
+export interface StoredTrip extends Trip {
+  userId: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface TripSummary extends Trip {
+  status: 'upcoming' | 'active' | 'completed';
+  totalSpent: number;
+  categorySpending: TripCategorySpending[];
+}
+
+export interface TripCategorySpending {
+  categoryId: string;
+  categoryName: string;
+  spent: number;
+  budgeted: number | null;
+}
+
+export interface CreateTripDto {
+  name: string;
+  startDate: string;
+  endDate: string;
+  totalBudget?: number | null;
+  categoryBudgets?: TripCategoryBudget[];
+  rating?: number | null;
+  notes?: string;
+}
+
+export interface UpdateTripDto {
+  name?: string;
+  startDate?: string;
+  endDate?: string;
+  totalBudget?: number | null;
+  categoryBudgets?: TripCategoryBudget[];
+  rating?: number | null;
+  notes?: string;
+}

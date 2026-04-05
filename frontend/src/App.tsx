@@ -21,6 +21,7 @@ import { Categories } from './pages/Categories';
 import { Budgets } from './pages/Budgets';
 import { Reports } from './pages/Reports';
 import { Admin } from './pages/Admin';
+import { Trips } from './pages/Trips';
 import { PlaidLinkProvider } from './providers/PlaidLinkProvider';
 import { MantineProvider, createTheme } from '@mantine/core';
 import { queryClient } from './lib/queryClient';
@@ -78,6 +79,11 @@ function App() {
                     <Route path="/reports" element={
                       <RouteErrorBoundary routeName="Reports">
                         <Reports />
+                      </RouteErrorBoundary>
+                    } />
+                    <Route path="/trips" element={
+                      <RouteErrorBoundary routeName="Trips">
+                        <Trips />
                       </RouteErrorBoundary>
                     } />
                     <Route path="/admin" element={

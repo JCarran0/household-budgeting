@@ -15,6 +15,7 @@ import { ReportService } from './reportService';
 import { AutoCategorizeService } from './autoCategorizeService';
 import { ImportService } from './importService';
 import { ActualsOverrideService } from './actualsOverrideService';
+import { TripService, getTripService } from './tripService';
 
 // Create data service based on environment
 // Uses StorageFactory to automatically switch between filesystem and S3
@@ -43,6 +44,7 @@ export const importService = ImportService.getInstance(dataService, categoryServ
 (categoryService as any).importService = importService;
 export const actualsOverrideService = new ActualsOverrideService(dataService);
 export const reportService = new ReportService(dataService, actualsOverrideService);
+export const tripService = getTripService(dataService, transactionService);
 
 // Export dataService for other services that need it
 export { dataService };
@@ -58,5 +60,6 @@ export {
   BudgetService,
   ReportService,
   ImportService,
-  ActualsOverrideService
+  ActualsOverrideService,
+  TripService
 };

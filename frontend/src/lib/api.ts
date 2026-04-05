@@ -12,7 +12,11 @@ import type {
   AutoCategorizeRule,
   User,
   FeedbackSubmission,
-  FeedbackResponse
+  FeedbackResponse,
+  StoredTrip,
+  TripSummary,
+  CreateTripDto,
+  UpdateTripDto
 } from '../../../shared/types';
 
 // Use relative URL in production, localhost in development
@@ -208,6 +212,15 @@ class ApiClient {
     this.getActualsOverride = this.getActualsOverride.bind(this);
     this.createOrUpdateActualsOverride = this.createOrUpdateActualsOverride.bind(this);
     this.deleteActualsOverride = this.deleteActualsOverride.bind(this);
+
+    // Trip methods
+    this.createTrip = this.createTrip.bind(this);
+    this.getTrips = this.getTrips.bind(this);
+    this.getTrip = this.getTrip.bind(this);
+    this.getTripSummary = this.getTripSummary.bind(this);
+    this.getTripsSummaries = this.getTripsSummaries.bind(this);
+    this.updateTrip = this.updateTrip.bind(this);
+    this.deleteTrip = this.deleteTrip.bind(this);
 
     // Request interceptor to add auth token
     this.client.interceptors.request.use(
@@ -1006,6 +1019,46 @@ class ApiClient {
       }
       throw error;
     }
+  }
+
+  // Trip methods
+
+  async createTrip(data: CreateTripDto): Promise<StoredTrip> {
+    const { data: trip } = await this.client.post<StoredTrip>('/trips', data);
+    return trip;
+  }
+
+  async getTrips(year?: number): Promise<StoredTrip[]> {
+    const { data } = await this.client.get<StoredTrip[]>('/trips', {
+      params: year !== undefined ? { year } : undefined,
+    });
+    return data;
+  }
+
+  async getTrip(id: string): Promise<StoredTrip> {
+    const { data } = await this.client.get<StoredTrip>(`/trips/${id}`);
+    return data;
+  }
+
+  async getTripSummary(id: string): Promise<TripSummary> {
+    const { data } = await this.client.get<TripSummary>(`/trips/${id}/summary`);
+    return data;
+  }
+
+  async getTripsSummaries(year?: number): Promise<TripSummary[]> {
+    const { data } = await this.client.get<TripSummary[]>('/trips/summaries', {
+      params: year !== undefined ? { year } : undefined,
+    });
+    return data;
+  }
+
+  async updateTrip(id: string, updates: UpdateTripDto): Promise<StoredTrip> {
+    const { data } = await this.client.put<StoredTrip>(`/trips/${id}`, updates);
+    return data;
+  }
+
+  async deleteTrip(id: string): Promise<void> {
+    await this.client.delete(`/trips/${id}`);
   }
 }
 
