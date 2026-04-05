@@ -20,6 +20,8 @@ import type {
   ChatRequest,
   ChatResponse,
   GitHubIssueDraft,
+  ClassifyTransactionsResponse,
+  SuggestRulesResponse,
 } from '../../../shared/types';
 
 // Use relative URL in production, localhost in development
@@ -225,10 +227,12 @@ class ApiClient {
     this.updateTrip = this.updateTrip.bind(this);
     this.deleteTrip = this.deleteTrip.bind(this);
 
-    // Chatbot
+    // Chatbot & AI Categorization
     this.sendChatMessage = this.sendChatMessage.bind(this);
     this.getChatUsage = this.getChatUsage.bind(this);
     this.confirmGitHubIssue = this.confirmGitHubIssue.bind(this);
+    this.classifyTransactions = this.classifyTransactions.bind(this);
+    this.suggestCategorizeRules = this.suggestCategorizeRules.bind(this);
 
     // Request interceptor to add auth token
     this.client.interceptors.request.use(
@@ -1085,6 +1089,28 @@ class ApiClient {
 
   async confirmGitHubIssue(draft: GitHubIssueDraft): Promise<{ issueUrl: string }> {
     const { data } = await this.client.post<{ success: boolean; issueUrl: string }>('/chatbot/confirm-issue', { draft });
+    return data;
+  }
+
+  // =========================================================================
+  // AI Categorization
+  // =========================================================================
+
+  async classifyTransactions(transactionIds?: string[]): Promise<ClassifyTransactionsResponse> {
+    const { data } = await this.client.post<{ success: boolean } & ClassifyTransactionsResponse>(
+      '/chatbot/classify-transactions',
+      { transactionIds },
+    );
+    return data;
+  }
+
+  async suggestCategorizeRules(
+    categorizations: { transactionId: string; categoryId: string }[],
+  ): Promise<SuggestRulesResponse> {
+    const { data } = await this.client.post<{ success: boolean } & SuggestRulesResponse>(
+      '/chatbot/suggest-rules',
+      { categorizations },
+    );
     return data;
   }
 }

@@ -1,15 +1,17 @@
 /**
  * Chatbot API Routes
  *
- * POST /message       — Send a chat message, get Claude's response
- * GET  /usage         — Get current monthly cost usage
- * POST /confirm-issue — Execute a GitHub issue after user confirmation (D13)
+ * POST /message                — Send a chat message, get Claude's response
+ * GET  /usage                  — Get current monthly cost usage
+ * POST /confirm-issue          — Execute a GitHub issue after user confirmation (D13)
+ * POST /classify-transactions  — AI bulk categorization
+ * POST /suggest-rules          — Suggest auto-categorization rules
  */
 
 import { Router, Request, Response, NextFunction } from 'express';
 import { authenticate, validateBody } from '../middleware/authMiddleware';
-import { chatbotService } from '../services';
-import { chatRequestSchema, confirmIssueSchema } from '../validators/chatbotValidators';
+import { chatbotService, categorizationService } from '../services';
+import { chatRequestSchema, confirmIssueSchema, classifyTransactionsSchema, suggestRulesSchema } from '../validators/chatbotValidators';
 import type { ChatRequest, GitHubIssueDraft } from '../shared/types';
 
 const router = Router();
@@ -122,6 +124,57 @@ router.post(
         success: false,
         error: 'Failed to create GitHub issue',
       });
+    }
+  },
+);
+
+// =============================================================================
+// POST /classify-transactions — AI bulk categorization
+// =============================================================================
+router.post(
+  '/classify-transactions',
+  authenticate,
+  rateLimitChatbot,
+  validateBody(classifyTransactionsSchema),
+  async (req: Request, res: Response): Promise<void> => {
+    try {
+      const userId = req.user!.userId;
+      const { transactionIds } = req.body as { transactionIds?: string[] };
+
+      const result = await categorizationService.classifyTransactions(userId, transactionIds);
+
+      res.json({ success: true, ...result });
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : 'Classification failed';
+      console.error('[Chatbot] POST /classify-transactions error:', msg);
+
+      if (msg.includes('budget cap')) {
+        res.status(429).json({ success: false, error: msg });
+        return;
+      }
+      res.status(500).json({ success: false, error: 'Failed to classify transactions' });
+    }
+  },
+);
+
+// =============================================================================
+// POST /suggest-rules — Suggest auto-categorization rules
+// =============================================================================
+router.post(
+  '/suggest-rules',
+  authenticate,
+  validateBody(suggestRulesSchema),
+  async (req: Request, res: Response): Promise<void> => {
+    try {
+      const userId = req.user!.userId;
+      const { categorizations } = req.body as { categorizations: { transactionId: string; categoryId: string }[] };
+
+      const result = await categorizationService.suggestRules(userId, categorizations);
+
+      res.json({ success: true, ...result });
+    } catch (error) {
+      console.error('[Chatbot] POST /suggest-rules error:', error instanceof Error ? error.message : error);
+      res.status(500).json({ success: false, error: 'Failed to suggest rules' });
     }
   },
 );

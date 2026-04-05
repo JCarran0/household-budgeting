@@ -366,3 +366,63 @@ export interface CashFlowSummary {
     net: number;
   }[];
 }
+
+// =============================================================================
+// AI Categorization Types
+// =============================================================================
+
+export type ClassificationConfidence = 'high' | 'medium' | 'low';
+
+export interface ClassificationResult {
+  transactionId: string;
+  suggestedCategoryId: string;
+  confidence: ClassificationConfidence;
+  reasoning: string;
+}
+
+export interface ClassifiedTransaction {
+  id: string;
+  date: string;
+  name: string;
+  merchantName: string | null;
+  amount: number;
+  suggestedCategoryId: string;
+  confidence: ClassificationConfidence;
+  reasoning: string;
+  selectedCategoryId: string | null; // user can override before applying
+}
+
+export interface ClassificationBucket {
+  categoryId: string;
+  categoryName: string;
+  confidence: ClassificationConfidence;
+  transactions: ClassifiedTransaction[];
+  totalAmount: number;
+}
+
+export interface ClassifyTransactionsRequest {
+  transactionIds?: string[];
+}
+
+export interface ClassifyTransactionsResponse {
+  buckets: ClassificationBucket[];
+  unsureBucket: ClassificationBucket;
+  totalClassified: number;
+  costUsed: number;
+}
+
+export interface RuleSuggestion {
+  patterns: string[];
+  categoryId: string;
+  categoryName: string;
+  matchingTransactionCount: number;
+  exampleTransactions: string[];
+}
+
+export interface SuggestRulesRequest {
+  categorizations: { transactionId: string; categoryId: string }[];
+}
+
+export interface SuggestRulesResponse {
+  suggestions: RuleSuggestion[];
+}

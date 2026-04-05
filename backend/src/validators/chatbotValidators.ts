@@ -37,3 +37,14 @@ export const confirmIssueSchema = z.object({
     labels: z.array(z.enum(['bug', 'enhancement'])),
   }),
 });
+
+export const classifyTransactionsSchema = z.object({
+  transactionIds: z.array(z.string()).optional(),
+});
+
+export const suggestRulesSchema = z.object({
+  categorizations: z.array(z.object({
+    transactionId: z.string(),
+    categoryId: z.string(),
+  })).min(1, 'At least one categorization required'),
+});

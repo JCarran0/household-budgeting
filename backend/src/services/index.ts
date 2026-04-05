@@ -20,6 +20,7 @@ import { ReadOnlyDataServiceImpl } from './readOnlyDataService';
 import { ChatbotDataService } from './chatbotDataService';
 import { ChatbotCostTracker } from './chatbotCostTracker';
 import { ChatbotService } from './chatbotService';
+import { CategorizationService } from './categorizationService';
 
 // Create data service based on environment
 // Uses StorageFactory to automatically switch between filesystem and S3
@@ -65,6 +66,11 @@ export const chatbotService = new ChatbotService(
   process.env.GITHUB_ISSUES_PAT || '',
   process.env.ANTHROPIC_API_KEY || '',
 );
+export const categorizationService = new CategorizationService(
+  chatbotDataService,
+  chatbotCostTracker,
+  process.env.ANTHROPIC_API_KEY || '',
+);
 
 // Export dataService for other services that need it
 export { dataService };
@@ -84,4 +90,5 @@ export {
   TripService,
   ChatbotDataService,
   ChatbotService,
+  CategorizationService,
 };

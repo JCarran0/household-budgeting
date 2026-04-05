@@ -63,12 +63,14 @@ import {
   IconAlertCircle,
   IconDatabaseImport,
   IconDownload,
+  IconSparkles,
 } from '@tabler/icons-react';
 import { TransactionEditModal } from '../components/transactions/TransactionEditModal';
 import { TransactionImport } from '../components/transactions/TransactionImport';
 import { TransactionSplitModal } from '../components/transactions/TransactionSplitModal';
 import { BulkEditBar } from '../components/transactions/BulkEditBar';
 import { BulkEditModal, type BulkEditUpdates } from '../components/transactions/BulkEditModal';
+import { CategorizationFlowModal } from '../components/transactions/CategorizationFlowModal';
 
 type DateFilterOption = 'this-month' | 'ytd' | 'custom' | string; // string for specific month like '2025-01'
 
@@ -88,6 +90,7 @@ export function EnhancedTransactions() {
   const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null);
   const [selectedCategoryValue, setSelectedCategoryValue] = useState<string | null>(null);
   const [isTransactionImportOpen, setIsTransactionImportOpen] = useState(false);
+  const [isCategorizationOpen, setIsCategorizationOpen] = useState(false);
   
   // Use persisted filters from localStorage
   const {
@@ -943,6 +946,15 @@ export function EnhancedTransactions() {
           </Group>
           <Group>
             <Button
+              leftSection={<IconSparkles size={16} />}
+              onClick={() => setIsCategorizationOpen(true)}
+              variant="light"
+              color="violet"
+              disabled={!uncategorizedData?.count || uncategorizedData.count === 0}
+            >
+              AI Categorize{uncategorizedData?.count ? ` (${uncategorizedData.count})` : ''}
+            </Button>
+            <Button
               leftSection={<IconDatabaseImport size={16} />}
               onClick={() => setIsTransactionImportOpen(true)}
               variant="light"
@@ -1633,6 +1645,11 @@ export function EnhancedTransactions() {
       <TransactionImport
         opened={isTransactionImportOpen}
         onClose={() => setIsTransactionImportOpen(false)}
+      />
+      <CategorizationFlowModal
+        opened={isCategorizationOpen}
+        onClose={() => setIsCategorizationOpen(false)}
+        uncategorizedCount={uncategorizedData?.count || 0}
       />
     </Container>
     </>
