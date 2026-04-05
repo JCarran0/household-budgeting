@@ -85,6 +85,22 @@ These are the highest-priority requirements for this feature. Financial data acc
 | SEC-010 | The system must enforce a **$20/month spending cap** on LLM API usage. |
 | SEC-011 | When the spending cap is reached, the chatbot must inform the user and stop processing new messages until the next billing period. |
 | SEC-012 | The system must track token usage and estimated cost per request. |
+| SEC-013 | The system must set a `max_tokens` limit on each Claude API call (e.g., 4096) to bound per-request cost. |
+
+### 3.5 Resilience & Rate Limiting
+
+| # | Requirement |
+|---|-------------|
+| SEC-014 | The tool call loop must enforce a maximum iteration limit (e.g., 10 rounds). If the limit is reached, the system must return a graceful error to the user, not continue indefinitely. This prevents runaway loops from exhausting the cost cap in a single request. |
+| SEC-015 | Each Claude API call must have a per-request timeout (e.g., 60 seconds). On timeout, the system must return a user-friendly error. |
+| SEC-016 | The chatbot endpoint must enforce per-user rate limiting (e.g., 5 requests per minute) independent of the monthly cost cap, to prevent rapid-fire requests from racing ahead of cost tracking updates. |
+| SEC-017 | Cost tracking must use a concurrency-safe mechanism (mutex, optimistic locking, or equivalent) to prevent concurrent requests from bypassing the spending cap via read-modify-write race conditions. |
+
+### 3.6 Data Layer Isolation
+
+| # | Requirement |
+|---|-------------|
+| SEC-018 | The chatbot's data access service must receive a **read-only interface** to the storage layer — not the full `DataService` which exposes write methods (`saveData`, `deleteData`, etc.). This may be enforced via a TypeScript interface that exposes only read methods, or via a wrapper class. |
 
 ---
 
@@ -108,6 +124,14 @@ These are the highest-priority requirements for this feature. Financial data acc
 | REQ-007 | Conversation history must be cleared on page refresh or logout. |
 | REQ-008 | The chatbot must be aware of the user's current page context — the current URL, active filters, selected month/year, and any other state reflected in the URL or page. |
 | REQ-009 | When the user asks a contextual question (e.g., "How does this compare to last month?" while on the March budget page), the chatbot must use page context to resolve ambiguity. |
+| REQ-028 | Conversation history sent to the backend must be capped at a maximum length (e.g., last 50 messages). The **backend must enforce** this limit regardless of what the frontend sends, to prevent unbounded token growth and context window overflow. When the limit is reached, the oldest messages are dropped. |
+
+### 4.4 Observability
+
+| # | Requirement |
+|---|-------------|
+| REQ-029 | The system must log structured data for each chatbot interaction: tool calls invoked, input parameters, result sizes, latency, model used, and token counts. This enables debugging inaccurate responses and monitoring operational health. |
+| REQ-030 | When a request completes, the response must include whether the in-flight request crossed the cost cap mid-execution. If so, the current request completes normally but future requests are blocked. (The system does not abort mid-conversation.) |
 
 ### 4.3 Page Context Awareness
 
@@ -152,7 +176,7 @@ The chatbot must be able to support these categories of questions:
 | # | Requirement |
 |---|-------------|
 | REQ-023 | The chatbot must be able to create GitHub issues on the repository `JCarran0/household-budgeting` when the user reports a bug or requests a feature. |
-| REQ-024 | Before submitting, the chatbot must draft the issue (title, body, labels) and present it to the user for confirmation. No issue may be created without explicit user approval. |
+| REQ-024 | Before submitting, the chatbot must draft the issue (title, body, labels) and present it to the user for confirmation. No issue may be created without explicit user approval. **This must be structurally enforced**: when Claude calls `submit_github_issue`, the backend must intercept the tool call, return the draft to the frontend as a structured `issue_confirmation` response type, and only execute the GitHub API call after the frontend sends a separate confirmation request. The LLM must never be able to unilaterally create issues. |
 | REQ-025 | The chatbot must auto-label issues as `bug` or `enhancement` based on the conversation context. |
 | REQ-026 | The issue body should include relevant context: current page URL, browser info, and a summary of the conversation leading to the report. |
 | REQ-027 | The GitHub API token used for issue creation must have the minimum required scope (`issues:write` on the single repository). It must not have access to code, deployments, or other repository operations. |
@@ -166,7 +190,7 @@ The chatbot must be able to support these categories of questions:
 | A-1 | The Claude API (Anthropic) will be used as the LLM provider. Tool use (function calling) is the mechanism for data access. |
 | A-2 | Both household users share a single login for Phase 1. Multi-user chatbot scoping will be addressed alongside the broader multi-user framework. |
 | A-3 | URL-based page state (prerequisite REQ-010) will be implemented as a separate effort prior to or in parallel with the chatbot. |
-| A-4 | The $20/month cost cap is sufficient for 2 users' conversational usage. This will be validated during initial rollout and adjusted if needed. |
+| A-4 | The $20/month cost cap is sufficient for 2 users' conversational usage. This will be validated during initial rollout and adjusted if needed. Concurrent request handling must use a mutex or equivalent to prevent race conditions that could bypass the cap (see SEC-017). |
 | A-5 | Conversation history does not need server-side persistence for Phase 1. Session-scoped storage is acceptable. |
 | A-6 | The chatbot's financial planning responses (retirement, vacation budgets) are conversational reasoning, not certified financial advice. No compliance framework is needed for a personal household tool. |
 
@@ -184,7 +208,7 @@ The chatbot must be able to support these categories of questions:
 | Voice input | Future enhancement |
 | Multi-user conversation isolation | Deferred to multi-user framework |
 | Mobile-specific chat UI | Mobile app is a separate initiative |
-| Streaming responses | Nice-to-have; not required for Phase 1 |
+| Streaming responses | Nice-to-have; not required for Phase 1. **Note**: Multi-tool-call responses with Opus can take 30+ seconds without streaming, which degrades UX significantly. Reconsider for Phase 1 if latency proves problematic during testing. |
 
 ---
 
@@ -192,12 +216,14 @@ The chatbot must be able to support these categories of questions:
 
 | # | Question | Status |
 |---|----------|--------|
-| 1 | Should the cost cap be per-user or household-wide? (Moot while sharing a login, but relevant for multi-user.) | Open |
-| 2 | Should the chatbot surface a cost indicator to the user (e.g., "You've used $X of $20 this month")? | Open |
-| 3 | What model should be the default selection — Haiku (cheapest) or Sonnet (best balance)? | Open |
-| 4 | Should the chatbot have access to transaction data from all time, or should there be a lookback window for performance? | Open |
-| 5 | How should the GitHub PAT be stored and rotated? Environment variable like other secrets, or a separate mechanism? | Open |
-| 6 | Should the overlay be resizable or have a fixed size? | Open |
+| 1 | Should the cost cap be per-user or household-wide? | Resolved — household-wide (D2) |
+| 2 | Should the chatbot surface a cost indicator to the user? | Resolved — yes, overlay header (D3) |
+| 3 | What model should be the default selection? | Resolved — Sonnet (D1) |
+| 4 | Should there be a lookback window for performance? | Resolved — 12 months default (D6) |
+| 5 | How should the GitHub PAT be stored and rotated? | Resolved — env var (D4) |
+| 6 | Should the overlay be resizable or have a fixed size? | Resolved — fixed 400x600 (D5) |
+| 7 | Should streaming be added in Phase 1 to mitigate long response times (10-30s with Opus/multi-tool)? | Open |
+| 8 | What is the right `max_tokens` limit per request? 2048? 4096? Affects cost vs. response completeness tradeoff. | Open |
 
 ---
 
