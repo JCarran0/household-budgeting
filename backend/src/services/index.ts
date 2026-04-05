@@ -16,6 +16,8 @@ import { AutoCategorizeService } from './autoCategorizeService';
 import { ImportService } from './importService';
 import { ActualsOverrideService } from './actualsOverrideService';
 import { TripService, getTripService } from './tripService';
+import { ReadOnlyDataServiceImpl } from './readOnlyDataService';
+import { ChatbotDataService } from './chatbotDataService';
 
 // Create data service based on environment
 // Uses StorageFactory to automatically switch between filesystem and S3
@@ -46,6 +48,12 @@ export const actualsOverrideService = new ActualsOverrideService(dataService);
 export const reportService = new ReportService(dataService, actualsOverrideService);
 export const tripService = getTripService(dataService, transactionService);
 
+// SECURITY: chatbotDataService receives ONLY readOnlyDataService.
+// It must NEVER receive the full dataService, plaidService, accountService,
+// or any service with write methods. SEC-001/003/018 compliance.
+const readOnlyDataService = new ReadOnlyDataServiceImpl(dataService);
+export const chatbotDataService = new ChatbotDataService(readOnlyDataService);
+
 // Export dataService for other services that need it
 export { dataService };
 
@@ -61,5 +69,6 @@ export {
   ReportService,
   ImportService,
   ActualsOverrideService,
-  TripService
+  TripService,
+  ChatbotDataService,
 };
