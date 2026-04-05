@@ -213,3 +213,155 @@ export interface UpdateTripDto {
   rating?: number | null;
   notes?: string;
 }
+
+// =============================================================================
+// Chatbot Types (Phase 1)
+// =============================================================================
+
+export interface PageContext {
+  path: string;
+  pageName: string;
+  params: Record<string, string>;
+  description: string;
+}
+
+export interface TokenUsage {
+  inputTokens: number;
+  outputTokens: number;
+  estimatedCost: number; // USD
+}
+
+export interface ChatMessage {
+  id: string;
+  role: 'user' | 'assistant';
+  content: string;
+  timestamp: string; // ISO date
+  model?: string;
+  tokenUsage?: TokenUsage;
+  pageContext?: PageContext;
+}
+
+export type ChatModel = 'haiku' | 'sonnet' | 'opus';
+
+export interface ChatRequest {
+  message: string;
+  conversationHistory: ChatMessage[];
+  pageContext: PageContext;
+  model: ChatModel;
+}
+
+export interface ChatResponse {
+  type: 'message' | 'issue_confirmation';
+  message: ChatMessage;
+  issueDraft?: GitHubIssueDraft; // present when type === 'issue_confirmation'
+  usage: {
+    monthlySpend: number;
+    monthlyLimit: number;
+    remainingBudget: number;
+    capExceeded: boolean;
+  };
+}
+
+export const MAX_CONVERSATION_HISTORY = 50;
+
+// GitHub issue types
+export interface GitHubIssueDraft {
+  title: string;
+  body: string;
+  labels: string[];
+}
+
+export interface GitHubIssueConfirmation {
+  draft: GitHubIssueDraft;
+  conversationContext: string;
+}
+
+// =============================================================================
+// Chatbot Tool Input/Output Types
+// =============================================================================
+
+// AccountSummary — safe subset of PlaidAccount, explicitly excludes secrets (SEC-002)
+export interface AccountSummary {
+  id: string;
+  name: string;
+  nickname?: string | null;
+  type: PlaidAccount['type'];
+  subtype: string | null;
+  institution: string;
+  mask: string | null;
+  currentBalance: number;
+  availableBalance: number | null;
+  isActive: boolean;
+  status: PlaidAccount['status'];
+  lastSynced: string | null;
+  // Intentionally EXCLUDES: plaidAccountId, plaidItemId, createdAt, updatedAt
+}
+
+// Tool inputs
+export interface QueryTransactionsInput {
+  startDate?: string;
+  endDate?: string;
+  categoryIds?: string[];
+  accountIds?: string[];
+  tags?: string[];
+  minAmount?: number;
+  maxAmount?: number;
+  searchQuery?: string;
+  status?: 'pending' | 'posted';
+  limit?: number;
+}
+
+export interface GetBudgetsInput {
+  month: string; // YYYY-MM
+}
+
+export interface GetBudgetSummaryInput {
+  month: string; // YYYY-MM
+}
+
+export interface GetSpendingByCategoryInput {
+  startDate: string;
+  endDate: string;
+}
+
+export interface GetCashFlowInput {
+  startDate: string;
+  endDate: string;
+}
+
+// Tool outputs
+export interface CategorySpendingSummary {
+  categoryId: string;
+  categoryName: string;
+  parentCategoryId: string | null;
+  parentCategoryName: string | null;
+  amount: number;
+  transactionCount: number;
+  percentage: number;
+}
+
+export interface BudgetSummaryTotals {
+  month: string;
+  totalBudgetedIncome: number;
+  totalActualIncome: number;
+  totalBudgetedExpense: number;
+  totalActualExpense: number;
+  netBudgeted: number;
+  netActual: number;
+  incomeVariance: number;
+  expenseVariance: number;
+}
+
+export interface CashFlowSummary {
+  startDate: string;
+  endDate: string;
+  totalIncome: number;
+  totalExpenses: number;
+  netCashFlow: number;
+  monthlyBreakdown: {
+    month: string;
+    income: number;
+    expenses: number;
+    net: number;
+  }[];
+}
