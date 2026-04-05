@@ -181,8 +181,13 @@ export function EnhancedTransactions() {
       const startDate = searchParams.get('startDate');
       const endDate = searchParams.get('endDate');
       const timeRangeFilter = searchParams.get('timeRangeFilter');
+      const tags = searchParams.get('tags');
 
       // Apply filters from URL parameters
+      if (tags) {
+        setSelectedTags(tags.split(','));
+      }
+
       if (categoryIds) {
         const categoryIdArray = categoryIds.split(',');
         setSelectedCategories(categoryIdArray);
@@ -216,20 +221,21 @@ export function EnhancedTransactions() {
       setHasInitialized(true);
       
       // Show notification when filters are applied from reports
-      if (categoryIds || onlyUncategorizedParam === 'true' || timeRangeFilter || (startDate && endDate)) {
+      if (categoryIds || onlyUncategorizedParam === 'true' || timeRangeFilter || (startDate && endDate) || tags) {
         const filterTypes = [];
         if (categoryIds) filterTypes.push('category');
         if (onlyUncategorizedParam === 'true') filterTypes.push('uncategorized transactions');
         if (timeRangeFilter || (startDate && endDate)) filterTypes.push('date range');
-        
+        if (tags) filterTypes.push('tags');
+
         notifications.show({
           title: 'Filters Applied',
-          message: `Applied ${filterTypes.join(', ')} filters from reports`,
+          message: `Applied ${filterTypes.join(', ')} filters`,
           color: 'blue',
         });
       }
     }
-  }, [searchParams, hasInitialized, setSelectedCategories, setOnlyUncategorized, setCustomDateRange, setDateFilterOption]);
+  }, [searchParams, hasInitialized, setSelectedCategories, setSelectedTags, setOnlyUncategorized, setCustomDateRange, setDateFilterOption]);
   
   // Update category mutation
   const updateCategoryMutation = useMutation({
