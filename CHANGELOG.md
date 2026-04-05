@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.0](https://github.com/JCarran0/household-budgeting/compare/v2.0.1...v3.0.0) (2026-04-05)
+
+
+### Features
+
+* **theme:** centralize color system with Sage & Stone palette ([1c411db](https://github.com/JCarran0/household-budgeting/commit/1c411dbc831198d5e93a0f4e416384d58a60547c))
+
+
+### Documentation
+
+* **chatbot:** harden BRD and plan after staff engineer review ([bd5a661](https://github.com/JCarran0/household-budgeting/commit/bd5a661ad3d3cbe6e90f14da4b68b003ff6ec987))
+* **travel:** mark travel tagging plan as complete ([f10271d](https://github.com/JCarran0/household-budgeting/commit/f10271dde5f9432a9ba7c96ae0efbcb5c0273ab5))
+
+
+### Styling
+
+* **theme:** brighten dark scale for more visible sage undertone ([f15221d](https://github.com/JCarran0/household-budgeting/commit/f15221de10e9f12956c1a38d0d7ed96adf45e9a5))
+* **theme:** switch to peach cream + olive/amber palette ([24a0823](https://github.com/JCarran0/household-budgeting/commit/24a0823fe87df0004520de2c863f3361432d294b))
+
 ### [2.0.1](https://github.com/JCarran0/household-budgeting/compare/v2.0.0...v2.0.1) (2026-04-05)
 
 
