@@ -41,18 +41,18 @@ export type DeepPartial<T> = {
 
 export const defaultPalette: ColorPalette = {
   colors: {
-    // Dark theme backgrounds — near-black with sage/green undertone
+    // Dark theme backgrounds — sage green undertone, brighter than pure black
     dark: [
-      '#C1C2BD', // 0 — lightest (text-on-dark)
-      '#A1A39C', // 1
-      '#818377', // 2
-      '#616556', // 3
-      '#4A4E40', // 4
-      '#383C31', // 5
-      '#2D3128', // 6 — cards / surfaces
-      '#242820', // 7 — sidebar / main bg
-      '#1C1F18', // 8 — deepest bg
-      '#151813', // 9 — near-black
+      '#C8CAC4', // 0 — lightest (text-on-dark)
+      '#AAADA4', // 1
+      '#8C9082', // 2
+      '#6E7363', // 3
+      '#565B4C', // 4
+      '#454A3D', // 5
+      '#3A3F33', // 6 — cards / surfaces
+      '#2F3429', // 7 — sidebar / main bg
+      '#262B21', // 8 — deepest bg
+      '#1E2219', // 9 — darkest
     ] as MantineColorsTuple,
 
     // Primary — warm sand / wheat (replaces yellow)
@@ -252,8 +252,8 @@ export const defaultPalette: ColorPalette = {
   },
 
   debug: {
-    background: '#2D3128',
-    border: '#4A4E40',
+    background: '#3A3F33',
+    border: '#565B4C',
   },
 };
 
