@@ -20,12 +20,15 @@ import { api } from '../lib/api';
 import { useState, useEffect } from 'react';
 import { ChangelogModal } from './ChangelogModal';
 import { FeedbackModal } from './feedback/FeedbackModal';
+import { ChatFAB } from './chat/ChatFAB';
+import { ChatOverlay } from './chat/ChatOverlay';
 
 export function MantineLayout() {
   const [mobileOpened, { toggle: toggleMobile }] = useDisclosure();
   const [desktopOpened, { toggle: toggleDesktop }] = useDisclosure(true);
   const [changelogOpened, { open: openChangelog, close: closeChangelog }] = useDisclosure(false);
   const [feedbackOpened, { open: openFeedback, close: closeFeedback }] = useDisclosure(false);
+  const [chatOpened, { toggle: toggleChat, close: closeChat }] = useDisclosure(false);
   const [version, setVersion] = useState<string | null>(null);
   const navigate = useNavigate();
   const location = useLocation();
@@ -206,6 +209,9 @@ export function MantineLayout() {
         opened={feedbackOpened}
         onClose={closeFeedback}
       />
+
+      <ChatFAB onClick={toggleChat} isOpen={chatOpened} />
+      <ChatOverlay opened={chatOpened} onClose={closeChat} />
     </AppShell>
   );
 }

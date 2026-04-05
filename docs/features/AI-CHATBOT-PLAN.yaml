@@ -788,7 +788,7 @@ phase_5_api_client:
 # PHASE 6: Frontend — Chat Overlay UI
 # =============================================================================
 phase_6_frontend:
-  status: not_started
+  status: completed
   description: |
     Build the floating chat overlay accessible from all authenticated pages.
     Uses Mantine components for consistency with the rest of the app.
@@ -923,7 +923,7 @@ phase_7_prompt_engineering:
   tasks:
     - id: "7.1"
       task: Write the system prompt
-      status: not_started
+      status: completed  # Created during Phase 3 as chatbotPrompt.ts
       details: |
         File: backend/src/services/chatbotPrompt.ts (exported constant)
 
