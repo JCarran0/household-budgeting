@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.0](https://github.com/JCarran0/household-budgeting/compare/v1.23.2...v2.0.0) (2026-04-05)
+
+
+### Features
+
+* **trips:** implement travel tagging & trip management ([f5eda82](https://github.com/JCarran0/household-budgeting/commit/f5eda82af1f4a374657814ed10e16b0991f0c96e))
+
+
+### Code Refactoring
+
+* **categories:** consolidate category option builders into useCategoryOptions hook ([6565c39](https://github.com/JCarran0/household-budgeting/commit/6565c39baad7bd54b6c3e9609122c7e041e54a0a))
+
+
+### Documentation
+
+* **travel:** add travel tagging BRD, implementation plan, and project plan updates ([8dad9bc](https://github.com/JCarran0/household-budgeting/commit/8dad9bcfed1234dfc52132d132001dd6296805fd))
+
 ### [1.23.2](https://github.com/JCarran0/household-budgeting/compare/v1.23.1...v1.23.2) (2026-04-05)
 
 
