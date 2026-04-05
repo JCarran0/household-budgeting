@@ -316,6 +316,7 @@ Features delivered beyond the original plan:
 - [ ] Update data service to use `primaryAccountId || userId` for file paths
 - [ ] Add UI indicator showing shared account status
 - [ ] Test concurrent access patterns
+- [ ] Migrate trip storage from `trips_{userId}` to shared household-level storage (or cross-user query pattern) so both users see the same trips and combined transaction totals
 
 ### 7.2 Phase 2: Optimistic Locking (When Needed)
 - [ ] Add version tracking to data files
@@ -448,22 +449,54 @@ Features delivered beyond the original plan:
 - [x] Remove unused category option building code and clean up imports
 - [x] TypeScript compile check — 0 errors, 0 new warnings
 
-## Phase 12: Future Enhancements (Optional)
+## Phase 12: Travel Tagging & Trip Management ⏳ NOT STARTED
 
-### 12.1 Cost-Effective Improvements
+**BRD**: [docs/features/TRAVEL-TAGGING-BRD.md](docs/features/TRAVEL-TAGGING-BRD.md)
+**Implementation Plan**: [docs/features/TRAVEL-TAGGING-PLAN.yaml](docs/features/TRAVEL-TAGGING-PLAN.yaml)
+
+Trips as a first-class entity backed by the existing tag system. Tag convention: `trip:<name>:<year>`.
+New sidebar section with trip card grid, per-trip budgets (independent from monthly), category drill-down.
+
+### 12.1 Shared Types & Data Model
+- [ ] Trip/StoredTrip/TripSummary interfaces in shared/types/index.ts
+- [ ] Zod validation schemas for trip CRUD
+- [ ] Tag generation utility (name → slug → trip:slug:year)
+
+### 12.2 Backend Service & Routes
+- [ ] TripService (create, read, update, delete, summaries)
+- [ ] Trip routes at /api/v1/trips (CRUD + summary endpoints)
+- [ ] Tag propagation: rename tag on trip name change, strip tags on trip delete
+- [ ] Register service and routes
+
+### 12.3 Frontend — Trips Page
+- [ ] Sidebar navigation entry (Trips)
+- [ ] Trip card grid with year/name filters, status badges, budget indicators
+- [ ] Trip detail accordion with category breakdown
+- [ ] Create/edit trip modal with tag preview
+- [ ] Category drill-down via TransactionPreviewModal
+- [ ] Trip deletion confirmation modal
+
+### 12.4 Integration & Testing
+- [ ] Verify trip tags work with existing TagsInput, bulk edit, and tag filters
+- [ ] Integration tests for TripService (tag generation, spending aggregation, rename/delete propagation)
+- [ ] Manual testing checklist
+
+## Phase 13: Future Enhancements (Optional)
+
+### 13.1 Cost-Effective Improvements
 - [ ] Add custom domain with Route 53 ($12/year)
 - [ ] Implement CloudWatch detailed monitoring ($3/month)
 - [ ] Set up AWS Backup automation ($1/month)
 - [ ] Add more comprehensive health checks
 
-### 12.2 Database Migration (When Needed)
+### 13.2 Database Migration (When Needed)
 - [ ] Install PostgreSQL on same EC2 instance
 - [ ] Design optimized schema for relational data
 - [ ] Create migration scripts from JSON to PostgreSQL
 - [ ] Test thoroughly before switching over
 - [ ] Keep JSON export capability as backup
 
-### 12.3 Performance Enhancements (If Required)
+### 13.3 Performance Enhancements (If Required)
 - [ ] Implement Redis for session caching
 - [ ] Add nginx caching for static assets
 - [ ] Optimize frontend bundle size

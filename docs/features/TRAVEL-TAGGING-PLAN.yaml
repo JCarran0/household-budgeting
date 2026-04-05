@@ -1,0 +1,498 @@
+# =============================================================================
+# Travel Tagging & Trip Management — Implementation Plan
+# =============================================================================
+# BRD: docs/features/TRAVEL-TAGGING-BRD.md
+# Status: Not Started
+# Last Updated: 2026-04-05
+# =============================================================================
+
+overview:
+  description: |
+    Implementation plan for the Travel Tagging feature set. Trips are a first-class
+    entity backed by the existing tag system. Users create trips via a dedicated flow,
+    which generates a structured tag (trip:<name>:<year>) applied to transactions.
+    A new Trips section provides trip management, per-trip budgets, and a travel
+    spending report with category drill-down.
+  key_files:
+    brd: docs/features/TRAVEL-TAGGING-BRD.md
+    shared_types: shared/types/index.ts
+    backend_services: backend/src/services/index.ts
+    backend_routes: backend/src/routes/
+    frontend_pages: frontend/src/pages/
+    sidebar_nav: frontend/src/components/MantineLayout.tsx
+    api_client: frontend/src/lib/api.ts
+    app_routes: frontend/src/App.tsx
+
+# =============================================================================
+# DECISIONS LOG — Capture key decisions as they're made during implementation
+# =============================================================================
+decisions:
+  - id: D1
+    date: 2026-04-05
+    decision: Trip budgets are independent from monthly budgets
+    rationale: |
+      Trips span arbitrary dates across months. A tagged transaction counts toward
+      both its monthly category budget and its trip budget naturally — no explicit
+      linking needed. The tag is the bridge.
+
+  - id: D2
+    date: 2026-04-05
+    decision: Trip tag format is trip:<name>:<year> with year required
+    rationale: |
+      Year was originally optional but no clear use case for omitting it.
+      Required year keeps tags unambiguous and supports year-based filtering.
+
+  - id: D3
+    date: 2026-04-05
+    decision: Trip category breakdown includes ALL categories, not just Travel subcategories
+    rationale: |
+      Trip spending spans many categories (Food, Transportation, Entertainment, etc.).
+      The tag identifies a transaction as trip-related; categories provide grouping
+      within that filter.
+
+  - id: D4
+    date: 2026-04-05
+    decision: Store trips as a first-class entity, not derived from tags alone
+    rationale: |
+      Trips carry metadata (dates, budget, rating, notes) that doesn't belong on
+      individual transactions. The trip entity owns this metadata; the tag is the
+      link to transactions.
+
+  - id: D5
+    date: 2026-04-05
+    decision: Single shared login means trips are single-user for now
+    rationale: |
+      Both household users share one login. trips_{userId} storage works as-is.
+      When multi-user support is added (PROJECT_PLAN.md Phase 7), trip storage
+      should migrate to household-level or add cross-user query support.
+
+  - id: D6
+    date: 2026-04-05
+    decision: Tag propagation order — update transactions first, then trip entity
+    rationale: |
+      On rename/delete, if the trip entity is updated first but transaction
+      tag-stripping fails, you get orphaned tags. Updating transactions first
+      is safer — if the trip entity update fails, the old trip still references
+      a (now-renamed) tag, which is easier to recover from. Operations should
+      be idempotent so they can be safely retried.
+
+  - id: D7
+    date: 2026-04-05
+    decision: Strip colons and validate generated tag for uniqueness
+    rationale: |
+      The tag format uses colons as delimiters (trip:<name>:<year>). User input
+      containing colons would break parsing. Slugification must explicitly strip
+      colons. Uniqueness must be checked on the generated tag, not the trip name,
+      since different names can produce the same slug.
+
+# =============================================================================
+# PHASE 1: Shared Types & Data Model
+# =============================================================================
+phase_1_data_model:
+  status: not_started
+  description: Define Trip types and extend existing types for trip support.
+
+  tasks:
+    - id: "1.1"
+      task: Define Trip interface in shared/types/index.ts
+      status: not_started
+      details: |
+        Follow existing entity patterns (MonthlyBudget, Transaction, etc.).
+
+        interface Trip {
+          id: string;                          // UUID
+          name: string;                        // Display name, e.g. "Costa Rica 2026"
+          tag: string;                         // Generated: "trip:costa-rica:2026"
+          startDate: string;                   // ISO date
+          endDate: string;                     // ISO date
+          totalBudget: number | null;          // Overall spending target
+          categoryBudgets: TripCategoryBudget[];  // Per-category targets
+          rating: number | null;               // 1-5 stars
+          notes: string;                       // Free-text
+        }
+
+        interface TripCategoryBudget {
+          categoryId: string;
+          amount: number;
+        }
+
+        interface StoredTrip extends Trip {
+          userId: string;
+          createdAt: string;
+          updatedAt: string;
+        }
+
+        // Computed type for the trip detail view
+        interface TripSummary extends Trip {
+          status: 'upcoming' | 'active' | 'completed';
+          totalSpent: number;
+          categorySpending: TripCategorySpending[];
+        }
+
+        interface TripCategorySpending {
+          categoryId: string;
+          categoryName: string;
+          spent: number;
+          budgeted: number | null;
+        }
+
+    - id: "1.2"
+      task: Define Zod validation schemas for trip CRUD
+      status: not_started
+      details: |
+        Create in backend route file or a shared schema file.
+        - createTripSchema: name (required, max 100 chars), startDate, endDate,
+          totalBudget (optional), categoryBudgets (optional array),
+          rating (optional, z.number().int().min(1).max(5).nullable()),
+          notes (optional, max 2000 chars)
+        - updateTripSchema: all fields optional (partial update), same constraints
+        - Tag is auto-generated, not user-provided.
+        - Validate endDate >= startDate.
+
+    - id: "1.3"
+      task: Add tag generation utility
+      status: not_started
+      details: |
+        Utility function to generate trip tags from name + year.
+        - Lowercase the name
+        - Strip colons explicitly (delimiter conflict — see D7)
+        - Replace spaces and remaining special chars with hyphens
+        - Strip consecutive hyphens and leading/trailing hyphens
+        - Format: "trip:{slug}:{year}"
+        - Extract year from startDate
+        - Validate generated tag is unique among existing trips (check tag, not name)
+        Place in shared/utils/ — frontend needs it for tag preview in create form.
+
+# =============================================================================
+# PHASE 2: Backend Service & Routes
+# =============================================================================
+phase_2_backend:
+  status: not_started
+  description: |
+    Create TripService and trip API routes following existing patterns
+    (singleton service, Express routes with Zod validation, authMiddleware).
+
+  tasks:
+    - id: "2.1"
+      task: Create TripService in backend/src/services/tripService.ts
+      status: not_started
+      details: |
+        Follow BudgetService/CategoryService singleton patterns.
+        Storage key: "trips_{userId}" via dataService.
+
+        Methods:
+        - createTrip(data, userId): Generate tag, validate uniqueness, save
+        - getTrip(tripId, userId): Get single trip
+        - getAllTrips(userId): Get all trips for user
+        - updateTrip(tripId, data, userId): Update trip fields
+          - If name changes and tag changes: update tag on all associated transactions
+        - deleteTrip(tripId, userId): Remove trip entity + strip tags from transactions
+        - getTripSummary(tripId, userId): Compute spending by querying tagged transactions
+        - getTripsSummary(userId, filters?): Compute summaries for card grid
+
+        Dependencies: dataService, transactionService (for tag operations and spending queries)
+
+    - id: "2.2"
+      task: Register TripService in backend/src/services/index.ts
+      status: not_started
+      details: |
+        Instantiate tripService singleton with dataService and transactionService
+        dependencies. Export for use in routes.
+
+    - id: "2.3"
+      task: Create trip routes in backend/src/routes/trips.ts
+      status: not_started
+      details: |
+        Follow budgets.ts route pattern with authMiddleware and Zod validation.
+
+        Endpoints (order matters — static paths before :id params):
+        - POST   /api/v1/trips              — Create trip
+        - GET    /api/v1/trips              — List all trips (with optional year filter)
+        - GET    /api/v1/trips/summaries    — Get all trip summaries (for card grid)
+        - GET    /api/v1/trips/:id          — Get single trip
+        - GET    /api/v1/trips/:id/summary  — Get trip with spending breakdown
+        - PUT    /api/v1/trips/:id          — Update trip
+        - DELETE /api/v1/trips/:id          — Delete trip (strips tags from transactions)
+
+    - id: "2.4"
+      task: Register trip routes in backend/src/app.ts or main router
+      status: not_started
+      details: |
+        Mount trip routes at /api/v1/trips. Follow existing pattern for route registration.
+
+    - id: "2.5"
+      task: Add tag-stripping logic to TransactionService
+      status: not_started
+      details: |
+        TransactionService already has addTransactionTags (replaces full tag array).
+        Add a method or extend existing logic to support:
+        - removeTagFromAllTransactions(tag, userId): For trip deletion
+        - renameTagOnAllTransactions(oldTag, newTag, userId): For trip rename
+
+        These iterate all user transactions and update the tags array where the
+        target tag is found.
+
+        IMPORTANT (see D6): On rename/delete, update transactions FIRST, then
+        the trip entity. Operations must be idempotent so they can be retried
+        safely if the second step fails.
+
+        Note: Plaid resyncs preserve user-set tags (including trip tags), so
+        no special handling needed for synced transactions.
+
+# =============================================================================
+# PHASE 3: API Client
+# =============================================================================
+phase_3_api_client:
+  status: not_started
+  description: Add trip methods to the frontend API client.
+
+  tasks:
+    - id: "3.1"
+      task: Add trip CRUD methods to frontend/src/lib/api.ts
+      status: not_started
+      details: |
+        Follow existing method patterns (bound methods, typed responses).
+
+        Methods to add:
+        - createTrip(data: CreateTripDto): Promise<Trip>
+        - getTrips(year?: number): Promise<Trip[]>
+        - getTrip(id: string): Promise<Trip>
+        - getTripSummary(id: string): Promise<TripSummary>
+        - getTripsSummaries(year?: number): Promise<TripSummary[]>
+        - updateTrip(id: string, data: UpdateTripDto): Promise<Trip>
+        - deleteTrip(id: string): Promise<void>
+
+        Bind all methods in constructor.
+
+# =============================================================================
+# PHASE 4: Frontend — Trips Page & Navigation
+# =============================================================================
+phase_4_frontend:
+  status: not_started
+  description: |
+    Build the Trips page with card grid, trip detail accordion, and Create Trip flow.
+    Add sidebar navigation entry and route.
+
+  tasks:
+    - id: "4.1"
+      task: Add Trips to sidebar navigation
+      status: not_started
+      details: |
+        In frontend/src/components/MantineLayout.tsx, add to navItems array:
+        { label: 'Trips', icon: IconPlane, path: '/trips' }
+
+        Place between Reports and Admin in the nav order.
+        Import IconPlane (or IconMapPin) from @tabler/icons-react.
+
+    - id: "4.2"
+      task: Add /trips route to frontend/src/App.tsx
+      status: not_started
+      details: |
+        Add protected route for the Trips page component.
+        Follow existing route pattern with lazy loading if used elsewhere.
+
+    - id: "4.3"
+      task: Create Trips page — card grid view
+      status: not_started
+      details: |
+        File: frontend/src/pages/Trips.tsx
+
+        Layout:
+        - Page title "Trips" with "Create Trip" button
+        - Filter bar: year selector, trip name search
+        - Card grid (Mantine SimpleGrid or Grid), sorted by most recent startDate
+
+        Each trip card displays:
+        - Trip name
+        - Date range (formatted: "May 1 – May 14, 2026")
+        - Status badge (Upcoming/Active/Completed) with color coding
+        - Total spent
+        - Total budget (if set), with spent/budget fraction or bar
+        - Rating stars (if set)
+
+        State management:
+        - useQuery for fetching trip summaries
+        - Local state for year filter and search
+        - React Query queryKey: ['trips', 'summaries', year]
+
+        Status derivation (compute on frontend from dates):
+        - upcoming: startDate > today
+        - active: startDate <= today <= endDate
+        - completed: endDate < today
+
+    - id: "4.4"
+      task: Create Trip detail — accordion expansion
+      status: not_started
+      details: |
+        When a trip card is clicked, expand to show:
+
+        1. Trip header: name, dates, status badge, rating (editable stars),
+           notes (editable), total spent vs total budget with variance
+
+        2. Category breakdown table/list:
+           - Category name
+           - Amount spent
+           - Category budget (if set)
+           - Variance (budget - spent)
+           - Each row is clickable for drill-down (see 4.6)
+
+        Use Mantine Accordion or Collapse component.
+        Fetch full trip summary (GET /api/v1/trips/:id/summary) on expand.
+        queryKey: ['trips', tripId, 'summary']
+
+    - id: "4.5"
+      task: Create Trip form — create/edit modal
+      status: not_started
+      details: |
+        Mantine Modal with form fields:
+        - Trip name (TextInput, required)
+        - Start date (DatePickerInput, required)
+        - End date (DatePickerInput, required, must be >= startDate)
+        - Total budget (NumberInput, optional)
+        - Category budgets (repeatable row: category select + amount)
+          - Category select reuses useCategoryOptions hook
+        - Rating (Rating component, optional)
+        - Notes (Textarea, optional)
+
+        On submit: POST /api/v1/trips (create) or PUT /api/v1/trips/:id (edit)
+        Use React Query useMutation with queryClient.invalidateQueries(['trips'])
+        Show generated tag as read-only preview (e.g. "Tag: trip:costa-rica:2026")
+
+    - id: "4.6"
+      task: Wire category drill-down using TransactionPreviewModal
+      status: not_started
+      details: |
+        Reuse existing TransactionPreviewModal pattern from Reports page.
+
+        When user clicks a category row in trip detail:
+        - Open TransactionPreviewModal filtered by:
+          - Trip tag (via tags filter)
+          - Category ID
+          - No date range constraint (trip transactions can be outside trip dates)
+
+        The modal's "View All" button navigates to Transactions page with
+        URL params: tags=trip:costa-rica:2026&categoryIds=FOOD_AND_DRINK
+
+        This may require extending TransactionPreviewModal to accept a tags
+        filter prop if it doesn't already support it. Check existing props and
+        extend minimally.
+
+    - id: "4.7"
+      task: Create trip deletion confirmation modal
+      status: not_started
+      details: |
+        Mantine Modal confirming deletion.
+        Message: "Delete {trip name}? This will remove the trip tag from all
+        associated transactions. Transactions will not be deleted."
+
+        On confirm: DELETE /api/v1/trips/:id
+        Invalidate queries on success.
+
+# =============================================================================
+# PHASE 5: Transaction Integration
+# =============================================================================
+phase_5_transaction_integration:
+  status: not_started
+  description: |
+    Ensure trip tags flow correctly through existing transaction UX.
+    No new tagging UI is needed — users apply trip tags via existing mechanisms.
+
+  tasks:
+    - id: "5.1"
+      task: Verify trip tags work with existing tag input
+      status: not_started
+      details: |
+        TransactionEditModal already has TagsInput with suggestions from
+        existing tags. Trip tags (trip:costa-rica:2026) should appear in
+        suggestions once any transaction has one.
+
+        Verify:
+        - TagsInput accepts colon-separated values without issues
+        - Trip tags appear in tag filter dropdown on Transactions page
+        - Bulk edit can apply trip tags to multiple transactions
+
+    - id: "5.2"
+      task: Verify Transactions page tag filter works with trip tags
+      status: not_started
+      details: |
+        EnhancedTransactions already has selectedTags filter with multi-select.
+        Trip tags should appear in the dropdown and filter correctly.
+
+        Verify the "View All" navigation from TransactionPreviewModal
+        correctly applies trip tag as a URL param filter.
+
+# =============================================================================
+# PHASE 6: Testing
+# =============================================================================
+phase_6_testing:
+  status: not_started
+  description: |
+    Follow risk-based testing strategy. Focus on critical paths:
+    tag generation, spending calculations, tag propagation on rename/delete.
+
+  tasks:
+    - id: "6.1"
+      task: Integration tests for TripService
+      status: not_started
+      details: |
+        File: backend/src/__tests__/integration/tripService.test.ts
+
+        Critical test cases:
+        - Create trip generates correct tag from name
+        - Tag uniqueness validation (no duplicate trip tags)
+        - Trip deletion strips tags from all associated transactions
+        - Trip rename updates tags on all associated transactions
+        - Trip summary correctly aggregates spending by category
+        - Trip summary includes transactions outside trip date range
+        - Category budgets vs actual calculation accuracy
+
+    - id: "6.2"
+      task: Route-level tests for trip API endpoints
+      status: not_started
+      details: |
+        File: backend/src/__tests__/integration/tripRoutes.test.ts
+
+        Test CRUD operations via supertest.
+        Verify auth middleware protection on all endpoints.
+        Verify Zod validation rejects invalid inputs.
+        Verify year filter on GET /trips.
+
+    - id: "6.3"
+      task: Manual testing checklist
+      status: not_started
+      details: |
+        - [ ] Create trip via form, verify tag preview
+        - [ ] Tag transactions via edit modal with trip tag
+        - [ ] Bulk-tag transactions for a trip
+        - [ ] View trip card grid with correct totals
+        - [ ] Expand trip to see category breakdown
+        - [ ] Click category to open TransactionPreviewModal
+        - [ ] "View All" navigates to Transactions with correct filters
+        - [ ] Edit trip name, verify tag updates on transactions
+        - [ ] Delete trip, verify tags removed from transactions
+        - [ ] Year filter on card grid
+        - [ ] Both users see same trip with combined transactions
+        - [ ] Pre-trip transaction (date before startDate) included in totals
+        - [ ] Rating and notes editable at any time
+
+# =============================================================================
+# IMPLEMENTATION ORDER
+# =============================================================================
+implementation_order:
+  description: |
+    Recommended sequence. Phases 1-3 are backend foundation.
+    Phase 4 is the bulk of frontend work. Phase 5 is verification.
+    Phase 6 runs alongside development.
+  sequence:
+    - phase: 1 — Shared Types & Data Model
+      reason: Types are needed by everything else
+    - phase: 2 — Backend Service & Routes
+      reason: API must exist before frontend can consume it
+    - phase: 3 — API Client
+      reason: Frontend methods needed for page development
+    - phase: 4 — Frontend (Trips Page & Navigation)
+      reason: Main deliverable; depends on phases 1-3
+    - phase: 5 — Transaction Integration Verification
+      reason: Verify existing UX works with trip tags
+    - phase: 6 — Testing
+      reason: Write integration tests alongside phases 2-4; manual testing at end
