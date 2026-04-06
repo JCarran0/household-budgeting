@@ -14,9 +14,7 @@ interface TransactionFilters {
   onlyUncategorized: boolean;
   onlyFlagged: boolean;
   amountRange: { min: number | null; max: number | null };
-  amountSearchMode: 'range' | 'exact';
-  exactAmount: number | null;
-  amountTolerance: number;
+  amountSearchMode: 'any' | 'less-than' | 'greater-than' | 'between';
   transactionType: 'all' | 'income' | 'expense' | 'transfer';
 }
 
@@ -63,15 +61,13 @@ const defaultTransactionFilters: TransactionFilters = {
   selectedAccount: 'all',
   selectedCategories: [],
   selectedTags: [],
-  dateFilterOption: 'ytd',
+  dateFilterOption: 'all',
   customDateRange: [null, null],
   includeHidden: false,
   onlyUncategorized: false,
   onlyFlagged: false,
   amountRange: { min: null, max: null },
-  amountSearchMode: 'range',
-  exactAmount: null,
-  amountTolerance: 0.50,
+  amountSearchMode: 'any',
   transactionType: 'all',
 };
 
@@ -118,9 +114,7 @@ const validateStoredFilters = (stored: unknown): Partial<FilterStore> => {
             max: typeof (t.amountRange as Record<string, unknown>).max === 'number' || (t.amountRange as Record<string, unknown>).max === null ? (t.amountRange as Record<string, unknown>).max as number | null : null,
           }
         : defaultTransactionFilters.amountRange,
-      amountSearchMode: (t.amountSearchMode === 'range' || t.amountSearchMode === 'exact') ? t.amountSearchMode : defaultTransactionFilters.amountSearchMode,
-      exactAmount: typeof t.exactAmount === 'number' || t.exactAmount === null ? t.exactAmount : defaultTransactionFilters.exactAmount,
-      amountTolerance: typeof t.amountTolerance === 'number' ? t.amountTolerance : defaultTransactionFilters.amountTolerance,
+      amountSearchMode: (t.amountSearchMode === 'any' || t.amountSearchMode === 'less-than' || t.amountSearchMode === 'greater-than' || t.amountSearchMode === 'between') ? t.amountSearchMode : defaultTransactionFilters.amountSearchMode,
       transactionType: (t.transactionType === 'all' || t.transactionType === 'income' || t.transactionType === 'expense' || t.transactionType === 'transfer') ? t.transactionType : defaultTransactionFilters.transactionType,
     };
   }
@@ -246,7 +240,7 @@ export const useFilterStore = create<FilterStore>()(
           Object.assign(state, validated);
         }
       },
-      version: 1, // Increment this when breaking changes are made to the filter structure
+      version: 2, // Increment this when breaking changes are made to the filter structure
     }
   )
 );

@@ -20,9 +20,7 @@ interface TransactionFilterState {
   onlyUncategorized: boolean;
   onlyFlagged: boolean;
   amountRange: { min: number | null; max: number | null };
-  amountSearchMode: 'range' | 'exact';
-  exactAmount: number | null;
-  amountTolerance: number;
+  amountSearchMode: 'any' | 'less-than' | 'greater-than' | 'between';
   transactionType: 'all' | 'income' | 'expense' | 'transfer';
 }
 
@@ -37,9 +35,7 @@ interface TransactionFilterActions {
   setOnlyUncategorized: (value: boolean) => void;
   setOnlyFlagged: (value: boolean) => void;
   setAmountRange: (value: { min: number | null; max: number | null }) => void;
-  setAmountSearchMode: (value: 'range' | 'exact') => void;
-  setExactAmount: (value: number | null) => void;
-  setAmountTolerance: (value: number) => void;
+  setAmountSearchMode: (value: 'any' | 'less-than' | 'greater-than' | 'between') => void;
   setTransactionType: (value: 'all' | 'income' | 'expense' | 'transfer') => void;
   resetFilters: () => void;
   debouncedSearchTerm: string;
@@ -56,7 +52,7 @@ export function useTransactionFilters(): TransactionFilterState & TransactionFil
   const selectedAccount = transactionFilters?.selectedAccount || 'all';
   const selectedCategories = transactionFilters?.selectedCategories || [];
   const selectedTags = transactionFilters?.selectedTags || [];
-  const dateFilterOption = (transactionFilters?.dateFilterOption || 'ytd') as DateFilterOption;
+  const dateFilterOption = (transactionFilters?.dateFilterOption || 'all') as DateFilterOption;
   const customDateRange = useMemo<[Date | null, Date | null]>(() => {
     const [start, end] = transactionFilters?.customDateRange || [null, null];
     return [parseDateFromStorage(start), parseDateFromStorage(end)];
@@ -65,9 +61,7 @@ export function useTransactionFilters(): TransactionFilterState & TransactionFil
   const onlyUncategorized = transactionFilters?.onlyUncategorized || false;
   const onlyFlagged = transactionFilters?.onlyFlagged || false;
   const amountRange = transactionFilters?.amountRange || { min: null, max: null };
-  const amountSearchMode = (transactionFilters?.amountSearchMode || 'range') as 'range' | 'exact';
-  const exactAmount = transactionFilters?.exactAmount ?? null;
-  const amountTolerance = transactionFilters?.amountTolerance ?? 0.50;
+  const amountSearchMode = (transactionFilters?.amountSearchMode || 'any') as 'any' | 'less-than' | 'greater-than' | 'between';
   const transactionType = (transactionFilters?.transactionType || 'all') as 'all' | 'income' | 'expense' | 'transfer';
   
   const [debouncedSearchTerm] = useDebouncedValue(searchInput, 300);
@@ -116,18 +110,10 @@ export function useTransactionFilters(): TransactionFilterState & TransactionFil
     setTransactionFilters({ amountRange: value });
   }, [setTransactionFilters]);
   
-  const setAmountSearchMode = useCallback((value: 'range' | 'exact') => {
+  const setAmountSearchMode = useCallback((value: 'any' | 'less-than' | 'greater-than' | 'between') => {
     setTransactionFilters({ amountSearchMode: value });
   }, [setTransactionFilters]);
-  
-  const setExactAmount = useCallback((value: number | null) => {
-    setTransactionFilters({ exactAmount: value });
-  }, [setTransactionFilters]);
-  
-  const setAmountTolerance = useCallback((value: number) => {
-    setTransactionFilters({ amountTolerance: value });
-  }, [setTransactionFilters]);
-  
+
   const setTransactionType = useCallback((value: 'all' | 'income' | 'expense' | 'transfer') => {
     setTransactionFilters({ transactionType: value });
   }, [setTransactionFilters]);
@@ -148,8 +134,6 @@ export function useTransactionFilters(): TransactionFilterState & TransactionFil
     onlyFlagged,
     amountRange,
     amountSearchMode,
-    exactAmount,
-    amountTolerance,
     transactionType,
     setSearchInput,
     setSelectedAccount,
@@ -162,8 +146,6 @@ export function useTransactionFilters(): TransactionFilterState & TransactionFil
     setOnlyFlagged,
     setAmountRange,
     setAmountSearchMode,
-    setExactAmount,
-    setAmountTolerance,
     setTransactionType,
     resetFilters,
     debouncedSearchTerm,

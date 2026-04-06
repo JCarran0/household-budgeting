@@ -36,12 +36,10 @@ import {
   Checkbox,
   Menu,
   rem,
-  SegmentedControl,
   Skeleton,
   LoadingOverlay,
   Pagination,
   Alert,
-  Slider,
   Box,
   Loader,
 } from '@mantine/core';
@@ -106,8 +104,6 @@ export function EnhancedTransactions() {
     onlyFlagged,
     amountRange,
     amountSearchMode,
-    exactAmount,
-    amountTolerance,
     setSearchInput,
     setSelectedAccount,
     setSelectedCategories,
@@ -119,8 +115,6 @@ export function EnhancedTransactions() {
     setOnlyFlagged,
     setAmountRange,
     setAmountSearchMode,
-    setExactAmount,
-    setAmountTolerance,
     transactionType,
     setTransactionType,
     resetFilters,
@@ -261,7 +255,7 @@ export function EnhancedTransactions() {
         if (customDateRange[1]) prev.set('endDate', format(customDateRange[1], 'yyyy-MM-dd'));
       }
       if (transactionType && transactionType !== 'all') prev.set('txnType', transactionType);
-      if (onlyUncategorized) prev.set('uncategorized', 'true');
+      if (selectedCategories.length === 1 && selectedCategories.includes('uncategorized')) prev.set('uncategorized', 'true');
       if (onlyFlagged) prev.set('onlyFlagged', 'true');
 
       return prev;
@@ -363,12 +357,9 @@ export function EnhancedTransactions() {
     };
     
     // Add amount search params based on mode
-    if (amountSearchMode === 'exact' && exactAmount !== null) {
-      params.exactAmount = exactAmount;
-      params.amountTolerance = amountTolerance;
-    } else if (amountSearchMode === 'range') {
-      params.minAmount = amountRange.min || undefined;
-      params.maxAmount = amountRange.max || undefined;
+    if (amountSearchMode !== 'any') {
+      params.minAmount = amountRange.min ?? undefined;
+      params.maxAmount = amountRange.max ?? undefined;
     }
     
     // Remove undefined values
@@ -390,8 +381,6 @@ export function EnhancedTransactions() {
     onlyFlagged,
     amountRange,
     amountSearchMode,
-    exactAmount,
-    amountTolerance,
     transactionType,
   ]);
 
@@ -1005,10 +994,8 @@ export function EnhancedTransactions() {
               root: { cursor: 'pointer' },
             }}
             onClick={() => {
-              // Set filter to show only uncategorized transactions
-              setOnlyUncategorized(true);
-              // Reset other filters that might conflict
-              setSelectedCategories([]);
+              // Set category filter to show only uncategorized transactions
+              setSelectedCategories(['uncategorized']);
             }}
           >
             <Group justify="space-between">
@@ -1036,11 +1023,19 @@ export function EnhancedTransactions() {
         {/* Filters */}
         <Paper p="md" withBorder>
           <Stack gap="md">
-            {/* Date Filter */}
-            <Stack gap="xs">
-              <Text size="sm" fw={500}>Date Range</Text>
-              <Group gap="xs">
+            {/* Row 1: Search - full width */}
+            <TextInput
+              placeholder="Search transactions..."
+              leftSection={<IconSearch size={16} />}
+              value={searchInput}
+              onChange={handleSearchChange}
+            />
+
+            {/* Row 2: Date Range, Account, Categories, Tags, Transaction Type, Amount */}
+            <Grid>
+              <Grid.Col span={{ base: 12, sm: 6, md: 4, lg: 2 }}>
                 <Select
+                  placeholder="All Time"
                   value={dateFilterOption}
                   onChange={(value) => {
                     if (value === 'custom') {
@@ -1052,33 +1047,88 @@ export function EnhancedTransactions() {
                     }
                   }}
                   data={[
+                    { value: 'all', label: 'All Time' },
                     { value: 'this-month', label: 'This Month' },
                     { value: 'last-month', label: 'Last Month' },
                     { value: 'last3', label: 'Last 3 Months' },
                     { value: 'last6', label: 'Last 6 Months' },
                     { value: 'last12', label: 'Last 12 Months' },
                     { value: 'ytd', label: 'Year to Date' },
-                    { value: 'all', label: 'All Time' },
                     { value: 'custom', label: 'Custom Range' },
                   ]}
-                  size="sm"
-                  w={180}
                 />
+              </Grid.Col>
 
-                {(dateFilterOption === 'custom' || showCustomDatePicker) && (
-                  <Button
-                    variant="light"
-                    size="sm"
-                    onClick={() => setShowCustomDatePicker(!showCustomDatePicker)}
-                    leftSection={<IconCalendar size={14} />}
-                  >
-                    {customDateRange[0] && customDateRange[1]
-                      ? `${format(customDateRange[0], 'MMM d')} - ${format(customDateRange[1], 'MMM d, yyyy')}`
-                      : 'Select dates'}
-                  </Button>
-                )}
-              </Group>
-              
+              <Grid.Col span={{ base: 12, sm: 6, md: 4, lg: 2 }}>
+                <Select
+                  placeholder="All Accounts"
+                  data={accountOptions}
+                  value={selectedAccount}
+                  onChange={(value) => setSelectedAccount(value || 'all')}
+                  clearable={false}
+                />
+              </Grid.Col>
+
+              <Grid.Col span={{ base: 12, sm: 6, md: 4, lg: 2 }}>
+                <MultiSelect
+                  placeholder="All Categories"
+                  data={categoryOptions}
+                  value={selectedCategories}
+                  onChange={handleCategorySelectionChange}
+                  clearable
+                  searchable
+                />
+              </Grid.Col>
+
+              <Grid.Col span={{ base: 12, sm: 6, md: 4, lg: 2 }}>
+                <MultiSelect
+                  placeholder="All Tags"
+                  data={availableTags}
+                  value={selectedTags}
+                  onChange={setSelectedTags}
+                  clearable
+                  searchable
+                />
+              </Grid.Col>
+
+              <Grid.Col span={{ base: 12, sm: 6, md: 4, lg: 2 }}>
+                <Select
+                  placeholder="All Types"
+                  value={transactionType}
+                  onChange={(value) => setTransactionType((value || 'all') as 'all' | 'income' | 'expense' | 'transfer')}
+                  data={[
+                    { value: 'all', label: 'All Types' },
+                    { value: 'income', label: 'Income' },
+                    { value: 'expense', label: 'Expenses' },
+                    { value: 'transfer', label: 'Transfers' },
+                  ]}
+                  clearable={false}
+                />
+              </Grid.Col>
+
+              <Grid.Col span={{ base: 12, sm: 6, md: 4, lg: 2 }}>
+                <Select
+                  placeholder="Any Amount"
+                  value={amountSearchMode}
+                  onChange={(value) => {
+                    const mode = (value || 'any') as 'any' | 'less-than' | 'greater-than' | 'between';
+                    setAmountSearchMode(mode);
+                    // Reset amount range when switching modes
+                    setAmountRange({ min: null, max: null });
+                  }}
+                  data={[
+                    { value: 'any', label: 'Any Amount' },
+                    { value: 'less-than', label: 'Less than' },
+                    { value: 'greater-than', label: 'Greater than' },
+                    { value: 'between', label: 'Between' },
+                  ]}
+                  clearable={false}
+                />
+              </Grid.Col>
+            </Grid>
+
+            {/* Row 3 (conditional): Custom date picker OR Amount inputs */}
+            {(dateFilterOption === 'custom' || showCustomDatePicker) && (
               <Box
                 style={{
                   overflow: showCustomDatePicker ? 'visible' : 'hidden',
@@ -1087,8 +1137,8 @@ export function EnhancedTransactions() {
                   opacity: showCustomDatePicker ? 1 : 0,
                 }}
               >
-                <Stack 
-                  gap="xs" 
+                <Stack
+                  gap="xs"
                   mt="xs"
                   style={{
                     visibility: showCustomDatePicker ? 'visible' : 'hidden',
@@ -1123,7 +1173,7 @@ export function EnhancedTransactions() {
                         if (tempCustomDateRange[0] && tempCustomDateRange[1]) {
                           const startDate = parseDateFromStorage(tempCustomDateRange[0]);
                           const endDate = parseDateFromStorage(tempCustomDateRange[1]);
-                          
+
                           if (startDate && endDate) {
                             setCustomDateRange([startDate, endDate]);
                             setDateFilterOption('custom');
@@ -1138,173 +1188,76 @@ export function EnhancedTransactions() {
                   </Group>
                 </Stack>
               </Box>
-            </Stack>
-            
-            <Grid>
-              <Grid.Col span={{ base: 12, sm: 6, md: 3 }}>
-                <TextInput
-                  placeholder="Search transactions..."
-                  leftSection={<IconSearch size={16} />}
-                  value={searchInput}
-                  onChange={handleSearchChange}
-                />
-              </Grid.Col>
-              
-              <Grid.Col span={{ base: 12, sm: 6, md: 3 }}>
-                <Select
-                  placeholder="Select account"
-                  data={accountOptions}
-                  value={selectedAccount}
-                  onChange={(value) => setSelectedAccount(value || 'all')}
-                  clearable={false}
-                />
-              </Grid.Col>
-              
-              <Grid.Col span={{ base: 12, sm: 6, md: 3 }}>
-                <MultiSelect
-                  placeholder="Filter by categories"
-                  data={categoryOptions}
-                  value={selectedCategories}
-                  onChange={handleCategorySelectionChange}
-                  clearable
-                  searchable
-                />
-              </Grid.Col>
-              
-              <Grid.Col span={{ base: 12, sm: 6, md: 3 }}>
-                <MultiSelect
-                  placeholder="Filter by tags"
-                  data={availableTags}
-                  value={selectedTags}
-                  onChange={setSelectedTags}
-                  clearable
-                  searchable
-                />
-              </Grid.Col>
-            </Grid>
+            )}
 
-            {/* Transaction Type Filter */}
-            <Stack gap="xs">
-              <Text size="sm" fw={500}>Transaction Type</Text>
-              <SegmentedControl
-                value={transactionType}
-                onChange={(value) => setTransactionType(value as 'all' | 'income' | 'expense' | 'transfer')}
-                data={[
-                  { label: 'All Transactions', value: 'all' },
-                  { label: 'Income', value: 'income' },
-                  { label: 'Expenses', value: 'expense' },
-                  { label: 'Transfers', value: 'transfer' },
-                ]}
+            {amountSearchMode === 'less-than' && (
+              <NumberInput
+                label="Less than"
+                placeholder="0.00"
+                prefix="$"
+                value={amountRange.max ?? undefined}
+                onChange={(value) => setAmountRange({ min: null, max: value !== undefined && value !== '' ? Number(value) : null })}
+                min={0}
+                decimalScale={2}
+                fixedDecimalScale
+                w={200}
               />
-            </Stack>
+            )}
 
-            <Grid>
-              <Grid.Col span={{ base: 12 }}>
-                <Stack gap="sm">
-                  <SegmentedControl
-                    value={amountSearchMode}
-                    onChange={(value) => setAmountSearchMode(value as 'range' | 'exact')}
-                    data={[
-                      { label: 'Amount Range', value: 'range' },
-                      { label: 'Exact Amount', value: 'exact' },
-                    ]}
-                  />
-                  
-                  {amountSearchMode === 'range' ? (
-                    <Group grow>
-                      <NumberInput
-                        label="Min Amount"
-                        placeholder="0.00"
-                        prefix="$"
-                        value={amountRange.min || undefined}
-                        onChange={(value) => setAmountRange({ ...amountRange, min: value !== undefined ? Number(value) : null })}
-                        min={0}
-                        decimalScale={2}
-                        fixedDecimalScale
-                      />
-                      <NumberInput
-                        label="Max Amount"
-                        placeholder="999.99"
-                        prefix="$"
-                        value={amountRange.max || undefined}
-                        onChange={(value) => setAmountRange({ ...amountRange, max: value !== undefined ? Number(value) : null })}
-                        min={0}
-                        decimalScale={2}
-                        fixedDecimalScale
-                      />
-                    </Group>
-                  ) : (
-                    <Stack gap="xs">
-                      <Group grow>
-                        <NumberInput
-                          label="Exact Amount"
-                          placeholder="Enter amount to search for"
-                          prefix="$"
-                          value={exactAmount || undefined}
-                          onChange={(value) => setExactAmount(value !== undefined ? Number(value) : null)}
-                          min={0}
-                          decimalScale={2}
-                          fixedDecimalScale
-                        />
-                      </Group>
-                      
-                      <Box>
-                        <Text size="sm" mb={4}>Tolerance: ±{formatCurrency(amountTolerance, true)}</Text>
-                        <Slider
-                          value={amountTolerance}
-                          onChange={setAmountTolerance}
-                          min={0}
-                          max={5}
-                          step={0.10}
-                          marks={[
-                            { value: 0, label: '$0' },
-                            { value: 1, label: '$1' },
-                            { value: 2.5, label: '$2.50' },
-                            { value: 5, label: '$5' },
-                          ]}
-                          mb="sm"
-                        />
-                      </Box>
-                      
-                      <Group gap="xs" mt="xs">
-                        <Text size="xs" c="dimmed">Quick amounts:</Text>
-                        {[10, 20, 50, 100, 200].map((amount) => (
-                          <Button
-                            key={amount}
-                            size="xs"
-                            variant="light"
-                            onClick={() => setExactAmount(amount)}
-                          >
-                            ${amount}
-                          </Button>
-                        ))}
-                      </Group>
-                    </Stack>
-                  )}
-                </Stack>
-              </Grid.Col>
-              
-              <Grid.Col span={{ base: 12, sm: 6, md: 3 }}>
-                <Stack gap="xs" mt="md">
-                  <Checkbox
-                    label="Include hidden transactions"
-                    checked={includeHidden}
-                    onChange={(e) => setIncludeHidden(e.currentTarget.checked)}
-                  />
-                  <Checkbox
-                    label="Only uncategorized"
-                    checked={onlyUncategorized}
-                    onChange={(e) => setOnlyUncategorized(e.currentTarget.checked)}
-                  />
-                  <Checkbox
-                    label="Only flagged"
-                    checked={onlyFlagged}
-                    onChange={(e) => setOnlyFlagged(e.currentTarget.checked)}
-                  />
-                </Stack>
-              </Grid.Col>
-            </Grid>
+            {amountSearchMode === 'greater-than' && (
+              <NumberInput
+                label="Greater than"
+                placeholder="0.00"
+                prefix="$"
+                value={amountRange.min ?? undefined}
+                onChange={(value) => setAmountRange({ min: value !== undefined && value !== '' ? Number(value) : null, max: null })}
+                min={0}
+                decimalScale={2}
+                fixedDecimalScale
+                w={200}
+              />
+            )}
 
+            {amountSearchMode === 'between' && (
+              <Group grow>
+                <NumberInput
+                  label="Min Amount"
+                  placeholder="0.00"
+                  prefix="$"
+                  value={amountRange.min ?? undefined}
+                  onChange={(value) => setAmountRange({ ...amountRange, min: value !== undefined && value !== '' ? Number(value) : null })}
+                  min={0}
+                  decimalScale={2}
+                  fixedDecimalScale
+                />
+                <NumberInput
+                  label="Max Amount"
+                  placeholder="0.00"
+                  prefix="$"
+                  value={amountRange.max ?? undefined}
+                  onChange={(value) => setAmountRange({ ...amountRange, max: value !== undefined && value !== '' ? Number(value) : null })}
+                  min={0}
+                  decimalScale={2}
+                  fixedDecimalScale
+                />
+              </Group>
+            )}
+
+            {/* Row 4: Checkboxes */}
+            <Group gap="lg">
+              <Checkbox
+                label="Include hidden transactions"
+                checked={includeHidden}
+                onChange={(e) => setIncludeHidden(e.currentTarget.checked)}
+              />
+              <Checkbox
+                label="Only flagged"
+                checked={onlyFlagged}
+                onChange={(e) => setOnlyFlagged(e.currentTarget.checked)}
+              />
+            </Group>
+
+            {/* Row 5: Summary and actions */}
             <Group justify="space-between">
               {showSkeletons ? (
                 <Skeleton height={16} width={200} />
@@ -1319,9 +1272,9 @@ export function EnhancedTransactions() {
                 </Stack>
               )}
               <Group gap="xs">
-                <Button 
-                  variant="subtle" 
-                  size="sm" 
+                <Button
+                  variant="subtle"
+                  size="sm"
                   leftSection={<IconFilterOff size={14} />}
                   onClick={() => {
                     resetFilters();
@@ -1334,9 +1287,9 @@ export function EnhancedTransactions() {
                 >
                   Reset Filters
                 </Button>
-                <Button 
-                  variant="subtle" 
-                  size="sm" 
+                <Button
+                  variant="subtle"
+                  size="sm"
                   onClick={() => refetch()}
                   loading={isFetching}
                   leftSection={!isFetching && <IconRefresh size={14} />}
