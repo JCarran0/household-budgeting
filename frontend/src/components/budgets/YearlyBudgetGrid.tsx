@@ -333,15 +333,11 @@ export function YearlyBudgetGrid({
     // Update pending updates
     setPendingUpdates(prev => {
       const newUpdates = new Map(prev);
-      if (value === 0) {
-        newUpdates.delete(updateKey);
-      } else {
-        newUpdates.set(updateKey, {
-          categoryId,
-          month: monthKey,
-          amount: value,
-        });
-      }
+      newUpdates.set(updateKey, {
+        categoryId,
+        month: monthKey,
+        amount: value,
+      });
       return newUpdates;
     });
   }, [year, detectBatchMode]);
