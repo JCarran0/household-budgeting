@@ -14,6 +14,10 @@ Building a personal budgeting app for 2 users with Plaid integration. Using Risk
 | **[AI-TESTING-STRATEGY.md](docs/AI-TESTING-STRATEGY.md)** | Test philosophy & examples | Writing tests, understanding test patterns, debugging test failures |
 | **[AI-USER-STORIES.md](docs/AI-USER-STORIES.md)** | Product requirements | Understanding features, acceptance criteria, user scenarios |
 | **[AI-TECHNICAL-DEBT.md](docs/AI-TECHNICAL-DEBT.md)** | Technical debt tracking | Reviewing known issues, planning improvements, understanding workarounds |
+| **[AI-CHATBOT-BRD.md](docs/features/AI-CHATBOT-BRD.md)** | AI chatbot requirements | Chatbot feature requirements, security model, tool definitions |
+| **[AI-CHATBOT-PLAN.yaml](docs/features/AI-CHATBOT-PLAN.yaml)** | AI chatbot implementation plan | Phase-by-phase implementation with decisions log |
+| **[AI-CATEGORIZATION-BRD.md](docs/features/AI-CATEGORIZATION-BRD.md)** | AI categorization requirements | Bulk categorization feature requirements and UX flow |
+| **[AI-CATEGORIZATION-PLAN.yaml](docs/features/AI-CATEGORIZATION-PLAN.yaml)** | AI categorization plan | Implementation phases with decisions log |
 
 ### Document Contents Overview
 
@@ -209,11 +213,21 @@ scripts/               # Deployment scripts
 8. **Admin Panel**: Data migration tools, system monitoring, batch operations
 9. **Yearly Budget Grid**: Comprehensive yearly budget planning with inline editing and auto-save
 
+### ✅ Completed Features (April 2026)
+10. **AI Financial Chatbot**: Conversational assistant using Claude API with tool_use for read-only financial data queries. Floating overlay on all pages with model selection (Haiku/Sonnet/Opus), cost tracking ($20/month cap), page context awareness, and GitHub issue filing.
+    - BRD: `docs/features/AI-CHATBOT-BRD.md`
+    - Plan: `docs/features/AI-CHATBOT-PLAN.yaml`
+11. **AI Bulk Categorization**: Batch transaction classification using Claude with few-shot learning from user data. Bucket-based approve/edit/skip flow with auto-categorization rule suggestions.
+    - BRD: `docs/features/AI-CATEGORIZATION-BRD.md`
+    - Plan: `docs/features/AI-CATEGORIZATION-PLAN.yaml`
+12. **URL-Based Page State**: Budget, Reports, and Transactions pages reflect filter state in URL params for chatbot context awareness and bookmarkable filter states.
+
 ### 🚧 Next Priorities
-1. **Rollover categories for budget carryover**
-2. **Bill reminders and recurring transactions**
-3. **Enhanced reporting and visualizations**
-4. **Mobile app development**
+1. **AI feature hardening** — Security tests, prompt injection testing, integration tests (Phase 8 of chatbot plan)
+2. **Rollover categories for budget carryover**
+3. **Bill reminders and recurring transactions**
+4. **Enhanced reporting and visualizations**
+5. **Mobile app development**
 
 ## Security Best Practices
 
@@ -369,6 +383,11 @@ STORAGE_TYPE=filesystem  # Use 's3' for production (see docs/AI-DEPLOYMENTS.md)
 # S3_BUCKET_NAME=your-bucket  # Required if STORAGE_TYPE=s3
 # S3_PREFIX=data/  # Optional S3 prefix
 # AWS_REGION=us-east-1  # Required for S3
+
+# AI Chatbot & Categorization
+ANTHROPIC_API_KEY=your_anthropic_api_key  # https://console.anthropic.com/settings/keys
+# GITHUB_ISSUES_PAT=your_pat  # Optional: for chatbot GitHub issue filing
+# CHATBOT_MONTHLY_LIMIT=20  # Optional: monthly AI spend cap in dollars
 ```
 
 ### Common Plaid Issues
@@ -484,6 +503,12 @@ Having issues?
 - **Account Management**: `backend/src/services/accountService.ts`
 - **Frontend Entry**: `frontend/src/App.tsx`
 - **API Client**: `frontend/src/lib/api.ts`
+- **Chatbot Service**: `backend/src/services/chatbotService.ts`
+- **Chatbot Data Service**: `backend/src/services/chatbotDataService.ts` (read-only security boundary)
+- **Chatbot Prompt**: `backend/src/services/chatbotPrompt.ts`
+- **Categorization Service**: `backend/src/services/categorizationService.ts`
+- **Chat Overlay UI**: `frontend/src/components/chat/ChatOverlay.tsx`
+- **Categorization Flow UI**: `frontend/src/components/transactions/CategorizationFlowModal.tsx`
 
 ### Testing
 - **Backend Tests**: `backend/src/__tests__/`
@@ -596,6 +621,9 @@ Track important decisions that affect how the codebase should be modified.
 
 | Date | Decision | Rationale | Impact |
 |------|----------|-----------|--------|
+| 2026-04 | AI chatbot with structural security boundary | LLM-powered financial assistant with read-only data access | ChatbotDataService receives ReadOnlyDataService (SEC-018), tool_use for prompt injection defense, $20/month cost cap with mutex, GitHub issue confirmation via frontend-only path |
+| 2026-04 | AI bulk categorization with few-shot learning | Batch classify uncategorized transactions using user's own data as examples | CategorizationService, bucket-based approve/edit/skip UI, auto-rule suggestions post-categorization |
+| 2026-04 | URL-based page state for all filter pages | Chatbot context awareness + bookmarkable/shareable URLs | Budget, Reports, Transactions pages sync filter state to URL params via useSearchParams |
 | 2026-01 | Plaid Link update mode for re-authentication | Allow users to re-authenticate expired bank connections | New endpoints, PlaidLinkContext update mode, visual indicators on accounts page and dashboard |
 | 2025-09 | Shared transaction calculation utilities | Consistent transfer exclusion across app | Created shared/utils/transactionCalculations.ts for all financial calculations |
 | 2025-09 | Field migration pattern with Admin UI | Safe data migrations with user control | Direct dataService access with destructuring for clean field removal |

@@ -47,6 +47,8 @@ Configure in: Settings → Secrets and variables → Actions → Secrets
 - `PRODUCTION_PLAID_CLIENT_ID` - Plaid API client ID
 - `PRODUCTION_PLAID_SECRET` - Plaid API secret
 - `PRODUCTION_ENCRYPTION_KEY` - Data encryption key (32-byte hex string)
+- `PRODUCTION_ANTHROPIC_API_KEY` - Anthropic API key for AI chatbot and categorization ([console.anthropic.com/settings/keys](https://console.anthropic.com/settings/keys))
+- `PRODUCTION_GITHUB_ISSUES_PAT` - Fine-grained GitHub PAT with `issues:write` scope on JCarran0/household-budgeting (for chatbot issue filing)
 
 ### GitHub Variables (Non-Sensitive)
 Configure in: Settings → Secrets and variables → Actions → Variables
@@ -63,6 +65,7 @@ Configure in: Settings → Secrets and variables → Actions → Variables
 - `AWS_REGION` - AWS region (e.g., `us-east-1`)
 - `S3_BACKUP_BUCKET` - S3 bucket for deployment artifacts
 - `EC2_INSTANCE_ID` - EC2 instance ID (e.g., `i-0123456789abcdef0`)
+- `PRODUCTION_CHATBOT_MONTHLY_LIMIT` - Monthly AI spending cap in dollars (default: `20`)
 
 ## Deployment Process
 
