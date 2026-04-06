@@ -10,7 +10,7 @@ const router = Router();
 const createBudgetSchema = z.object({
   categoryId: z.string().min(1),
   month: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/, 'Invalid month format. Use YYYY-MM'),
-  amount: z.number().positive('Budget amount must be positive')
+  amount: z.number().min(0, 'Budget amount must not be negative')
 });
 
 const copyBudgetsSchema = z.object({
