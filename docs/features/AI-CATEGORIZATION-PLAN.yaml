@@ -72,7 +72,7 @@ decisions:
 # PHASE 1: Shared Types
 # =============================================================================
 phase_1_types:
-  status: not_started
+  status: completed
   description: |
     Define types for classification requests, responses, buckets, and
     rule suggestions in shared/types/index.ts.
@@ -80,7 +80,7 @@ phase_1_types:
   tasks:
     - id: "1.1"
       task: Define classification types in shared/types/index.ts
-      status: not_started
+      status: completed
       details: |
         interface ClassificationResult {
           transactionId: string;
@@ -133,7 +133,7 @@ phase_1_types:
 # PHASE 2: Backend — Classification Service
 # =============================================================================
 phase_2_classification_service:
-  status: not_started
+  status: completed
   description: |
     Service that calls Claude to classify uncategorized transactions against
     the user's category hierarchy. Separate from ChatbotService but shares
@@ -142,7 +142,7 @@ phase_2_classification_service:
   tasks:
     - id: "2.1"
       task: Create CategorizationService in backend/src/services/categorizationService.ts
-      status: not_started
+      status: completed
       details: |
         Constructor receives:
         - chatbotDataService: ChatbotDataService (read-only data access)
@@ -178,7 +178,7 @@ phase_2_classification_service:
 
     - id: "2.2"
       task: Write classification prompt and tool definition
-      status: not_started
+      status: completed
       details: |
         File: backend/src/services/categorizationPrompt.ts
 
@@ -198,7 +198,7 @@ phase_2_classification_service:
 
     - id: "2.3"
       task: Register CategorizationService in backend/src/services/index.ts
-      status: not_started
+      status: completed
       details: |
         Instantiate with chatbotDataService, chatbotCostTracker, and API key.
         Export as categorizationService singleton.
@@ -207,7 +207,7 @@ phase_2_classification_service:
 # PHASE 3: Backend — API Routes
 # =============================================================================
 phase_3_routes:
-  status: not_started
+  status: completed
   description: |
     New endpoints for classification and rule suggestions. Protected by
     auth and rate limiting. Mounted under /api/v1/chatbot/ to share
@@ -216,7 +216,7 @@ phase_3_routes:
   tasks:
     - id: "3.1"
       task: Add classification endpoints to chatbot routes
-      status: not_started
+      status: completed
       details: |
         POST /api/v1/chatbot/classify-transactions
         - Auth: required
@@ -233,7 +233,7 @@ phase_3_routes:
 
     - id: "3.2"
       task: Add Zod validators for new endpoints
-      status: not_started
+      status: completed
       details: |
         Add to backend/src/validators/chatbotValidators.ts:
 
@@ -248,13 +248,13 @@ phase_3_routes:
 # PHASE 4: Frontend — API Client
 # =============================================================================
 phase_4_api_client:
-  status: not_started
+  status: completed
   description: Add classification methods to the frontend API client.
 
   tasks:
     - id: "4.1"
       task: Add classification methods to frontend/src/lib/api.ts
-      status: not_started
+      status: completed
       details: |
         - classifyTransactions(transactionIds?: string[]): Promise<ClassifyTransactionsResponse>
         - suggestCategorizeRules(categorizations): Promise<SuggestRulesResponse>
@@ -266,7 +266,7 @@ phase_4_api_client:
 # PHASE 5: Frontend — Categorization Flow UI
 # =============================================================================
 phase_5_frontend:
-  status: not_started
+  status: completed
   description: |
     The main UI: trigger button, classification loading, bucket review modal,
     rule suggestions, and summary. Uses Mantine components.
@@ -274,7 +274,7 @@ phase_5_frontend:
   tasks:
     - id: "5.1"
       task: Create AI Categorize button on Transactions page
-      status: not_started
+      status: completed
       details: |
         Add to EnhancedTransactions.tsx near the filter controls:
         - Button with IconSparkles or IconRobot icon
@@ -284,7 +284,7 @@ phase_5_frontend:
 
     - id: "5.2"
       task: Create CategorizationFlowModal component
-      status: not_started
+      status: completed
       details: |
         File: frontend/src/components/transactions/CategorizationFlowModal.tsx
 
@@ -304,7 +304,7 @@ phase_5_frontend:
 
     - id: "5.3"
       task: Create BucketReviewStep component
-      status: not_started
+      status: completed
       details: |
         File: frontend/src/components/transactions/BucketReviewStep.tsx
 
@@ -321,7 +321,7 @@ phase_5_frontend:
 
     - id: "5.4"
       task: Create RuleSuggestionsStep component
-      status: not_started
+      status: completed
       details: |
         File: frontend/src/components/transactions/RuleSuggestionsStep.tsx
 
@@ -334,7 +334,7 @@ phase_5_frontend:
 
     - id: "5.5"
       task: Create SummaryStep component
-      status: not_started
+      status: completed
       details: |
         File: frontend/src/components/transactions/SummaryStep.tsx
 
@@ -346,7 +346,7 @@ phase_5_frontend:
 
     - id: "5.6"
       task: Handle loading, error, and cost cap states
-      status: not_started
+      status: completed
       details: |
         - Loading: skeleton/spinner during classification API call
         - Error: inline error message with retry option
