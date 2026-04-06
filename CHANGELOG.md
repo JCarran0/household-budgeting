@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.2.0](https://github.com/JCarran0/household-budgeting/compare/v4.1.0...v4.2.0) (2026-04-06)
+
+
+### Bug Fixes
+
+* **categories:** correct transaction count badge and accordion behavior ([25022c7](https://github.com/JCarran0/household-budgeting/commit/25022c7de0bfa8584d6fdbd46d95cbe23476a1f5))
+
+
+### Documentation
+
+* update CLAUDE.md, deployment guide, and .env.example for AI features ([e1a2842](https://github.com/JCarran0/household-budgeting/commit/e1a2842e1ac19192466eb5f54e6c116cb370f974))
+
 ## [4.1.0](https://github.com/JCarran0/household-budgeting/compare/v4.0.1...v4.1.0) (2026-04-06)
 
 
