@@ -849,33 +849,54 @@ class ApiClient {
     wouldCategorize: number;
     wouldRecategorize: number;
     total: number;
+    changes: Array<{
+      transactionId: string;
+      date: string;
+      description: string;
+      amount: number;
+      oldCategoryId: string | null;
+      oldCategoryName: string | null;
+      newCategoryId: string;
+      newCategoryName: string;
+    }>;
   }> {
-    const { data } = await this.client.post<{ 
-      success: boolean; 
+    const { data } = await this.client.post<{
+      success: boolean;
       wouldCategorize: number;
-      wouldRecategorize: number; 
-      total: number; 
-      message: string 
+      wouldRecategorize: number;
+      total: number;
+      changes: Array<{
+        transactionId: string;
+        date: string;
+        description: string;
+        amount: number;
+        oldCategoryId: string | null;
+        oldCategoryName: string | null;
+        newCategoryId: string;
+        newCategoryName: string;
+      }>;
+      message: string;
     }>('/autocategorize/preview', { forceRecategorize });
-    return { 
-      wouldCategorize: data.wouldCategorize, 
+    return {
+      wouldCategorize: data.wouldCategorize,
       wouldRecategorize: data.wouldRecategorize,
-      total: data.total 
+      total: data.total,
+      changes: data.changes,
     };
   }
 
-  async applyAutoCategorizeRules(forceRecategorize: boolean = false): Promise<{ 
-    categorized: number; 
+  async applyAutoCategorizeRules(forceRecategorize: boolean = false, transactionIds?: string[]): Promise<{
+    categorized: number;
     recategorized: number;
-    total: number 
+    total: number
   }> {
-    const { data } = await this.client.post<{ 
-      success: boolean; 
+    const { data } = await this.client.post<{
+      success: boolean;
       categorized: number;
-      recategorized: number; 
-      total: number; 
+      recategorized: number;
+      total: number;
       message: string 
-    }>('/autocategorize/apply', { forceRecategorize });
+    }>('/autocategorize/apply', { forceRecategorize, transactionIds });
     return { 
       categorized: data.categorized, 
       recategorized: data.recategorized,

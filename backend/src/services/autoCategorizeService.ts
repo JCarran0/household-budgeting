@@ -297,21 +297,32 @@ export class AutoCategorizeService {
     wouldCategorize?: number;
     wouldRecategorize?: number;
     total?: number;
+    changes?: Array<{
+      transactionId: string;
+      date: string;
+      description: string;
+      amount: number;
+      oldCategoryId: string | null;
+      oldCategoryName: string | null;
+      newCategoryId: string;
+      newCategoryName: string;
+    }>;
     error?: string;
   }> {
     try {
       if (this.categoryService) {
         await this.categoryService.initializeDefaultCategories(userId);
       }
-      
+
       const transactions = await this.dataService.getData<StoredTransaction[]>(
         `transactions_${userId}`
       ) || [];
 
       const userCategories = await this.dataService.getCategories(userId);
-      
+      const categoryMap = new Map(userCategories.map(c => [c.id, c.name]));
+
       // For preview, include all non-hidden transactions
-      const targetTransactions = forceRecategorize 
+      const targetTransactions = forceRecategorize
         ? transactions.filter(t => !t.isHidden)
         : transactions.filter(t => {
             if (t.isHidden) return false;
@@ -320,17 +331,40 @@ export class AutoCategorizeService {
             const validCategory = userCategories.find(cat => cat.id === t.categoryId);
             return !validCategory;
           });
-      
+
+      // Snapshot original category IDs before dry-run
+      const originalCategoryIds = new Map(
+        targetTransactions.map(t => [t.id, t.categoryId])
+      );
+
       // Make a deep copy to avoid modifying actual data
       const transactionsCopy = targetTransactions.map(t => ({ ...t }));
-      
+
       const result = await this.applyRules(userId, transactionsCopy, userCategories, forceRecategorize);
+
+      // Build detailed change records by comparing before/after
+      const changes = transactionsCopy
+        .filter(t => {
+          const originalCategoryId = originalCategoryIds.get(t.id);
+          return t.categoryId !== originalCategoryId;
+        })
+        .map(t => ({
+          transactionId: t.id,
+          date: t.date,
+          description: t.userDescription || t.merchantName || t.name,
+          amount: t.amount,
+          oldCategoryId: originalCategoryIds.get(t.id) ?? null,
+          oldCategoryName: categoryMap.get(originalCategoryIds.get(t.id) ?? '') ?? null,
+          newCategoryId: t.categoryId!,
+          newCategoryName: categoryMap.get(t.categoryId!) ?? t.categoryId!,
+        }));
 
       return {
         success: true,
         wouldCategorize: result.categorized,
         wouldRecategorize: result.recategorized,
         total: targetTransactions.length,
+        changes,
       };
     } catch (error) {
       console.error('Error previewing categorization:', error);
@@ -341,7 +375,7 @@ export class AutoCategorizeService {
   /**
    * Apply rules to all transactions (with option to force recategorization)
    */
-  async applyRulesToAllTransactions(userId: string, forceRecategorize: boolean = false): Promise<{
+  async applyRulesToAllTransactions(userId: string, forceRecategorize: boolean = false, transactionIds?: string[]): Promise<{
     success: boolean;
     categorized?: number;
     recategorized?: number;
@@ -353,7 +387,7 @@ export class AutoCategorizeService {
       if (this.categoryService) {
         await this.categoryService.initializeDefaultCategories(userId);
       }
-      
+
       const transactions = await this.dataService.getData<StoredTransaction[]>(
         `transactions_${userId}`
       ) || [];
@@ -362,7 +396,7 @@ export class AutoCategorizeService {
       const userCategories = await this.dataService.getCategories(userId);
 
       // Include all non-hidden transactions if force recategorizing
-      const targetTransactions = forceRecategorize 
+      let targetTransactions = forceRecategorize
         ? transactions.filter(t => !t.isHidden)
         : transactions.filter(t => {
             if (t.isHidden) return false;
@@ -371,7 +405,13 @@ export class AutoCategorizeService {
             const validCategory = userCategories.find(cat => cat.id === t.categoryId);
             return !validCategory;
           });
-      
+
+      // If specific transaction IDs provided, filter to only those
+      if (transactionIds && transactionIds.length > 0) {
+        const idSet = new Set(transactionIds);
+        targetTransactions = targetTransactions.filter(t => idSet.has(t.id));
+      }
+
       const result = await this.applyRules(userId, targetTransactions, userCategories, forceRecategorize);
       
       // Save updated transactions

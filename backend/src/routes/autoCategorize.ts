@@ -282,12 +282,13 @@ router.post('/preview', authMiddleware, async (req: AuthRequest, res: Response):
       return;
     }
 
-    res.json({ 
-      success: true, 
+    res.json({
+      success: true,
       wouldCategorize: result.wouldCategorize || 0,
       wouldRecategorize: result.wouldRecategorize || 0,
       total: result.total || 0,
-      message: forceRecategorize 
+      changes: result.changes || [],
+      message: forceRecategorize
         ? `Would categorize ${result.wouldCategorize || 0} new and recategorize ${result.wouldRecategorize || 0} existing transactions`
         : `Would categorize ${result.wouldCategorize || 0} of ${result.total || 0} uncategorized transactions`
     });
@@ -308,8 +309,8 @@ router.post('/apply', authMiddleware, async (req: AuthRequest, res: Response): P
       return;
     }
 
-    const { forceRecategorize = false } = req.body;
-    const result = await autoCategorizeService.applyRulesToAllTransactions(req.user.userId, forceRecategorize);
+    const { forceRecategorize = false, transactionIds } = req.body;
+    const result = await autoCategorizeService.applyRulesToAllTransactions(req.user.userId, forceRecategorize, transactionIds);
 
     if (!result.success) {
       res.status(500).json({ success: false, error: result.error });

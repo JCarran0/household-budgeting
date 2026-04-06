@@ -19,11 +19,13 @@ import {
   Card,
   Checkbox,
   CloseButton,
+  ScrollArea,
+  Divider,
+  ThemeIcon,
 } from '@mantine/core';
 import { useForm } from '@mantine/form';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { notifications } from '@mantine/notifications';
-import { modals } from '@mantine/modals';
 import {
   IconPlus,
   IconEdit,
@@ -33,10 +35,25 @@ import {
   IconRobot,
   IconAlertCircle,
   IconSearch,
+  IconArrowRight,
+  IconEye,
 } from '@tabler/icons-react';
+import { format } from 'date-fns';
 import { api } from '../../lib/api';
 import type { AutoCategorizeRule } from '../../../../shared/types';
 import { useCategoryOptions } from '../../hooks/useCategoryOptions';
+import { formatCurrency } from '../../utils/formatters';
+
+interface TransactionChange {
+  transactionId: string;
+  date: string;
+  description: string;
+  amount: number;
+  oldCategoryId: string | null;
+  oldCategoryName: string | null;
+  newCategoryId: string;
+  newCategoryName: string;
+}
 
 interface RuleFormValues {
   description: string;
@@ -51,6 +68,10 @@ export function AutoCategorization() {
   const [editingRule, setEditingRule] = useState<AutoCategorizeRule | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [forceRecategorize, setForceRecategorize] = useState(false);
+  const [isPreviewOpen, setIsPreviewOpen] = useState(false);
+  const [previewChanges, setPreviewChanges] = useState<TransactionChange[]>([]);
+  const [previewCounts, setPreviewCounts] = useState({ wouldCategorize: 0, wouldRecategorize: 0 });
+  const [selectedChangeIds, setSelectedChangeIds] = useState<Set<string>>(new Set());
   const queryClient = useQueryClient();
 
   // Fetch rules
@@ -249,7 +270,8 @@ export function AutoCategorization() {
 
   // Apply rules mutation
   const applyRulesMutation = useMutation({
-    mutationFn: (force: boolean) => api.applyAutoCategorizeRules(force),
+    mutationFn: ({ force, transactionIds }: { force: boolean; transactionIds?: string[] }) =>
+      api.applyAutoCategorizeRules(force, transactionIds),
     onSuccess: (result) => {
       const message = forceRecategorize
         ? `Categorized ${result.categorized} new and recategorized ${result.recategorized} existing transactions`
@@ -376,27 +398,16 @@ export function AutoCategorization() {
             <Button
               leftSection={<IconRobot size={16} />}
               onClick={async () => {
-                // Get preview of what will be categorized
                 const preview = await previewMutation.mutateAsync(forceRecategorize);
-                
-                if (forceRecategorize && preview.wouldRecategorize > 0) {
-                  // Show confirmation dialog for recategorization
-                  modals.openConfirmModal({
-                    title: 'Recategorize Transactions?',
-                    children: (
-                      <Text size="sm">
-                        This will recategorize {preview.wouldRecategorize} transactions that already have categories.
-                        {preview.wouldCategorize > 0 && ` It will also categorize ${preview.wouldCategorize} new transactions.`}
-                        {' '}Continue?
-                      </Text>
-                    ),
-                    labels: { confirm: 'Yes, Recategorize', cancel: 'Cancel' },
-                    confirmProps: { color: 'blue' },
-                    onConfirm: () => applyRulesMutation.mutate(forceRecategorize),
+
+                if (preview.changes.length > 0) {
+                  setPreviewChanges(preview.changes);
+                  setPreviewCounts({
+                    wouldCategorize: preview.wouldCategorize,
+                    wouldRecategorize: preview.wouldRecategorize,
                   });
-                } else if (preview.wouldCategorize > 0) {
-                  // Just categorize new transactions
-                  applyRulesMutation.mutate(forceRecategorize);
+                  setSelectedChangeIds(new Set(preview.changes.map(c => c.transactionId)));
+                  setIsPreviewOpen(true);
                 } else {
                   notifications.show({
                     title: 'No Transactions to Categorize',
@@ -674,6 +685,136 @@ export function AutoCategorization() {
             </Group>
           </Stack>
         </form>
+      </Modal>
+
+      {/* Preview Categorization Modal */}
+      <Modal
+        opened={isPreviewOpen}
+        onClose={() => setIsPreviewOpen(false)}
+        size="xl"
+        title={
+          <Group gap="xs">
+            <ThemeIcon variant="light" size="sm">
+              <IconEye size={14} />
+            </ThemeIcon>
+            <Text fw={600}>Preview Categorization Changes</Text>
+          </Group>
+        }
+        scrollAreaComponent={ScrollArea.Autosize}
+      >
+        <Stack gap="md">
+          <div>
+            {previewCounts.wouldCategorize > 0 && (
+              <Text size="sm">
+                <Text span fw={600}>{previewCounts.wouldCategorize}</Text> transaction{previewCounts.wouldCategorize !== 1 ? 's' : ''} will be categorized
+              </Text>
+            )}
+            {previewCounts.wouldRecategorize > 0 && (
+              <Text size="sm" c="yellow">
+                <Text span fw={600}>{previewCounts.wouldRecategorize}</Text> transaction{previewCounts.wouldRecategorize !== 1 ? 's' : ''} will be recategorized
+              </Text>
+            )}
+          </div>
+
+          <Divider />
+
+          <Table striped highlightOnHover>
+            <Table.Thead>
+              <Table.Tr>
+                <Table.Th w={40}>
+                  <Checkbox
+                    checked={selectedChangeIds.size === previewChanges.length}
+                    indeterminate={selectedChangeIds.size > 0 && selectedChangeIds.size < previewChanges.length}
+                    onChange={() => {
+                      if (selectedChangeIds.size === previewChanges.length) {
+                        setSelectedChangeIds(new Set());
+                      } else {
+                        setSelectedChangeIds(new Set(previewChanges.map(c => c.transactionId)));
+                      }
+                    }}
+                    aria-label="Select all"
+                  />
+                </Table.Th>
+                <Table.Th>Date</Table.Th>
+                <Table.Th>Description</Table.Th>
+                <Table.Th style={{ textAlign: 'right' }}>Amount</Table.Th>
+                <Table.Th>Current</Table.Th>
+                <Table.Th />
+                <Table.Th>New Category</Table.Th>
+              </Table.Tr>
+            </Table.Thead>
+            <Table.Tbody>
+              {previewChanges.map((change) => (
+                <Table.Tr
+                  key={change.transactionId}
+                  style={{ opacity: selectedChangeIds.has(change.transactionId) ? 1 : 0.5 }}
+                >
+                  <Table.Td>
+                    <Checkbox
+                      checked={selectedChangeIds.has(change.transactionId)}
+                      onChange={(e) => {
+                        const isChecked = e.currentTarget.checked;
+                        setSelectedChangeIds(prev => {
+                          const next = new Set(prev);
+                          if (isChecked) {
+                            next.add(change.transactionId);
+                          } else {
+                            next.delete(change.transactionId);
+                          }
+                          return next;
+                        });
+                      }}
+                      aria-label={`Select ${change.description}`}
+                    />
+                  </Table.Td>
+                  <Table.Td>
+                    <Text size="sm">{format(new Date(change.date + 'T00:00:00'), 'MMM dd')}</Text>
+                  </Table.Td>
+                  <Table.Td>
+                    <Tooltip label={change.description} disabled={change.description.length <= 30}>
+                      <Text size="sm" truncate maw={200}>{change.description}</Text>
+                    </Tooltip>
+                  </Table.Td>
+                  <Table.Td style={{ textAlign: 'right' }}>
+                    <Text size="sm">{formatCurrency(Math.abs(change.amount))}</Text>
+                  </Table.Td>
+                  <Table.Td>
+                    <Text size="sm" c="dimmed">
+                      {change.oldCategoryName ?? 'Uncategorized'}
+                    </Text>
+                  </Table.Td>
+                  <Table.Td>
+                    <IconArrowRight size={14} style={{ opacity: 0.5 }} />
+                  </Table.Td>
+                  <Table.Td>
+                    <Badge variant="light" size="sm">{change.newCategoryName}</Badge>
+                  </Table.Td>
+                </Table.Tr>
+              ))}
+            </Table.Tbody>
+          </Table>
+
+          <Divider />
+
+          <Group justify="flex-end">
+            <Button variant="default" onClick={() => setIsPreviewOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              loading={applyRulesMutation.isPending}
+              disabled={selectedChangeIds.size === 0}
+              onClick={() => {
+                const selectedIds = selectedChangeIds.size === previewChanges.length
+                  ? undefined  // All selected — no need to filter server-side
+                  : Array.from(selectedChangeIds);
+                applyRulesMutation.mutate({ force: forceRecategorize, transactionIds: selectedIds });
+                setIsPreviewOpen(false);
+              }}
+            >
+              Apply {selectedChangeIds.size} Change{selectedChangeIds.size !== 1 ? 's' : ''}
+            </Button>
+          </Group>
+        </Stack>
       </Modal>
     </Stack>
   );
