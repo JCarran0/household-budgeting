@@ -10,6 +10,10 @@ on:
         default: 'Manual production deployment'
         type: string
 
+concurrency:
+  group: production-deploy
+  cancel-in-progress: true
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
