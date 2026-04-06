@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+### [4.0.1](https://github.com/JCarran0/household-budgeting/compare/v4.0.0...v4.0.1) (2026-04-06)
+
+
+### Bug Fixes
+
+* **categorization:** add proper error state and progress logging ([08fa8a3](https://github.com/JCarran0/household-budgeting/commit/08fa8a39e8c2ee68814822c0bb833d91c62ff157))
+
+
+### CI/CD
+
+* add AI feature env vars to deploy workflows ([e60eed7](https://github.com/JCarran0/household-budgeting/commit/e60eed7247d03f54e73d54c00b1b649a9453293f))
+
+
+### Documentation
+
+* update plans with completed phase statuses ([e7ed3ce](https://github.com/JCarran0/household-budgeting/commit/e7ed3cee60016ec58d064b20bea7f40f38265839))
+
 ## [4.0.0](https://github.com/JCarran0/household-budgeting/compare/v3.0.0...v4.0.0) (2026-04-06)
 
 
