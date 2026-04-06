@@ -66,8 +66,11 @@ export class CategorizationService {
     ]);
 
     if (uncategorized.length === 0) {
+      console.log('[CategorizationService] No uncategorized transactions found');
       return { buckets: [], unsureBucket: this.emptyBucket(), totalClassified: 0, costUsed: 0 };
     }
+
+    console.log(`[CategorizationService] Classifying ${uncategorized.length} transactions`);
 
     // Build few-shot examples from previously categorized transactions
     const examples = await this.buildExamples(userId, categories);
@@ -78,16 +81,22 @@ export class CategorizationService {
     // Classify in batches
     const allResults: ClassificationResult[] = [];
     let totalCost = 0;
+    const totalBatches = Math.ceil(uncategorized.length / BATCH_SIZE);
 
     for (let i = 0; i < uncategorized.length; i += BATCH_SIZE) {
+      const batchNum = Math.floor(i / BATCH_SIZE) + 1;
       const batch = uncategorized.slice(i, i + BATCH_SIZE);
+      console.log(`[CategorizationService] Batch ${batchNum}/${totalBatches}: classifying ${batch.length} transactions...`);
       const { results, cost } = await this.classifyBatch(batch, categoryContext, examples, existingRules);
+      console.log(`[CategorizationService] Batch ${batchNum}/${totalBatches}: got ${results.length} results, cost $${cost.toFixed(4)}`);
       allResults.push(...results);
       totalCost += cost;
     }
 
     // Group into buckets
+    console.log(`[CategorizationService] Grouping ${allResults.length} results into buckets`);
     const { buckets, unsureBucket } = this.groupIntoBuckets(allResults, uncategorized, categories);
+    console.log(`[CategorizationService] Done: ${buckets.length} buckets + ${unsureBucket.transactions.length} unsure`);
 
     return {
       buckets,

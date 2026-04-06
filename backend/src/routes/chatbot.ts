@@ -141,7 +141,9 @@ router.post(
       const userId = req.user!.userId;
       const { transactionIds } = req.body as { transactionIds?: string[] };
 
+      console.log(`[Chatbot] classify-transactions: starting for user ${userId}`);
       const result = await categorizationService.classifyTransactions(userId, transactionIds);
+      console.log(`[Chatbot] classify-transactions: done, ${result.totalClassified} classified, ${result.buckets.length} buckets`);
 
       res.json({ success: true, ...result });
     } catch (error) {

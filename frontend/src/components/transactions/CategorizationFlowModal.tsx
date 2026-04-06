@@ -8,7 +8,7 @@ import { BucketReviewStep } from './BucketReviewStep';
 import { RuleSuggestionsStep } from './RuleSuggestionsStep';
 import type { ClassificationBucket, RuleSuggestion } from '../../../../shared/types';
 
-type FlowStep = 'loading' | 'review' | 'rules' | 'summary';
+type FlowStep = 'loading' | 'review' | 'rules' | 'summary' | 'error';
 
 interface CategorizationFlowModalProps {
   opened: boolean;
@@ -60,8 +60,10 @@ export function CategorizationFlowModal({ opened, onClose, uncategorizedCount }:
           }
         })
         .catch(err => {
-          setError(err instanceof Error ? err.message : 'Classification failed');
-          setStep('summary');
+          const axiosError = err?.response?.data?.error;
+          const message = axiosError || (err instanceof Error ? err.message : 'Classification failed');
+          setError(message);
+          setStep('error');
         });
     }
   }, [opened]);
@@ -177,27 +179,34 @@ export function CategorizationFlowModal({ opened, onClose, uncategorizedCount }:
         />
       )}
 
+      {step === 'error' && (
+        <Stack align="center" gap="md" py="xl">
+          <ThemeIcon size={60} radius="xl" variant="light" color="red">
+            <IconSparkles size={30} />
+          </ThemeIcon>
+          <Text size="lg" fw={600}>Classification Failed</Text>
+          <Text size="sm" c="dimmed" ta="center" maw={400}>{error}</Text>
+          <Group>
+            <Button variant="light" onClick={() => { setError(null); setStep('loading'); api.classifyTransactions().then(result => { setBuckets(result.buckets); setUnsureBucket(result.unsureBucket); setStep(result.buckets.length === 0 && result.unsureBucket.transactions.length === 0 ? 'summary' : 'review'); }).catch(err => { setError(err?.response?.data?.error || 'Classification failed'); setStep('error'); }); }}>
+              Retry
+            </Button>
+            <Button variant="subtle" color="gray" onClick={handleClose}>Close</Button>
+          </Group>
+        </Stack>
+      )}
+
       {step === 'summary' && (
         <Stack align="center" gap="md" py="xl">
-          {error ? (
-            <>
-              <Text c="red" fw={600}>{error}</Text>
-              <Button onClick={handleClose}>Close</Button>
-            </>
-          ) : (
-            <>
-              <ThemeIcon size={60} radius="xl" variant="light" color="green">
-                <IconCheck size={30} />
-              </ThemeIcon>
-              <Text size="lg" fw={600}>Categorization Complete</Text>
-              <Stack gap={4} align="center">
-                <Text size="sm">{appliedCount} transaction{appliedCount !== 1 ? 's' : ''} categorized</Text>
-                {skippedCount > 0 && <Text size="sm" c="dimmed">{skippedCount} skipped</Text>}
-                {createdRulesCount > 0 && <Text size="sm" c="blue">{createdRulesCount} new auto-categorization rule{createdRulesCount !== 1 ? 's' : ''} created</Text>}
-              </Stack>
-              <Button onClick={handleClose}>Done</Button>
-            </>
-          )}
+          <ThemeIcon size={60} radius="xl" variant="light" color="green">
+            <IconCheck size={30} />
+          </ThemeIcon>
+          <Text size="lg" fw={600}>Categorization Complete</Text>
+          <Stack gap={4} align="center">
+            <Text size="sm">{appliedCount} transaction{appliedCount !== 1 ? 's' : ''} categorized</Text>
+            {skippedCount > 0 && <Text size="sm" c="dimmed">{skippedCount} skipped</Text>}
+            {createdRulesCount > 0 && <Text size="sm" c="blue">{createdRulesCount} new auto-categorization rule{createdRulesCount !== 1 ? 's' : ''} created</Text>}
+          </Stack>
+          <Button onClick={handleClose}>Done</Button>
         </Stack>
       )}
     </Modal>
