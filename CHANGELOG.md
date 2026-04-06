@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+### [5.0.1](https://github.com/JCarran0/household-budgeting/compare/v5.0.0...v5.0.1) (2026-04-06)
+
+
+### Bug Fixes
+
+* **budgets:** allow zeroing out budgets in yearly grid view ([6b9a1bd](https://github.com/JCarran0/household-budgeting/commit/6b9a1bd174ba80f7b26937750fb91495fb3590fd))
+* **categories:** surface duplicate pattern errors in rule updates ([d69b8a3](https://github.com/JCarran0/household-budgeting/commit/d69b8a3a5f8d5b3b5f4ada00d8d75ffae79585a7))
+* **transactions:** read dateFilter URL param on page init ([c04b55a](https://github.com/JCarran0/household-budgeting/commit/c04b55ae729d9bea60fbcea9a964ebb4508b1a28))
+* **transactions:** reset filters before applying inbound URL params ([c6ccc75](https://github.com/JCarran0/household-budgeting/commit/c6ccc75c3d8e24b2a0a59126882eb72ae32f4003))
+
+
+### CI/CD
+
+* add concurrency group to cancel superseded deploys ([d3024eb](https://github.com/JCarran0/household-budgeting/commit/d3024ebe7d8712bd2f2544766bb1a4f30d0c8a3d))
+* auto-deploy to production on push to main ([39a07e7](https://github.com/JCarran0/household-budgeting/commit/39a07e7dec11f59da574cbbb2b71cda81434345a))
+* move auto-deploy trigger to release-and-deploy workflow ([bcf7629](https://github.com/JCarran0/household-budgeting/commit/bcf76290c770cac8bca577875b9154e4da0c4cac))
+
 ## [5.0.0](https://github.com/JCarran0/household-budgeting/compare/v4.2.0...v5.0.0) (2026-04-06)
 
 
