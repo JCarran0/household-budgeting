@@ -34,7 +34,7 @@ interface TransactionPreviewModalProps {
   onClose: () => void;
   categoryId: string | null; // null for "Uncategorized"
   categoryName: string;
-  dateRange: { startDate: string; endDate: string };
+  dateRange?: { startDate: string; endDate: string };
   limit?: number; // default 25
   timeRangeFilter?: string; // Reports page time range filter (e.g., 'thisMonth', 'yearToDate')
   tags?: string[]; // Optional tag filter (e.g., trip tags)
@@ -54,12 +54,12 @@ export function TransactionPreviewModal({
 
   // Fetch transaction preview data
   const { data: transactionData, isLoading, error } = useQuery({
-    queryKey: ['transaction-preview', categoryId, dateRange.startDate, dateRange.endDate, limit, tags],
+    queryKey: ['transaction-preview', categoryId, dateRange?.startDate, dateRange?.endDate, limit, tags],
     queryFn: () => api.getTransactions({
       categoryIds: categoryId ? [categoryId] : undefined,
       onlyUncategorized: categoryId === null,
-      startDate: dateRange.startDate,
-      endDate: dateRange.endDate,
+      startDate: dateRange?.startDate,
+      endDate: dateRange?.endDate,
       limit: limit,
       offset: 0,
       tags,
@@ -91,8 +91,10 @@ export function TransactionPreviewModal({
     } else {
       params.set('onlyUncategorized', 'true');
     }
-    params.set('startDate', dateRange.startDate);
-    params.set('endDate', dateRange.endDate);
+    if (dateRange) {
+      params.set('startDate', dateRange.startDate);
+      params.set('endDate', dateRange.endDate);
+    }
     
     // Include the time range filter from reports page if provided
     if (timeRangeFilter) {
@@ -119,10 +121,11 @@ export function TransactionPreviewModal({
 
   // Format date range for header
   const formatDateRange = () => {
+    if (!dateRange) return null;
     try {
       const start = new Date(dateRange.startDate);
       const end = new Date(dateRange.endDate);
-      
+
       if (start.getFullYear() === end.getFullYear() && start.getMonth() === end.getMonth()) {
         // Same month
         return format(start, 'MMMM yyyy');
@@ -176,10 +179,12 @@ export function TransactionPreviewModal({
         <Group justify="space-between">
           <div>
             <Text size="lg" fw={600}>{categoryName}</Text>
-            <Group gap="xs" c="dimmed">
-              <IconCalendar size={14} />
-              <Text size="sm">{formatDateRange()}</Text>
-            </Group>
+            {formatDateRange() && (
+              <Group gap="xs" c="dimmed">
+                <IconCalendar size={14} />
+                <Text size="sm">{formatDateRange()}</Text>
+              </Group>
+            )}
           </div>
         </Group>
 

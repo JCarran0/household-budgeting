@@ -143,32 +143,24 @@ function CategoryNode({ category, onEdit, onDelete, level = 0, transactionCounts
                   </Badge>
                 </Tooltip>
               )}
-              {transactionCounts && transactionCount > 0 && dateRange ? (
-                <TransactionPreviewTrigger
-                  categoryId={category.id}
-                  categoryName={category.name}
-                  dateRange={dateRange}
-                  tooltipText={`Click to preview ${transactionCount} transaction${transactionCount === 1 ? '' : 's'}`}
-                >
-                  <Badge
-                    size="xs"
-                    variant="filled"
-                    color="blue"
-                    style={{ cursor: 'pointer' }}
+              {transactionCounts && transactionCount > 0 ? (
+                <div onClick={(e) => e.stopPropagation()}>
+                  <TransactionPreviewTrigger
+                    categoryId={category.id}
+                    categoryName={category.name}
+                    dateRange={dateRange}
+                    tooltipText={`Click to preview ${transactionCount} transaction${transactionCount === 1 ? '' : 's'}`}
                   >
-                    {transactionCount}
-                  </Badge>
-                </TransactionPreviewTrigger>
-              ) : transactionCounts && transactionCount > 0 ? (
-                <Tooltip label={`${transactionCount} transaction${transactionCount === 1 ? '' : 's'}`}>
-                  <Badge
-                    size="xs"
-                    variant="filled"
-                    color="blue"
-                  >
-                    {transactionCount}
-                  </Badge>
-                </Tooltip>
+                    <Badge
+                      size="xs"
+                      variant="filled"
+                      color="blue"
+                      style={{ cursor: 'pointer' }}
+                    >
+                      {transactionCount}
+                    </Badge>
+                  </TransactionPreviewTrigger>
+                </div>
               ) : null}
             </Group>
           </Group>

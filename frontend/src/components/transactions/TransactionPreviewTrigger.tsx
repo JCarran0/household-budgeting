@@ -6,7 +6,7 @@ import { TransactionPreviewModal } from './TransactionPreviewModal';
 interface TransactionPreviewTriggerProps {
   categoryId: string | null; // null for "Uncategorized"
   categoryName: string;
-  dateRange: { startDate: string; endDate: string };
+  dateRange?: { startDate: string; endDate: string };
   children: ReactNode; // The clickable content
   disabled?: boolean;
   className?: string;
