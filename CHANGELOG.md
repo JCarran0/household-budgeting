@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.2.0](https://github.com/JCarran0/household-budgeting/compare/v5.1.0...v5.2.0) (2026-04-06)
+
+
+### Features
+
+* **transactions:** redesign filter layout with unified dropdown row ([c5fe85f](https://github.com/JCarran0/household-budgeting/commit/c5fe85fff7b90f6a46444e95ab78bf5f09c06521))
+
 ## [5.1.0](https://github.com/JCarran0/household-budgeting/compare/v5.0.3...v5.1.0) (2026-04-06)
 
 
