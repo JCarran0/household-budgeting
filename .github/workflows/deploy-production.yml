@@ -74,6 +74,9 @@ jobs:
           FRONTEND_URL=${{ vars.PRODUCTION_FRONTEND_URL }}
           API_PREFIX=${{ vars.PRODUCTION_API_PREFIX }}
           LOG_LEVEL=${{ vars.PRODUCTION_LOG_LEVEL }}
+          ANTHROPIC_API_KEY=${{ secrets.PRODUCTION_ANTHROPIC_API_KEY }}
+          GITHUB_ISSUES_PAT=${{ secrets.PRODUCTION_GITHUB_ISSUES_PAT }}
+          CHATBOT_MONTHLY_LIMIT=${{ vars.PRODUCTION_CHATBOT_MONTHLY_LIMIT }}
           EOF
           
           # Add metadata
