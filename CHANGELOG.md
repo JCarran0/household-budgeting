@@ -5,6 +5,32 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.0.0](https://github.com/JCarran0/household-budgeting/compare/v3.0.0...v4.0.0) (2026-04-06)
+
+
+### Features
+
+* **backend:** add chatbot API routes with rate limiting ([fdc937f](https://github.com/JCarran0/household-budgeting/commit/fdc937f16e8721d7be56ef43ab033fe361fd069f))
+* **backend:** add ChatbotDataService with read-only data boundary ([f502a0b](https://github.com/JCarran0/household-budgeting/commit/f502a0b327d89cc500aacc16ff03fbe7ead02b09))
+* **backend:** add ChatbotService orchestration with cost tracking ([3423fe6](https://github.com/JCarran0/household-budgeting/commit/3423fe699087a5f6aa09004f5285c0ab0b054ad6))
+* **frontend:** add chat overlay UI with FAB and message components ([22438de](https://github.com/JCarran0/household-budgeting/commit/22438de73cfb290264f4052beaceee0980988daa))
+* **frontend:** add chatbot API client methods ([666142a](https://github.com/JCarran0/household-budgeting/commit/666142a155e0cb3788ac0c9d184ff77cf46923fe))
+* **frontend:** add URL-based page state for chatbot context ([d2e4d16](https://github.com/JCarran0/household-budgeting/commit/d2e4d16963cdd8e68eaf9bcc74ca0ea93eaa5660))
+* implement AI-powered bulk transaction categorization ([7e4c1ad](https://github.com/JCarran0/household-budgeting/commit/7e4c1adc6ff78a932edf514fc4adb3f0d036eb2f))
+* **shared:** add chatbot types and tool schemas ([03312ee](https://github.com/JCarran0/household-budgeting/commit/03312ee03df651883e151275f690ad74e9bd697a))
+* **transactions:** sync filter state to URL params ([8faf168](https://github.com/JCarran0/household-budgeting/commit/8faf168fe652288285034cc6d8b9eceb5459a10f))
+
+
+### Bug Fixes
+
+* **chatbot:** correct model IDs, pricing, and add uncategorized filter ([fe27ceb](https://github.com/JCarran0/household-budgeting/commit/fe27ceb5aa21b0bdbdcd1e20cea0ae8b16dcf124))
+
+
+### Documentation
+
+* **categorization:** add AI bulk categorization BRD ([57c3664](https://github.com/JCarran0/household-budgeting/commit/57c3664ea5e5ab079f9a7a524552bc6afd32e89c))
+* **categorization:** add AI bulk categorization implementation plan ([9b26203](https://github.com/JCarran0/household-budgeting/commit/9b2620308a7e04a6d21a9fc316ea59cbb9b9888a))
+
 ## [3.0.0](https://github.com/JCarran0/household-budgeting/compare/v2.0.1...v3.0.0) (2026-04-05)
 
 
