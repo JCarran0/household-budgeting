@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.0.0](https://github.com/JCarran0/household-budgeting/compare/v4.2.0...v5.0.0) (2026-04-06)
+
+
+### Features
+
+* **categories:** add detailed preview modal for auto-categorization ([266068b](https://github.com/JCarran0/household-budgeting/commit/266068b1b0f26c5c9b6043beebe660b02c5e623f))
+* **transactions:** add expanded time range filters and consolidate with reports ([817f13b](https://github.com/JCarran0/household-budgeting/commit/817f13b89669554c077a6261f83564fa137460a2))
+
+
+### Bug Fixes
+
+* **transactions:** remove distracting filters applied toast ([a6e2f4c](https://github.com/JCarran0/household-budgeting/commit/a6e2f4c011051b87603c556ffa1c171da2d0a836))
+
 ## [4.2.0](https://github.com/JCarran0/household-budgeting/compare/v4.1.0...v4.2.0) (2026-04-06)
 
 
