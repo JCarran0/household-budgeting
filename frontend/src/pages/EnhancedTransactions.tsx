@@ -224,20 +224,6 @@ export function EnhancedTransactions() {
       
       setHasInitialized(true);
       
-      // Show notification when filters are applied from reports
-      if (categoryIds || onlyUncategorizedParam === 'true' || timeRangeFilter || (startDate && endDate) || tags) {
-        const filterTypes = [];
-        if (categoryIds) filterTypes.push('category');
-        if (onlyUncategorizedParam === 'true') filterTypes.push('uncategorized transactions');
-        if (timeRangeFilter || (startDate && endDate)) filterTypes.push('date range');
-        if (tags) filterTypes.push('tags');
-
-        notifications.show({
-          title: 'Filters Applied',
-          message: `Applied ${filterTypes.join(', ')} filters`,
-          color: 'blue',
-        });
-      }
     }
   }, [searchParams, hasInitialized, setSelectedCategories, setSelectedTags, setOnlyUncategorized, setCustomDateRange, setDateFilterOption]);
 
