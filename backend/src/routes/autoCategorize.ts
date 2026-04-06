@@ -223,7 +223,8 @@ router.put('/rules/:ruleId', authMiddleware, async (req: AuthRequest, res: Respo
     );
 
     if (!result.success) {
-      res.status(404).json({ success: false, error: result.error });
+      const status = result.code === 'NOT_FOUND' ? 404 : result.code === 'DUPLICATE' ? 409 : 400;
+      res.status(status).json({ success: false, error: result.error });
       return;
     }
 

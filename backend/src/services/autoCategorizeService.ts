@@ -125,13 +125,13 @@ export class AutoCategorizeService {
       userDescription: string;
       isActive: boolean;
     }>
-  ): Promise<{ success: boolean; error?: string }> {
+  ): Promise<{ success: boolean; error?: string; code?: string }> {
     try {
       const rules = await this.getRules(userId);
       const rule = rules.find(r => r.id === ruleId);
       
       if (!rule) {
-        return { success: false, error: 'Rule not found' };
+        return { success: false, error: 'Rule not found', code: 'NOT_FOUND' };
       }
 
       // Check for duplicate patterns if patterns are being updated
@@ -140,9 +140,9 @@ export class AutoCategorizeService {
         for (const otherRule of rules) {
           if (otherRule.id === ruleId) continue;
           const existingPatterns = otherRule.patterns.map(p => p.toLowerCase());
-          const hasDuplicate = lowerPatterns.some(p => existingPatterns.includes(p));
-          if (hasDuplicate) {
-            return { success: false, error: 'One or more patterns already exist in another rule' };
+          const duplicates = lowerPatterns.filter(p => existingPatterns.includes(p));
+          if (duplicates.length > 0) {
+            return { success: false, error: `Pattern "${duplicates[0]}" already exists in rule "${otherRule.description}"`, code: 'DUPLICATE' };
           }
         }
       }

@@ -818,9 +818,16 @@ class ApiClient {
     userDescription?: string;
     isActive?: boolean;
   }): Promise<void> {
-    const response = await this.client.put(`/autocategorize/rules/${ruleId}`, updates);
-    if (!response.data.success) {
-      throw new Error(response.data.error || 'Failed to update rule');
+    try {
+      const response = await this.client.put(`/autocategorize/rules/${ruleId}`, updates);
+      if (!response.data.success) {
+        throw new Error(response.data.error || 'Failed to update rule');
+      }
+    } catch (error) {
+      if (axios.isAxiosError(error) && error.response?.data?.error) {
+        throw new Error(error.response.data.error);
+      }
+      throw error;
     }
   }
 
