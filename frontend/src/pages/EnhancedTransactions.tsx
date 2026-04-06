@@ -185,7 +185,14 @@ export function EnhancedTransactions() {
       const startDate = searchParams.get('startDate');
       const endDate = searchParams.get('endDate');
       const timeRangeFilter = searchParams.get('timeRangeFilter');
+      const dateFilterParam = searchParams.get('dateFilter');
       const tags = searchParams.get('tags');
+
+      // If navigating from another page with filters, reset existing filters first
+      const hasInboundFilters = categoryIds || onlyUncategorizedParam || timeRangeFilter || dateFilterParam || (startDate && endDate) || tags;
+      if (hasInboundFilters) {
+        resetFilters();
+      }
 
       // Apply filters from URL parameters
       if (tags) {
@@ -204,7 +211,6 @@ export function EnhancedTransactions() {
       }
       
       // Handle date filtering based on dateFilter, timeRangeFilter, or explicit dates
-      const dateFilterParam = searchParams.get('dateFilter');
       if (dateFilterParam) {
         setDateFilterOption(dateFilterParam as DateFilterOption);
         if (dateFilterParam === 'custom' && startDate && endDate) {
