@@ -171,11 +171,6 @@ export function CategoryDeletionModal({
   const deleteCategoryMutation = useMutation({
     mutationFn: () => api.deleteCategory(category!.id),
     onSuccess: () => {
-      notifications.show({
-        title: 'Category Deleted',
-        message: `"${category!.name}" has been deleted successfully`,
-        color: 'green',
-      });
       queryClient.invalidateQueries({ queryKey: ['categories'] });
       setCurrentStep('complete');
     },
