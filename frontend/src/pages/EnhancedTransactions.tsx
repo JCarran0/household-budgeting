@@ -203,11 +203,17 @@ export function EnhancedTransactions() {
         setSelectedCategories([]);
       }
       
-      // Handle date filtering based on timeRangeFilter or explicit dates
-      if (timeRangeFilter) {
+      // Handle date filtering based on dateFilter, timeRangeFilter, or explicit dates
+      const dateFilterParam = searchParams.get('dateFilter');
+      if (dateFilterParam) {
+        setDateFilterOption(dateFilterParam as DateFilterOption);
+        if (dateFilterParam === 'custom' && startDate && endDate) {
+          setCustomDateRange([new Date(startDate), new Date(endDate)]);
+        }
+      } else if (timeRangeFilter) {
         const dateFilterValue = convertTimeRangeToDateFilter(timeRangeFilter);
         setDateFilterOption(dateFilterValue);
-        
+
         // For cases that need custom date range, set the explicit dates
         if (dateFilterValue === 'custom' && startDate && endDate) {
           const startDateObj = new Date(startDate);
