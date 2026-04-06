@@ -1,6 +1,8 @@
 name: Release and Deploy to Production
 
 on:
+  push:
+    branches: [main]
   workflow_dispatch:
     inputs:
       deployment_message:
@@ -24,6 +26,10 @@ on:
           - 'minor'
           - 'major'
           - 'alpha'
+
+concurrency:
+  group: production-deploy
+  cancel-in-progress: true
 
 jobs:
   # Validation job - runs tests and build before creating release
