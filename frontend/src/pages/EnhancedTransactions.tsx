@@ -72,7 +72,7 @@ import { BulkEditBar } from '../components/transactions/BulkEditBar';
 import { BulkEditModal, type BulkEditUpdates } from '../components/transactions/BulkEditModal';
 import { CategorizationFlowModal } from '../components/transactions/CategorizationFlowModal';
 
-type DateFilterOption = 'this-month' | 'ytd' | 'custom' | string; // string for specific month like '2025-01'
+type DateFilterOption = 'this-month' | 'last-month' | 'ytd' | 'last3' | 'last6' | 'last12' | 'all' | 'custom' | string;
 
 // Add CSS for spinning animation
 const spinAnimation = `
@@ -161,18 +161,19 @@ export function EnhancedTransactions() {
       case 'thisMonth':
         return 'this-month';
       case 'lastMonth':
-        return format(subMonths(new Date(), 1), 'yyyy-MM');
+        return 'last-month';
       case 'yearToDate':
         return 'ytd';
       case 'thisYear':
-        return format(new Date(), 'yyyy'); // Current year
+        return 'ytd'; // Closest equivalent
       case 'last3':
-      case 'last6':  
+        return 'last3';
+      case 'last6':
+        return 'last6';
       case 'last12':
-        // For these cases, we'll use custom date range since transaction filters don't have exact equivalents
-        return 'custom';
+        return 'last12';
       default:
-        return 'ytd'; // Default fallback
+        return 'ytd';
     }
   };
 
@@ -306,35 +307,25 @@ export function EnhancedTransactions() {
     
     if (dateFilterOption === 'this-month') {
       return [startOfMonth(now), endOfMonth(now)] as [Date, Date];
+    } else if (dateFilterOption === 'last-month') {
+      const lastMonth = subMonths(now, 1);
+      return [startOfMonth(lastMonth), endOfMonth(lastMonth)] as [Date, Date];
     } else if (dateFilterOption === 'ytd') {
       return [startOfYear(now), endOfMonth(now)] as [Date, Date];
+    } else if (dateFilterOption === 'last3') {
+      return [subMonths(now, 3), now] as [Date, Date];
+    } else if (dateFilterOption === 'last6') {
+      return [subMonths(now, 6), now] as [Date, Date];
+    } else if (dateFilterOption === 'last12') {
+      return [subMonths(now, 12), now] as [Date, Date];
+    } else if (dateFilterOption === 'all') {
+      return [null, null];
     } else if (dateFilterOption === 'custom') {
       return customDateRange;
-    } else if (dateFilterOption.match(/^\d{4}-\d{2}$/)) {
-      // Specific month selected (e.g., '2025-01')
-      const [year, month] = dateFilterOption.split('-').map(Number);
-      const monthDate = new Date(year, month - 1, 1);
-      return [startOfMonth(monthDate), endOfMonth(monthDate)] as [Date, Date];
     }
     return [startOfMonth(now), endOfMonth(now)] as [Date, Date];
   }, [dateFilterOption, customDateRange]);
   
-  // Generate month options for current year
-  const monthOptions = useMemo(() => {
-    const now = new Date();
-    const currentYear = now.getFullYear();
-    const currentMonth = now.getMonth();
-    const months = [];
-    
-    for (let i = 0; i < currentMonth; i++) {
-      const monthDate = new Date(currentYear, i, 1);
-      const value = format(monthDate, 'yyyy-MM');
-      const label = format(monthDate, 'MMMM');
-      months.push({ value, label });
-    }
-    
-    return months.reverse(); // Most recent first
-  }, []);
 
   // Fetch accounts
   const { data: accounts } = useQuery<ExtendedPlaidAccount[]>({
@@ -1036,42 +1027,31 @@ export function EnhancedTransactions() {
             <Stack gap="xs">
               <Text size="sm" fw={500}>Date Range</Text>
               <Group gap="xs">
-                <SegmentedControl
-                  value={dateFilterOption === 'custom' || monthOptions.some(m => m.value === dateFilterOption) ? 'custom' : dateFilterOption}
+                <Select
+                  value={dateFilterOption}
                   onChange={(value) => {
                     if (value === 'custom') {
                       setDateFilterOption('custom');
                       setShowCustomDatePicker(true);
-                    } else {
+                    } else if (value) {
                       setDateFilterOption(value as DateFilterOption);
                       setShowCustomDatePicker(false);
                     }
                   }}
                   data={[
-                    { label: 'This Month', value: 'this-month' },
-                    { label: 'Year to Date', value: 'ytd' },
-                    { label: 'Custom', value: 'custom' },
+                    { value: 'this-month', label: 'This Month' },
+                    { value: 'last-month', label: 'Last Month' },
+                    { value: 'last3', label: 'Last 3 Months' },
+                    { value: 'last6', label: 'Last 6 Months' },
+                    { value: 'last12', label: 'Last 12 Months' },
+                    { value: 'ytd', label: 'Year to Date' },
+                    { value: 'all', label: 'All Time' },
+                    { value: 'custom', label: 'Custom Range' },
                   ]}
+                  size="sm"
+                  w={180}
                 />
-                
-                {monthOptions.length > 0 && (
-                  <Select
-                    placeholder="Select month"
-                    data={monthOptions}
-                    value={monthOptions.some(m => m.value === dateFilterOption) ? dateFilterOption : null}
-                    onChange={(value) => {
-                      if (value) {
-                        setDateFilterOption(value);
-                        setShowCustomDatePicker(false);
-                      }
-                    }}
-                    clearable
-                    searchable
-                    size="sm"
-                    w={150}
-                  />
-                )}
-                
+
                 {(dateFilterOption === 'custom' || showCustomDatePicker) && (
                   <Button
                     variant="light"

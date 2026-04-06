@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 
-type DateFilterOption = 'this-month' | 'ytd' | 'custom' | string; // string for specific month like '2025-01'
+type DateFilterOption = 'this-month' | 'last-month' | 'ytd' | 'last3' | 'last6' | 'last12' | 'all' | 'custom' | string;
 
 interface TransactionFilters {
   searchInput: string;

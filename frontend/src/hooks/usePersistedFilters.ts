@@ -7,7 +7,7 @@ import {
   formatDateForStorage 
 } from '../stores/filterStore';
 
-type DateFilterOption = 'this-month' | 'ytd' | 'custom' | string;
+type DateFilterOption = 'this-month' | 'last-month' | 'ytd' | 'last3' | 'last6' | 'last12' | 'all' | 'custom' | string;
 
 interface TransactionFilterState {
   searchInput: string;

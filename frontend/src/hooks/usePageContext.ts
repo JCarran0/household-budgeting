@@ -40,7 +40,9 @@ const TIME_RANGE_LABELS: Record<string, string> = {
   last12: 'last 12 months',
   // Transaction date filters
   'this-month': 'this month',
+  'last-month': 'last month',
   ytd: 'year to date',
+  all: 'all time',
   custom: 'custom date range',
 };
 

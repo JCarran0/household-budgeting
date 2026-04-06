@@ -96,9 +96,11 @@ export function TransactionPreviewModal({
       params.set('endDate', dateRange.endDate);
     }
     
-    // Include the time range filter from reports page if provided
+    // Include the time range filter from reports page if provided, otherwise default to all time
     if (timeRangeFilter) {
       params.set('timeRangeFilter', timeRangeFilter);
+    } else {
+      params.set('dateFilter', 'all');
     }
 
     // Include tag filters (e.g., trip tags)
