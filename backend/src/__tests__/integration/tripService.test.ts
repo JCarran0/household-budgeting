@@ -35,6 +35,7 @@ async function createTestTransaction(
     tags: [],
     notes: null,
     isHidden: false,
+    isFlagged: false,
     isSplit: false,
     parentTransactionId: null,
     splitTransactionIds: [],

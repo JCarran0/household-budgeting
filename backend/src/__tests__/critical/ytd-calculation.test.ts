@@ -47,6 +47,7 @@ describe('YTD Calculation - Complete Month Logic', () => {
     tags: [],
     notes: null,
     isHidden: false,
+    isFlagged: false,
     isSplit: false,
     parentTransactionId: null,
     splitTransactionIds: [],

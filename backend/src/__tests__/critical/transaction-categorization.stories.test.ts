@@ -84,6 +84,7 @@ describe('User Story: Transaction Categorization', () => {
       tags: [],
       notes: null,
       isHidden: false,
+      isFlagged: false,
       isSplit: false,
       parentTransactionId: null,
       splitTransactionIds: [],

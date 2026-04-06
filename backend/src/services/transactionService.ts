@@ -35,6 +35,7 @@ export interface StoredTransaction {
   tags: string[];                      // User tags
   notes: string | null;                // User notes
   isHidden: boolean;                   // Hidden from budgets
+  isFlagged: boolean;                  // Flagged for discussion
   isSplit: boolean;                    // Is this a split transaction?
   parentTransactionId: string | null;  // Parent if this is a split
   splitTransactionIds: string[];       // Child transactions if split
@@ -62,6 +63,7 @@ export interface TransactionFilter {
   includePending?: boolean;
   includeHidden?: boolean;
   onlyUncategorized?: boolean;
+  onlyFlagged?: boolean;
   minAmount?: number;
   maxAmount?: number;
   exactAmount?: number;
@@ -316,6 +318,7 @@ export class TransactionService {
       tags: [],
       notes: null,
       isHidden: false,
+      isFlagged: false,
       isSplit: false,
       parentTransactionId: null,
       splitTransactionIds: [],
@@ -457,6 +460,10 @@ export class TransactionService {
 
       if (filter.onlyUncategorized) {
         filtered = filtered.filter((txn: StoredTransaction) => !txn.categoryId);
+      }
+
+      if (filter.onlyFlagged) {
+        filtered = filtered.filter((txn: StoredTransaction) => txn.isFlagged);
       }
 
       // Handle exact amount search with tolerance
@@ -716,6 +723,7 @@ export class TransactionService {
           tags: split.tags || [],
           notes: originalTransaction.notes, // Preserve original notes
           isHidden: false,
+          isFlagged: false,
           isSplit: false,
           parentTransactionId: originalTransaction.id,
           splitTransactionIds: [],
@@ -770,6 +778,35 @@ export class TransactionService {
     } catch (error) {
       console.error('Error updating transaction description:', error);
       return { success: false, error: 'Failed to update description' };
+    }
+  }
+
+  /**
+   * Update transaction flagged status
+   */
+  async updateTransactionFlagged(
+    userId: string,
+    transactionId: string,
+    isFlagged: boolean
+  ): Promise<{ success: boolean; error?: string }> {
+    try {
+      const transactions = await this.dataService.getData<StoredTransaction[]>(
+        `transactions_${userId}`
+      ) || [];
+
+      const transaction = transactions.find(t => t.id === transactionId);
+      if (!transaction) {
+        return { success: false, error: 'Transaction not found' };
+      }
+
+      transaction.isFlagged = isFlagged;
+      transaction.updatedAt = new Date();
+
+      await this.dataService.saveData(`transactions_${userId}`, transactions);
+      return { success: true };
+    } catch (error) {
+      console.error('Error updating transaction flagged status:', error);
+      return { success: false, error: 'Failed to update flagged status' };
     }
   }
 
@@ -965,6 +1002,7 @@ export class TransactionService {
     tags: string[];
     notes: string | null;
     isHidden: boolean;
+    isFlagged: boolean;
     location: {
       address: string | null;
       city: string | null;

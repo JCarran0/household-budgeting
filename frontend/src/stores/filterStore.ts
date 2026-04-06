@@ -12,6 +12,7 @@ interface TransactionFilters {
   customDateRange: [string | null, string | null]; // Store as ISO strings for serialization
   includeHidden: boolean;
   onlyUncategorized: boolean;
+  onlyFlagged: boolean;
   amountRange: { min: number | null; max: number | null };
   amountSearchMode: 'range' | 'exact';
   exactAmount: number | null;
@@ -66,6 +67,7 @@ const defaultTransactionFilters: TransactionFilters = {
   customDateRange: [null, null],
   includeHidden: false,
   onlyUncategorized: false,
+  onlyFlagged: false,
   amountRange: { min: null, max: null },
   amountSearchMode: 'range',
   exactAmount: null,
@@ -109,6 +111,7 @@ const validateStoredFilters = (stored: unknown): Partial<FilterStore> => {
         : defaultTransactionFilters.customDateRange,
       includeHidden: typeof t.includeHidden === 'boolean' ? t.includeHidden : defaultTransactionFilters.includeHidden,
       onlyUncategorized: typeof t.onlyUncategorized === 'boolean' ? t.onlyUncategorized : defaultTransactionFilters.onlyUncategorized,
+      onlyFlagged: typeof t.onlyFlagged === 'boolean' ? t.onlyFlagged : defaultTransactionFilters.onlyFlagged,
       amountRange: t.amountRange && typeof t.amountRange === 'object' 
         ? {
             min: typeof (t.amountRange as Record<string, unknown>).min === 'number' || (t.amountRange as Record<string, unknown>).min === null ? (t.amountRange as Record<string, unknown>).min as number | null : null,

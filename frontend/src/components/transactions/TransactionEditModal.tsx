@@ -36,6 +36,7 @@ interface EditFormValues {
   tags: string[];
   notes: string;
   isHidden: boolean;
+  isFlagged: boolean;
 }
 
 export function TransactionEditModal({ 
@@ -76,6 +77,7 @@ export function TransactionEditModal({
       tags: [],
       notes: '',
       isHidden: false,
+      isFlagged: false,
     },
   });
 
@@ -88,6 +90,7 @@ export function TransactionEditModal({
         tags: transaction.tags || [],
         notes: transaction.notes || '',
         isHidden: transaction.isHidden || false,
+        isFlagged: transaction.isFlagged || false,
       });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -182,10 +185,32 @@ export function TransactionEditModal({
   });
 
 
+  // Update flagged status mutation
+  const updateFlaggedMutation = useMutation({
+    mutationFn: ({ transactionId, isFlagged }: { transactionId: string; isFlagged: boolean }) =>
+      api.updateTransactionFlagged(transactionId, isFlagged),
+    onSuccess: () => {
+      notifications.show({
+        title: 'Flagged Status Updated',
+        message: 'Transaction flagged status has been updated',
+        color: 'green',
+      });
+      queryClient.invalidateQueries({ queryKey: ['transactions'] });
+      queryClient.invalidateQueries({ queryKey: ['transactions', 'uncategorized', 'count'] });
+    },
+    onError: () => {
+      notifications.show({
+        title: 'Error',
+        message: 'Failed to update flagged status',
+        color: 'red',
+      });
+    },
+  });
+
   // Build tag options (existing tags)
   const tagOptions = availableTags.map(tag => tag);
 
-  const isLoading = updateCategoryMutation.isPending || addTagsMutation.isPending || updateDescriptionMutation.isPending || updateHiddenMutation.isPending;
+  const isLoading = updateCategoryMutation.isPending || addTagsMutation.isPending || updateDescriptionMutation.isPending || updateHiddenMutation.isPending || updateFlaggedMutation.isPending;
 
   const handleSubmit = async (values: EditFormValues) => {
     if (!transaction) return;
@@ -233,6 +258,16 @@ export function TransactionEditModal({
         await updateHiddenMutation.mutateAsync({
           transactionId: transaction.id,
           isHidden: values.isHidden,
+        });
+      }
+
+      // Update flagged status if changed
+      const currentFlagged = transaction.isFlagged || false;
+      const flaggedChanged = values.isFlagged !== currentFlagged;
+      if (flaggedChanged) {
+        await updateFlaggedMutation.mutateAsync({
+          transactionId: transaction.id,
+          isFlagged: values.isFlagged,
         });
       }
 
@@ -355,6 +390,12 @@ export function TransactionEditModal({
             label="Hide from budgets"
             {...form.getInputProps('isHidden', { type: 'checkbox' })}
             description="Exclude this transaction from budget calculations"
+          />
+
+          <Switch
+            label="Flag for discussion"
+            {...form.getInputProps('isFlagged', { type: 'checkbox' })}
+            description="Flag this transaction to discuss with your partner"
           />
 
           {transaction.isSplit && (

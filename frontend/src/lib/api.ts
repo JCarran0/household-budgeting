@@ -448,7 +448,7 @@ class ApiClient {
     }
   }
   
-  async bulkUpdateTransactions(transactionIds: string[], updates: { categoryId?: string | null; userDescription?: string | null; isHidden?: boolean; tagsToAdd?: string[]; tagsToRemove?: string[] }): Promise<{ updated: number; failed: number; errors?: string[] }> {
+  async bulkUpdateTransactions(transactionIds: string[], updates: { categoryId?: string | null; userDescription?: string | null; isHidden?: boolean; isFlagged?: boolean; tagsToAdd?: string[]; tagsToRemove?: string[] }): Promise<{ updated: number; failed: number; errors?: string[] }> {
     const response = await this.client.put('/transactions/bulk', { transactionIds, updates });
     if (!response.data.success) {
       throw new Error(response.data.error || 'Failed to perform bulk update');
@@ -487,6 +487,13 @@ class ApiClient {
     const response = await this.client.put(`/transactions/${transactionId}/hidden`, { isHidden });
     if (!response.data.success) {
       throw new Error(response.data.error || 'Failed to update hidden status');
+    }
+  }
+
+  async updateTransactionFlagged(transactionId: string, isFlagged: boolean): Promise<void> {
+    const response = await this.client.put(`/transactions/${transactionId}/flagged`, { isFlagged });
+    if (!response.data.success) {
+      throw new Error(response.data.error || 'Failed to update flagged status');
     }
   }
 

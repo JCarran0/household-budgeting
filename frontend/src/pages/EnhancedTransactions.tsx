@@ -64,6 +64,7 @@ import {
   IconDatabaseImport,
   IconDownload,
   IconSparkles,
+  IconFlag,
 } from '@tabler/icons-react';
 import { TransactionEditModal } from '../components/transactions/TransactionEditModal';
 import { TransactionImport } from '../components/transactions/TransactionImport';
@@ -102,6 +103,7 @@ export function EnhancedTransactions() {
     customDateRange,
     includeHidden,
     onlyUncategorized,
+    onlyFlagged,
     amountRange,
     amountSearchMode,
     exactAmount,
@@ -114,6 +116,7 @@ export function EnhancedTransactions() {
     setCustomDateRange,
     setIncludeHidden,
     setOnlyUncategorized,
+    setOnlyFlagged,
     setAmountRange,
     setAmountSearchMode,
     setExactAmount,
@@ -151,7 +154,7 @@ export function EnhancedTransactions() {
   // Bulk selection state
   const [selectedTransactionIds, setSelectedTransactionIds] = useState<Set<string>>(new Set());
   const [lastClickedId, setLastClickedId] = useState<string | null>(null);
-  const [bulkEditMode, setBulkEditMode] = useState<'category' | 'description' | 'hidden' | 'tags' | null>(null);
+  const [bulkEditMode, setBulkEditMode] = useState<'category' | 'description' | 'hidden' | 'flagged' | 'tags' | null>(null);
   
   const queryClient = useQueryClient();
   
@@ -245,7 +248,7 @@ export function EnhancedTransactions() {
 
     setSearchParams((prev) => {
       // Clear old params and rebuild from current filter state
-      const keysToManage = ['search', 'accountId', 'categoryIds', 'tags', 'dateFilter', 'startDate', 'endDate', 'txnType', 'uncategorized'];
+      const keysToManage = ['search', 'accountId', 'categoryIds', 'tags', 'dateFilter', 'startDate', 'endDate', 'txnType', 'uncategorized', 'onlyFlagged'];
       keysToManage.forEach((k) => prev.delete(k));
 
       if (debouncedSearchTerm) prev.set('search', debouncedSearchTerm);
@@ -259,10 +262,11 @@ export function EnhancedTransactions() {
       }
       if (transactionType && transactionType !== 'all') prev.set('txnType', transactionType);
       if (onlyUncategorized) prev.set('uncategorized', 'true');
+      if (onlyFlagged) prev.set('onlyFlagged', 'true');
 
       return prev;
     }, { replace: true });
-  }, [hasInitialized, debouncedSearchTerm, selectedAccount, selectedCategories, selectedTags, dateFilterOption, customDateRange, transactionType, onlyUncategorized, setSearchParams]);
+  }, [hasInitialized, debouncedSearchTerm, selectedAccount, selectedCategories, selectedTags, dateFilterOption, customDateRange, transactionType, onlyUncategorized, onlyFlagged, setSearchParams]);
 
   // Update category mutation
   const updateCategoryMutation = useMutation({
@@ -354,6 +358,7 @@ export function EnhancedTransactions() {
       searchQuery: debouncedSearchTerm || undefined,
       includeHidden,
       onlyUncategorized,
+      onlyFlagged: onlyFlagged || undefined,
       transactionType: transactionType === 'all' ? undefined : transactionType,
     };
     
@@ -382,6 +387,7 @@ export function EnhancedTransactions() {
     debouncedSearchTerm,
     includeHidden,
     onlyUncategorized,
+    onlyFlagged,
     amountRange,
     amountSearchMode,
     exactAmount,
@@ -663,6 +669,10 @@ export function EnhancedTransactions() {
     setBulkEditMode('tags');
   };
 
+  const handleBulkEditFlagged = () => {
+    setBulkEditMode('flagged');
+  };
+
   const handleClearSelection = () => {
     setSelectedTransactionIds(new Set());
     setLastClickedId(null);
@@ -681,7 +691,7 @@ export function EnhancedTransactions() {
     
     try {
       // Build the updates object based on the mode
-      const apiUpdates: { categoryId?: string | null; userDescription?: string | null; isHidden?: boolean; tagsToAdd?: string[]; tagsToRemove?: string[] } = {};
+      const apiUpdates: { categoryId?: string | null; userDescription?: string | null; isHidden?: boolean; isFlagged?: boolean; tagsToAdd?: string[]; tagsToRemove?: string[] } = {};
 
       if (updates.categoryId !== undefined) {
         apiUpdates.categoryId = updates.categoryId;
@@ -695,6 +705,10 @@ export function EnhancedTransactions() {
 
       if (updates.isHidden !== undefined) {
         apiUpdates.isHidden = updates.isHidden;
+      }
+
+      if (updates.isFlagged !== undefined) {
+        apiUpdates.isFlagged = updates.isFlagged;
       }
 
       if (updates.tagsToAdd && updates.tagsToAdd.length > 0) {
@@ -975,6 +989,7 @@ export function EnhancedTransactions() {
           onEditCategory={handleBulkEditCategory}
           onEditDescription={handleBulkEditDescription}
           onEditHidden={handleBulkEditHidden}
+          onEditFlagged={handleBulkEditFlagged}
           onEditTags={handleBulkEditTags}
           onClearSelection={handleClearSelection}
         />
@@ -1281,6 +1296,11 @@ export function EnhancedTransactions() {
                     checked={onlyUncategorized}
                     onChange={(e) => setOnlyUncategorized(e.currentTarget.checked)}
                   />
+                  <Checkbox
+                    label="Only flagged"
+                    checked={onlyFlagged}
+                    onChange={(e) => setOnlyFlagged(e.currentTarget.checked)}
+                  />
                 </Stack>
               </Grid.Col>
             </Grid>
@@ -1389,18 +1409,23 @@ export function EnhancedTransactions() {
                   
                   <Table.Td>
                     <Stack gap={2}>
-                      {transaction.userDescription ? (
-                        <Tooltip
-                          label={`Original: ${transaction.name}`}
-                          openDelay={1000}
-                          closeDelay={200}
-                          disabled={!transaction.userDescription}
-                        >
-                          <Text fw={500}>{transaction.userDescription}</Text>
-                        </Tooltip>
-                      ) : (
-                        <Text fw={500}>{transaction.merchantName || transaction.name}</Text>
-                      )}
+                      <Group gap="xs" wrap="nowrap">
+                        {transaction.userDescription ? (
+                          <Tooltip
+                            label={`Original: ${transaction.name}`}
+                            openDelay={1000}
+                            closeDelay={200}
+                            disabled={!transaction.userDescription}
+                          >
+                            <Text fw={500}>{transaction.userDescription}</Text>
+                          </Tooltip>
+                        ) : (
+                          <Text fw={500}>{transaction.merchantName || transaction.name}</Text>
+                        )}
+                        {transaction.isFlagged && (
+                          <IconFlag size={14} style={{ color: 'var(--mantine-color-orange-5)', flexShrink: 0 }} />
+                        )}
+                      </Group>
                       {transaction.notes && (
                         <Text size="xs" c="dimmed">{transaction.notes}</Text>
                       )}

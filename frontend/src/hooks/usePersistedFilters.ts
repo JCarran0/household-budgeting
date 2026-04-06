@@ -18,6 +18,7 @@ interface TransactionFilterState {
   customDateRange: [Date | null, Date | null];
   includeHidden: boolean;
   onlyUncategorized: boolean;
+  onlyFlagged: boolean;
   amountRange: { min: number | null; max: number | null };
   amountSearchMode: 'range' | 'exact';
   exactAmount: number | null;
@@ -34,6 +35,7 @@ interface TransactionFilterActions {
   setCustomDateRange: (value: [Date | null, Date | null]) => void;
   setIncludeHidden: (value: boolean) => void;
   setOnlyUncategorized: (value: boolean) => void;
+  setOnlyFlagged: (value: boolean) => void;
   setAmountRange: (value: { min: number | null; max: number | null }) => void;
   setAmountSearchMode: (value: 'range' | 'exact') => void;
   setExactAmount: (value: number | null) => void;
@@ -61,6 +63,7 @@ export function useTransactionFilters(): TransactionFilterState & TransactionFil
   }, [transactionFilters?.customDateRange]);
   const includeHidden = transactionFilters?.includeHidden || false;
   const onlyUncategorized = transactionFilters?.onlyUncategorized || false;
+  const onlyFlagged = transactionFilters?.onlyFlagged || false;
   const amountRange = transactionFilters?.amountRange || { min: null, max: null };
   const amountSearchMode = (transactionFilters?.amountSearchMode || 'range') as 'range' | 'exact';
   const exactAmount = transactionFilters?.exactAmount ?? null;
@@ -104,7 +107,11 @@ export function useTransactionFilters(): TransactionFilterState & TransactionFil
   const setOnlyUncategorized = useCallback((value: boolean) => {
     setTransactionFilters({ onlyUncategorized: value });
   }, [setTransactionFilters]);
-  
+
+  const setOnlyFlagged = useCallback((value: boolean) => {
+    setTransactionFilters({ onlyFlagged: value });
+  }, [setTransactionFilters]);
+
   const setAmountRange = useCallback((value: { min: number | null; max: number | null }) => {
     setTransactionFilters({ amountRange: value });
   }, [setTransactionFilters]);
@@ -138,6 +145,7 @@ export function useTransactionFilters(): TransactionFilterState & TransactionFil
     customDateRange,
     includeHidden,
     onlyUncategorized,
+    onlyFlagged,
     amountRange,
     amountSearchMode,
     exactAmount,
@@ -151,6 +159,7 @@ export function useTransactionFilters(): TransactionFilterState & TransactionFil
     setCustomDateRange,
     setIncludeHidden,
     setOnlyUncategorized,
+    setOnlyFlagged,
     setAmountRange,
     setAmountSearchMode,
     setExactAmount,

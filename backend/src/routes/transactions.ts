@@ -42,6 +42,10 @@ const transactionFilterSchema = z.object({
     if (typeof val === 'string') return val === 'true';
     return val;
   }),
+  onlyFlagged: z.union([z.boolean(), z.string()]).optional().transform(val => {
+    if (typeof val === 'string') return val === 'true';
+    return val;
+  }),
   minAmount: z.union([z.number(), z.string()]).optional().transform(val => {
     if (typeof val === 'string') return parseFloat(val);
     return val;
@@ -77,6 +81,10 @@ const updateHiddenSchema = z.object({
   isHidden: z.boolean(),
 });
 
+const updateFlaggedSchema = z.object({
+  isFlagged: z.boolean(),
+});
+
 const splitTransactionSchema = z.object({
   splits: z.array(z.object({
     amount: z.number().positive(),
@@ -96,6 +104,7 @@ const bulkUpdateSchema = z.object({
     categoryId: z.union([z.string().min(1), z.null()]).optional(),
     userDescription: z.union([z.string(), z.null()]).optional(),
     isHidden: z.boolean().optional(),
+    isFlagged: z.boolean().optional(),
     tagsToAdd: z.array(z.string().min(1)).optional(),
     tagsToRemove: z.array(z.string().min(1)).optional(),
   }).refine(data => Object.keys(data).length > 0, {
@@ -387,6 +396,48 @@ router.put('/:transactionId/hidden', authMiddleware, async (req: AuthRequest, re
 });
 
 /**
+ * PUT /api/v1/transactions/:transactionId/flagged
+ * Update transaction flagged status
+ */
+router.put('/:transactionId/flagged', authMiddleware, async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    if (!req.user) {
+      res.status(401).json({ success: false, error: 'Unauthorized' });
+      return;
+    }
+
+    const validation = updateFlaggedSchema.safeParse(req.body);
+    if (!validation.success) {
+      res.status(400).json({
+        success: false,
+        error: 'Invalid request data',
+        details: validation.error.format(),
+      });
+      return;
+    }
+
+    const { transactionId } = req.params;
+    const { isFlagged } = validation.data;
+
+    const result = await transactionService.updateTransactionFlagged(
+      req.user.userId,
+      transactionId,
+      isFlagged
+    );
+
+    if (!result.success) {
+      res.status(404).json({ success: false, error: result.error });
+      return;
+    }
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error updating flagged status:', error);
+    res.status(500).json({ success: false, error: 'Failed to update flagged status' });
+  }
+});
+
+/**
  * POST /api/v1/transactions/:transactionId/tags
  * Add tags to a transaction
  */
@@ -534,6 +585,20 @@ router.put('/bulk', authMiddleware, async (req: AuthRequest, res: Response): Pro
             req.user.userId,
             transactionId,
             updates.isHidden
+          );
+          if (!result.success) {
+            failedCount++;
+            errors.push(`Transaction ${transactionId}: ${result.error}`);
+            continue;
+          }
+        }
+
+        // Update flagged status if provided
+        if (updates.isFlagged !== undefined) {
+          const result = await transactionService.updateTransactionFlagged(
+            req.user.userId,
+            transactionId,
+            updates.isFlagged
           );
           if (!result.success) {
             failedCount++;

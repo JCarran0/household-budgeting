@@ -58,6 +58,7 @@ interface StoredTransaction {
   tags: string[];
   notes: string | null;
   isHidden: boolean;
+  isFlagged?: boolean;
   isSplit: boolean;
   parentTransactionId: string | null;
   splitTransactionIds: string[];
@@ -390,6 +391,7 @@ export class ChatbotDataService {
       tags: stored.tags || [],
       notes: stored.notes,
       isHidden: stored.isHidden,
+      isFlagged: stored.isFlagged || false,
       isManual: stored.isManual || false,
       isSplit: stored.isSplit,
       parentTransactionId: stored.parentTransactionId,

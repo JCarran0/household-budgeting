@@ -59,63 +59,63 @@ describe('Budget Calculation Utilities', () => {
       id: '1', plaidTransactionId: '1', accountId: 'acc1', amount: -4500, date: '2025-01-15',
       name: 'Salary', userDescription: null, merchantName: null, category: [], plaidCategoryId: null,
       categoryId: 'INCOME', pending: false, tags: [], notes: null, isHidden: false,
-      isManual: false, isSplit: false, parentTransactionId: null, splitTransactionIds: [],
+      isFlagged: false, isManual: false, isSplit: false, parentTransactionId: null, splitTransactionIds: [],
       createdAt: '2025-01-15', updatedAt: '2025-01-15'
     },
     {
       id: '2', plaidTransactionId: '2', accountId: 'acc1', amount: -2800, date: '2025-01-15',
       name: 'Freelance', userDescription: null, merchantName: null, category: [], plaidCategoryId: null,
       categoryId: 'CUSTOM_SALARY', pending: false, tags: [], notes: null, isHidden: false,
-      isManual: false, isSplit: false, parentTransactionId: null, splitTransactionIds: [],
+      isFlagged: false, isManual: false, isSplit: false, parentTransactionId: null, splitTransactionIds: [],
       createdAt: '2025-01-15', updatedAt: '2025-01-15'
     },
     {
       id: '3', plaidTransactionId: '3', accountId: 'acc1', amount: 750, date: '2025-01-20',
       name: 'Grocery Store', userDescription: null, merchantName: null, category: [], plaidCategoryId: null,
       categoryId: 'FOOD_AND_DRINK', pending: false, tags: [], notes: null, isHidden: false,
-      isManual: false, isSplit: false, parentTransactionId: null, splitTransactionIds: [],
+      isFlagged: false, isManual: false, isSplit: false, parentTransactionId: null, splitTransactionIds: [],
       createdAt: '2025-01-20', updatedAt: '2025-01-20'
     },
     {
       id: '4', plaidTransactionId: '4', accountId: 'acc1', amount: 180, date: '2025-01-22',
       name: 'Coffee Shop', userDescription: null, merchantName: null, category: [], plaidCategoryId: null,
       categoryId: 'FOOD_AND_DRINK_COFFEE', pending: false, tags: [], notes: null, isHidden: false,
-      isManual: false, isSplit: false, parentTransactionId: null, splitTransactionIds: [],
+      isFlagged: false, isManual: false, isSplit: false, parentTransactionId: null, splitTransactionIds: [],
       createdAt: '2025-01-22', updatedAt: '2025-01-22'
     },
     {
       id: '5', plaidTransactionId: '5', accountId: 'acc1', amount: 250, date: '2025-01-25',
       name: 'Movie Theater', userDescription: null, merchantName: null, category: [], plaidCategoryId: null,
       categoryId: 'ENTERTAINMENT', pending: false, tags: [], notes: null, isHidden: false,
-      isManual: false, isSplit: false, parentTransactionId: null, splitTransactionIds: [],
+      isFlagged: false, isManual: false, isSplit: false, parentTransactionId: null, splitTransactionIds: [],
       createdAt: '2025-01-25', updatedAt: '2025-01-25'
     },
     {
       id: '6', plaidTransactionId: '6', accountId: 'acc1', amount: 1000, date: '2025-01-26',
       name: 'Transfer', userDescription: null, merchantName: null, category: [], plaidCategoryId: null,
       categoryId: 'TRANSFER_IN', pending: false, tags: [], notes: null, isHidden: false,
-      isManual: false, isSplit: false, parentTransactionId: null, splitTransactionIds: [],
+      isFlagged: false, isManual: false, isSplit: false, parentTransactionId: null, splitTransactionIds: [],
       createdAt: '2025-01-26', updatedAt: '2025-01-26'
     },
     {
       id: '7', plaidTransactionId: '7', accountId: 'acc1', amount: 90, date: '2025-01-27',
       name: 'Hidden Transaction', userDescription: null, merchantName: null, category: [], plaidCategoryId: null,
       categoryId: 'HIDDEN_CATEGORY', pending: false, tags: [], notes: null, isHidden: false,
-      isManual: false, isSplit: false, parentTransactionId: null, splitTransactionIds: [],
+      isFlagged: false, isManual: false, isSplit: false, parentTransactionId: null, splitTransactionIds: [],
       createdAt: '2025-01-27', updatedAt: '2025-01-27'
     },
     {
       id: '8', plaidTransactionId: '8', accountId: 'acc1', amount: 40, date: '2025-01-28',
       name: 'Child of Hidden', userDescription: null, merchantName: null, category: [], plaidCategoryId: null,
       categoryId: 'CHILD_OF_HIDDEN', pending: false, tags: [], notes: null, isHidden: false,
-      isManual: false, isSplit: false, parentTransactionId: null, splitTransactionIds: [],
+      isFlagged: false, isManual: false, isSplit: false, parentTransactionId: null, splitTransactionIds: [],
       createdAt: '2025-01-28', updatedAt: '2025-01-28'
     },
     {
       id: '9', plaidTransactionId: '9', accountId: 'acc1', amount: 25, date: '2025-01-29',
       name: 'Hidden Transaction', userDescription: null, merchantName: null, category: [], plaidCategoryId: null,
       categoryId: 'VISIBLE_PARENT', pending: false, tags: [], notes: null, isHidden: true,
-      isManual: false, isSplit: false, parentTransactionId: null, splitTransactionIds: [],
+      isFlagged: false, isManual: false, isSplit: false, parentTransactionId: null, splitTransactionIds: [],
       createdAt: '2025-01-29', updatedAt: '2025-01-29'
     }
   ];
@@ -289,7 +289,7 @@ describe('Budget Calculation Utilities', () => {
             id: '10', plaidTransactionId: '10', accountId: 'acc1', amount: 500, date: '2025-01-30',
             name: 'Uncategorized', userDescription: null, merchantName: null, category: [], plaidCategoryId: null,
             categoryId: null, pending: false, tags: [], notes: null, isHidden: false,
-            isManual: false, isSplit: false, parentTransactionId: null, splitTransactionIds: [],
+            isFlagged: false, isManual: false, isSplit: false, parentTransactionId: null, splitTransactionIds: [],
             createdAt: '2025-01-30', updatedAt: '2025-01-30'
           }
         ];
@@ -518,14 +518,14 @@ describe('Budget Calculation Utilities', () => {
             id: '1', plaidTransactionId: '1', accountId: 'acc1', amount: -5000, date: '2025-01-15',
             name: 'Salary', userDescription: null, merchantName: null, category: [], plaidCategoryId: null,
             categoryId: 'INCOME', pending: false, tags: [], notes: null, isHidden: false,
-            isManual: false, isSplit: false, parentTransactionId: null, splitTransactionIds: [],
+            isFlagged: false, isManual: false, isSplit: false, parentTransactionId: null, splitTransactionIds: [],
             createdAt: '2025-01-15', updatedAt: '2025-01-15'
           },
           {
             id: '2', plaidTransactionId: '2', accountId: 'acc1', amount: -3000, date: '2025-01-15',
             name: 'Freelance', userDescription: null, merchantName: null, category: [], plaidCategoryId: null,
             categoryId: 'CUSTOM_SALARY', pending: false, tags: [], notes: null, isHidden: false,
-            isManual: false, isSplit: false, parentTransactionId: null, splitTransactionIds: [],
+            isFlagged: false, isManual: false, isSplit: false, parentTransactionId: null, splitTransactionIds: [],
             createdAt: '2025-01-15', updatedAt: '2025-01-15'
           }
         ];
@@ -541,14 +541,14 @@ describe('Budget Calculation Utilities', () => {
             id: '1', plaidTransactionId: '1', accountId: 'acc1', amount: 800, date: '2025-01-20',
             name: 'Grocery Store', userDescription: null, merchantName: null, category: [], plaidCategoryId: null,
             categoryId: 'FOOD_AND_DRINK', pending: false, tags: [], notes: null, isHidden: false,
-            isManual: false, isSplit: false, parentTransactionId: null, splitTransactionIds: [],
+            isFlagged: false, isManual: false, isSplit: false, parentTransactionId: null, splitTransactionIds: [],
             createdAt: '2025-01-20', updatedAt: '2025-01-20'
           },
           {
             id: '2', plaidTransactionId: '2', accountId: 'acc1', amount: 150, date: '2025-01-22',
             name: 'Movie Tickets', userDescription: null, merchantName: null, category: [], plaidCategoryId: null,
             categoryId: 'CUSTOM_MOVIES', pending: false, tags: [], notes: null, isHidden: false,
-            isManual: false, isSplit: false, parentTransactionId: null, splitTransactionIds: [],
+            isFlagged: false, isManual: false, isSplit: false, parentTransactionId: null, splitTransactionIds: [],
             createdAt: '2025-01-22', updatedAt: '2025-01-22'
           }
         ];

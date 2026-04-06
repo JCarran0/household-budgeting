@@ -82,6 +82,7 @@ describe('User Story: Budget Date Filtering Integration', () => {
         tags: [],
         notes: null,
         isHidden: false,
+        isFlagged: false,
         location: null
       });
       
@@ -105,6 +106,7 @@ describe('User Story: Budget Date Filtering Integration', () => {
         tags: [],
         notes: null,
         isHidden: false,
+        isFlagged: false,
         location: null
       });
       
@@ -213,6 +215,7 @@ describe('User Story: Budget Date Filtering Integration', () => {
           tags: [],
           notes: null,
           isHidden: false,
+          isFlagged: false,
           location: null
         });
         
@@ -236,6 +239,7 @@ describe('User Story: Budget Date Filtering Integration', () => {
           tags: [],
           notes: null,
           isHidden: false,
+          isFlagged: false,
           location: null
         });
         
@@ -309,6 +313,7 @@ describe('User Story: Budget Date Filtering Integration', () => {
           tags: [],
           notes: null,
           isHidden: false,
+          isFlagged: false,
           location: null
         });
       }

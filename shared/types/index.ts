@@ -57,6 +57,7 @@ export interface Transaction {
   tags: string[];
   notes: string | null;
   isHidden: boolean;
+  isFlagged: boolean;
   isManual: boolean;
   isSplit: boolean;
   parentTransactionId: string | null;

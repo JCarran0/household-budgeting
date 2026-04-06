@@ -19,7 +19,7 @@ import { IconAlertCircle } from '@tabler/icons-react';
 interface BulkEditModalProps {
   opened: boolean;
   onClose: () => void;
-  mode: 'category' | 'description' | 'hidden' | 'tags';
+  mode: 'category' | 'description' | 'hidden' | 'flagged' | 'tags';
   selectedCount: number;
   categories: Array<{ value: string; label: string; group?: string }>;
   existingTags?: string[];
@@ -31,6 +31,7 @@ export interface BulkEditUpdates {
   userDescription?: string | null;
   descriptionMode?: 'replace' | 'clear';
   isHidden?: boolean;
+  isFlagged?: boolean;
   tagsToAdd?: string[];
   tagsToRemove?: string[];
   tagsMode?: 'add' | 'remove';
@@ -49,6 +50,7 @@ export function BulkEditModal({
   const [descriptionMode, setDescriptionMode] = useState<'replace' | 'clear'>('replace');
   const [description, setDescription] = useState('');
   const [hiddenMode, setHiddenMode] = useState<'hide' | 'unhide'>('hide');
+  const [flaggedMode, setFlaggedMode] = useState<'flag' | 'unflag'>('flag');
   const [tagsMode, setTagsMode] = useState<'add' | 'remove'>('add');
   const [tagValues, setTagValues] = useState<string[]>([]);
 
@@ -68,6 +70,8 @@ export function BulkEditModal({
       }
     } else if (mode === 'hidden') {
       updates.isHidden = hiddenMode === 'hide';
+    } else if (mode === 'flagged') {
+      updates.isFlagged = flaggedMode === 'flag';
     } else if (mode === 'tags') {
       updates.tagsMode = tagsMode;
       if (tagsMode === 'add') {
@@ -86,6 +90,7 @@ export function BulkEditModal({
     setDescriptionMode('replace');
     setDescription('');
     setHiddenMode('hide');
+    setFlaggedMode('flag');
     setTagsMode('add');
     setTagValues([]);
     onClose();
@@ -101,6 +106,8 @@ export function BulkEditModal({
       return true;
     } else if (mode === 'hidden') {
       return true;
+    } else if (mode === 'flagged') {
+      return true;
     } else if (mode === 'tags') {
       return tagValues.length > 0;
     }
@@ -114,7 +121,7 @@ export function BulkEditModal({
       title={
         <Group>
           <Text fw={600}>
-            Bulk Edit {mode === 'category' ? 'Category' : mode === 'description' ? 'Description' : mode === 'tags' ? 'Tags' : 'Visibility'}
+            Bulk Edit {mode === 'category' ? 'Category' : mode === 'description' ? 'Description' : mode === 'tags' ? 'Tags' : mode === 'flagged' ? 'Flag Status' : 'Visibility'}
           </Text>
           <Badge variant="filled" size="lg">
             {selectedCount} selected
@@ -132,6 +139,8 @@ export function BulkEditModal({
             ? ' Choose how to update the descriptions below.'
             : mode === 'tags'
             ? ' Choose whether to add or remove tags below.'
+            : mode === 'flagged'
+            ? ' Choose whether to flag or unflag the selected transactions.'
             : ' Choose whether to hide or unhide the selected transactions.'}
         </Alert>
         
@@ -192,7 +201,7 @@ export function BulkEditModal({
               clearable
             />
           </Stack>
-        ) : (
+        ) : mode === 'hidden' ? (
           <RadioGroup
             label="Choose Action"
             value={hiddenMode}
@@ -202,7 +211,17 @@ export function BulkEditModal({
             <Radio value="hide" label="Hide selected transactions from budgets and reports" />
             <Radio value="unhide" label="Unhide selected transactions (include in budgets and reports)" />
           </RadioGroup>
-        )}
+        ) : mode === 'flagged' ? (
+          <RadioGroup
+            label="Choose Action"
+            value={flaggedMode}
+            onChange={(value) => setFlaggedMode(value as 'flag' | 'unflag')}
+            required
+          >
+            <Radio value="flag" label="Flag selected transactions for discussion" />
+            <Radio value="unflag" label="Remove flag from selected transactions" />
+          </RadioGroup>
+        ) : null}
         
         <Divider />
         
