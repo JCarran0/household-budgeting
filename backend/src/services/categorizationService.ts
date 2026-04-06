@@ -302,7 +302,7 @@ ${examples}`;
       return { results: output.classifications || [], cost };
     } catch (error) {
       console.error('[CategorizationService] classifyBatch error:', error instanceof Error ? error.message : error);
-      return { results: [], cost: 0 };
+      throw error;
     }
   }
 
