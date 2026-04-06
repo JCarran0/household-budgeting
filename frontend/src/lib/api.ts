@@ -75,6 +75,7 @@ function hasTokenAndUser(data: unknown): data is { success: boolean; token: stri
 export interface UpdateCategoryDto {
   name?: string;
   description?: string;
+  parentId?: string | null;
   isHidden?: boolean;
   isRollover?: boolean;
 }

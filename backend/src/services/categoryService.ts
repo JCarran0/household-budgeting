@@ -21,6 +21,7 @@ export interface CreateCategoryDto {
 export interface UpdateCategoryDto {
   name?: string;
   description?: string;
+  parentId?: string | null;
   isHidden?: boolean;
   isRollover?: boolean;
 }
@@ -151,6 +152,11 @@ export class CategoryService {
       ...categories[index],
       ...updates
     };
+
+    // Recompute isIncome when parentId changes
+    if (updates.parentId !== undefined) {
+      updatedCategory.isIncome = this.isIncomeCategory(updatedCategory.id, updatedCategory.parentId, categories);
+    }
 
     categories[index] = updatedCategory;
     await this.dataService.saveCategories(categories, userId);

@@ -39,12 +39,18 @@ export function CategoryForm({ opened, onClose, category, onSuccess }: CategoryF
   // Fetch parent categories for dropdown
   const { data: parentCategories, isLoading: loadingParents } = useQuery({
     queryKey: ['categories', 'parents'],
-    queryFn: async () => {
-      const result = await api.getParentCategories();
-      return result;
-    },
+    queryFn: () => api.getParentCategories(),
     enabled: opened,
   });
+
+  // Fetch all categories to check if current category has children
+  const { data: allCategories } = useQuery({
+    queryKey: ['categories'],
+    queryFn: () => api.getCategories(),
+    enabled: opened && isEdit,
+  });
+
+  const hasChildren = isEdit && allCategories?.some(c => c.parentId === category?.id);
 
   const form = useForm<FormValues>({
     initialValues: {
@@ -134,6 +140,7 @@ export function CategoryForm({ opened, onClose, category, onSuccess }: CategoryF
       const updates: UpdateCategoryDto = {};
       if (values.name !== category.name) updates.name = values.name;
       if (values.description !== (category.description || '')) updates.description = values.description || undefined;
+      if (values.parentId !== category.parentId) updates.parentId = values.parentId;
       if (values.isHidden !== category.isHidden) updates.isHidden = values.isHidden;
       if (values.isRollover !== category.isRollover) updates.isRollover = values.isRollover;
       
@@ -171,9 +178,6 @@ export function CategoryForm({ opened, onClose, category, onSuccess }: CategoryF
     return options;
   }, [parentCategories, category]);
 
-  // Show parent selector only when creating a new category (not when editing)
-  const showParentSelector = !isEdit;
-
   return (
     <Modal
       opened={opened}
@@ -199,18 +203,18 @@ export function CategoryForm({ opened, onClose, category, onSuccess }: CategoryF
             description={`${form.values.description.length}/500 characters`}
           />
 
-          {showParentSelector && (
-            <Select
-              label="Parent Category"
-              placeholder="Select parent category (optional)"
-              data={parentOptions}
-              clearable
-              searchable
-              {...form.getInputProps('parentId')}
-              description="Leave empty to create a top-level category"
-              disabled={loadingParents}
-            />
-          )}
+          <Select
+            label="Parent Category"
+            placeholder="Select parent category (optional)"
+            data={parentOptions}
+            clearable
+            searchable
+            {...form.getInputProps('parentId')}
+            description={hasChildren
+              ? "Cannot change parent for a category that has subcategories"
+              : "Leave empty to make a top-level category"}
+            disabled={loadingParents || !!hasChildren}
+          />
 
           <Stack gap="xs">
             <Text size="sm" fw={500}>Options</Text>
