@@ -55,6 +55,7 @@ interface EditingCell {
   categoryId: string;
   month: string;
   value: number;
+  originalValue: number;
 }
 
 const MONTHS = [
@@ -318,14 +319,17 @@ export function YearlyBudgetGrid({
 
     const value = currentValue ?? (targetCategoryData?.budgets[month] || 0);
 
-    setEditingCell({ categoryId, month, value });
+    setEditingCell({ categoryId, month, value, originalValue: value });
   }, [categoryBudgetData]);
 
-  const handleCellEdit = useCallback((categoryId: string, month: string, value: number) => {
+  const handleCellEdit = useCallback((categoryId: string, month: string, value: number, originalValue: number) => {
+    if (value === originalValue) {
+      // No change — don't queue a pending update
+      return;
+    }
+
     const monthKey = `${year}-${month}`;
     const updateKey = `${categoryId}_${monthKey}`;
-
-    setEditingCell({ categoryId, month, value });
 
     // Detect batch editing patterns
     detectBatchMode();
@@ -410,7 +414,7 @@ export function YearlyBudgetGrid({
                   }}
                   onBlur={() => {
                     if (editingCell) {
-                      handleCellEdit(editingCell.categoryId, editingCell.month, editingCell.value);
+                      handleCellEdit(editingCell.categoryId, editingCell.month, editingCell.value, editingCell.originalValue);
                       setEditingCell(null);
                     }
                   }}
@@ -420,7 +424,7 @@ export function YearlyBudgetGrid({
                     if (e.key === 'Tab') {
                       e.preventDefault();
                       // Save current cell first
-                      handleCellEdit(editingCell.categoryId, editingCell.month, editingCell.value);
+                      handleCellEdit(editingCell.categoryId, editingCell.month, editingCell.value, editingCell.originalValue);
 
                       // Navigate to next/previous cell
                       const direction = e.shiftKey ? 'prev' : 'next';
@@ -432,7 +436,7 @@ export function YearlyBudgetGrid({
                         setEditingCell(null);
                       }
                     } else if (e.key === 'Enter') {
-                      handleCellEdit(editingCell.categoryId, editingCell.month, editingCell.value);
+                      handleCellEdit(editingCell.categoryId, editingCell.month, editingCell.value, editingCell.originalValue);
 
                       // Navigate to cell below (next row, same column)
                       const nextCell = findNextCell(editingCell.categoryId, editingCell.month, 'next');
@@ -462,7 +466,7 @@ export function YearlyBudgetGrid({
                     backgroundColor: hasPendingUpdate ? 'var(--mantine-color-yellow-light)' : 'transparent',
                     position: 'relative'
                   }}
-                  onClick={() => setEditingCell({ categoryId: category.id, month: month.key, value: currentValue })}
+                  onClick={() => setEditingCell({ categoryId: category.id, month: month.key, value: currentValue, originalValue: currentValue })}
                 >
                   <Text size="xs" fw={currentValue > 0 ? 500 : 400} c={currentValue > 0 ? undefined : 'dimmed'}>
                     {currentValue > 0 ? formatCurrency(currentValue) : '—'}
