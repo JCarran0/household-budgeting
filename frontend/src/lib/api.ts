@@ -235,6 +235,11 @@ class ApiClient {
     this.classifyTransactions = this.classifyTransactions.bind(this);
     this.suggestCategorizeRules = this.suggestCategorizeRules.bind(this);
 
+    // Theme methods
+    this.getThemePreferences = this.getThemePreferences.bind(this);
+    this.saveThemePreferences = this.saveThemePreferences.bind(this);
+    this.resetThemePreferences = this.resetThemePreferences.bind(this);
+
     // Request interceptor to add auth token
     this.client.interceptors.request.use(
       (config) => {
@@ -1148,6 +1153,23 @@ class ApiClient {
       { categorizations },
     );
     return data;
+  }
+
+  // =========================================================================
+  // Theme Preferences
+  // =========================================================================
+
+  async getThemePreferences(): Promise<Record<string, unknown> | null> {
+    const { data } = await this.client.get<{ success: boolean; preferences: Record<string, unknown> | null }>('/themes/preferences');
+    return data.preferences;
+  }
+
+  async saveThemePreferences(overrides: Record<string, unknown>): Promise<void> {
+    await this.client.put('/themes/preferences', overrides);
+  }
+
+  async resetThemePreferences(): Promise<void> {
+    await this.client.delete('/themes/preferences');
   }
 }
 

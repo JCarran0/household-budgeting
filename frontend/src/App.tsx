@@ -23,8 +23,7 @@ import { Reports } from './pages/Reports';
 import { Admin } from './pages/Admin';
 import { Trips } from './pages/Trips';
 import { PlaidLinkProvider } from './providers/PlaidLinkProvider';
-import { MantineProvider } from '@mantine/core';
-import { theme } from './theme';
+import { ThemeProvider } from './providers/ThemeProvider';
 import { queryClient } from './lib/queryClient';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { RouteErrorBoundary } from './components/RouteErrorBoundary';
@@ -34,7 +33,7 @@ function App() {
   return (
     <ErrorBoundary level="app">
       <QueryClientProvider client={queryClient}>
-        <MantineProvider theme={theme} defaultColorScheme="dark">
+        <ThemeProvider>
           <ModalsProvider>
             <Notifications position="top-right" />
             <PlaidLinkProvider>
@@ -94,7 +93,7 @@ function App() {
             </PlaidLinkProvider>
             <ReactQueryDevtools initialIsOpen={false} />
           </ModalsProvider>
-        </MantineProvider>
+        </ThemeProvider>
       </QueryClientProvider>
     </ErrorBoundary>
   );

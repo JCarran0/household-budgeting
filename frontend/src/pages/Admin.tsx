@@ -12,11 +12,13 @@ import {
   Badge,
   Modal,
   Center,
+  Tabs,
 } from '@mantine/core';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { notifications } from '@mantine/notifications';
-import { IconAlertTriangle, IconCheck, IconInfoCircle, IconSettings } from '@tabler/icons-react';
+import { IconAlertTriangle, IconCheck, IconInfoCircle, IconSettings, IconPalette, IconTool } from '@tabler/icons-react';
 import { api } from '../lib/api';
+import { ThemeCustomizer } from '../components/admin/ThemeCustomizer';
 
 export function Admin() {
   const [confirmationOpen, setConfirmationOpen] = useState(false);
@@ -141,176 +143,176 @@ export function Admin() {
           <Title order={1}>Admin Panel</Title>
         </Group>
 
-        <Text c="dimmed">
-          Administrative functions and system maintenance tools.
-        </Text>
+        <Tabs defaultValue="maintenance">
+          <Tabs.List>
+            <Tabs.Tab value="maintenance" leftSection={<IconTool size={16} />}>
+              Maintenance
+            </Tabs.Tab>
+            <Tabs.Tab value="theme" leftSection={<IconPalette size={16} />}>
+              Theme
+            </Tabs.Tab>
+          </Tabs.List>
 
-        {/* Migration Section */}
-        <Card withBorder padding="lg" radius="md">
-          <Stack gap="md">
-            <Group justify="space-between" align="flex-start">
-              <div>
-                <Title order={3}>Category Migration</Title>
-                <Text size="sm" c="dimmed">
-                  Migrate category field from "isSavings" to "isRollover"
-                </Text>
-              </div>
-              <Badge color={getMigrationStatusColor()} variant="light">
-                {getMigrationStatusText()}
-              </Badge>
-            </Group>
+          <Tabs.Panel value="maintenance" pt="lg">
+            <Stack gap="lg">
+              {/* Migration Section */}
+              <Card withBorder padding="lg" radius="md">
+                <Stack gap="md">
+                  <Group justify="space-between" align="flex-start">
+                    <div>
+                      <Title order={3}>Category Migration</Title>
+                      <Text size="sm" c="dimmed">
+                        Migrate category field from "isSavings" to "isRollover"
+                      </Text>
+                    </div>
+                    <Badge color={getMigrationStatusColor()} variant="light">
+                      {getMigrationStatusText()}
+                    </Badge>
+                  </Group>
 
-            {isStatusLoading ? (
-              <Center>
-                <Loader size="sm" />
-              </Center>
-            ) : (
-              <Stack gap="sm">
-                <Group gap="xl">
-                  <div>
-                    <Text size="sm" fw={500}>Total Categories</Text>
-                    <Text size="lg" fw={700}>{migrationStatus?.totalCategories || 0}</Text>
-                  </div>
-                  <div>
-                    <Text size="sm" fw={500}>With Old Field</Text>
-                    <Text size="lg" fw={700} c={migrationStatus?.categoriesWithOldField ? 'yellow' : 'green'}>
-                      {migrationStatus?.categoriesWithOldField || 0}
-                    </Text>
-                  </div>
-                  <div>
-                    <Text size="sm" fw={500}>With New Field</Text>
-                    <Text size="lg" fw={700} c="green">
-                      {migrationStatus?.categoriesWithNewField || 0}
-                    </Text>
-                  </div>
-                </Group>
+                  {isStatusLoading ? (
+                    <Center>
+                      <Loader size="sm" />
+                    </Center>
+                  ) : (
+                    <Stack gap="sm">
+                      <Group gap="xl">
+                        <div>
+                          <Text size="sm" fw={500}>Total Categories</Text>
+                          <Text size="lg" fw={700}>{migrationStatus?.totalCategories || 0}</Text>
+                        </div>
+                        <div>
+                          <Text size="sm" fw={500}>With Old Field</Text>
+                          <Text size="lg" fw={700} c={migrationStatus?.categoriesWithOldField ? 'yellow' : 'green'}>
+                            {migrationStatus?.categoriesWithOldField || 0}
+                          </Text>
+                        </div>
+                        <div>
+                          <Text size="sm" fw={500}>With New Field</Text>
+                          <Text size="lg" fw={700} c="green">
+                            {migrationStatus?.categoriesWithNewField || 0}
+                          </Text>
+                        </div>
+                      </Group>
 
-                {migrationStatus?.migrationNeeded && (
-                  <Alert color="yellow" icon={<IconInfoCircle size={16} />}>
-                    <Text size="sm">
-                      Some categories still use the old "isSavings" field. Running the migration will 
-                      rename this field to "isRollover" for better clarity.
-                    </Text>
-                  </Alert>
-                )}
+                      {migrationStatus?.migrationNeeded && (
+                        <Alert color="yellow" icon={<IconInfoCircle size={16} />}>
+                          <Text size="sm">
+                            Some categories still use the old "isSavings" field. Running the migration will
+                            rename this field to "isRollover" for better clarity.
+                          </Text>
+                        </Alert>
+                      )}
 
-                {migrationStatus?.migrationComplete && (
-                  <Alert color="green" icon={<IconCheck size={16} />}>
-                    <Text size="sm">
-                      All categories have been successfully migrated to use the "isRollover" field.
-                    </Text>
-                  </Alert>
-                )}
+                      {migrationStatus?.migrationComplete && (
+                        <Alert color="green" icon={<IconCheck size={16} />}>
+                          <Text size="sm">
+                            All categories have been successfully migrated to use the "isRollover" field.
+                          </Text>
+                        </Alert>
+                      )}
 
-                <Group justify="flex-end">
-                  <Button
-                    onClick={() => setConfirmationOpen(true)}
-                    disabled={!migrationStatus?.migrationNeeded}
-                    loading={migrationMutation.isPending}
-                    color="yellow"
-                    variant={migrationStatus?.migrationNeeded ? 'filled' : 'light'}
-                  >
-                    {migrationStatus?.migrationNeeded ? 'Run Migration' : 'Migration Not Needed'}
-                  </Button>
-                </Group>
-              </Stack>
-            )}
-          </Stack>
-        </Card>
+                      <Group justify="flex-end">
+                        <Button
+                          onClick={() => setConfirmationOpen(true)}
+                          disabled={!migrationStatus?.migrationNeeded}
+                          loading={migrationMutation.isPending}
+                          color="yellow"
+                          variant={migrationStatus?.migrationNeeded ? 'filled' : 'light'}
+                        >
+                          {migrationStatus?.migrationNeeded ? 'Run Migration' : 'Migration Not Needed'}
+                        </Button>
+                      </Group>
+                    </Stack>
+                  )}
+                </Stack>
+              </Card>
 
-        {/* Location Data Cleanup Section */}
-        <Card withBorder padding="lg" radius="md">
-          <Stack gap="md">
-            <Group justify="space-between" align="flex-start">
-              <div>
-                <Title order={3}>Location Data Cleanup</Title>
-                <Text size="sm" c="dimmed">
-                  Remove empty location objects from transactions to optimize storage
-                </Text>
-              </div>
-              <Badge color={getLocationCleanupStatusColor()} variant="light">
-                {getLocationCleanupStatusText()}
-              </Badge>
-            </Group>
+              {/* Location Data Cleanup Section */}
+              <Card withBorder padding="lg" radius="md">
+                <Stack gap="md">
+                  <Group justify="space-between" align="flex-start">
+                    <div>
+                      <Title order={3}>Location Data Cleanup</Title>
+                      <Text size="sm" c="dimmed">
+                        Remove empty location objects from transactions to optimize storage
+                      </Text>
+                    </div>
+                    <Badge color={getLocationCleanupStatusColor()} variant="light">
+                      {getLocationCleanupStatusText()}
+                    </Badge>
+                  </Group>
 
-            {isLocationStatusLoading ? (
-              <Center>
-                <Loader size="sm" />
-              </Center>
-            ) : (
-              <Stack gap="sm">
-                <Group gap="xl">
-                  <div>
-                    <Text size="sm" fw={500}>Total Transactions</Text>
-                    <Text size="lg" fw={700}>{locationStatus?.totalTransactions || 0}</Text>
-                  </div>
-                  <div>
-                    <Text size="sm" fw={500}>With Empty Location</Text>
-                    <Text size="lg" fw={700} c={locationStatus?.transactionsWithEmptyLocation ? 'yellow' : 'green'}>
-                      {locationStatus?.transactionsWithEmptyLocation || 0}
-                    </Text>
-                  </div>
-                  <div>
-                    <Text size="sm" fw={500}>With Valid Location</Text>
-                    <Text size="lg" fw={700} c="green">
-                      {locationStatus?.transactionsWithValidLocation || 0}
-                    </Text>
-                  </div>
-                  <div>
-                    <Text size="sm" fw={500}>Already Clean</Text>
-                    <Text size="lg" fw={700} c="blue">
-                      {locationStatus?.transactionsWithNullLocation || 0}
-                    </Text>
-                  </div>
-                </Group>
+                  {isLocationStatusLoading ? (
+                    <Center>
+                      <Loader size="sm" />
+                    </Center>
+                  ) : (
+                    <Stack gap="sm">
+                      <Group gap="xl">
+                        <div>
+                          <Text size="sm" fw={500}>Total Transactions</Text>
+                          <Text size="lg" fw={700}>{locationStatus?.totalTransactions || 0}</Text>
+                        </div>
+                        <div>
+                          <Text size="sm" fw={500}>With Empty Location</Text>
+                          <Text size="lg" fw={700} c={locationStatus?.transactionsWithEmptyLocation ? 'yellow' : 'green'}>
+                            {locationStatus?.transactionsWithEmptyLocation || 0}
+                          </Text>
+                        </div>
+                        <div>
+                          <Text size="sm" fw={500}>With Valid Location</Text>
+                          <Text size="lg" fw={700} c="green">
+                            {locationStatus?.transactionsWithValidLocation || 0}
+                          </Text>
+                        </div>
+                        <div>
+                          <Text size="sm" fw={500}>Already Clean</Text>
+                          <Text size="lg" fw={700} c="blue">
+                            {locationStatus?.transactionsWithNullLocation || 0}
+                          </Text>
+                        </div>
+                      </Group>
 
-                {locationStatus?.cleanupNeeded && (
-                  <Alert color="yellow" icon={<IconInfoCircle size={16} />}>
-                    <Text size="sm">
-                      {locationStatus.transactionsWithEmptyLocation} transactions have location objects with only null values. 
-                      Running the cleanup will remove these empty objects to optimize storage and improve performance.
-                    </Text>
-                  </Alert>
-                )}
+                      {locationStatus?.cleanupNeeded && (
+                        <Alert color="yellow" icon={<IconInfoCircle size={16} />}>
+                          <Text size="sm">
+                            {locationStatus.transactionsWithEmptyLocation} transactions have location objects with only null values.
+                            Running the cleanup will remove these empty objects to optimize storage and improve performance.
+                          </Text>
+                        </Alert>
+                      )}
 
-                {locationStatus?.cleanupComplete && (
-                  <Alert color="green" icon={<IconCheck size={16} />}>
-                    <Text size="sm">
-                      All transactions have been optimized. Empty location objects have been removed from storage.
-                    </Text>
-                  </Alert>
-                )}
+                      {locationStatus?.cleanupComplete && (
+                        <Alert color="green" icon={<IconCheck size={16} />}>
+                          <Text size="sm">
+                            All transactions have been optimized. Empty location objects have been removed from storage.
+                          </Text>
+                        </Alert>
+                      )}
 
-                <Group justify="flex-end">
-                  <Button
-                    onClick={() => setLocationConfirmationOpen(true)}
-                    disabled={!locationStatus?.cleanupNeeded}
-                    loading={locationCleanupMutation.isPending}
-                    color="blue"
-                    variant={locationStatus?.cleanupNeeded ? 'filled' : 'light'}
-                  >
-                    {locationStatus?.cleanupNeeded ? 'Run Cleanup' : 'Cleanup Not Needed'}
-                  </Button>
-                </Group>
-              </Stack>
-            )}
-          </Stack>
-        </Card>
+                      <Group justify="flex-end">
+                        <Button
+                          onClick={() => setLocationConfirmationOpen(true)}
+                          disabled={!locationStatus?.cleanupNeeded}
+                          loading={locationCleanupMutation.isPending}
+                          color="blue"
+                          variant={locationStatus?.cleanupNeeded ? 'filled' : 'light'}
+                        >
+                          {locationStatus?.cleanupNeeded ? 'Run Cleanup' : 'Cleanup Not Needed'}
+                        </Button>
+                      </Group>
+                    </Stack>
+                  )}
+                </Stack>
+              </Card>
+            </Stack>
+          </Tabs.Panel>
 
-        {/* Future admin features can be added here */}
-        <Card withBorder padding="lg" radius="md" style={{ opacity: 0.6 }}>
-          <Stack gap="sm">
-            <Title order={3}>Coming Soon</Title>
-            <Text size="sm" c="dimmed">
-              Additional administrative features will be added here in future updates.
-            </Text>
-            <Group gap="xs">
-              <Badge variant="light" color="gray">Database Cleanup</Badge>
-              <Badge variant="light" color="gray">User Management</Badge>
-              <Badge variant="light" color="gray">System Health</Badge>
-            </Group>
-          </Stack>
-        </Card>
+          <Tabs.Panel value="theme" pt="lg">
+            <ThemeCustomizer />
+          </Tabs.Panel>
+        </Tabs>
       </Stack>
 
       {/* Confirmation Modal */}
