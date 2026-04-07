@@ -143,7 +143,7 @@ export function Admin() {
           <Title order={1}>Admin Panel</Title>
         </Group>
 
-        <Tabs defaultValue="maintenance">
+        <Tabs defaultValue="theme">
           <Tabs.List>
             <Tabs.Tab value="maintenance" leftSection={<IconTool size={16} />}>
               Maintenance

@@ -17,7 +17,7 @@ interface ThemeProviderProps {
 
 export function ThemeProvider({ children }: ThemeProviderProps) {
   const [overrides, setOverrides] = useState<DeepPartial<ColorPalette>>({});
-  const [colorScheme, setColorScheme] = useState<MantineColorScheme>('dark');
+  const [colorScheme, setColorScheme] = useState<MantineColorScheme>('light');
   const initialLoadDone = useRef(false);
 
   // Load saved preferences on mount
@@ -45,7 +45,7 @@ export function ThemeProvider({ children }: ThemeProviderProps) {
 
   const resetPalette = useCallback(() => {
     setOverrides({});
-    setColorScheme('dark');
+    setColorScheme('light');
   }, []);
 
   const palette = useMemo(
