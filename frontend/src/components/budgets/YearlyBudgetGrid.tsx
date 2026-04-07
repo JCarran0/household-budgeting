@@ -391,9 +391,12 @@ export function YearlyBudgetGrid({
         </Table.Td>
 
         {MONTHS.map((month) => {
-          const currentValue = categoryBudgets[month.key] || 0;
+          const serverValue = categoryBudgets[month.key] || 0;
           const isEditing = editingCell?.categoryId === category.id && editingCell?.month === month.key;
-          const hasPendingUpdate = pendingUpdates.has(`${category.id}_${year}-${month.key}`);
+          const updateKey = `${category.id}_${year}-${month.key}`;
+          const pendingUpdate = pendingUpdates.get(updateKey);
+          const hasPendingUpdate = pendingUpdate !== undefined;
+          const currentValue = hasPendingUpdate ? pendingUpdate.amount : serverValue;
 
           return (
             <Table.Td key={month.key} width={100}>
