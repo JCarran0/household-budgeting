@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.3.0](https://github.com/JCarran0/household-budgeting/compare/v5.2.1...v5.3.0) (2026-04-07)
+
+
+### Features
+
+* **reports:** add Budgets tab with 5 budget health widgets ([772ba4c](https://github.com/JCarran0/household-budgeting/commit/772ba4c9a3b4f1eca871e6d9c0d224a3082e1459))
+
+
+### Bug Fixes
+
+* **budgets:** show pending value in grid cells while batch save is in-flight ([f045ecb](https://github.com/JCarran0/household-budgeting/commit/f045ecbb60842386bbad6376dd28efb403c59ce0))
+* **budgets:** skip no-op updates when tabbing across yearly grid cells ([2392d71](https://github.com/JCarran0/household-budgeting/commit/2392d71cd15a06a83d29706da227823c528d84d5))
+* **reports:** make KPI cards respect global date filter and default to YTD ([c59637c](https://github.com/JCarran0/household-budgeting/commit/c59637cf1e5b0406ac32a425b41622048305e544))
+
 ### [5.2.1](https://github.com/JCarran0/household-budgeting/compare/v5.2.0...v5.2.1) (2026-04-07)
 
 
