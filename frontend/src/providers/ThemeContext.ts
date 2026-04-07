@@ -1,4 +1,5 @@
 import { createContext } from 'react';
+import type { MantineColorScheme } from '@mantine/core';
 import type { ColorPalette, DeepPartial } from '../theme';
 
 export interface ThemeContextValue {
@@ -10,6 +11,10 @@ export interface ThemeContextValue {
   updatePalette: (newOverrides: DeepPartial<ColorPalette>) => void;
   /** Reset palette to defaults (local state only) */
   resetPalette: () => void;
+  /** Current color scheme (light/dark) */
+  colorScheme: MantineColorScheme;
+  /** Toggle between light and dark */
+  setColorScheme: (scheme: MantineColorScheme) => void;
   /** Whether saved preferences are still loading */
   isLoading: boolean;
 }

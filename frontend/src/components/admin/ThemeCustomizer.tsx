@@ -10,10 +10,12 @@ import {
   ColorInput,
   Divider,
   Alert,
+  Tooltip,
+  SegmentedControl,
 } from '@mantine/core';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation } from '@tanstack/react-query';
 import { notifications } from '@mantine/notifications';
-import { IconCheck, IconPalette, IconRefresh } from '@tabler/icons-react';
+import { IconCheck, IconPalette, IconRefresh, IconSun, IconMoon } from '@tabler/icons-react';
 import { useTheme } from '../../providers/useTheme';
 import { defaultPalette } from '../../theme';
 import type { ColorPalette, DeepPartial } from '../../theme';
@@ -71,6 +73,7 @@ function generateScale(baseHex: string): string[] {
 // Color picker group definitions
 interface ColorField {
   label: string;
+  tooltip?: string;
   getValue: (palette: ColorPalette) => string;
   buildOverride: (color: string, current: DeepPartial<ColorPalette>) => DeepPartial<ColorPalette>;
 }
@@ -175,7 +178,7 @@ const COLOR_GROUPS: ColorGroup[] = [
     title: 'Backgrounds',
     description: 'Surface and background colors for the app shell',
     fields: [
-      makeColorScaleField('Cards / Surfaces', 'dark', 6),
+      { ...makeColorScaleField('Surfaces', 'dark', 6), tooltip: 'Cards, inputs, nav highlight, and other surface elements' },
       makeColorScaleField('Main Background', 'dark', 7),
       makeColorScaleField('Deep Elements', 'dark', 8),
       makeColorScaleField('Darkest Tone', 'dark', 9),
@@ -214,15 +217,13 @@ const COLOR_GROUPS: ColorGroup[] = [
 ];
 
 export function ThemeCustomizer() {
-  const { palette, overrides, updatePalette, resetPalette } = useTheme();
-  const queryClient = useQueryClient();
+  const { palette, overrides, updatePalette, resetPalette, colorScheme, setColorScheme } = useTheme();
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
 
   const saveMutation = useMutation({
-    mutationFn: (data: DeepPartial<ColorPalette>) =>
-      api.saveThemePreferences(data as Record<string, unknown>),
+    mutationFn: (data: Record<string, unknown>) =>
+      api.saveThemePreferences(data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['themePreferences'] });
       setHasUnsavedChanges(false);
       notifications.show({
         title: 'Theme saved',
@@ -244,7 +245,6 @@ export function ThemeCustomizer() {
     mutationFn: () => api.resetThemePreferences(),
     onSuccess: () => {
       resetPalette();
-      queryClient.invalidateQueries({ queryKey: ['themePreferences'] });
       setHasUnsavedChanges(false);
       notifications.show({
         title: 'Theme reset',
@@ -273,8 +273,8 @@ export function ThemeCustomizer() {
   );
 
   const handleSave = useCallback(() => {
-    saveMutation.mutate(overrides);
-  }, [overrides, saveMutation]);
+    saveMutation.mutate({ ...overrides as Record<string, unknown>, colorScheme });
+  }, [overrides, colorScheme, saveMutation]);
 
   const handleReset = useCallback(() => {
     resetMutation.mutate();
@@ -311,6 +311,22 @@ export function ThemeCustomizer() {
           </Group>
         </Group>
 
+        <Group gap="sm">
+          <Text size="sm" fw={500}>Color Scheme</Text>
+          <SegmentedControl
+            value={colorScheme}
+            onChange={(value) => {
+              setColorScheme(value as 'light' | 'dark');
+              setHasUnsavedChanges(true);
+            }}
+            data={[
+              { label: <Group gap={4}><IconSun size={14} /><span>Light</span></Group>, value: 'light' },
+              { label: <Group gap={4}><IconMoon size={14} /><span>Dark</span></Group>, value: 'dark' },
+            ]}
+            size="sm"
+          />
+        </Group>
+
         {hasUnsavedChanges && (
           <Alert color="yellow" variant="light">
             <Text size="sm">
@@ -330,7 +346,15 @@ export function ThemeCustomizer() {
               {group.fields.map((field) => (
                 <ColorInput
                   key={field.label}
-                  label={field.label}
+                  label={
+                    field.tooltip ? (
+                      <Tooltip label={field.tooltip} withArrow>
+                        <Text size="sm" span style={{ cursor: 'help', textDecoration: 'underline dotted' }}>
+                          {field.label}
+                        </Text>
+                      </Tooltip>
+                    ) : field.label
+                  }
                   value={field.getValue(palette)}
                   onChange={(color) => handleColorChange(field, color)}
                   format="hex"

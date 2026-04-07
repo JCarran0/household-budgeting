@@ -13,6 +13,7 @@ const hexColor = z.string().regex(/^#[0-9a-fA-F]{6}$/, 'Must be a valid hex colo
 const colorTuplePartial = z.array(hexColor).max(10).optional();
 
 const themePreferencesSchema = z.object({
+  colorScheme: z.enum(['light', 'dark']).optional(),
   colors: z.record(z.string(), colorTuplePartial).optional(),
   primaryColor: z.string().max(50).optional(),
   chart: z.object({
