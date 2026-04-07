@@ -2,27 +2,32 @@
 # Admin Theme Customizer — Implementation Plan
 # =============================================================================
 # Prerequisite: feat(theme) commit — centralized color config (colorConfig.ts)
-# Status: Planned
-# Last Updated: 2026-04-05
+# Status: Completed
+# Last Updated: 2026-04-07
 # =============================================================================
 
 overview:
   description: |
-    Add an Admin UI that lets users customize the app's color palette via color
-    pickers. Colors are persisted per-user on the backend and loaded on app init.
-    The existing colorConfig.ts already provides defaultPalette, mergePalette(),
-    and buildTheme() — this feature wires those into a live-editable UI with
-    backend persistence.
+    Admin UI that lets users customize the app's color palette via color
+    pickers and toggle light/dark color scheme. Colors and scheme are
+    persisted per-user on the backend and loaded on app init.
+    The existing colorConfig.ts provides defaultPalette, mergePalette(),
+    and buildTheme() — this feature wires those into a live-editable UI
+    with backend persistence.
   key_files:
     color_config: frontend/src/theme/colorConfig.ts
     theme_builder: frontend/src/theme/theme.ts
     theme_barrel: frontend/src/theme/index.ts
     admin_page: frontend/src/pages/Admin.tsx
     admin_components: frontend/src/components/admin/
+    theme_customizer: frontend/src/components/admin/ThemeCustomizer.tsx
+    theme_provider: frontend/src/providers/ThemeProvider.tsx
+    theme_context: frontend/src/providers/ThemeContext.ts
+    use_theme_hook: frontend/src/providers/useTheme.ts
     api_client: frontend/src/lib/api.ts
     app_entry: frontend/src/App.tsx
     backend_app: backend/src/app.ts
-    backend_routes: backend/src/routes/
+    backend_routes: backend/src/routes/themes.ts
     data_service: backend/src/services/dataService.ts
 
 # =============================================================================
@@ -63,10 +68,62 @@ decisions:
 
   - id: D5
     date: 2026-04-05
-    decision: Backend placeholder already exists in app.ts (line 107, commented out)
+    status: resolved
+    decision: Backend placeholder already existed in app.ts (commented out)
     rationale: |
-      app.ts has `// app.use(\`${apiPrefix}/themes\`, themeRoutes);` ready to
-      uncomment. The route file just needs to be created.
+      app.ts had the theme route import and registration commented out.
+      Uncommented during P1 implementation.
+
+  - id: D6
+    date: 2026-04-07
+    decision: Auto-generate full 10-shade scale from a single picked color
+    rationale: |
+      Mantine uses different shade indices for different variants (e.g., filled
+      uses shade 8 in dark mode, light variant uses shade 4). Changing only
+      one shade index left other UI elements using the old color. HSL
+      interpolation generates all 10 shades from the user's picked color,
+      ensuring buttons, nav highlights, and other variants update together.
+      Applied to accent and semantic color pickers.
+
+  - id: D7
+    date: 2026-04-07
+    decision: Light color scheme as default
+    rationale: |
+      The Sage & Stone palette uses light/cream backgrounds (dark[6-9] are
+      peach tones). Running these under Mantine's "dark" color scheme caused
+      contrast issues — Mantine assumes light text on dark backgrounds in dark
+      mode, resulting in washed-out buttons and poor readability. Switching
+      to light mode as default aligns Mantine's contrast assumptions with
+      the actual palette.
+
+  - id: D8
+    date: 2026-04-07
+    decision: Separate ThemeContext/useTheme into own files
+    rationale: |
+      ESLint react-refresh/only-export-components rule requires files to only
+      export components. The useTheme hook was split to useTheme.ts and the
+      context to ThemeContext.ts to satisfy this constraint.
+
+  - id: D9
+    date: 2026-04-07
+    decision: Do not invalidate themePreferences query after save/reset
+    rationale: |
+      Invalidating the query caused a refetch, which triggered setOverrides
+      inside useQuery's select callback during render. This caused React to
+      re-render ThemeProvider, briefly unmounting MantineProvider and crashing
+      any Mantine components in ErrorBoundary fallbacks. Fix: sync query data
+      via useEffect on initial load only; after save/reset, local state is
+      already correct so no refetch needed.
+
+  - id: D10
+    date: 2026-04-07
+    decision: Background shade pickers use full default array, not sparse overrides
+    rationale: |
+      mergePalette's deepMerge replaces arrays wholesale (not element-by-element).
+      Building a sparse override array (e.g., only dark[9] set) caused all other
+      indices to become undefined, rendering as black. Fix: buildOverride starts
+      from the full default palette array, layers existing overrides, then sets
+      the new value — override arrays are always complete tuples.
 
 # =============================================================================
 # IMPLEMENTATION PHASES
@@ -74,31 +131,28 @@ decisions:
 phases:
   - id: P1
     name: Backend Theme Preferences API
-    status: planned
+    status: completed
     tasks:
       - id: P1.T1
         description: Create backend/src/routes/themes.ts
         details: |
           Three endpoints, all behind authMiddleware:
-          - GET  /themes/preferences — returns saved DeepPartial<ColorPalette> or null
+          - GET  /themes/preferences — returns saved overrides or null
           - PUT  /themes/preferences — validates with Zod, saves via dataService
           - DELETE /themes/preferences — resets to defaults (deletes stored prefs)
           Storage key: theme_preferences_{userId}
-          Uses dataService.getData() / saveData() / deleteData()
+          Zod schema validates colorScheme, colors, chart, gradients, debug fields.
         files:
-          - backend/src/routes/themes.ts (new)
+          - backend/src/routes/themes.ts
 
       - id: P1.T2
         description: Uncomment theme routes in app.ts
-        details: |
-          Uncomment import on line 16 and route registration on line 107.
-          Update import path to match new file location.
         files:
           - backend/src/app.ts
 
   - id: P2
     name: Frontend API Client Methods
-    status: planned
+    status: completed
     tasks:
       - id: P2.T1
         description: Add theme preference methods to api.ts
@@ -112,76 +166,78 @@ phases:
 
   - id: P3
     name: ThemeProvider Context
-    status: planned
+    status: completed
     tasks:
       - id: P3.T1
-        description: Create frontend/src/providers/ThemeProvider.tsx
+        description: Create ThemeProvider, ThemeContext, and useTheme hook
         details: |
-          React context provider that:
-          1. Wraps MantineProvider
-          2. Loads saved theme overrides from API on mount (useQuery)
-          3. Maintains palette overrides in React state
-          4. Exposes updatePalette(overrides) for live preview
-          5. Exposes resetPalette() to clear overrides
-          6. Calls mergePalette() + buildTheme() to produce Mantine theme
-          7. Passes built theme to MantineProvider
+          Split across three files for ESLint compliance:
+          - ThemeContext.ts: context definition and ThemeContextValue interface
+          - ThemeProvider.tsx: provider component wrapping MantineProvider
+          - useTheme.ts: hook for consuming theme context
+          Provider loads saved prefs on mount via useQuery, syncs to state via
+          useEffect (not select — see D9). Manages colorScheme and palette
+          overrides. Uses forceColorScheme for runtime light/dark switching.
         files:
-          - frontend/src/providers/ThemeProvider.tsx (new)
+          - frontend/src/providers/ThemeContext.ts
+          - frontend/src/providers/ThemeProvider.tsx
+          - frontend/src/providers/useTheme.ts
 
       - id: P3.T2
         description: Update App.tsx to use ThemeProvider
         details: |
-          Replace direct MantineProvider with ThemeProvider.
-          ThemeProvider internally renders MantineProvider with the
-          dynamically-built theme. Remove static theme import.
+          Replaced direct MantineProvider with ThemeProvider.
+          Removed static theme import.
         files:
           - frontend/src/App.tsx
 
   - id: P4
     name: ThemeCustomizer Admin Component
-    status: planned
+    status: completed
     tasks:
       - id: P4.T1
-        description: Create frontend/src/components/admin/ThemeCustomizer.tsx
+        description: Create ThemeCustomizer component
         details: |
-          Card component matching existing Admin page patterns. Contains:
+          Card component on Admin page Theme tab. Contains:
+
+          Light/Dark toggle: SegmentedControl with sun/moon icons.
 
           Color picker groups:
-          - Backgrounds: dark[6] (surfaces), dark[7] (main bg), dark[8] (deep bg), dark[9] (darkest)
-          - Primary Accent: yellow[5] (main accent shade)
-          - Semantic Colors: red[5] (error), orange[5] (warning), green[5] (success), blue[5] (info)
-          - Chart Colors: series array, income, expense, budgeted, priorYear
+          - Backgrounds: dark[6] (surfaces), dark[7] (main bg), dark[8] (deep), dark[9] (darkest)
+          - Primary Accent: yellow (auto-generates full 10-shade scale via HSL)
+          - Semantic Colors: red, orange, green, blue (each auto-generates full scale)
+          - Chart Colors: income, expense, budgeted, priorYear, series[0-7]
 
-          Each picker uses Mantine ColorInput component.
+          "Surfaces" picker has tooltip explaining scope (cards, inputs, nav).
+          Accent and semantic pickers use makeAutoScaleField (HSL shade generation).
+          Background pickers use makeColorScaleField (single index, full array override).
 
-          Buttons:
-          - Save: persists current overrides to backend via useMutation
-          - Reset to Defaults: calls DELETE endpoint, clears local state
-
-          Uses useTheme() context from ThemeProvider for live preview.
-          Uses useMutation/useQuery matching existing Admin patterns.
+          Save persists overrides + colorScheme to backend.
+          Reset calls DELETE endpoint and clears local state.
         files:
-          - frontend/src/components/admin/ThemeCustomizer.tsx (new)
+          - frontend/src/components/admin/ThemeCustomizer.tsx
 
       - id: P4.T2
-        description: Add ThemeCustomizer to Admin.tsx
+        description: Add ThemeCustomizer to Admin.tsx as tabbed layout
         details: |
-          Replace the "Coming Soon" placeholder card (lines 301-313)
-          with the ThemeCustomizer component import.
+          Admin page uses Mantine Tabs with two tabs:
+          - Theme (default): ThemeCustomizer component
+          - Maintenance: existing migration and cleanup tools
         files:
           - frontend/src/pages/Admin.tsx
 
 # =============================================================================
-# HELPER FUNCTION — Shade regeneration (future enhancement)
+# FUTURE ENHANCEMENTS
 # =============================================================================
 future_enhancements:
   - id: F1
+    status: completed
     description: Auto-generate full 10-shade scale from a single picked color
     details: |
-      Currently, picking yellow[5] only changes shade 5. A future enhancement
-      could auto-generate all 10 shades (lighter and darker variants) from the
-      picked color using HSL interpolation. This would make the color picker
-      more intuitive — pick one color, get a full harmonious scale.
+      Implemented via generateScale() in ThemeCustomizer.tsx using HSL
+      interpolation. Applied to accent and semantic color pickers via
+      makeAutoScaleField(). Lightness ramp: [95,85,72,60,50,42,35,28,22,16]
+      with slight desaturation at extremes.
 
   - id: F2
     description: Preset theme gallery
@@ -195,21 +251,31 @@ future_enhancements:
       Let users export their theme overrides as JSON and import them back,
       enabling theme sharing between users or backup/restore.
 
+  - id: F4
+    description: Component-level style overrides
+    details: |
+      dark[6] controls all surfaces (cards, inputs, nav, table rows) because
+      Mantine maps shade indices to fixed semantic roles. To split these,
+      override Mantine's theme.components with per-component styles
+      (e.g., TextInput.styles, NavLink.styles, Table.styles). This would
+      allow independent control of card vs input vs nav backgrounds.
+
 # =============================================================================
 # VERIFICATION
 # =============================================================================
 verification:
   build:
     - cd backend && npx tsc --noEmit
-    - cd frontend && npx tsc --noEmit
+    - cd frontend && npx tsc -b --noEmit
   tests:
     - cd backend && npm test
   manual:
     - Start dev servers (backend + frontend)
-    - Navigate to Admin page
-    - Verify ThemeCustomizer card appears with color pickers
+    - Navigate to Admin page — Theme tab should be default
+    - Verify light/dark toggle switches color scheme immediately
     - Change a background color — verify UI updates live
-    - Change primary accent — verify header icon and nav highlight change
-    - Click Save — refresh page — verify colors persist
-    - Click Reset to Defaults — verify Sage & Stone palette restored
+    - Change primary accent — verify header icon AND nav highlight change
+    - Click Save — refresh page — verify colors and color scheme persist
+    - Click Reset to Defaults — verify light mode and Sage & Stone palette restored
+    - Hover "Surfaces" label — verify tooltip appears
     - Verify auth pages (login/register) also reflect theme changes
