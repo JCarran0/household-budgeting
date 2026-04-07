@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.4.0](https://github.com/JCarran0/household-budgeting/compare/v5.3.0...v5.4.0) (2026-04-07)
+
+
+### Features
+
+* **admin:** add light/dark color scheme toggle and fix theme save crash ([cbbd9fa](https://github.com/JCarran0/household-budgeting/commit/cbbd9faa12b9623316ee38eff8fd19691e7a36ea))
+* **admin:** add theme customizer with backend persistence and auto-shade generation ([971ed81](https://github.com/JCarran0/household-budgeting/commit/971ed81765d4a34ba14d445a60d2a35049a86b33))
+* **admin:** default to light color scheme and theme tab ([58d7399](https://github.com/JCarran0/household-budgeting/commit/58d73990fa18451b83ebe5f5b08c6d56724452e9))
+
+
+### Documentation
+
+* **theme:** update plan to completed status with implementation decisions ([caf9414](https://github.com/JCarran0/household-budgeting/commit/caf9414ad3e78b70c7514919d9f7f530c88fd921))
+
 ## [5.3.0](https://github.com/JCarran0/household-budgeting/compare/v5.2.1...v5.3.0) (2026-04-07)
 
 
