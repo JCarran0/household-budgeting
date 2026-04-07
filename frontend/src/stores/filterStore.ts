@@ -81,7 +81,7 @@ const defaultDashboardFilters: DashboardFilters = {
 };
 
 const defaultReportsFilters: ReportsFilters = {
-  timeRange: 'thisMonth', // Default to This Month
+  timeRange: 'yearToDate', // Default to Year to Date
 };
 
 // Helper to validate and migrate stored data

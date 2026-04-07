@@ -231,7 +231,7 @@ export function Reports() {
 
   const resetFilters = useCallback(() => {
     setSearchParams((prev) => {
-      prev.set('timeRange', 'thisMonth');
+      prev.set('timeRange', 'yearToDate');
       prev.set('type', 'expenses');
       prev.set('tab', 'cashflow');
       return prev;
@@ -261,11 +261,6 @@ export function Reports() {
   const { startDate, endDate, startMonth, endMonth } = getDateRange(timeRange);
 
   // Fetch all report data
-  const { data: ytdData, isLoading: ytdLoading } = useQuery({
-    queryKey: ['reports', 'ytd'],
-    queryFn: () => api.getYearToDate(),
-  });
-
   const { data: cashFlowData, isLoading: cashFlowLoading } = useQuery({
     queryKey: ['reports', 'cashflow', startMonth, endMonth],
     queryFn: () => api.getCashFlow(startMonth, endMonth),
@@ -915,7 +910,39 @@ export function Reports() {
     return result;
   }, [cashFlowData, startMonth, endMonth]);
 
-  const isLoading = ytdLoading || cashFlowLoading || trendsLoading || breakdownLoading || projectionsLoading || budgetLoading;
+  const isLoading = cashFlowLoading || trendsLoading || breakdownLoading || projectionsLoading || budgetLoading;
+
+  // Compute KPI summary from cash flow data (respects date filter)
+  const kpiSummary = useMemo(() => {
+    if (!cashFlowData?.summary) return null;
+    const months = cashFlowData.summary;
+    const totalIncome = months.reduce((sum, m) => sum + m.income, 0);
+    const totalExpenses = months.reduce((sum, m) => sum + m.expenses, 0);
+    const netIncome = totalIncome - totalExpenses;
+    const now = new Date();
+    const currentMonth = format(now, 'yyyy-MM');
+    // Average over complete months only (exclude current partial month)
+    const completeMonths = months.filter(m => m.month < currentMonth && (m.income > 0 || m.expenses > 0));
+    const monthCount = completeMonths.length || 1;
+    const averageMonthlyIncome = completeMonths.reduce((sum, m) => sum + m.income, 0) / monthCount;
+    const averageMonthlyExpenses = completeMonths.reduce((sum, m) => sum + m.expenses, 0) / monthCount;
+    const savingsRate = totalIncome > 0 ? (netIncome / totalIncome) * 100 : 0;
+    return { totalIncome, totalExpenses, netIncome, averageMonthlyIncome, averageMonthlyExpenses, savingsRate };
+  }, [cashFlowData]);
+
+  // Dynamic label for KPI cards based on time range
+  const timeRangeLabel = useMemo(() => {
+    const labels: Record<string, string> = {
+      thisMonth: 'This Month',
+      lastMonth: 'Last Month',
+      yearToDate: 'YTD',
+      thisYear: 'Full Year',
+      last3: 'Last 3 Mo',
+      last6: 'Last 6 Mo',
+      last12: 'Last 12 Mo',
+    };
+    return labels[timeRange] || 'Period';
+  }, [timeRange]);
 
   if (isLoading) {
     return (
@@ -1090,8 +1117,6 @@ export function Reports() {
     return null;
   };
 
-  const ytd = ytdData?.summary;
-
   return (
     <Container size="xl" py="xl">
       <Stack gap="lg">
@@ -1100,7 +1125,7 @@ export function Reports() {
           <Group gap="xs">
             <Select
               value={timeRange}
-              onChange={(value) => setTimeRange(value || 'thisMonth')}
+              onChange={(value) => setTimeRange(value || 'yearToDate')}
               data={[
                 { value: 'thisMonth', label: 'This Month' },
                 { value: 'lastMonth', label: 'Last Month' },
@@ -1112,14 +1137,14 @@ export function Reports() {
               ]}
               w={200}
             />
-            <Tooltip label="Reset to default (This Month)">
+            <Tooltip label="Reset to default (Year to Date)">
               <ActionIcon
                 variant="subtle"
                 onClick={() => {
                   resetFilters();
                   notifications.show({
                     title: 'View Reset',
-                    message: 'Reset to This Month view',
+                    message: 'Reset to Year to Date view',
                     color: 'blue',
                   });
                 }}
@@ -1131,19 +1156,19 @@ export function Reports() {
           </Group>
         </Group>
 
-        {/* YTD Summary Cards */}
+        {/* Summary Cards (respects date filter) */}
         <SimpleGrid cols={{ base: 1, sm: 2, md: 4 }} spacing="md">
           <Card withBorder>
             <Group justify="space-between">
               <div>
                 <Text c="dimmed" size="xs" tt="uppercase" fw={700}>
-                  YTD Income
+                  {timeRangeLabel} Income
                 </Text>
                 <Text fw={700} size="xl">
-                  ${ytd?.totalIncome ? Math.ceil(ytd.totalIncome).toLocaleString() : 0}
+                  ${kpiSummary?.totalIncome ? Math.ceil(kpiSummary.totalIncome).toLocaleString() : 0}
                 </Text>
                 <Text size="xs" c="dimmed" mt={7}>
-                  ${ytd?.averageMonthlyIncome.toFixed(0) || 0}/month avg
+                  ${kpiSummary?.averageMonthlyIncome.toFixed(0) || 0}/month avg
                 </Text>
               </div>
               <ThemeIcon color="green" variant="light" size={38} radius="md">
@@ -1156,13 +1181,13 @@ export function Reports() {
             <Group justify="space-between">
               <div>
                 <Text c="dimmed" size="xs" tt="uppercase" fw={700}>
-                  YTD Expenses
+                  {timeRangeLabel} Expenses
                 </Text>
                 <Text fw={700} size="xl">
-                  ${ytd?.totalExpenses ? Math.ceil(ytd.totalExpenses).toLocaleString() : 0}
+                  ${kpiSummary?.totalExpenses ? Math.ceil(kpiSummary.totalExpenses).toLocaleString() : 0}
                 </Text>
                 <Text size="xs" c="dimmed" mt={7}>
-                  ${ytd?.averageMonthlyExpenses.toFixed(0) || 0}/month avg
+                  ${kpiSummary?.averageMonthlyExpenses.toFixed(0) || 0}/month avg
                 </Text>
               </div>
               <ThemeIcon color="red" variant="light" size={38} radius="md">
@@ -1177,17 +1202,17 @@ export function Reports() {
                 <Text c="dimmed" size="xs" tt="uppercase" fw={700}>
                   Net Income
                 </Text>
-                <Text fw={700} size="xl" c={ytd?.netIncome && ytd.netIncome > 0 ? 'green' : 'red'}>
-                  {ytd?.netIncome ? (ytd.netIncome < 0 ? '-' : '') + formatCurrency(Math.abs(ytd.netIncome)) : formatCurrency(0)}
+                <Text fw={700} size="xl" c={kpiSummary?.netIncome && kpiSummary.netIncome > 0 ? 'green' : 'red'}>
+                  {kpiSummary?.netIncome ? (kpiSummary.netIncome < 0 ? '-' : '') + formatCurrency(Math.abs(kpiSummary.netIncome)) : formatCurrency(0)}
                 </Text>
                 <Text size="xs" c="dimmed" mt={7}>
-                  This year
+                  {timeRangeLabel}
                 </Text>
               </div>
-              <ThemeIcon 
-                color={ytd?.netIncome && ytd.netIncome > 0 ? 'green' : 'red'} 
-                variant="light" 
-                size={38} 
+              <ThemeIcon
+                color={kpiSummary?.netIncome && kpiSummary.netIncome > 0 ? 'green' : 'red'}
+                variant="light"
+                size={38}
                 radius="md"
               >
                 <IconCash size={22} />
@@ -1202,7 +1227,7 @@ export function Reports() {
                   Savings Rate
                 </Text>
                 <Text fw={700} size="xl">
-                  {ytd?.savingsRate.toFixed(1) || 0}%
+                  {kpiSummary?.savingsRate.toFixed(1) || 0}%
                 </Text>
                 <Text size="xs" c="dimmed" mt={7}>
                   Of income saved
@@ -1213,7 +1238,7 @@ export function Reports() {
                 thickness={6}
                 roundCaps
                 sections={[
-                  { value: ytd?.savingsRate || 0, color: 'teal' }
+                  { value: kpiSummary?.savingsRate || 0, color: 'teal' }
                 ]}
               />
             </Group>
@@ -1622,21 +1647,21 @@ export function Reports() {
                         </TransactionPreviewTrigger>
                       ))
                     ) : (
-                      // Show YTD top spending categories
-                      ytd?.topCategories.slice(0, 10).map((category, index) => (
+                      // Show top spending categories from current breakdown data
+                      pieChartData.slice(0, 10).map((category: PieChartEntry, index: number) => (
                         <TransactionPreviewTrigger
-                          key={category.categoryId}
-                          categoryId={category.categoryId}
-                          categoryName={category.categoryName}
-                          dateRange={{ startDate: format(startOfYear(new Date()), 'yyyy-MM-dd'), endDate: format(new Date(), 'yyyy-MM-dd') }}
-                          tooltipText="Click to preview YTD transactions"
-                          timeRangeFilter="yearToDate"
+                          key={category.id || category.name}
+                          categoryId={category.id || null}
+                          categoryName={category.name}
+                          dateRange={{ startDate, endDate }}
+                          tooltipText="Click to preview transactions"
+                          timeRangeFilter={timeRange}
                         >
                           <div style={{ borderRadius: 'var(--mantine-radius-sm)', padding: '8px', margin: '-8px' }}>
                             <Group justify="space-between" mb={5}>
-                              <Text size="sm">{category.categoryName}</Text>
+                              <Text size="sm">{category.name}</Text>
                               <Text size="sm" fw={600}>
-                                ${category.amount.toFixed(0)}
+                                ${category.value.toFixed(0)}
                               </Text>
                             </Group>
                             <Progress
