@@ -1,0 +1,635 @@
+# =============================================================================
+# Transfer Linking — Implementation Plan
+# =============================================================================
+# BRD: docs/features/TRANSFER-LINKING-BRD.md
+# Status: Not Started
+# Last Updated: 2026-04-06
+# =============================================================================
+
+overview:
+  description: |
+    Implementation plan for the Transfer Linking feature. Adds the ability to
+    pair two transfer-categorized transactions into a single logical transfer
+    via a shared transferGroupId. Linking is user-initiated — the system never
+    auto-links. Unlinked transfers are surfaced through a dedicated filter.
+
+    The feature is fully additive: two nullable fields on StoredTransaction,
+    no data migration, and all existing transfer detection / budget exclusion
+    logic remains unchanged.
+  key_files:
+    brd: docs/features/TRANSFER-LINKING-BRD.md
+    stored_transaction: backend/src/services/transactionService.ts
+    category_helpers: backend/src/shared/utils/categoryHelpers.ts
+    transaction_routes: backend/src/routes/transactions.ts
+    transaction_edit_modal: frontend/src/components/transactions/TransactionEditModal.tsx
+    enhanced_transactions: frontend/src/pages/EnhancedTransactions.tsx
+    filter_store: frontend/src/stores/filterStore.ts
+    api_client: frontend/src/lib/api.ts
+    budget_calculations: shared/utils/budgetCalculations.ts
+    transaction_calculations: shared/utils/transactionCalculations.ts
+
+# =============================================================================
+# DECISIONS LOG — Capture key decisions as they're made during implementation
+# =============================================================================
+decisions:
+  - id: D1
+    date: 2026-04-06
+    decision: Linking prompt lives inside the existing transaction edit modal
+    rationale: |
+      The edit modal is already where categorization happens. Adding a linking
+      step there keeps the flow in a single, familiar place. No new modals needed.
+
+  - id: D2
+    date: 2026-04-06
+    decision: Inline category change to transfer auto-opens the edit modal
+    rationale: |
+      When a user changes a category to a transfer type via the inline picker
+      on the transaction list, the edit modal opens automatically so they can
+      link immediately. Dismissing the modal leaves the transfer unlinked.
+      This avoids a separate linking step while keeping the inline picker fast.
+
+  - id: D3
+    date: 2026-04-06
+    decision: Matching is by exact absolute amount only — no date proximity
+    rationale: |
+      Transfers between accounts can post days apart. Filtering candidates
+      by date would hide valid matches. Amount + different account + opposite
+      sign is sufficient. Candidate list is sorted by date proximity as a
+      convenience, not a filter.
+
+  - id: D4
+    date: 2026-04-06
+    decision: No automatic linking of historical data
+    rationale: |
+      Users work through historical unlinked transfers at their own pace via
+      the unlinked transfer filter. Auto-linking risks false positives (e.g.,
+      two unrelated $50 transactions). The filter-and-link workflow is the
+      primary mechanism.
+
+  - id: D5
+    date: 2026-04-06
+    decision: Plaid suggestions are surfaced as hints, never auto-applied
+    rationale: |
+      Plaid's transfer classification is useful but not trusted. When a
+      transaction has plaidCategoryId starting with TRANSFER_IN/OUT and
+      categoryId is null, the UI shows a subtle hint. User must confirm
+      by explicitly categorizing as a transfer.
+
+# =============================================================================
+# PHASE 1: Data Model Extension
+# =============================================================================
+phase_1_data_model:
+  status: not_started
+  description: |
+    Add transfer linking fields to the transaction data model. These are
+    purely additive — no migration required. Existing transactions get null
+    defaults.
+
+  tasks:
+    - id: "1.1"
+      task: Add transfer linking fields to StoredTransaction interface
+      status: not_started
+      details: |
+        File: backend/src/services/transactionService.ts (lines 18-53)
+
+        Add two nullable fields to the StoredTransaction interface:
+
+          transferGroupId: string | null;      // Shared ID linking a transfer pair
+          linkedTransactionId: string | null;  // ID of the paired counterpart
+
+        Both default to null. No existing code needs to change — these fields
+        are only read/written by new transfer linking logic.
+
+    - id: "1.2"
+      task: Add transfer linking fields to shared Transaction type
+      status: not_started
+      details: |
+        File: backend/src/shared/types/index.ts (lines 43-67)
+
+        Add the same two fields to the shared Transaction interface so the
+        frontend has access to linking state.
+
+    - id: "1.3"
+      task: Add transfer linking fields to chatbot data service type
+      status: not_started
+      details: |
+        File: backend/src/services/chatbotDataService.ts (line 53 area)
+
+        Add transferGroupId and linkedTransactionId to the chatbot's
+        transaction type so the chatbot can answer questions about
+        linked/unlinked transfers (BRD REQ-027).
+
+    - id: "1.4"
+      task: Ensure new fields are included in transaction creation defaults
+      status: not_started
+      details: |
+        File: backend/src/services/transactionService.ts (around line 300)
+
+        In the createStoredTransaction method (or equivalent), set:
+          transferGroupId: null,
+          linkedTransactionId: null,
+
+        Also ensure transaction sync from Plaid preserves these fields
+        on existing transactions (they should already be preserved since
+        Plaid sync only updates specific Plaid-owned fields).
+
+# =============================================================================
+# PHASE 2: Backend — Linking Service Logic
+# =============================================================================
+phase_2_backend_service:
+  status: not_started
+  description: |
+    Add transfer linking and unlinking methods to TransactionService.
+    These enforce the invariants from the BRD (exact amount, different
+    accounts, opposite signs).
+
+  tasks:
+    - id: "2.1"
+      task: Add linkTransferPair method to TransactionService
+      status: not_started
+      details: |
+        File: backend/src/services/transactionService.ts
+
+        Method signature:
+          linkTransferPair(userId: string, transactionId: string, counterpartId: string): Promise<void>
+
+        Logic:
+        1. Load both transactions, verify they belong to userId
+        2. Validate invariants:
+           - Same absolute amount (Math.abs)
+           - Different accountId
+           - Opposite signs (one positive, one negative)
+           - Neither is already linked (transferGroupId is null)
+        3. Generate a transferGroupId (uuid)
+        4. Set transferGroupId and linkedTransactionId on both transactions
+        5. Auto-assign transfer categories:
+           - Negative amount → TRANSFER_IN
+           - Positive amount → TRANSFER_OUT
+        6. Save both transactions
+
+        Throw descriptive errors for each validation failure.
+
+    - id: "2.2"
+      task: Add unlinkTransferPair method to TransactionService
+      status: not_started
+      details: |
+        File: backend/src/services/transactionService.ts
+
+        Method signature:
+          unlinkTransferPair(userId: string, transactionId: string): Promise<void>
+
+        Logic:
+        1. Load the transaction, verify it belongs to userId
+        2. Verify it has a linkedTransactionId (is part of a pair)
+        3. Load the counterpart transaction
+        4. Clear transferGroupId and linkedTransactionId on both
+        5. Do NOT change categoryId on either — both remain as transfers (unlinked)
+        6. Save both transactions
+
+    - id: "2.3"
+      task: Add auto-unlink on recategorization
+      status: not_started
+      details: |
+        File: backend/src/services/transactionService.ts
+
+        Modify the existing updateTransactionCategory method:
+        - After setting the new categoryId, check if the transaction was
+          previously linked (transferGroupId is not null)
+        - If the new category is NOT a transfer category (use isTransferCategory()),
+          call unlinkTransferPair logic to clear linking on both sides
+        - This enforces BRD REQ-009: recategorizing away from transfer breaks the link
+
+    - id: "2.4"
+      task: Add getCandidateTransfers query method
+      status: not_started
+      details: |
+        File: backend/src/services/transactionService.ts
+
+        Method signature:
+          getCandidateTransfers(
+            userId: string,
+            transactionId: string,
+            amount: number,
+            accountId: string
+          ): Promise<StoredTransaction[]>
+
+        Logic:
+        1. Find all user transactions where:
+           - Math.abs(amount) === Math.abs(provided amount)
+           - accountId !== provided accountId
+           - Sign is opposite to the provided amount
+           - transferGroupId is null (not already linked)
+           - id !== transactionId (not self)
+        2. Sort by date proximity to the source transaction
+        3. Return the list
+
+        This powers the candidate picker in the linking UI.
+
+# =============================================================================
+# PHASE 3: Backend — API Routes
+# =============================================================================
+phase_3_backend_routes:
+  status: not_started
+  description: |
+    Add API endpoints for transfer linking operations and candidate lookup.
+
+  tasks:
+    - id: "3.1"
+      task: Add transfer link endpoint
+      status: not_started
+      details: |
+        File: backend/src/routes/transactions.ts
+
+        POST /api/v1/transactions/:transactionId/transfer-link
+
+        Request body (Zod validated):
+          { counterpartId: string }
+
+        Calls transactionService.linkTransferPair(userId, transactionId, counterpartId)
+        Returns: { success: true, transferGroupId: string }
+
+    - id: "3.2"
+      task: Add transfer unlink endpoint
+      status: not_started
+      details: |
+        File: backend/src/routes/transactions.ts
+
+        DELETE /api/v1/transactions/:transactionId/transfer-link
+
+        No request body needed — the service finds the counterpart from
+        the transaction's linkedTransactionId.
+
+        Calls transactionService.unlinkTransferPair(userId, transactionId)
+        Returns: { success: true }
+
+    - id: "3.3"
+      task: Add candidate transfers endpoint
+      status: not_started
+      details: |
+        File: backend/src/routes/transactions.ts
+
+        GET /api/v1/transactions/:transactionId/transfer-candidates
+
+        No query params needed — amount and accountId are read from the
+        transaction itself.
+
+        Calls transactionService.getCandidateTransfers(userId, transactionId, amount, accountId)
+        Returns: { candidates: StoredTransaction[] }
+
+    - id: "3.4"
+      task: Add unlinked transfer count endpoint
+      status: not_started
+      details: |
+        File: backend/src/routes/transactions.ts
+
+        GET /api/v1/transactions/unlinked-transfers/count
+
+        Returns the count of transactions where categoryId is a transfer
+        category AND transferGroupId is null.
+
+        Returns: { count: number }
+
+        This powers the unlinked transfer badge in the UI (BRD REQ-015).
+
+    - id: "3.5"
+      task: Extend transaction filter for unlinked transfers
+      status: not_started
+      details: |
+        File: backend/src/routes/transactions.ts (line 65 area)
+        File: backend/src/services/transactionService.ts (TransactionFilter interface)
+
+        Add 'unlinked_transfer' to the transactionType enum:
+          z.enum(['income', 'expense', 'transfer', 'unlinked_transfer', 'all'])
+
+        In the filter logic (transactionService.ts lines 499-519), add:
+          if (filter.transactionType === 'unlinked_transfer') {
+            return isTransfer && !txn.transferGroupId;
+          }
+
+# =============================================================================
+# PHASE 4: Frontend — API Client
+# =============================================================================
+phase_4_api_client:
+  status: not_started
+  description: Add transfer linking methods to the frontend API client.
+
+  tasks:
+    - id: "4.1"
+      task: Add transfer linking methods to api.ts
+      status: not_started
+      details: |
+        File: frontend/src/lib/api.ts
+
+        Methods to add:
+        - linkTransfer(transactionId: string, counterpartId: string): Promise<{ transferGroupId: string }>
+        - unlinkTransfer(transactionId: string): Promise<void>
+        - getTransferCandidates(transactionId: string): Promise<Transaction[]>
+        - getUnlinkedTransferCount(): Promise<number>
+
+        Bind all methods in constructor following existing patterns.
+
+    - id: "4.2"
+      task: Add 'unlinked_transfer' to frontend filter types
+      status: not_started
+      details: |
+        File: frontend/src/stores/filterStore.ts (line 18)
+
+        Update TransactionFilters.transactionType union:
+          transactionType: 'all' | 'income' | 'expense' | 'transfer' | 'unlinked_transfer';
+
+        Update the transaction type selector in EnhancedTransactions.tsx to
+        include the new option (label: "Unlinked Transfers").
+
+# =============================================================================
+# PHASE 5: Frontend — Linking UI in Edit Modal
+# =============================================================================
+phase_5_linking_ui:
+  status: not_started
+  description: |
+    Add the transfer linking workflow to the transaction edit modal. This is
+    the core UX — when a user categorizes as transfer, they can select a
+    counterpart from a candidate list.
+
+  tasks:
+    - id: "5.1"
+      task: Add transfer linking section to TransactionEditModal
+      status: not_started
+      details: |
+        File: frontend/src/components/transactions/TransactionEditModal.tsx
+
+        When the transaction's categoryId is a transfer category (use
+        isTransferCategory from shared utils), show a new section below
+        the category picker:
+
+        IF linked (transferGroupId is set):
+          Show "Linked Transfer" card with counterpart summary:
+            - Account name, date, amount, transaction name
+            - "Unlink" button to break the pair
+
+        IF unlinked (transfer category but no transferGroupId):
+          Show "Link Transfer" section:
+            - Explanatory text: "Select the matching transaction"
+            - Candidate list fetched from GET /transfer-candidates
+            - Each candidate row shows: account name, date, amount, name
+            - Clicking a candidate calls POST /transfer-link
+            - "Skip" or dismiss to leave unlinked
+
+        Use React Query:
+          queryKey: ['transfer-candidates', transactionId]
+          enabled: only when transaction is unlinked transfer
+
+    - id: "5.2"
+      task: Auto-open edit modal on inline category change to transfer
+      status: not_started
+      details: |
+        File: frontend/src/pages/EnhancedTransactions.tsx (lines 754-767)
+
+        Modify the handleCategorySelect function:
+        - After the category update mutation succeeds, check if the new
+          category is a transfer category (isTransferCategory)
+        - If so, set the transaction as the active edit modal transaction
+          and open the modal (setEditingTransaction + open modal state)
+        - The modal will render with the linking section visible since
+          the transaction now has a transfer category
+
+    - id: "5.3"
+      task: Create TransferCandidateList component
+      status: not_started
+      details: |
+        File: frontend/src/components/transactions/TransferCandidateList.tsx
+
+        Reusable component for displaying candidate matches:
+
+        Props:
+          transactionId: string
+          onLink: (counterpartId: string) => void
+          onSkip: () => void
+
+        Fetches candidates via useQuery, displays as a scrollable list.
+        Each row: account name, date, amount (with sign), transaction name.
+        Sorted by date closest to source transaction.
+        Clicking a row calls onLink with the candidate's id.
+        Empty state: "No matching transactions found" with explanation.
+
+        Use Mantine List or Table component. Keep it compact — this sits
+        inside the edit modal.
+
+    - id: "5.4"
+      task: Add unlink mutation and UI
+      status: not_started
+      details: |
+        In TransactionEditModal, when a linked transfer is displayed:
+        - "Unlink" button triggers DELETE /transfer-link mutation
+        - On success: invalidate transaction queries, update local state
+        - Both transactions revert to unlinked transfer state
+        - Show brief notification: "Transfer unlinked"
+
+# =============================================================================
+# PHASE 6: Frontend — Transaction List Visual Linking
+# =============================================================================
+phase_6_visual_linking:
+  status: not_started
+  description: |
+    Add visual indicators for linked transfers in the transaction list.
+    Linked pairs appear as two rows with a visual connection.
+
+  tasks:
+    - id: "6.1"
+      task: Add link indicator to transaction rows
+      status: not_started
+      details: |
+        File: frontend/src/pages/EnhancedTransactions.tsx
+
+        For transactions with a transferGroupId:
+        - Show a small link icon (IconLink from @tabler/icons-react) next
+          to the transaction name or in a dedicated column
+        - Use a consistent color or badge to indicate linked status
+        - Unlinked transfers (transfer category, no transferGroupId) get
+          a different indicator — e.g., a broken link icon (IconUnlink)
+          or a subtle "unlinked" badge
+
+    - id: "6.2"
+      task: Add counterpart preview on link icon interaction
+      status: not_started
+      details: |
+        File: frontend/src/pages/EnhancedTransactions.tsx
+
+        When clicking or hovering the link icon on a linked transfer:
+        - Show a tooltip or popover with counterpart details:
+          account name, date, amount, transaction name
+        - Include a "View" action that scrolls to or navigates to
+          the counterpart (if visible in current view)
+        - If the counterpart is not in the current filtered view,
+          show the summary with a note like "In [Account Name]"
+
+    - id: "6.3"
+      task: Add unlinked transfer count badge
+      status: not_started
+      details: |
+        File: frontend/src/pages/EnhancedTransactions.tsx
+
+        Near the transaction type filter or as a small notification badge:
+        - Fetch unlinked transfer count via GET /unlinked-transfers/count
+        - Display count as a badge (e.g., "3 unlinked transfers")
+        - Clicking the badge activates the 'unlinked_transfer' filter
+        - Use React Query with a reasonable staleTime (e.g., 30s)
+        - queryKey: ['transactions', 'unlinked-transfers', 'count']
+
+# =============================================================================
+# PHASE 7: Plaid Suggestion Hints
+# =============================================================================
+phase_7_plaid_hints:
+  status: not_started
+  description: |
+    Surface Plaid's transfer suggestions as non-authoritative hints on
+    uncategorized transactions. This helps users identify potential transfers
+    without requiring them to manually scan every transaction.
+
+  tasks:
+    - id: "7.1"
+      task: Add Plaid transfer hint to transaction list rows
+      status: not_started
+      details: |
+        File: frontend/src/pages/EnhancedTransactions.tsx
+
+        For transactions where:
+          - categoryId is null (uncategorized)
+          - plaidCategoryId starts with 'TRANSFER_IN' or 'TRANSFER_OUT'
+
+        Show a subtle hint, e.g.:
+          - Small text below the transaction name: "Plaid suggests: transfer"
+          - Or a faint transfer icon with tooltip
+
+        The hint is passive — clicking it does nothing special. The user
+        categorizes the transaction normally (which may involve selecting
+        a transfer category, triggering the linking flow).
+
+    - id: "7.2"
+      task: Ensure Plaid-suggested transfers are excluded from unlinked count
+      status: not_started
+      details: |
+        File: backend/src/services/transactionService.ts
+
+        The unlinked transfer count and filter must only include transactions
+        where categoryId is a transfer category (user-confirmed). Transactions
+        where only plaidCategoryId is a transfer (but categoryId is null) must
+        NOT appear in unlinked transfer results.
+
+        This should already be the case since the filter checks categoryId,
+        not plaidCategoryId. Verify and add a test to confirm.
+
+# =============================================================================
+# PHASE 8: Testing
+# =============================================================================
+phase_8_testing:
+  status: not_started
+  description: |
+    Follow risk-based testing strategy. Focus on invariant enforcement,
+    linking/unlinking correctness, and the auto-unlink on recategorization.
+
+  tasks:
+    - id: "8.1"
+      task: Integration tests for transfer linking logic
+      status: not_started
+      details: |
+        File: backend/src/__tests__/integration/transferLinking.test.ts
+
+        Critical test cases:
+        - Link two transactions with matching amounts succeeds
+        - Both transactions get transferGroupId and linkedTransactionId
+        - Counterpart auto-categorized as TRANSFER_IN or TRANSFER_OUT
+        - Reject link when amounts differ
+        - Reject link when same account
+        - Reject link when same sign
+        - Reject link when one is already linked
+        - Unlink clears both transactions, preserves categories
+        - Recategorize linked transfer to non-transfer breaks the link
+        - Recategorize linked transfer to different transfer subcategory
+          does NOT break the link (still a transfer)
+
+    - id: "8.2"
+      task: Integration tests for candidate query
+      status: not_started
+      details: |
+        File: backend/src/__tests__/integration/transferLinking.test.ts
+
+        Test cases:
+        - Returns transactions with matching absolute amount and opposite sign
+        - Excludes same-account transactions
+        - Excludes already-linked transactions
+        - Excludes the source transaction itself
+        - Returns empty array when no candidates exist
+        - Results sorted by date proximity
+
+    - id: "8.3"
+      task: Route-level tests for transfer API endpoints
+      status: not_started
+      details: |
+        File: backend/src/__tests__/integration/transferRoutes.test.ts
+
+        Test CRUD via supertest:
+        - POST /transfer-link with valid counterpart succeeds
+        - POST /transfer-link with invalid counterpart returns 400
+        - DELETE /transfer-link on linked transaction succeeds
+        - DELETE /transfer-link on non-linked transaction returns 400
+        - GET /transfer-candidates returns filtered list
+        - GET /unlinked-transfers/count returns correct count
+        - All endpoints require auth
+
+    - id: "8.4"
+      task: Verify existing transfer behavior unchanged
+      status: not_started
+      details: |
+        Run existing test suite:
+        - backend/src/__tests__/critical/transfer-filter.test.ts
+        - backend/src/__tests__/unit/budgetCalculations.test.ts
+
+        All existing tests must pass without modification. This confirms
+        the feature is truly additive and non-breaking.
+
+    - id: "8.5"
+      task: Manual testing checklist
+      status: not_started
+      details: |
+        - [ ] Categorize transaction as transfer via edit modal → linking section appears
+        - [ ] Select candidate from list → both transactions linked
+        - [ ] Counterpart auto-categorized as correct TRANSFER_IN/OUT
+        - [ ] Linked transactions show link icon in list
+        - [ ] Click link icon → see counterpart summary
+        - [ ] Unlink via edit modal → both become unlinked transfers
+        - [ ] Recategorize linked transfer to non-transfer → link broken
+        - [ ] Inline category change to transfer → edit modal auto-opens
+        - [ ] Dismiss modal → transaction stays as unlinked transfer
+        - [ ] Filter by "Unlinked Transfers" → shows only unlinked
+        - [ ] Unlinked transfer badge shows correct count
+        - [ ] Click badge → activates unlinked transfer filter
+        - [ ] Plaid hint visible on uncategorized transactions with transfer plaidCategoryId
+        - [ ] Plaid-hinted transactions NOT counted in unlinked transfer count
+        - [ ] Budgets and reports still exclude transfers correctly
+        - [ ] Existing transfer filter still shows all transfers (linked + unlinked)
+
+# =============================================================================
+# IMPLEMENTATION ORDER
+# =============================================================================
+implementation_order:
+  description: |
+    Recommended sequence. Phases 1-3 are backend foundation.
+    Phase 4 bridges backend to frontend. Phases 5-6 are the core UX.
+    Phase 7 is a polish layer. Phase 8 runs alongside development.
+  sequence:
+    - phase: 1 — Data Model Extension
+      reason: Fields are needed by everything else. No migration, just additive.
+    - phase: 2 — Backend Service Logic
+      reason: Linking/unlinking logic must exist before routes or UI.
+    - phase: 3 — Backend API Routes
+      reason: API must exist before frontend can consume it.
+    - phase: 4 — Frontend API Client
+      reason: Frontend methods needed for UI development.
+    - phase: 5 — Linking UI in Edit Modal
+      reason: Core UX deliverable. Depends on phases 1-4.
+    - phase: 6 — Transaction List Visual Linking
+      reason: Display layer. Depends on linking being functional.
+    - phase: 7 — Plaid Suggestion Hints
+      reason: Polish / discovery layer. Independent of linking logic.
+    - phase: 8 — Testing
+      reason: Write integration tests alongside phases 2-3. Manual testing at end.
