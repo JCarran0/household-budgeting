@@ -186,7 +186,7 @@ export function Reports() {
   // Valid values for URL params
   const validTimeRanges = ['thisMonth', 'lastMonth', 'thisYear', 'yearToDate', 'last3', 'last6', 'last12'];
   const validTypes = ['expenses', 'income'] as const;
-  const validTabs = ['cashflow', 'breakdown', 'trends'];
+  const validTabs = ['cashflow', 'spending', 'categories', 'projections', 'settings'];
 
   // URL params are source of truth, falling back to localStorage/defaults
   const timeRange = validTimeRanges.includes(searchParams.get('timeRange') || '')
