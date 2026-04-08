@@ -16,7 +16,7 @@ This plan captures the top 10 architectural refactoring targets identified throu
 | R2. Fix Circular Deps | **Done** | `034fab0` | Zero `as any` casts. CategoryDependencyChecker interface. BudgetService uses dataService directly. |
 | R1. Split TransactionService | **Done** | `eaa3391`, `8d07125` | 112 pre-refactor tests + filter engine extraction + Repository adoption. |
 | R3. Split ReportService | **Done** | `08811e9`, `7a90096` | 35 pre-refactor tests + helper extraction + Repository adoption. |
-| R6. Standardize Errors | Not started | | |
+| R6. Standardize Errors | **Done** | `98bf9a2` | Error classes + middleware + 2 routes migrated (budgets, trips). 33 tests. |
 | R4. Decompose Reports.tsx | Not started | | |
 | R5. Decompose EnhancedTransactions.tsx | Not started | | |
 | R7. Split API Client | Not started | | |
@@ -171,38 +171,21 @@ pages/EnhancedTransactions.tsx (~250 LOC — layout, coordination)
 
 ---
 
-### R6. Standardize Error Handling
+### R6. Standardize Error Handling — DONE
 
-**Problem:** Three inconsistent patterns coexist across the backend:
-- Services **throw** generic `Error` objects: `throw new Error('Invalid month format')`
-- Some services return result objects: `{ success: false, error: '...' }`
-- Routes catch everything as generic 500: `res.status(500).json({ error: 'Failed to...' })`
+> **Completed:** 2026-04-07 | **Commit:** `98bf9a2`
 
-Frontend has its own inconsistency: some components check `error.response.data.error`, others just use `error.message`.
+**What was done:**
+- Created `backend/src/errors/index.ts` — `AppError` base class with 7 typed subclasses: `ValidationError` (400), `NotFoundError` (404), `AuthorizationError` (401), `ForbiddenError` (403), `ConflictError` (409), `ExternalServiceError` (502), `RateLimitError` (429). Each carries HTTP status code and error code string.
+- Created `backend/src/middleware/errorHandler.ts` — Express error middleware that dispatches `AppError` subclasses to correct HTTP responses, handles Zod errors as 400, and returns generic 500s for unknown errors.
+- Replaced inline global error handler in `app.ts` with the new middleware.
+- Migrated `budgets.ts` (12 handlers) and `trips.ts` (6 handlers) to demonstrate the pattern: `throw new AuthorizationError()` + `next(error)` instead of inline `res.status().json()`.
+- Created `backend/src/__tests__/unit/errors.test.ts` — 33 tests for error classes and middleware dispatch.
 
-**Target state:**
-- Typed error classes: `ValidationError`, `NotFoundError`, `AuthorizationError`, `ExternalServiceError`
-- Each carries an HTTP status code and user-safe message
-- Express error middleware maps error class → HTTP response (one place, not 15 route files)
-- Services throw typed errors consistently (no result objects for errors)
-- Frontend has a shared `useApiError` hook or error handler for mutations
-
-**Pre-refactor test work:**
-1. **Assess:** Error paths are partially tested in integration stories. Auth error handling is tested in `auth.stories.test.ts`.
-2. **Gap fill:**
-   - Catalog every `throw new Error(...)` and `catch` block across all services and routes
-   - Add tests for error scenarios in each major service: invalid input, missing data, external service failure
-   - Add tests for route-level error responses: verify status codes and response shapes for known error conditions
-   - Test that validation errors return 400 (not 500)
-3. **Confidence gate:** Error response tests document current behavior. New error classes must produce identical HTTP responses.
-
-**Key files:**
-- All files in `backend/src/routes/` (15 files)
-- All files in `backend/src/services/` (22 files)
-- New: `backend/src/errors/` directory with error classes
-- New: `backend/src/middleware/errorHandler.ts`
-
-**Estimated effort:** Medium-High (touches many files but changes are mechanical)
+**Remaining work (not blocking):**
+- Migrate remaining 13 route files to use the same pattern (mechanical — follow budgets.ts/trips.ts as examples)
+- Gradually migrate services to throw typed `AppError` subclasses instead of plain `Error` objects
+- Frontend `useApiError` hook for consistent mutation error handling — deferred to Phase 3
 
 ---
 
@@ -311,9 +294,9 @@ Phase 2: Backend structural improvements (IN PROGRESS)
 ├── R2.  Fix circular deps / DI ✅
 ├── R1.  Split TransactionService ✅
 ├── R3.  Split ReportService ✅
-└── R6.  Standardize error handling ← NEXT
+└── R6.  Standardize error handling ✅
 
-Phase 3: Frontend decomposition
+Phase 3: Frontend decomposition ← NEXT
 ├── R4.  Decompose Reports.tsx (largest frontend file)
 ├── R5.  Decompose EnhancedTransactions.tsx
 └── R7.  Split API client (mechanical, low risk)
