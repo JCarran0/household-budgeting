@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.6.0](https://github.com/JCarran0/household-budgeting/compare/v5.5.0...v5.6.0) (2026-04-08)
+
+
+### Features
+
+* **accounts:** add manual accounts for complete net worth tracking ([dd2d1a7](https://github.com/JCarran0/household-budgeting/commit/dd2d1a7c9efa9baa40e2c776e819590f8b0ba811))
+
 ## [5.5.0](https://github.com/JCarran0/household-budgeting/compare/v5.4.0...v5.5.0) (2026-04-08)
 
 
