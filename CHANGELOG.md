@@ -5,6 +5,28 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+### [5.7.1](https://github.com/JCarran0/household-budgeting/compare/v5.7.0...v5.7.1) (2026-04-08)
+
+
+### Bug Fixes
+
+* resolve merge conflicts in report components ([10d8c03](https://github.com/JCarran0/household-budgeting/commit/10d8c0390a7dd36b3a1cd9f115c559c987df27fd))
+
+
+### Code Refactoring
+
+* **config:** add centralized config module with Zod validation (R10) ([5d0eea4](https://github.com/JCarran0/household-budgeting/commit/5d0eea40f4bde51d7b22c4ffa64fc5bd2c757936))
+* **data:** add generic Repository base class (R8) ([fbe27b1](https://github.com/JCarran0/household-budgeting/commit/fbe27b1441dfdc5ca86798c13a216f675e790127))
+* **services:** fix circular dependencies and remove as-any casts (R2) ([034fab0](https://github.com/JCarran0/household-budgeting/commit/034fab0f332740cc4e9c9619608d5ca5499e5fd2))
+
+
+### Documentation
+
+* add maintainability refactor plan with test-first approach ([c148220](https://github.com/JCarran0/household-budgeting/commit/c148220660f1589e24f8ad529adc9ad4c2bdc838))
+* sync refactor plan with current progress ([29b8855](https://github.com/JCarran0/household-budgeting/commit/29b88555edc79d67830163c28f1f477911b975a0))
+* update refactor plan with R10 completion status ([10dd869](https://github.com/JCarran0/household-budgeting/commit/10dd869530a80045e6f5dbb606212fca9e8955ca))
+* update refactor plan with R8 and R2 completion status ([df9f5ef](https://github.com/JCarran0/household-budgeting/commit/df9f5efa85dcb88808eaef1aaeb18ebabd512911))
+
 ## [5.7.0](https://github.com/JCarran0/household-budgeting/compare/v5.6.0...v5.7.0) (2026-04-08)
 
 
