@@ -2,11 +2,11 @@
  * Transaction Management Routes
  */
 
-import { Router, Request, Response } from 'express';
+import { Router, Request, Response, NextFunction } from 'express';
 import { transactionService, accountService, importService } from '../services';
 import { authMiddleware } from '../middleware/authMiddleware';
+import { AuthorizationError } from '../errors';
 import { z } from 'zod';
-import { calculateIncome, calculateExpenses, calculateNetCashFlow } from '../shared/utils/transactionCalculations';
 
 const router = Router();
 
@@ -116,34 +116,19 @@ const bulkUpdateSchema = z.object({
  * GET /api/v1/transactions/uncategorized/count
  * Get count of uncategorized transactions
  */
-router.get('/uncategorized/count', authMiddleware, async (req: AuthRequest, res: Response): Promise<void> => {
+router.get('/uncategorized/count', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
   try {
-    if (!req.user) {
-      res.status(401).json({ success: false, error: 'Unauthorized' });
-      return;
-    }
+    if (!req.user) throw new AuthorizationError();
 
-    const result = await transactionService.getTransactions(req.user.userId);
-    
-    if (!result.success || !result.transactions) {
-      res.status(500).json({ success: false, error: 'Failed to fetch transactions' });
-      return;
-    }
+    const { count, total } = await transactionService.getUncategorizedCount(req.user.userId);
 
-    // Count transactions without a category
-    // Exclude hidden transactions and split child transactions
-    const uncategorizedCount = result.transactions.filter(
-      t => !t.categoryId && !t.isHidden && !t.parentTransactionId
-    ).length;
-
-    res.json({ 
+    res.json({
       success: true,
-      count: uncategorizedCount,
-      total: result.transactions.filter(t => !t.isHidden && !t.parentTransactionId).length
+      count,
+      total,
     });
   } catch (error) {
-    console.error('Error fetching uncategorized count:', error);
-    res.status(500).json({ success: false, error: 'Failed to fetch uncategorized count' });
+    next(error);
   }
 });
 
@@ -151,17 +136,14 @@ router.get('/uncategorized/count', authMiddleware, async (req: AuthRequest, res:
  * GET /api/v1/transactions
  * Get transactions with filtering
  */
-router.get('/', authMiddleware, async (req: AuthRequest, res: Response): Promise<void> => {
+router.get('/', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
   try {
-    if (!req.user) {
-      res.status(401).json({ success: false, error: 'Unauthorized' });
-      return;
-    }
+    if (!req.user) throw new AuthorizationError();
 
     const validation = transactionFilterSchema.safeParse(req.query);
     if (!validation.success) {
-      res.status(400).json({ 
-        success: false, 
+      res.status(400).json({
+        success: false,
         error: 'Invalid filter parameters',
         details: validation.error.format(),
       });
@@ -171,11 +153,11 @@ router.get('/', authMiddleware, async (req: AuthRequest, res: Response): Promise
     // Transform single accountId to accountIds array for the service
     const filterData = {
       ...validation.data,
-      accountIds: validation.data.accountId 
-        ? [validation.data.accountId] 
+      accountIds: validation.data.accountId
+        ? [validation.data.accountId]
         : validation.data.accountIds
     };
-    
+
     const result = await transactionService.getTransactions(
       req.user.userId,
       filterData
@@ -193,8 +175,7 @@ router.get('/', authMiddleware, async (req: AuthRequest, res: Response): Promise
       total: result.unfilteredTotal || result.totalCount,
     });
   } catch (error) {
-    console.error('Error fetching transactions:', error);
-    res.status(500).json({ success: false, error: 'Failed to fetch transactions' });
+    next(error);
   }
 });
 
@@ -202,17 +183,14 @@ router.get('/', authMiddleware, async (req: AuthRequest, res: Response): Promise
  * POST /api/v1/transactions/sync
  * Sync all transactions for all user accounts
  */
-router.post('/sync', authMiddleware, async (req: AuthRequest, res: Response): Promise<void> => {
+router.post('/sync', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
   try {
-    if (!req.user) {
-      res.status(401).json({ success: false, error: 'Unauthorized' });
-      return;
-    }
+    if (!req.user) throw new AuthorizationError();
 
     const validation = syncAllSchema.safeParse(req.body);
     if (!validation.success) {
-      res.status(400).json({ 
-        success: false, 
+      res.status(400).json({
+        success: false,
         error: 'Invalid request data',
         details: validation.error.format(),
       });
@@ -251,21 +229,16 @@ router.post('/sync', authMiddleware, async (req: AuthRequest, res: Response): Pr
       warning: result.warning,  // Include warning if some accounts failed
     });
   } catch (error) {
-    console.error('Error syncing transactions:', error);
-    
     // Check for specific error types and provide helpful messages
-    if (error instanceof Error) {
-      if (error.message.includes('reconnect your bank account')) {
-        res.status(400).json({ 
-          success: false, 
-          error: error.message,
-          requiresReconnect: true 
-        });
-        return;
-      }
+    if (error instanceof Error && error.message.includes('reconnect your bank account')) {
+      res.status(400).json({
+        success: false,
+        error: error.message,
+        requiresReconnect: true,
+      });
+      return;
     }
-    
-    res.status(500).json({ success: false, error: 'Failed to sync transactions' });
+    next(error);
   }
 });
 
@@ -273,17 +246,14 @@ router.post('/sync', authMiddleware, async (req: AuthRequest, res: Response): Pr
  * PUT /api/v1/transactions/:transactionId/category
  * Update transaction category
  */
-router.put('/:transactionId/category', authMiddleware, async (req: AuthRequest, res: Response): Promise<void> => {
+router.put('/:transactionId/category', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
   try {
-    if (!req.user) {
-      res.status(401).json({ success: false, error: 'Unauthorized' });
-      return;
-    }
+    if (!req.user) throw new AuthorizationError();
 
     const validation = updateCategorySchema.safeParse(req.body);
     if (!validation.success) {
-      res.status(400).json({ 
-        success: false, 
+      res.status(400).json({
+        success: false,
         error: 'Invalid request data',
         details: validation.error.format(),
       });
@@ -306,8 +276,7 @@ router.put('/:transactionId/category', authMiddleware, async (req: AuthRequest, 
 
     res.json({ success: true });
   } catch (error) {
-    console.error('Error updating category:', error);
-    res.status(500).json({ success: false, error: 'Failed to update category' });
+    next(error);
   }
 });
 
@@ -315,17 +284,14 @@ router.put('/:transactionId/category', authMiddleware, async (req: AuthRequest, 
  * PUT /api/v1/transactions/:transactionId/description
  * Update transaction description
  */
-router.put('/:transactionId/description', authMiddleware, async (req: AuthRequest, res: Response): Promise<void> => {
+router.put('/:transactionId/description', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
   try {
-    if (!req.user) {
-      res.status(401).json({ success: false, error: 'Unauthorized' });
-      return;
-    }
+    if (!req.user) throw new AuthorizationError();
 
     const validation = updateDescriptionSchema.safeParse(req.body);
     if (!validation.success) {
-      res.status(400).json({ 
-        success: false, 
+      res.status(400).json({
+        success: false,
         error: 'Invalid request data',
         details: validation.error.format(),
       });
@@ -348,8 +314,7 @@ router.put('/:transactionId/description', authMiddleware, async (req: AuthReques
 
     res.json({ success: true });
   } catch (error) {
-    console.error('Error updating description:', error);
-    res.status(500).json({ success: false, error: 'Failed to update description' });
+    next(error);
   }
 });
 
@@ -357,17 +322,14 @@ router.put('/:transactionId/description', authMiddleware, async (req: AuthReques
  * PUT /api/v1/transactions/:transactionId/hidden
  * Update transaction hidden status
  */
-router.put('/:transactionId/hidden', authMiddleware, async (req: AuthRequest, res: Response): Promise<void> => {
+router.put('/:transactionId/hidden', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
   try {
-    if (!req.user) {
-      res.status(401).json({ success: false, error: 'Unauthorized' });
-      return;
-    }
+    if (!req.user) throw new AuthorizationError();
 
     const validation = updateHiddenSchema.safeParse(req.body);
     if (!validation.success) {
-      res.status(400).json({ 
-        success: false, 
+      res.status(400).json({
+        success: false,
         error: 'Invalid request data',
         details: validation.error.format(),
       });
@@ -390,8 +352,7 @@ router.put('/:transactionId/hidden', authMiddleware, async (req: AuthRequest, re
 
     res.json({ success: true });
   } catch (error) {
-    console.error('Error updating hidden status:', error);
-    res.status(500).json({ success: false, error: 'Failed to update hidden status' });
+    next(error);
   }
 });
 
@@ -399,12 +360,9 @@ router.put('/:transactionId/hidden', authMiddleware, async (req: AuthRequest, re
  * PUT /api/v1/transactions/:transactionId/flagged
  * Update transaction flagged status
  */
-router.put('/:transactionId/flagged', authMiddleware, async (req: AuthRequest, res: Response): Promise<void> => {
+router.put('/:transactionId/flagged', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
   try {
-    if (!req.user) {
-      res.status(401).json({ success: false, error: 'Unauthorized' });
-      return;
-    }
+    if (!req.user) throw new AuthorizationError();
 
     const validation = updateFlaggedSchema.safeParse(req.body);
     if (!validation.success) {
@@ -432,8 +390,7 @@ router.put('/:transactionId/flagged', authMiddleware, async (req: AuthRequest, r
 
     res.json({ success: true });
   } catch (error) {
-    console.error('Error updating flagged status:', error);
-    res.status(500).json({ success: false, error: 'Failed to update flagged status' });
+    next(error);
   }
 });
 
@@ -441,17 +398,14 @@ router.put('/:transactionId/flagged', authMiddleware, async (req: AuthRequest, r
  * POST /api/v1/transactions/:transactionId/tags
  * Add tags to a transaction
  */
-router.post('/:transactionId/tags', authMiddleware, async (req: AuthRequest, res: Response): Promise<void> => {
+router.post('/:transactionId/tags', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
   try {
-    if (!req.user) {
-      res.status(401).json({ success: false, error: 'Unauthorized' });
-      return;
-    }
+    if (!req.user) throw new AuthorizationError();
 
     const validation = addTagsSchema.safeParse(req.body);
     if (!validation.success) {
-      res.status(400).json({ 
-        success: false, 
+      res.status(400).json({
+        success: false,
         error: 'Invalid request data',
         details: validation.error.format(),
       });
@@ -474,8 +428,7 @@ router.post('/:transactionId/tags', authMiddleware, async (req: AuthRequest, res
 
     res.json({ success: true });
   } catch (error) {
-    console.error('Error adding tags:', error);
-    res.status(500).json({ success: false, error: 'Failed to add tags' });
+    next(error);
   }
 });
 
@@ -483,17 +436,14 @@ router.post('/:transactionId/tags', authMiddleware, async (req: AuthRequest, res
  * POST /api/v1/transactions/:transactionId/split
  * Split a transaction into multiple parts
  */
-router.post('/:transactionId/split', authMiddleware, async (req: AuthRequest, res: Response): Promise<void> => {
+router.post('/:transactionId/split', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
   try {
-    if (!req.user) {
-      res.status(401).json({ success: false, error: 'Unauthorized' });
-      return;
-    }
+    if (!req.user) throw new AuthorizationError();
 
     const validation = splitTransactionSchema.safeParse(req.body);
     if (!validation.success) {
-      res.status(400).json({ 
-        success: false, 
+      res.status(400).json({
+        success: false,
         error: 'Invalid request data',
         details: validation.error.format(),
       });
@@ -516,8 +466,7 @@ router.post('/:transactionId/split', authMiddleware, async (req: AuthRequest, re
 
     res.json({ success: true, splitTransactions: result.splitTransactions });
   } catch (error) {
-    console.error('Error splitting transaction:', error);
-    res.status(500).json({ success: false, error: 'Failed to split transaction' });
+    next(error);
   }
 });
 
@@ -525,17 +474,14 @@ router.post('/:transactionId/split', authMiddleware, async (req: AuthRequest, re
  * PUT /api/v1/transactions/bulk
  * Bulk update multiple transactions
  */
-router.put('/bulk', authMiddleware, async (req: AuthRequest, res: Response): Promise<void> => {
+router.put('/bulk', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
   try {
-    if (!req.user) {
-      res.status(401).json({ success: false, error: 'Unauthorized' });
-      return;
-    }
+    if (!req.user) throw new AuthorizationError();
 
     const validation = bulkUpdateSchema.safeParse(req.body);
     if (!validation.success) {
-      res.status(400).json({ 
-        success: false, 
+      res.status(400).json({
+        success: false,
         error: 'Invalid request data',
         details: validation.error.format(),
       });
@@ -543,114 +489,21 @@ router.put('/bulk', authMiddleware, async (req: AuthRequest, res: Response): Pro
     }
 
     const { transactionIds, updates } = validation.data;
-    
-    // Update transactions in bulk
-    let successCount = 0;
-    let failedCount = 0;
-    const errors: string[] = [];
-    
-    for (const transactionId of transactionIds) {
-      try {
-        // Update category if provided
-        if (updates.categoryId !== undefined) {
-          const result = await transactionService.updateTransactionCategory(
-            req.user.userId,
-            transactionId,
-            updates.categoryId
-          );
-          if (!result.success) {
-            failedCount++;
-            errors.push(`Transaction ${transactionId}: ${result.error}`);
-            continue;
-          }
-        }
-        
-        // Update description if provided
-        if (updates.userDescription !== undefined) {
-          const result = await transactionService.updateTransactionDescription(
-            req.user.userId,
-            transactionId,
-            updates.userDescription
-          );
-          if (!result.success) {
-            failedCount++;
-            errors.push(`Transaction ${transactionId}: ${result.error}`);
-            continue;
-          }
-        }
-        
-        // Update hidden status if provided
-        if (updates.isHidden !== undefined) {
-          const result = await transactionService.updateTransactionHidden(
-            req.user.userId,
-            transactionId,
-            updates.isHidden
-          );
-          if (!result.success) {
-            failedCount++;
-            errors.push(`Transaction ${transactionId}: ${result.error}`);
-            continue;
-          }
-        }
 
-        // Update flagged status if provided
-        if (updates.isFlagged !== undefined) {
-          const result = await transactionService.updateTransactionFlagged(
-            req.user.userId,
-            transactionId,
-            updates.isFlagged
-          );
-          if (!result.success) {
-            failedCount++;
-            errors.push(`Transaction ${transactionId}: ${result.error}`);
-            continue;
-          }
-        }
+    const { updated, failed, errors } = await transactionService.bulkUpdate(
+      req.user.userId,
+      transactionIds,
+      updates
+    );
 
-        // Add tags if provided
-        if (updates.tagsToAdd && updates.tagsToAdd.length > 0) {
-          const result = await transactionService.appendTransactionTags(
-            req.user.userId,
-            transactionId,
-            updates.tagsToAdd
-          );
-          if (!result.success) {
-            failedCount++;
-            errors.push(`Transaction ${transactionId}: ${result.error}`);
-            continue;
-          }
-        }
-
-        // Remove tags if provided
-        if (updates.tagsToRemove && updates.tagsToRemove.length > 0) {
-          const result = await transactionService.removeTransactionTags(
-            req.user.userId,
-            transactionId,
-            updates.tagsToRemove
-          );
-          if (!result.success) {
-            failedCount++;
-            errors.push(`Transaction ${transactionId}: ${result.error}`);
-            continue;
-          }
-        }
-
-        successCount++;
-      } catch (error) {
-        failedCount++;
-        errors.push(`Transaction ${transactionId}: Update failed`);
-      }
-    }
-    
-    res.json({ 
+    res.json({
       success: true,
-      updated: successCount,
-      failed: failedCount,
-      errors: errors.length > 0 ? errors : undefined,
+      updated,
+      failed,
+      errors,
     });
   } catch (error) {
-    console.error('Error performing bulk update:', error);
-    res.status(500).json({ success: false, error: 'Failed to perform bulk update' });
+    next(error);
   }
 });
 
@@ -658,47 +511,18 @@ router.put('/bulk', authMiddleware, async (req: AuthRequest, res: Response): Pro
  * GET /api/v1/transactions/summary
  * Get transaction summary/statistics
  */
-router.get('/summary', authMiddleware, async (req: AuthRequest, res: Response): Promise<void> => {
+router.get('/summary', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
   try {
-    if (!req.user) {
-      res.status(401).json({ success: false, error: 'Unauthorized' });
-      return;
-    }
+    if (!req.user) throw new AuthorizationError();
 
-    // Get this month's transactions
-    const now = new Date();
-    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
-    const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split('T')[0];
-
-    const result = await transactionService.getTransactions(req.user.userId, {
-      startDate: startOfMonth,
-      endDate: endOfMonth,
-      includePending: false,
-    });
-
-    if (!result.success || !result.transactions) {
-      res.status(500).json({ success: false, error: 'Failed to calculate summary' });
-      return;
-    }
-
-    // Calculate summary (excluding transfers)
-    const totalIncome = calculateIncome(result.transactions);
-    const totalExpenses = calculateExpenses(result.transactions);
-    const netIncome = calculateNetCashFlow(result.transactions);
+    const summary = await transactionService.getMonthlySummary(req.user.userId);
 
     res.json({
       success: true,
-      summary: {
-        month: `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`,
-        totalIncome,
-        totalExpenses,
-        netIncome,
-        transactionCount: result.transactions.length,
-      },
+      summary,
     });
   } catch (error) {
-    console.error('Error calculating summary:', error);
-    res.status(500).json({ success: false, error: 'Failed to calculate summary' });
+    next(error);
   }
 });
 
@@ -714,11 +538,9 @@ const transactionImportSchema = z.object({
  * Import transactions from CSV/TSV
  * POST /api/v1/transactions/import-csv
  */
-router.post('/import-csv', authMiddleware, async (req: AuthRequest, res: Response) => {
+router.post('/import-csv', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
-    if (!req.user?.userId) {
-      return res.status(401).json({ success: false, error: 'User not authenticated' });
-    }
+    if (!req.user?.userId) throw new AuthorizationError();
 
     // Set a longer timeout for this import endpoint
     res.setTimeout(5 * 60 * 1000); // 5 minutes
@@ -770,12 +592,8 @@ router.post('/import-csv', authMiddleware, async (req: AuthRequest, res: Respons
       });
     }
   } catch (error) {
-    console.error('Error importing transactions:', error);
-    return res.status(500).json({ 
-      success: false, 
-      error: 'Failed to import transactions',
-      details: [error instanceof Error ? error.message : 'Unknown error occurred']
-    });
+    next(error);
+    return;
   }
 });
 

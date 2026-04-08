@@ -8,7 +8,8 @@ import {
 } from '../shared/utils/categoryHelpers';
 import {
   calculateBudgetTotals,
-  BudgetTotals
+  BudgetTotals,
+  getHiddenCategoryIds
 } from '../shared/utils/budgetCalculations';
 
 // Stored budget structure with user isolation
@@ -432,6 +433,41 @@ export class BudgetService {
     }
 
     return updatedBudgets;
+  }
+
+  /**
+   * Get budget vs actual comparison for a month, including totals.
+   * Encapsulates hidden-category filtering so route handlers stay thin.
+   */
+  async getBudgetComparisonForMonth(
+    month: string,
+    actuals: Map<string, number>,
+    userId: string
+  ): Promise<{
+    comparisons: BudgetComparison[];
+    totals: { budgeted: number; actual: number; remaining: number; percentUsed: number; isOverBudget: boolean };
+  }> {
+    const categories = await this.dataService.getCategories(userId);
+    const hiddenCategoryIds = getHiddenCategoryIds(categories);
+    const comparisons = await this.getMonthlyBudgetVsActual(month, actuals, userId, hiddenCategoryIds);
+
+    const totals = comparisons.reduce(
+      (acc, comp) => ({
+        budgeted: acc.budgeted + comp.budgeted,
+        actual: acc.actual + comp.actual,
+        remaining: acc.remaining + comp.remaining,
+      }),
+      { budgeted: 0, actual: 0, remaining: 0 }
+    );
+
+    return {
+      comparisons,
+      totals: {
+        ...totals,
+        percentUsed: totals.budgeted > 0 ? Math.round((totals.actual / totals.budgeted) * 100) : 0,
+        isOverBudget: totals.actual > totals.budgeted,
+      },
+    };
   }
 }
 

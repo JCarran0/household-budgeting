@@ -2,9 +2,10 @@
  * Reporting Routes
  */
 
-import { Router, Request, Response } from 'express';
+import { Router, Request, Response, NextFunction } from 'express';
 import { reportService } from '../services';
 import { authMiddleware } from '../middleware/authMiddleware';
+import { AuthorizationError } from '../errors';
 import { z } from 'zod';
 
 const router = Router();
@@ -49,17 +50,14 @@ const projectionsSchema = z.object({
  * GET /api/v1/reports/spending-trends
  * Get spending trends by category over time
  */
-router.get('/spending-trends', authMiddleware, async (req: AuthRequest, res: Response): Promise<void> => {
+router.get('/spending-trends', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
   try {
-    if (!req.user) {
-      res.status(401).json({ success: false, error: 'Unauthorized' });
-      return;
-    }
+    if (!req.user) throw new AuthorizationError();
 
     const validation = spendingTrendsSchema.safeParse(req.query);
     if (!validation.success) {
-      res.status(400).json({ 
-        success: false, 
+      res.status(400).json({
+        success: false,
         error: 'Invalid parameters',
         details: validation.error.format(),
       });
@@ -85,8 +83,7 @@ router.get('/spending-trends', authMiddleware, async (req: AuthRequest, res: Res
       trends: result.trends,
     });
   } catch (error) {
-    console.error('Error getting spending trends:', error);
-    res.status(500).json({ success: false, error: 'Failed to get spending trends' });
+    next(error);
   }
 });
 
@@ -94,17 +91,14 @@ router.get('/spending-trends', authMiddleware, async (req: AuthRequest, res: Res
  * GET /api/v1/reports/category-breakdown
  * Get category breakdown for a period
  */
-router.get('/category-breakdown', authMiddleware, async (req: AuthRequest, res: Response): Promise<void> => {
+router.get('/category-breakdown', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
   try {
-    if (!req.user) {
-      res.status(401).json({ success: false, error: 'Unauthorized' });
-      return;
-    }
+    if (!req.user) throw new AuthorizationError();
 
     const validation = categoryBreakdownSchema.safeParse(req.query);
     if (!validation.success) {
-      res.status(400).json({ 
-        success: false, 
+      res.status(400).json({
+        success: false,
         error: 'Invalid parameters',
         details: validation.error.format(),
       });
@@ -131,8 +125,7 @@ router.get('/category-breakdown', authMiddleware, async (req: AuthRequest, res: 
       total: result.total,
     });
   } catch (error) {
-    console.error('Error getting category breakdown:', error);
-    res.status(500).json({ success: false, error: 'Failed to get category breakdown' });
+    next(error);
   }
 });
 
@@ -140,17 +133,14 @@ router.get('/category-breakdown', authMiddleware, async (req: AuthRequest, res: 
  * GET /api/v1/reports/cash-flow
  * Get cash flow summary
  */
-router.get('/cash-flow', authMiddleware, async (req: AuthRequest, res: Response): Promise<void> => {
+router.get('/cash-flow', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
   try {
-    if (!req.user) {
-      res.status(401).json({ success: false, error: 'Unauthorized' });
-      return;
-    }
+    if (!req.user) throw new AuthorizationError();
 
     const validation = cashFlowSchema.safeParse(req.query);
     if (!validation.success) {
-      res.status(400).json({ 
-        success: false, 
+      res.status(400).json({
+        success: false,
         error: 'Invalid parameters',
         details: validation.error.format(),
       });
@@ -175,8 +165,7 @@ router.get('/cash-flow', authMiddleware, async (req: AuthRequest, res: Response)
       summary: result.summary,
     });
   } catch (error) {
-    console.error('Error getting cash flow summary:', error);
-    res.status(500).json({ success: false, error: 'Failed to get cash flow summary' });
+    next(error);
   }
 });
 
@@ -184,12 +173,9 @@ router.get('/cash-flow', authMiddleware, async (req: AuthRequest, res: Response)
  * GET /api/v1/reports/projections
  * Generate cash flow projections
  */
-router.get('/projections', authMiddleware, async (req: AuthRequest, res: Response): Promise<void> => {
+router.get('/projections', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
   try {
-    if (!req.user) {
-      res.status(401).json({ success: false, error: 'Unauthorized' });
-      return;
-    }
+    if (!req.user) throw new AuthorizationError();
 
     const validation = projectionsSchema.safeParse(req.query);
     if (!validation.success) {
@@ -219,8 +205,7 @@ router.get('/projections', authMiddleware, async (req: AuthRequest, res: Respons
       hasPriorYearData: result.hasPriorYearData,
     });
   } catch (error) {
-    console.error('Error generating projections:', error);
-    res.status(500).json({ success: false, error: 'Failed to generate projections' });
+    next(error);
   }
 });
 
@@ -228,17 +213,14 @@ router.get('/projections', authMiddleware, async (req: AuthRequest, res: Respons
  * GET /api/v1/reports/income-breakdown
  * Get income category breakdown for a period
  */
-router.get('/income-breakdown', authMiddleware, async (req: AuthRequest, res: Response): Promise<void> => {
+router.get('/income-breakdown', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
   try {
-    if (!req.user) {
-      res.status(401).json({ success: false, error: 'Unauthorized' });
-      return;
-    }
+    if (!req.user) throw new AuthorizationError();
 
     const validation = categoryBreakdownSchema.safeParse(req.query);
     if (!validation.success) {
-      res.status(400).json({ 
-        success: false, 
+      res.status(400).json({
+        success: false,
         error: 'Invalid parameters',
         details: validation.error.format(),
       });
@@ -265,8 +247,7 @@ router.get('/income-breakdown', authMiddleware, async (req: AuthRequest, res: Re
       total: result.total,
     });
   } catch (error) {
-    console.error('Error getting income breakdown:', error);
-    res.status(500).json({ success: false, error: 'Failed to get income breakdown' });
+    next(error);
   }
 });
 
@@ -274,17 +255,14 @@ router.get('/income-breakdown', authMiddleware, async (req: AuthRequest, res: Re
  * GET /api/v1/reports/savings-breakdown
  * Get savings category breakdown for a period
  */
-router.get('/savings-breakdown', authMiddleware, async (req: AuthRequest, res: Response): Promise<void> => {
+router.get('/savings-breakdown', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
   try {
-    if (!req.user) {
-      res.status(401).json({ success: false, error: 'Unauthorized' });
-      return;
-    }
+    if (!req.user) throw new AuthorizationError();
 
     const validation = categoryBreakdownSchema.safeParse(req.query);
     if (!validation.success) {
-      res.status(400).json({ 
-        success: false, 
+      res.status(400).json({
+        success: false,
         error: 'Invalid parameters',
         details: validation.error.format(),
       });
@@ -310,8 +288,7 @@ router.get('/savings-breakdown', authMiddleware, async (req: AuthRequest, res: R
       total: result.total,
     });
   } catch (error) {
-    console.error('Error getting savings breakdown:', error);
-    res.status(500).json({ success: false, error: 'Failed to get savings breakdown' });
+    next(error);
   }
 });
 
@@ -319,12 +296,9 @@ router.get('/savings-breakdown', authMiddleware, async (req: AuthRequest, res: R
  * GET /api/v1/reports/year-to-date
  * Get year-to-date summary
  */
-router.get('/year-to-date', authMiddleware, async (req: AuthRequest, res: Response): Promise<void> => {
+router.get('/year-to-date', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
   try {
-    if (!req.user) {
-      res.status(401).json({ success: false, error: 'Unauthorized' });
-      return;
-    }
+    if (!req.user) throw new AuthorizationError();
 
     const result = await reportService.getYearToDateSummary(req.user.userId);
 
@@ -338,8 +312,7 @@ router.get('/year-to-date', authMiddleware, async (req: AuthRequest, res: Respon
       summary: result.summary,
     });
   } catch (error) {
-    console.error('Error getting YTD summary:', error);
-    res.status(500).json({ success: false, error: 'Failed to get YTD summary' });
+    next(error);
   }
 });
 

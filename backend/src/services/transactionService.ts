@@ -11,6 +11,7 @@ import { Repository } from './repository';
 import { StoredAccount } from './accountService';
 import { encryptionService } from '../utils/encryption';
 import { filterTransactions } from './transactionFilterEngine';
+import { calculateIncome, calculateExpenses, calculateNetCashFlow } from '../shared/utils/transactionCalculations';
 
 // Transaction status
 export type TransactionStatus = 'posted' | 'pending' | 'removed';
@@ -885,5 +886,144 @@ export class TransactionService {
     await this.repo.saveAll(transactionData.userId, transactions);
 
     return transaction;
+  }
+
+  /**
+   * Get count of uncategorized transactions for a user
+   */
+  async getUncategorizedCount(userId: string): Promise<{ count: number; total: number }> {
+    const result = await this.getTransactions(userId);
+    if (!result.success || !result.transactions) {
+      throw new Error('Failed to fetch transactions');
+    }
+    const count = result.transactions.filter(
+      t => !t.categoryId && !t.isHidden && !t.parentTransactionId
+    ).length;
+    const total = result.transactions.filter(
+      t => !t.isHidden && !t.parentTransactionId
+    ).length;
+    return { count, total };
+  }
+
+  /**
+   * Get a summary of this month's transactions (income, expenses, net)
+   */
+  async getMonthlySummary(userId: string): Promise<{
+    month: string;
+    totalIncome: number;
+    totalExpenses: number;
+    netIncome: number;
+    transactionCount: number;
+  }> {
+    const now = new Date();
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
+    const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split('T')[0];
+
+    const result = await this.getTransactions(userId, {
+      startDate: startOfMonth,
+      endDate: endOfMonth,
+      includePending: false,
+    });
+
+    if (!result.success || !result.transactions) {
+      throw new Error('Failed to calculate summary');
+    }
+
+    return {
+      month: `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`,
+      totalIncome: calculateIncome(result.transactions),
+      totalExpenses: calculateExpenses(result.transactions),
+      netIncome: calculateNetCashFlow(result.transactions),
+      transactionCount: result.transactions.length,
+    };
+  }
+
+  /**
+   * Bulk update multiple transactions with the given field updates
+   */
+  async bulkUpdate(
+    userId: string,
+    transactionIds: string[],
+    updates: {
+      categoryId?: string | null;
+      userDescription?: string | null;
+      isHidden?: boolean;
+      isFlagged?: boolean;
+      tagsToAdd?: string[];
+      tagsToRemove?: string[];
+    }
+  ): Promise<{ updated: number; failed: number; errors?: string[] }> {
+    let successCount = 0;
+    let failedCount = 0;
+    const errors: string[] = [];
+
+    for (const transactionId of transactionIds) {
+      try {
+        if (updates.categoryId !== undefined) {
+          const result = await this.updateTransactionCategory(userId, transactionId, updates.categoryId);
+          if (!result.success) {
+            failedCount++;
+            errors.push(`Transaction ${transactionId}: ${result.error}`);
+            continue;
+          }
+        }
+
+        if (updates.userDescription !== undefined) {
+          const result = await this.updateTransactionDescription(userId, transactionId, updates.userDescription);
+          if (!result.success) {
+            failedCount++;
+            errors.push(`Transaction ${transactionId}: ${result.error}`);
+            continue;
+          }
+        }
+
+        if (updates.isHidden !== undefined) {
+          const result = await this.updateTransactionHidden(userId, transactionId, updates.isHidden);
+          if (!result.success) {
+            failedCount++;
+            errors.push(`Transaction ${transactionId}: ${result.error}`);
+            continue;
+          }
+        }
+
+        if (updates.isFlagged !== undefined) {
+          const result = await this.updateTransactionFlagged(userId, transactionId, updates.isFlagged);
+          if (!result.success) {
+            failedCount++;
+            errors.push(`Transaction ${transactionId}: ${result.error}`);
+            continue;
+          }
+        }
+
+        if (updates.tagsToAdd && updates.tagsToAdd.length > 0) {
+          const result = await this.appendTransactionTags(userId, transactionId, updates.tagsToAdd);
+          if (!result.success) {
+            failedCount++;
+            errors.push(`Transaction ${transactionId}: ${result.error}`);
+            continue;
+          }
+        }
+
+        if (updates.tagsToRemove && updates.tagsToRemove.length > 0) {
+          const result = await this.removeTransactionTags(userId, transactionId, updates.tagsToRemove);
+          if (!result.success) {
+            failedCount++;
+            errors.push(`Transaction ${transactionId}: ${result.error}`);
+            continue;
+          }
+        }
+
+        successCount++;
+      } catch {
+        failedCount++;
+        errors.push(`Transaction ${transactionId}: Update failed`);
+      }
+    }
+
+    return {
+      updated: successCount,
+      failed: failedCount,
+      errors: errors.length > 0 ? errors : undefined,
+    };
   }
 }

@@ -1,8 +1,7 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
-import { budgetService, categoryService } from '../services';
+import { budgetService } from '../services';
 import { authMiddleware } from '../middleware/authMiddleware';
-import { getHiddenCategoryIds } from '../shared/utils/budgetCalculations';
 import { AuthorizationError } from '../errors';
 
 const router = Router();
@@ -170,28 +169,13 @@ router.post('/comparison/:month', async (req: Request, res: Response, next: Next
     const { month } = req.params;
     const validatedData = budgetVsActualSchema.parse(req.body);
 
-    // Fetch categories and use shared utility to identify hidden ones
-    const categories = await categoryService.getAllCategories(userId);
-    const hiddenCategoryIds = getHiddenCategoryIds(categories);
-
     const actuals = new Map(Object.entries(validatedData.actuals));
-    const comparisons = await budgetService.getMonthlyBudgetVsActual(month, actuals, userId, hiddenCategoryIds);
-
-    // Calculate totals
-    const totals = comparisons.reduce((acc, comp) => ({
-      budgeted: acc.budgeted + comp.budgeted,
-      actual: acc.actual + comp.actual,
-      remaining: acc.remaining + comp.remaining
-    }), { budgeted: 0, actual: 0, remaining: 0 });
+    const { comparisons, totals } = await budgetService.getBudgetComparisonForMonth(month, actuals, userId);
 
     res.json({
       month,
       comparisons,
-      totals: {
-        ...totals,
-        percentUsed: totals.budgeted > 0 ? Math.round((totals.actual / totals.budgeted) * 100) : 0,
-        isOverBudget: totals.actual > totals.budgeted
-      }
+      totals,
     });
   } catch (error) {
     if (error instanceof z.ZodError) {
