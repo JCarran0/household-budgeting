@@ -1,9 +1,10 @@
 /**
  * Service Singletons
- * 
+ *
  * Ensures all parts of the app use the same service instances
  */
 
+import { config } from '../config';
 import { AuthService } from './authService';
 import { DataService, UnifiedDataService, InMemoryDataService } from './dataService';
 import { PlaidService } from './plaidService';
@@ -25,7 +26,7 @@ import { ManualAccountService } from './manualAccountService';
 
 // Create data service based on environment
 // Uses StorageFactory to automatically switch between filesystem and S3
-const dataService: DataService = process.env.NODE_ENV === 'test' 
+const dataService: DataService = config.server.nodeEnv === 'test'
   ? new InMemoryDataService()
   : new UnifiedDataService();
 
@@ -60,18 +61,18 @@ const readOnlyDataService = new ReadOnlyDataServiceImpl(dataService);
 export const chatbotDataService = new ChatbotDataService(readOnlyDataService);
 const chatbotCostTracker = new ChatbotCostTracker(
   dataService,
-  Number(process.env.CHATBOT_MONTHLY_LIMIT) || 20,
+  config.ai.chatbotMonthlyLimit,
 );
 export const chatbotService = new ChatbotService(
   chatbotDataService,
   chatbotCostTracker,
-  process.env.GITHUB_ISSUES_PAT || '',
-  process.env.ANTHROPIC_API_KEY || '',
+  config.ai.githubIssuesPat,
+  config.ai.anthropicApiKey,
 );
 export const categorizationService = new CategorizationService(
   chatbotDataService,
   chatbotCostTracker,
-  process.env.ANTHROPIC_API_KEY || '',
+  config.ai.anthropicApiKey,
 );
 
 // Export dataService for other services that need it

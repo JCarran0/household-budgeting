@@ -4,8 +4,9 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 import app from './app';
+import { config } from './config';
 
-const PORT = process.env.PORT || 3001;
+const PORT = config.server.port;
 
 // Start server
 const server = app.listen(PORT, () => {
@@ -13,9 +14,9 @@ const server = app.listen(PORT, () => {
 ╔════════════════════════════════════════╗
 ║   Personal Budgeting App - Backend    ║
 ╠════════════════════════════════════════╣
-║  Environment: ${process.env.NODE_ENV || 'development'}
+║  Environment: ${config.server.nodeEnv}
 ║  Port: ${PORT}
-║  API Prefix: ${process.env.API_PREFIX || '/api/v1'}
+║  API Prefix: ${config.server.apiPrefix}
 ║  
 ║  Security Features:
 ║  ✓ JWT Authentication

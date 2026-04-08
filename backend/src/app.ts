@@ -1,6 +1,7 @@
 import express, { Express, Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
+import { config } from './config';
 import authRoutes from './routes/authRoutes';
 import plaidRoutes from './routes/plaid';
 import accountRoutes from './routes/accounts';
@@ -39,7 +40,7 @@ const corsOptions = {
     ];
     
     // In development, allow any localhost origin
-    if (process.env.NODE_ENV === 'development') {
+    if (config.server.nodeEnv === 'development') {
       if (!origin || origin.includes('localhost') || origin.includes('127.0.0.1')) {
         callback(null, true);
       } else {
@@ -74,7 +75,7 @@ app.use((_req: Request, res: Response, next: NextFunction) => {
 });
 
 // Request logging in development
-if (process.env.NODE_ENV === 'development') {
+if (config.server.nodeEnv === 'development') {
   app.use((req: Request, _res: Response, next: NextFunction) => {
     console.log(`${new Date().toISOString()} - ${req.method} ${req.path}`);
     next();
@@ -87,13 +88,13 @@ app.get('/health', (_req: Request, res: Response) => {
   res.json({
     status: 'ok',
     timestamp: new Date().toISOString(),
-    environment: process.env.NODE_ENV || 'development',
+    environment: config.server.nodeEnv,
     version: pkg.version,
   });
 });
 
 // API routes
-const apiPrefix = process.env.API_PREFIX || '/api/v1';
+const apiPrefix = config.server.apiPrefix;
 app.use(`${apiPrefix}/auth`, authRoutes);
 app.use(`${apiPrefix}/plaid`, plaidRoutes);
 app.use(`${apiPrefix}/accounts`, accountRoutes);
@@ -131,9 +132,9 @@ app.get(`${apiPrefix}/version`, (_req: Request, res: Response) => {
   
   res.json({
     current: pkg.version,
-    environment: process.env.NODE_ENV || 'development',
-    deployedAt: process.env.DEPLOYMENT_TIMESTAMP || 'unknown',
-    commitHash: process.env.COMMIT_HASH || 'unknown',
+    environment: config.server.nodeEnv,
+    deployedAt: config.deploy.timestamp,
+    commitHash: config.deploy.commitHash,
     unreleased: unreleased || 'No unreleased changes',
   });
 });
@@ -186,7 +187,7 @@ app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
   console.error('Global error handler:', err);
   
   // Don't leak error details in production
-  const isDevelopment = process.env.NODE_ENV === 'development';
+  const isDevelopment = config.server.nodeEnv === 'development';
   
   res.status(500).json({
     success: false,
