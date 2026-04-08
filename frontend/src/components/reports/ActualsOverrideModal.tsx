@@ -123,7 +123,6 @@ export function ActualsOverrideModal({ opened, onClose, override }: ActualsOverr
       notes: values.notes.trim() || undefined,
     };
 
-    console.log('Submitting data:', data);
     createOrUpdateMutation.mutate(data);
   };
 
@@ -169,9 +168,7 @@ export function ActualsOverrideModal({ opened, onClose, override }: ActualsOverr
             leftSection={<IconCurrencyDollar size={16} />}
             value={form.values.totalIncome}
             onChange={(value) => {
-              console.log('Total Income onChange:', value, 'Type:', typeof value);
               const numValue = typeof value === 'number' ? value : (typeof value === 'string' ? parseFloat(value) : 0);
-              console.log('Setting totalIncome to:', numValue);
               form.setFieldValue('totalIncome', isNaN(numValue) ? 0 : numValue);
             }}
             error={form.errors.totalIncome}
@@ -189,9 +186,7 @@ export function ActualsOverrideModal({ opened, onClose, override }: ActualsOverr
             leftSection={<IconCurrencyDollar size={16} />}
             value={form.values.totalExpenses}
             onChange={(value) => {
-              console.log('Total Expenses onChange:', value, 'Type:', typeof value);
               const numValue = typeof value === 'number' ? value : (typeof value === 'string' ? parseFloat(value) : 0);
-              console.log('Setting totalExpenses to:', numValue);
               form.setFieldValue('totalExpenses', isNaN(numValue) ? 0 : numValue);
             }}
             error={form.errors.totalExpenses}

@@ -26,6 +26,7 @@ const formatMonthString = (monthStr: string): string => {
   return date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
 };
 
+
 export function ReportSettings() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingOverride, setEditingOverride] = useState<ActualsOverride | null>(null);
