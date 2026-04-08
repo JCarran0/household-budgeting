@@ -17,17 +17,18 @@ import {
   Tooltip
 } from '@mantine/core';
 import { useMemo } from 'react';
-import { 
-  IconCash, 
-  IconWallet, 
-  IconTrendingDown, 
+import {
+  IconCash,
+  IconWallet,
+  IconTrendingDown,
   IconTrendingUp,
   IconCreditCard,
   IconPlus,
   IconArrowUpRight,
   IconArrowDownRight,
   IconAlertCircle,
-  IconCategory
+  IconCategory,
+  IconChartLine,
 } from '@tabler/icons-react';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../lib/api';
@@ -73,6 +74,19 @@ export function MantineDashboard() {
     queryFn: api.getUncategorizedCount,
   });
 
+  // Fetch YTD transactions for projected net income calculation
+  const currentYear = currentDate.getFullYear();
+  const ytdStartDate = `${currentYear}-01-01`;
+  const ytdEndDate = format(currentDate, 'yyyy-MM-dd');
+  const { data: ytdTransactionData } = useQuery({
+    queryKey: ['transactions', 'ytd', currentYear],
+    queryFn: () => api.getTransactions({
+      startDate: ytdStartDate,
+      endDate: ytdEndDate,
+      limit: 10000,
+    }),
+  });
+
   // Fetch current month's budgets to show actual budget vs spending
   const currentMonthStr = new Date().toISOString().slice(0, 7); // YYYY-MM format
   const { data: budgetData } = useQuery({
@@ -113,6 +127,36 @@ export function MantineDashboard() {
 
   const monthlySpending = actualTotals.expense;
   const monthlyIncome = actualTotals.income;
+
+  // Calculate projected net income for the year
+  // Actuals through today + budgeted net income for remaining months
+  const projectedNetIncome = useMemo(() => {
+    if (!ytdTransactionData?.transactions || !categories) {
+      return null;
+    }
+
+    const ytdTotals = calculateActualTotals(ytdTransactionData.transactions, categories, { excludeHidden: true });
+    const ytdActualNet = ytdTotals.income - ytdTotals.expense;
+
+    // Remaining full months after current month (current month uses actuals)
+    const currentMonthIndex = currentDate.getMonth(); // 0-based
+    const remainingMonths = 11 - currentMonthIndex; // months after current
+
+    // Use budget totals for projection
+    const budgetedIncome = budgetData?.totals?.income || 0;
+    const budgetedExpense = budgetData?.totals?.expense || 0;
+    const monthlyBudgetedNet = budgetedIncome - budgetedExpense;
+
+    const projectedFromBudget = remainingMonths * monthlyBudgetedNet;
+
+    return {
+      total: ytdActualNet + projectedFromBudget,
+      ytdActual: ytdActualNet,
+      projectedFromBudget,
+      remainingMonths,
+      hasBudget: budgetedIncome > 0 || budgetedExpense > 0,
+    };
+  }, [ytdTransactionData, categories, budgetData, currentDate]);
 
   // Calculate budget progress - compare spending against actual expense budget only
   const totalBudget = budgetData?.totals?.expense || 0;
@@ -163,10 +207,20 @@ export function MantineDashboard() {
       color: 'blue',
       description: 'This month',
     },
+    ...(projectedNetIncome ? [{
+      title: 'Projected Net Income',
+      value: formatCurrency(projectedNetIncome.total),
+      exactValue: formatCurrency(projectedNetIncome.total, true),
+      icon: IconChartLine,
+      color: projectedNetIncome.total >= 0 ? 'teal' : 'red',
+      description: projectedNetIncome.hasBudget
+        ? `YTD actual + ${projectedNetIncome.remainingMonths}mo budgeted`
+        : 'Based on YTD actuals only',
+    }] : []),
   ];
 
   return (
-    <Stack gap="lg">
+    <Stack gap="lg" px="lg">
       {/* Header */}
       <Group justify="space-between">
         <div>
@@ -242,14 +296,14 @@ export function MantineDashboard() {
       )}
 
       {/* Stats Cards */}
-      <SimpleGrid cols={{ base: 1, sm: 2, lg: 4 }} spacing="lg">
+      <SimpleGrid cols={{ base: 1, sm: 2, lg: stats.length > 4 ? 5 : 4 }} spacing="lg">
         {stats.map((stat) => (
           <Card key={stat.title} padding="lg" radius="md" withBorder>
-            <Group justify="space-between" mb="xs">
+            <Group justify="space-between" mb="xs" wrap="nowrap">
               <Text size="xs" c="dimmed" tt="uppercase" fw={700}>
                 {stat.title}
               </Text>
-              <ThemeIcon color={stat.color} variant="light" size="lg" radius="md">
+              <ThemeIcon color={stat.color} variant="light" size="lg" radius="md" style={{ flexShrink: 0 }}>
                 <stat.icon size={18} />
               </ThemeIcon>
             </Group>
