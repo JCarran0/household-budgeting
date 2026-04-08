@@ -6,7 +6,7 @@
  */
 
 import { DataService, InMemoryDataService } from '../../services/dataService';
-import { CategoryService } from '../../services/categoryService';
+import { CategoryService, CategoryDependencyChecker } from '../../services/categoryService';
 import { BudgetService } from '../../services/budgetService';
 import { AutoCategorizeService } from '../../services/autoCategorizeService';
 import { TransactionService } from '../../services/transactionService';
@@ -29,7 +29,15 @@ describe('Category Deletion Protection', () => {
     autoCategorizeService = new AutoCategorizeService(dataService);
     plaidService = new PlaidService();
     transactionService = new TransactionService(dataService, plaidService);
-    categoryService = new CategoryService(dataService, budgetService, autoCategorizeService, transactionService);
+
+    // Wire dependencies through the CategoryDependencyChecker interface
+    const dependencyChecker: CategoryDependencyChecker = {
+      hasBudgetsForCategory: (id, uid) => budgetService.hasBudgetsForCategory(id, uid),
+      hasRulesForCategory: (id, uid) => autoCategorizeService.hasRulesForCategory(id, uid),
+      hasTransactionsForCategory: (id, uid) => transactionService.hasTransactionsForCategory(id, uid),
+      getBlockingTransactionDetails: (id, uid) => transactionService.getBlockingTransactionDetails(id, uid),
+    };
+    categoryService = new CategoryService(dataService, dependencyChecker);
   });
   
   describe('Deletion with no references', () => {

@@ -10,7 +10,7 @@ import { DataService, UnifiedDataService, InMemoryDataService } from './dataServ
 import { PlaidService } from './plaidService';
 import { AccountService } from './accountService';
 import { TransactionService } from './transactionService';
-import { CategoryService } from './categoryService';
+import { CategoryService, CategoryDependencyChecker } from './categoryService';
 import { BudgetService } from './budgetService';
 import { ReportService } from './reportService';
 import { AutoCategorizeService } from './autoCategorizeService';
@@ -35,20 +35,33 @@ export const authService = new AuthService(dataService);
 export const plaidService = new PlaidService();
 export const accountService = new AccountService(dataService, plaidService);
 export const transactionService = new TransactionService(dataService, plaidService);
-// Create budgetService temporarily without categories callback
 export const budgetService = new BudgetService(dataService);
-// Create categoryService first without autoCategorizeService and importService
-export const categoryService = new CategoryService(dataService, budgetService, undefined, transactionService, undefined);
 
-// Update budgetService with categories callback
-(budgetService as any).getCategoriesCallback = (userId: string) => categoryService.getAllCategories(userId);
-// Then create autoCategorizeService with categoryService
+// Build the dependency checker before CategoryService is created. The checker
+// delegates to autoCategorizeService via a closure so that the actual instance
+// can be assigned after CategoryService is constructed, breaking the cycle.
+let autoCategorizeServiceRef: AutoCategorizeService | undefined;
+const categoryDependencyChecker: CategoryDependencyChecker = {
+  hasBudgetsForCategory: (id, uid) => budgetService.hasBudgetsForCategory(id, uid),
+  hasRulesForCategory: (id, uid) => {
+    if (!autoCategorizeServiceRef) throw new Error('autoCategorizeService not yet initialized');
+    return autoCategorizeServiceRef.hasRulesForCategory(id, uid);
+  },
+  hasTransactionsForCategory: (id, uid) => transactionService.hasTransactionsForCategory(id, uid),
+  getBlockingTransactionDetails: (id, uid) => transactionService.getBlockingTransactionDetails(id, uid),
+};
+
+export const categoryService = new CategoryService(dataService, categoryDependencyChecker);
+
+// Create autoCategorizeService with categoryService, then assign the ref so the
+// dependency checker closure can resolve it.
 export const autoCategorizeService = new AutoCategorizeService(dataService, categoryService);
-// Create importService with all required dependencies
+autoCategorizeServiceRef = autoCategorizeService;
+
+// Create importService with all required dependencies, then wire it back into
+// categoryService via the typed setter (no `as any` needed).
 export const importService = ImportService.getInstance(dataService, categoryService, transactionService, autoCategorizeService);
-// Now update categoryService with autoCategorizeService and importService references
-(categoryService as any).autoCategorizeService = autoCategorizeService;
-(categoryService as any).importService = importService;
+categoryService.setImportService(importService);
 export const actualsOverrideService = new ActualsOverrideService(dataService);
 export const manualAccountService = new ManualAccountService(dataService);
 export const reportService = new ReportService(dataService, actualsOverrideService);

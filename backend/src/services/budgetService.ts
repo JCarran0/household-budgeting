@@ -1,5 +1,5 @@
 import { v4 as uuidv4 } from 'uuid';
-import { MonthlyBudget, Category, BudgetType } from '../shared/types';
+import { MonthlyBudget, Category } from '../shared/types';
 import { DataService } from './dataService';
 import {
   createCategoryLookup,
@@ -38,8 +38,7 @@ export interface BudgetComparison {
 
 export class BudgetService {
   constructor(
-    private dataService: DataService,
-    private getCategoriesCallback?: (userId: string) => Promise<Category[]>
+    private dataService: DataService
   ) {}
 
   private validateMonth(month: string): void {
@@ -129,7 +128,7 @@ export class BudgetService {
     const monthlyBudgets = await this.getMonthlyBudgets(month, userId);
 
     // Get categories to properly filter the budgets
-    const categories = this.getCategoriesCallback ? await this.getCategoriesCallback(userId) : [];
+    const categories = await this.dataService.getCategories(userId);
 
     // Use shared utility to calculate proper budget totals
     return calculateBudgetTotals(monthlyBudgets, categories, {
@@ -164,55 +163,34 @@ export class BudgetService {
     userId: string
   ): Promise<BudgetComparison | null> {
     // Check if category is budgetable (excludes only transfers)
-    if (this.getCategoriesCallback) {
-      const categories = await this.getCategoriesCallback(userId);
-      if (!isBudgetableCategory(categoryId, categories)) {
-        return null;
-      }
-      
-      const budgetType = getBudgetType(categoryId, categories);
-      const isIncomeCategory = budgetType === 'income';
-      
-      const budget = await this.getBudget(categoryId, month, userId);
-      const budgeted = budget?.amount || 0;
-      
-      // For income categories, we want to handle inverse logic:
-      // - remaining = actual - budgeted (positive remaining = good for income)
-      // - isOverBudget = actual < budgeted (under target is "bad" for income)
-      let remaining: number;
-      let isOverBudget: boolean;
-      
-      if (isIncomeCategory) {
-        // Income: exceeding budget is good, falling short is bad
-        remaining = actualAmount - budgeted; // positive = over target (good)
-        isOverBudget = actualAmount < budgeted; // under target is "over budget" semantically
-      } else {
-        // Expense: normal logic - under budget is good, over is bad
-        remaining = budgeted - actualAmount; // positive = under budget (good)
-        isOverBudget = actualAmount > budgeted || (budgeted === 0 && actualAmount > 0);
-      }
-      
-      const percentUsed = budgeted > 0 ? (Math.abs(actualAmount) / budgeted) * 100 : 0;
-
-      return {
-        categoryId,
-        month,
-        budgeted,
-        actual: actualAmount,
-        remaining,
-        percentUsed: Math.round(percentUsed),
-        isOverBudget,
-        budgetType,
-        isIncomeCategory
-      };
+    const categories = await this.dataService.getCategories(userId);
+    if (!isBudgetableCategory(categoryId, categories)) {
+      return null;
     }
-    
-    // Fallback for when no categories callback is available
-    // Default to expense logic
+
+    const budgetType = getBudgetType(categoryId, categories);
+    const isIncomeCategory = budgetType === 'income';
+
     const budget = await this.getBudget(categoryId, month, userId);
     const budgeted = budget?.amount || 0;
-    const remaining = budgeted - actualAmount;
-    const percentUsed = budgeted > 0 ? (actualAmount / budgeted) * 100 : 0;
+
+    // For income categories, we want to handle inverse logic:
+    // - remaining = actual - budgeted (positive remaining = good for income)
+    // - isOverBudget = actual < budgeted (under target is "bad" for income)
+    let remaining: number;
+    let isOverBudget: boolean;
+
+    if (isIncomeCategory) {
+      // Income: exceeding budget is good, falling short is bad
+      remaining = actualAmount - budgeted; // positive = over target (good)
+      isOverBudget = actualAmount < budgeted; // under target is "over budget" semantically
+    } else {
+      // Expense: normal logic - under budget is good, over is bad
+      remaining = budgeted - actualAmount; // positive = under budget (good)
+      isOverBudget = actualAmount > budgeted || (budgeted === 0 && actualAmount > 0);
+    }
+
+    const percentUsed = budgeted > 0 ? (Math.abs(actualAmount) / budgeted) * 100 : 0;
 
     return {
       categoryId,
@@ -221,9 +199,9 @@ export class BudgetService {
       actual: actualAmount,
       remaining,
       percentUsed: Math.round(percentUsed),
-      isOverBudget: actualAmount > budgeted || (budgeted === 0 && actualAmount > 0),
-      budgetType: 'expense' as BudgetType,
-      isIncomeCategory: false
+      isOverBudget,
+      budgetType,
+      isIncomeCategory
     };
   }
 
@@ -237,18 +215,13 @@ export class BudgetService {
     const comparisons: BudgetComparison[] = [];
 
     // Get categories for budget type detection and hierarchy traversal
-    let categoryLookup: Map<string, Category> | null = null;
-    if (this.getCategoriesCallback) {
-      const categories = await this.getCategoriesCallback(userId);
-      categoryLookup = createCategoryLookup(categories);
-    }
+    const categories = await this.dataService.getCategories(userId);
+    const categoryLookup: Map<string, Category> = createCategoryLookup(categories);
 
     // Process budgeted categories (including both income and expense categories, excluding only hidden)
     for (const budget of budgets) {
       // Skip non-budgetable categories (transfers)
-      const isBudgetable = categoryLookup 
-        ? isBudgetableCategory(budget.categoryId, categoryLookup.get(budget.categoryId) ? Array.from(categoryLookup.values()) : [])
-        : !budget.categoryId.startsWith('TRANSFER_');
+      const isBudgetable = isBudgetableCategory(budget.categoryId, Array.from(categoryLookup.values()));
       
       if (!isBudgetable) {
         continue;
@@ -269,9 +242,7 @@ export class BudgetService {
     // Process unbudgeted categories with actuals (including both income and expense, excluding only transfers and hidden)
     for (const [categoryId, actual] of actuals) {
       // Skip non-budgetable categories (transfers)
-      const isBudgetable = categoryLookup 
-        ? isBudgetableCategory(categoryId, Array.from(categoryLookup.values()))
-        : !categoryId.startsWith('TRANSFER_');
+      const isBudgetable = isBudgetableCategory(categoryId, Array.from(categoryLookup.values()));
         
       if (!isBudgetable) {
         continue;
@@ -464,18 +435,3 @@ export class BudgetService {
   }
 }
 
-// Export singleton instance
-let budgetServiceInstance: BudgetService | null = null;
-
-export function getBudgetService(
-  dataService?: DataService, 
-  getCategoriesCallback?: (userId: string) => Promise<Category[]>
-): BudgetService {
-  if (!budgetServiceInstance) {
-    if (!dataService) {
-      throw new Error('DataService must be provided when creating BudgetService instance');
-    }
-    budgetServiceInstance = new BudgetService(dataService, getCategoriesCallback);
-  }
-  return budgetServiceInstance;
-}

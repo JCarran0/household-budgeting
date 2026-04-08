@@ -11,7 +11,7 @@ This plan captures the top 10 architectural refactoring targets identified throu
 | Item | Status | Commit | Notes |
 |------|--------|--------|-------|
 | R10. Config Validation | **Done** | `5d0eea4` | Backend config module created and wired in. Frontend config deferred. |
-| R8. Repository Base Class | Not started | | |
+| R8. Repository Base Class | **Done** | `fbe27b1` | Generic `Repository<T>` created with 23 tests. Migration of services deferred. |
 | R4. Frontend Test Infra | Not started | | |
 | R2. Fix Circular Deps | Not started | | |
 | R1. Split TransactionService | Not started | | |
@@ -280,49 +280,16 @@ frontend/src/lib/
 
 ---
 
-### R8. Extract Data Repository Base Class
+### R8. Extract Data Repository Base Class — DONE
 
-**Problem:** 8+ services repeat identical `getData`/`saveData` boilerplate with string-based keys like `budgets_${userId}`. No schema validation on keys. A typo in a key name causes silent data loss.
+> **Completed:** 2026-04-07 | **Commit:** `fbe27b1`
 
-**Target state:**
-```typescript
-// Generic repository with typed keys and serialization
-class Repository<T> {
-  constructor(
-    private dataService: DataService,
-    private entityName: string // e.g., 'budgets', 'categories'
-  ) {}
+**What was done:**
+- Created `backend/src/services/repository.ts` — Generic `Repository<T>` class (49 LOC) with `getAll`, `saveAll`, `findBy`, `findById`, `deleteAll` methods. Encapsulates the `{entityName}_{userId}` key convention and bakes in empty-array defaults.
+- Created `backend/src/__tests__/unit/repository.test.ts` — 23 tests covering key generation, CRUD, field-based lookup, and user isolation using `InMemoryDataService` directly.
 
-  async getAll(userId: string): Promise<T[]> {
-    return await this.dataService.getData<T[]>(
-      `${this.entityName}_${userId}`
-    ) || [];
-  }
-
-  async save(userId: string, data: T[]): Promise<void> {
-    await this.dataService.saveData(`${this.entityName}_${userId}`, data);
-  }
-
-  async getById(userId: string, id: string, idField: keyof T = 'id' as keyof T): Promise<T | undefined> {
-    const all = await this.getAll(userId);
-    return all.find(item => item[idField] === id);
-  }
-}
-```
-
-**Pre-refactor test work:**
-1. **Assess:** DataService itself has no unit tests. Each service's data access is tested via its own unit/integration tests.
-2. **Gap fill:**
-   - Add unit tests for DataService: read, write, delete, list operations
-   - Add tests verifying key naming conventions match across services (catch any existing inconsistencies before they're baked into the Repository class)
-   - Test edge cases: empty data, corrupted JSON, concurrent writes
-3. **Confidence gate:** DataService unit tests pass. Key naming audit is clean.
-
-**Key files:**
-- `backend/src/services/dataService.ts`
-- All services that call `this.dataService.getData()` / `this.dataService.saveData()`
-
-**Estimated effort:** Low-Medium
+**Remaining work (not blocking):**
+- Migrate existing services to compose or extend `Repository<T>` instead of calling `dataService.getData`/`saveData` directly. Can be done incrementally as services are touched in R1/R3 refactors.
 
 ---
 

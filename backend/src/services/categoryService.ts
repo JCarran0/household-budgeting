@@ -1,9 +1,26 @@
 import { Category } from '../shared/types';
 import { DataService } from './dataService';
-import { BudgetService } from './budgetService';
-import { AutoCategorizeService } from './autoCategorizeService';
-import { TransactionService } from './transactionService';
 import { ImportService } from './importService';
+
+/**
+ * Interface for checking if a category has dependencies that prevent deletion.
+ * This breaks the circular dependency between CategoryService and other services.
+ */
+export interface CategoryDependencyChecker {
+  hasBudgetsForCategory(categoryId: string, userId: string): Promise<boolean>;
+  hasRulesForCategory(categoryId: string, userId: string): Promise<boolean>;
+  hasTransactionsForCategory(categoryId: string, userId: string): Promise<boolean>;
+  getBlockingTransactionDetails(categoryId: string, userId: string): Promise<{
+    count: number;
+    sampleTransactions: Array<{
+      id: string;
+      description: string;
+      amount: number;
+      date: string;
+      accountId: string;
+    }>;
+  }>;
+}
 
 export interface CategoryWithChildren extends Category {
   children?: Category[];
@@ -27,13 +44,21 @@ export interface UpdateCategoryDto {
 }
 
 export class CategoryService {
+  private importService?: ImportService;
+
   constructor(
     private dataService: DataService,
-    private budgetService?: BudgetService,
-    private autoCategorizeService?: AutoCategorizeService,
-    private transactionService?: TransactionService,
-    private importService?: ImportService
+    private dependencyChecker?: CategoryDependencyChecker
   ) {}
+
+  /**
+   * Late-bind the ImportService to break the circular dependency between
+   * CategoryService and ImportService (each needs the other at construction time).
+   * Must be called before any CSV import operations.
+   */
+  setImportService(importService: ImportService): void {
+    this.importService = importService;
+  }
 
   /**
    * Determine if a category should be marked as income based on its hierarchy
@@ -179,26 +204,26 @@ export class CategoryService {
     }
     
     // Check if category has associated budgets
-    if (this.budgetService) {
-      const hasBudgets = await this.budgetService.hasBudgetsForCategory(id, userId);
+    if (this.dependencyChecker) {
+      const hasBudgets = await this.dependencyChecker.hasBudgetsForCategory(id, userId);
       if (hasBudgets) {
         throw new Error('Cannot delete category with active budgets. Please delete the budgets first.');
       }
     }
-    
+
     // Check if category is used in auto-categorization rules
-    if (this.autoCategorizeService) {
-      const hasRules = await this.autoCategorizeService.hasRulesForCategory(id, userId);
+    if (this.dependencyChecker) {
+      const hasRules = await this.dependencyChecker.hasRulesForCategory(id, userId);
       if (hasRules) {
         throw new Error('Cannot delete category used in auto-categorization rules. Please update or delete the rules first.');
       }
     }
-    
+
     // Check if category has associated transactions
-    if (this.transactionService) {
-      const hasTransactions = await this.transactionService.hasTransactionsForCategory(id, userId);
+    if (this.dependencyChecker) {
+      const hasTransactions = await this.dependencyChecker.hasTransactionsForCategory(id, userId);
       if (hasTransactions) {
-        const blockingDetails = await this.transactionService.getBlockingTransactionDetails(id, userId);
+        const blockingDetails = await this.dependencyChecker.getBlockingTransactionDetails(id, userId);
 
         let errorMessage = `Cannot delete category with ${blockingDetails.count} associated transaction${blockingDetails.count > 1 ? 's' : ''}.`;
 
@@ -327,16 +352,13 @@ let categoryServiceInstance: CategoryService | null = null;
 
 export function getCategoryService(
   dataService?: DataService,
-  budgetService?: BudgetService,
-  autoCategorizeService?: AutoCategorizeService,
-  transactionService?: TransactionService,
-  importService?: ImportService
+  dependencyChecker?: CategoryDependencyChecker
 ): CategoryService {
   if (!categoryServiceInstance) {
     if (!dataService) {
       throw new Error('DataService must be provided when creating CategoryService instance');
     }
-    categoryServiceInstance = new CategoryService(dataService, budgetService, autoCategorizeService, transactionService, importService);
+    categoryServiceInstance = new CategoryService(dataService, dependencyChecker);
   }
   return categoryServiceInstance;
 }
