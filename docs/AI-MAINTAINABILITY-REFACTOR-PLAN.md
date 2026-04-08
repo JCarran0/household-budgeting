@@ -39,10 +39,12 @@ Before planning each refactor, here's where we stand today:
 
 | Area | Coverage Level | Notes |
 |------|---------------|-------|
+| Config module | **Strong** | 41 unit tests (added in R10) |
+| Repository base class | **Strong** | 23 unit tests (added in R8) |
 | Shared utils (budgetCalculations, categoryHelpers) | **Strong** | 682 + 267 LOC of unit tests |
 | Auth service | **Strong** | 517 LOC unit tests |
 | Budget service | **Moderate** | 429 LOC unit tests |
-| Category service | **Moderate** | 458 LOC unit tests |
+| Category service | **Moderate** | 458 LOC unit tests; deletion protection tested via integration |
 | Plaid service | **Moderate** | 650 LOC unit + integration |
 | Transaction service | **Indirect only** | No unit tests; covered by integration stories |
 | Report service | **Indirect only** | No unit tests; covered by financial-calc stories |
@@ -324,16 +326,16 @@ frontend/src/lib/
 The items are ordered to maximize early value and minimize dependencies between items.
 
 ```
-Phase 1: Foundation (do first — enables everything else)
-├── R10. Config validation (Low effort, immediate safety win)
-├── R8.  Repository base class (Low effort, reduces noise in later refactors)
-└── R4.  Frontend test infra setup ONLY (prerequisite for R4/R5 refactoring)
+Phase 1: Foundation ✅ COMPLETE
+├── R10. Config validation ✅
+├── R8.  Repository base class ✅
+└── R4.  Frontend test infra setup ONLY (deferred — not blocking Phase 2)
 
-Phase 2: Backend structural improvements
-├── R2.  Fix circular deps / DI (unblocks clean service splitting)
-├── R1.  Split TransactionService (highest-risk god object)
-├── R3.  Split ReportService (second highest-risk god object)
-└── R6.  Standardize error handling (easier after services are smaller)
+Phase 2: Backend structural improvements (IN PROGRESS)
+├── R2.  Fix circular deps / DI ✅
+├── R1.  Split TransactionService ← NEXT
+├── R3.  Split ReportService
+└── R6.  Standardize error handling
 
 Phase 3: Frontend decomposition
 ├── R4.  Decompose Reports.tsx (largest frontend file)
