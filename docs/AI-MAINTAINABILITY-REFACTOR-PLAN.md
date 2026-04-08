@@ -19,7 +19,7 @@ This plan captures the top 10 architectural refactoring targets identified throu
 | R6. Standardize Errors | **Done** | `98bf9a2` | Error classes + middleware + 2 routes migrated (budgets, trips). 33 tests. |
 | R4. Decompose Reports.tsx | Not started | | |
 | R5. Decompose EnhancedTransactions.tsx | Not started | | |
-| R7. Split API Client | Not started | | |
+| R7. Split API Client | **Done** | `4373790` | 9 domain modules. api.ts reduced from 1,206 to 43 LOC. Zero import changes. |
 | R9. Move Logic Out of Routes | Not started | | |
 
 ---
@@ -189,38 +189,26 @@ pages/EnhancedTransactions.tsx (~250 LOC — layout, coordination)
 
 ---
 
-### R7. Split API Client (1,206 LOC)
+### R7. Split API Client (1,206 LOC) — DONE
 
-**Problem:** `frontend/src/lib/api.ts` contains 60+ methods in a single file with no domain grouping. Every new endpoint grows this file. Type definitions are duplicated from `shared/types/`.
+> **Completed:** 2026-04-08 | **Commit:** `4373790`
 
-**Target state:**
-```
-frontend/src/lib/
-  ├── api.ts (~100 LOC — shared client instance, auth interceptors, base config)
-  ├── api/
-  │   ├── transactions.ts (~200 LOC)
-  │   ├── budgets.ts (~150 LOC)
-  │   ├── categories.ts (~120 LOC)
-  │   ├── reports.ts (~150 LOC)
-  │   ├── accounts.ts (~120 LOC)
-  │   ├── chat.ts (~100 LOC)
-  │   └── admin.ts (~100 LOC)
-  └── types/ → imports from shared/types/ (no local redefinitions)
-```
+**What was done:**
+- Split 1,206 LOC `ApiClient` class into 9 domain modules under `frontend/src/lib/api/`:
+  - `client.ts` (61 LOC) — shared Axios instance with auth/error interceptors
+  - `auth.ts` (79 LOC) — login, register, password reset
+  - `accounts.ts` (80 LOC) — Plaid accounts, reauth
+  - `transactions.ts` (136 LOC) — CRUD, sync, bulk ops, CSV import
+  - `categories.ts` (118 LOC) — CRUD, tree, deletion workflow
+  - `budgets.ts` (162 LOC) — CRUD, comparison, rollover, yearly
+  - `reports.ts` (151 LOC) — trends, breakdowns, cash flow, YTD
+  - `admin.ts` (48 LOC) — migrations, cleanup
+  - `misc.ts` (400 LOC) — trips, chatbot, feedback, themes, auto-categorize, manual accounts
+- `api.ts` reduced to 43 LOC — creates client, composes domain modules, re-exports all types
+- All 41 existing import sites work without changes. TypeScript compilation and production build pass.
 
-**Pre-refactor test work:**
-1. **Assess:** No tests for API client.
-2. **Gap fill:**
-   - This is a structural refactor (moving methods between files) with no logic changes
-   - Rather than testing the API client directly, verify with TypeScript compilation — all existing call sites must still compile after the split
-   - Add a simple smoke test: each API module exports the expected methods
-3. **Confidence gate:** `tsc --noEmit` passes. All existing imports resolve. Existing integration/E2E tests (once R4 adds them) still pass.
-
-**Key files:**
-- `frontend/src/lib/api.ts`
-- All files that import from `frontend/src/lib/api`
-
-**Estimated effort:** Low-Medium
+**Remaining work (not blocking):**
+- `misc.ts` (400 LOC) is still a grab-bag. Can be split further into `trips.ts`, `chat.ts`, `feedback.ts`, `themes.ts` etc. as those areas are worked on.
 
 ---
 
@@ -296,10 +284,10 @@ Phase 2: Backend structural improvements ✅ COMPLETE
 ├── R3.  Split ReportService ✅
 └── R6.  Standardize error handling ✅
 
-Phase 3: Frontend decomposition ← NEXT
-├── R4.  Decompose Reports.tsx (largest frontend file)
+Phase 3: Frontend decomposition (IN PROGRESS)
+├── R4.  Decompose Reports.tsx ← NEXT
 ├── R5.  Decompose EnhancedTransactions.tsx
-└── R7.  Split API client (mechanical, low risk)
+└── R7.  Split API client ✅
 
 Phase 4: Cleanup
 └── R9.  Move business logic out of routes (easier after services are well-structured)
