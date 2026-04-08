@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.7.0](https://github.com/JCarran0/household-budgeting/compare/v5.6.0...v5.7.0) (2026-04-08)
+
+
+### Features
+
+* **reports:** make budget tab actual amounts clickable for transaction preview ([ca1d6de](https://github.com/JCarran0/household-budgeting/commit/ca1d6de742049258310eaf2a062bd62a2d8dcbcb))
+* **ui:** persist active tab on Reports and Accounts pages ([77780fc](https://github.com/JCarran0/household-budgeting/commit/77780fc4dd0c74616544baa41852d182a60cbb31))
+
 ## [5.6.0](https://github.com/JCarran0/household-budgeting/compare/v5.5.0...v5.6.0) (2026-04-08)
 
 
