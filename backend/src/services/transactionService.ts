@@ -7,9 +7,10 @@
 import { v4 as uuidv4 } from 'uuid';
 import { PlaidService, Transaction as PlaidTransaction } from './plaidService';
 import { DataService } from './dataService';
+import { Repository } from './repository';
 import { StoredAccount } from './accountService';
 import { encryptionService } from '../utils/encryption';
-import { isTransferCategory } from '../shared/utils/categoryHelpers';
+import { filterTransactions } from './transactionFilterEngine';
 
 // Transaction status
 export type TransactionStatus = 'posted' | 'pending' | 'removed';
@@ -90,10 +91,14 @@ export interface SyncResult {
 }
 
 export class TransactionService {
+  private repo: Repository<StoredTransaction>;
+
   constructor(
-    private dataService: DataService,
+    dataService: DataService,
     private plaidService: PlaidService
-  ) {}
+  ) {
+    this.repo = new Repository<StoredTransaction>(dataService, 'transactions');
+  }
 
   /**
    * Check if a location object contains any non-null data
@@ -222,9 +227,7 @@ export class TransactionService {
     plaidTransactions: PlaidTransaction[]
   ): Promise<{ added: number; modified: number; removed: number }> {
     // Load existing transactions
-    const existingTransactions = await this.dataService.getData<StoredTransaction[]>(
-      `transactions_${userId}`
-    ) || [];
+    const existingTransactions = await this.repo.getAll(userId);
 
     // Create lookup maps
     const existingByPlaidId = new Map<string, StoredTransaction>();
@@ -284,7 +287,7 @@ export class TransactionService {
     }
 
     // Save all transactions
-    await this.dataService.saveData(`transactions_${userId}`, existingTransactions);
+    await this.repo.saveAll(userId, existingTransactions);
 
     return { added, modified, removed };
   }
@@ -398,135 +401,8 @@ export class TransactionService {
     filter: TransactionFilter = {}
   ): Promise<TransactionsResult> {
     try {
-      const allTransactions = await this.dataService.getData<StoredTransaction[]>(
-        `transactions_${userId}`
-      ) || [];
-
-      // Get base transactions (excluding removed and pending if not included)
-      let baseTransactions = allTransactions.filter((txn: StoredTransaction) => txn.status !== 'removed');
-      
-      // Apply base filters that affect the total count
-      if (!filter.includePending) {
-        baseTransactions = baseTransactions.filter((txn: StoredTransaction) => !txn.pending);
-      }
-
-      let filtered = baseTransactions;
-
-      // Apply date and account filters (these are part of the base query)
-      if (filter.startDate) {
-        filtered = filtered.filter((txn: StoredTransaction) => txn.date >= filter.startDate!);
-      }
-
-      if (filter.endDate) {
-        filtered = filtered.filter((txn: StoredTransaction) => txn.date <= filter.endDate!);
-      }
-
-      if (filter.accountIds && filter.accountIds.length > 0) {
-        filtered = filtered.filter((txn: StoredTransaction) => filter.accountIds!.includes(txn.accountId));
-      }
-      
-      // Calculate total after date/account filters but before search/category/tag filters
-      // This gives us the denominator for "Showing X of Y transactions"
-      const totalBeforeSearchFilters = filter.includeHidden 
-        ? filtered.length
-        : filtered.filter((txn: StoredTransaction) => !txn.isHidden).length;
-
-      if (filter.categoryIds && filter.categoryIds.length > 0) {
-        filtered = filtered.filter((txn: StoredTransaction) => {
-          // Handle "uncategorized" special case first
-          if (filter.categoryIds!.includes('uncategorized')) {
-            // If uncategorized is selected, include transactions without categories
-            if (!txn.categoryId) return true;
-          }
-          
-          // For regular categories, check if the transaction's category is in the filter
-          return txn.categoryId ? filter.categoryIds!.includes(txn.categoryId) : false;
-        });
-      }
-
-      if (filter.tags && filter.tags.length > 0) {
-        filtered = filtered.filter((txn: StoredTransaction) => 
-          filter.tags!.some(tag => txn.tags.includes(tag))
-        );
-      }
-
-      if (!filter.includePending) {
-        filtered = filtered.filter((txn: StoredTransaction) => !txn.pending);
-      }
-
-      if (!filter.includeHidden) {
-        filtered = filtered.filter((txn: StoredTransaction) => !txn.isHidden);
-      }
-
-      if (filter.onlyUncategorized) {
-        filtered = filtered.filter((txn: StoredTransaction) => !txn.categoryId);
-      }
-
-      if (filter.onlyFlagged) {
-        filtered = filtered.filter((txn: StoredTransaction) => txn.isFlagged);
-      }
-
-      // Handle exact amount search with tolerance
-      if (filter.exactAmount !== undefined) {
-        const tolerance = filter.amountTolerance || 0.50; // Default tolerance of $0.50
-        const targetAmount = filter.exactAmount;
-        filtered = filtered.filter((txn: StoredTransaction) => {
-          const txnAmount = Math.abs(txn.amount);
-          return txnAmount >= (targetAmount - tolerance) && txnAmount <= (targetAmount + tolerance);
-        });
-      } else {
-        // Handle min/max range search (only if not doing exact search)
-        if (filter.minAmount !== undefined) {
-          filtered = filtered.filter((txn: StoredTransaction) => txn.amount >= filter.minAmount!);
-        }
-
-        if (filter.maxAmount !== undefined) {
-          filtered = filtered.filter((txn: StoredTransaction) => txn.amount <= filter.maxAmount!);
-        }
-      }
-
-      if (filter.searchQuery) {
-        const query = filter.searchQuery.toLowerCase();
-        filtered = filtered.filter((txn: StoredTransaction) => 
-          txn.name.toLowerCase().includes(query) ||
-          (txn.merchantName && txn.merchantName.toLowerCase().includes(query)) ||
-          txn.tags.some(tag => tag.toLowerCase().includes(query)) ||
-          (txn.notes && txn.notes.toLowerCase().includes(query))
-        );
-      }
-
-      // Filter by income vs expense vs transfers
-      if (filter.transactionType && filter.transactionType !== 'all') {
-        filtered = filtered.filter((txn: StoredTransaction) => {
-          // Check if this is a transfer transaction
-          const isTransfer = txn.categoryId ? isTransferCategory(txn.categoryId) : false;
-          
-          if (filter.transactionType === 'transfer') {
-            // Show only transfers
-            return isTransfer;
-          } else if (filter.transactionType === 'income' || filter.transactionType === 'expense') {
-            // Exclude transfers from income/expense filters
-            if (isTransfer) return false;
-            
-            // In Plaid, positive amounts are debits (expenses), negative amounts are credits (income)
-            // Zero amounts are treated as expenses (non-income)
-            const isExpense = txn.amount >= 0;
-            return filter.transactionType === 'expense' ? isExpense : !isExpense;
-          }
-          
-          return true;
-        });
-      }
-
-      // Sort by date descending
-      filtered.sort((a: StoredTransaction, b: StoredTransaction) => b.date.localeCompare(a.date));
-
-      return {
-        success: true,
-        transactions: filtered,
-        totalCount: filtered.length,
-        unfilteredTotal: totalBeforeSearchFilters,
-      };
+      const allTransactions = await this.repo.getAll(userId);
+      return filterTransactions(allTransactions, filter);
     } catch (error) {
       console.error('Error fetching transactions:', error);
       return {
@@ -545,9 +421,7 @@ export class TransactionService {
     categoryId: string | null
   ): Promise<{ success: boolean; error?: string }> {
     try {
-      const transactions = await this.dataService.getData<StoredTransaction[]>(
-        `transactions_${userId}`
-      ) || [];
+      const transactions = await this.repo.getAll(userId);
 
       const transaction = transactions.find(t => t.id === transactionId);
       if (!transaction) {
@@ -558,7 +432,7 @@ export class TransactionService {
       transaction.categoryId = categoryId;
       transaction.updatedAt = new Date();
 
-      await this.dataService.saveData(`transactions_${userId}`, transactions);
+      await this.repo.saveAll(userId, transactions);
 
       return { success: true };
     } catch (error) {
@@ -575,9 +449,7 @@ export class TransactionService {
     tags: string[]
   ): Promise<{ success: boolean; error?: string }> {
     try {
-      const transactions = await this.dataService.getData<StoredTransaction[]>(
-        `transactions_${userId}`
-      ) || [];
+      const transactions = await this.repo.getAll(userId);
 
       const transaction = transactions.find(t => t.id === transactionId);
       if (!transaction) {
@@ -588,7 +460,7 @@ export class TransactionService {
       transaction.tags = tags;
       transaction.updatedAt = new Date();
 
-      await this.dataService.saveData(`transactions_${userId}`, transactions);
+      await this.repo.saveAll(userId, transactions);
 
       return { success: true };
     } catch (error) {
@@ -605,9 +477,7 @@ export class TransactionService {
     tagsToAdd: string[]
   ): Promise<{ success: boolean; error?: string }> {
     try {
-      const transactions = await this.dataService.getData<StoredTransaction[]>(
-        `transactions_${userId}`
-      ) || [];
+      const transactions = await this.repo.getAll(userId);
 
       const transaction = transactions.find(t => t.id === transactionId);
       if (!transaction) {
@@ -621,7 +491,7 @@ export class TransactionService {
 
       transaction.tags = merged;
       transaction.updatedAt = new Date();
-      await this.dataService.saveData(`transactions_${userId}`, transactions);
+      await this.repo.saveAll(userId, transactions);
 
       return { success: true };
     } catch (error) {
@@ -638,9 +508,7 @@ export class TransactionService {
     tagsToRemove: string[]
   ): Promise<{ success: boolean; error?: string }> {
     try {
-      const transactions = await this.dataService.getData<StoredTransaction[]>(
-        `transactions_${userId}`
-      ) || [];
+      const transactions = await this.repo.getAll(userId);
 
       const transaction = transactions.find(t => t.id === transactionId);
       if (!transaction) {
@@ -655,7 +523,7 @@ export class TransactionService {
 
       transaction.tags = filtered;
       transaction.updatedAt = new Date();
-      await this.dataService.saveData(`transactions_${userId}`, transactions);
+      await this.repo.saveAll(userId, transactions);
 
       return { success: true };
     } catch (error) {
@@ -677,9 +545,7 @@ export class TransactionService {
     }>
   ): Promise<{ success: boolean; error?: string; splitTransactions?: StoredTransaction[] }> {
     try {
-      const transactions = await this.dataService.getData<StoredTransaction[]>(
-        `transactions_${userId}`
-      ) || [];
+      const transactions = await this.repo.getAll(userId);
 
       const originalTransaction = transactions.find(t => t.id === transactionId);
       if (!originalTransaction) {
@@ -743,7 +609,7 @@ export class TransactionService {
       originalTransaction.updatedAt = now;
 
       // Save all transactions
-      await this.dataService.saveData(`transactions_${userId}`, transactions);
+      await this.repo.saveAll(userId, transactions);
 
       return { success: true, splitTransactions };
     } catch (error) {
@@ -761,9 +627,7 @@ export class TransactionService {
     description: string | null
   ): Promise<{ success: boolean; error?: string }> {
     try {
-      const transactions = await this.dataService.getData<StoredTransaction[]>(
-        `transactions_${userId}`
-      ) || [];
+      const transactions = await this.repo.getAll(userId);
 
       const transaction = transactions.find(t => t.id === transactionId);
       if (!transaction) {
@@ -773,7 +637,7 @@ export class TransactionService {
       transaction.userDescription = description;
       transaction.updatedAt = new Date();
 
-      await this.dataService.saveData(`transactions_${userId}`, transactions);
+      await this.repo.saveAll(userId, transactions);
       return { success: true };
     } catch (error) {
       console.error('Error updating transaction description:', error);
@@ -790,9 +654,7 @@ export class TransactionService {
     isFlagged: boolean
   ): Promise<{ success: boolean; error?: string }> {
     try {
-      const transactions = await this.dataService.getData<StoredTransaction[]>(
-        `transactions_${userId}`
-      ) || [];
+      const transactions = await this.repo.getAll(userId);
 
       const transaction = transactions.find(t => t.id === transactionId);
       if (!transaction) {
@@ -802,7 +664,7 @@ export class TransactionService {
       transaction.isFlagged = isFlagged;
       transaction.updatedAt = new Date();
 
-      await this.dataService.saveData(`transactions_${userId}`, transactions);
+      await this.repo.saveAll(userId, transactions);
       return { success: true };
     } catch (error) {
       console.error('Error updating transaction flagged status:', error);
@@ -819,9 +681,7 @@ export class TransactionService {
     isHidden: boolean
   ): Promise<{ success: boolean; error?: string }> {
     try {
-      const transactions = await this.dataService.getData<StoredTransaction[]>(
-        `transactions_${userId}`
-      ) || [];
+      const transactions = await this.repo.getAll(userId);
 
       const transaction = transactions.find(t => t.id === transactionId);
       if (!transaction) {
@@ -831,7 +691,7 @@ export class TransactionService {
       transaction.isHidden = isHidden;
       transaction.updatedAt = new Date();
 
-      await this.dataService.saveData(`transactions_${userId}`, transactions);
+      await this.repo.saveAll(userId, transactions);
       return { success: true };
     } catch (error) {
       console.error('Error updating transaction hidden status:', error);
@@ -861,9 +721,7 @@ export class TransactionService {
    * "Cannot delete category with 0 associated transactions" error
    */
   async hasTransactionsForCategory(categoryId: string, userId: string): Promise<boolean> {
-    const transactions = await this.dataService.getData<StoredTransaction[]>(
-      `transactions_${userId}`
-    ) || [];
+    const transactions = await this.repo.getAll(userId);
     return transactions.some(t =>
       t.categoryId === categoryId &&
       t.status !== 'removed' &&
@@ -884,9 +742,7 @@ export class TransactionService {
     newCategoryId: string | null,
     userId: string
   ): Promise<number> {
-    const transactions = await this.dataService.getData<StoredTransaction[]>(
-      `transactions_${userId}`
-    ) || [];
+    const transactions = await this.repo.getAll(userId);
 
     let updateCount = 0;
     const updatedTransactions = transactions.map(transaction => {
@@ -901,7 +757,7 @@ export class TransactionService {
     });
 
     if (updateCount > 0) {
-      await this.dataService.saveData(`transactions_${userId}`, updatedTransactions);
+      await this.repo.saveAll(userId, updatedTransactions);
     }
 
     return updateCount;
@@ -921,9 +777,7 @@ export class TransactionService {
       accountId: string;
     }>;
   }> {
-    const transactions = await this.dataService.getData<StoredTransaction[]>(
-      `transactions_${userId}`
-    ) || [];
+    const transactions = await this.repo.getAll(userId);
 
     const blockingTransactions = transactions.filter(t =>
       t.categoryId === categoryId &&
@@ -952,9 +806,7 @@ export class TransactionService {
    */
   async getTransactionCountsByCategory(userId: string): Promise<Record<string, number>> {
     try {
-      const transactions = await this.dataService.getData<StoredTransaction[]>(
-        `transactions_${userId}`
-      ) || [];
+      const transactions = await this.repo.getAll(userId);
 
       const counts: Record<string, number> = {};
       
@@ -1024,15 +876,13 @@ export class TransactionService {
     };
 
     // Get existing transactions
-    const transactions = await this.dataService.getData<StoredTransaction[]>(
-      `transactions_${transactionData.userId}`
-    ) || [];
+    const transactions = await this.repo.getAll(transactionData.userId);
 
     // Add the new transaction
     transactions.push(transaction);
 
     // Save updated transactions
-    await this.dataService.saveData(`transactions_${transactionData.userId}`, transactions);
+    await this.repo.saveAll(transactionData.userId, transactions);
 
     return transaction;
   }
