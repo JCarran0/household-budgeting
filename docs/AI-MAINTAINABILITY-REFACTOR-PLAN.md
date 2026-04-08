@@ -15,7 +15,7 @@ This plan captures the top 10 architectural refactoring targets identified throu
 | R4. Frontend Test Infra | Not started | | |
 | R2. Fix Circular Deps | **Done** | `034fab0` | Zero `as any` casts. CategoryDependencyChecker interface. BudgetService uses dataService directly. |
 | R1. Split TransactionService | **Done** | `eaa3391`, `8d07125` | 112 pre-refactor tests + filter engine extraction + Repository adoption. |
-| R3. Split ReportService | Not started | | |
+| R3. Split ReportService | **Done** | `08811e9`, `7a90096` | 35 pre-refactor tests + helper extraction + Repository adoption. |
 | R6. Standardize Errors | Not started | | |
 | R4. Decompose Reports.tsx | Not started | | |
 | R5. Decompose EnhancedTransactions.tsx | Not started | | |
@@ -47,7 +47,7 @@ Before planning each refactor, here's where we stand today:
 | Category service | **Moderate** | 458 LOC unit tests; deletion protection tested via integration |
 | Plaid service | **Moderate** | 650 LOC unit + integration |
 | Transaction service | **Strong** | 112 unit tests (added in R1): 62 filter + 50 mutation tests |
-| Report service | **Indirect only** | No unit tests; covered by financial-calc stories |
+| Report service | **Strong** | 35 unit tests (added in R3): trends, breakdowns, cash flow, projections, YTD |
 | Auto-categorize service | **Indirect only** | Covered by 1,219 LOC integration story |
 | Import service | **Indirect only** | Covered by csv-import integration test |
 | Chatbot service | **None** | Zero tests |
@@ -92,32 +92,19 @@ Before planning each refactor, here's where we stand today:
 
 ---
 
-### R3. Split ReportService (968 LOC)
+### R3. Split ReportService (968 LOC) — DONE
 
-**Problem:** ReportService mixes data aggregation, trend calculation, projection math, and drill-down logic. Complex financial calculations are hard to test in isolation and risky to modify.
+> **Completed:** 2026-04-07 | **Commits:** `08811e9` (tests), `7a90096` (split)
 
-**Target state:**
-- `ReportDataAggregator` — Fetches and joins data from multiple sources (~250 LOC)
-- `TrendCalculator` — Spending trends, period-over-period analysis (~250 LOC)
-- `ProjectionEngine` — Forward-looking projections and forecasts (~200 LOC)
-- `ReportService` becomes an orchestrator that composes the above
+**What was done:**
+- **Pre-refactor tests (commit `08811e9`):** Added 35 unit tests covering spending trends, category breakdowns (expense/income/savings), cash flow with actuals overrides, projections, YTD summary, and helper method behavior.
+- **Structural split (commit `7a90096`):**
+  - Extracted 4 helper functions into `reportHelpers.ts` (74 LOC): `getMonthRange`, `calculateStdDev`, `getEffectivelyHiddenCategoryIds`, `getSavingsSubcategoryIds` — pure functions, independently testable
+  - Refactored ReportService to use `Repository<StoredTransaction>` for transaction data access
+  - ReportService reduced from 969 to 896 LOC
 
-**Pre-refactor test work:**
-1. **Assess:** No unit tests. Covered indirectly by:
-   - `financial-calc.stories.test.ts` (833 LOC)
-   - `reports-transactions-navigation.stories.test.ts` (282 LOC)
-2. **Gap fill:**
-   - Add unit tests for each report endpoint's calculation logic with known inputs/outputs
-   - Test trend calculations: monthly trends, category trends, income vs expense over time
-   - Test projection calculations: accuracy with varying data densities, edge cases (no data, single month)
-   - Test cash flow aggregation: income/expense totals, transfer exclusion, category rollups
-3. **Confidence gate:** Unit tests cover every public method of ReportService before splitting.
-
-**Key files:**
-- `backend/src/services/reportService.ts`
-- `backend/src/__tests__/stories/financial-calc.stories.test.ts`
-
-**Estimated effort:** Medium
+**Remaining work (not blocking):**
+- Report methods still have significant shared patterns (load transactions → filter by date/hidden → group by category). A further extraction of a `ReportDataLoader` could reduce duplication if these methods grow.
 
 ---
 
@@ -323,8 +310,8 @@ Phase 1: Foundation ✅ COMPLETE
 Phase 2: Backend structural improvements (IN PROGRESS)
 ├── R2.  Fix circular deps / DI ✅
 ├── R1.  Split TransactionService ✅
-├── R3.  Split ReportService ← NEXT
-└── R6.  Standardize error handling
+├── R3.  Split ReportService ✅
+└── R6.  Standardize error handling ← NEXT
 
 Phase 3: Frontend decomposition
 ├── R4.  Decompose Reports.tsx (largest frontend file)
