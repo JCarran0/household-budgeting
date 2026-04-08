@@ -24,10 +24,18 @@ import type { Transaction } from '../../../../shared/types';
 import { formatCurrency } from '../../utils/formatters';
 import { useCategoryOptions } from '../../hooks/useCategoryOptions';
 
+interface AccountInfo {
+  name: string;
+  institution: string;
+  mask: string | null;
+  nickname: string | null;
+}
+
 interface TransactionEditModalProps {
   opened: boolean;
   onClose: () => void;
   transaction: Transaction | null;
+  accountInfo?: AccountInfo | null;
 }
 
 interface EditFormValues {
@@ -39,10 +47,11 @@ interface EditFormValues {
   isFlagged: boolean;
 }
 
-export function TransactionEditModal({ 
-  opened, 
-  onClose, 
-  transaction 
+export function TransactionEditModal({
+  opened,
+  onClose,
+  transaction,
+  accountInfo,
 }: TransactionEditModalProps) {
   const queryClient = useQueryClient();
   const [availableTags, setAvailableTags] = useState<string[]>([]);
@@ -308,10 +317,14 @@ export function TransactionEditModal({
               <Text fw={500}>{transaction.date}</Text>
             </Group>
             
-            {transaction.accountName && (
+            {(accountInfo || transaction.accountName) && (
               <Group justify="space-between">
                 <Text size="sm" c="dimmed">Account</Text>
-                <Badge variant="light">{transaction.accountName}</Badge>
+                <Badge variant="light">
+                  {accountInfo
+                    ? `${accountInfo.nickname || accountInfo.name} (${accountInfo.institution})`
+                    : transaction.accountName}
+                </Badge>
               </Group>
             )}
           </Stack>

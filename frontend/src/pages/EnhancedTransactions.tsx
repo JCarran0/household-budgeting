@@ -56,7 +56,6 @@ import {
   IconScissors,
   IconDots,
   IconRefresh,
-  IconBuilding,
   IconFilterOff,
   IconAlertCircle,
   IconDatabaseImport,
@@ -1462,20 +1461,25 @@ export function EnhancedTransactions() {
                   <Table.Td>
                     {(() => {
                       const accountInfo = accountLookup.get(transaction.accountId);
-                      return accountInfo ? (
+                      if (!accountInfo) {
+                        return (
+                          <Text size="xs" c="dimmed">{transaction.accountName || 'Unknown'}</Text>
+                        );
+                      }
+                      const displayName = accountInfo.nickname || accountInfo.name;
+                      const shortLabel = accountInfo.mask
+                        ? `${displayName} ••${accountInfo.mask}`
+                        : displayName;
+                      return (
                         <Tooltip
-                          label={`${accountInfo.nickname || accountInfo.name} - ${accountInfo.institution}${accountInfo.mask ? ` ••${accountInfo.mask}` : ''}`}
+                          label={`${displayName} - ${accountInfo.institution}${accountInfo.mask ? ` ••${accountInfo.mask}` : ''}`}
                           openDelay={1000}
                           closeDelay={200}
                         >
-                          <ThemeIcon variant="light" size="md">
-                            <IconBuilding size={16} />
-                          </ThemeIcon>
+                          <Text size="xs" c="dimmed" truncate maw={140}>
+                            {shortLabel}
+                          </Text>
                         </Tooltip>
-                      ) : (
-                        <Badge variant="outline">
-                          {transaction.accountName || 'Unknown'}
-                        </Badge>
                       );
                     })()}
                   </Table.Td>
@@ -1577,6 +1581,7 @@ export function EnhancedTransactions() {
         opened={isEditModalOpen}
         onClose={handleEditModalClose}
         transaction={editingTransaction}
+        accountInfo={editingTransaction ? accountLookup.get(editingTransaction.accountId) : null}
       />
 
       {/* Split Modal */}
