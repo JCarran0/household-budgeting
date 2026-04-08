@@ -1196,7 +1196,6 @@ export function EnhancedTransactions() {
                 prefix="$"
                 value={amountRange.max ?? undefined}
                 onChange={(value) => setAmountRange({ min: null, max: value !== undefined && value !== '' ? Number(value) : null })}
-                min={0}
                 decimalScale={2}
                 fixedDecimalScale
                 w={200}
@@ -1210,7 +1209,6 @@ export function EnhancedTransactions() {
                 prefix="$"
                 value={amountRange.min ?? undefined}
                 onChange={(value) => setAmountRange({ min: value !== undefined && value !== '' ? Number(value) : null, max: null })}
-                min={0}
                 decimalScale={2}
                 fixedDecimalScale
                 w={200}
@@ -1225,7 +1223,6 @@ export function EnhancedTransactions() {
                   prefix="$"
                   value={amountRange.min ?? undefined}
                   onChange={(value) => setAmountRange({ ...amountRange, min: value !== undefined && value !== '' ? Number(value) : null })}
-                  min={0}
                   decimalScale={2}
                   fixedDecimalScale
                 />
@@ -1235,7 +1232,6 @@ export function EnhancedTransactions() {
                   prefix="$"
                   value={amountRange.max ?? undefined}
                   onChange={(value) => setAmountRange({ ...amountRange, max: value !== undefined && value !== '' ? Number(value) : null })}
-                  min={0}
                   decimalScale={2}
                   fixedDecimalScale
                 />

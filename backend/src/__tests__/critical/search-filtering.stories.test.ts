@@ -618,7 +618,7 @@ describe('User Story: Transaction Search and Filtering', () => {
       });
 
       expect(result.success).toBe(true);
-      expect(result.transactions!.every(t => Math.abs(t.amount) >= 100)).toBe(true);
+      expect(result.transactions!.every(t => t.amount >= 100)).toBe(true);
       expect(result.transactions!.length).toBeGreaterThan(0);
     });
 
@@ -628,7 +628,7 @@ describe('User Story: Transaction Search and Filtering', () => {
       });
 
       expect(result.success).toBe(true);
-      expect(result.transactions!.every(t => Math.abs(t.amount) <= 50)).toBe(true);
+      expect(result.transactions!.every(t => t.amount <= 50)).toBe(true);
       expect(result.transactions!.length).toBeGreaterThan(0);
     });
 
@@ -639,24 +639,30 @@ describe('User Story: Transaction Search and Filtering', () => {
       });
 
       expect(result.success).toBe(true);
-      expect(result.transactions!.every(t => {
-        const absAmount = Math.abs(t.amount);
-        return absAmount >= 30 && absAmount <= 100;
-      })).toBe(true);
+      expect(result.transactions!.every(t => t.amount >= 30 && t.amount <= 100)).toBe(true);
       expect(result.transactions!.length).toBeGreaterThan(0);
     });
 
-    test('Amount filters work with negative amounts (income)', async () => {
-      const result = await transactionService.getTransactions(testUserId, {
-        minAmount: 1000,
-        includeHidden: false,
+    test('Amount filters use raw values so negative amounts can be filtered', async () => {
+      // minAmount: 0 should return only expenses (positive amounts)
+      const expensesOnly = await transactionService.getTransactions(testUserId, {
+        minAmount: 0,
       });
 
-      expect(result.success).toBe(true);
-      // Should include the salary transaction (-1500)
-      const salaryTransaction = result.transactions!.find(t => t.amount === -1500);
+      expect(expensesOnly.success).toBe(true);
+      expect(expensesOnly.transactions!.every(t => t.amount >= 0)).toBe(true);
+      // Salary (-1500) should be excluded
+      expect(expensesOnly.transactions!.find(t => t.amount === -1500)).toBeUndefined();
+
+      // maxAmount: 0 should return only income (negative amounts)
+      const incomeOnly = await transactionService.getTransactions(testUserId, {
+        maxAmount: 0,
+      });
+
+      expect(incomeOnly.success).toBe(true);
+      expect(incomeOnly.transactions!.every(t => t.amount <= 0)).toBe(true);
+      const salaryTransaction = incomeOnly.transactions!.find(t => t.amount === -1500);
       expect(salaryTransaction).toBeDefined();
-      expect(Math.abs(salaryTransaction!.amount)).toBeGreaterThanOrEqual(1000);
     });
 
     test('Invalid amount range returns empty results', async () => {
@@ -796,12 +802,11 @@ describe('User Story: Transaction Search and Filtering', () => {
 
       expect(result.success).toBe(true);
       expect(result.transactions!.every(t => {
-        const absAmount = Math.abs(t.amount);
         return t.date >= startDate &&
                t.date <= endDate &&
                ['checking-account', 'credit-card'].includes(t.accountId) &&
-               absAmount >= 10 &&
-               absAmount <= 100 &&
+               t.amount >= 10 &&
+               t.amount <= 100 &&
                !t.isHidden &&
                !t.pending;
       })).toBe(true);

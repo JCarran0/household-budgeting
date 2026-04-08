@@ -337,24 +337,25 @@ describe('User Story: Income vs Expense Transaction Filtering', () => {
     });
 
     test('Income/expense filter works with amount range filters', async () => {
-      // Filter for high-value income (> $100)
+      // Filter for high-value income (> $100 in absolute value)
+      // Income amounts are negative in Plaid, so maxAmount: -100 means "at least $100 income"
       const response = await request(app)
         .get('/api/v1/transactions')
         .set('Authorization', `Bearer ${authToken}`)
-        .query({ 
+        .query({
           transactionType: 'income',
-          minAmount: 100
+          maxAmount: -100
         });
 
       expect(response.status).toBe(200);
       expect(response.body.success).toBe(true);
       expect(response.body.transactions).toHaveLength(2);
-      
+
       // Should include salary and refund (both > $100 in absolute value)
       const returnedIds = response.body.transactions.map((t: StoredTransaction) => t.id);
-      expect(returnedIds).toContain('txn1'); // $2500 salary
-      expect(returnedIds).toContain('txn2'); // $150 refund
-      expect(returnedIds).not.toContain('txn3'); // $75 cashback (below threshold)
+      expect(returnedIds).toContain('txn1'); // -$2500 salary
+      expect(returnedIds).toContain('txn2'); // -$150 refund
+      expect(returnedIds).not.toContain('txn3'); // -$75 cashback (below threshold)
     });
 
     test('Invalid transaction type values are handled gracefully', async () => {

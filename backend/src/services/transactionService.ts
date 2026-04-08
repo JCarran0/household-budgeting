@@ -477,11 +477,11 @@ export class TransactionService {
       } else {
         // Handle min/max range search (only if not doing exact search)
         if (filter.minAmount !== undefined) {
-          filtered = filtered.filter((txn: StoredTransaction) => Math.abs(txn.amount) >= filter.minAmount!);
+          filtered = filtered.filter((txn: StoredTransaction) => txn.amount >= filter.minAmount!);
         }
 
         if (filter.maxAmount !== undefined) {
-          filtered = filtered.filter((txn: StoredTransaction) => Math.abs(txn.amount) <= filter.maxAmount!);
+          filtered = filtered.filter((txn: StoredTransaction) => txn.amount <= filter.maxAmount!);
         }
       }
 

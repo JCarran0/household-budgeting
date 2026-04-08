@@ -150,10 +150,10 @@ export class ChatbotDataService {
       results = results.filter(t => t.tags?.some(tag => tagSet.has(tag)));
     }
     if (filters.minAmount !== undefined) {
-      results = results.filter(t => Math.abs(t.amount) >= filters.minAmount!);
+      results = results.filter(t => t.amount >= filters.minAmount!);
     }
     if (filters.maxAmount !== undefined) {
-      results = results.filter(t => Math.abs(t.amount) <= filters.maxAmount!);
+      results = results.filter(t => t.amount <= filters.maxAmount!);
     }
     if (filters.searchQuery) {
       const query = filters.searchQuery.toLowerCase();

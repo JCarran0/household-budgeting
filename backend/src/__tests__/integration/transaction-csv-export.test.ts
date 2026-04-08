@@ -358,8 +358,8 @@ describe('Transaction CSV Export', () => {
       expect(transactions).toHaveLength(2); // txn_1 (50.25) and txn_2 (25.00)
       
       transactions.forEach((t: any) => {
-        expect(Math.abs(t.amount)).toBeGreaterThanOrEqual(20);
-        expect(Math.abs(t.amount)).toBeLessThanOrEqual(60);
+        expect(t.amount).toBeGreaterThanOrEqual(20);
+        expect(t.amount).toBeLessThanOrEqual(60);
       });
     });
     
