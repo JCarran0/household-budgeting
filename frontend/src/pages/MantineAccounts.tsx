@@ -97,6 +97,7 @@ export function MantineAccounts() {
   const [editingManualAccount, setEditingManualAccount] = useState<ManualAccount | null>(null);
   const [manualAccountToDelete, setManualAccountToDelete] = useState<ManualAccount | null>(null);
   const [deleteManualOpened, { open: openDeleteManual, close: closeDeleteManual }] = useDisclosure(false);
+  const [accountsTab, setAccountsTab] = useState(() => localStorage.getItem('accounts-active-tab') || 'connected');
 
   const { data: accounts, isLoading } = useQuery({
     queryKey: ['accounts'],
@@ -285,7 +286,11 @@ export function MantineAccounts() {
         </div>
       </Group>
 
-      <Tabs defaultValue="connected">
+      <Tabs value={accountsTab} onChange={(val) => {
+        const tab = val || 'connected';
+        setAccountsTab(tab);
+        localStorage.setItem('accounts-active-tab', tab);
+      }}>
         <Tabs.List>
           <Tabs.Tab value="connected" leftSection={<IconLink size={16} />}>
             Connected{accounts && accounts.length > 0 ? ` (${accounts.length})` : ''}

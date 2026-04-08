@@ -30,6 +30,7 @@ interface DashboardFilters {
 
 interface ReportsFilters {
   timeRange: string; // Number of months to show (e.g., '3', '6', '12')
+  activeTab: string; // Last active tab on the reports page
 }
 
 interface FilterStore {
@@ -82,6 +83,7 @@ const defaultDashboardFilters: DashboardFilters = {
 
 const defaultReportsFilters: ReportsFilters = {
   timeRange: 'yearToDate', // Default to Year to Date
+  activeTab: 'cashflow',
 };
 
 // Helper to validate and migrate stored data
@@ -157,6 +159,7 @@ const validateStoredFilters = (stored: unknown): Partial<FilterStore> => {
     
     validated.reports = {
       timeRange: timeRange,
+      activeTab: typeof r.activeTab === 'string' ? r.activeTab : defaultReportsFilters.activeTab,
     };
   }
   

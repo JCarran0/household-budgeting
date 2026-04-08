@@ -239,10 +239,12 @@ export function useDashboardFilters(): DashboardFilterState & DashboardFilterAct
 
 interface ReportsFilterState {
   timeRange: string;
+  activeTab: string;
 }
 
 interface ReportsFilterActions {
   setTimeRange: (range: string) => void;
+  setActiveTab: (tab: string) => void;
   resetFilters: () => void;
 }
 
@@ -252,20 +254,27 @@ export function useReportsFilters(): ReportsFilterState & ReportsFilterActions {
   const setReportsFilters = useFilterStore((state) => state.setReportsFilters);
   const resetReportsFilters = useFilterStore((state) => state.resetReportsFilters);
   
-  // Get the current value directly from the store
+  // Get the current values directly from the store
   const timeRange = reportsFilters?.timeRange || 'yearToDate';
-  
+  const activeTab = reportsFilters?.activeTab || 'cashflow';
+
   const setTimeRange = useCallback((range: string) => {
     setReportsFilters({ timeRange: range });
   }, [setReportsFilters]);
-  
+
+  const setActiveTab = useCallback((tab: string) => {
+    setReportsFilters({ activeTab: tab });
+  }, [setReportsFilters]);
+
   const resetFilters = useCallback(() => {
     resetReportsFilters();
   }, [resetReportsFilters]);
-  
+
   return {
     timeRange,
+    activeTab,
     setTimeRange,
+    setActiveTab,
     resetFilters,
   };
 }

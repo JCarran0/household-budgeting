@@ -183,7 +183,7 @@ export function Reports() {
   const [searchParams, setSearchParams] = useSearchParams();
 
   // Use persisted filters from localStorage as fallback
-  const { timeRange: storedTimeRange, setTimeRange: setStoredTimeRange, resetFilters: resetStoredFilters } = useReportsFilters();
+  const { timeRange: storedTimeRange, setTimeRange: setStoredTimeRange, activeTab: storedActiveTab, setActiveTab: setStoredActiveTab, resetFilters: resetStoredFilters } = useReportsFilters();
 
   // Valid values for URL params
   const validTimeRanges = ['thisMonth', 'lastMonth', 'thisYear', 'yearToDate', 'last3', 'last6', 'last12'];
@@ -199,7 +199,7 @@ export function Reports() {
     : 'expenses';
   const activeTab: string | null = validTabs.includes(searchParams.get('tab') || '')
     ? searchParams.get('tab')
-    : 'cashflow';
+    : validTabs.includes(storedActiveTab) ? storedActiveTab : 'cashflow';
 
   // Sync URL params on mount if they're missing
   useEffect(() => {
@@ -226,8 +226,10 @@ export function Reports() {
   }, [setSearchParams]);
 
   const setActiveTab = useCallback((tab: string | null) => {
-    setSearchParams((prev) => { prev.set('tab', tab || 'cashflow'); return prev; }, { replace: true });
-  }, [setSearchParams]);
+    const value = tab || 'cashflow';
+    setSearchParams((prev) => { prev.set('tab', value); return prev; }, { replace: true });
+    setStoredActiveTab(value);
+  }, [setSearchParams, setStoredActiveTab]);
 
   const resetFilters = useCallback(() => {
     setSearchParams((prev) => {
