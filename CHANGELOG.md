@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+### [5.7.2](https://github.com/JCarran0/household-budgeting/compare/v5.7.1...v5.7.2) (2026-04-08)
+
+
+### Tests
+
+* **transactions:** add 112 unit tests for TransactionService (R1 prep) ([0c1d9e7](https://github.com/JCarran0/household-budgeting/commit/0c1d9e708a953076bba5040ecdcc170564317f43))
+
+
+### Code Refactoring
+
+* **transactions:** extract filter engine and use Repository (R1) ([1171718](https://github.com/JCarran0/household-budgeting/commit/117171898c5e6c977cb8eec952bd71d6204d155f))
+
+
+### Documentation
+
+* update refactor plan with R1 completion status ([01c9145](https://github.com/JCarran0/household-budgeting/commit/01c91452d1414f5f08c0554a7ed4f79715d8c456))
+
 ### [5.7.1](https://github.com/JCarran0/household-budgeting/compare/v5.7.0...v5.7.1) (2026-04-08)
 
 
