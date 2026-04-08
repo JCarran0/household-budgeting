@@ -1,6 +1,6 @@
 # Transfer Linking — Business Requirements Document
 
-**Status:** Draft
+**Status:** Shelved
 **Author:** Jared Carrano
 **Date:** 2026-04-06
 **Version:** 1.0
@@ -233,3 +233,23 @@ These fields are additive. Existing transactions default to `null` for both fiel
 - Existing budget exclusion, report filtering, and transfer detection behavior is unchanged.
 - No data migration is required — the feature rolls out cleanly on top of existing data.
 - Plaid suggestions help users identify transfers without being treated as truth.
+
+---
+
+## 14. Notes
+
+### One-Sided Venmo Transfer Problem (2026-04-07)
+
+**Status:** Shelved — the double-counting and reconciliation problems this BRD addresses have not materialized as real pain points for a 2-user household app. The complexity is not justified.
+
+**Key finding from data analysis:** When Venmo auto-funds a payment from a linked bank account (e.g., BoA checking), Plaid reports **2 transactions, not 3**:
+
+1. **Venmo account**: The actual payment to the person (e.g., "Rachel Scott '12/9 ty!'" $160) — categorized as the real expense (CUSTOM_HOUSE_CLEANING)
+2. **BoA Checking**: "Venmo" for the same amount ($160) — categorized as TRANSFER_OUT
+
+There is no intermediate "transfer into Venmo" transaction on the Venmo side. This means the BoA→Venmo auto-funding creates a **one-sided transfer**: a TRANSFER_OUT on BoA with no corresponding TRANSFER_IN. Under this BRD's model (INV-004), these can never be linked as a pair.
+
+**Implications if this feature were built:**
+- Every Venmo auto-funding transaction would permanently appear in the "unlinked transfers" filter, creating noise
+- The correct categorization is already what users do today: expense category on Venmo, TRANSFER_OUT on BoA — no linking needed
+- The real risk (double-counting) only occurs if users miscategorize the BoA "Venmo" debit as an expense instead of a transfer
