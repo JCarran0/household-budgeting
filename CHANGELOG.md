@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.5.0](https://github.com/JCarran0/household-budgeting/compare/v5.4.0...v5.5.0) (2026-04-08)
+
+
+### Features
+
+* **dashboard:** add projected net income KPI card ([ccd6161](https://github.com/JCarran0/household-budgeting/commit/ccd616170a4a738b2296770c2e11bfd142471acf))
+* **transactions:** show account name in list view and edit modal ([e4c1db2](https://github.com/JCarran0/household-budgeting/commit/e4c1db29483ed6e67e65625d65d27928feb93cae))
+
+
+### Bug Fixes
+
+* **transactions:** use raw amount for min/max filters instead of Math.abs ([535460f](https://github.com/JCarran0/household-budgeting/commit/535460fd695f58ccafe97c1e07841bbb702c2ccc))
+
+
+### Documentation
+
+* **transfer-linking:** shelve BRD and document one-sided Venmo transfer finding ([ceb2262](https://github.com/JCarran0/household-budgeting/commit/ceb22625cc0db9e596ef57a90190984c5e3443d2))
+
 ## [5.4.0](https://github.com/JCarran0/household-budgeting/compare/v5.3.0...v5.4.0) (2026-04-07)
 
 
