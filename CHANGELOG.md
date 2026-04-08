@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+### [5.7.4](https://github.com/JCarran0/household-budgeting/compare/v5.7.3...v5.7.4) (2026-04-08)
+
+
+### Code Refactoring
+
+* **errors:** add typed error classes and error middleware (R6) ([98bf9a2](https://github.com/JCarran0/household-budgeting/commit/98bf9a2866ad82e428741afa30c4a1346d97214f))
+
+
+### Documentation
+
+* update refactor plan with R6 completion — Phase 2 complete ([0b1c087](https://github.com/JCarran0/household-budgeting/commit/0b1c087347bd334490859500c2bfad6176f58856))
+
 ### [5.7.3](https://github.com/JCarran0/household-budgeting/compare/v5.7.2...v5.7.3) (2026-04-08)
 
 
