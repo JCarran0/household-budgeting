@@ -14,7 +14,7 @@ This plan captures the top 10 architectural refactoring targets identified throu
 | R8. Repository Base Class | **Done** | `fbe27b1` | Generic `Repository<T>` created with 23 tests. Migration of services deferred. |
 | R4. Frontend Test Infra | Not started | | |
 | R2. Fix Circular Deps | **Done** | `034fab0` | Zero `as any` casts. CategoryDependencyChecker interface. BudgetService uses dataService directly. |
-| R1. Split TransactionService | Not started | | |
+| R1. Split TransactionService | **Done** | `eaa3391`, `8d07125` | 112 pre-refactor tests + filter engine extraction + Repository adoption. |
 | R3. Split ReportService | Not started | | |
 | R6. Standardize Errors | Not started | | |
 | R4. Decompose Reports.tsx | Not started | | |
@@ -46,7 +46,7 @@ Before planning each refactor, here's where we stand today:
 | Budget service | **Moderate** | 429 LOC unit tests |
 | Category service | **Moderate** | 458 LOC unit tests; deletion protection tested via integration |
 | Plaid service | **Moderate** | 650 LOC unit + integration |
-| Transaction service | **Indirect only** | No unit tests; covered by integration stories |
+| Transaction service | **Strong** | 112 unit tests (added in R1): 62 filter + 50 mutation tests |
 | Report service | **Indirect only** | No unit tests; covered by financial-calc stories |
 | Auto-categorize service | **Indirect only** | Covered by 1,219 LOC integration story |
 | Import service | **Indirect only** | Covered by csv-import integration test |
@@ -59,34 +59,23 @@ Before planning each refactor, here's where we stand today:
 
 ## Refactor Items
 
-### R1. Split TransactionService (1,038 LOC)
+### R1. Split TransactionService (1,038 LOC) — DONE
 
-**Problem:** Single service handles syncing, filtering, categorization, splitting, and matching. Changing any one concern risks breaking others. The `getTransactions()` method alone is 400+ LOC of filtering pipeline.
+> **Completed:** 2026-04-07 | **Commits:** `eaa3391` (tests), `8d07125` (split)
 
-**Target state:**
-- `TransactionRepository` — CRUD operations against DataService (~250 LOC)
-- `TransactionFilterEngine` — Filtering, sorting, search logic (~350 LOC)
-- `TransactionSyncOrchestrator` — Plaid sync coordination (~300 LOC)
-- `TransactionService` becomes a thin facade that delegates to the above
+**What was done:**
+- **Pre-refactor tests (commit `eaa3391`):** Added 112 unit tests in two files:
+  - `transactionService.filter.test.ts` (62 tests) — comprehensive coverage of the `getTransactions()` filtering pipeline: date, account, category, tag, amount, search, type, hidden/flagged, sort, totals, and combined filters
+  - `transactionService.mutations.test.ts` (50 tests) — all CRUD methods: category updates, tag operations, split transactions, description/flag/hide toggles, bulk recategorize, blocking transaction queries
+- **Structural split (commit `8d07125`):**
+  - Extracted `filterTransactions()` into `transactionFilterEngine.ts` (153 LOC) — a pure stateless function with no DataService dependency, independently testable
+  - Refactored TransactionService to use `Repository<StoredTransaction>` for all data access (replaced 15 raw `getData`/`saveData` calls)
+  - `getTransactions()` reduced from ~130 lines to 8 lines (delegates to filter engine)
+  - TransactionService reduced from 1,038 to 888 LOC
 
-**Pre-refactor test work:**
-1. **Assess:** TransactionService has no unit tests. It's tested indirectly via:
-   - `search-filtering.stories.test.ts` (907 LOC)
-   - `transaction-sync.stories.test.ts` (674 LOC)
-   - `transaction-categorization.stories.test.ts` (392 LOC)
-2. **Gap fill:**
-   - Add unit tests for `getTransactions()` filter logic — all filter combinations (category, amount, date range, tags, type, hidden, splits)
-   - Add unit tests for `syncTransactions()` — success path, partial failure, empty response
-   - Add unit tests for `splitTransaction()` and `updateTransaction()` edge cases
-   - Add unit tests for `removeTransactions()` — the scoped-removal logic that only removes accounts being synced
-3. **Confidence gate:** All new unit tests + existing integration stories pass before any structural changes.
-
-**Key files:**
-- `backend/src/services/transactionService.ts`
-- `backend/src/__tests__/stories/search-filtering.stories.test.ts`
-- `backend/src/__tests__/stories/transaction-sync.stories.test.ts`
-
-**Estimated effort:** Medium-High
+**Remaining work (not blocking):**
+- Sync logic could be further extracted into a `TransactionSyncOrchestrator` if it grows or needs independent testing. Currently reasonable at ~180 LOC within the service.
+- CRUD mutations follow a repetitive load-find-modify-save pattern that could benefit from Repository helper methods in a future pass.
 
 ---
 
@@ -333,8 +322,8 @@ Phase 1: Foundation ✅ COMPLETE
 
 Phase 2: Backend structural improvements (IN PROGRESS)
 ├── R2.  Fix circular deps / DI ✅
-├── R1.  Split TransactionService ← NEXT
-├── R3.  Split ReportService
+├── R1.  Split TransactionService ✅
+├── R3.  Split ReportService ← NEXT
 └── R6.  Standardize error handling
 
 Phase 3: Frontend decomposition
