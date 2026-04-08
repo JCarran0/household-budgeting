@@ -1,0 +1,417 @@
+# Maintainability Refactor Plan
+
+## Overview
+
+This plan captures the top 10 architectural refactoring targets identified through a deep-dive analysis of the codebase. Each item follows a **test-first approach**: assess existing coverage, add missing tests to lock in current behavior, then refactor with confidence.
+
+**Last Updated**: 2026-04-07
+
+---
+
+## Guiding Principles
+
+1. **Test before you touch** — Every refactor item begins with a coverage assessment and test gap fill. No structural changes until we can verify behavior is preserved.
+2. **Incremental delivery** — Each item is independently shippable. No big-bang rewrites.
+3. **Preserve behavior exactly** — Refactoring means changing structure, not behavior. Any behavioral changes are separate work items.
+4. **One concern per module** — The target state is files under 400 LOC with a single, clear responsibility.
+
+---
+
+## Current Test Coverage Snapshot
+
+Before planning each refactor, here's where we stand today:
+
+| Area | Coverage Level | Notes |
+|------|---------------|-------|
+| Shared utils (budgetCalculations, categoryHelpers) | **Strong** | 682 + 267 LOC of unit tests |
+| Auth service | **Strong** | 517 LOC unit tests |
+| Budget service | **Moderate** | 429 LOC unit tests |
+| Category service | **Moderate** | 458 LOC unit tests |
+| Plaid service | **Moderate** | 650 LOC unit + integration |
+| Transaction service | **Indirect only** | No unit tests; covered by integration stories |
+| Report service | **Indirect only** | No unit tests; covered by financial-calc stories |
+| Auto-categorize service | **Indirect only** | Covered by 1,219 LOC integration story |
+| Import service | **Indirect only** | Covered by csv-import integration test |
+| Chatbot service | **None** | Zero tests |
+| Route handlers | **Almost none** | 1 of 15 routes has a test file |
+| Frontend components | **None** | Zero test files, no test framework configured |
+| transactionCalculations.ts (shared) | **None** | No dedicated test |
+
+---
+
+## Refactor Items
+
+### R1. Split TransactionService (1,038 LOC)
+
+**Problem:** Single service handles syncing, filtering, categorization, splitting, and matching. Changing any one concern risks breaking others. The `getTransactions()` method alone is 400+ LOC of filtering pipeline.
+
+**Target state:**
+- `TransactionRepository` — CRUD operations against DataService (~250 LOC)
+- `TransactionFilterEngine` — Filtering, sorting, search logic (~350 LOC)
+- `TransactionSyncOrchestrator` — Plaid sync coordination (~300 LOC)
+- `TransactionService` becomes a thin facade that delegates to the above
+
+**Pre-refactor test work:**
+1. **Assess:** TransactionService has no unit tests. It's tested indirectly via:
+   - `search-filtering.stories.test.ts` (907 LOC)
+   - `transaction-sync.stories.test.ts` (674 LOC)
+   - `transaction-categorization.stories.test.ts` (392 LOC)
+2. **Gap fill:**
+   - Add unit tests for `getTransactions()` filter logic — all filter combinations (category, amount, date range, tags, type, hidden, splits)
+   - Add unit tests for `syncTransactions()` — success path, partial failure, empty response
+   - Add unit tests for `splitTransaction()` and `updateTransaction()` edge cases
+   - Add unit tests for `removeTransactions()` — the scoped-removal logic that only removes accounts being synced
+3. **Confidence gate:** All new unit tests + existing integration stories pass before any structural changes.
+
+**Key files:**
+- `backend/src/services/transactionService.ts`
+- `backend/src/__tests__/stories/search-filtering.stories.test.ts`
+- `backend/src/__tests__/stories/transaction-sync.stories.test.ts`
+
+**Estimated effort:** Medium-High
+
+---
+
+### R2. Fix Circular Dependencies & Service Initialization
+
+**Problem:** `backend/src/services/index.ts` creates 18 service singletons with manual ordering and uses runtime type casting (`(budgetService as any).getCategoriesCallback = ...`) to wire bidirectional dependencies between CategoryService and BudgetService. This defeats TypeScript, makes testing hard, and creates a fragile initialization sequence.
+
+**Target state:**
+- Services declare dependencies via constructor parameters (constructor injection)
+- A `ServiceContainer` or factory function builds the dependency graph
+- No `as any` casts — all dependencies typed at compile time
+- Circular dependency between CategoryService and BudgetService broken via:
+  - Option A: Extract a `CategoryBudgetMediator` that both depend on
+  - Option B: Use an event emitter for cross-service notifications
+  - Option C: Extract the shared concern (category lookup) into a lightweight `CategoryLookupService` that both can depend on without circularity
+
+**Pre-refactor test work:**
+1. **Assess:** No tests for service initialization. CategoryService has 458 LOC of unit tests. BudgetService has 429 LOC.
+2. **Gap fill:**
+   - Add tests for the callback-dependent behavior: budget service fetching categories, category service triggering auto-categorize
+   - Add tests that verify service initialization order doesn't matter (currently it does)
+   - Ensure existing categoryService and budgetService unit tests cover the cross-service interactions (category deletion updating budgets, budget copy resolving categories)
+3. **Confidence gate:** All service unit tests pass. The callback-behavior tests define the contract that the new DI approach must preserve.
+
+**Key files:**
+- `backend/src/services/index.ts` (96 LOC — small file, big impact)
+- `backend/src/services/categoryService.ts` (imports 5 services + monkey-patched deps)
+- `backend/src/services/budgetService.ts`
+
+**Estimated effort:** Medium
+
+---
+
+### R3. Split ReportService (968 LOC)
+
+**Problem:** ReportService mixes data aggregation, trend calculation, projection math, and drill-down logic. Complex financial calculations are hard to test in isolation and risky to modify.
+
+**Target state:**
+- `ReportDataAggregator` — Fetches and joins data from multiple sources (~250 LOC)
+- `TrendCalculator` — Spending trends, period-over-period analysis (~250 LOC)
+- `ProjectionEngine` — Forward-looking projections and forecasts (~200 LOC)
+- `ReportService` becomes an orchestrator that composes the above
+
+**Pre-refactor test work:**
+1. **Assess:** No unit tests. Covered indirectly by:
+   - `financial-calc.stories.test.ts` (833 LOC)
+   - `reports-transactions-navigation.stories.test.ts` (282 LOC)
+2. **Gap fill:**
+   - Add unit tests for each report endpoint's calculation logic with known inputs/outputs
+   - Test trend calculations: monthly trends, category trends, income vs expense over time
+   - Test projection calculations: accuracy with varying data densities, edge cases (no data, single month)
+   - Test cash flow aggregation: income/expense totals, transfer exclusion, category rollups
+3. **Confidence gate:** Unit tests cover every public method of ReportService before splitting.
+
+**Key files:**
+- `backend/src/services/reportService.ts`
+- `backend/src/__tests__/stories/financial-calc.stories.test.ts`
+
+**Estimated effort:** Medium
+
+---
+
+### R4. Decompose Reports.tsx (2,151 LOC)
+
+**Problem:** Single React component with 11 useState calls, 5 useQuery calls, 6 tab panels, complex memoized data processing, and rendering all in one file. Adding a new chart or modifying a tab risks breaking unrelated tabs.
+
+**Target state:**
+```
+pages/Reports.tsx (~200 LOC — tab shell, shared filters, URL sync)
+  ├── components/reports/CashflowSection.tsx (~350 LOC)
+  ├── components/reports/SpendingTrendsSection.tsx (~300 LOC)
+  ├── components/reports/CategoryBreakdownSection.tsx (~350 LOC)
+  ├── components/reports/ProjectionsSection.tsx (~300 LOC)
+  ├── components/reports/BudgetPerformanceSection.tsx (~300 LOC)
+  └── hooks/useReportData.ts (~150 LOC — shared data fetching)
+```
+
+**Pre-refactor test work:**
+1. **Assess:** Zero frontend tests. No test framework configured for frontend.
+2. **Gap fill:**
+   - **First:** Set up Vitest + React Testing Library in the frontend project
+   - Add integration-style tests for Reports page: renders each tab, displays data from mocked API responses, filter changes update displayed data
+   - Test critical data transformations: the `useMemo` blocks that process API responses into chart data — extract these into pure functions and unit test them
+   - Test URL parameter sync: changing filters updates URL, loading with URL params restores filter state
+3. **Confidence gate:** Each tab renders with test data. Data transformation functions have unit tests. URL sync round-trips correctly.
+
+**Key files:**
+- `frontend/src/pages/Reports.tsx`
+- `frontend/src/hooks/usePersistedFilters.ts`
+
+**Estimated effort:** High (includes frontend test infrastructure setup)
+
+---
+
+### R5. Decompose EnhancedTransactions.tsx (1,613 LOC)
+
+**Problem:** Same structural issue as Reports — 14 useState calls, pagination, bulk editing, inline modals, filter logic, and rendering all in one file.
+
+**Target state:**
+```
+pages/EnhancedTransactions.tsx (~250 LOC — layout, coordination)
+  ├── components/transactions/TransactionTable.tsx (~400 LOC)
+  ├── components/transactions/TransactionFilterBar.tsx (~300 LOC)
+  ├── components/transactions/TransactionToolbar.tsx (~200 LOC)
+  ├── components/transactions/TransactionEditModal.tsx (already exists — 431 LOC)
+  └── hooks/useTransactionList.ts (~200 LOC — data fetching + pagination)
+```
+
+**Pre-refactor test work:**
+1. **Assess:** Zero frontend tests (same as R4).
+2. **Gap fill:** (Depends on R4 setting up test infrastructure)
+   - Test transaction list rendering: pagination, empty states, loading states
+   - Test filter interactions: applying filters updates the list, clearing resets
+   - Test bulk operations: select all, bulk categorize, bulk hide
+   - Test inline editing: category assignment, split transactions
+3. **Confidence gate:** Core user flows (list, filter, edit, bulk operate) have test coverage.
+
+**Key files:**
+- `frontend/src/pages/EnhancedTransactions.tsx`
+- `frontend/src/components/transactions/TransactionEditModal.tsx`
+
+**Estimated effort:** Medium (assumes R4 already set up test infra)
+
+---
+
+### R6. Standardize Error Handling
+
+**Problem:** Three inconsistent patterns coexist across the backend:
+- Services **throw** generic `Error` objects: `throw new Error('Invalid month format')`
+- Some services return result objects: `{ success: false, error: '...' }`
+- Routes catch everything as generic 500: `res.status(500).json({ error: 'Failed to...' })`
+
+Frontend has its own inconsistency: some components check `error.response.data.error`, others just use `error.message`.
+
+**Target state:**
+- Typed error classes: `ValidationError`, `NotFoundError`, `AuthorizationError`, `ExternalServiceError`
+- Each carries an HTTP status code and user-safe message
+- Express error middleware maps error class → HTTP response (one place, not 15 route files)
+- Services throw typed errors consistently (no result objects for errors)
+- Frontend has a shared `useApiError` hook or error handler for mutations
+
+**Pre-refactor test work:**
+1. **Assess:** Error paths are partially tested in integration stories. Auth error handling is tested in `auth.stories.test.ts`.
+2. **Gap fill:**
+   - Catalog every `throw new Error(...)` and `catch` block across all services and routes
+   - Add tests for error scenarios in each major service: invalid input, missing data, external service failure
+   - Add tests for route-level error responses: verify status codes and response shapes for known error conditions
+   - Test that validation errors return 400 (not 500)
+3. **Confidence gate:** Error response tests document current behavior. New error classes must produce identical HTTP responses.
+
+**Key files:**
+- All files in `backend/src/routes/` (15 files)
+- All files in `backend/src/services/` (22 files)
+- New: `backend/src/errors/` directory with error classes
+- New: `backend/src/middleware/errorHandler.ts`
+
+**Estimated effort:** Medium-High (touches many files but changes are mechanical)
+
+---
+
+### R7. Split API Client (1,206 LOC)
+
+**Problem:** `frontend/src/lib/api.ts` contains 60+ methods in a single file with no domain grouping. Every new endpoint grows this file. Type definitions are duplicated from `shared/types/`.
+
+**Target state:**
+```
+frontend/src/lib/
+  ├── api.ts (~100 LOC — shared client instance, auth interceptors, base config)
+  ├── api/
+  │   ├── transactions.ts (~200 LOC)
+  │   ├── budgets.ts (~150 LOC)
+  │   ├── categories.ts (~120 LOC)
+  │   ├── reports.ts (~150 LOC)
+  │   ├── accounts.ts (~120 LOC)
+  │   ├── chat.ts (~100 LOC)
+  │   └── admin.ts (~100 LOC)
+  └── types/ → imports from shared/types/ (no local redefinitions)
+```
+
+**Pre-refactor test work:**
+1. **Assess:** No tests for API client.
+2. **Gap fill:**
+   - This is a structural refactor (moving methods between files) with no logic changes
+   - Rather than testing the API client directly, verify with TypeScript compilation — all existing call sites must still compile after the split
+   - Add a simple smoke test: each API module exports the expected methods
+3. **Confidence gate:** `tsc --noEmit` passes. All existing imports resolve. Existing integration/E2E tests (once R4 adds them) still pass.
+
+**Key files:**
+- `frontend/src/lib/api.ts`
+- All files that import from `frontend/src/lib/api`
+
+**Estimated effort:** Low-Medium
+
+---
+
+### R8. Extract Data Repository Base Class
+
+**Problem:** 8+ services repeat identical `getData`/`saveData` boilerplate with string-based keys like `budgets_${userId}`. No schema validation on keys. A typo in a key name causes silent data loss.
+
+**Target state:**
+```typescript
+// Generic repository with typed keys and serialization
+class Repository<T> {
+  constructor(
+    private dataService: DataService,
+    private entityName: string // e.g., 'budgets', 'categories'
+  ) {}
+
+  async getAll(userId: string): Promise<T[]> {
+    return await this.dataService.getData<T[]>(
+      `${this.entityName}_${userId}`
+    ) || [];
+  }
+
+  async save(userId: string, data: T[]): Promise<void> {
+    await this.dataService.saveData(`${this.entityName}_${userId}`, data);
+  }
+
+  async getById(userId: string, id: string, idField: keyof T = 'id' as keyof T): Promise<T | undefined> {
+    const all = await this.getAll(userId);
+    return all.find(item => item[idField] === id);
+  }
+}
+```
+
+**Pre-refactor test work:**
+1. **Assess:** DataService itself has no unit tests. Each service's data access is tested via its own unit/integration tests.
+2. **Gap fill:**
+   - Add unit tests for DataService: read, write, delete, list operations
+   - Add tests verifying key naming conventions match across services (catch any existing inconsistencies before they're baked into the Repository class)
+   - Test edge cases: empty data, corrupted JSON, concurrent writes
+3. **Confidence gate:** DataService unit tests pass. Key naming audit is clean.
+
+**Key files:**
+- `backend/src/services/dataService.ts`
+- All services that call `this.dataService.getData()` / `this.dataService.saveData()`
+
+**Estimated effort:** Low-Medium
+
+---
+
+### R9. Move Business Logic Out of Routes
+
+**Problem:** Route handlers in `budgets.ts`, `reports.ts`, and `transactions.ts` contain filter transformation logic, aggregation calculations, and inline validation that belongs in the service layer. Routes should only do: parse request, call service, format response.
+
+**Target state:**
+- Route handlers are under 30 LOC each (parse → call → respond)
+- All filter transformation, calculation, and validation lives in services
+- Shared request-parsing utilities for common patterns (pagination, date ranges, user ID extraction)
+
+**Pre-refactor test work:**
+1. **Assess:** Only 1 of 15 route files has tests (`plaid.integration.test.ts`, 81 LOC).
+2. **Gap fill:**
+   - Add route-level integration tests for the routes being refactored: `budgets.ts`, `reports.ts`, `transactions.ts`
+   - Test the HTTP contract: request shape → response shape for each endpoint
+   - Test error responses: missing params → 400, invalid auth → 401, service error → 500
+   - These tests exercise the full route → service → data path, so they catch regressions regardless of where the logic lives
+3. **Confidence gate:** Every endpoint in the target route files has at least one happy-path and one error-path test.
+
+**Key files:**
+- `backend/src/routes/budgets.ts` (432 LOC)
+- `backend/src/routes/reports.ts` (345 LOC)
+- `backend/src/routes/transactions.ts` (781 LOC)
+
+**Estimated effort:** Medium
+
+---
+
+### R10. Startup Configuration Validation
+
+**Problem:** Missing environment variables are only discovered at runtime when a service tries to use them. `ANTHROPIC_API_KEY` is checked inline in the service, `CHATBOT_MONTHLY_LIMIT` defaults silently to 20, pagination is hardcoded in the frontend. No fail-fast on misconfiguration.
+
+**Target state:**
+- `backend/src/config.ts` — Validates all required env vars at startup using Zod schemas. Exports typed config object. App refuses to start if required vars are missing.
+- `frontend/src/config.ts` — Typed constants for pagination, feature flags, etc.
+- No env var reads scattered through services — all go through config module.
+
+**Pre-refactor test work:**
+1. **Assess:** No tests for configuration.
+2. **Gap fill:**
+   - Add tests for config validation: missing required vars → clear error message, optional vars → sensible defaults, invalid formats → rejected
+   - Test that the app startup fails fast when critical vars are missing (JWT_SECRET, ENCRYPTION_KEY)
+   - Test that the app starts cleanly when optional vars are absent (GITHUB_ISSUES_PAT, CHATBOT_MONTHLY_LIMIT)
+3. **Confidence gate:** Config module tests cover all env vars documented in `.env.example`.
+
+**Key files:**
+- New: `backend/src/config.ts`
+- `backend/src/services/index.ts` (currently reads env vars)
+- `backend/src/services/chatbotCostTracker.ts` (inline env var read)
+
+**Estimated effort:** Low
+
+---
+
+## Recommended Execution Order
+
+The items are ordered to maximize early value and minimize dependencies between items.
+
+```
+Phase 1: Foundation (do first — enables everything else)
+├── R10. Config validation (Low effort, immediate safety win)
+├── R8.  Repository base class (Low effort, reduces noise in later refactors)
+└── R4.  Frontend test infra setup ONLY (prerequisite for R4/R5 refactoring)
+
+Phase 2: Backend structural improvements
+├── R2.  Fix circular deps / DI (unblocks clean service splitting)
+├── R1.  Split TransactionService (highest-risk god object)
+├── R3.  Split ReportService (second highest-risk god object)
+└── R6.  Standardize error handling (easier after services are smaller)
+
+Phase 3: Frontend decomposition
+├── R4.  Decompose Reports.tsx (largest frontend file)
+├── R5.  Decompose EnhancedTransactions.tsx
+└── R7.  Split API client (mechanical, low risk)
+
+Phase 4: Cleanup
+└── R9.  Move business logic out of routes (easier after services are well-structured)
+```
+
+**Dependencies between items:**
+- R4 and R5 depend on frontend test infrastructure (part of R4)
+- R1 and R3 are easier after R2 (cleaner DI)
+- R6 is easier after R1 and R3 (fewer files to touch per service)
+- R9 is easier after R6 (new error classes can be used in routes)
+
+---
+
+## Success Criteria
+
+Each refactor item is complete when:
+
+1. Pre-refactor tests are written and passing
+2. Structural changes are made
+3. All pre-existing tests still pass (zero regressions)
+4. New tests for the refactored structure pass
+5. No file exceeds 400 LOC (target state)
+6. `tsc --noEmit` passes with zero errors
+7. The change is shipped as an independent, reviewable PR
+
+---
+
+## Cross-References
+
+- **Technical Debt Tracker:** `docs/AI-TECHNICAL-DEBT.md` — existing known issues that may overlap
+- **Testing Strategy:** `docs/AI-TESTING-STRATEGY.md` — test philosophy and patterns
+- **Architecture Guide:** `docs/AI-APPLICATION-ARCHITECTURE.md` — current architecture reference
