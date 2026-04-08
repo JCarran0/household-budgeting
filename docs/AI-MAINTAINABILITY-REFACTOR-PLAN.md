@@ -51,7 +51,7 @@ Before planning each refactor, here's where we stand today:
 | Auto-categorize service | **Indirect only** | Covered by 1,219 LOC integration story |
 | Import service | **Indirect only** | Covered by csv-import integration test |
 | Chatbot service | **None** | Zero tests |
-| Route handlers | **Almost none** | 1 of 15 routes has a test file |
+| Route handlers / error handling | **Partial** | Error middleware has 33 tests (R6). 2 of 15 routes migrated to typed errors. |
 | Frontend components | **None** | Zero test files, no test framework configured |
 | transactionCalculations.ts (shared) | **None** | No dedicated test |
 
@@ -233,7 +233,7 @@ frontend/src/lib/
 - Created `backend/src/__tests__/unit/repository.test.ts` — 23 tests covering key generation, CRUD, field-based lookup, and user isolation using `InMemoryDataService` directly.
 
 **Remaining work (not blocking):**
-- Migrate existing services to compose or extend `Repository<T>` instead of calling `dataService.getData`/`saveData` directly. Can be done incrementally as services are touched in R1/R3 refactors.
+- TransactionService and ReportService now use `Repository<T>` (done in R1/R3). Remaining services (actualsOverrideService, autoCategorizeService, accountService, etc.) can be migrated incrementally.
 
 ---
 
@@ -290,7 +290,7 @@ Phase 1: Foundation ✅ COMPLETE
 ├── R8.  Repository base class ✅
 └── R4.  Frontend test infra setup ONLY (deferred — not blocking Phase 2)
 
-Phase 2: Backend structural improvements (IN PROGRESS)
+Phase 2: Backend structural improvements ✅ COMPLETE
 ├── R2.  Fix circular deps / DI ✅
 ├── R1.  Split TransactionService ✅
 ├── R3.  Split ReportService ✅
