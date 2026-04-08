@@ -6,6 +6,22 @@ This plan captures the top 10 architectural refactoring targets identified throu
 
 **Last Updated**: 2026-04-07
 
+## Progress
+
+| Item | Status | Commit | Notes |
+|------|--------|--------|-------|
+| R10. Config Validation | **Done** | `5d0eea4` | Backend config module created and wired in. Frontend config deferred. |
+| R8. Repository Base Class | Not started | | |
+| R4. Frontend Test Infra | Not started | | |
+| R2. Fix Circular Deps | Not started | | |
+| R1. Split TransactionService | Not started | | |
+| R3. Split ReportService | Not started | | |
+| R6. Standardize Errors | Not started | | |
+| R4. Decompose Reports.tsx | Not started | | |
+| R5. Decompose EnhancedTransactions.tsx | Not started | | |
+| R7. Split API Client | Not started | | |
+| R9. Move Logic Out of Routes | Not started | | |
+
 ---
 
 ## Guiding Principles
@@ -337,29 +353,19 @@ class Repository<T> {
 
 ---
 
-### R10. Startup Configuration Validation
+### R10. Startup Configuration Validation — DONE
 
-**Problem:** Missing environment variables are only discovered at runtime when a service tries to use them. `ANTHROPIC_API_KEY` is checked inline in the service, `CHATBOT_MONTHLY_LIMIT` defaults silently to 20, pagination is hardcoded in the frontend. No fail-fast on misconfiguration.
+> **Completed:** 2026-04-07 | **Commit:** `5d0eea4`
 
-**Target state:**
-- `backend/src/config.ts` — Validates all required env vars at startup using Zod schemas. Exports typed config object. App refuses to start if required vars are missing.
-- `frontend/src/config.ts` — Typed constants for pagination, feature flags, etc.
-- No env var reads scattered through services — all go through config module.
+**What was done:**
+- Created `backend/src/config.ts` — Zod-validated config module grouped by domain (server, plaid, auth, storage, ai, github, deploy). Exports typed `AppConfig` object and `loadConfig()` function for test isolation.
+- Created `backend/src/__tests__/unit/config.test.ts` — 41 tests covering valid configs, required vars, conditional validation (production Plaid creds, S3 bucket), type coercion, defaults, enum validation, and error message quality.
+- Wired config into `backend/src/services/index.ts`, `backend/src/app.ts`, and `backend/src/index.ts`, replacing scattered `process.env` reads.
+- All 41 config tests pass. All 169 integration tests pass (zero regressions).
 
-**Pre-refactor test work:**
-1. **Assess:** No tests for configuration.
-2. **Gap fill:**
-   - Add tests for config validation: missing required vars → clear error message, optional vars → sensible defaults, invalid formats → rejected
-   - Test that the app startup fails fast when critical vars are missing (JWT_SECRET, ENCRYPTION_KEY)
-   - Test that the app starts cleanly when optional vars are absent (GITHUB_ISSUES_PAT, CHATBOT_MONTHLY_LIMIT)
-3. **Confidence gate:** Config module tests cover all env vars documented in `.env.example`.
-
-**Key files:**
-- New: `backend/src/config.ts`
-- `backend/src/services/index.ts` (currently reads env vars)
-- `backend/src/services/chatbotCostTracker.ts` (inline env var read)
-
-**Estimated effort:** Low
+**Remaining work (not blocking):**
+- Migrate remaining services that still read `process.env` directly (plaidService, authService, storageFactory, feedbackService, encryption utils) — can be done incrementally as those files are touched in later refactors.
+- Frontend `config.ts` for typed constants (pagination, feature flags) — deferred to Phase 3 when frontend is being decomposed.
 
 ---
 
