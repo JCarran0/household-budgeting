@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+### [5.7.3](https://github.com/JCarran0/household-budgeting/compare/v5.7.2...v5.7.3) (2026-04-08)
+
+
+### Tests
+
+* **reports:** add 35 unit tests for ReportService (R3 prep) ([08811e9](https://github.com/JCarran0/household-budgeting/commit/08811e9510900a248a292d25a33db01b626f23e2))
+
+
+### Code Refactoring
+
+* **reports:** extract helpers and use Repository (R3) ([7a90096](https://github.com/JCarran0/household-budgeting/commit/7a90096ef83579d8b57e838fd2b49025fe6b0655))
+
+
+### Documentation
+
+* update refactor plan with R3 completion status ([28cef60](https://github.com/JCarran0/household-budgeting/commit/28cef60514441b37e0f06391e031d6ac3f4b0adb))
+
 ### [5.7.2](https://github.com/JCarran0/household-budgeting/compare/v5.7.1...v5.7.2) (2026-04-08)
 
 
