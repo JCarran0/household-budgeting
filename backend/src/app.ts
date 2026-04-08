@@ -1,4 +1,5 @@
 import express, { Express, Request, Response, NextFunction } from 'express';
+import { errorHandler } from './middleware/errorHandler';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import { config } from './config';
@@ -183,17 +184,6 @@ app.use((req: Request, res: Response) => {
 });
 
 // Global error handler
-app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
-  console.error('Global error handler:', err);
-  
-  // Don't leak error details in production
-  const isDevelopment = config.server.nodeEnv === 'development';
-  
-  res.status(500).json({
-    success: false,
-    error: isDevelopment ? err.message : 'Internal server error',
-    ...(isDevelopment && { stack: err.stack }),
-  });
-});
+app.use(errorHandler);
 
 export default app;

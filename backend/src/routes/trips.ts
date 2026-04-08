@@ -1,7 +1,8 @@
-import { Router, Request, Response } from 'express';
+import { Router, Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
 import { tripService, categoryService } from '../services';
 import { authMiddleware } from '../middleware/authMiddleware';
+import { AuthorizationError, NotFoundError, ConflictError } from '../errors';
 
 const router = Router();
 
@@ -83,13 +84,10 @@ const updateTripSchema = z
 router.use(authMiddleware);
 
 // POST /api/v1/trips - Create trip
-router.post('/', async (req: Request, res: Response): Promise<void> => {
+router.post('/', async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const userId = req.user?.userId;
-    if (!userId) {
-      res.status(401).json({ error: 'User not authenticated' });
-      return;
-    }
+    if (!userId) throw new AuthorizationError();
     const validatedData = createTripSchema.parse(req.body);
     const trip = await tripService.createTrip(validatedData, userId);
     res.status(201).json(trip);
@@ -99,104 +97,84 @@ router.post('/', async (req: Request, res: Response): Promise<void> => {
       return;
     }
     if (error instanceof Error && error.message === 'A trip with this tag already exists') {
-      res.status(409).json({ error: error.message });
+      next(new ConflictError(error.message));
       return;
     }
-    console.error('Error creating trip:', error);
-    res.status(500).json({ error: 'Failed to create trip' });
+    next(error);
   }
 });
 
 // GET /api/v1/trips - List all trips
-router.get('/', async (req: Request, res: Response): Promise<void> => {
+router.get('/', async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const userId = req.user?.userId;
-    if (!userId) {
-      res.status(401).json({ error: 'User not authenticated' });
-      return;
-    }
+    if (!userId) throw new AuthorizationError();
     const year = req.query.year ? parseInt(req.query.year as string, 10) : undefined;
     const trips = await tripService.getAllTrips(userId, year);
     res.json(trips);
   } catch (error) {
-    console.error('Error fetching trips:', error);
-    res.status(500).json({ error: 'Failed to fetch trips' });
+    next(error);
   }
 });
 
 // GET /api/v1/trips/summaries - Get all trip summaries (for card grid)
-router.get('/summaries', async (req: Request, res: Response): Promise<void> => {
+router.get('/summaries', async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const userId = req.user?.userId;
-    if (!userId) {
-      res.status(401).json({ error: 'User not authenticated' });
-      return;
-    }
+    if (!userId) throw new AuthorizationError();
     const year = req.query.year ? parseInt(req.query.year as string, 10) : undefined;
     const categories = await categoryService.getAllCategories(userId);
     const categoryInfo = categories.map((c) => ({ id: c.id, name: c.name }));
     const summaries = await tripService.getTripsSummaries(userId, year, categoryInfo);
     res.json(summaries);
   } catch (error) {
-    console.error('Error fetching trip summaries:', error);
-    res.status(500).json({ error: 'Failed to fetch trip summaries' });
+    next(error);
   }
 });
 
 // GET /api/v1/trips/:id - Get single trip
-router.get('/:id', async (req: Request, res: Response): Promise<void> => {
+router.get('/:id', async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const userId = req.user?.userId;
-    if (!userId) {
-      res.status(401).json({ error: 'User not authenticated' });
-      return;
-    }
+    if (!userId) throw new AuthorizationError();
     const trip = await tripService.getTrip(req.params.id, userId);
     if (!trip) {
-      res.status(404).json({ error: 'Trip not found' });
+      next(new NotFoundError('Trip not found'));
       return;
     }
     res.json(trip);
   } catch (error) {
-    console.error('Error fetching trip:', error);
-    res.status(500).json({ error: 'Failed to fetch trip' });
+    next(error);
   }
 });
 
 // GET /api/v1/trips/:id/summary - Get trip with spending breakdown
-router.get('/:id/summary', async (req: Request, res: Response): Promise<void> => {
+router.get('/:id/summary', async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const userId = req.user?.userId;
-    if (!userId) {
-      res.status(401).json({ error: 'User not authenticated' });
-      return;
-    }
+    if (!userId) throw new AuthorizationError();
     const categories = await categoryService.getAllCategories(userId);
     const categoryInfo = categories.map((c) => ({ id: c.id, name: c.name }));
     const summary = await tripService.getTripSummary(req.params.id, userId, categoryInfo);
     if (!summary) {
-      res.status(404).json({ error: 'Trip not found' });
+      next(new NotFoundError('Trip not found'));
       return;
     }
     res.json(summary);
   } catch (error) {
     if (error instanceof Error && error.message === 'Trip not found') {
-      res.status(404).json({ error: 'Trip not found' });
+      next(new NotFoundError('Trip not found'));
       return;
     }
-    console.error('Error fetching trip summary:', error);
-    res.status(500).json({ error: 'Failed to fetch trip summary' });
+    next(error);
   }
 });
 
 // PUT /api/v1/trips/:id - Update trip
-router.put('/:id', async (req: Request, res: Response): Promise<void> => {
+router.put('/:id', async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const userId = req.user?.userId;
-    if (!userId) {
-      res.status(401).json({ error: 'User not authenticated' });
-      return;
-    }
+    if (!userId) throw new AuthorizationError();
     const validatedData = updateTripSchema.parse(req.body);
     const trip = await tripService.updateTrip(req.params.id, validatedData, userId);
     res.json(trip);
@@ -206,35 +184,30 @@ router.put('/:id', async (req: Request, res: Response): Promise<void> => {
       return;
     }
     if (error instanceof Error && error.message === 'Trip not found') {
-      res.status(404).json({ error: 'Trip not found' });
+      next(new NotFoundError('Trip not found'));
       return;
     }
     if (error instanceof Error && error.message === 'A trip with this tag already exists') {
-      res.status(409).json({ error: error.message });
+      next(new ConflictError(error.message));
       return;
     }
-    console.error('Error updating trip:', error);
-    res.status(500).json({ error: 'Failed to update trip' });
+    next(error);
   }
 });
 
 // DELETE /api/v1/trips/:id - Delete trip
-router.delete('/:id', async (req: Request, res: Response): Promise<void> => {
+router.delete('/:id', async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const userId = req.user?.userId;
-    if (!userId) {
-      res.status(401).json({ error: 'User not authenticated' });
-      return;
-    }
+    if (!userId) throw new AuthorizationError();
     await tripService.deleteTrip(req.params.id, userId);
     res.status(204).send();
   } catch (error) {
     if (error instanceof Error && error.message === 'Trip not found') {
-      res.status(404).json({ error: 'Trip not found' });
+      next(new NotFoundError('Trip not found'));
       return;
     }
-    console.error('Error deleting trip:', error);
-    res.status(500).json({ error: 'Failed to delete trip' });
+    next(error);
   }
 });
 
