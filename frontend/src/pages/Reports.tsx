@@ -1953,9 +1953,17 @@ export function Reports() {
                               <Text size="sm">{formatCurrency(row.budgeted)}</Text>
                             </Table.Td>
                             <Table.Td>
-                              <Text size="sm" c={row.actual > row.budgeted ? 'red' : 'green'} fw={500}>
-                                {formatCurrency(row.actual)}
-                              </Text>
+                              <TransactionPreviewTrigger
+                                categoryId={row.categoryId}
+                                categoryName={row.categoryName}
+                                dateRange={{ startDate, endDate }}
+                                timeRangeFilter={timeRange}
+                                tooltipText="Click to preview transactions"
+                              >
+                                <Text size="sm" c={row.actual > row.budgeted ? 'red' : 'green'} fw={500} style={{ cursor: 'pointer', textDecoration: 'underline', textDecorationStyle: 'dotted', textUnderlineOffset: 3 }}>
+                                  {formatCurrency(row.actual)}
+                                </Text>
+                              </TransactionPreviewTrigger>
                             </Table.Td>
                             <Table.Td>
                               <Text size="sm" c={row.gap > 0 ? 'red' : 'green'} fw={500}>
@@ -2062,7 +2070,17 @@ export function Reports() {
                                   <Text size="sm">{formatCurrency(row.budgeted)}</Text>
                                 </Table.Td>
                                 <Table.Td>
-                                  <Text size="sm">{formatCurrency(row.actual)}</Text>
+                                  <TransactionPreviewTrigger
+                                    categoryId={row.categoryId}
+                                    categoryName={row.categoryName}
+                                    dateRange={{ startDate, endDate }}
+                                    timeRangeFilter={timeRange}
+                                    tooltipText="Click to preview transactions"
+                                  >
+                                    <Text size="sm" style={{ cursor: 'pointer', textDecoration: 'underline', textDecorationStyle: 'dotted', textUnderlineOffset: 3 }}>
+                                      {formatCurrency(row.actual)}
+                                    </Text>
+                                  </TransactionPreviewTrigger>
                                 </Table.Td>
                                 <Table.Td>
                                   <Text size="sm" c="dimmed">
