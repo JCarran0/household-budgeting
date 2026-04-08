@@ -13,7 +13,7 @@ This plan captures the top 10 architectural refactoring targets identified throu
 | R10. Config Validation | **Done** | `5d0eea4` | Backend config module created and wired in. Frontend config deferred. |
 | R8. Repository Base Class | **Done** | `fbe27b1` | Generic `Repository<T>` created with 23 tests. Migration of services deferred. |
 | R4. Frontend Test Infra | Not started | | |
-| R2. Fix Circular Deps | Not started | | |
+| R2. Fix Circular Deps | **Done** | `034fab0` | Zero `as any` casts. CategoryDependencyChecker interface. BudgetService uses dataService directly. |
 | R1. Split TransactionService | Not started | | |
 | R3. Split ReportService | Not started | | |
 | R6. Standardize Errors | Not started | | |
@@ -88,33 +88,16 @@ Before planning each refactor, here's where we stand today:
 
 ---
 
-### R2. Fix Circular Dependencies & Service Initialization
+### R2. Fix Circular Dependencies & Service Initialization — DONE
 
-**Problem:** `backend/src/services/index.ts` creates 18 service singletons with manual ordering and uses runtime type casting (`(budgetService as any).getCategoriesCallback = ...`) to wire bidirectional dependencies between CategoryService and BudgetService. This defeats TypeScript, makes testing hard, and creates a fragile initialization sequence.
+> **Completed:** 2026-04-07 | **Commit:** `034fab0`
 
-**Target state:**
-- Services declare dependencies via constructor parameters (constructor injection)
-- A `ServiceContainer` or factory function builds the dependency graph
-- No `as any` casts — all dependencies typed at compile time
-- Circular dependency between CategoryService and BudgetService broken via:
-  - Option A: Extract a `CategoryBudgetMediator` that both depend on
-  - Option B: Use an event emitter for cross-service notifications
-  - Option C: Extract the shared concern (category lookup) into a lightweight `CategoryLookupService` that both can depend on without circularity
-
-**Pre-refactor test work:**
-1. **Assess:** No tests for service initialization. CategoryService has 458 LOC of unit tests. BudgetService has 429 LOC.
-2. **Gap fill:**
-   - Add tests for the callback-dependent behavior: budget service fetching categories, category service triggering auto-categorize
-   - Add tests that verify service initialization order doesn't matter (currently it does)
-   - Ensure existing categoryService and budgetService unit tests cover the cross-service interactions (category deletion updating budgets, budget copy resolving categories)
-3. **Confidence gate:** All service unit tests pass. The callback-behavior tests define the contract that the new DI approach must preserve.
-
-**Key files:**
-- `backend/src/services/index.ts` (96 LOC — small file, big impact)
-- `backend/src/services/categoryService.ts` (imports 5 services + monkey-patched deps)
-- `backend/src/services/budgetService.ts`
-
-**Estimated effort:** Medium
+**What was done:**
+- **BudgetService**: Removed `getCategoriesCallback` parameter. BudgetService now calls `this.dataService.getCategories(userId)` directly — the data layer always had this method, making the callback unnecessary indirection.
+- **CategoryService**: Introduced `CategoryDependencyChecker` interface capturing the 4 deletion pre-check methods (`hasBudgetsForCategory`, `hasRulesForCategory`, `hasTransactionsForCategory`, `getBlockingTransactionDetails`). Constructor reduced from 5 params to 2 (`dataService`, `dependencyChecker?`). Added typed `setImportService()` setter for the remaining late-binding dependency.
+- **services/index.ts**: Clean initialization with zero `as any` casts. Uses a closure-based dependency checker that defers `autoCategorizeService` resolution until after construction.
+- Updated `category-deletion-protection.test.ts` setup to use new constructor signature (assertions unchanged).
+- All 30 critical tests pass (category deletion + financial calculations). Net -34 LOC.
 
 ---
 
