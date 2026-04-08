@@ -7,10 +7,12 @@
 import { DataService } from './dataService';
 import { ActualsOverrideService } from './actualsOverrideService';
 import { StoredTransaction } from './transactionService';
-import { Category, MonthlyBudget } from '../shared/types';
+import { MonthlyBudget } from '../shared/types';
 import { format, startOfMonth, endOfMonth, subMonths, addMonths } from 'date-fns';
 import { calculateIncome, calculateExpenses, calculateNetCashFlow, calculateSavingsRate } from '../shared/utils/transactionCalculations';
 import { calculateBudgetTotals } from '../shared/utils/budgetCalculations';
+import { Repository } from './repository';
+import { getMonthRange, calculateStdDev, getEffectivelyHiddenCategoryIds, getSavingsSubcategoryIds } from './reportHelpers';
 
 // Report types
 export interface SpendingTrend {
@@ -109,10 +111,14 @@ export interface YTDResult {
 }
 
 export class ReportService {
+  private transactionRepo: Repository<StoredTransaction>;
+
   constructor(
     private dataService: DataService,
     private actualsOverrideService?: ActualsOverrideService
-  ) {}
+  ) {
+    this.transactionRepo = new Repository<StoredTransaction>(dataService, 'transactions');
+  }
 
   /**
    * Get spending trends by category over time
@@ -124,19 +130,17 @@ export class ReportService {
     categoryIds?: string[]
   ): Promise<SpendingTrendsResult> {
     try {
-      const transactions = await this.dataService.getData<StoredTransaction[]>(
-        `transactions_${userId}`
-      ) || [];
+      const transactions = await this.transactionRepo.getAll(userId);
       
       const categories = await this.dataService.getCategories(userId);
 
       const categoryMap = new Map(categories.map(c => [c.id, c.name]));
       // Create a set of hidden category IDs including subcategories of hidden parents
-      const hiddenCategoryIds = this.getEffectivelyHiddenCategoryIds(categories);
+      const hiddenCategoryIds = getEffectivelyHiddenCategoryIds(categories);
       const trends: SpendingTrend[] = [];
 
       // Generate month list
-      const months = this.getMonthRange(startMonth, endMonth);
+      const months = getMonthRange(startMonth, endMonth);
 
       for (const month of months) {
         // Parse month properly
@@ -201,13 +205,11 @@ export class ReportService {
     includeSubcategories: boolean = true
   ): Promise<CategoryBreakdownResult> {
     try {
-      const transactions = await this.dataService.getData<StoredTransaction[]>(
-        `transactions_${userId}`
-      ) || [];
+      const transactions = await this.transactionRepo.getAll(userId);
       
       const categories = await this.dataService.getCategories(userId);
       // Create a set of hidden category IDs including subcategories of hidden parents
-      const hiddenCategoryIds = this.getEffectivelyHiddenCategoryIds(categories);
+      const hiddenCategoryIds = getEffectivelyHiddenCategoryIds(categories);
 
       // Find the Income parent category (Plaid PFC standard category)
       const incomeParentCategory = categories.find(c => 
@@ -343,15 +345,13 @@ export class ReportService {
     includeSubcategories: boolean = true
   ): Promise<CategoryBreakdownResult> {
     try {
-      const transactions = await this.dataService.getData<StoredTransaction[]>(
-        `transactions_${userId}`
-      ) || [];
+      const transactions = await this.transactionRepo.getAll(userId);
       
       const categories = await this.dataService.getCategories(userId);
       // Create a set of hidden category IDs including subcategories of hidden parents
-      const hiddenCategoryIds = this.getEffectivelyHiddenCategoryIds(categories);
+      const hiddenCategoryIds = getEffectivelyHiddenCategoryIds(categories);
       // Also exclude savings subcategories from spending breakdown
-      const savingsSubcategoryIds = this.getSavingsSubcategoryIds(categories);
+      const savingsSubcategoryIds = getSavingsSubcategoryIds(categories);
 
       // Filter transactions (excluding hidden categories and savings subcategories)
       const filteredTransactions = transactions.filter(t => 
@@ -471,13 +471,11 @@ export class ReportService {
     endDate: string
   ): Promise<CategoryBreakdownResult> {
     try {
-      const transactions = await this.dataService.getData<StoredTransaction[]>(
-        `transactions_${userId}`
-      ) || [];
+      const transactions = await this.transactionRepo.getAll(userId);
       
       const categories = await this.dataService.getCategories(userId);
       // Get savings subcategories
-      const savingsSubcategoryIds = this.getSavingsSubcategoryIds(categories);
+      const savingsSubcategoryIds = getSavingsSubcategoryIds(categories);
 
       // Filter transactions for savings subcategories only
       const filteredTransactions = transactions.filter(t => 
@@ -536,15 +534,13 @@ export class ReportService {
     endMonth: string
   ): Promise<CashFlowResult> {
     try {
-      const transactions = await this.dataService.getData<StoredTransaction[]>(
-        `transactions_${userId}`
-      ) || [];
+      const transactions = await this.transactionRepo.getAll(userId);
       
       const categories = await this.dataService.getCategories(userId);
       // Create a set of hidden category IDs including subcategories of hidden parents
-      const hiddenCategoryIds = this.getEffectivelyHiddenCategoryIds(categories);
+      const hiddenCategoryIds = getEffectivelyHiddenCategoryIds(categories);
 
-      const months = this.getMonthRange(startMonth, endMonth);
+      const months = getMonthRange(startMonth, endMonth);
       const summary: CashFlowSummary[] = [];
 
       for (const month of months) {
@@ -645,8 +641,8 @@ export class ReportService {
       const avgExpenses = historical.reduce((sum, m) => sum + m.expenses, 0) / historical.length;
       
       // Calculate volatility for confidence
-      const incomeStdDev = this.calculateStdDev(historical.map(m => m.income));
-      const expenseStdDev = this.calculateStdDev(historical.map(m => m.expenses));
+      const incomeStdDev = calculateStdDev(historical.map(m => m.income));
+      const expenseStdDev = calculateStdDev(historical.map(m => m.expenses));
       
       // Generate projections
       const projections: CashFlowProjection[] = [];
@@ -844,13 +840,11 @@ export class ReportService {
       const startDate = `${currentYear}-01-01`;
       const endDate = new Date().toISOString().split('T')[0];
 
-      const transactions = await this.dataService.getData<StoredTransaction[]>(
-        `transactions_${userId}`
-      ) || [];
+      const transactions = await this.transactionRepo.getAll(userId);
 
       const categories = await this.dataService.getCategories(userId);
       // Create a set of hidden category IDs including subcategories of hidden parents
-      const hiddenCategoryIds = this.getEffectivelyHiddenCategoryIds(categories);
+      const hiddenCategoryIds = getEffectivelyHiddenCategoryIds(categories);
 
       const ytdTransactions = transactions.filter(t =>
         t.date >= startDate &&
@@ -900,70 +894,4 @@ export class ReportService {
     }
   }
 
-  /**
-   * Helper: Get month range
-   */
-  private getMonthRange(startMonth: string, endMonth: string): string[] {
-    const months: string[] = [];
-
-    // Parse months properly - split by dash and create date
-    const [startYear, startMonthNum] = startMonth.split('-').map(Number);
-    const [endYear, endMonthNum] = endMonth.split('-').map(Number);
-
-    let current = new Date(startYear, startMonthNum - 1, 1); // Month is 0-based
-    const end = new Date(endYear, endMonthNum - 1, 1);
-
-    while (current <= end) {
-      months.push(format(current, 'yyyy-MM'));
-      current = addMonths(current, 1);
-    }
-
-    return months;
-  }
-
-  /**
-   * Helper: Calculate standard deviation
-   */
-  private calculateStdDev(values: number[]): number {
-    const avg = values.reduce((sum, v) => sum + v, 0) / values.length;
-    const squaredDiffs = values.map(v => Math.pow(v - avg, 2));
-    const avgSquaredDiff = squaredDiffs.reduce((sum, v) => sum + v, 0) / values.length;
-    return Math.sqrt(avgSquaredDiff);
-  }
-
-  /**
-   * Helper: Get all category IDs that should be considered hidden
-   * Includes both directly hidden categories and subcategories of hidden parents
-   */
-  private getEffectivelyHiddenCategoryIds(categories: Category[]): Set<string> {
-    const hiddenIds = new Set<string>();
-    
-    // First, add directly hidden categories
-    categories.filter(c => c.isHidden).forEach(c => hiddenIds.add(c.id));
-    
-    // Then, add subcategories of hidden parents
-    categories.forEach(category => {
-      if (category.parentId && hiddenIds.has(category.parentId)) {
-        hiddenIds.add(category.id);
-      }
-    });
-    
-    return hiddenIds;
-  }
-
-  /**
-   * Helper: Get all savings subcategory IDs
-   */
-  private getSavingsSubcategoryIds(categories: Category[]): Set<string> {
-    const savingsSubcategoryIds = new Set<string>();
-    
-    // Find all subcategories of the CUSTOM_SAVINGS parent category
-    categories.forEach(category => {
-      if (category.parentId === 'CUSTOM_SAVINGS') {
-        savingsSubcategoryIds.add(category.id);
-      }
-    });
-    
-    return savingsSubcategoryIds;
-  }
 }
