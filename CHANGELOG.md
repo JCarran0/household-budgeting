@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+### [5.7.5](https://github.com/JCarran0/household-budgeting/compare/v5.7.4...v5.7.5) (2026-04-08)
+
+
+### Documentation
+
+* fix stale notes in refactor plan ([0b41b36](https://github.com/JCarran0/household-budgeting/commit/0b41b36e9ed568dfa31f79669b46f979bdbbfd65))
+
 ### [5.7.4](https://github.com/JCarran0/household-budgeting/compare/v5.7.3...v5.7.4) (2026-04-08)
 
 
