@@ -15,6 +15,7 @@ import actualsOverrideRoutes from './routes/actualsOverrides';
 import tripRoutes from './routes/trips';
 import chatbotRoutes from './routes/chatbot';
 import themeRoutes from './routes/themes';
+import manualAccountRoutes from './routes/manualAccounts';
 
 // Load environment variables (skip in test mode as it's loaded in setup.ts)
 if (process.env.NODE_ENV !== 'test') {
@@ -107,6 +108,7 @@ app.use(`${apiPrefix}/actuals-overrides`, actualsOverrideRoutes);
 app.use(`${apiPrefix}/trips`, tripRoutes);
 app.use(`${apiPrefix}/chatbot`, chatbotRoutes);
 app.use(`${apiPrefix}/themes`, themeRoutes);
+app.use(`${apiPrefix}/manual-accounts`, manualAccountRoutes);
 
 // Version endpoint under API prefix
 app.get(`${apiPrefix}/version`, (_req: Request, res: Response) => {

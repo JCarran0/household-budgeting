@@ -46,6 +46,11 @@ export function MantineDashboard() {
     queryFn: api.getAccounts,
   });
 
+  const { data: manualAccounts } = useQuery({
+    queryKey: ['manualAccounts'],
+    queryFn: api.getManualAccounts,
+  });
+
   // Fetch recent transactions for display (limit 10)
   const { data: recentTransactionData, isLoading: transactionsLoading } = useQuery({
     queryKey: ['transactions', 'recent'],
@@ -96,15 +101,18 @@ export function MantineDashboard() {
 
   const isLoading = accountsLoading || transactionsLoading;
 
-  // Calculate net worth: assets minus liabilities
-  // Loan accounts (mortgage, auto, student) and credit cards are liabilities
-  const totalBalance = accounts?.reduce((sum, account) => {
+  // Calculate net worth: assets minus liabilities (linked + manual accounts)
+  const linkedBalance = accounts?.reduce((sum, account) => {
     const balance = account.currentBalance || 0;
     const isLiability = account.type === 'loan' || account.type === 'credit';
-    // For liabilities, subtract the balance (what you owe)
-    // For assets, add the balance (what you have)
     return sum + (isLiability ? -balance : balance);
   }, 0) || 0;
+
+  const manualBalance = manualAccounts?.reduce((sum, account) => {
+    return sum + (account.isAsset ? account.currentBalance : -account.currentBalance);
+  }, 0) || 0;
+
+  const totalBalance = linkedBalance + manualBalance;
 
   // Available balance: only count asset accounts (not loans)
   const totalAvailable = accounts?.reduce((sum, account) => {

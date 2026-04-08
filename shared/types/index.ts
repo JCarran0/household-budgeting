@@ -427,3 +427,46 @@ export interface SuggestRulesRequest {
 export interface SuggestRulesResponse {
   suggestions: RuleSuggestion[];
 }
+
+// Manual Account Types
+export type ManualAccountCategory =
+  | 'real_estate'
+  | 'vehicle'
+  | 'retirement'
+  | 'brokerage'
+  | 'cash'
+  | 'crypto'
+  | 'other_asset'
+  | 'mortgage'
+  | 'auto_loan'
+  | 'student_loan'
+  | 'personal_loan'
+  | 'other_liability';
+
+export interface ManualAccount {
+  id: string;
+  userId: string;
+  name: string;
+  category: ManualAccountCategory;
+  isAsset: boolean;
+  currentBalance: number;
+  notes: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateManualAccountDto {
+  name: string;
+  category: ManualAccountCategory;
+  isAsset: boolean;
+  currentBalance: number;
+  notes?: string | null;
+}
+
+export interface UpdateManualAccountDto {
+  name?: string;
+  category?: ManualAccountCategory;
+  isAsset?: boolean;
+  currentBalance?: number;
+  notes?: string | null;
+}

@@ -21,6 +21,7 @@ import { ChatbotDataService } from './chatbotDataService';
 import { ChatbotCostTracker } from './chatbotCostTracker';
 import { ChatbotService } from './chatbotService';
 import { CategorizationService } from './categorizationService';
+import { ManualAccountService } from './manualAccountService';
 
 // Create data service based on environment
 // Uses StorageFactory to automatically switch between filesystem and S3
@@ -48,6 +49,7 @@ export const importService = ImportService.getInstance(dataService, categoryServ
 (categoryService as any).autoCategorizeService = autoCategorizeService;
 (categoryService as any).importService = importService;
 export const actualsOverrideService = new ActualsOverrideService(dataService);
+export const manualAccountService = new ManualAccountService(dataService);
 export const reportService = new ReportService(dataService, actualsOverrideService);
 export const tripService = getTripService(dataService, transactionService);
 
@@ -91,4 +93,5 @@ export {
   ChatbotDataService,
   ChatbotService,
   CategorizationService,
+  ManualAccountService,
 };

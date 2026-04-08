@@ -22,6 +22,9 @@ import type {
   GitHubIssueDraft,
   ClassifyTransactionsResponse,
   SuggestRulesResponse,
+  ManualAccount,
+  CreateManualAccountDto,
+  UpdateManualAccountDto,
 } from '../../../shared/types';
 
 // Use relative URL in production, localhost in development
@@ -234,6 +237,12 @@ class ApiClient {
     this.confirmGitHubIssue = this.confirmGitHubIssue.bind(this);
     this.classifyTransactions = this.classifyTransactions.bind(this);
     this.suggestCategorizeRules = this.suggestCategorizeRules.bind(this);
+
+    // Manual account methods
+    this.getManualAccounts = this.getManualAccounts.bind(this);
+    this.createManualAccount = this.createManualAccount.bind(this);
+    this.updateManualAccount = this.updateManualAccount.bind(this);
+    this.deleteManualAccount = this.deleteManualAccount.bind(this);
 
     // Theme methods
     this.getThemePreferences = this.getThemePreferences.bind(this);
@@ -1156,6 +1165,28 @@ class ApiClient {
   }
 
   // =========================================================================
+  // Manual Accounts
+  // =========================================================================
+
+  async getManualAccounts(): Promise<ManualAccount[]> {
+    const { data } = await this.client.get<ManualAccount[]>('/manual-accounts');
+    return data;
+  }
+
+  async createManualAccount(dto: CreateManualAccountDto): Promise<ManualAccount> {
+    const { data } = await this.client.post<ManualAccount>('/manual-accounts', dto);
+    return data;
+  }
+
+  async updateManualAccount(id: string, dto: UpdateManualAccountDto): Promise<ManualAccount> {
+    const { data } = await this.client.put<ManualAccount>(`/manual-accounts/${id}`, dto);
+    return data;
+  }
+
+  async deleteManualAccount(id: string): Promise<void> {
+    await this.client.delete(`/manual-accounts/${id}`);
+  }
+
   // Theme Preferences
   // =========================================================================
 
