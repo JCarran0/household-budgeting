@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.10.0](https://github.com/JCarran0/household-budgeting/compare/v5.9.0...v5.10.0) (2026-04-09)
+
+
+### Features
+
+* **ui:** add tooltip on hover for truncated MultiSelect pills ([0771467](https://github.com/JCarran0/household-budgeting/commit/0771467891dabe1db71387383d9af17ce3ffd27e))
+
+
+### Bug Fixes
+
+* **frontend:** resolve all 7 react-hooks/exhaustive-deps lint warnings ([0fcd1e2](https://github.com/JCarran0/household-budgeting/commit/0fcd1e2d87d2c322f984e2b5ea49b1057cd00fdb))
+* **nginx:** add client_max_body_size for PDF uploads ([f649787](https://github.com/JCarran0/household-budgeting/commit/f649787df1778ff9da9fbacf40fead122eb5037d))
+
 ## [5.9.0](https://github.com/JCarran0/household-budgeting/compare/v5.8.0...v5.9.0) (2026-04-09)
 
 
