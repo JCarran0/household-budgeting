@@ -64,7 +64,10 @@ limit_req_zone $binary_remote_addr zone=api:10m rate=10r/s;
 server {
     listen 80;
     server_name _;
-    
+
+    # Allow PDF uploads up to 25 MB (multer limit is 20 MB per file, 2 files max)
+    client_max_body_size 25m;
+
     # Frontend
     location / {
         root /home/appuser/app/frontend/dist;
