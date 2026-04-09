@@ -5,6 +5,28 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.8.0](https://github.com/JCarran0/household-budgeting/compare/v5.7.15...v5.8.0) (2026-04-09)
+
+
+### Features
+
+* **amazon-receipts:** add shared types, upload infrastructure, and route scaffold (Phases 1–2) ([7a69a5d](https://github.com/JCarran0/household-budgeting/commit/7a69a5d18bdccb4bad21e174068273dd0885a957))
+* **amazon-receipts:** implement PDF parsing, matching, categorization, and full UI (Phases 3–9) ([00d6277](https://github.com/JCarran0/household-budgeting/commit/00d627764c552f10f239ffaa0ffc6d6970cf2661))
+
+
+### Bug Fixes
+
+* **frontend:** use store logout on 401 and remove stale router types ([e10b175](https://github.com/JCarran0/household-budgeting/commit/e10b1758d7df924e84c68fa38427f3d61ccccf1b))
+* resolve stale closure bug, add cost display, dev port conflicts, and theme loop ([ab16640](https://github.com/JCarran0/household-budgeting/commit/ab16640afaac3f4dc3522db178d644afded404b4))
+* **search:** include userDescription in transaction search filter ([5e85278](https://github.com/JCarran0/household-budgeting/commit/5e85278982a64127ff578712dd77430fb6d27314))
+* **security:** decouple encryption secret, remove token logging, pin JWT algorithm ([ef24737](https://github.com/JCarran0/household-budgeting/commit/ef247375110e03561423ef0c67bf3e8b0fcff1fb))
+* **test:** mock config module in encryption environment tests ([472f97a](https://github.com/JCarran0/household-budgeting/commit/472f97aaa49e40e17c1c2b40b8379dc73090ffd0))
+
+
+### Code Refactoring
+
+* **amazon-receipts:** smarter dedup, unified AI menu, delete-all endpoint ([5f80ffd](https://github.com/JCarran0/household-budgeting/commit/5f80ffd67010bca98f463d8e0edf34610852bd2e))
+
 ### [5.7.15](https://github.com/JCarran0/household-budgeting/compare/v5.7.14...v5.7.15) (2026-04-09)
 
 
