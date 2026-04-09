@@ -1,7 +1,8 @@
-import { Router, Request, Response } from 'express';
+import { Router, Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
 import { actualsOverrideService } from '../services';
 import { authMiddleware } from '../middleware/authMiddleware';
+import { AuthorizationError } from '../errors';
 
 const router = Router();
 
@@ -17,13 +18,10 @@ const createActualsOverrideSchema = z.object({
 router.use(authMiddleware);
 
 // GET /api/actuals-overrides - Get all overrides for user
-router.get('/', async (req: Request, res: Response) => {
+router.get('/', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const userId = req.user?.userId;
-    if (!userId) {
-      res.status(401).json({ success: false, error: 'User not authenticated' });
-      return;
-    }
+    if (!userId) throw new AuthorizationError();
 
     const result = await actualsOverrideService.getOverrides(userId);
     if (!result.success) {
@@ -33,19 +31,15 @@ router.get('/', async (req: Request, res: Response) => {
 
     res.json({ success: true, overrides: result.overrides || [] });
   } catch (error) {
-    console.error('Error fetching actuals overrides:', error);
-    res.status(500).json({ success: false, error: 'Failed to fetch actuals overrides' });
+    next(error);
   }
 });
 
 // GET /api/actuals-overrides/:month - Get override for specific month
-router.get('/:month', async (req: Request, res: Response) => {
+router.get('/:month', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const userId = req.user?.userId;
-    if (!userId) {
-      res.status(401).json({ success: false, error: 'User not authenticated' });
-      return;
-    }
+    if (!userId) throw new AuthorizationError();
 
     const { month } = req.params;
 
@@ -64,19 +58,15 @@ router.get('/:month', async (req: Request, res: Response) => {
 
     res.json({ success: true, override: result.override });
   } catch (error) {
-    console.error('Error fetching actuals override:', error);
-    res.status(500).json({ success: false, error: 'Failed to fetch actuals override' });
+    next(error);
   }
 });
 
 // POST /api/actuals-overrides - Create or update override
-router.post('/', async (req: Request, res: Response) => {
+router.post('/', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const userId = req.user?.userId;
-    if (!userId) {
-      res.status(401).json({ success: false, error: 'User not authenticated' });
-      return;
-    }
+    if (!userId) throw new AuthorizationError();
 
     // Validate request body
     const validation = createActualsOverrideSchema.safeParse(req.body);
@@ -104,19 +94,15 @@ router.post('/', async (req: Request, res: Response) => {
 
     res.status(201).json({ success: true, override: result.override });
   } catch (error) {
-    console.error('Error creating/updating actuals override:', error);
-    res.status(500).json({ success: false, error: 'Failed to save actuals override' });
+    next(error);
   }
 });
 
 // DELETE /api/actuals-overrides/:id - Delete override by ID
-router.delete('/:id', async (req: Request, res: Response) => {
+router.delete('/:id', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const userId = req.user?.userId;
-    if (!userId) {
-      res.status(401).json({ success: false, error: 'User not authenticated' });
-      return;
-    }
+    if (!userId) throw new AuthorizationError();
 
     const { id } = req.params;
 
@@ -129,19 +115,15 @@ router.delete('/:id', async (req: Request, res: Response) => {
 
     res.status(200).json({ success: true });
   } catch (error) {
-    console.error('Error deleting actuals override:', error);
-    res.status(500).json({ success: false, error: 'Failed to delete actuals override' });
+    next(error);
   }
 });
 
 // GET /api/actuals-overrides/range/:startMonth/:endMonth - Get overrides in date range
-router.get('/range/:startMonth/:endMonth', async (req: Request, res: Response) => {
+router.get('/range/:startMonth/:endMonth', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const userId = req.user?.userId;
-    if (!userId) {
-      res.status(401).json({ success: false, error: 'User not authenticated' });
-      return;
-    }
+    if (!userId) throw new AuthorizationError();
 
     const { startMonth, endMonth } = req.params;
 
@@ -160,8 +142,7 @@ router.get('/range/:startMonth/:endMonth', async (req: Request, res: Response) =
 
     res.json({ success: true, overrides: result.overrides || [] });
   } catch (error) {
-    console.error('Error fetching actuals overrides in range:', error);
-    res.status(500).json({ success: false, error: 'Failed to fetch actuals overrides' });
+    next(error);
   }
 });
 

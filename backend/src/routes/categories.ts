@@ -1,7 +1,8 @@
-import { Router, Request, Response } from 'express';
+import { Router, Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
 import { categoryService, transactionService, budgetService, autoCategorizeService } from '../services';
 import { authMiddleware } from '../middleware/authMiddleware';
+import { AuthorizationError } from '../errors';
 
 const router = Router();
 
@@ -26,138 +27,108 @@ const updateCategorySchema = z.object({
 router.use(authMiddleware);
 
 // GET /api/categories - Get all categories
-router.get('/', async (req: Request, res: Response) => {
+router.get('/', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const userId = req.user?.userId;
-    if (!userId) {
-      res.status(401).json({ error: 'User not authenticated' });
-      return;
-    }
+    if (!userId) throw new AuthorizationError();
     const categories = await categoryService.getAllCategories(userId);
     res.json(categories);
   } catch (error) {
-    console.error('Error fetching categories:', error);
-    res.status(500).json({ error: 'Failed to fetch categories' });
+    next(error);
   }
 });
 
 // GET /api/categories/tree - Get categories in tree structure
-router.get('/tree', async (req: Request, res: Response) => {
+router.get('/tree', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const userId = req.user?.userId;
-    if (!userId) {
-      res.status(401).json({ error: 'User not authenticated' });
-      return;
-    }
+    if (!userId) throw new AuthorizationError();
     const tree = await categoryService.getCategoryTree(userId);
     res.json(tree);
   } catch (error) {
-    console.error('Error fetching category tree:', error);
-    res.status(500).json({ error: 'Failed to fetch category tree' });
+    next(error);
   }
 });
 
 // GET /api/categories/transaction-counts - Get transaction counts for all categories
-router.get('/transaction-counts', async (req: Request, res: Response) => {
+router.get('/transaction-counts', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const userId = req.user?.userId;
-    if (!userId) {
-      res.status(401).json({ error: 'User not authenticated' });
-      return;
-    }
+    if (!userId) throw new AuthorizationError();
     const counts = await transactionService.getTransactionCountsByCategory(userId);
     res.json(counts);
   } catch (error) {
-    console.error('Error fetching transaction counts by category:', error);
-    res.status(500).json({ error: 'Failed to fetch transaction counts' });
+    next(error);
   }
 });
 
 // GET /api/categories/parents - Get all parent categories
-router.get('/parents', async (req: Request, res: Response) => {
+router.get('/parents', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const userId = req.user?.userId;
-    if (!userId) {
-      res.status(401).json({ error: 'User not authenticated' });
-      return;
-    }
+    if (!userId) throw new AuthorizationError();
     const parents = await categoryService.getParentCategories(userId);
     res.json(parents);
   } catch (error) {
-    console.error('Error fetching parent categories:', error);
-    res.status(500).json({ error: 'Failed to fetch parent categories' });
+    next(error);
   }
 });
 
 // GET /api/categories/hidden - Get hidden categories
-router.get('/hidden', async (req: Request, res: Response) => {
+router.get('/hidden', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const userId = req.user?.userId;
-    if (!userId) {
-      res.status(401).json({ error: 'User not authenticated' });
-      return;
-    }
+    if (!userId) throw new AuthorizationError();
     const hidden = await categoryService.getHiddenCategories(userId);
     res.json(hidden);
   } catch (error) {
-    console.error('Error fetching hidden categories:', error);
-    res.status(500).json({ error: 'Failed to fetch hidden categories' });
+    next(error);
   }
 });
 
 // GET /api/categories/savings - Get savings categories
-router.get('/savings', async (req: Request, res: Response) => {
+router.get('/savings', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const userId = req.user?.userId;
-    if (!userId) {
-      res.status(401).json({ error: 'User not authenticated' });
-      return;
-    }
+    if (!userId) throw new AuthorizationError();
     const rollover = await categoryService.getRolloverCategories(userId);
     res.json(rollover);
   } catch (error) {
-    console.error('Error fetching rollover categories:', error);
-    res.status(500).json({ error: 'Failed to fetch rollover categories' });
+    next(error);
   }
 });
 
 // POST /api/categories/initialize - Initialize default categories
-router.post('/initialize', async (req: Request, res: Response) => {
+router.post('/initialize', async (req: Request, res: Response, next: NextFunction) => {
   try {
     console.log('=== INITIALIZE CATEGORIES ENDPOINT CALLED ===');
     console.log('Request headers:', req.headers);
     console.log('Request user object:', req.user);
-    
+
     const userId = req.user?.userId;
     if (!userId) {
       console.error('ERROR: No userId found in request. req.user is:', req.user);
-      res.status(401).json({ error: 'User not authenticated' });
-      return;
+      throw new AuthorizationError();
     }
-    
+
     console.log('Initializing categories for user:', userId);
     await categoryService.initializeDefaultCategories(userId);
     const categories = await categoryService.getAllCategories(userId);
     console.log('Categories initialized successfully:', categories.length);
     res.json({ message: 'Default categories initialized', categories });
   } catch (error) {
-    console.error('ERROR in /categories/initialize:', error);
-    console.error('Error stack:', error instanceof Error ? error.stack : 'No stack trace');
-    res.status(500).json({ error: 'Failed to initialize default categories' });
+    next(error);
   }
 });
 
 // POST /api/categories/import-csv - Import categories from CSV
-router.post('/import-csv', async (req: Request, res: Response) => {
+router.post('/import-csv', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const userId = req.user?.userId;
-    if (!userId) {
-      res.status(401).json({ error: 'User not authenticated' });
-      return;
-    }
+    if (!userId) throw new AuthorizationError();
 
     const { csvContent } = req.body;
-    
+
     if (!csvContent || typeof csvContent !== 'string') {
       res.status(400).json({ error: 'CSV content is required' });
       return;
@@ -167,7 +138,7 @@ router.post('/import-csv', async (req: Request, res: Response) => {
     res.setTimeout(5 * 60 * 1000); // 5 minutes
 
     const result = await categoryService.importFromCSV(csvContent, userId);
-    
+
     if (result.success) {
       res.json({
         success: true,
@@ -183,22 +154,15 @@ router.post('/import-csv', async (req: Request, res: Response) => {
       });
     }
   } catch (error) {
-    console.error('Error importing categories from CSV:', error);
-    res.status(500).json({ 
-      error: 'Failed to import categories',
-      message: error instanceof Error ? error.message : 'Unknown error'
-    });
+    next(error);
   }
 });
 
 // GET /api/categories/:id - Get a specific category
-router.get('/:id', async (req: Request, res: Response): Promise<void> => {
+router.get('/:id', async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const userId = req.user?.userId;
-    if (!userId) {
-      res.status(401).json({ error: 'User not authenticated' });
-      return;
-    }
+    if (!userId) throw new AuthorizationError();
     const category = await categoryService.getCategoryById(req.params.id, userId);
     if (!category) {
       res.status(404).json({ error: 'Category not found' });
@@ -206,35 +170,27 @@ router.get('/:id', async (req: Request, res: Response): Promise<void> => {
     }
     res.json(category);
   } catch (error) {
-    console.error('Error fetching category:', error);
-    res.status(500).json({ error: 'Failed to fetch category' });
+    next(error);
   }
 });
 
 // GET /api/categories/:id/subcategories - Get subcategories of a parent
-router.get('/:id/subcategories', async (req: Request, res: Response): Promise<void> => {
+router.get('/:id/subcategories', async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const userId = req.user?.userId;
-    if (!userId) {
-      res.status(401).json({ error: 'User not authenticated' });
-      return;
-    }
+    if (!userId) throw new AuthorizationError();
     const subcategories = await categoryService.getSubcategories(req.params.id, userId);
     res.json(subcategories);
   } catch (error) {
-    console.error('Error fetching subcategories:', error);
-    res.status(500).json({ error: 'Failed to fetch subcategories' });
+    next(error);
   }
 });
 
 // POST /api/categories - Create a new category
-router.post('/', async (req: Request, res: Response): Promise<void> => {
+router.post('/', async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const userId = req.user?.userId;
-    if (!userId) {
-      res.status(401).json({ error: 'User not authenticated' });
-      return;
-    }
+    if (!userId) throw new AuthorizationError();
     const validatedData = createCategorySchema.parse(req.body);
     const category = await categoryService.createCategory(validatedData, userId);
     res.status(201).json(category);
@@ -244,7 +200,7 @@ router.post('/', async (req: Request, res: Response): Promise<void> => {
       return;
     }
     if (error instanceof Error) {
-      if (error.message.includes('Parent category not found') || 
+      if (error.message.includes('Parent category not found') ||
           error.message.includes('Cannot create subcategory') ||
           error.message.includes('already exists') ||
           error.message.includes('name is required')) {
@@ -252,19 +208,15 @@ router.post('/', async (req: Request, res: Response): Promise<void> => {
         return;
       }
     }
-    console.error('Error creating category:', error);
-    res.status(500).json({ error: 'Failed to create category' });
+    next(error);
   }
 });
 
 // PUT /api/categories/:id - Update a category
-router.put('/:id', async (req: Request, res: Response) => {
+router.put('/:id', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const userId = req.user?.userId;
-    if (!userId) {
-      res.status(401).json({ error: 'User not authenticated' });
-      return;
-    }
+    if (!userId) throw new AuthorizationError();
     const validatedData = updateCategorySchema.parse(req.body);
     const category = await categoryService.updateCategory(req.params.id, validatedData, userId);
     res.json(category);
@@ -277,51 +229,39 @@ router.put('/:id', async (req: Request, res: Response) => {
       res.status(404).json({ error: 'Category not found' });
       return;
     }
-    console.error('Error updating category:', error);
-    res.status(500).json({ error: 'Failed to update category' });
+    next(error);
   }
 });
 
 // POST /api/categories/:id/delete-budgets - Delete all budgets for a category
-router.post('/:id/delete-budgets', async (req: Request, res: Response) => {
+router.post('/:id/delete-budgets', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const userId = req.user?.userId;
-    if (!userId) {
-      res.status(401).json({ error: 'User not authenticated' });
-      return;
-    }
+    if (!userId) throw new AuthorizationError();
     const deletedCount = await budgetService.deleteBudgetsForCategory(req.params.id, userId);
     res.json({ success: true, deleted: deletedCount });
   } catch (error) {
-    console.error('Error deleting budgets for category:', error);
-    res.status(500).json({ error: 'Failed to delete budgets' });
+    next(error);
   }
 });
 
 // POST /api/categories/:id/delete-rules - Delete all auto-categorization rules for a category
-router.post('/:id/delete-rules', async (req: Request, res: Response) => {
+router.post('/:id/delete-rules', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const userId = req.user?.userId;
-    if (!userId) {
-      res.status(401).json({ error: 'User not authenticated' });
-      return;
-    }
+    if (!userId) throw new AuthorizationError();
     const deletedCount = await autoCategorizeService.deleteRulesForCategory(req.params.id, userId);
     res.json({ success: true, deleted: deletedCount });
   } catch (error) {
-    console.error('Error deleting rules for category:', error);
-    res.status(500).json({ error: 'Failed to delete rules' });
+    next(error);
   }
 });
 
 // POST /api/categories/:id/recategorize-transactions - Recategorize all transactions from one category to another
-router.post('/:id/recategorize-transactions', async (req: Request, res: Response) => {
+router.post('/:id/recategorize-transactions', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const userId = req.user?.userId;
-    if (!userId) {
-      res.status(401).json({ error: 'User not authenticated' });
-      return;
-    }
+    if (!userId) throw new AuthorizationError();
 
     const { newCategoryId } = req.body;
 
@@ -338,19 +278,15 @@ router.post('/:id/recategorize-transactions', async (req: Request, res: Response
     );
     res.json({ success: true, updated: updatedCount });
   } catch (error) {
-    console.error('Error recategorizing transactions:', error);
-    res.status(500).json({ error: 'Failed to recategorize transactions' });
+    next(error);
   }
 });
 
 // DELETE /api/categories/:id - Delete a category
-router.delete('/:id', async (req: Request, res: Response) => {
+router.delete('/:id', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const userId = req.user?.userId;
-    if (!userId) {
-      res.status(401).json({ error: 'User not authenticated' });
-      return;
-    }
+    if (!userId) throw new AuthorizationError();
     await categoryService.deleteCategory(req.params.id, userId);
     res.status(204).send();
   } catch (error) {
@@ -366,9 +302,7 @@ router.delete('/:id', async (req: Request, res: Response) => {
         return;
       }
     }
-    // 500 only for unexpected server errors
-    console.error('Error deleting category:', error);
-    res.status(500).json({ error: 'Failed to delete category' });
+    next(error);
   }
 });
 

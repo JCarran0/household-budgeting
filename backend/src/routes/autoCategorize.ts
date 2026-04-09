@@ -2,10 +2,11 @@
  * Auto-Categorization Routes
  */
 
-import { Router, Request, Response } from 'express';
+import { Router, Request, Response, NextFunction } from 'express';
 import { AutoCategorizeService } from '../services/autoCategorizeService';
 import { dataService } from '../services';
 import { authMiddleware } from '../middleware/authMiddleware';
+import { AuthorizationError } from '../errors';
 import { z } from 'zod';
 
 const router = Router();
@@ -43,18 +44,14 @@ const reorderRulesSchema = z.object({
  * GET /api/v1/autocategorize/rules
  * Get all auto-categorization rules
  */
-router.get('/rules', authMiddleware, async (req: AuthRequest, res: Response): Promise<void> => {
+router.get('/rules', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
   try {
-    if (!req.user) {
-      res.status(401).json({ success: false, error: 'Unauthorized' });
-      return;
-    }
+    if (!req.user) throw new AuthorizationError();
 
     const rules = await autoCategorizeService.getRules(req.user.userId);
     res.json({ success: true, rules });
   } catch (error) {
-    console.error('Error fetching auto-categorize rules:', error);
-    res.status(500).json({ success: false, error: 'Failed to fetch rules' });
+    next(error);
   }
 });
 
@@ -62,17 +59,14 @@ router.get('/rules', authMiddleware, async (req: AuthRequest, res: Response): Pr
  * POST /api/v1/autocategorize/rules
  * Create a new auto-categorization rule
  */
-router.post('/rules', authMiddleware, async (req: AuthRequest, res: Response): Promise<void> => {
+router.post('/rules', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
   try {
-    if (!req.user) {
-      res.status(401).json({ success: false, error: 'Unauthorized' });
-      return;
-    }
+    if (!req.user) throw new AuthorizationError();
 
     const validation = createRuleSchema.safeParse(req.body);
     if (!validation.success) {
-      res.status(400).json({ 
-        success: false, 
+      res.status(400).json({
+        success: false,
         error: 'Invalid request data',
         details: validation.error.format(),
       });
@@ -91,8 +85,7 @@ router.post('/rules', authMiddleware, async (req: AuthRequest, res: Response): P
 
     res.json({ success: true, rule: result.rule });
   } catch (error) {
-    console.error('Error creating auto-categorize rule:', error);
-    res.status(500).json({ success: false, error: 'Failed to create rule' });
+    next(error);
   }
 });
 
@@ -101,17 +94,14 @@ router.post('/rules', authMiddleware, async (req: AuthRequest, res: Response): P
  * Reorder rules by priority
  * NOTE: This route must come before /rules/:ruleId to avoid being caught by the param route
  */
-router.put('/rules/reorder', authMiddleware, async (req: AuthRequest, res: Response): Promise<void> => {
+router.put('/rules/reorder', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
   try {
-    if (!req.user) {
-      res.status(401).json({ success: false, error: 'Unauthorized' });
-      return;
-    }
+    if (!req.user) throw new AuthorizationError();
 
     const validation = reorderRulesSchema.safeParse(req.body);
     if (!validation.success) {
-      res.status(400).json({ 
-        success: false, 
+      res.status(400).json({
+        success: false,
         error: 'Invalid request data',
         details: validation.error.format(),
       });
@@ -130,8 +120,7 @@ router.put('/rules/reorder', authMiddleware, async (req: AuthRequest, res: Respo
 
     res.json({ success: true });
   } catch (error) {
-    console.error('Error reordering auto-categorize rules:', error);
-    res.status(500).json({ success: false, error: 'Failed to reorder rules' });
+    next(error);
   }
 });
 
@@ -139,12 +128,9 @@ router.put('/rules/reorder', authMiddleware, async (req: AuthRequest, res: Respo
  * PUT /api/v1/autocategorize/rules/:ruleId/move-up
  * Move a rule up in priority
  */
-router.put('/rules/:ruleId/move-up', authMiddleware, async (req: AuthRequest, res: Response): Promise<void> => {
+router.put('/rules/:ruleId/move-up', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
   try {
-    if (!req.user) {
-      res.status(401).json({ success: false, error: 'Unauthorized' });
-      return;
-    }
+    if (!req.user) throw new AuthorizationError();
 
     const { ruleId } = req.params;
     const result = await autoCategorizeService.moveRuleUp(
@@ -159,8 +145,7 @@ router.put('/rules/:ruleId/move-up', authMiddleware, async (req: AuthRequest, re
 
     res.json({ success: true });
   } catch (error) {
-    console.error('Error moving rule up:', error);
-    res.status(500).json({ success: false, error: 'Failed to move rule' });
+    next(error);
   }
 });
 
@@ -168,12 +153,9 @@ router.put('/rules/:ruleId/move-up', authMiddleware, async (req: AuthRequest, re
  * PUT /api/v1/autocategorize/rules/:ruleId/move-down
  * Move a rule down in priority
  */
-router.put('/rules/:ruleId/move-down', authMiddleware, async (req: AuthRequest, res: Response): Promise<void> => {
+router.put('/rules/:ruleId/move-down', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
   try {
-    if (!req.user) {
-      res.status(401).json({ success: false, error: 'Unauthorized' });
-      return;
-    }
+    if (!req.user) throw new AuthorizationError();
 
     const { ruleId } = req.params;
     const result = await autoCategorizeService.moveRuleDown(
@@ -188,8 +170,7 @@ router.put('/rules/:ruleId/move-down', authMiddleware, async (req: AuthRequest, 
 
     res.json({ success: true });
   } catch (error) {
-    console.error('Error moving rule down:', error);
-    res.status(500).json({ success: false, error: 'Failed to move rule' });
+    next(error);
   }
 });
 
@@ -198,17 +179,14 @@ router.put('/rules/:ruleId/move-down', authMiddleware, async (req: AuthRequest, 
  * Update an existing rule
  * NOTE: This route must come after specific routes like /rules/reorder to avoid catching them
  */
-router.put('/rules/:ruleId', authMiddleware, async (req: AuthRequest, res: Response): Promise<void> => {
+router.put('/rules/:ruleId', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
   try {
-    if (!req.user) {
-      res.status(401).json({ success: false, error: 'Unauthorized' });
-      return;
-    }
+    if (!req.user) throw new AuthorizationError();
 
     const validation = updateRuleSchema.safeParse(req.body);
     if (!validation.success) {
-      res.status(400).json({ 
-        success: false, 
+      res.status(400).json({
+        success: false,
         error: 'Invalid request data',
         details: validation.error.format(),
       });
@@ -230,8 +208,7 @@ router.put('/rules/:ruleId', authMiddleware, async (req: AuthRequest, res: Respo
 
     res.json({ success: true });
   } catch (error) {
-    console.error('Error updating auto-categorize rule:', error);
-    res.status(500).json({ success: false, error: 'Failed to update rule' });
+    next(error);
   }
 });
 
@@ -239,12 +216,9 @@ router.put('/rules/:ruleId', authMiddleware, async (req: AuthRequest, res: Respo
  * DELETE /api/v1/autocategorize/rules/:ruleId
  * Delete a rule
  */
-router.delete('/rules/:ruleId', authMiddleware, async (req: AuthRequest, res: Response): Promise<void> => {
+router.delete('/rules/:ruleId', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
   try {
-    if (!req.user) {
-      res.status(401).json({ success: false, error: 'Unauthorized' });
-      return;
-    }
+    if (!req.user) throw new AuthorizationError();
 
     const { ruleId } = req.params;
     const result = await autoCategorizeService.deleteRule(
@@ -259,8 +233,7 @@ router.delete('/rules/:ruleId', authMiddleware, async (req: AuthRequest, res: Re
 
     res.json({ success: true });
   } catch (error) {
-    console.error('Error deleting auto-categorize rule:', error);
-    res.status(500).json({ success: false, error: 'Failed to delete rule' });
+    next(error);
   }
 });
 
@@ -268,12 +241,9 @@ router.delete('/rules/:ruleId', authMiddleware, async (req: AuthRequest, res: Re
  * POST /api/v1/autocategorize/preview
  * Preview what would be categorized without applying changes
  */
-router.post('/preview', authMiddleware, async (req: AuthRequest, res: Response): Promise<void> => {
+router.post('/preview', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
   try {
-    if (!req.user) {
-      res.status(401).json({ success: false, error: 'Unauthorized' });
-      return;
-    }
+    if (!req.user) throw new AuthorizationError();
 
     const { forceRecategorize = false } = req.body;
     const result = await autoCategorizeService.previewCategorization(req.user.userId, forceRecategorize);
@@ -294,8 +264,7 @@ router.post('/preview', authMiddleware, async (req: AuthRequest, res: Response):
         : `Would categorize ${result.wouldCategorize || 0} of ${result.total || 0} uncategorized transactions`
     });
   } catch (error) {
-    console.error('Error previewing auto-categorization:', error);
-    res.status(500).json({ success: false, error: 'Failed to preview categorization' });
+    next(error);
   }
 });
 
@@ -303,12 +272,9 @@ router.post('/preview', authMiddleware, async (req: AuthRequest, res: Response):
  * POST /api/v1/autocategorize/apply
  * Apply auto-categorization rules to all transactions
  */
-router.post('/apply', authMiddleware, async (req: AuthRequest, res: Response): Promise<void> => {
+router.post('/apply', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
   try {
-    if (!req.user) {
-      res.status(401).json({ success: false, error: 'Unauthorized' });
-      return;
-    }
+    if (!req.user) throw new AuthorizationError();
 
     const { forceRecategorize = false, transactionIds } = req.body;
     const result = await autoCategorizeService.applyRulesToAllTransactions(req.user.userId, forceRecategorize, transactionIds);
@@ -318,8 +284,8 @@ router.post('/apply', authMiddleware, async (req: AuthRequest, res: Response): P
       return;
     }
 
-    res.json({ 
-      success: true, 
+    res.json({
+      success: true,
       categorized: result.categorized || 0,
       recategorized: result.recategorized || 0,
       total: result.total || 0,
@@ -328,8 +294,7 @@ router.post('/apply', authMiddleware, async (req: AuthRequest, res: Response): P
         : `Categorized ${result.categorized || 0} of ${result.total || 0} transactions`
     });
   } catch (error) {
-    console.error('Error applying auto-categorization:', error);
-    res.status(500).json({ success: false, error: 'Failed to apply rules' });
+    next(error);
   }
 });
 

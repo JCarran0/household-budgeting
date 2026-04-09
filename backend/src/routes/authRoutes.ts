@@ -1,10 +1,11 @@
-import { Router, Request, Response } from 'express';
+import { Router, Request, Response, NextFunction } from 'express';
 import { authService } from '../services';
-import { 
-  authenticate, 
-  rateLimitAuth, 
-  validateBody 
+import {
+  authenticate,
+  rateLimitAuth,
+  validateBody
 } from '../middleware/authMiddleware';
+import { AuthorizationError } from '../errors';
 import {
   registrationSchema,
   loginSchema,
@@ -25,23 +26,19 @@ router.post(
   '/register',
   rateLimitAuth,
   validateBody(registrationSchema),
-  async (req: Request, res: Response): Promise<void> => {
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       const { username, password } = req.body;
-      
+
       const result = await authService.register(username, password);
-      
+
       if (result.success) {
         res.status(201).json(result);
       } else {
         res.status(400).json(result);
       }
     } catch (error) {
-      console.error('Registration error:', error);
-      res.status(500).json({
-        success: false,
-        error: 'Registration failed',
-      });
+      next(error);
     }
   }
 );
@@ -55,12 +52,12 @@ router.post(
   '/login',
   rateLimitAuth,
   validateBody(loginSchema),
-  async (req: Request, res: Response): Promise<void> => {
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       const { username, password } = req.body;
-      
+
       const result = await authService.login(username, password);
-      
+
       if (result.success) {
         res.json(result);
       } else {
@@ -72,11 +69,7 @@ router.post(
         }
       }
     } catch (error) {
-      console.error('Login error:', error);
-      res.status(500).json({
-        success: false,
-        error: 'Login failed',
-      });
+      next(error);
     }
   }
 );
@@ -89,23 +82,19 @@ router.post(
 router.post(
   '/refresh',
   validateBody(tokenRefreshSchema),
-  async (req: Request, res: Response): Promise<void> => {
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       const { token } = req.body;
-      
+
       const result = await authService.refreshToken(token);
-      
+
       if (result.success) {
         res.json(result);
       } else {
         res.status(401).json(result);
       }
     } catch (error) {
-      console.error('Token refresh error:', error);
-      res.status(500).json({
-        success: false,
-        error: 'Token refresh failed',
-      });
+      next(error);
     }
   }
 );
@@ -119,36 +108,26 @@ router.post(
   '/change-password',
   authenticate,
   validateBody(changePasswordSchema),
-  async (req: Request, res: Response): Promise<void> => {
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
-      if (!req.user) {
-        res.status(401).json({
-          success: false,
-          error: 'Not authenticated',
-        });
-        return;
-      }
+      if (!req.user) throw new AuthorizationError();
 
       const { currentPassword, newPassword } = req.body;
       const { userId } = req.user;
-      
+
       const result = await authService.changePassword(
         userId,
         currentPassword,
         newPassword
       );
-      
+
       if (result.success) {
         res.json(result);
       } else {
         res.status(400).json(result);
       }
     } catch (error) {
-      console.error('Change password error:', error);
-      res.status(500).json({
-        success: false,
-        error: 'Password change failed',
-      });
+      next(error);
     }
   }
 );
@@ -161,15 +140,9 @@ router.post(
 router.get(
   '/me',
   authenticate,
-  async (req: Request, res: Response): Promise<void> => {
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
-      if (!req.user) {
-        res.status(401).json({
-          success: false,
-          error: 'Not authenticated',
-        });
-        return;
-      }
+      if (!req.user) throw new AuthorizationError();
 
       // For now, just return the user info from the token
       // In a real app, you'd fetch fresh user data from the database
@@ -185,11 +158,7 @@ router.get(
         },
       });
     } catch (error) {
-      console.error('Get user error:', error);
-      res.status(500).json({
-        success: false,
-        error: 'Failed to get user info',
-      });
+      next(error);
     }
   }
 );
@@ -230,23 +199,19 @@ router.post(
   '/request-reset',
   rateLimitAuth,
   validateBody(resetRequestSchema),
-  async (req: Request, res: Response): Promise<void> => {
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       const { username } = req.body;
-      
+
       const result = await authService.requestPasswordReset(username);
-      
+
       if (result.success) {
         res.json(result);
       } else {
         res.status(400).json(result);
       }
     } catch (error) {
-      console.error('Password reset request error:', error);
-      res.status(500).json({
-        success: false,
-        error: 'Reset request failed',
-      });
+      next(error);
     }
   }
 );
@@ -260,23 +225,19 @@ router.post(
   '/reset-password',
   rateLimitAuth,
   validateBody(resetPasswordSchema),
-  async (req: Request, res: Response): Promise<void> => {
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       const { username, token, newPassword } = req.body;
-      
+
       const result = await authService.resetPassword(username, token, newPassword);
-      
+
       if (result.success) {
         res.json(result);
       } else {
         res.status(400).json(result);
       }
     } catch (error) {
-      console.error('Password reset error:', error);
-      res.status(500).json({
-        success: false,
-        error: 'Password reset failed',
-      });
+      next(error);
     }
   }
 );

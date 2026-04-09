@@ -2,9 +2,10 @@
  * Account Management Routes
  */
 
-import { Router, Request, Response } from 'express';
+import { Router, Request, Response, NextFunction } from 'express';
 import { accountService, transactionService } from '../services';
 import { authMiddleware } from '../middleware/authMiddleware';
+import { AuthorizationError } from '../errors';
 import { z } from 'zod';
 
 const router = Router();
@@ -29,12 +30,9 @@ const syncTransactionsSchema = z.object({
  * POST /api/v1/accounts/connect
  * Connect a new bank account after Plaid Link
  */
-router.post('/connect', authMiddleware, async (req: AuthRequest, res: Response): Promise<void> => {
+router.post('/connect', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
   try {
-    if (!req.user) {
-      res.status(401).json({ success: false, error: 'Unauthorized' });
-      return;
-    }
+    if (!req.user) throw new AuthorizationError();
 
     const validation = connectAccountSchema.safeParse(req.body);
     if (!validation.success) {
@@ -69,8 +67,7 @@ router.post('/connect', authMiddleware, async (req: AuthRequest, res: Response):
       account: result.account,
     });
   } catch (error) {
-    console.error('Error connecting account:', error);
-    res.status(500).json({ success: false, error: 'Failed to connect account' });
+    next(error);
   }
 });
 
@@ -78,12 +75,9 @@ router.post('/connect', authMiddleware, async (req: AuthRequest, res: Response):
  * GET /api/v1/accounts
  * Get all user's connected accounts
  */
-router.get('/', authMiddleware, async (req: AuthRequest, res: Response): Promise<void> => {
+router.get('/', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
   try {
-    if (!req.user) {
-      res.status(401).json({ success: false, error: 'Unauthorized' });
-      return;
-    }
+    if (!req.user) throw new AuthorizationError();
 
     const result = await accountService.getUserAccounts(req.user.userId);
 
@@ -103,8 +97,7 @@ router.get('/', authMiddleware, async (req: AuthRequest, res: Response): Promise
       accounts: mappedAccounts,
     });
   } catch (error) {
-    console.error('Error fetching accounts:', error);
-    res.status(500).json({ success: false, error: 'Failed to fetch accounts' });
+    next(error);
   }
 });
 
@@ -112,12 +105,9 @@ router.get('/', authMiddleware, async (req: AuthRequest, res: Response): Promise
  * POST /api/v1/accounts/sync
  * Sync account balances from Plaid
  */
-router.post('/sync', authMiddleware, async (req: AuthRequest, res: Response): Promise<void> => {
+router.post('/sync', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
   try {
-    if (!req.user) {
-      res.status(401).json({ success: false, error: 'Unauthorized' });
-      return;
-    }
+    if (!req.user) throw new AuthorizationError();
 
     const result = await accountService.syncAccountBalances(req.user.userId);
 
@@ -131,8 +121,7 @@ router.post('/sync', authMiddleware, async (req: AuthRequest, res: Response): Pr
       accountsUpdated: result.accountsUpdated,
     });
   } catch (error) {
-    console.error('Error syncing accounts:', error);
-    res.status(500).json({ success: false, error: 'Failed to sync accounts' });
+    next(error);
   }
 });
 
@@ -140,12 +129,9 @@ router.post('/sync', authMiddleware, async (req: AuthRequest, res: Response): Pr
  * POST /api/v1/accounts/:accountId/sync-transactions
  * Sync transactions for specific account
  */
-router.post('/:accountId/sync-transactions', authMiddleware, async (req: AuthRequest, res: Response): Promise<void> => {
+router.post('/:accountId/sync-transactions', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
   try {
-    if (!req.user) {
-      res.status(401).json({ success: false, error: 'Unauthorized' });
-      return;
-    }
+    if (!req.user) throw new AuthorizationError();
 
     const validation = syncTransactionsSchema.safeParse(req.body);
     if (!validation.success) {
@@ -186,8 +172,7 @@ router.post('/:accountId/sync-transactions', authMiddleware, async (req: AuthReq
       removed: result.removed,
     });
   } catch (error) {
-    console.error('Error syncing transactions:', error);
-    res.status(500).json({ success: false, error: 'Failed to sync transactions' });
+    next(error);
   }
 });
 
@@ -195,12 +180,9 @@ router.post('/:accountId/sync-transactions', authMiddleware, async (req: AuthReq
  * POST /api/v1/accounts/:accountId/link-token
  * Create a link token for re-authentication (update mode)
  */
-router.post('/:accountId/link-token', authMiddleware, async (req: AuthRequest, res: Response): Promise<void> => {
+router.post('/:accountId/link-token', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
   try {
-    if (!req.user) {
-      res.status(401).json({ success: false, error: 'Unauthorized' });
-      return;
-    }
+    if (!req.user) throw new AuthorizationError();
 
     const { accountId } = req.params;
     const result = await accountService.createUpdateLinkToken(req.user.userId, accountId);
@@ -219,8 +201,7 @@ router.post('/:accountId/link-token', authMiddleware, async (req: AuthRequest, r
       expiration: result.expiration,
     });
   } catch (error) {
-    console.error('Error creating update link token:', error);
-    res.status(500).json({ success: false, error: 'Failed to create link token' });
+    next(error);
   }
 });
 
@@ -228,12 +209,9 @@ router.post('/:accountId/link-token', authMiddleware, async (req: AuthRequest, r
  * POST /api/v1/accounts/:accountId/reauth-complete
  * Mark account as active after successful re-authentication
  */
-router.post('/:accountId/reauth-complete', authMiddleware, async (req: AuthRequest, res: Response): Promise<void> => {
+router.post('/:accountId/reauth-complete', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
   try {
-    if (!req.user) {
-      res.status(401).json({ success: false, error: 'Unauthorized' });
-      return;
-    }
+    if (!req.user) throw new AuthorizationError();
 
     const { accountId } = req.params;
     const result = await accountService.markAccountActive(req.user.userId, accountId);
@@ -248,8 +226,7 @@ router.post('/:accountId/reauth-complete', authMiddleware, async (req: AuthReque
 
     res.json({ success: true });
   } catch (error) {
-    console.error('Error completing re-authentication:', error);
-    res.status(500).json({ success: false, error: 'Failed to complete re-authentication' });
+    next(error);
   }
 });
 
@@ -257,12 +234,9 @@ router.post('/:accountId/reauth-complete', authMiddleware, async (req: AuthReque
  * PUT /api/v1/accounts/:accountId
  * Update account details (currently only nickname)
  */
-router.put('/:accountId', authMiddleware, async (req: AuthRequest, res: Response): Promise<void> => {
+router.put('/:accountId', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
   try {
-    if (!req.user) {
-      res.status(401).json({ success: false, error: 'Unauthorized' });
-      return;
-    }
+    if (!req.user) throw new AuthorizationError();
 
     const { accountId } = req.params;
     
@@ -297,8 +271,7 @@ router.put('/:accountId', authMiddleware, async (req: AuthRequest, res: Response
 
     res.json({ success: true });
   } catch (error) {
-    console.error('Error updating account:', error);
-    res.status(500).json({ success: false, error: 'Failed to update account' });
+    next(error);
   }
 });
 
@@ -306,12 +279,9 @@ router.put('/:accountId', authMiddleware, async (req: AuthRequest, res: Response
  * DELETE /api/v1/accounts/:accountId
  * Disconnect a bank account
  */
-router.delete('/:accountId', authMiddleware, async (req: AuthRequest, res: Response): Promise<void> => {
+router.delete('/:accountId', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
   try {
-    if (!req.user) {
-      res.status(401).json({ success: false, error: 'Unauthorized' });
-      return;
-    }
+    if (!req.user) throw new AuthorizationError();
 
     const { accountId } = req.params;
 
@@ -324,8 +294,7 @@ router.delete('/:accountId', authMiddleware, async (req: AuthRequest, res: Respo
 
     res.json({ success: true });
   } catch (error) {
-    console.error('Error disconnecting account:', error);
-    res.status(500).json({ success: false, error: 'Failed to disconnect account' });
+    next(error);
   }
 });
 

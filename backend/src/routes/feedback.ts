@@ -1,4 +1,4 @@
-import { Router, Request, Response } from 'express';
+import { Router, Request, Response, NextFunction } from 'express';
 import { feedbackService } from '../services/feedbackService';
 import { authenticate, validateBody, rateLimitAuth } from '../middleware/authMiddleware';
 import { feedbackSchema } from '../validators/feedbackValidators';
@@ -16,7 +16,7 @@ router.post(
   authenticate,
   rateLimitAuth, // Apply rate limiting to prevent spam
   validateBody(feedbackSchema),
-  async (req: Request, res: Response): Promise<void> => {
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       const feedbackData = req.body as FeedbackSubmission;
 
@@ -41,11 +41,7 @@ router.post(
         });
       }
     } catch (error) {
-      console.error('Feedback submission error:', error);
-      res.status(500).json({
-        success: false,
-        error: 'Internal server error',
-      });
+      next(error);
     }
   }
 );
@@ -58,7 +54,7 @@ router.post(
 router.get(
   '/test',
   authenticate,
-  async (_req: Request, res: Response): Promise<void> => {
+  async (_req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       const result = await feedbackService.testConnection();
 
@@ -70,11 +66,7 @@ router.get(
         error: result.error,
       });
     } catch (error) {
-      console.error('GitHub test error:', error);
-      res.status(500).json({
-        success: false,
-        error: 'Failed to test GitHub connection',
-      });
+      next(error);
     }
   }
 );

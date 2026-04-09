@@ -1,6 +1,7 @@
-import express from 'express';
+import express, { NextFunction, Request, Response } from 'express';
 import { categoryService, dataService } from '../services';
 import { authMiddleware } from '../middleware/authMiddleware';
+import { AuthorizationError } from '../errors';
 
 const router = express.Router();
 
@@ -18,13 +19,10 @@ interface MigrationResult {
  * Migrate categories from isSavings to isRollover
  * This is a one-time migration to rename the concept for better clarity
  */
-router.post('/migrate-savings-to-rollover', async (req, res) => {
+router.post('/migrate-savings-to-rollover', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const userId = req.user?.userId;
-    if (!userId) {
-      res.status(401).json({ error: 'User not authenticated' });
-      return;
-    }
+    if (!userId) throw new AuthorizationError();
 
     console.log(`Starting migration from isSavings to isRollover for user ${userId}`);
 
@@ -72,29 +70,17 @@ router.post('/migrate-savings-to-rollover', async (req, res) => {
     
     res.json(result);
   } catch (error) {
-    console.error('Migration failed:', error);
-    
-    const result: MigrationResult = {
-      success: false,
-      message: `Migration failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
-      migratedCount: 0,
-      totalCount: 0
-    };
-    
-    res.status(500).json(result);
+    next(error);
   }
 });
 
 /**
  * Get migration status - check if any categories still have the old field
  */
-router.get('/migration-status', async (req, res) => {
+router.get('/migration-status', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const userId = req.user?.userId;
-    if (!userId) {
-      res.status(401).json({ error: 'User not authenticated' });
-      return;
-    }
+    if (!userId) throw new AuthorizationError();
 
     // Get categories directly from data service to check raw data
     const dataService = (categoryService as any).dataService;
@@ -110,21 +96,17 @@ router.get('/migration-status', async (req, res) => {
       migrationComplete: oldFieldCount === 0 && newFieldCount > 0
     });
   } catch (error) {
-    console.error('Failed to get migration status:', error);
-    res.status(500).json({ error: 'Failed to get migration status' });
+    next(error);
   }
 });
 
 /**
  * Clean up transaction location data by removing null-only location objects
  */
-router.post('/clean-location-data', async (req, res) => {
+router.post('/clean-location-data', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const userId = req.user?.userId;
-    if (!userId) {
-      res.status(401).json({ error: 'User not authenticated' });
-      return;
-    }
+    if (!userId) throw new AuthorizationError();
 
     console.log(`Starting location data cleanup for user ${userId}`);
 
@@ -172,29 +154,17 @@ router.post('/clean-location-data', async (req, res) => {
     
     res.json(result);
   } catch (error) {
-    console.error('Location cleanup failed:', error);
-    
-    const result: MigrationResult = {
-      success: false,
-      message: `Location cleanup failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
-      migratedCount: 0,
-      totalCount: 0
-    };
-    
-    res.status(500).json(result);
+    next(error);
   }
 });
 
 /**
  * Get location cleanup status - check transaction location data state
  */
-router.get('/location-cleanup-status', async (req, res) => {
+router.get('/location-cleanup-status', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const userId = req.user?.userId;
-    if (!userId) {
-      res.status(401).json({ error: 'User not authenticated' });
-      return;
-    }
+    if (!userId) throw new AuthorizationError();
 
     // Get transactions directly from data service to check raw data
     const transactions = await dataService.getData<any[]>(`transactions_${userId}`) || [];
@@ -232,8 +202,7 @@ router.get('/location-cleanup-status', async (req, res) => {
       cleanupComplete: emptyLocationCount === 0
     });
   } catch (error) {
-    console.error('Failed to get location cleanup status:', error);
-    res.status(500).json({ error: 'Failed to get location cleanup status' });
+    next(error);
   }
 });
 
@@ -241,13 +210,10 @@ router.get('/location-cleanup-status', async (req, res) => {
  * Migrate categories to add isIncome property
  * This adds explicit isIncome property to existing categories based on hierarchy
  */
-router.post('/migrate-is-income', async (req, res) => {
+router.post('/migrate-is-income', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const userId = req.user?.userId;
-    if (!userId) {
-      res.status(401).json({ error: 'User not authenticated' });
-      return;
-    }
+    if (!userId) throw new AuthorizationError();
 
     console.log(`Starting isIncome migration for user ${userId}`);
 
@@ -264,29 +230,17 @@ router.post('/migrate-is-income', async (req, res) => {
 
     res.json(migrationResult);
   } catch (error) {
-    console.error('isIncome migration failed:', error);
-
-    const result: MigrationResult = {
-      success: false,
-      message: `isIncome migration failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
-      migratedCount: 0,
-      totalCount: 0
-    };
-
-    res.status(500).json(result);
+    next(error);
   }
 });
 
 /**
  * Get isIncome migration status - check if categories have explicit isIncome property
  */
-router.get('/is-income-migration-status', async (req, res) => {
+router.get('/is-income-migration-status', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const userId = req.user?.userId;
-    if (!userId) {
-      res.status(401).json({ error: 'User not authenticated' });
-      return;
-    }
+    if (!userId) throw new AuthorizationError();
 
     // Get categories directly from data service to check raw data
     const dataService = (categoryService as any).dataService;
@@ -320,8 +274,7 @@ router.get('/is-income-migration-status', async (req, res) => {
       migrationComplete: missingIsIncomeProperty === 0 && withIsIncomeProperty > 0
     });
   } catch (error) {
-    console.error('Failed to get isIncome migration status:', error);
-    res.status(500).json({ error: 'Failed to get isIncome migration status' });
+    next(error);
   }
 });
 

@@ -1,6 +1,7 @@
-import { Router, Request, Response } from 'express';
+import { Router, Request, Response, NextFunction } from 'express';
 import { plaidService } from '../services';
 import { authMiddleware } from '../middleware/authMiddleware';
+import { AuthorizationError } from '../errors';
 import { z } from 'zod';
 
 const router = Router();
@@ -36,15 +37,12 @@ interface AuthenticatedRequest extends Request {
  * POST /api/v1/plaid/link-token
  * Create a link token for Plaid Link initialization
  */
-router.post('/link-token', authMiddleware, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+router.post('/link-token', authMiddleware, async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
   try {
-    if (!req.user) {
-      res.status(401).json({ error: 'Unauthorized' });
-      return;
-    }
+    if (!req.user) throw new AuthorizationError();
 
     const result = await plaidService.createLinkToken(req.user.userId);
-    
+
     if (!result.success) {
       res.status(500).json({ error: result.error });
       return;
@@ -55,8 +53,7 @@ router.post('/link-token', authMiddleware, async (req: AuthenticatedRequest, res
       expiration: result.expiration,
     });
   } catch (error) {
-    console.error('Error creating link token:', error);
-    res.status(500).json({ error: 'Failed to create link token' });
+    next(error);
   }
 });
 
@@ -64,7 +61,7 @@ router.post('/link-token', authMiddleware, async (req: AuthenticatedRequest, res
  * POST /api/v1/plaid/exchange-token
  * Exchange public token for access token
  */
-router.post('/exchange-token', authMiddleware, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+router.post('/exchange-token', authMiddleware, async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
   try {
     // Validate input
     const validation = exchangeTokenSchema.safeParse(req.body);
@@ -75,7 +72,7 @@ router.post('/exchange-token', authMiddleware, async (req: AuthenticatedRequest,
 
     const { publicToken } = validation.data;
     const result = await plaidService.exchangePublicToken(publicToken);
-    
+
     if (!result.success) {
       res.status(500).json({ error: result.error });
       return;
@@ -88,8 +85,7 @@ router.post('/exchange-token', authMiddleware, async (req: AuthenticatedRequest,
       itemId: result.itemId,
     });
   } catch (error) {
-    console.error('Error exchanging token:', error);
-    res.status(500).json({ error: 'Failed to exchange token' });
+    next(error);
   }
 });
 
@@ -97,7 +93,7 @@ router.post('/exchange-token', authMiddleware, async (req: AuthenticatedRequest,
  * GET /api/v1/plaid/accounts
  * Get all accounts for a connected item
  */
-router.get('/accounts', authMiddleware, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+router.get('/accounts', authMiddleware, async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
   try {
     // Validate query parameters
     const validation = accountQuerySchema.safeParse(req.query);
@@ -109,13 +105,13 @@ router.get('/accounts', authMiddleware, async (req: AuthenticatedRequest, res: R
     // In a real app, we'd fetch the access token from secure storage using itemId and userId
     // For now, we'll use a placeholder
     const accessToken = 'access-token-placeholder';
-    
+
     const result = await plaidService.getAccounts(accessToken);
-    
+
     if (!result.success) {
       // Handle reauthentication requirement
       if (result.requiresReauth) {
-        res.status(401).json({ 
+        res.status(401).json({
           error: result.error,
           requiresReauth: true,
         });
@@ -130,8 +126,7 @@ router.get('/accounts', authMiddleware, async (req: AuthenticatedRequest, res: R
       itemId: result.itemId,
     });
   } catch (error) {
-    console.error('Error fetching accounts:', error);
-    res.status(500).json({ error: 'Failed to fetch accounts' });
+    next(error);
   }
 });
 
@@ -139,7 +134,7 @@ router.get('/accounts', authMiddleware, async (req: AuthenticatedRequest, res: R
  * GET /api/v1/plaid/transactions
  * Get transactions for a date range
  */
-router.get('/transactions', authMiddleware, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+router.get('/transactions', authMiddleware, async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
   try {
     // Validate query parameters
     const validation = transactionQuerySchema.safeParse(req.query);
@@ -149,18 +144,18 @@ router.get('/transactions', authMiddleware, async (req: AuthenticatedRequest, re
     }
 
     const { startDate, endDate, includePending, offset, count } = validation.data;
-    
+
     // In a real app, we'd fetch the access token from secure storage
     const accessToken = 'access-token-placeholder';
-    
+
     const options = {
       includePending: includePending === 'true',
       offset: offset ? parseInt(offset, 10) : undefined,
       count: count ? parseInt(count, 10) : undefined,
     };
-    
+
     const result = await plaidService.getTransactions(accessToken, startDate, endDate, options);
-    
+
     if (!result.success) {
       res.status(500).json({ error: result.error });
       return;
@@ -172,8 +167,7 @@ router.get('/transactions', authMiddleware, async (req: AuthenticatedRequest, re
       hasMore: result.hasMore,
     });
   } catch (error) {
-    console.error('Error fetching transactions:', error);
-    res.status(500).json({ error: 'Failed to fetch transactions' });
+    next(error);
   }
 });
 
@@ -181,7 +175,7 @@ router.get('/transactions', authMiddleware, async (req: AuthenticatedRequest, re
  * POST /api/v1/plaid/item/remove
  * Remove an item (disconnect bank account)
  */
-router.post('/item/remove', authMiddleware, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+router.post('/item/remove', authMiddleware, async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
   try {
     // Validate input
     const validation = removeItemSchema.safeParse(req.body);
@@ -193,9 +187,9 @@ router.post('/item/remove', authMiddleware, async (req: AuthenticatedRequest, re
     // const { itemId } = validation.data;
     // In a real app, we'd fetch the access token from secure storage using itemId
     const accessToken = 'access-token-placeholder';
-    
+
     const result = await plaidService.removeItem(accessToken);
-    
+
     if (!result.success) {
       res.status(500).json({ error: result.error });
       return;
@@ -206,8 +200,7 @@ router.post('/item/remove', authMiddleware, async (req: AuthenticatedRequest, re
       message: result.message,
     });
   } catch (error) {
-    console.error('Error removing item:', error);
-    res.status(500).json({ error: 'Failed to remove item' });
+    next(error);
   }
 });
 

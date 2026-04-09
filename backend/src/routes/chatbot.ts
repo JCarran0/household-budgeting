@@ -65,7 +65,7 @@ router.post(
   authenticate,
   rateLimitChatbot,
   validateBody(chatRequestSchema),
-  async (req: Request, res: Response): Promise<void> => {
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       const userId = req.user!.userId;
       const chatRequest = req.body as ChatRequest;
@@ -74,11 +74,7 @@ router.post(
 
       res.json({ success: true, ...response });
     } catch (error) {
-      console.error('[Chatbot] POST /message error:', error instanceof Error ? error.message : error);
-      res.status(500).json({
-        success: false,
-        error: 'Failed to process chat message',
-      });
+      next(error);
     }
   },
 );
@@ -89,16 +85,12 @@ router.post(
 router.get(
   '/usage',
   authenticate,
-  async (_req: Request, res: Response): Promise<void> => {
+  async (_req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       const usage = await chatbotService.getUsage();
       res.json({ success: true, ...usage });
     } catch (error) {
-      console.error('[Chatbot] GET /usage error:', error instanceof Error ? error.message : error);
-      res.status(500).json({
-        success: false,
-        error: 'Failed to get usage data',
-      });
+      next(error);
     }
   },
 );
@@ -111,7 +103,7 @@ router.post(
   '/confirm-issue',
   authenticate,
   validateBody(confirmIssueSchema),
-  async (req: Request, res: Response): Promise<void> => {
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       const { draft } = req.body as { draft: GitHubIssueDraft };
 
@@ -119,11 +111,7 @@ router.post(
 
       res.status(201).json({ success: true, issueUrl: result.issueUrl });
     } catch (error) {
-      console.error('[Chatbot] POST /confirm-issue error:', error instanceof Error ? error.message : error);
-      res.status(500).json({
-        success: false,
-        error: 'Failed to create GitHub issue',
-      });
+      next(error);
     }
   },
 );
@@ -136,7 +124,7 @@ router.post(
   authenticate,
   rateLimitChatbot,
   validateBody(classifyTransactionsSchema),
-  async (req: Request, res: Response): Promise<void> => {
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       const userId = req.user!.userId;
       const { transactionIds } = req.body as { transactionIds?: string[] };
@@ -148,13 +136,11 @@ router.post(
       res.json({ success: true, ...result });
     } catch (error) {
       const msg = error instanceof Error ? error.message : 'Classification failed';
-      console.error('[Chatbot] POST /classify-transactions error:', msg);
-
       if (msg.includes('budget cap')) {
         res.status(429).json({ success: false, error: msg });
         return;
       }
-      res.status(500).json({ success: false, error: 'Failed to classify transactions' });
+      next(error);
     }
   },
 );
@@ -166,7 +152,7 @@ router.post(
   '/suggest-rules',
   authenticate,
   validateBody(suggestRulesSchema),
-  async (req: Request, res: Response): Promise<void> => {
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       const userId = req.user!.userId;
       const { categorizations } = req.body as { categorizations: { transactionId: string; categoryId: string }[] };
@@ -175,8 +161,7 @@ router.post(
 
       res.json({ success: true, ...result });
     } catch (error) {
-      console.error('[Chatbot] POST /suggest-rules error:', error instanceof Error ? error.message : error);
-      res.status(500).json({ success: false, error: 'Failed to suggest rules' });
+      next(error);
     }
   },
 );

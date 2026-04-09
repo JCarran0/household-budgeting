@@ -1,4 +1,4 @@
-import { Router, Request, Response } from 'express';
+import { Router, Request, Response, NextFunction } from 'express';
 import { authenticate } from '../middleware/authMiddleware';
 import { UnifiedDataService } from '../services/dataService';
 import { z } from 'zod';
@@ -48,14 +48,13 @@ function storageKey(userId: string): string {
  * @desc Get saved theme preferences for the authenticated user
  * @access Private
  */
-router.get('/preferences', authenticate, async (req: Request, res: Response): Promise<void> => {
+router.get('/preferences', authenticate, async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const userId = req.user!.userId;
     const prefs = await dataService.getData<Record<string, unknown>>(storageKey(userId));
     res.json({ success: true, preferences: prefs });
   } catch (error) {
-    console.error('Error fetching theme preferences:', error);
-    res.status(500).json({ success: false, error: 'Failed to fetch theme preferences' });
+    next(error);
   }
 });
 
@@ -64,7 +63,7 @@ router.get('/preferences', authenticate, async (req: Request, res: Response): Pr
  * @desc Save theme preferences (overrides only) for the authenticated user
  * @access Private
  */
-router.put('/preferences', authenticate, async (req: Request, res: Response): Promise<void> => {
+router.put('/preferences', authenticate, async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const parsed = themePreferencesSchema.safeParse(req.body);
     if (!parsed.success) {
@@ -80,8 +79,7 @@ router.put('/preferences', authenticate, async (req: Request, res: Response): Pr
     await dataService.saveData(storageKey(userId), parsed.data);
     res.json({ success: true, message: 'Theme preferences saved' });
   } catch (error) {
-    console.error('Error saving theme preferences:', error);
-    res.status(500).json({ success: false, error: 'Failed to save theme preferences' });
+    next(error);
   }
 });
 
@@ -90,14 +88,13 @@ router.put('/preferences', authenticate, async (req: Request, res: Response): Pr
  * @desc Reset theme preferences to defaults (deletes stored prefs)
  * @access Private
  */
-router.delete('/preferences', authenticate, async (req: Request, res: Response): Promise<void> => {
+router.delete('/preferences', authenticate, async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const userId = req.user!.userId;
     await dataService.deleteData(storageKey(userId));
     res.json({ success: true, message: 'Theme preferences reset to defaults' });
   } catch (error) {
-    console.error('Error resetting theme preferences:', error);
-    res.status(500).json({ success: false, error: 'Failed to reset theme preferences' });
+    next(error);
   }
 });
 

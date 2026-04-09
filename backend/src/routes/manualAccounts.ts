@@ -1,7 +1,8 @@
-import { Router, Request, Response } from 'express';
+import { Router, Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
 import { manualAccountService } from '../services';
 import { authMiddleware } from '../middleware/authMiddleware';
+import { AuthorizationError } from '../errors';
 
 const router = Router();
 
@@ -39,29 +40,22 @@ const updateSchema = z.object({
 router.use(authMiddleware);
 
 // GET /api/v1/manual-accounts
-router.get('/', async (req: Request, res: Response): Promise<void> => {
+router.get('/', async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const userId = req.user?.userId;
-    if (!userId) {
-      res.status(401).json({ error: 'User not authenticated' });
-      return;
-    }
+    if (!userId) throw new AuthorizationError();
     const accounts = await manualAccountService.getAll(userId);
     res.json(accounts);
   } catch (error) {
-    console.error('Error fetching manual accounts:', error);
-    res.status(500).json({ error: 'Failed to fetch manual accounts' });
+    next(error);
   }
 });
 
 // POST /api/v1/manual-accounts
-router.post('/', async (req: Request, res: Response): Promise<void> => {
+router.post('/', async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const userId = req.user?.userId;
-    if (!userId) {
-      res.status(401).json({ error: 'User not authenticated' });
-      return;
-    }
+    if (!userId) throw new AuthorizationError();
     const data = createSchema.parse(req.body);
     const account = await manualAccountService.create(userId, data);
     res.status(201).json(account);
@@ -70,19 +64,15 @@ router.post('/', async (req: Request, res: Response): Promise<void> => {
       res.status(400).json({ error: 'Invalid request data', details: error.format() });
       return;
     }
-    console.error('Error creating manual account:', error);
-    res.status(500).json({ error: 'Failed to create manual account' });
+    next(error);
   }
 });
 
 // PUT /api/v1/manual-accounts/:id
-router.put('/:id', async (req: Request, res: Response): Promise<void> => {
+router.put('/:id', async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const userId = req.user?.userId;
-    if (!userId) {
-      res.status(401).json({ error: 'User not authenticated' });
-      return;
-    }
+    if (!userId) throw new AuthorizationError();
     const data = updateSchema.parse(req.body);
     const account = await manualAccountService.update(userId, req.params.id, data);
     res.json(account);
@@ -95,19 +85,15 @@ router.put('/:id', async (req: Request, res: Response): Promise<void> => {
       res.status(404).json({ error: 'Manual account not found' });
       return;
     }
-    console.error('Error updating manual account:', error);
-    res.status(500).json({ error: 'Failed to update manual account' });
+    next(error);
   }
 });
 
 // DELETE /api/v1/manual-accounts/:id
-router.delete('/:id', async (req: Request, res: Response): Promise<void> => {
+router.delete('/:id', async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const userId = req.user?.userId;
-    if (!userId) {
-      res.status(401).json({ error: 'User not authenticated' });
-      return;
-    }
+    if (!userId) throw new AuthorizationError();
     await manualAccountService.delete(userId, req.params.id);
     res.status(204).send();
   } catch (error) {
@@ -115,8 +101,7 @@ router.delete('/:id', async (req: Request, res: Response): Promise<void> => {
       res.status(404).json({ error: 'Manual account not found' });
       return;
     }
-    console.error('Error deleting manual account:', error);
-    res.status(500).json({ error: 'Failed to delete manual account' });
+    next(error);
   }
 });
 
