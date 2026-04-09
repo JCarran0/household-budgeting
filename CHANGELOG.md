@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+### [5.7.15](https://github.com/JCarran0/household-budgeting/compare/v5.7.14...v5.7.15) (2026-04-09)
+
+
+### Code Refactoring
+
+* **frontend:** extract hooks from EnhancedTransactions (TD-11) ([4dca963](https://github.com/JCarran0/household-budgeting/commit/4dca963648da307c1450e79d294be9734cc8b226))
+
+
+### Documentation
+
+* archive tech debt tracker — all actionable items resolved ([f711ee0](https://github.com/JCarran0/household-budgeting/commit/f711ee043ca914ddf170a69a1d84efd40296a28e)), closes [#7](https://github.com/JCarran0/household-budgeting/issues/7) [#8](https://github.com/JCarran0/household-budgeting/issues/8) [#9](https://github.com/JCarran0/household-budgeting/issues/9)
+* mark TD-11 as resolved ([5e2ddd5](https://github.com/JCarran0/household-budgeting/commit/5e2ddd5a3e565bda74023ca1786783291f21b6f7))
+
 ### [5.7.14](https://github.com/JCarran0/household-budgeting/compare/v5.7.13...v5.7.14) (2026-04-09)
 
 
