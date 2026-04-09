@@ -10,7 +10,7 @@ Building a personal budgeting app for 2 users with Plaid integration. Using Risk
 |----------|---------|-------------|
 | **[AI-APPLICATION-ARCHITECTURE.md](docs/AI-APPLICATION-ARCHITECTURE.md)** | Technical implementation guide | Adding features, understanding service patterns, modifying APIs |
 | **[AI-DEPLOYMENTS.md](docs/AI-DEPLOYMENTS.md)** | Operational procedures | Deploying code, troubleshooting production, configuring CI/CD |
-| **[AI-Architecture-Plan.md](docs/AI-Architecture-Plan.md)** | Strategic planning & costs | Analyzing infrastructure costs, reviewing architecture decisions |
+| **[AI-Architecture-Plan.md](docs/completed/AI-Architecture-Plan.md)** | Strategic planning & costs (historical) | Infrastructure cost analysis, architecture decisions from initial deployment |
 | **[AI-TESTING-STRATEGY.md](docs/AI-TESTING-STRATEGY.md)** | Test philosophy & examples | Writing tests, understanding test patterns, debugging test failures |
 | **[AI-USER-STORIES.md](docs/AI-USER-STORIES.md)** | Product requirements | Understanding features, acceptance criteria, user scenarios |
 | **[AI-TECHNICAL-DEBT.md](docs/AI-TECHNICAL-DEBT.md)** | Technical debt tracking | Reviewing known issues, planning improvements, understanding workarounds |
@@ -43,7 +43,7 @@ Building a personal budgeting app for 2 users with Plaid integration. Using Risk
 - Security best practices for handling production data
 - Troubleshooting AWS authentication issues
 
-**[docs/AI-Architecture-Plan.md](docs/AI-Architecture-Plan.md)** - Strategic planning
+**[docs/completed/AI-Architecture-Plan.md](docs/completed/AI-Architecture-Plan.md)** - Strategic planning (historical)
 - Cost analysis and projections ($10/month target)
 - Architecture Decision Records (ADRs)
 - Risk assessment framework

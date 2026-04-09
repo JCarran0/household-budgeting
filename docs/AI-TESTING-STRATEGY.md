@@ -5,7 +5,7 @@
 - **[AI-APPLICATION-ARCHITECTURE.md](./AI-APPLICATION-ARCHITECTURE.md)** - Technical architecture and patterns
 - **[AI-USER-STORIES.md](./AI-USER-STORIES.md)** - Product requirements this strategy tests
 - **[AI-DEPLOYMENTS.md](./AI-DEPLOYMENTS.md)** - How tests run in CI/CD pipeline
-- **[AI-Architecture-Plan.md](./AI-Architecture-Plan.md)** - Risk assessment informing test priorities
+- **[AI-Architecture-Plan.md](./completed/AI-Architecture-Plan.md)** - Risk assessment informing test priorities
 
 ## Philosophy: User Story Testing with Risk-Based Approach
 
@@ -13,10 +13,10 @@ This testing strategy prioritizes **real user behaviors** over isolated unit tes
 
 ## Core Testing Principles
 
-### 1. User Story Testing First
-- **No traditional unit tests** for backend services initially
-- Test complete user workflows from API endpoint to database
-- Each test validates a user story from `AI-USER-STORIES.md`
+### 1. Layered Testing Approach
+- **Integration tests** for complete user workflows (original approach)
+- **Unit tests** for core service logic (added Q2 2026 during maintainability refactor)
+- Each integration test validates a user story from `AI-USER-STORIES.md`
 - Tests use real Plaid sandbox data, not mocks
 
 ### 2. Risk-Based Priority
@@ -34,38 +34,53 @@ Tests are prioritized by business risk:
 
 ## Test Suite Organization
 
-### Suite 1: Critical Path Tests (Run on Every Commit)
-Fast-running tests for the most critical user stories.
+### Actual Test File Structure
 
 ```
-backend/src/__tests__/critical/
-├── auth.stories.test.ts           # Authentication flows
-├── transaction-sync.stories.test.ts # Transaction data integrity
-├── financial-calc.stories.test.ts  # Budget/spending calculations
-└── data-isolation.stories.test.ts  # Multi-user data separation
+backend/src/__tests__/
+├── critical/                                          # Critical path tests (run on every commit)
+│   ├── auth.stories.test.ts                          # Authentication flows
+│   ├── data-isolation.stories.test.ts                # Multi-user data separation
+│   ├── encryption.test.ts                            # Plaid token encryption
+│   ├── financial-calc.stories.test.ts                # Budget/spending calculations
+│   ├── hidden-categories.stories.test.ts             # Hidden category behavior
+│   ├── income-expense-filter.test.ts                 # Income/expense filtering
+│   ├── search-filtering.stories.test.ts              # Transaction search & filtering
+│   ├── transaction-categorization.stories.test.ts    # Transaction categorization
+│   ├── transaction-sync.stories.test.ts              # Transaction data integrity
+│   ├── transfer-filter.test.ts                       # Transfer exclusion
+│   ├── category-deletion-protection.test.ts          # Deletion safety checks
+│   └── ytd-calculation.test.ts                       # Year-to-date calculations
+├── integration/                                       # Integration tests (run on PR/merge)
+│   ├── actualsOverride.test.ts                       # Actuals override CRUD
+│   ├── auto-categorization.stories.test.ts           # Auto-categorization rules
+│   ├── budget-date-filtering.stories.test.ts         # Budget date filter edge cases
+│   ├── category-deletion-cleanup.test.ts             # Category deletion side effects
+│   ├── csv-import.test.ts                            # CSV import workflow
+│   ├── reports-transactions-navigation.stories.test.ts  # Reports/transactions nav
+│   ├── time-range-filter-mappings.test.ts            # Time range filter logic
+│   ├── transaction-csv-export.test.ts                # CSV export
+│   ├── transaction-preview-navigation.stories.test.ts   # Transaction preview nav
+│   └── tripService.test.ts                           # Trip management
+├── unit/                                              # Unit tests (added Q2 2026 during maintainability refactor)
+│   ├── budgetCalculations.test.ts                    # Shared budget utility functions
+│   ├── categoryHelpers.test.ts                       # Shared category utility functions
+│   ├── config.test.ts                                # Config validation (41 tests)
+│   ├── errors.test.ts                                # Error classes & middleware (33 tests)
+│   ├── reportService.test.ts                         # Report calculations (35 tests)
+│   ├── repository.test.ts                            # Repository base class (23 tests)
+│   ├── transactionService.filter.test.ts             # Filter pipeline (62 tests)
+│   └── transactionService.mutations.test.ts          # CRUD operations (50 tests)
+├── __mocks__/                                         # Shared mock implementations
+├── fixtures/                                          # Test fixture data
+├── helpers/                                           # Shared test utilities
+├── app.test.ts                                        # Application-level smoke tests
+├── setup.test.ts                                      # Test setup verification
+└── setup.ts                                           # Test environment setup
 ```
 
-### Suite 2: Integration Tests (Run on PR/Merge)
-Complete user workflow tests with external services.
-
-```
-backend/src/__tests__/integration/
-├── plaid-connect.stories.test.ts   # Complete Plaid connection flow
-├── transaction-mgmt.stories.test.ts # Full transaction lifecycle
-├── budget-workflow.stories.test.ts  # Budget creation to reporting
-└── categorization.stories.test.ts   # Auto-categorization rules
-```
-
-### Suite 3: Frontend User Story Tests
-Testing complete user interactions in the browser.
-
-```
-frontend/src/__tests__/stories/
-├── registration-flow.test.tsx      # User registration journey
-├── plaid-linking.test.tsx         # Bank account connection
-├── transaction-filtering.test.tsx  # Search and filter workflows
-└── budget-management.test.tsx      # Budget creation and tracking
-```
+### Suite 3: Frontend Tests
+**Status**: Not yet implemented. Frontend relies on TypeScript compilation (`tsc --noEmit`) and production build (`vite build`) for structural confidence. Frontend test infrastructure (Vitest + React Testing Library) is planned as a separate initiative for testing user interactions and behavior.
 
 ## Test Data Strategy
 
@@ -865,6 +880,26 @@ beforeEach(async () => {
    - **Key Learning**: Filtering edge cases require explicit testing - uncategorized state logic can be easily missed in complex filter combinations
    - **Impact**: Critical user workflow (filtering transactions by category) was broken, demonstrating importance of testing all filter states including "empty" conditions
 
+## Refactoring Test Patterns (April 2026)
+
+During the maintainability refactor, 244 unit tests were added following a "test before you touch" approach:
+
+### Pattern: Pre-refactor coverage
+Before splitting a service, add unit tests that lock in current behavior. This provides a regression safety net for structural changes.
+
+### Key test files added:
+- `config.test.ts` (41 tests) — Config module validation: required vars, defaults, type coercion, conditional rules
+- `repository.test.ts` (23 tests) — Generic Repository<T>: CRUD, key generation, user isolation
+- `transactionService.filter.test.ts` (62 tests) — Filter pipeline: all filter combinations, sort, totals
+- `transactionService.mutations.test.ts` (50 tests) — CRUD mutations: categories, tags, splits, bulk ops
+- `reportService.test.ts` (35 tests) — Report calculations: trends, breakdowns, cash flow, projections
+- `errors.test.ts` (33 tests) — Error class hierarchy and middleware dispatch
+
+### Approach:
+- Use `InMemoryDataService` (real implementation) instead of mocks
+- Test pure functions separately from service orchestration
+- For frontend structural refactors (component decomposition), TypeScript compilation is the confidence gate — no component tests needed for JSX extraction
+
 ## Success Metrics
 
 - **Zero** authentication vulnerabilities in production
@@ -873,6 +908,7 @@ beforeEach(async () => {
 - **<2%** transaction sync failures
 - **<5min** test execution for critical path ✅ (Currently ~3s)
 - **<30min** test execution for full suite
+- **244** unit tests covering core services (added Q2 2026)
 
 ## Maintenance Guidelines
 

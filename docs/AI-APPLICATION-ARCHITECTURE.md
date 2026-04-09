@@ -5,7 +5,7 @@
 - **[AI-DEPLOYMENTS.md](./AI-DEPLOYMENTS.md)** - Deployment procedures and troubleshooting
 - **[AI-TESTING-STRATEGY.md](./AI-TESTING-STRATEGY.md)** - Testing patterns and examples
 - **[AI-USER-STORIES.md](./AI-USER-STORIES.md)** - Product requirements and features
-- **[AI-Architecture-Plan.md](./AI-Architecture-Plan.md)** - Infrastructure costs and strategic planning
+- **[AI-Architecture-Plan.md](./completed/AI-Architecture-Plan.md)** - Infrastructure costs and strategic planning
 
 ## Quick Start for AI Agents
 
@@ -30,17 +30,34 @@ household-budgeting/
 │   ├── src/
 │   │   ├── routes/          # Express route handlers
 │   │   ├── services/        # Business logic layer
+│   │   │   ├── storage/     # Storage adapters (S3, filesystem)
+│   │   │   ├── repository.ts        # Generic Repository<T> base class
+│   │   │   ├── transactionFilterEngine.ts  # Pure filtering logic
+│   │   │   └── reportHelpers.ts     # Report calculation helpers
+│   │   ├── errors/          # Typed error classes (AppError hierarchy)
 │   │   ├── middleware/      # Auth, error handling
+│   │   ├── config.ts        # Centralized Zod-validated configuration
 │   │   ├── utils/           # Encryption, helpers
-│   │   └── __tests__/       # Integration tests
-│   └── data/                # JSON file storage
+│   │   └── __tests__/       # Integration and unit tests
+│   └── data/                # JSON file storage (dev)
 ├── frontend/
 │   ├── src/
 │   │   ├── pages/           # React page components
-│   │   ├── components/      # Reusable UI components
-│   │   ├── lib/             # API client, utilities
+│   │   ├── components/
+│   │   │   ├── reports/     # Report section components (CashflowSection, etc.)
+│   │   │   ├── transactions/ # Transaction components (FilterBar, Table, Toolbar)
+│   │   │   ├── budgets/     # Budget components
+│   │   │   ├── categories/  # Category components
+│   │   │   ├── accounts/    # Account components
+│   │   │   ├── chat/        # Chatbot overlay
+│   │   │   └── auth/        # Auth forms
+│   │   ├── lib/
+│   │   │   ├── api.ts       # API facade (composes domain modules)
+│   │   │   └── api/         # Domain-specific API modules
 │   │   ├── hooks/           # Custom React hooks
-│   │   └── stores/          # Zustand state stores
+│   │   ├── stores/          # Zustand state stores
+│   │   ├── providers/       # ThemeProvider, PlaidLinkProvider
+│   │   └── utils/           # Formatters, report date range helpers
 └── shared/
     ├── types/               # Shared TypeScript types
     └── utils/               # Shared utility functions
@@ -52,6 +69,14 @@ household-budgeting/
 ## Key Services Architecture
 
 ### Backend Services (Singleton Pattern)
+
+#### Service Architecture Patterns
+- **Dependency Injection**: Services receive dependencies via constructor. No `as any` casts — `services/index.ts` builds the dependency graph with typed interfaces.
+- **Repository Pattern**: `Repository<T>` base class (`repository.ts`) encapsulates data access. Used by TransactionService and ReportService.
+- **Filter Engine**: `transactionFilterEngine.ts` — pure `filterTransactions()` function extracted from TransactionService for independent testability.
+- **Report Helpers**: `reportHelpers.ts` — pure functions for date ranges, std dev, hidden category propagation, savings category detection.
+- **Error Handling**: Typed `AppError` hierarchy in `errors/index.ts` with Express `errorHandler` middleware. Services throw typed errors; routes pass via `next(error)`.
+- **Configuration**: `config.ts` validates all env vars at startup via Zod. Exports typed `config` object consumed by services.
 
 #### 1. AuthService (`backend/src/services/authService.ts`)
 - **Purpose**: User authentication, JWT management, and password recovery
@@ -378,10 +403,12 @@ const actualTotals = calculateActualTotals(transactions, categories, { excludeHi
   - Income-specific green color palette
 
 #### API Client (`frontend/src/lib/api.ts`)
-- Axios-based HTTP client
+- Axios-based HTTP client (facade that composes domain modules)
+- Domain logic split into separate modules under `frontend/src/lib/api/` (e.g., `transactions.ts`, `budgets.ts`, `reports.ts`)
 - Automatic JWT token injection
 - Response interceptors for auth handling
 - Method binding for proper context
+- When adding new API methods, add them to the relevant domain module under `frontend/src/lib/api/` and re-export from `api.ts`
 
 #### State Management (`frontend/src/stores/`)
 - **authStore**: User authentication state
@@ -557,15 +584,17 @@ const authService = new AuthService(dataService);
 ```
 
 ### Circular Dependency Resolution
-When services need to reference each other (e.g., CategoryService needs AutoCategorizeService and vice versa), use dependency injection:
+When services need to reference each other (e.g., CategoryService needs AutoCategorizeService for deletion protection), use a narrow interface:
 ```typescript
-// Create first service without circular dependency
-const categoryService = new CategoryService(dataService, budgetService, undefined, transactionService);
-// Create second service with reference to first
-const autoCategorizeService = new AutoCategorizeService(dataService, categoryService);
-// Update first service with reference to second
-(categoryService as any).autoCategorizeService = autoCategorizeService;
+// Define a narrow interface so CategoryService doesn't depend on the full concrete type
+interface CategoryDependencyChecker {
+  hasRulesForCategory(categoryId: string, userId: string): Promise<boolean>;
+}
+
+// Pass the checker interface during construction — no `as any` casts needed
+const categoryService = new CategoryService(dataService, budgetService, transactionService, autoCategorizeService);
 ```
+This pattern is wired in `services/index.ts`, which owns the full dependency graph.
 
 ## Quick Modification Guide
 
@@ -574,7 +603,7 @@ const autoCategorizeService = new AutoCategorizeService(dataService, categorySer
 ### To Add a New API Endpoint
 1. Create route handler in `backend/src/routes/`
 2. Add business logic to relevant service
-3. Update API client in `frontend/src/lib/api.ts`
+3. Add API method to the relevant domain module in `frontend/src/lib/api/` and re-export from `frontend/src/lib/api.ts`
 4. Add types to `shared/types/`
 
 #### Example: CSV Import Endpoint
@@ -958,11 +987,12 @@ Key files:
 
 ## Final Notes
 
-This application follows a pragmatic "spike and stabilize" approach:
-- Features are built quickly with minimal tests
-- Tests are added when bugs are found
-- TypeScript strict mode catches most issues
-- Integration tests preferred over unit tests
+This application follows a pragmatic approach:
+- Features are built quickly, then stabilized with tests
+- Core services have comprehensive unit test coverage (244+ tests added in Q2 2026 refactor)
+- Integration tests validate complete user workflows
+- TypeScript strict mode catches type errors at compile time
+- Frontend structural changes verified via `tsc --noEmit` + production build
 
 The codebase prioritizes:
 1. **Type Safety**: No runtime type errors

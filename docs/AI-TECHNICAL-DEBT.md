@@ -3,22 +3,25 @@
 ## Overview
 This document tracks technical debt items for AI coding agents working on the household budgeting application. Items are prioritized and linked to relevant code locations.
 
-**Last Updated**: 2025-10-14
+**Last Updated**: 2026-04-08
 
 ## Critical Priority
 
 ### 1. Reports Page: Excessive Parallel API Requests
-**Status**: Mitigated (nginx rate limits increased)
+**Status**: Mitigated (nginx rate limits increased; page decomposed into sections)
 **Created**: 2025-10-14
 **Impact**: High - Causes 503 errors on Reports page load
 **Effort**: Medium
 
 **Problem**:
-The Reports page (`frontend/src/pages/Reports.tsx`) makes 15+ parallel API requests on load:
+The Reports page makes 15+ parallel API requests on load:
 - 12 monthly budget requests (2025-01 through 2025-12)
 - Multiple report data requests (category breakdown, projections, etc.)
 - Version check
 This overwhelms nginx rate limits (originally 10r/s burst 10, now 30r/s burst 30).
+
+**Current State** (updated 2026-04-08):
+Reports.tsx was decomposed into 7 section components (commit `afb0a6f`). `frontend/src/pages/Reports.tsx` is now 423 LOC and handles data fetching only; rendering is delegated to section components in `frontend/src/components/reports/`. The root cause (12 parallel monthly budget requests) remains — a batch endpoint is still the proper fix.
 
 **Current Workaround**:
 Nginx rate limits increased to 30r/s with burst allowance of 30 requests.
@@ -42,6 +45,7 @@ Nginx rate limits increased to 30r/s with burst allowance of 30 requests.
 - `backend/src/services/budgetService.ts` - Add `getYearlyBudgets(year, userId)` method
 - `frontend/src/lib/api.ts` - Add `getYearlyBudgets(year)` method
 - `frontend/src/pages/Reports.tsx` - Use batch endpoint instead of 12 individual calls
+- `frontend/src/components/reports/` - Section components
 
 **References**:
 - Nginx config: `/etc/nginx/sites-available/budget-app` on production server
@@ -71,100 +75,78 @@ Some frontend components use `any` types, violating the project's strict TypeScr
 
 ---
 
-### 3. API Client Method Binding
-**Status**: Resolved (documented as pattern)
-**Created**: From architecture docs
-**Impact**: High - Runtime errors if forgotten
-**Effort**: Low per method
-
-**Problem**:
-New API client methods must be manually bound in constructor to preserve `this` context. Forgetting causes "Cannot read properties of undefined" errors when methods are used as callbacks.
-
-**Current Pattern** (must be followed):
-```typescript
-// frontend/src/lib/api.ts
-constructor() {
-  // ALL methods must be bound!
-  this.getBudgets = this.getBudgets.bind(this);
-  this.getMonthlyBudgets = this.getMonthlyBudgets.bind(this);
-  // ... etc
-}
-```
-
-**Better Solution** (future):
-- Convert API client to use arrow functions (automatically binds `this`)
-- Or use TypeScript decorators for auto-binding
-
-**Files**:
-- `frontend/src/lib/api.ts:constructor`
-
-**References**:
-- `docs/AI-APPLICATION-ARCHITECTURE.md:749-771` - Troubleshooting section
-
----
-
 ## Medium Priority
 
-### 4. Expired Plaid Token Recovery
+### 10. Remaining Route Error Pattern Migration
 **Status**: Open
-**Created**: From CLAUDE.md
-**Impact**: Medium - Poor UX
+**Created**: 2026-04-08
+**Impact**: Medium - Inconsistent error handling across routes
 **Effort**: Medium
 
 **Problem**:
-When Plaid access tokens expire, users must manually reconnect accounts. No automatic refresh mechanism.
+10 of 15 route files still use the old `try/catch → res.status(500)` error handling pattern. Budgets, trips, transactions, and reports routes have been migrated to typed error classes + `next(error)` middleware. The remaining routes are inconsistent with the new pattern and do not benefit from centralised error formatting.
+
+**Remaining files to migrate**:
+- `backend/src/routes/accounts.ts`
+- `backend/src/routes/categories.ts`
+- `backend/src/routes/auth.ts`
+- `backend/src/routes/plaid.ts`
+- `backend/src/routes/admin.ts`
+- `backend/src/routes/feedback.ts`
+- `backend/src/routes/chatbot.ts`
+- `backend/src/routes/autoCategorize.ts`
+- `backend/src/routes/actualsOverrides.ts`
+- `backend/src/routes/manualAccounts.ts`
+- `backend/src/routes/themes.ts`
 
 **Solution**:
-- Implement Plaid token refresh flow
-- Add webhook support for token expiration events
-- Show user-friendly reconnection UI
+Replace `res.status(500).json({ error: '...' })` patterns with typed error classes and `next(error)` calls following the pattern established in the migrated routes.
+
+**References**:
+- `backend/src/errors/index.ts` - Typed error classes
+- `backend/src/middleware/errorHandler.ts` - Centralised error middleware
+
+---
+
+### 11. EnhancedTransactions.tsx Still 923 LOC
+**Status**: Open
+**Created**: 2026-04-08
+**Impact**: Low - Decomposed from 1,613 LOC but still over 400 LOC target
+**Effort**: Medium
+
+**Problem**:
+`frontend/src/pages/EnhancedTransactions.tsx` retains coordination logic including bulk selection, mutations, URL params, and 15 `useState` calls. The file is functional but still large enough to be difficult to navigate and test.
+
+**Solution**:
+Extract custom hooks to slim the component:
+- `useTransactionBulkOps` — bulk selection state and handlers
+- `useTransactionData` — data fetching and React Query logic
+- `useTransactionFilters` — URL param sync for filters
 
 **Files**:
-- `backend/src/services/plaidService.ts` - Add refresh logic
-- `backend/src/services/accountService.ts` - Handle token refresh
-- `frontend/src/pages/MantineAccounts.tsx` - Add reconnection UI
-
-**References**:
-- CLAUDE.md:586 - Known issues
+- `frontend/src/pages/EnhancedTransactions.tsx` - Main page (923 LOC)
 
 ---
 
-### 5. Frontend TypeScript Build Warnings
+### 12. API Client misc.ts Grab-Bag (400 LOC)
 **Status**: Open
-**Created**: From CLAUDE.md
-**Impact**: Medium - Build warnings
-**Effort**: Medium
+**Created**: 2026-04-08
+**Impact**: Low - Functional but poorly organized
+**Effort**: Low
 
 **Problem**:
-Frontend has TypeScript errors that don't fail the build but generate warnings.
+`frontend/src/lib/api/misc.ts` is a catch-all module (~400 LOC) containing trips, chatbot, feedback, themes, auto-categorize, manual accounts, actuals overrides, and version/changelog API calls. New domain-specific modules added during refactoring have their own files, but this grab-bag remains.
 
 **Solution**:
-- Run `cd frontend && npm run build` to see warnings
-- Fix type errors systematically
-- Consider enabling `noEmitOnError` in `tsconfig.json`
+Split into individual domain modules following the existing pattern:
+- `frontend/src/lib/api/chatbot.ts`
+- `frontend/src/lib/api/themes.ts`
+- `frontend/src/lib/api/manualAccounts.ts`
+- etc.
 
-**References**:
-- CLAUDE.md:583 - Known issues
-
----
-
-### 6. Test Coverage Gaps
-**Status**: Open
-**Created**: From CLAUDE.md
-**Impact**: Medium - Risk of UI bugs
-**Effort**: High
-
-**Problem**:
-UI components lack comprehensive test coverage.
-
-**Solution**:
-- Add tests for critical UI flows (Reports, Budgets, Transactions)
-- Use Testing Library for component tests
-- Focus on user interactions, not implementation details
-
-**References**:
-- CLAUDE.md:616 - Technical debt section
-- `docs/AI-TESTING-STRATEGY.md` - Testing philosophy
+**Files**:
+- `frontend/src/lib/api/misc.ts` - Current grab-bag module
+- `frontend/src/lib/api/index.ts` - Re-export barrel
 
 ---
 
@@ -190,7 +172,7 @@ Users cannot export their financial data (CSV/JSON).
 - `frontend/src/components/DataExport.tsx`
 
 **References**:
-- CLAUDE.md:612 - Pending architectural changes
+- CLAUDE.md - Pending architectural changes
 
 ---
 
@@ -213,7 +195,7 @@ App relies on manual sync for transaction updates. Plaid supports webhooks for r
 - `backend/src/services/webhookService.ts`
 
 **References**:
-- CLAUDE.md:611 - Pending architectural changes
+- CLAUDE.md - Pending architectural changes
 
 ---
 
@@ -232,7 +214,7 @@ Frequently accessed transaction data is fetched repeatedly.
 - Invalidate cache on transaction updates
 
 **References**:
-- CLAUDE.md:610 - Pending architectural changes
+- CLAUDE.md - Pending architectural changes
 
 ---
 
@@ -242,6 +224,49 @@ Frequently accessed transaction data is fetched repeatedly.
 **Completed**: 2025-10-14
 **Solution**: Increased nginx rate limits from 10r/s (burst 10) to 30r/s (burst 30)
 **Follow-up**: Create batch API endpoint (see #1 above)
+
+---
+
+### 3. API Client Method Binding - RESOLVED
+**Completed**: 2026-04-08 (commit `4373790`)
+**Original Problem**: New API client methods had to be manually bound in the constructor to preserve `this` context. Forgetting to bind caused "Cannot read properties of undefined" errors when methods were passed as callbacks.
+**Solution**: The API client was split into domain-specific modules using factory functions (not a class). The old class with manual `.bind()` calls no longer exists. `frontend/src/lib/api.ts` is now 43 LOC that composes modules from `frontend/src/lib/api/`. Arrow functions in factory modules preserve context automatically.
+
+---
+
+### 4. Expired Plaid Token Recovery - RESOLVED
+**Completed**: 2026-01 (see CLAUDE.md)
+**Original Problem**: When Plaid access tokens expired, users had to fully disconnect and reconnect accounts.
+**Solution**: Plaid Link update mode for re-authentication was implemented. Accounts in `requires_reauth` state show visual indicators on the Accounts page and dashboard. Users re-authenticate via "Sign in to Bank" in the account menu. New endpoints and `PlaidLinkContext` update mode support the flow.
+
+---
+
+### 5. Frontend TypeScript Build Warnings - RESOLVED
+**Completed**: 2026-04-08
+**Original Problem**: Frontend had TypeScript errors that generated warnings but did not fail the build.
+**Solution**: `tsc -b --noEmit` now passes with zero errors. Only pre-existing ESLint warnings remain (`react-hooks/exhaustive-deps`), which are a separate concern from TypeScript type correctness.
+
+---
+
+### 6. Test Coverage Gaps - PARTIALLY RESOLVED
+**Updated**: 2026-04-08
+**Original Problem**: UI components lacked comprehensive test coverage.
+**Current State**: 244 backend unit tests were added during the maintainability refactor:
+- Config utilities: 41 tests
+- Repository layer: 23 tests
+- Transaction filter logic: 62 tests
+- Transaction mutation logic: 50 tests
+- Report service: 35 tests
+- Error classes: 33 tests
+
+Backend coverage is now strong. Frontend component tests are still missing for critical UI flows (Reports, Budgets, Transactions). Adding frontend component tests with Testing Library remains a valid improvement.
+
+**Remaining Work**:
+- Add component tests for Reports, Budgets, EnhancedTransactions pages
+- Focus on user interactions, not implementation details
+
+**References**:
+- `docs/AI-TESTING-STRATEGY.md` - Testing philosophy
 
 ---
 
@@ -272,3 +297,4 @@ Frequently accessed transaction data is fetched repeatedly.
 - **docs/AI-APPLICATION-ARCHITECTURE.md** - Technical architecture
 - **docs/AI-DEPLOYMENTS.md** - Deployment procedures
 - **docs/AI-TESTING-STRATEGY.md** - Testing approach
+- **docs/completed/AI-Architecture-Plan.md** - Strategic planning and ADRs (archived)
