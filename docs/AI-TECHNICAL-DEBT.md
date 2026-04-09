@@ -98,7 +98,7 @@ Replace `res.status(500).json({ error: '...' })` patterns with typed error class
 ---
 
 ### 11. EnhancedTransactions.tsx Still 923 LOC
-**Status**: Open
+**Status**: Resolved (commit `4dca963` — reduced to 544 LOC)
 **Created**: 2026-04-08
 **Impact**: Low - Decomposed from 1,613 LOC but still over 400 LOC target
 **Effort**: Medium
