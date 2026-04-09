@@ -18,7 +18,7 @@ This plan captures the top 10 architectural refactoring targets identified throu
 | R3. Split ReportService | **Done** | `08811e9`, `7a90096` | 35 pre-refactor tests + helper extraction + Repository adoption. |
 | R6. Standardize Errors | **Done** | `98bf9a2` | Error classes + middleware + 2 routes migrated (budgets, trips). 33 tests. |
 | R4. Decompose Reports.tsx | **Done** | `afb0a6f` | 7 section components. Reports.tsx reduced from 2,151 to 423 LOC. |
-| R5. Decompose EnhancedTransactions.tsx | Not started | | |
+| R5. Decompose EnhancedTransactions.tsx | **Done** | `e995ed7` | 3 section components. EnhancedTransactions.tsx reduced from 1,613 to 923 LOC. |
 | R7. Split API Client | **Done** | `4373790` | 9 domain modules. api.ts reduced from 1,206 to 43 LOC. Zero import changes. |
 | R9. Move Logic Out of Routes | **Done** | `b88b864` | 4 new service methods. All 3 routes migrated to R6 patterns. -225 LOC from routes. |
 
@@ -126,27 +126,17 @@ Before planning each refactor, here's where we stand today:
 
 ---
 
-### R5. Decompose EnhancedTransactions.tsx (1,613 LOC)
+### R5. Decompose EnhancedTransactions.tsx (1,613 LOC) — DONE
 
-**Problem:** Same structural issue as Reports — 14 useState calls, pagination, bulk editing, inline modals, filter logic, and rendering all in one file.
+> **Completed:** 2026-04-08 | **Commit:** `e995ed7`
 
-**Target state:**
-```
-pages/EnhancedTransactions.tsx (~250 LOC — layout, coordination)
-  ├── components/transactions/TransactionTable.tsx (~400 LOC)
-  ├── components/transactions/TransactionFilterBar.tsx (~300 LOC)
-  ├── components/transactions/TransactionToolbar.tsx (~200 LOC)
-  ├── components/transactions/TransactionEditModal.tsx (already exists — 431 LOC)
-  └── hooks/useTransactionList.ts (~200 LOC — data fetching + pagination)
-```
-
-**Confidence gate:** TypeScript compilation (`tsc --noEmit`) + manual smoke test. See decision note below.
-
-**Key files:**
-- `frontend/src/pages/EnhancedTransactions.tsx`
-- `frontend/src/components/transactions/TransactionEditModal.tsx`
-
-**Estimated effort:** Medium
+**What was done:**
+- Extracted 3 sections into focused components:
+  - `TransactionToolbar.tsx` (80 LOC) — header with sync, AI Categorize, Import CSV, Export TSV buttons
+  - `TransactionFilterBar.tsx` (423 LOC) — all filter controls (search, date, account, category, tags, amount, toggles, reset). Owns `showCustomDatePicker` and `tempCustomDateRange` local state.
+  - `TransactionTable.tsx` (420 LOC) — table with inline category editing, selection checkboxes, row action menus, pagination. Owns `editingCategoryId`/`selectedCategoryValue` local state.
+- EnhancedTransactions.tsx reduced to 923 LOC: URL sync, React Query fetches, mutations, bulk selection coordination, and component orchestration.
+- TypeScript compilation and production build pass cleanly.
 
 ---
 
@@ -254,10 +244,10 @@ Phase 2: Backend structural improvements ✅ COMPLETE
 ├── R3.  Split ReportService ✅
 └── R6.  Standardize error handling ✅
 
-Phase 3: Frontend decomposition (IN PROGRESS)
+Phase 3: Frontend decomposition ✅ COMPLETE
 ├── R7.  Split API client ✅
 ├── R4.  Decompose Reports.tsx ✅
-└── R5.  Decompose EnhancedTransactions.tsx ← LAST ITEM
+└── R5.  Decompose EnhancedTransactions.tsx ✅
 
 Phase 4: Cleanup ✅ COMPLETE
 └── R9.  Move business logic out of routes ✅
