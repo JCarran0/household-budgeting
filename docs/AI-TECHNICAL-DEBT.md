@@ -8,7 +8,7 @@ This document tracks technical debt items for AI coding agents working on the ho
 ## Critical Priority
 
 ### 1. Reports Page: Excessive Parallel API Requests
-**Status**: Mitigated (nginx rate limits increased; page decomposed into sections)
+**Status**: Resolved (commit `5ed0bb9`)
 **Created**: 2025-10-14
 **Impact**: High - Causes 503 errors on Reports page load
 **Effort**: Medium
@@ -56,29 +56,18 @@ Nginx rate limits increased to 30r/s with burst allowance of 30 requests.
 ## High Priority
 
 ### 2. TypeScript `any` Types in Frontend
-**Status**: Open
+**Status**: Resolved (verified 2026-04-08)
 **Created**: From CLAUDE.md
-**Impact**: High - Type safety compromised
-**Effort**: High
+**Impact**: Was High - now resolved
 
-**Problem**:
-Some frontend components use `any` types, violating the project's strict TypeScript policy.
-
-**Solution**:
-- Audit frontend code for `any` types: `cd frontend && grep -r ": any" src/`
-- Replace with proper types or `unknown` with type guards
-- Run TypeScript compiler in strict mode: `npx tsc --noEmit`
-
-**References**:
-- CLAUDE.md:236 - TypeScript strict mode policy
-- CLAUDE.md:583 - Known issues list
+**Resolution**: Audit of `grep -rn ": any\|as any" frontend/src/` returns zero matches. The API client refactoring eliminated the last `any` casts. `tsc -b --noEmit` passes clean.
 
 ---
 
 ## Medium Priority
 
 ### 10. Remaining Route Error Pattern Migration
-**Status**: Open
+**Status**: Resolved (commit `8d9243e`)
 **Created**: 2026-04-08
 **Impact**: Medium - Inconsistent error handling across routes
 **Effort**: Medium
@@ -129,7 +118,7 @@ Extract custom hooks to slim the component:
 ---
 
 ### 12. API Client misc.ts Grab-Bag (400 LOC)
-**Status**: Open
+**Status**: Resolved (commit `0cfd902`)
 **Created**: 2026-04-08
 **Impact**: Low - Functional but poorly organized
 **Effort**: Low
