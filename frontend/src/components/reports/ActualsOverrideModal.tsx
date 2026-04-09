@@ -61,7 +61,7 @@ export function ActualsOverrideModal({ opened, onClose, override }: ActualsOverr
     } else {
       form.reset();
     }
-  }, [override]);
+  }, [override, form]);
 
   const createOrUpdateMutation = useMutation({
     mutationFn: (data: CreateActualsOverrideDto) => api.createOrUpdateActualsOverride(data),

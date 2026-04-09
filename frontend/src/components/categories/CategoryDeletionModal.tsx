@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
   Modal,
   Stack,
@@ -57,18 +57,8 @@ export function CategoryDeletionModal({
   const [replacementCategoryId, setReplacementCategoryId] = useState<string | null>(null);
   const [completedSteps, setCompletedSteps] = useState<Set<string>>(new Set());
 
-  // Reset state when modal opens/closes
-  useEffect(() => {
-    if (opened && category) {
-      setCurrentStep('loading');
-      setCompletedSteps(new Set());
-      setReplacementCategoryId(null);
-      loadDependencies();
-    }
-  }, [opened, category]);
-
   // Load dependency counts
-  const loadDependencies = async () => {
+  const loadDependencies = useCallback(async () => {
     if (!category) return;
 
     try {
@@ -98,7 +88,17 @@ export function CategoryDeletionModal({
       });
       onClose();
     }
-  };
+  }, [category, onClose]);
+
+  // Reset state when modal opens/closes
+  useEffect(() => {
+    if (opened && category) {
+      setCurrentStep('loading');
+      setCompletedSteps(new Set());
+      setReplacementCategoryId(null);
+      loadDependencies();
+    }
+  }, [opened, category, loadDependencies]);
 
   // Mutation: Delete budgets
   const deleteBudgetsMutation = useMutation({

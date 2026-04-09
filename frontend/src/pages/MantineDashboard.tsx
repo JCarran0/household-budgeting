@@ -57,8 +57,8 @@ export function MantineDashboard() {
     queryFn: () => api.getTransactions({ limit: 10 }),
   });
 
-  // Fetch current month's transactions for accurate calculations
-  const currentDate = new Date();
+  // Memoize currentDate so it doesn't cause unstable deps on every render
+  const currentDate = useMemo(() => new Date(), []);
   const currentMonth = startOfMonth(currentDate);
   const { data: monthlyTransactionData } = useQuery({
     queryKey: ['transactions', format(currentMonth, 'yyyy-MM')],

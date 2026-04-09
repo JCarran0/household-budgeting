@@ -105,8 +105,7 @@ export function TransactionSplitModal({
       const totalSplit = form.values.splits.reduce((sum, split) => sum + (split.amount || 0), 0);
       setRemainingAmount(Math.abs(transaction.amount) - totalSplit);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [form.values.splits, transaction]); // form.values.splits is the actual dependency
+  }, [form.values.splits, transaction]);
 
   // Split transaction mutation
   const splitMutation = useMutation({

@@ -159,7 +159,7 @@ export function EnhancedTransactions() {
 
       setHasInitialized(true);
     }
-  }, [searchParams, hasInitialized, setSelectedCategories, setSelectedTags, setOnlyUncategorized, setCustomDateRange, setDateFilterOption]);
+  }, [searchParams, hasInitialized, resetFilters, setSelectedCategories, setSelectedTags, setOnlyUncategorized, setCustomDateRange, setDateFilterOption]);
 
   // Sync filter state to URL params so chatbot (and bookmarks) can read current context
   useEffect(() => {
@@ -214,7 +214,7 @@ export function EnhancedTransactions() {
     transactionType,
   });
 
-  const transactions = transactionData?.transactions || [];
+  const transactions = useMemo(() => transactionData?.transactions || [], [transactionData?.transactions]);
 
   // Count Amazon transactions for the receipt matching button
   const amazonTransactionCount = useMemo(() => {
