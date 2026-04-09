@@ -260,7 +260,11 @@ export function loadConfig(
   const storageType: 'filesystem' | 's3' =
     raw.STORAGE_TYPE ?? (nodeEnv === 'production' ? 's3' : 'filesystem');
 
-  // PLAID_ENCRYPTION_SECRET falls back to JWT_SECRET when not set.
+  // PLAID_ENCRYPTION_SECRET falls back to JWT_SECRET in development only.
+  // In production, a dedicated encryption secret is required.
+  if (nodeEnv === 'production' && (!raw.PLAID_ENCRYPTION_SECRET || raw.PLAID_ENCRYPTION_SECRET.length === 0)) {
+    throw new Error('PLAID_ENCRYPTION_SECRET is required in production (must be separate from JWT_SECRET)');
+  }
   const encryptionSecret =
     raw.PLAID_ENCRYPTION_SECRET && raw.PLAID_ENCRYPTION_SECRET.length > 0
       ? raw.PLAID_ENCRYPTION_SECRET

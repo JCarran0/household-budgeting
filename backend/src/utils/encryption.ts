@@ -1,4 +1,5 @@
 import crypto from 'crypto';
+import { config } from '../config';
 
 /**
  * Encryption utility for sensitive data using AES-256-GCM
@@ -14,9 +15,9 @@ export class EncryptionService {
   private encryptionKey: Buffer;
 
   constructor() {
-    const secret = process.env.PLAID_ENCRYPTION_SECRET || process.env.JWT_SECRET;
+    const secret = config.auth.encryptionSecret;
     if (!secret) {
-      throw new Error('PLAID_ENCRYPTION_SECRET or JWT_SECRET must be set for encryption');
+      throw new Error('PLAID_ENCRYPTION_SECRET must be set for encryption');
     }
     
     // Derive a key from the secret using PBKDF2

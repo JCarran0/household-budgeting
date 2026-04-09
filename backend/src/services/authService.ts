@@ -230,7 +230,7 @@ export class AuthService {
     return jwt.sign(
       { userId, username },
       secret,
-      { expiresIn: process.env.JWT_EXPIRES_IN || '7d' } as jwt.SignOptions
+      { algorithm: 'HS256', expiresIn: process.env.JWT_EXPIRES_IN || '7d' } as jwt.SignOptions
     );
   }
 
@@ -241,7 +241,7 @@ export class AuthService {
         throw new Error('JWT_SECRET is not configured');
       }
 
-      const decoded = jwt.verify(token, secret);
+      const decoded = jwt.verify(token, secret, { algorithms: ['HS256'] });
       
       // Ensure decoded is our expected JWTPayload structure
       if (typeof decoded === 'object' && decoded !== null && 'userId' in decoded && 'username' in decoded) {
@@ -413,17 +413,8 @@ export class AuthService {
       // Update request time
       this.resetRequestTime.set(username, new Date());
 
-      // Log the token to server logs (this is how you'll access it)
-      console.log('');
-      console.log('='.repeat(80));
-      console.log('🔐 PASSWORD RESET TOKEN GENERATED');
-      console.log('='.repeat(80));
-      console.log(`Username: ${username}`);
-      console.log(`Reset Token: ${resetToken}`);
-      console.log(`Expires At: ${expiresAt.toISOString()}`);
-      console.log(`Valid for: 15 minutes`);
-      console.log('='.repeat(80));
-      console.log('');
+      // Log that a reset was generated (token is NOT logged for security)
+      console.log(`Password reset token generated for user: ${username} (expires: ${expiresAt.toISOString()})`);
 
       this.logSecurityEvent({
         event: 'PASSWORD_RESET_REQUESTED',
