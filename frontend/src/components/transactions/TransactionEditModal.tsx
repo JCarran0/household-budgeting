@@ -327,6 +327,37 @@ export function TransactionEditModal({
                 </Badge>
               </Group>
             )}
+
+            {transaction.accountOwner && (
+              <Group justify="space-between">
+                <Text size="sm" c="dimmed">Purchased by</Text>
+                <Text fw={500}>{transaction.accountOwner}</Text>
+              </Group>
+            )}
+
+            {transaction.originalDescription && (
+              <Group justify="space-between">
+                <Text size="sm" c="dimmed">Appears on statement as</Text>
+                <Text fw={500} size="sm" style={{ maxWidth: '60%', textAlign: 'right' }}>
+                  {transaction.originalDescription}
+                </Text>
+              </Group>
+            )}
+
+            {transaction.location && [transaction.location.address, transaction.location.city, transaction.location.region, transaction.location.postalCode, transaction.location.country].some(Boolean) && (
+              <Group justify="space-between">
+                <Text size="sm" c="dimmed">Location</Text>
+                <Text fw={500} size="sm" style={{ maxWidth: '60%', textAlign: 'right' }}>
+                  {[
+                    transaction.location.address,
+                    transaction.location.city,
+                    transaction.location.region,
+                    transaction.location.postalCode,
+                    transaction.location.country,
+                  ].filter(Boolean).join(', ')}
+                </Text>
+              </Group>
+            )}
           </Stack>
 
           <Divider />

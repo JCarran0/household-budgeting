@@ -34,6 +34,8 @@ export interface StoredTransaction {
   status: TransactionStatus;           // Transaction status
   pending: boolean;                    // Is transaction pending?
   isoCurrencyCode: string | null;      // Currency code
+  accountOwner: string | null;         // Account owner from Plaid (for joint accounts)
+  originalDescription: string | null;  // Raw statement description from Plaid
   tags: string[];                      // User tags
   notes: string | null;                // User notes
   isHidden: boolean;                   // Hidden from budgets
@@ -319,6 +321,8 @@ export class TransactionService {
       status: plaidTxn.pending ? 'pending' : 'posted',
       pending: plaidTxn.pending,
       isoCurrencyCode: plaidTxn.isoCurrencyCode,
+      accountOwner: plaidTxn.accountOwner || null,
+      originalDescription: plaidTxn.originalDescription || null,
       tags: [],
       notes: null,
       isHidden: false,
@@ -374,6 +378,16 @@ export class TransactionService {
 
     if (existing.merchantName !== plaidTxn.merchantName) {
       existing.merchantName = plaidTxn.merchantName;
+      changed = true;
+    }
+
+    if (existing.accountOwner !== plaidTxn.accountOwner) {
+      existing.accountOwner = plaidTxn.accountOwner || null;
+      changed = true;
+    }
+
+    if (existing.originalDescription !== plaidTxn.originalDescription) {
+      existing.originalDescription = plaidTxn.originalDescription || null;
       changed = true;
     }
 
@@ -587,6 +601,8 @@ export class TransactionService {
           status: originalTransaction.status,
           pending: originalTransaction.pending,
           isoCurrencyCode: originalTransaction.isoCurrencyCode,
+          accountOwner: originalTransaction.accountOwner || null,
+          originalDescription: originalTransaction.originalDescription || null,
           tags: split.tags || [],
           notes: originalTransaction.notes, // Preserve original notes
           isHidden: false,
@@ -852,6 +868,8 @@ export class TransactionService {
     status: TransactionStatus;
     pending: boolean;
     isoCurrencyCode: string | null;
+    accountOwner?: string | null;
+    originalDescription?: string | null;
     tags: string[];
     notes: string | null;
     isHidden: boolean;
@@ -869,6 +887,8 @@ export class TransactionService {
     const transaction: StoredTransaction = {
       id: uuidv4(),
       ...transactionData,
+      accountOwner: transactionData.accountOwner ?? null,
+      originalDescription: transactionData.originalDescription ?? null,
       isSplit: false,
       parentTransactionId: null,
       splitTransactionIds: [],

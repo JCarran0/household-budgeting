@@ -52,6 +52,8 @@ function createTestTransaction(
     isSplit: false,
     parentTransactionId: null,
     splitTransactionIds: [],
+    accountOwner: null,
+    originalDescription: null,
     location: null,
     createdAt: now,
     updatedAt: now,

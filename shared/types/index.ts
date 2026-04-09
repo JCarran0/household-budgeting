@@ -117,6 +117,17 @@ export interface Transaction {
   isSplit: boolean;
   parentTransactionId: string | null;
   splitTransactionIds: string[];
+  accountOwner: string | null;
+  originalDescription: string | null;
+  location: {
+    address: string | null;
+    city: string | null;
+    region: string | null;
+    postalCode: string | null;
+    country: string | null;
+    lat: number | null;
+    lon: number | null;
+  } | null;
   createdAt: string;
   updatedAt: string;
 }

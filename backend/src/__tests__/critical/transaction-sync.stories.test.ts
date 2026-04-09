@@ -80,6 +80,8 @@ describe('User Story: Transaction Synchronization', () => {
           categoryId: '13005000',
           pending: false,
           isoCurrencyCode: 'USD',
+          accountOwner: null,
+          originalDescription: null,
           location: undefined,
         },
         {
@@ -94,6 +96,8 @@ describe('User Story: Transaction Synchronization', () => {
           categoryId: '19013000',
           pending: false,
           isoCurrencyCode: 'USD',
+          accountOwner: null,
+          originalDescription: null,
           location: undefined,
         },
       ];
@@ -148,6 +152,8 @@ describe('User Story: Transaction Synchronization', () => {
           categoryId: '19000000',
           pending: false,
           isoCurrencyCode: 'USD',
+          accountOwner: null,
+          originalDescription: null,
           location: undefined,
         });
       }
@@ -187,6 +193,8 @@ describe('User Story: Transaction Synchronization', () => {
           categoryId: '19000000',
           pending: false,
           isoCurrencyCode: 'USD',
+          accountOwner: null,
+          originalDescription: null,
           location: undefined,
         },
         {
@@ -201,6 +209,8 @@ describe('User Story: Transaction Synchronization', () => {
           categoryId: '13000000',
           pending: true,
           isoCurrencyCode: 'USD',
+          accountOwner: null,
+          originalDescription: null,
           location: undefined,
         },
       ];
@@ -245,6 +255,8 @@ describe('User Story: Transaction Synchronization', () => {
         categoryId: '19000000',
         pending: false,
         isoCurrencyCode: 'USD',
+        accountOwner: null,
+        originalDescription: null,
         location: undefined,
       };
 
@@ -294,6 +306,8 @@ describe('User Story: Transaction Synchronization', () => {
         categoryId: '19000000',
         pending: true, // Start as pending
         isoCurrencyCode: 'USD',
+        accountOwner: null,
+        originalDescription: null,
         location: undefined,
       };
 
@@ -352,6 +366,8 @@ describe('User Story: Transaction Synchronization', () => {
           categoryId: '19000000',
           pending: false,
           isoCurrencyCode: 'USD',
+          accountOwner: null,
+          originalDescription: null,
           location: undefined,
         },
         {
@@ -366,6 +382,8 @@ describe('User Story: Transaction Synchronization', () => {
           categoryId: '19000000',
           pending: false,
           isoCurrencyCode: 'USD',
+          accountOwner: null,
+          originalDescription: null,
           location: undefined,
         },
       ];
@@ -432,6 +450,8 @@ describe('User Story: Transaction Synchronization', () => {
           categoryId: '19000000',
           pending: false,
           isoCurrencyCode: 'USD',
+          accountOwner: null,
+          originalDescription: null,
           location: undefined,
         },
       ];
@@ -450,6 +470,8 @@ describe('User Story: Transaction Synchronization', () => {
           categoryId: '21000000',
           pending: false,
           isoCurrencyCode: 'USD',
+          accountOwner: null,
+          originalDescription: null,
           location: undefined,
         },
       ];
@@ -514,6 +536,8 @@ describe('User Story: Transaction Synchronization', () => {
           categoryId: '19000000',
           pending: false,
           isoCurrencyCode: 'USD',
+          accountOwner: null,
+          originalDescription: null,
           location: undefined,
         },
       ];
@@ -580,6 +604,8 @@ describe('User Story: Transaction Synchronization', () => {
           categoryId: '19000000',
           pending: false,
           isoCurrencyCode: 'USD',
+          accountOwner: null,
+          originalDescription: null,
           location: undefined,
         }],
         totalTransactions: 1,
@@ -602,6 +628,8 @@ describe('User Story: Transaction Synchronization', () => {
           categoryId: '19000000',
           pending: false,
           isoCurrencyCode: 'USD',
+          accountOwner: null,
+          originalDescription: null,
           location: undefined,
         }],
         totalTransactions: 1,
@@ -640,6 +668,8 @@ describe('User Story: Transaction Synchronization', () => {
         categoryId: '13005000',
         pending: false,
         isoCurrencyCode: 'USD',
+        accountOwner: null,
+        originalDescription: null,
         location: {
           address: '123 Main St',
           city: 'San Francisco',

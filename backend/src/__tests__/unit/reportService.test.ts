@@ -43,6 +43,8 @@ function makeTransaction(
     isSplit: false,
     parentTransactionId: null,
     splitTransactionIds: [],
+    accountOwner: null,
+    originalDescription: null,
     location: null,
     createdAt: new Date('2025-01-01'),
     updatedAt: new Date('2025-01-01'),

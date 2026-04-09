@@ -89,6 +89,8 @@ describe('User Story: Transaction Categorization', () => {
       parentTransactionId: null,
       splitTransactionIds: [],
       userDescription: null,
+      accountOwner: null,
+      originalDescription: null,
       location: null,
       createdAt: new Date(),
       updatedAt: new Date(),

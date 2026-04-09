@@ -60,6 +60,7 @@ describe('Budget Calculation Utilities', () => {
       name: 'Salary', userDescription: null, merchantName: null, category: [], plaidCategoryId: null,
       categoryId: 'INCOME', pending: false, tags: [], notes: null, isHidden: false,
       isFlagged: false, isManual: false, isSplit: false, parentTransactionId: null, splitTransactionIds: [],
+      accountOwner: null, originalDescription: null, location: null,
       createdAt: '2025-01-15', updatedAt: '2025-01-15'
     },
     {
@@ -67,6 +68,7 @@ describe('Budget Calculation Utilities', () => {
       name: 'Freelance', userDescription: null, merchantName: null, category: [], plaidCategoryId: null,
       categoryId: 'CUSTOM_SALARY', pending: false, tags: [], notes: null, isHidden: false,
       isFlagged: false, isManual: false, isSplit: false, parentTransactionId: null, splitTransactionIds: [],
+      accountOwner: null, originalDescription: null, location: null,
       createdAt: '2025-01-15', updatedAt: '2025-01-15'
     },
     {
@@ -74,6 +76,7 @@ describe('Budget Calculation Utilities', () => {
       name: 'Grocery Store', userDescription: null, merchantName: null, category: [], plaidCategoryId: null,
       categoryId: 'FOOD_AND_DRINK', pending: false, tags: [], notes: null, isHidden: false,
       isFlagged: false, isManual: false, isSplit: false, parentTransactionId: null, splitTransactionIds: [],
+      accountOwner: null, originalDescription: null, location: null,
       createdAt: '2025-01-20', updatedAt: '2025-01-20'
     },
     {
@@ -81,6 +84,7 @@ describe('Budget Calculation Utilities', () => {
       name: 'Coffee Shop', userDescription: null, merchantName: null, category: [], plaidCategoryId: null,
       categoryId: 'FOOD_AND_DRINK_COFFEE', pending: false, tags: [], notes: null, isHidden: false,
       isFlagged: false, isManual: false, isSplit: false, parentTransactionId: null, splitTransactionIds: [],
+      accountOwner: null, originalDescription: null, location: null,
       createdAt: '2025-01-22', updatedAt: '2025-01-22'
     },
     {
@@ -88,6 +92,7 @@ describe('Budget Calculation Utilities', () => {
       name: 'Movie Theater', userDescription: null, merchantName: null, category: [], plaidCategoryId: null,
       categoryId: 'ENTERTAINMENT', pending: false, tags: [], notes: null, isHidden: false,
       isFlagged: false, isManual: false, isSplit: false, parentTransactionId: null, splitTransactionIds: [],
+      accountOwner: null, originalDescription: null, location: null,
       createdAt: '2025-01-25', updatedAt: '2025-01-25'
     },
     {
@@ -95,6 +100,7 @@ describe('Budget Calculation Utilities', () => {
       name: 'Transfer', userDescription: null, merchantName: null, category: [], plaidCategoryId: null,
       categoryId: 'TRANSFER_IN', pending: false, tags: [], notes: null, isHidden: false,
       isFlagged: false, isManual: false, isSplit: false, parentTransactionId: null, splitTransactionIds: [],
+      accountOwner: null, originalDescription: null, location: null,
       createdAt: '2025-01-26', updatedAt: '2025-01-26'
     },
     {
@@ -102,6 +108,7 @@ describe('Budget Calculation Utilities', () => {
       name: 'Hidden Transaction', userDescription: null, merchantName: null, category: [], plaidCategoryId: null,
       categoryId: 'HIDDEN_CATEGORY', pending: false, tags: [], notes: null, isHidden: false,
       isFlagged: false, isManual: false, isSplit: false, parentTransactionId: null, splitTransactionIds: [],
+      accountOwner: null, originalDescription: null, location: null,
       createdAt: '2025-01-27', updatedAt: '2025-01-27'
     },
     {
@@ -109,6 +116,7 @@ describe('Budget Calculation Utilities', () => {
       name: 'Child of Hidden', userDescription: null, merchantName: null, category: [], plaidCategoryId: null,
       categoryId: 'CHILD_OF_HIDDEN', pending: false, tags: [], notes: null, isHidden: false,
       isFlagged: false, isManual: false, isSplit: false, parentTransactionId: null, splitTransactionIds: [],
+      accountOwner: null, originalDescription: null, location: null,
       createdAt: '2025-01-28', updatedAt: '2025-01-28'
     },
     {
@@ -116,6 +124,7 @@ describe('Budget Calculation Utilities', () => {
       name: 'Hidden Transaction', userDescription: null, merchantName: null, category: [], plaidCategoryId: null,
       categoryId: 'VISIBLE_PARENT', pending: false, tags: [], notes: null, isHidden: true,
       isFlagged: false, isManual: false, isSplit: false, parentTransactionId: null, splitTransactionIds: [],
+      accountOwner: null, originalDescription: null, location: null,
       createdAt: '2025-01-29', updatedAt: '2025-01-29'
     }
   ];
@@ -290,6 +299,7 @@ describe('Budget Calculation Utilities', () => {
             name: 'Uncategorized', userDescription: null, merchantName: null, category: [], plaidCategoryId: null,
             categoryId: null, pending: false, tags: [], notes: null, isHidden: false,
             isFlagged: false, isManual: false, isSplit: false, parentTransactionId: null, splitTransactionIds: [],
+            accountOwner: null, originalDescription: null, location: null,
             createdAt: '2025-01-30', updatedAt: '2025-01-30'
           }
         ];
@@ -519,6 +529,7 @@ describe('Budget Calculation Utilities', () => {
             name: 'Salary', userDescription: null, merchantName: null, category: [], plaidCategoryId: null,
             categoryId: 'INCOME', pending: false, tags: [], notes: null, isHidden: false,
             isFlagged: false, isManual: false, isSplit: false, parentTransactionId: null, splitTransactionIds: [],
+            accountOwner: null, originalDescription: null, location: null,
             createdAt: '2025-01-15', updatedAt: '2025-01-15'
           },
           {
@@ -526,6 +537,7 @@ describe('Budget Calculation Utilities', () => {
             name: 'Freelance', userDescription: null, merchantName: null, category: [], plaidCategoryId: null,
             categoryId: 'CUSTOM_SALARY', pending: false, tags: [], notes: null, isHidden: false,
             isFlagged: false, isManual: false, isSplit: false, parentTransactionId: null, splitTransactionIds: [],
+            accountOwner: null, originalDescription: null, location: null,
             createdAt: '2025-01-15', updatedAt: '2025-01-15'
           }
         ];
@@ -542,6 +554,7 @@ describe('Budget Calculation Utilities', () => {
             name: 'Grocery Store', userDescription: null, merchantName: null, category: [], plaidCategoryId: null,
             categoryId: 'FOOD_AND_DRINK', pending: false, tags: [], notes: null, isHidden: false,
             isFlagged: false, isManual: false, isSplit: false, parentTransactionId: null, splitTransactionIds: [],
+            accountOwner: null, originalDescription: null, location: null,
             createdAt: '2025-01-20', updatedAt: '2025-01-20'
           },
           {
@@ -549,6 +562,7 @@ describe('Budget Calculation Utilities', () => {
             name: 'Movie Tickets', userDescription: null, merchantName: null, category: [], plaidCategoryId: null,
             categoryId: 'CUSTOM_MOVIES', pending: false, tags: [], notes: null, isHidden: false,
             isFlagged: false, isManual: false, isSplit: false, parentTransactionId: null, splitTransactionIds: [],
+            accountOwner: null, originalDescription: null, location: null,
             createdAt: '2025-01-22', updatedAt: '2025-01-22'
           }
         ];

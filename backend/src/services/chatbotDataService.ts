@@ -55,6 +55,17 @@ interface StoredTransaction {
   status: string;
   pending: boolean;
   isoCurrencyCode: string | null;
+  accountOwner?: string | null;
+  originalDescription?: string | null;
+  location?: {
+    address: string | null;
+    city: string | null;
+    region: string | null;
+    postalCode: string | null;
+    country: string | null;
+    lat: number | null;
+    lon: number | null;
+  } | null;
   tags: string[];
   notes: string | null;
   isHidden: boolean;
@@ -396,6 +407,9 @@ export class ChatbotDataService {
       isSplit: stored.isSplit,
       parentTransactionId: stored.parentTransactionId,
       splitTransactionIds: stored.splitTransactionIds || [],
+      accountOwner: stored.accountOwner || null,
+      originalDescription: stored.originalDescription || null,
+      location: stored.location || null,
       createdAt: String(stored.createdAt),
       updatedAt: String(stored.updatedAt),
     };

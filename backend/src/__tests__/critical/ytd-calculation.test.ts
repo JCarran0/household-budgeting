@@ -55,6 +55,7 @@ describe('YTD Calculation - Complete Month Logic', () => {
     updatedAt: new Date(date),
     location: null,
     accountOwner: 'Test User',
+    originalDescription: null,
     checkNumber: null,
     personalFinanceCategory: null,
     personalFinanceCategoryDetailed: null,

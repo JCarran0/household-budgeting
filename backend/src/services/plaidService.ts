@@ -64,6 +64,8 @@ export interface Transaction {
   categoryId: string | null;
   pending: boolean;
   isoCurrencyCode: string | null;
+  accountOwner: string | null;
+  originalDescription: string | null;
   location?: {
     address: string | null;
     city: string | null;
@@ -526,6 +528,8 @@ export class PlaidService {
         categoryId: txn.category_id || null,
         pending: txn.pending,
         isoCurrencyCode: txn.iso_currency_code || null,
+        accountOwner: txn.account_owner || null,
+        originalDescription: txn.original_description || null,
         location: (() => {
           if (!txn.location) return undefined;
           

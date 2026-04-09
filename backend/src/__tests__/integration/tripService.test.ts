@@ -39,6 +39,8 @@ async function createTestTransaction(
     isSplit: false,
     parentTransactionId: null,
     splitTransactionIds: [],
+    accountOwner: null,
+    originalDescription: null,
     location: null,
     createdAt: new Date(),
     updatedAt: new Date(),
