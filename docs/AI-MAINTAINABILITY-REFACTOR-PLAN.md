@@ -17,7 +17,7 @@ This plan captures the top 10 architectural refactoring targets identified throu
 | R1. Split TransactionService | **Done** | `eaa3391`, `8d07125` | 112 pre-refactor tests + filter engine extraction + Repository adoption. |
 | R3. Split ReportService | **Done** | `08811e9`, `7a90096` | 35 pre-refactor tests + helper extraction + Repository adoption. |
 | R6. Standardize Errors | **Done** | `98bf9a2` | Error classes + middleware + 2 routes migrated (budgets, trips). 33 tests. |
-| R4. Decompose Reports.tsx | Not started | | |
+| R4. Decompose Reports.tsx | **Done** | `afb0a6f` | 7 section components. Reports.tsx reduced from 2,151 to 423 LOC. |
 | R5. Decompose EnhancedTransactions.tsx | Not started | | |
 | R7. Split API Client | **Done** | `4373790` | 9 domain modules. api.ts reduced from 1,206 to 43 LOC. Zero import changes. |
 | R9. Move Logic Out of Routes | **Done** | `b88b864` | 4 new service methods. All 3 routes migrated to R6 patterns. -225 LOC from routes. |
@@ -108,28 +108,21 @@ Before planning each refactor, here's where we stand today:
 
 ---
 
-### R4. Decompose Reports.tsx (2,151 LOC)
+### R4. Decompose Reports.tsx (2,151 LOC) — DONE
 
-**Problem:** Single React component with 11 useState calls, 5 useQuery calls, 6 tab panels, complex memoized data processing, and rendering all in one file. Adding a new chart or modifying a tab risks breaking unrelated tabs.
+> **Completed:** 2026-04-08 | **Commit:** `afb0a6f`
 
-**Target state:**
-```
-pages/Reports.tsx (~200 LOC — tab shell, shared filters, URL sync)
-  ├── components/reports/CashflowSection.tsx (~350 LOC)
-  ├── components/reports/SpendingTrendsSection.tsx (~300 LOC)
-  ├── components/reports/CategoryBreakdownSection.tsx (~350 LOC)
-  ├── components/reports/ProjectionsSection.tsx (~300 LOC)
-  ├── components/reports/BudgetPerformanceSection.tsx (~300 LOC)
-  └── hooks/useReportData.ts (~150 LOC — shared data fetching)
-```
-
-**Confidence gate:** TypeScript compilation (`tsc --noEmit`) + manual smoke test of each tab. See decision note below for rationale.
-
-**Key files:**
-- `frontend/src/pages/Reports.tsx`
-- `frontend/src/hooks/usePersistedFilters.ts`
-
-**Estimated effort:** Medium
+**What was done:**
+- Extracted 6 tab panels into 7 focused components:
+  - `CashflowSection.tsx` (149 LOC) — area chart + planned vs actual overlay
+  - `SpendingTrendsSection.tsx` (171 LOC) — category trends line chart
+  - `CategoryBreakdownSection.tsx` (757 LOC) — pie chart with drill-down, hidden categories, "Other" grouping. All category-local state and memos moved inside.
+  - `ProjectionsSection.tsx` (273 LOC) — outlook chart with toggle states moved inside
+  - `BudgetPerformanceSection.tsx` (473 LOC) — 5 budget health widgets with memos moved inside
+  - `ReportsKpiCards.tsx` (120 LOC) — 4 KPI summary cards
+  - `reportDateRange.ts` (78 LOC) — extracted `getDateRange` utility
+- Reports.tsx reduced to 423 LOC: URL sync, React Query fetches, shared memos, tab shell
+- TypeScript compilation and production build pass cleanly
 
 ---
 
@@ -263,8 +256,8 @@ Phase 2: Backend structural improvements ✅ COMPLETE
 
 Phase 3: Frontend decomposition (IN PROGRESS)
 ├── R7.  Split API client ✅
-├── R4.  Decompose Reports.tsx ← NEXT
-└── R5.  Decompose EnhancedTransactions.tsx
+├── R4.  Decompose Reports.tsx ✅
+└── R5.  Decompose EnhancedTransactions.tsx ← LAST ITEM
 
 Phase 4: Cleanup ✅ COMPLETE
 └── R9.  Move business logic out of routes ✅
