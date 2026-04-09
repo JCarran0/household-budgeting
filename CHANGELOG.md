@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+### [5.7.9](https://github.com/JCarran0/household-budgeting/compare/v5.7.8...v5.7.9) (2026-04-09)
+
+
+### Documentation
+
+* drop frontend test infra prerequisite for R4/R5 ([cde43be](https://github.com/JCarran0/household-budgeting/commit/cde43be578557032e99a0bcfba65fb4f63c227ca))
+
 ### [5.7.8](https://github.com/JCarran0/household-budgeting/compare/v5.7.7...v5.7.8) (2026-04-09)
 
 
