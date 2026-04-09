@@ -372,7 +372,8 @@ describe('User Story: Transaction Search and Filtering', () => {
       });
 
       expect(result.success).toBe(true);
-      expect(result.transactions).toHaveLength(0); // User descriptions are not currently searched
+      expect(result.transactions).toHaveLength(1);
+      expect(result.transactions![0].userDescription).toBe('Weekly groceries');
     });
 
     test('I can search by tags', async () => {

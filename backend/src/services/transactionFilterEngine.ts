@@ -112,6 +112,7 @@ export function filterTransactions(
     const query = filter.searchQuery.toLowerCase();
     filtered = filtered.filter((txn: StoredTransaction) =>
       txn.name.toLowerCase().includes(query) ||
+      (txn.userDescription && txn.userDescription.toLowerCase().includes(query)) ||
       (txn.merchantName && txn.merchantName.toLowerCase().includes(query)) ||
       txn.tags.some(tag => tag.toLowerCase().includes(query)) ||
       (txn.notes && txn.notes.toLowerCase().includes(query))
