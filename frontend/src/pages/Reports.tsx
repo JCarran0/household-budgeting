@@ -137,36 +137,49 @@ export function Reports() {
   });
 
   // Fetch budget data for comparison dashboards
+  // Uses yearly batch endpoint (1-2 requests) instead of per-month requests (up to 12)
   const { data: budgetMonthlyData, isLoading: budgetLoading } = useQuery({
     queryKey: ['budgetComparison', startMonth, endMonth],
     queryFn: async () => {
-      const months = [];
-      const [startYear, startMonthNum] = startMonth.split('-').map(Number);
-      const [endYear, endMonthNum] = endMonth.split('-').map(Number);
+      const [startYear] = startMonth.split('-').map(Number);
+      const [endYear] = endMonth.split('-').map(Number);
 
-      let currentMonth = new Date(startYear, startMonthNum - 1, 1);
-      const endMonthDate = new Date(endYear, endMonthNum - 1, 1);
+      // Fetch yearly budgets for each year in the range (typically 1-2 requests)
+      const yearPromises = [];
+      for (let year = startYear; year <= endYear; year++) {
+        yearPromises.push(
+          api.getYearlyBudgets(year).catch(() => ({ year, budgets: [], count: 0 }))
+        );
+      }
+      const yearResults = await Promise.all(yearPromises);
 
-      while (currentMonth <= endMonthDate) {
-        months.push(format(currentMonth, 'yyyy-MM'));
-        currentMonth = addMonths(currentMonth, 1);
+      // Combine all budgets and group by month
+      const allBudgets = yearResults.flatMap(r => r.budgets);
+      const budgetsByMonth = new Map<string, typeof allBudgets>();
+      for (const budget of allBudgets) {
+        const month = budget.month;
+        if (month >= startMonth && month <= endMonth) {
+          const existing = budgetsByMonth.get(month) || [];
+          existing.push(budget);
+          budgetsByMonth.set(month, existing);
+        }
       }
 
-      const budgetPromises = months.map(async monthStr => {
-        try {
-          const budgetData = await api.getMonthlyBudgets(monthStr);
-          return {
-            monthKey: monthStr,
-            month: budgetData.month,
-            budgets: budgetData.budgets,
-            total: budgetData.total
-          };
-        } catch {
-          return { monthKey: monthStr, month: monthStr, budgets: [], total: 0 };
-        }
-      });
+      // Build expected months list and produce same shape as before
+      const months: string[] = [];
+      let current = new Date(startYear, parseInt(startMonth.split('-')[1]) - 1, 1);
+      const endDate = new Date(parseInt(endMonth.split('-')[0]), parseInt(endMonth.split('-')[1]) - 1, 1);
+      while (current <= endDate) {
+        months.push(format(current, 'yyyy-MM'));
+        current = addMonths(current, 1);
+      }
 
-      return await Promise.all(budgetPromises);
+      return months.map(month => ({
+        monthKey: month,
+        month,
+        budgets: budgetsByMonth.get(month) || [],
+        total: (budgetsByMonth.get(month) || []).reduce((sum, b) => sum + b.amount, 0),
+      }));
     },
   });
 
