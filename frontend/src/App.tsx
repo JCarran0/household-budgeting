@@ -23,6 +23,7 @@ import { Budgets } from './pages/Budgets';
 import { Reports } from './pages/Reports';
 import { Admin } from './pages/Admin';
 import { Trips } from './pages/Trips';
+import { Projects } from './pages/Projects';
 import { PlaidLinkProvider } from './providers/PlaidLinkProvider';
 import { queryClient } from './lib/queryClient';
 import { ErrorBoundary } from './components/ErrorBoundary';
@@ -78,6 +79,11 @@ function App() {
                     <Route path="/trips" element={
                       <RouteErrorBoundary routeName="Trips">
                         <Trips />
+                      </RouteErrorBoundary>
+                    } />
+                    <Route path="/projects" element={
+                      <RouteErrorBoundary routeName="Projects">
+                        <Projects />
                       </RouteErrorBoundary>
                     } />
                     <Route path="/admin" element={

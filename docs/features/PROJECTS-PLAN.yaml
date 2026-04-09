@@ -1,0 +1,465 @@
+# =============================================================================
+# Project Tracking & Budget Management — Implementation Plan
+# =============================================================================
+# BRD: docs/features/PROJECTS-BRD.md
+# Status: Not Started
+# Last Updated: 2026-04-09
+# =============================================================================
+
+overview:
+  description: |
+    Implementation plan for the Project Tracking feature. Projects are a first-class
+    entity backed by the existing tag system, following the same architecture as Trips.
+    Users create projects via a dedicated flow, which generates a structured tag
+    (project:<name>:<year>) applied to transactions. A new Projects section provides
+    project management, per-project budgets, and a spending report with category drill-down.
+
+    Unlike Trips which have a rating field, Projects omit ratings (not meaningful for
+    renovations) but are otherwise structurally identical.
+  key_files:
+    brd: docs/features/PROJECTS-BRD.md
+    trips_reference: backend/src/services/tripService.ts
+    shared_types: shared/types/index.ts
+    backend_services: backend/src/services/index.ts
+    backend_routes: backend/src/routes/
+    frontend_pages: frontend/src/pages/
+    sidebar_nav: frontend/src/components/MantineLayout.tsx
+    api_client: frontend/src/lib/api.ts
+    app_routes: frontend/src/App.tsx
+    trip_helpers: shared/utils/tripHelpers.ts
+
+# =============================================================================
+# DECISIONS LOG — Capture key decisions as they're made during implementation
+# =============================================================================
+decisions:
+  - id: D1
+    date: 2026-04-09
+    decision: Projects mirror Trips architecture exactly (tag-based, independent budgets, accordion UI)
+    rationale: |
+      Proven pattern from Trips. Same data model, same service structure, same UI layout.
+      Reduces implementation risk and keeps the codebase consistent.
+
+  - id: D2
+    date: 2026-04-09
+    decision: Tag format is project:<name>:<year> with year required
+    rationale: |
+      Matches trip tag convention. Year extracted from startDate. Even though projects
+      may span years, the year anchors the tag to when the project started.
+
+  - id: D3
+    date: 2026-04-09
+    decision: No mutual exclusivity between trip and project tags
+    rationale: |
+      Trip and project budgets are independent parallel lenses on the same transactions,
+      just like monthly budgets. A transaction can legitimately appear in both a trip
+      summary and a project summary — same pattern as monthly budgets.
+
+  - id: D4
+    date: 2026-04-09
+    decision: No rating field on projects (unlike trips)
+    rationale: |
+      Ratings are meaningful for travel experiences but not for home renovations.
+      Keeps the form simpler. Can be added later if needed.
+
+  - id: D5
+    date: 2026-04-09
+    decision: Project statuses are Planning/Active/Completed (not Upcoming like trips)
+    rationale: |
+      "Planning" better describes a future home renovation than "Upcoming" which
+      implies a scheduled event. Same derivation logic (date-based), different labels.
+
+  - id: D6
+    date: 2026-04-09
+    decision: Reuse tag helper pattern — create projectHelpers.ts mirroring tripHelpers.ts
+    rationale: |
+      Could extract a generic "tagged entity" helper, but premature abstraction.
+      Two parallel helper files are clear and simple. If a third entity type appears,
+      then generalize.
+
+  - id: D7
+    date: 2026-04-09
+    decision: Tag propagation follows same D6 rule from Trips — update transactions first, then entity
+    rationale: |
+      Same safety reasoning as Trips. Orphaned tags are harder to recover from than
+      a stale entity reference.
+
+# =============================================================================
+# PHASE 1: Shared Types & Helpers
+# =============================================================================
+phase_1_data_model:
+  status: not_started
+  description: |
+    Define Project types and tag helpers. Mirror Trip types closely.
+
+  tasks:
+    - id: "1.1"
+      task: Define Project interfaces in shared/types/index.ts
+      status: not_started
+      details: |
+        Follow Trip type pattern exactly.
+
+        interface Project {
+          id: string;                               // UUID
+          name: string;                             // Display name, e.g. "Kitchen Renovation 2026"
+          tag: string;                              // Generated: "project:kitchen-renovation:2026"
+          startDate: string;                        // ISO date
+          endDate: string;                          // ISO date
+          totalBudget: number | null;               // Overall spending target
+          categoryBudgets: ProjectCategoryBudget[]; // Per-category targets
+          notes: string;                            // Free-text
+        }
+
+        interface ProjectCategoryBudget {
+          categoryId: string;
+          amount: number;
+        }
+
+        interface StoredProject extends Project {
+          userId: string;
+          createdAt: string;
+          updatedAt: string;
+        }
+
+        interface ProjectSummary extends Project {
+          status: 'planning' | 'active' | 'completed';
+          totalSpent: number;
+          categorySpending: ProjectCategorySpending[];
+        }
+
+        interface ProjectCategorySpending {
+          categoryId: string;
+          categoryName: string;
+          spent: number;
+          budgeted: number | null;
+        }
+
+        Also add CreateProjectDto and UpdateProjectDto types for API payloads.
+
+    - id: "1.2"
+      task: Create shared/utils/projectHelpers.ts
+      status: not_started
+      details: |
+        Mirror tripHelpers.ts with project-specific prefix:
+
+        - generateProjectTag(name, startDate): Creates "project:<slug>:<year>"
+        - slugifyProjectName(name): Same logic as slugifyTripName
+        - isProjectTag(tag): Regex /^project:[a-z0-9-]+:\d{4}$/
+        - getProjectStatus(startDate, endDate): Returns 'planning' | 'active' | 'completed'
+
+        Consider extracting slugify to a shared function since trip and project
+        use identical slugification logic. Only do this if tripHelpers already
+        exports it separately — don't refactor tripHelpers in this phase.
+
+# =============================================================================
+# PHASE 2: Backend Service & Routes
+# =============================================================================
+phase_2_backend:
+  status: not_started
+  description: |
+    Create ProjectService and project API routes. Mirror TripService closely.
+    Add mutual exclusivity validation to transaction tag operations.
+
+  tasks:
+    - id: "2.1"
+      task: Create ProjectService in backend/src/services/projectService.ts
+      status: not_started
+      details: |
+        Mirror TripService (backend/src/services/tripService.ts) closely.
+        Storage key: "projects_{userId}" via dataService.
+
+        Methods:
+        - createProject(data, userId): Generate tag, validate uniqueness, save
+        - getProject(projectId, userId): Get single project
+        - getAllProjects(userId, year?): Get all projects for user
+        - updateProject(projectId, data, userId): Update project fields
+          - If name changes and tag changes: update tag on all associated transactions
+        - deleteProject(projectId, userId): Remove entity + strip tags from transactions
+        - getProjectSummary(projectId, userId, categories?): Compute spending
+        - getProjectsSummaries(userId, year?, categories?): Summaries for card grid
+
+        Dependencies: dataService, transactionService
+
+        Tag propagation order: update transactions FIRST, then entity (D7).
+
+    - id: "2.2"
+      task: Register ProjectService in backend/src/services/index.ts
+      status: not_started
+      details: |
+        Instantiate projectService singleton with dataService and transactionService
+        dependencies. Export for use in routes.
+
+    - id: "2.3"
+      task: Create project routes in backend/src/routes/projects.ts
+      status: not_started
+      details: |
+        Mirror trips.ts route structure with authMiddleware and Zod validation.
+
+        Endpoints:
+        - POST   /api/v1/projects              — Create project
+        - GET    /api/v1/projects              — List all projects (optional ?year=)
+        - GET    /api/v1/projects/summaries    — Get all project summaries
+        - GET    /api/v1/projects/:id          — Get single project
+        - GET    /api/v1/projects/:id/summary  — Get project with spending breakdown
+        - PUT    /api/v1/projects/:id          — Update project
+        - DELETE /api/v1/projects/:id          — Delete project
+
+        Zod schemas:
+        - createProjectSchema: name (required, max 100), startDate, endDate,
+          totalBudget (optional), categoryBudgets (optional array),
+          notes (optional, max 2000)
+        - updateProjectSchema: all fields optional, same constraints
+        - Validate endDate >= startDate
+        - Validate totalBudget >= sum of categoryBudgets
+
+    - id: "2.4"
+      task: Register project routes in backend app
+      status: not_started
+      details: |
+        Mount project routes at /api/v1/projects. Follow existing pattern.
+
+# =============================================================================
+# PHASE 3: API Client
+# =============================================================================
+phase_3_api_client:
+  status: not_started
+  description: Add project methods to the frontend API client.
+
+  tasks:
+    - id: "3.1"
+      task: Add project API methods to frontend/src/lib/api/
+      status: not_started
+      details: |
+        Create frontend/src/lib/api/projects.ts mirroring trips.ts.
+
+        Methods:
+        - createProject(data: CreateProjectDto): Promise<Project>
+        - getProjects(year?: number): Promise<Project[]>
+        - getProject(id: string): Promise<Project>
+        - getProjectSummary(id: string): Promise<ProjectSummary>
+        - getProjectsSummaries(year?: number): Promise<ProjectSummary[]>
+        - updateProject(id: string, data: UpdateProjectDto): Promise<Project>
+        - deleteProject(id: string): Promise<void>
+
+        Register in main api client and bind all methods.
+
+# =============================================================================
+# PHASE 4: Frontend — Projects Page & Navigation
+# =============================================================================
+phase_4_frontend:
+  status: not_started
+  description: |
+    Build the Projects page with card grid, project detail accordion, and Create
+    Project flow. Mirror Trips.tsx closely. Add sidebar navigation entry and route.
+
+  tasks:
+    - id: "4.1"
+      task: Add Projects to sidebar navigation
+      status: not_started
+      details: |
+        In frontend/src/components/MantineLayout.tsx, add to navItems array:
+        { label: 'Projects', icon: IconHammer, path: '/projects' }
+
+        Place after Trips in the nav order.
+        Import IconHammer from @tabler/icons-react (or IconTool as fallback).
+
+    - id: "4.2"
+      task: Add /projects route to frontend/src/App.tsx
+      status: not_started
+      details: |
+        Add protected route for the Projects page component.
+        Follow existing route pattern with RouteErrorBoundary wrapper.
+
+    - id: "4.3"
+      task: Create Projects page — card grid view
+      status: not_started
+      details: |
+        File: frontend/src/pages/Projects.tsx
+        Mirror Trips.tsx structure closely.
+
+        Layout:
+        - Page title "Projects" with "Create Project" button
+        - Filter bar: year selector, project name search
+        - Accordion card grid, sorted by most recent startDate
+
+        Each project card header displays:
+        - Project name
+        - Date range (formatted: "May 1 – Aug 31, 2026")
+        - Status badge (Planning/Active/Completed) with color coding
+          - Planning = blue, Active = green, Completed = gray
+        - Total spent
+        - Total budget (if set), with spent/budget fraction
+
+        State management:
+        - useQuery for fetching project summaries
+        - Local state for year filter and search
+        - React Query queryKey: ['projects', 'summaries', year]
+
+    - id: "4.4"
+      task: Create Project detail — accordion expansion
+      status: not_started
+      details: |
+        When a project card is clicked, expand to show:
+
+        1. Project header: name, dates, status badge, notes (editable),
+           total spent vs total budget with variance
+
+        2. Category breakdown table:
+           - Category name
+           - Amount spent
+           - Category budget (if set)
+           - Variance (budget - spent)
+           - Each row clickable for drill-down (see 4.6)
+
+        3. Project tag displayed and copyable
+
+        Use Mantine Accordion (same as Trips).
+        queryKey: ['projects', projectId, 'summary']
+
+    - id: "4.5"
+      task: Create Project form — create/edit modal
+      status: not_started
+      details: |
+        Mantine Modal with form fields:
+        - Project name (TextInput, required)
+        - Start date (DatePickerInput, required)
+        - End date (DatePickerInput, required, must be >= startDate)
+        - Total budget (NumberInput, optional)
+        - Category budgets (repeatable row: category select + amount)
+        - Notes (Textarea, optional)
+
+        No rating field (D4).
+
+        On submit: POST /api/v1/projects (create) or PUT /api/v1/projects/:id (edit)
+        Use React Query useMutation with queryClient.invalidateQueries(['projects'])
+        Show generated tag as read-only preview (e.g. "Tag: project:kitchen-renovation:2026")
+
+    - id: "4.6"
+      task: Wire category drill-down using TransactionPreviewModal
+      status: not_started
+      details: |
+        Reuse TransactionPreviewModal (same pattern as Trips).
+
+        When user clicks a category row in project detail:
+        - Open TransactionPreviewModal filtered by:
+          - Project tag (via tags filter)
+          - Category ID
+          - No date range constraint
+
+        "View All" navigates to Transactions page with URL params:
+        tags=project:kitchen-renovation:2026&categoryIds=HOME_IMPROVEMENT
+
+    - id: "4.7"
+      task: Create project deletion confirmation modal
+      status: not_started
+      details: |
+        Mantine Modal confirming deletion.
+        Message: "Delete {project name}? This will remove the project tag from all
+        associated transactions. Transactions will not be deleted."
+
+        On confirm: DELETE /api/v1/projects/:id
+        Invalidate queries on success.
+
+# =============================================================================
+# PHASE 5: Transaction Integration Verification
+# =============================================================================
+phase_5_transaction_integration:
+  status: not_started
+  description: |
+    Verify project tags work correctly through existing transaction UX.
+
+  tasks:
+    - id: "5.1"
+      task: Verify project tags work with existing tag input
+      status: not_started
+      details: |
+        - TagsInput accepts project:kitchen-renovation:2026 format
+        - Project tags appear in tag filter dropdown on Transactions page
+        - Bulk edit can apply project tags to multiple transactions
+
+    - id: "5.2"
+      task: Verify Transactions page tag filter works with project tags
+      status: not_started
+      details: |
+        - Project tags appear in tag filter multi-select
+        - "View All" navigation from TransactionPreviewModal applies correct URL params
+        - Tag filter correctly returns only project-tagged transactions
+
+# =============================================================================
+# PHASE 6: Testing
+# =============================================================================
+phase_6_testing:
+  status: not_started
+  description: |
+    Risk-based testing. Focus on: tag generation, spending calculations,
+    tag propagation on rename/delete, mutual exclusivity enforcement.
+
+  tasks:
+    - id: "6.1"
+      task: Integration tests for ProjectService
+      status: not_started
+      details: |
+        File: backend/src/__tests__/integration/projectService.test.ts
+
+        Critical test cases:
+        - Create project generates correct tag from name
+        - Tag uniqueness validation (no duplicate project tags)
+        - Project deletion strips tags from all associated transactions
+        - Project rename updates tags on all associated transactions
+        - Project summary correctly aggregates spending by category
+        - Project summary includes transactions outside date range
+        - Category budgets vs actual calculation accuracy
+
+    - id: "6.2"
+      task: Route-level tests for project API endpoints
+      status: not_started
+      details: |
+        File: backend/src/__tests__/integration/projectRoutes.test.ts
+
+        Test CRUD operations via supertest.
+        Verify auth middleware protection on all endpoints.
+        Verify Zod validation rejects invalid inputs.
+        Verify year filter on GET /projects.
+
+    - id: "6.3"
+      task: Manual testing checklist
+      status: not_started
+      details: |
+        - [ ] Create project via form, verify tag preview
+        - [ ] Tag transactions via edit modal with project tag
+        - [ ] Bulk-tag transactions for a project
+        - [ ] View project card grid with correct totals
+        - [ ] Expand project to see category breakdown
+        - [ ] Click category to open TransactionPreviewModal
+        - [ ] "View All" navigates to Transactions with correct filters
+        - [ ] Edit project name, verify tag updates on transactions
+        - [ ] Delete project, verify tags removed from transactions
+        - [ ] Year filter on card grid
+        - [ ] Both users see same project with combined transactions
+        - [ ] Pre-project transaction (date before startDate) included in totals
+        - [ ] Notes editable at any time
+
+# =============================================================================
+# IMPLEMENTATION ORDER
+# =============================================================================
+implementation_order:
+  description: |
+    Recommended sequence. Phases 1-3 are backend foundation.
+    Phase 4 is the bulk of frontend work. Phase 5 is verification.
+    Phase 6 runs alongside development.
+
+    This feature is highly parallel to Trips — expect to copy and adapt
+    rather than build from scratch. Estimated effort is lower than Trips
+    since the patterns are established.
+  sequence:
+    - phase: 1 — Shared Types & Helpers
+      reason: Types and helpers are needed by everything else
+    - phase: 2 — Backend Service & Routes
+      reason: API must exist before frontend can consume it
+    - phase: 3 — API Client
+      reason: Frontend methods needed for page development
+    - phase: 4 — Frontend (Projects Page & Navigation)
+      reason: Main deliverable; depends on phases 1-3
+    - phase: 5 — Transaction Integration Verification
+      reason: Verify existing UX works with project tags
+    - phase: 6 — Testing
+      reason: Write integration tests alongside phases 2-4; manual testing at end

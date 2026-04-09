@@ -281,6 +281,60 @@ export interface UpdateTripDto {
   notes?: string;
 }
 
+// Project types
+export interface Project {
+  id: string;
+  name: string;
+  tag: string;
+  startDate: string;
+  endDate: string;
+  totalBudget: number | null;
+  categoryBudgets: ProjectCategoryBudget[];
+  notes: string;
+}
+
+export interface ProjectCategoryBudget {
+  categoryId: string;
+  amount: number;
+}
+
+export interface StoredProject extends Project {
+  userId: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ProjectSummary extends Project {
+  status: 'planning' | 'active' | 'completed';
+  totalSpent: number;
+  categorySpending: ProjectCategorySpending[];
+}
+
+export interface ProjectCategorySpending {
+  categoryId: string;
+  categoryName: string;
+  spent: number;
+  budgeted: number | null;
+}
+
+export interface CreateProjectDto {
+  name: string;
+  startDate: string;
+  endDate: string;
+  totalBudget?: number | null;
+  categoryBudgets?: ProjectCategoryBudget[];
+  notes?: string;
+}
+
+export interface UpdateProjectDto {
+  name?: string;
+  startDate?: string;
+  endDate?: string;
+  totalBudget?: number | null;
+  categoryBudgets?: ProjectCategoryBudget[];
+  notes?: string;
+}
+
 // =============================================================================
 // Chatbot Types (Phase 1)
 // =============================================================================

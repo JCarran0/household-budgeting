@@ -17,6 +17,7 @@ import { AutoCategorizeService } from './autoCategorizeService';
 import { ImportService } from './importService';
 import { ActualsOverrideService } from './actualsOverrideService';
 import { TripService, getTripService } from './tripService';
+import { ProjectService, getProjectService } from './projectService';
 import { ReadOnlyDataServiceImpl } from './readOnlyDataService';
 import { ChatbotDataService } from './chatbotDataService';
 import { ChatbotCostTracker } from './chatbotCostTracker';
@@ -67,6 +68,7 @@ export const actualsOverrideService = new ActualsOverrideService(dataService);
 export const manualAccountService = new ManualAccountService(dataService);
 export const reportService = new ReportService(dataService, actualsOverrideService);
 export const tripService = getTripService(dataService, transactionService);
+export const projectService = getProjectService(dataService, transactionService);
 
 // SECURITY: chatbotDataService receives ONLY readOnlyDataService.
 // It must NEVER receive the full dataService, plaidService, accountService,
@@ -114,6 +116,7 @@ export {
   ImportService,
   ActualsOverrideService,
   TripService,
+  ProjectService,
   ChatbotDataService,
   ChatbotService,
   CategorizationService,

@@ -8,6 +8,7 @@ import { createReportsApi } from './api/reports';
 import { createAdminApi } from './api/admin';
 import { createMiscApi } from './api/misc';
 import { createTripsApi } from './api/trips';
+import { createProjectsApi } from './api/projects';
 import { createChatbotApi } from './api/chatbot';
 import { createFeedbackApi } from './api/feedback';
 import { createActualsOverridesApi } from './api/actualsOverrides';
@@ -44,6 +45,7 @@ export const api = {
   ...createReportsApi(client),
   ...createAdminApi(client),
   ...createTripsApi(client),
+  ...createProjectsApi(client),
   ...createChatbotApi(client),
   ...createFeedbackApi(client),
   ...createActualsOverridesApi(client),
