@@ -67,35 +67,37 @@ export function Reports() {
     const hasTab = searchParams.has('tab');
     if (!hasTimeRange || !hasType || !hasTab) {
       setSearchParams((prev) => {
-        if (!hasTimeRange) prev.set('timeRange', timeRange);
-        if (!hasType) prev.set('type', categoryView);
-        if (!hasTab) prev.set('tab', activeTab || 'cashflow');
-        return prev;
+        const next = new URLSearchParams(prev);
+        if (!hasTimeRange) next.set('timeRange', timeRange);
+        if (!hasType) next.set('type', categoryView);
+        if (!hasTab) next.set('tab', activeTab || 'cashflow');
+        return next;
       }, { replace: true });
     }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const setTimeRange = useCallback((range: string) => {
-    setSearchParams((prev) => { prev.set('timeRange', range); return prev; }, { replace: true });
+    setSearchParams((prev) => { const next = new URLSearchParams(prev); next.set('timeRange', range); return next; }, { replace: true });
     setStoredTimeRange(range);
   }, [setSearchParams, setStoredTimeRange]);
 
   const setCategoryView = useCallback((view: 'expenses' | 'income') => {
-    setSearchParams((prev) => { prev.set('type', view); return prev; }, { replace: true });
+    setSearchParams((prev) => { const next = new URLSearchParams(prev); next.set('type', view); return next; }, { replace: true });
   }, [setSearchParams]);
 
   const setActiveTab = useCallback((tab: string | null) => {
     const value = tab || 'cashflow';
-    setSearchParams((prev) => { prev.set('tab', value); return prev; }, { replace: true });
+    setSearchParams((prev) => { const next = new URLSearchParams(prev); next.set('tab', value); return next; }, { replace: true });
     setStoredActiveTab(value);
   }, [setSearchParams, setStoredActiveTab]);
 
   const resetFilters = useCallback(() => {
     setSearchParams((prev) => {
-      prev.set('timeRange', 'yearToDate');
-      prev.set('type', 'expenses');
-      prev.set('tab', 'cashflow');
-      return prev;
+      const next = new URLSearchParams(prev);
+      next.set('timeRange', 'yearToDate');
+      next.set('type', 'expenses');
+      next.set('tab', 'cashflow');
+      return next;
     }, { replace: true });
     resetStoredFilters();
   }, [setSearchParams, resetStoredFilters]);
