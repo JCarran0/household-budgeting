@@ -125,7 +125,7 @@ Admin routes in `backend/src/routes/admin.ts` only check that a user is authenti
 ---
 
 ### TD-007: 401 Handler Bypasses Store Logout
-**Status**: Open
+**Status**: Resolved (2026-04-08)
 **Created**: 2026-04-08
 **Impact**: High - Stale data from previous session persists after forced logout
 **Effort**: Low
@@ -162,7 +162,7 @@ Extract a shared `getApiErrorMessage(error: unknown): string` utility and use it
 ---
 
 ### TD-009: Stale @types/react-router-dom v5
-**Status**: Open
+**Status**: Resolved (2026-04-08)
 **Created**: 2026-04-08
 **Impact**: Medium - v5 types silently suppress errors for v7-specific APIs
 **Effort**: Trivial
