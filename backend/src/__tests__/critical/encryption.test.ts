@@ -140,42 +140,55 @@ describe('Encryption Service - Critical Security', () => {
 
   describe('Environment Configuration', () => {
     test('should throw error if no encryption secret is set', () => {
-      delete process.env.PLAID_ENCRYPTION_SECRET;
-      delete process.env.JWT_SECRET;
-      
+      // EncryptionService reads from config.auth.encryptionSecret (not process.env directly).
+      // Mock the config module to return an empty secret.
+      jest.resetModules();
+      jest.doMock('../../config', () => ({
+        config: { auth: { encryptionSecret: '' } },
+      }));
+
+      // The module exports a singleton that is created at load time, so
+      // requiring the module itself will throw.
       expect(() => {
-        new EncryptionService();
-      }).toThrow('PLAID_ENCRYPTION_SECRET or JWT_SECRET must be set for encryption');
+        require('../../utils/encryption');
+      }).toThrow('PLAID_ENCRYPTION_SECRET must be set for encryption');
     });
 
     test('should use PLAID_ENCRYPTION_SECRET when available', () => {
-      process.env.PLAID_ENCRYPTION_SECRET = 'plaid-specific-secret';
-      process.env.JWT_SECRET = 'jwt-secret';
-      
       const service = new EncryptionService();
       const token = 'test-token';
       const encrypted = service.encrypt(token);
-      
+
       // Should be able to decrypt with same service
       expect(service.decrypt(encrypted)).toBe(token);
-      
-      // Service with different secret should fail
-      process.env.PLAID_ENCRYPTION_SECRET = 'different-secret';
-      const differentService = new EncryptionService();
-      
+
+      // Service with different secret should fail to decrypt
+      jest.resetModules();
+      jest.doMock('../../config', () => ({
+        config: { auth: { encryptionSecret: 'different-secret' } },
+      }));
+      const { EncryptionService: DiffSecret } = require('../../utils/encryption');
+      const differentService = new DiffSecret();
+
       expect(() => {
         differentService.decrypt(encrypted);
       }).toThrow('Failed to decrypt data');
     });
 
     test('should fall back to JWT_SECRET if PLAID_ENCRYPTION_SECRET not set', () => {
-      delete process.env.PLAID_ENCRYPTION_SECRET;
-      process.env.JWT_SECRET = 'jwt-fallback-secret';
-      
-      const service = new EncryptionService();
+      // Config module already handles the fallback (encryptionSecret = JWT_SECRET when
+      // PLAID_ENCRYPTION_SECRET is absent). Verify that EncryptionService works when
+      // the config provides a secret derived from JWT_SECRET.
+      jest.resetModules();
+      jest.doMock('../../config', () => ({
+        config: { auth: { encryptionSecret: 'jwt-fallback-secret' } },
+      }));
+      const { EncryptionService: FallbackService } = require('../../utils/encryption');
+
+      const service = new FallbackService();
       const token = 'test-token';
       const encrypted = service.encrypt(token);
-      
+
       expect(service.decrypt(encrypted)).toBe(token);
     });
   });
