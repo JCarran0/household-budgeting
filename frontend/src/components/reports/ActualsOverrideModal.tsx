@@ -61,7 +61,8 @@ export function ActualsOverrideModal({ opened, onClose, override }: ActualsOverr
     } else {
       form.reset();
     }
-  }, [override, form]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [override]);
 
   const createOrUpdateMutation = useMutation({
     mutationFn: (data: CreateActualsOverrideDto) => api.createOrUpdateActualsOverride(data),
