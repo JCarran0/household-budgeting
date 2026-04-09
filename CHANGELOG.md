@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+### [5.10.3](https://github.com/JCarran0/household-budgeting/compare/v5.10.2...v5.10.3) (2026-04-09)
+
+
+### Bug Fixes
+
+* **transactions:** create new URLSearchParams instead of mutating prev ([e5a60d2](https://github.com/JCarran0/household-budgeting/commit/e5a60d2c8f6d635a0539d87a32fafd8de03683b6))
+
 ### [5.10.2](https://github.com/JCarran0/household-budgeting/compare/v5.10.1...v5.10.2) (2026-04-09)
 
 
