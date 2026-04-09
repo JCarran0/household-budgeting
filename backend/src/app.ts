@@ -35,8 +35,10 @@ const corsOptions = {
     const allowedOrigins = [
       'http://localhost:5173',
       'http://localhost:5174',
+      'http://localhost:5183',
       'http://localhost:3000',
       'http://localhost:3001',
+      'http://localhost:3021',
       'https://budget.jaredcarrano.com',
       'http://budget.jaredcarrano.com',
     ];

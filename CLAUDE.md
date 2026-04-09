@@ -356,8 +356,8 @@ npm run build
 2. If running, skip startup commands
 3. If needed to restart: `npm run dev:restart` (stops then starts)
 
-Frontend runs on: http://localhost:3000
-Backend runs on: http://localhost:3001
+Frontend runs on: http://localhost:5183
+Backend runs on: http://localhost:3021
 
 ### Required Environment Variables
 ```bash
@@ -522,7 +522,7 @@ Having issues?
 - **Handle auth errors**: Review JWT middleware patterns
 - **Financial calculations**: Always use shared utilities from `shared/utils/transactionCalculations.ts` to exclude transfers and `shared/utils/budgetCalculations.ts` for budget calculations
 - **Create a release**: Run `npm run release:prepare` and follow prompts
-- **Check version**: Visit `/version` endpoint or run `curl localhost:3001/version`
+- **Check version**: Visit `/version` endpoint or run `curl localhost:3021/version`
 - **Password reset recovery**: If locked out, request a reset via the UI. Reset tokens are stored in-memory and expire after 15 minutes
 - **⚠️ Category Migration**: Before deploying Plaid PFC changes, delete existing category data: `rm backend/data/categories_*.json`
 - **Production data debugging**: Sync production data locally (must run from `backend/` with `budget-app-prod` AWS profile):
@@ -561,7 +561,7 @@ test -f backend/dist/index.js && echo "✅ index.js" || echo "❌ index.js" && \
 test -f backend/.env && echo "✅ .env" || echo "❌ .env" && \
 test -f ecosystem.config.js && echo "✅ PM2 config" || echo "❌ PM2 config" && \
 pm2 status | grep -q budget-backend && echo "✅ PM2 running" || echo "❌ PM2 not running" && \
-curl -s http://localhost:3001/health | grep -q "ok" && echo "✅ Health OK" || echo "❌ Health FAIL"
+curl -s http://localhost:3021/health | grep -q "ok" && echo "✅ Health OK" || echo "❌ Health FAIL"
 ```
 
 #### Common Troubleshooting Commands
@@ -576,7 +576,7 @@ pm2 restart budget-backend
 pm2 env budget-backend | grep -E "(JWT|PLAID|NODE_ENV)"
 
 # Test API directly
-curl -s http://localhost:3001/health | jq '.'
+curl -s http://localhost:3021/health | jq '.'
 
 # Check disk space
 df -h /home/appuser

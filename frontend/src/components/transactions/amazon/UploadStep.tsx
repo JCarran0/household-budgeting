@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react';
-import { Stack, Text, Button, Group, Paper, ActionIcon, ThemeIcon } from '@mantine/core';
+import { Stack, Text, Button, Group, Paper, ActionIcon, ThemeIcon, Anchor } from '@mantine/core';
 import { IconUpload, IconFile, IconX, IconInfoCircle } from '@tabler/icons-react';
 
 interface UploadStepProps {
@@ -57,10 +57,18 @@ export function UploadStep({ onUpload, isUploading }: UploadStepProps) {
           <Text size="sm" fw={500}>How to get your Amazon PDFs</Text>
         </Group>
         <Text size="xs" c="dimmed">
-          1. Go to amazon.com/gp/css/order-history and print the page to PDF (Orders page)
+          1. Go to{' '}
+          <Anchor href="https://www.amazon.com/gp/css/order-history?ref_=nav_orders_first" target="_blank" size="xs">
+            Amazon Order History
+          </Anchor>
+          {' '}and print the page to PDF (Orders page)
         </Text>
         <Text size="xs" c="dimmed">
-          2. Optionally, go to amazon.com/cpe/yourpayments/transactions and print to PDF (Transactions page)
+          2. Optionally, go to{' '}
+          <Anchor href="https://www.amazon.com/cpe/yourpayments/transactions" target="_blank" size="xs">
+            Amazon Payment Transactions
+          </Anchor>
+          {' '}and print to PDF (Transactions page)
         </Text>
         <Text size="xs" c="dimmed" mt={4}>
           Upload one or both — providing both gives the best matching accuracy.

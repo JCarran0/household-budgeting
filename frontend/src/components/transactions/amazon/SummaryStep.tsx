@@ -6,10 +6,11 @@ interface SummaryStepProps {
   result: AmazonApplyResponse;
   unmatchedCount: number;
   rulesCreated: number;
+  totalCostUsed: number;
   onClose: () => void;
 }
 
-export function SummaryStep({ result, unmatchedCount, rulesCreated, onClose }: SummaryStepProps) {
+export function SummaryStep({ result, unmatchedCount, rulesCreated, totalCostUsed, onClose }: SummaryStepProps) {
   return (
     <Stack gap="md">
       <Group gap="xs" mb="sm">
@@ -67,6 +68,10 @@ export function SummaryStep({ result, unmatchedCount, rulesCreated, onClose }: S
             </Text>
           </Group>
         </Paper>
+      )}
+
+      {totalCostUsed > 0 && (
+        <Text size="xs" c="dimmed" ta="center">AI cost: ~${totalCostUsed.toFixed(4)}</Text>
       )}
 
       <Button onClick={onClose} mt="md">

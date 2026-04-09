@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { mergePalette, buildTheme, defaultPalette } from '../theme';
 import type { ColorPalette, DeepPartial } from '../theme';
 import { api } from '../lib/api';
+import { useAuthStore } from '../stores/authStore';
 import { ThemeContext } from './ThemeContext';
 
 interface SavedPreferences {
@@ -19,12 +20,15 @@ export function ThemeProvider({ children }: ThemeProviderProps) {
   const [overrides, setOverrides] = useState<DeepPartial<ColorPalette>>({});
   const [colorScheme, setColorScheme] = useState<MantineColorScheme>('light');
   const initialLoadDone = useRef(false);
+  const isAuthenticated = useAuthStore(s => s.isAuthenticated);
 
-  // Load saved preferences on mount
+  // Load saved preferences only when authenticated (prevents 401 retry loop on login page)
   const { data: savedPrefs, isLoading } = useQuery({
     queryKey: ['themePreferences'],
     queryFn: () => api.getThemePreferences(),
     staleTime: Infinity,
+    enabled: isAuthenticated,
+    retry: false,
   });
 
   // Sync fetched preferences into state only on initial load

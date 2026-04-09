@@ -53,6 +53,7 @@ export function AmazonReceiptFlowModal({ opened, onClose }: AmazonReceiptFlowMod
   // Results
   const [applyResult, setApplyResult] = useState<AmazonApplyResponse | null>(null);
   const [rulesCreated, setRulesCreated] = useState(0);
+  const [totalCostUsed, setTotalCostUsed] = useState(0);
 
   // Accumulated actions from category + split review
   const [accumulatedActions, setAccumulatedActions] = useState<AmazonApplyAction[]>([]);
@@ -70,6 +71,7 @@ export function AmazonReceiptFlowModal({ opened, onClose }: AmazonReceiptFlowMod
       setSplitRecommendations([]);
       setApplyResult(null);
       setRulesCreated(0);
+      setTotalCostUsed(0);
       setAccumulatedActions([]);
     }
   }, [opened]);
@@ -81,6 +83,7 @@ export function AmazonReceiptFlowModal({ opened, onClose }: AmazonReceiptFlowMod
     try {
       const result = await api.uploadAmazonReceipts(files);
       setSessionId(result.sessionId);
+      setTotalCostUsed(prev => prev + (result.costUsed || 0));
 
       if (result.parsedOrders.length === 0 && result.parsedCharges.length === 0) {
         setError('No orders or charges found in the uploaded PDF(s). Please check the file format.');
@@ -118,6 +121,7 @@ export function AmazonReceiptFlowModal({ opened, onClose }: AmazonReceiptFlowMod
       const result = await api.categorizeAmazonMatches(sessionId, confirmedMatchIds);
       setRecommendations(result.recommendations);
       setSplitRecommendations(result.splitRecommendations);
+      setTotalCostUsed(prev => prev + (result.costUsed || 0));
 
       if (result.recommendations.length === 0 && result.splitRecommendations.length === 0) {
         // Nothing to categorize — go directly to summary
@@ -146,25 +150,7 @@ export function AmazonReceiptFlowModal({ opened, onClose }: AmazonReceiptFlowMod
     }
   }, [sessionId]);
 
-  // Step 3: Category review complete → check for splits
-  const handleCategoryComplete = useCallback((categoryActions: AmazonApplyAction[]) => {
-    setAccumulatedActions(categoryActions);
-
-    if (splitRecommendations.length > 0) {
-      setStep('review-splits');
-    } else {
-      // No splits — apply all and go to summary
-      applyAll(categoryActions);
-    }
-  }, [splitRecommendations]);
-
-  // Step 4: Split review complete → apply all
-  const handleSplitComplete = useCallback((splitActions: AmazonApplyAction[]) => {
-    const allActions = [...accumulatedActions, ...splitActions];
-    applyAll(allActions);
-  }, [accumulatedActions]);
-
-  // Apply all actions
+  // Apply all actions (defined first so callbacks below can reference it)
   const applyAll = useCallback(async (actions: AmazonApplyAction[]) => {
     if (!sessionId) return;
     setStep('applying');
@@ -188,6 +174,23 @@ export function AmazonReceiptFlowModal({ opened, onClose }: AmazonReceiptFlowMod
       setStep('error');
     }
   }, [sessionId]);
+
+  // Step 3: Category review complete → check for splits
+  const handleCategoryComplete = useCallback((categoryActions: AmazonApplyAction[]) => {
+    setAccumulatedActions(categoryActions);
+
+    if (splitRecommendations.length > 0) {
+      setStep('review-splits');
+    } else {
+      applyAll(categoryActions);
+    }
+  }, [splitRecommendations, applyAll]);
+
+  // Step 4: Split review complete → apply all
+  const handleSplitComplete = useCallback((splitActions: AmazonApplyAction[]) => {
+    const allActions = [...accumulatedActions, ...splitActions];
+    applyAll(allActions);
+  }, [accumulatedActions, applyAll]);
 
   const handleClose = () => {
     // Invalidate transaction queries to refresh the list
@@ -267,6 +270,7 @@ export function AmazonReceiptFlowModal({ opened, onClose }: AmazonReceiptFlowMod
           result={applyResult}
           unmatchedCount={unmatched.length}
           rulesCreated={rulesCreated}
+          totalCostUsed={totalCostUsed}
           onClose={handleClose}
         />
       )}

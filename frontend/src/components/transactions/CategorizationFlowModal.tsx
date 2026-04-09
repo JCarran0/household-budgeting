@@ -29,6 +29,7 @@ export function CategorizationFlowModal({ opened, onClose, uncategorizedCount }:
   const [ruleSuggestions, setRuleSuggestions] = useState<RuleSuggestion[]>([]);
   const [createdRulesCount, setCreatedRulesCount] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  const [costUsed, setCostUsed] = useState(0);
 
   // Track all categorizations for rule suggestion
   const [allCategorizations, setAllCategorizations] = useState<{ transactionId: string; categoryId: string }[]>([]);
@@ -47,12 +48,14 @@ export function CategorizationFlowModal({ opened, onClose, uncategorizedCount }:
       setSkippedCount(0);
       setAllCategorizations([]);
       setCreatedRulesCount(0);
+      setCostUsed(0);
       setError(null);
 
       api.classifyTransactions()
         .then(result => {
           setBuckets(result.buckets);
           setUnsureBucket(result.unsureBucket);
+          setCostUsed(result.costUsed);
           if (result.buckets.length === 0 && result.unsureBucket.transactions.length === 0) {
             setStep('summary');
           } else {
@@ -205,6 +208,7 @@ export function CategorizationFlowModal({ opened, onClose, uncategorizedCount }:
             <Text size="sm">{appliedCount} transaction{appliedCount !== 1 ? 's' : ''} categorized</Text>
             {skippedCount > 0 && <Text size="sm" c="dimmed">{skippedCount} skipped</Text>}
             {createdRulesCount > 0 && <Text size="sm" c="blue">{createdRulesCount} new auto-categorization rule{createdRulesCount !== 1 ? 's' : ''} created</Text>}
+            {costUsed > 0 && <Text size="xs" c="dimmed">AI cost: ~${costUsed.toFixed(4)}</Text>}
           </Stack>
           <Button onClick={handleClose}>Done</Button>
         </Stack>

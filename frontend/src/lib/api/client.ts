@@ -3,7 +3,7 @@ import axios, { type AxiosInstance, type AxiosError } from 'axios';
 // Use relative URL in production, localhost in development
 const API_BASE_URL = import.meta.env.PROD
   ? '/api/v1'  // In production, use relative path (nginx will proxy)
-  : 'http://localhost:3001/api/v1';
+  : 'http://localhost:3021/api/v1';
 
 export function createApiClient(): AxiosInstance {
   const client = axios.create({
