@@ -12,7 +12,7 @@ This plan captures the top 10 architectural refactoring targets identified throu
 |------|--------|--------|-------|
 | R10. Config Validation | **Done** | `5d0eea4` | Backend config module created and wired in. Frontend config deferred. |
 | R8. Repository Base Class | **Done** | `fbe27b1` | Generic `Repository<T>` created with 23 tests. Migration of services deferred. |
-| R4. Frontend Test Infra | Not started | | |
+| R4. Frontend Test Infra | **Dropped** | — | See decision note below. TypeScript compilation is the confidence gate for R4/R5. |
 | R2. Fix Circular Deps | **Done** | `034fab0` | Zero `as any` casts. CategoryDependencyChecker interface. BudgetService uses dataService directly. |
 | R1. Split TransactionService | **Done** | `eaa3391`, `8d07125` | 112 pre-refactor tests + filter engine extraction + Repository adoption. |
 | R3. Split ReportService | **Done** | `08811e9`, `7a90096` | 35 pre-refactor tests + helper extraction + Repository adoption. |
@@ -123,20 +123,13 @@ pages/Reports.tsx (~200 LOC — tab shell, shared filters, URL sync)
   └── hooks/useReportData.ts (~150 LOC — shared data fetching)
 ```
 
-**Pre-refactor test work:**
-1. **Assess:** Zero frontend tests. No test framework configured for frontend.
-2. **Gap fill:**
-   - **First:** Set up Vitest + React Testing Library in the frontend project
-   - Add integration-style tests for Reports page: renders each tab, displays data from mocked API responses, filter changes update displayed data
-   - Test critical data transformations: the `useMemo` blocks that process API responses into chart data — extract these into pure functions and unit test them
-   - Test URL parameter sync: changing filters updates URL, loading with URL params restores filter state
-3. **Confidence gate:** Each tab renders with test data. Data transformation functions have unit tests. URL sync round-trips correctly.
+**Confidence gate:** TypeScript compilation (`tsc --noEmit`) + manual smoke test of each tab. See decision note below for rationale.
 
 **Key files:**
 - `frontend/src/pages/Reports.tsx`
 - `frontend/src/hooks/usePersistedFilters.ts`
 
-**Estimated effort:** High (includes frontend test infrastructure setup)
+**Estimated effort:** Medium
 
 ---
 
@@ -154,20 +147,13 @@ pages/EnhancedTransactions.tsx (~250 LOC — layout, coordination)
   └── hooks/useTransactionList.ts (~200 LOC — data fetching + pagination)
 ```
 
-**Pre-refactor test work:**
-1. **Assess:** Zero frontend tests (same as R4).
-2. **Gap fill:** (Depends on R4 setting up test infrastructure)
-   - Test transaction list rendering: pagination, empty states, loading states
-   - Test filter interactions: applying filters updates the list, clearing resets
-   - Test bulk operations: select all, bulk categorize, bulk hide
-   - Test inline editing: category assignment, split transactions
-3. **Confidence gate:** Core user flows (list, filter, edit, bulk operate) have test coverage.
+**Confidence gate:** TypeScript compilation (`tsc --noEmit`) + manual smoke test. See decision note below.
 
 **Key files:**
 - `frontend/src/pages/EnhancedTransactions.tsx`
 - `frontend/src/components/transactions/TransactionEditModal.tsx`
 
-**Estimated effort:** Medium (assumes R4 already set up test infra)
+**Estimated effort:** Medium
 
 ---
 
@@ -276,19 +262,39 @@ Phase 2: Backend structural improvements ✅ COMPLETE
 └── R6.  Standardize error handling ✅
 
 Phase 3: Frontend decomposition (IN PROGRESS)
+├── R7.  Split API client ✅
 ├── R4.  Decompose Reports.tsx ← NEXT
-├── R5.  Decompose EnhancedTransactions.tsx
-└── R7.  Split API client ✅
+└── R5.  Decompose EnhancedTransactions.tsx
 
 Phase 4: Cleanup ✅ COMPLETE
 └── R9.  Move business logic out of routes ✅
 ```
 
 **Dependencies between items:**
-- R4 and R5 depend on frontend test infrastructure (part of R4)
-- R1 and R3 are easier after R2 (cleaner DI)
-- R6 is easier after R1 and R3 (fewer files to touch per service)
-- R9 is easier after R6 (new error classes can be used in routes)
+- R1 and R3 are easier after R2 (cleaner DI) ✅
+- R6 is easier after R1 and R3 (fewer files to touch per service) ✅
+- R9 is easier after R6 (new error classes can be used in routes) ✅
+- R4 and R5 have no remaining blockers (frontend test infra dropped — see decision note)
+
+---
+
+## Decision: Frontend Test Infrastructure (2026-04-08)
+
+The original plan required setting up Vitest + React Testing Library before decomposing R4/R5. After completing all backend items, we reassessed this requirement:
+
+**Why we're skipping frontend test infra for R4/R5:**
+- R4/R5 are pure *structural* refactors — extracting JSX into child components, passing props down. No logic changes.
+- TypeScript compilation is the real safety net for component decomposition. If props are wrong or imports break, `tsc` catches it.
+- React component tests for this kind of work tend to be brittle — they test rendering details that change during the refactor itself, creating churn.
+- Setting up Vitest + RTL + mocking React Query + Mantine is significant effort for tests that would mostly assert "component renders."
+- The backend test-first approach worked well because we were changing *logic* (filter pipelines, data access). Frontend decomposition changes *structure*, not behavior.
+
+**Confidence gate for R4/R5:**
+1. `tsc --noEmit` passes (catches type errors, missing props, broken imports)
+2. `vite build` succeeds (catches runtime import issues)
+3. Manual smoke test of each page/tab after extraction
+
+**Frontend tests remain valuable** for testing user interactions, form validation, and filter behavior — but that should be its own initiative, not coupled to structural decomposition.
 
 ---
 
@@ -296,10 +302,10 @@ Phase 4: Cleanup ✅ COMPLETE
 
 Each refactor item is complete when:
 
-1. Pre-refactor tests are written and passing
+1. Pre-refactor tests are written and passing (backend items) OR TypeScript compilation passes (frontend structural items)
 2. Structural changes are made
 3. All pre-existing tests still pass (zero regressions)
-4. New tests for the refactored structure pass
+4. New tests for the refactored structure pass (where applicable)
 5. No file exceeds 400 LOC (target state)
 6. `tsc --noEmit` passes with zero errors
 7. The change is shipped as an independent, reviewable PR
