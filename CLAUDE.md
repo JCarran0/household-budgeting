@@ -315,6 +315,21 @@ refactor(budget): simplify monthly calculation logic
 
 📚 **For detailed commit guidelines and examples, see [CONTRIBUTING.md](CONTRIBUTING.md)**
 
+### Pushing to Remote
+**IMPORTANT**: Every push to `main` triggers a GitHub Action that runs `standard-version`, which may create a `chore(release)` commit and push it back to `main`. This means the remote often has commits that don't exist locally.
+
+**Before every `git push`**, run:
+```bash
+git pull --rebase origin main
+```
+
+If the pull introduces a `chore(release)` commit, that's expected — just proceed with the push. If there are rebase conflicts with changelog/version files (`CHANGELOG.md`, `package.json` version field, `package-lock.json`), accept the remote (incoming) version since it was machine-generated:
+```bash
+git checkout --theirs CHANGELOG.md package.json package-lock.json
+git add CHANGELOG.md package.json package-lock.json
+git rebase --continue
+```
+
 ## Getting Started
 
 ### Prerequisites
