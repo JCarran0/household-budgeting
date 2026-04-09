@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+### [5.7.13](https://github.com/JCarran0/household-budgeting/compare/v5.7.12...v5.7.13) (2026-04-09)
+
+
+### Documentation
+
+* audit and update AI documentation suite ([35d71fe](https://github.com/JCarran0/household-budgeting/commit/35d71feaa11c97c8ca20c2c43214888b8bc29e3c)), closes [#3](https://github.com/JCarran0/household-budgeting/issues/3) [#4](https://github.com/JCarran0/household-budgeting/issues/4) [#5](https://github.com/JCarran0/household-budgeting/issues/5) [#6](https://github.com/JCarran0/household-budgeting/issues/6) [#10](https://github.com/JCarran0/household-budgeting/issues/10) [#11](https://github.com/JCarran0/household-budgeting/issues/11) [#12](https://github.com/JCarran0/household-budgeting/issues/12)
+
 ### [5.7.12](https://github.com/JCarran0/household-budgeting/compare/v5.7.11...v5.7.12) (2026-04-09)
 
 
