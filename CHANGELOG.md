@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+### [5.7.11](https://github.com/JCarran0/household-budgeting/compare/v5.7.10...v5.7.11) (2026-04-09)
+
+
+### Code Refactoring
+
+* **frontend:** decompose EnhancedTransactions.tsx into sections (R5) ([e995ed7](https://github.com/JCarran0/household-budgeting/commit/e995ed76b2549861662cf9e58c9fba69b4d0e5a7))
+
+
+### Documentation
+
+* update refactor plan with R5 completion — all 10 items done ([70d22d3](https://github.com/JCarran0/household-budgeting/commit/70d22d3fa4e78e663712a66755d5adac60d30694))
+
 ### [5.7.10](https://github.com/JCarran0/household-budgeting/compare/v5.7.9...v5.7.10) (2026-04-09)
 
 
