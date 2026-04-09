@@ -13,7 +13,7 @@ Building a personal budgeting app for 2 users with Plaid integration. Using Risk
 | **[AI-Architecture-Plan.md](docs/completed/AI-Architecture-Plan.md)** | Strategic planning & costs (historical) | Infrastructure cost analysis, architecture decisions from initial deployment |
 | **[AI-TESTING-STRATEGY.md](docs/AI-TESTING-STRATEGY.md)** | Test philosophy & examples | Writing tests, understanding test patterns, debugging test failures |
 | **[AI-USER-STORIES.md](docs/AI-USER-STORIES.md)** | Product requirements | Understanding features, acceptance criteria, user scenarios |
-| **[AI-TECHNICAL-DEBT.md](docs/AI-TECHNICAL-DEBT.md)** | Technical debt tracking | Reviewing known issues, planning improvements, understanding workarounds |
+| **[AI-TECHNICAL-DEBT.md](docs/completed/AI-TECHNICAL-DEBT.md)** | Technical debt tracking | Reviewing known issues, planning improvements, understanding workarounds |
 | **[AI-CHATBOT-BRD.md](docs/features/AI-CHATBOT-BRD.md)** | AI chatbot requirements | Chatbot feature requirements, security model, tool definitions |
 | **[AI-CHATBOT-PLAN.yaml](docs/features/AI-CHATBOT-PLAN.yaml)** | AI chatbot implementation plan | Phase-by-phase implementation with decisions log |
 | **[AI-CATEGORIZATION-BRD.md](docs/features/AI-CATEGORIZATION-BRD.md)** | AI categorization requirements | Bulk categorization feature requirements and UX flow |
@@ -647,7 +647,7 @@ Planned changes that haven't been implemented yet.
 | Mobile app development | Better user experience | TBD | React Native likely choice |
 
 ### Technical Debt
-**For comprehensive technical debt tracking, see [docs/AI-TECHNICAL-DEBT.md](docs/AI-TECHNICAL-DEBT.md)**
+**For comprehensive technical debt tracking, see [docs/completed/AI-TECHNICAL-DEBT.md](docs/completed/AI-TECHNICAL-DEBT.md)**
 
 Quick summary of high-priority items:
 - Reports page makes excessive parallel API requests (mitigated with nginx rate limit increase)

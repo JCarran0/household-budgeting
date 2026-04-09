@@ -342,11 +342,12 @@ Follow existing patterns — JSON file per user in `backend/data/`, e.g., `amazo
 
 | # | Requirement |
 |---|-------------|
-| REQ-006 | The system must match parsed orders against existing `CUSTOM_AMAZON` transactions using amount + date window matching. |
+| REQ-006 | The system must match parsed orders against all Amazon-merchant transactions (identified by merchant name pattern, regardless of current category) using amount + date window matching. |
 | REQ-007 | Each match must include a confidence level: high (exact amount, ±3 days), medium (exact amount, ±7 days), or low (ambiguous — multiple candidates). |
 | REQ-008 | Unmatched orders (no corresponding transaction found) must be displayed separately and clearly labeled. |
 | REQ-009 | The user must be able to manually link an unmatched order to any Amazon transaction, or dismiss it. |
-| REQ-010 | The system must not re-match transactions that have already been recategorized away from `CUSTOM_AMAZON` in a previous session. |
+| REQ-010 | The system must not re-suggest changes for transactions the user has previously skipped or rejected. User decisions are tracked in session data and persist across uploads. |
+| REQ-010a | For matched transactions that already have a non-Amazon category, the system must display them with their current category and flag them as "already categorized." The user can choose to recategorize but the system must not default to changing them. |
 
 ### 8.3 Categorization
 
@@ -368,7 +369,18 @@ Follow existing patterns — JSON file per user in `backend/data/`, e.g., `amazo
 | REQ-019 | Approved splits must be created via the existing split transaction API, preserving all existing split behavior (parent hidden, children inherit metadata). |
 | REQ-020 | If all items in a multi-item order map to the **same** category, the system should recommend a simple recategorization instead of a split. |
 
-### 8.5 Session Management
+### 8.5 Auto-Categorization Rule Suggestions
+
+| # | Requirement |
+|---|-------------|
+| REQ-020a | After all matches are processed, the system must identify recurring Amazon purchases (Subscribe & Save items, repeated products across sessions) and suggest auto-categorization rules. |
+| REQ-020b | Each rule suggestion must include: the detected pattern, target category, frequency observed, and example transactions that would match. |
+| REQ-020c | Since bank transaction descriptions for Amazon don't contain product names, rules must match on merchant pattern + amount range (e.g., "AMAZON MKTPL charge of $30–$32" → Pet Supplies for recurring bedding orders). |
+| REQ-020d | The system must not suggest rules that duplicate existing auto-categorization rules. |
+| REQ-020e | The user must be able to approve, edit, or dismiss each rule suggestion. Approved rules are created via the existing auto-categorize rules API. |
+| REQ-020f | Rule suggestions should leverage session history — if the same product has been matched across multiple upload sessions, that strengthens the rule suggestion confidence. |
+
+### 8.6 Session Management
 
 | # | Requirement |
 |---|-------------|
@@ -377,11 +389,11 @@ Follow existing patterns — JSON file per user in `backend/data/`, e.g., `amazo
 | REQ-023 | The user must be able to view a history of past receipt matching sessions and their outcomes. |
 | REQ-024 | The user must be able to delete session data if they no longer want it stored. |
 
-### 8.6 Summary and Feedback
+### 8.7 Summary and Feedback
 
 | # | Requirement |
 |---|-------------|
-| REQ-025 | After processing, show a summary: transactions recategorized, transactions split, items skipped, unmatched orders. |
+| REQ-025 | After processing, show a summary: transactions recategorized, transactions split, items skipped, unmatched orders, rules created. |
 | REQ-026 | The summary should include total dollar amount moved out of `CUSTOM_AMAZON` into specific categories — this is the core value metric the user cares about. |
 
 ---
@@ -456,7 +468,7 @@ Well within the $20/month shared cap. PDF vision parsing is the most expensive s
 | A-3 | Amount-based matching with a date window is reliable enough for V1. Our analysis of real data showed ~80% exact-match rate on amount alone. |
 | A-4 | Claude's vision capabilities can reliably extract structured data from Amazon's print-to-PDF format. This should be validated with a spike before full implementation. |
 | A-5 | Sonnet is the right model for both PDF parsing and categorization — fast enough, accurate enough, cost-effective. |
-| A-6 | Most Amazon transactions the user wants to categorize will be in `CUSTOM_AMAZON`. Transactions already categorized to other categories are excluded from matching. |
+| A-6 | The system matches all Amazon-merchant transactions regardless of current category. User decisions (skip/reject) are persisted to prevent recommendation churn. Most actionable value comes from `CUSTOM_AMAZON` transactions, but already-categorized transactions may benefit from split recommendations. |
 | A-7 | The existing split transaction infrastructure (API, UI patterns, parent/child model) is sufficient — this feature adds a new entry point for splits, not a new split mechanism. |
 
 ---
@@ -466,45 +478,53 @@ Well within the $20/month shared cap. PDF vision parsing is the most expensive s
 | Item | Rationale |
 |------|-----------|
 | Amazon API integration | Privacy concerns, API complexity, and account linking overhead. PDF upload is simpler and user-controlled. |
-| Amazon order history CSV import | Amazon offers CSV export via "Order History Reports" which has structured per-item data. Worth considering for V2 but adds a separate parsing path. |
+| Amazon order history CSV import | Amazon's "Order History Reports" CSV export feature no longer exists as of 2026. Not a viable path. |
 | Non-Amazon retailers | This BRD targets Amazon specifically due to its volume and opacity. The pattern could generalize to Walmart, Target, etc. in the future. |
 | Automatic PDF fetching | No browser extensions, email parsing, or Amazon account connections. User manually uploads. |
 | Per-item price lookup | The system estimates prices via Claude's knowledge, not by scraping Amazon product pages. |
 | Retroactive split price verification | If the user uploads a PDF months later, the system won't verify whether estimated prices were accurate. |
 | Real-time transaction matching | This is a batch process triggered by PDF upload, not a sync-time enhancement. |
+| Chatbot integration | This is a structured button-driven flow, not a conversational feature. The chatbot does not participate in upload, matching, or approval steps. |
 
 ---
 
-## 13. Open Questions
+## 13. Decisions Log
+
+| # | Decision | Resolution |
+|---|----------|------------|
+| D-1 | **UX model**: This is a structured, button-driven flow — not a chatbot feature. Separate entry point from AI Categorize, but shared downstream UI patterns (approve/edit/skip). The AI Categorizer may hint at this feature when it encounters Amazon transactions. | Resolved |
+| D-2 | **Matching scope**: Match against all Amazon-merchant transactions regardless of current category, not just `CUSTOM_AMAZON`. User decisions (skip/reject) are persisted to prevent churn on transactions already decided. | Resolved |
+| D-3 | **Amazon CSV export**: Amazon's "Order History Reports" feature no longer exists as of 2026. PDF upload is the only viable external data source. Removed from scope and future considerations. | Resolved |
+| D-4 | **Auto-categorization rules**: Yes — the system should detect recurring Amazon purchases (Subscribe & Save, repeated orders) and suggest auto-categorization rules after the review flow. | Resolved |
+
+## 14. Open Questions
 
 | # | Question | Status |
 |---|----------|--------|
-| 1 | Should the feature also surface in the AI Chatbot? E.g., "You have 15 Amazon transactions this month — want to upload your order history to categorize them?" | Open |
-| 2 | Should we support Amazon's "Order History Reports" CSV as an alternative input format? It has per-item prices and structured data, which would eliminate price estimation for splits. | Open |
-| 3 | What happens when the user has multiple Amazon accounts (e.g., personal + household)? Should sessions track which account the PDF came from? | Open |
-| 4 | Should the match review step allow the user to expand the matching scope beyond `CUSTOM_AMAZON`? Some Amazon charges may have been manually categorized incorrectly. | Open |
-| 5 | Is 20MB / 50 pages a reasonable file size limit? Need to validate with real-world PDFs — a full year of Amazon orders could be large. | Open |
-| 6 | Should the system suggest auto-categorization rules for recurring Amazon purchases (e.g., monthly Subscribe & Save items)? | Open |
+| 1 | What happens when the user has multiple Amazon accounts (e.g., personal + household)? Should sessions track which account the PDF came from? | Open |
+| 2 | Is 20MB / 50 pages a reasonable file size limit? Need to validate with real-world PDFs — a full year of Amazon orders could be large. | Open |
+| 3 | For auto-categorization rules on Amazon purchases: since bank descriptions don't contain product names, rules must match on merchant pattern + amount range. Is this too brittle for items with fluctuating prices? Should rules use a wider amount tolerance? | Open |
 
 ---
 
-## 14. Success Criteria
+## 15. Success Criteria
 
 - Users can recategorize 20+ Amazon transactions in under 5 minutes (vs. 30+ minutes of manual lookup and categorization).
 - Amount-based matching achieves ≥80% confirmed match rate against real user data.
 - Category recommendations achieve ≥75% user acceptance rate (approved without changes).
 - Split recommendations correctly identify multi-category orders ≥70% of the time.
 - The `CUSTOM_AMAZON` category balance decreases by ≥50% after a typical upload session.
+- Auto-categorization rules from Subscribe & Save detection reduce future uncategorized Amazon transactions.
 - Total cost per session stays under $0.50.
 - PDF parsing succeeds on ≥95% of standard Amazon print-to-PDF exports.
 
 ---
 
-## 15. Future Considerations
+## 16. Future Considerations
 
 **V2 enhancements to evaluate after V1 usage:**
-- **CSV import support** — Amazon's "Order History Reports" provides structured per-item data with actual prices, eliminating estimation
-- **Recurring purchase detection** — Flag Subscribe & Save items and suggest auto-categorization rules
 - **Cross-PDF correlation** — If both orders + transactions PDFs are uploaded, join on order number for highest accuracy matching
 - **Generalization** — Apply the same pattern to other high-volume opaque merchants (Walmart.com, Target.com, Costco.com)
-- **Chatbot integration** — Let the chatbot prompt users to upload Amazon receipts when it detects a high concentration of `CUSTOM_AMAZON` transactions
+- **AI Categorizer integration** — When the AI Categorizer encounters a batch of Amazon transactions, surface a contextual prompt: "15 of these are Amazon — upload your order history for better results?"
+- **Email receipt parsing** — Parse Amazon order confirmation emails as an alternative to PDF upload
+- **Smarter auto-rules** — Use item-level data across sessions to build richer auto-categorization rules (e.g., "Amazon charges around $31 every 6 weeks" → Pet Supplies, based on recurring Kaytee bedding orders)
