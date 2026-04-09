@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { format } from 'date-fns';
 import {
   Stack,
@@ -125,6 +125,19 @@ export function TransactionFilterBar({
   onResetFilters,
   onRefetch,
 }: TransactionFilterBarProps) {
+  const categoryMultiSelectRef = useRef<HTMLDivElement>(null);
+  const tagMultiSelectRef = useRef<HTMLDivElement>(null);
+
+  // Add title attributes to MultiSelect pills so truncated text shows full name on hover
+  useEffect(() => {
+    for (const ref of [categoryMultiSelectRef, tagMultiSelectRef]) {
+      if (!ref.current) continue;
+      ref.current.querySelectorAll<HTMLElement>('.mantine-Pill-label').forEach((label) => {
+        label.title = label.textContent || '';
+      });
+    }
+  }, [selectedCategories, selectedTags]);
+
   const [showCustomDatePicker, setShowCustomDatePicker] = useState(false);
   const [tempCustomDateRange, setTempCustomDateRange] = useState<[string | null, string | null]>([null, null]);
 
@@ -205,25 +218,29 @@ export function TransactionFilterBar({
           </Grid.Col>
 
           <Grid.Col span={{ base: 12, sm: 6, md: 4, lg: 2 }}>
-            <MultiSelect
-              placeholder="All Categories"
-              data={categoryOptions as { value: string; label: string }[]}
-              value={selectedCategories}
-              onChange={onCategoryChange}
-              clearable
-              searchable
-            />
+            <div ref={categoryMultiSelectRef}>
+              <MultiSelect
+                placeholder="All Categories"
+                data={categoryOptions as { value: string; label: string }[]}
+                value={selectedCategories}
+                onChange={onCategoryChange}
+                clearable
+                searchable
+              />
+            </div>
           </Grid.Col>
 
           <Grid.Col span={{ base: 12, sm: 6, md: 4, lg: 2 }}>
-            <MultiSelect
-              placeholder="All Tags"
-              data={availableTags}
-              value={selectedTags}
-              onChange={onTagChange}
-              clearable
-              searchable
-            />
+            <div ref={tagMultiSelectRef}>
+              <MultiSelect
+                placeholder="All Tags"
+                data={availableTags}
+                value={selectedTags}
+                onChange={onTagChange}
+                clearable
+                searchable
+              />
+            </div>
           </Grid.Col>
 
           <Grid.Col span={{ base: 12, sm: 6, md: 4, lg: 2 }}>
