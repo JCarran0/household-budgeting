@@ -5,6 +5,28 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.9.0](https://github.com/JCarran0/household-budgeting/compare/v5.8.0...v5.9.0) (2026-04-09)
+
+
+### Features
+
+* **transactions:** add account owner, original description, and location display ([2326b0d](https://github.com/JCarran0/household-budgeting/commit/2326b0df62e25f2b982ebf891c19a4d3c00dc185))
+
+
+### Bug Fixes
+
+* **ci:** add PLAID_ENCRYPTION_SECRET to deploy workflow .env templates ([ff6e284](https://github.com/JCarran0/household-budgeting/commit/ff6e2844d68f30d658afeaf08336b3badfbc8dc6))
+
+
+### Code Refactoring
+
+* **test:** remove unnecessary symlink copy/restore from test scripts ([5769db5](https://github.com/JCarran0/household-budgeting/commit/5769db5c990164369827293dd262b9beb183823e))
+
+
+### Documentation
+
+* add git push rebase guidance for CI changelog commits ([5bc3925](https://github.com/JCarran0/household-budgeting/commit/5bc39259f6a221d51426d459306d7d5b04ba2e04))
+
 ## [5.8.0](https://github.com/JCarran0/household-budgeting/compare/v5.7.15...v5.8.0) (2026-04-09)
 
 
