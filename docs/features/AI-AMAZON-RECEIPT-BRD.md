@@ -56,11 +56,11 @@ A "Match Amazon Receipts" button on the Transactions page, visible when Amazon-m
 
 ### 2.2 Step-by-Step Flow
 
-1. **Upload** — User clicks "Match Amazon Receipts" and uploads a PDF. The UI accepts either format:
+1. **Upload** — User clicks "Match Amazon Receipts" and uploads 1–2 PDFs. The UI accepts:
    - **Orders page PDF** (amazon.com/gp/css/order-history) — contains item names, images, order dates, totals, and order numbers
    - **Payments > Transactions PDF** (amazon.com/cpe/yourpayments/transactions) — contains charge dates, amounts, order numbers, and card identifiers
 
-   The system accepts one PDF per upload session. If the user has both, they can upload either — the orders PDF is preferred because it contains item descriptions needed for categorization.
+   The system accepts up to two PDFs per upload session — one of each type. If both are provided, the system cross-references them on order number for higher-quality matching (exact charge dates from the transactions PDF + item details from the orders PDF). If only one is uploaded, the orders PDF is preferred because it contains item descriptions needed for categorization.
 
 2. **Parse** — System sends the PDF to Claude with vision capabilities to extract structured data:
    - Order number, order date, charge amount
@@ -203,12 +203,12 @@ Matching is performed in tiers, stopping at the first confident match:
 
 ### 4.2 Cross-Reference Enhancement
 
-When both PDF types are available (future consideration), the system could cross-reference:
+When both PDF types are uploaded in the same session, the system cross-references them:
 - Transactions PDF provides `orderNumber` + exact `chargeDate` + `amount`
 - Orders PDF provides `orderNumber` + `items`
 - Join on `orderNumber` to get: exact charge date + item details → highest quality match
 
-For V1, single-PDF upload is sufficient. The orders PDF is the recommended upload because it contains item descriptions required for categorization.
+This is the recommended workflow when the user has both PDFs available. The orders PDF alone is sufficient for basic matching, but providing both significantly improves match confidence by combining exact charge dates with item-level detail.
 
 ---
 
@@ -384,9 +384,9 @@ Follow existing patterns — JSON file per user in `backend/data/`, e.g., `amazo
 
 | # | Requirement |
 |---|-------------|
-| REQ-021 | Parsed order data and match results must be persisted per-user so the user can process matches incrementally across multiple sessions. |
+| REQ-021 | Parsed order data and match results must be persisted per-user for deduplication across uploads. The active review flow is single-session (complete or start over — no incremental resumption). |
 | REQ-022 | On subsequent uploads, the system must detect previously processed orders (by order number) and skip them, showing only new matches. |
-| REQ-023 | The user must be able to view a history of past receipt matching sessions and their outcomes. |
+| REQ-023 | ~~The user must be able to view a history of past receipt matching sessions and their outcomes.~~ **Deferred** — session data persists for deduplication but no history browsing UI in V1. |
 | REQ-024 | The user must be able to delete session data if they no longer want it stored. |
 
 ### 8.7 Summary and Feedback
@@ -404,10 +404,12 @@ Follow existing patterns — JSON file per user in `backend/data/`, e.g., `amazo
 
 **POST /api/v1/amazon-receipts/upload**
 - Auth: required
-- Body: multipart form data with PDF file
-- Response: `{ sessionId: string, pdfType: 'orders' | 'transactions', parsedOrders: ParsedAmazonOrder[], costUsed: number }`
-- Validates file type, size, page count
-- Parses PDF via Claude vision API
+- Body: multipart form data with 1–2 PDF files (field name: `pdfs`)
+- Response: `{ sessionId: string, pdfTypes: ('orders' | 'transactions')[], parsedOrders: ParsedAmazonOrder[], parsedCharges: ParsedAmazonCharge[], costUsed: number }`
+- Validates file type, size, page count per file
+- Auto-detects PDF type (orders vs. transactions) per file
+- Parses each PDF via Claude vision API
+- Cross-references on order number when both types are provided
 - Persists parsed results to session storage
 
 **POST /api/v1/amazon-receipts/:sessionId/match**
@@ -496,6 +498,11 @@ Well within the $20/month shared cap. PDF vision parsing is the most expensive s
 | D-2 | **Matching scope**: Match against all Amazon-merchant transactions regardless of current category, not just `CUSTOM_AMAZON`. User decisions (skip/reject) are persisted to prevent churn on transactions already decided. | Resolved |
 | D-3 | **Amazon CSV export**: Amazon's "Order History Reports" feature no longer exists as of 2026. PDF upload is the only viable external data source. Removed from scope and future considerations. | Resolved |
 | D-4 | **Auto-categorization rules**: Yes — the system should detect recurring Amazon purchases (Subscribe & Save, repeated orders) and suggest auto-categorization rules after the review flow. | Resolved |
+| D-5 | **Multi-file upload**: Accept 1–2 PDFs per session (one orders, one transactions). When both provided, cross-reference on order number for highest-quality matching. Pulled from §4.2 future consideration into V1. | Resolved |
+| D-6 | **Session resumability**: Single-session flow — complete the review or start over. No incremental resumption. Session data persists for deduplication only. | Resolved |
+| D-7 | **Session history UI**: Deferred. No history browsing UI in V1. Session data persists for deduplication but is not user-visible. | Resolved |
+| D-8 | **Auto-rule amount matching**: Deferred. V1 auto-categorization rules use existing pattern-only format (merchant name matching). Amount-range matching requires rule infrastructure changes and is low-value without more data. | Resolved |
+| D-9 | **File upload infrastructure**: Multer with in-memory buffer. PDFs are held in memory during parsing, never written to disk or S3. Parsed results are persisted; raw PDFs are discarded. | Resolved |
 
 ## 14. Open Questions
 
@@ -523,7 +530,7 @@ Well within the $20/month shared cap. PDF vision parsing is the most expensive s
 ## 16. Future Considerations
 
 **V2 enhancements to evaluate after V1 usage:**
-- **Cross-PDF correlation** — If both orders + transactions PDFs are uploaded, join on order number for highest accuracy matching
+- ~~**Cross-PDF correlation**~~ — **Pulled into V1** (D-5). Upload 1–2 PDFs per session with automatic cross-referencing
 - **Generalization** — Apply the same pattern to other high-volume opaque merchants (Walmart.com, Target.com, Costco.com)
 - **AI Categorizer integration** — When the AI Categorizer encounters a batch of Amazon transactions, surface a contextual prompt: "15 of these are Amazon — upload your order history for better results?"
 - **Email receipt parsing** — Parse Amazon order confirmation emails as an alternative to PDF upload

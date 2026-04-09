@@ -483,6 +483,164 @@ export interface SuggestRulesResponse {
   suggestions: RuleSuggestion[];
 }
 
+// =============================================================================
+// Amazon Receipt Matching Types
+// =============================================================================
+
+// --- PDF Parsing Types ---
+
+/** Extracted from Amazon Orders page PDF */
+export interface ParsedAmazonOrder {
+  orderNumber: string;
+  orderDate: string; // ISO date
+  totalAmount: number;
+  items: ParsedAmazonItem[];
+}
+
+export interface ParsedAmazonItem {
+  name: string;
+  estimatedPrice: number | null; // null if not available (multi-item orders)
+  quantity: number;
+}
+
+/** Extracted from Amazon Payments > Transactions PDF */
+export interface ParsedAmazonCharge {
+  orderNumber: string;
+  chargeDate: string; // ISO date
+  amount: number;
+  cardLastFour: string;
+  merchantLabel: string;
+}
+
+// --- Matching & Session Types ---
+
+export type AmazonMatchConfidence = 'high' | 'medium' | 'low' | 'manual';
+export type AmazonMatchStatus = 'pending' | 'categorized' | 'split' | 'skipped';
+export type AmazonSessionStatus = 'parsed' | 'matching' | 'reviewing' | 'completed';
+
+export interface AmazonMatchItem {
+  name: string;
+  estimatedPrice: number | null;
+  suggestedCategoryId: string | null;
+  appliedCategoryId: string | null;
+  confidence: number; // 0.0–1.0
+  isEstimatedPrice: boolean;
+}
+
+export interface AmazonTransactionMatch {
+  id: string; // Generated match ID
+  orderNumber: string;
+  transactionId: string;
+  matchConfidence: AmazonMatchConfidence;
+  items: AmazonMatchItem[];
+  splitTransactionIds: string[]; // Populated after split applied
+  status: AmazonMatchStatus;
+}
+
+export interface AmazonReceiptSession {
+  id: string;
+  userId: string;
+  uploadedAt: string; // ISO timestamp
+  pdfTypes: ('orders' | 'transactions')[];
+  parsedOrders: ParsedAmazonOrder[];
+  parsedCharges: ParsedAmazonCharge[];
+  matches: AmazonTransactionMatch[];
+  status: AmazonSessionStatus;
+}
+
+// --- API Request/Response Types ---
+
+export interface AmazonReceiptUploadResponse {
+  sessionId: string;
+  pdfTypes: ('orders' | 'transactions')[];
+  parsedOrders: ParsedAmazonOrder[];
+  parsedCharges: ParsedAmazonCharge[];
+  costUsed: number;
+}
+
+export interface AmazonReceiptMatchResponse {
+  matches: AmazonTransactionMatch[];
+  unmatched: ParsedAmazonOrder[];
+  ambiguous: AmbiguousAmazonMatch[];
+}
+
+export interface AmbiguousAmazonMatch {
+  order: ParsedAmazonOrder;
+  candidates: {
+    transactionId: string;
+    date: string;
+    amount: number;
+    description: string;
+  }[];
+}
+
+export interface AmazonCategorizationResponse {
+  recommendations: AmazonCategoryRecommendation[];
+  splitRecommendations: AmazonSplitRecommendation[];
+  costUsed: number;
+}
+
+export interface AmazonCategoryRecommendation {
+  matchId: string;
+  transactionId: string;
+  suggestedCategoryId: string;
+  categoryName: string;
+  confidence: number;
+  reasoning: string;
+  itemName: string;
+  isAlreadyCategorized: boolean;
+  currentCategoryId: string | null;
+}
+
+export interface AmazonSplitRecommendation {
+  matchId: string;
+  transactionId: string;
+  originalAmount: number;
+  splits: {
+    itemName: string;
+    estimatedAmount: number;
+    suggestedCategoryId: string;
+    categoryName: string;
+    confidence: number;
+    isEstimatedPrice: boolean;
+  }[];
+  totalMatchesOriginal: boolean;
+}
+
+export interface AmazonApplyAction {
+  matchId: string;
+  type: 'categorize' | 'split' | 'skip';
+  categoryId?: string; // For simple recategorization
+  splits?: {
+    // For split application
+    amount: number;
+    categoryId: string;
+    description?: string;
+  }[];
+}
+
+export interface AmazonApplyResponse {
+  applied: number;
+  splits: number;
+  skipped: number;
+  rulesCreated: number;
+  summary: {
+    totalDollarsRecategorized: number;
+    categoriesUpdated: string[];
+  };
+}
+
+export interface AmazonResolveAmbiguousRequest {
+  resolutions: {
+    orderNumber: string;
+    transactionId: string;
+  }[];
+}
+
+export interface AmazonCategorizeRequest {
+  matchIds: string[];
+}
+
 // Manual Account Types
 export type ManualAccountCategory =
   | 'real_estate'

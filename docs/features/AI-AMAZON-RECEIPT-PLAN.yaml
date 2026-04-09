@@ -1,0 +1,1150 @@
+# =============================================================================
+# Amazon Receipt Matching — Implementation Plan
+# =============================================================================
+# BRD: docs/features/AI-AMAZON-RECEIPT-BRD.md
+# Status: Not Started
+# Last Updated: 2026-04-08
+# =============================================================================
+
+overview:
+  description: |
+    Implementation plan for the Amazon Receipt Matching feature. Users upload
+    1–2 Amazon PDFs (orders page and/or payments transactions page), the system
+    parses them via Claude vision, matches parsed orders against Amazon-merchant
+    bank transactions, recommends categories (with splits for multi-item orders),
+    and suggests auto-categorization rules for recurring purchases.
+
+    Shares cost tracking infrastructure with the chatbot and AI categorizer.
+    Separate route namespace (/api/v1/amazon-receipts/) since this is a
+    structured upload-driven flow, not a chatbot feature.
+
+  key_files:
+    brd: docs/features/AI-AMAZON-RECEIPT-BRD.md
+    shared_types: shared/types/index.ts
+    chatbot_cost_tracker: backend/src/services/chatbotCostTracker.ts
+    categorization_service: backend/src/services/categorizationService.ts
+    transaction_service: backend/src/services/transactionService.ts
+    autocategorize_service: backend/src/services/autoCategorizeService.ts
+    split_route: backend/src/routes/transactions.ts
+    transactions_page: frontend/src/pages/EnhancedTransactions.tsx
+    categorization_flow_modal: frontend/src/components/transactions/CategorizationFlowModal.tsx
+    api_client_chatbot: frontend/src/lib/api/chatbot.ts
+
+# =============================================================================
+# DECISIONS LOG
+# =============================================================================
+decisions:
+  - id: D1
+    date: 2026-04-08
+    decision: Multi-file upload — accept 1–2 PDFs per session (one orders, one transactions)
+    rationale: |
+      The orders PDF has item names but order dates (which drift from bank posting
+      dates). The transactions PDF has exact charge dates and card last-4 digits.
+      Cross-referencing on order number when both are provided gives dramatically
+      better matching — exact charge dates + item-level detail. This was originally
+      a V2 consideration (BRD §4.2) but is low incremental complexity and high
+      value. Pulled into V1 per user feedback.
+
+  - id: D2
+    date: 2026-04-08
+    decision: Multer with in-memory buffer for PDF upload — no disk, no S3
+    rationale: |
+      PDFs are held in memory during parsing (20MB max per file), sent to Claude,
+      and the buffer is garbage-collected. Parsed results are what we persist.
+      This fully satisfies SEC-001 (no raw PDF persistence) without introducing
+      S3 buckets, TTLs, or temp file cleanup. The codebase has zero multipart
+      handling today, so this introduces multer as a new dependency.
+
+  - id: D3
+    date: 2026-04-08
+    decision: Separate route namespace /api/v1/amazon-receipts/
+    rationale: |
+      The BRD explicitly says this is not a chatbot feature. Separate routes keep
+      the chatbot router focused. The service still shares ChatbotCostTracker as
+      a dependency — cost tracking is infrastructure, not a chatbot concern.
+
+  - id: D4
+    date: 2026-04-08
+    decision: Use Sonnet for both PDF parsing and categorization
+    rationale: |
+      Consistent with the AI Categorizer (D1 from categorization plan). Sonnet
+      has strong vision capabilities for PDF extraction and good category mapping.
+      Haiku may miss nuance in product descriptions; Opus is overkill. Single
+      model simplifies cost estimation and prompt tuning.
+
+  - id: D5
+    date: 2026-04-08
+    decision: Single-session review flow — no incremental resumption
+    rationale: |
+      Full resumability (save state at every step, reload from any point) adds
+      significant complexity for low value. The review flow is designed to be
+      completable in one sitting (~5 min). Session data persists for deduplication
+      across uploads, but if the user abandons mid-review, they start the review
+      over on next upload (already-applied changes are preserved).
+
+  - id: D6
+    date: 2026-04-08
+    decision: No session history UI in V1
+    rationale: |
+      Session data persists for deduplication (REQ-022) but is not exposed to
+      the user via a browsing UI. The value is in the categorization result, not
+      in reviewing past sessions. Deferred indefinitely unless user demand emerges.
+
+  - id: D7
+    date: 2026-04-08
+    decision: Auto-categorization rules use existing pattern-only format
+    rationale: |
+      The BRD proposed amount-range matching for Amazon rules (REQ-020c), but
+      this requires extending the auto-categorize rule infrastructure and is
+      brittle for items with fluctuating prices. V1 rules use merchant name
+      pattern matching only (existing infrastructure). Amount-range matching
+      deferred pending more data on actual rule effectiveness.
+
+  - id: D8
+    date: 2026-04-08
+    decision: New AmazonReceiptService class, separate from CategorizationService
+    rationale: |
+      Different concerns: PDF parsing (vision API), order-to-transaction matching
+      (algorithmic, no AI), and item categorization (text-based AI). The matching
+      logic is substantial and domain-specific. Shares cost tracker and Anthropic
+      client but has its own service class. May reuse categorization prompt
+      patterns for the item classification step.
+
+  - id: D9
+    date: 2026-04-08
+    decision: Reuse existing split transaction API for multi-item order splits
+    rationale: |
+      The existing POST /transactions/:id/split endpoint handles parent/child
+      creation, amount validation, and metadata inheritance. This feature adds
+      a new entry point for splits (AI-recommended), not a new split mechanism.
+      The frontend split review UI is new, but the write path is existing.
+
+# =============================================================================
+# PHASE 1: Shared Types & Interfaces
+# =============================================================================
+phase_1_types:
+  status: completed
+  description: |
+    Define all types for PDF parsing, matching, categorization, split
+    recommendations, and session persistence in shared/types/index.ts.
+
+  tasks:
+    - id: "1.1"
+      task: Define PDF parsing types in shared/types/index.ts
+      status: completed
+      details: |
+        // Extracted from Amazon Orders page PDF
+        interface ParsedAmazonOrder {
+          orderNumber: string;
+          orderDate: string;             // ISO date
+          totalAmount: number;
+          items: ParsedAmazonItem[];
+        }
+
+        interface ParsedAmazonItem {
+          name: string;
+          estimatedPrice: number | null;  // null if not available
+          quantity: number;
+        }
+
+        // Extracted from Amazon Payments > Transactions PDF
+        interface ParsedAmazonCharge {
+          orderNumber: string;
+          chargeDate: string;             // ISO date
+          amount: number;
+          cardLastFour: string;
+          merchantLabel: string;
+        }
+
+    - id: "1.2"
+      task: Define matching and session types in shared/types/index.ts
+      status: completed
+      details: |
+        type AmazonMatchConfidence = 'high' | 'medium' | 'low' | 'manual';
+        type AmazonMatchStatus = 'pending' | 'categorized' | 'split' | 'skipped';
+        type AmazonSessionStatus = 'parsed' | 'matching' | 'reviewing' | 'completed';
+
+        interface AmazonTransactionMatch {
+          id: string;                     // Generated match ID
+          orderNumber: string;
+          transactionId: string;
+          matchConfidence: AmazonMatchConfidence;
+          items: AmazonMatchItem[];
+          splitTransactionIds: string[];  // Populated after split applied
+          status: AmazonMatchStatus;
+        }
+
+        interface AmazonMatchItem {
+          name: string;
+          estimatedPrice: number | null;
+          suggestedCategoryId: string | null;
+          appliedCategoryId: string | null;
+          confidence: number;             // 0.0–1.0
+          isEstimatedPrice: boolean;
+        }
+
+        interface AmazonReceiptSession {
+          id: string;
+          userId: string;
+          uploadedAt: string;
+          pdfTypes: ('orders' | 'transactions')[];
+          parsedOrders: ParsedAmazonOrder[];
+          parsedCharges: ParsedAmazonCharge[];
+          matches: AmazonTransactionMatch[];
+          status: AmazonSessionStatus;
+        }
+
+    - id: "1.3"
+      task: Define API request/response types in shared/types/index.ts
+      status: completed
+      details: |
+        // Upload response
+        interface AmazonReceiptUploadResponse {
+          sessionId: string;
+          pdfTypes: ('orders' | 'transactions')[];
+          parsedOrders: ParsedAmazonOrder[];
+          parsedCharges: ParsedAmazonCharge[];
+          costUsed: number;
+        }
+
+        // Match response
+        interface AmazonReceiptMatchResponse {
+          matches: AmazonTransactionMatch[];
+          unmatched: ParsedAmazonOrder[];
+          ambiguous: AmbiguousAmazonMatch[];
+        }
+
+        interface AmbiguousAmazonMatch {
+          order: ParsedAmazonOrder;
+          candidates: { transactionId: string; date: string; amount: number; description: string }[];
+        }
+
+        // Categorize response
+        interface AmazonCategorizationResponse {
+          recommendations: AmazonCategoryRecommendation[];
+          splitRecommendations: AmazonSplitRecommendation[];
+          costUsed: number;
+        }
+
+        interface AmazonCategoryRecommendation {
+          matchId: string;
+          transactionId: string;
+          suggestedCategoryId: string;
+          categoryName: string;
+          confidence: number;
+          reasoning: string;
+          itemName: string;
+          isAlreadyCategorized: boolean;
+          currentCategoryId: string | null;
+        }
+
+        interface AmazonSplitRecommendation {
+          matchId: string;
+          transactionId: string;
+          originalAmount: number;
+          splits: {
+            itemName: string;
+            estimatedAmount: number;
+            suggestedCategoryId: string;
+            categoryName: string;
+            confidence: number;
+            isEstimatedPrice: boolean;
+          }[];
+          totalMatchesOriginal: boolean;
+        }
+
+        // Apply request
+        interface AmazonApplyAction {
+          matchId: string;
+          type: 'categorize' | 'split' | 'skip';
+          categoryId?: string;          // For simple recategorization
+          splits?: {                    // For split application
+            amount: number;
+            categoryId: string;
+            description?: string;
+          }[];
+        }
+
+        // Apply response
+        interface AmazonApplyResponse {
+          applied: number;
+          splits: number;
+          skipped: number;
+          rulesCreated: number;
+          summary: {
+            totalDollarsRecategorized: number;
+            categoriesUpdated: string[];
+          };
+        }
+
+# =============================================================================
+# PHASE 2: Backend — PDF Upload Infrastructure
+# =============================================================================
+phase_2_upload:
+  status: completed
+  description: |
+    Introduce multer for multipart form-data handling. Create the upload
+    endpoint that accepts 1–2 PDFs, validates them, and passes them to
+    the parsing service.
+
+  tasks:
+    - id: "2.1"
+      task: Install multer and @types/multer
+      status: completed
+      details: |
+        cd backend && npm install multer && npm install -D @types/multer
+
+        Multer configured with:
+        - storage: memoryStorage() (in-memory buffer, no disk)
+        - limits: { fileSize: 20 * 1024 * 1024 } (20MB per file)
+        - fileFilter: accept only application/pdf MIME type
+        - maxCount: 2 (up to 2 files)
+
+    - id: "2.2"
+      task: Create upload middleware in backend/src/middleware/pdfUpload.ts
+      status: completed
+      details: |
+        Export a configured multer instance:
+
+        import multer from 'multer';
+
+        const PDF_MAGIC_BYTES = Buffer.from('%PDF-');
+
+        const pdfUpload = multer({
+          storage: multer.memoryStorage(),
+          limits: { fileSize: 20 * 1024 * 1024 },
+          fileFilter: (_req, file, cb) => {
+            if (file.mimetype !== 'application/pdf') {
+              cb(new Error('Only PDF files are accepted'));
+              return;
+            }
+            cb(null, true);
+          },
+        });
+
+        export const uploadPdfs = pdfUpload.array('pdfs', 2);
+
+        // SECURITY: Post-upload magic byte validation (SEC-007 hardening)
+        // MIME type from the Content-Type header is client-controlled and
+        // trivially spoofable. After multer accepts the files, validate the
+        // actual file content starts with the PDF magic bytes (%PDF-).
+        export function validatePdfMagicBytes(
+          files: Express.Multer.File[]
+        ): void {
+          for (const file of files) {
+            if (!file.buffer.subarray(0, 5).equals(PDF_MAGIC_BYTES)) {
+              throw new ValidationError(
+                'Uploaded file is not a valid PDF (invalid file header)'
+              );
+            }
+          }
+        }
+
+        Call validatePdfMagicBytes() in the route handler immediately after
+        multer middleware, before passing buffers to the parsing service.
+
+        Also add page count validation post-upload (use pdf-parse or similar
+        lightweight library to check page count ≤ 50 per file without full
+        content extraction). Or defer page count validation to the Claude
+        parsing step — if the PDF is too long, Claude's response will indicate
+        truncation. Prefer the simpler approach: validate file size and MIME
+        type at the multer level, and let Claude handle content limits.
+
+    - id: "2.3"
+      task: Create upload route in backend/src/routes/amazonReceipts.ts
+      status: completed
+      details: |
+        POST /api/v1/amazon-receipts/upload
+        - Auth middleware (existing authenticateToken)
+        - Rate limiting: 3 requests per minute per user (lower than chatbot
+          since each upload is expensive)
+        - Multer middleware (uploadPdfs)
+        - SECURITY: Call validatePdfMagicBytes(req.files) immediately after
+          multer — rejects spoofed MIME types with invalid file content
+        - SECURITY: Confirm JWT is sent via Authorization header, not cookies,
+          for this endpoint. Multipart form uploads are a classic CSRF vector.
+          If auth ever moves to cookies, add CSRF token to the upload form.
+        - Validate at least 1 file uploaded, max 2
+        - Validate no duplicate PDF types (can't upload 2 orders PDFs)
+        - Pass file buffers to AmazonReceiptService.parseAndCreateSession()
+        - Return AmazonReceiptUploadResponse
+        - Catch MulterError specifically and return 400 with user-friendly
+          messages (e.g., "File too large", "Too many files") instead of
+          leaking internal error details via generic 500
+
+    - id: "2.4"
+      task: Register amazon-receipts routes in backend/src/routes/amazonReceipts.ts (mounted in app.ts)
+      status: completed
+      details: |
+        Import and mount: router.use('/amazon-receipts', amazonReceiptRoutes);
+        Following the same pattern as chatbot, transactions, etc.
+
+# =============================================================================
+# PHASE 3: Backend — PDF Parsing Service
+# =============================================================================
+phase_3_parsing:
+  status: not_started
+  description: |
+    Core service that sends PDFs to Claude's vision API and extracts
+    structured order/charge data. Handles both PDF types with type
+    auto-detection. Strips sensitive data (card numbers) before persisting.
+
+  tasks:
+    - id: "3.1"
+      task: Create AmazonReceiptService in backend/src/services/amazonReceiptService.ts
+      status: not_started
+      details: |
+        Constructor receives:
+        - dataService: DataService (for session persistence)
+        - costTracker: ChatbotCostTracker (shared cost tracking)
+        - anthropicApiKey: string
+
+        Storage key pattern: amazon_receipts_{userId}
+        Stores: AmazonReceiptSession[] (array of all sessions per user)
+
+        SECURITY — Session ownership (IDOR prevention, SEC-003):
+        All methods that load a session MUST verify ownership. Create a
+        private helper used by every public method:
+
+        private async loadOwnedSession(
+          userId: string, sessionId: string
+        ): Promise<AmazonReceiptSession> {
+          const sessions = await this.loadSessions(userId);
+          const session = sessions.find(s => s.id === sessionId);
+          if (!session) throw new NotFoundError('Session not found');
+          if (session.userId !== userId) {
+            throw new ForbiddenError('Access denied');
+          }
+          return session;
+        }
+
+        Every public method (matchOrders, categorizeMatches, applyActions,
+        suggestRules, deleteSession) must call loadOwnedSession() — never
+        load sessions by ID alone without the userId check.
+
+        SECURITY — Session data pruning:
+        When loading existing sessions to append a new one (step 7), prune
+        stale sessions to prevent unbounded storage growth:
+        - Keep at most 20 sessions per user
+        - For sessions with status 'completed' older than 90 days, strip
+          parsedOrders down to { orderNumber, totalAmount } only (enough
+          for deduplication, much smaller than full item data)
+        - Delete sessions with status 'parsed' (abandoned) older than 7 days
+
+        Core method: parseAndCreateSession(userId, pdfBuffers: Buffer[])
+        1. Check cost cap via costTracker.checkBudget()
+        2. For each PDF buffer:
+           a. Send to Claude vision API with type-detection prompt
+           b. Claude returns: detected type + structured extracted data
+        3. SECURITY — Validate Claude's parsed output with Zod before
+           persisting. Claude output is untrusted input (the PDF could
+           contain adversarial text that manipulates extraction). Validate:
+           - orderNumber: string, max 30 chars, alphanumeric + hyphens
+           - dates: valid ISO date strings, within reasonable range
+             (not before 2020, not in the future beyond +7 days)
+           - amounts: positive numbers, max $99,999 (sanity bound)
+           - items array: max 50 items per order
+           - item names: string, max 500 chars
+           - cardLastFour: exactly 4 digits (strip anything else)
+           Reject individual orders that fail validation (log warning),
+           continue processing valid ones. Do not fail the entire session
+           for one malformed order.
+        4. Validate no duplicate types across uploaded files
+        5. If both types provided, cross-reference on orderNumber:
+           - Enrich ParsedAmazonOrder with chargeDate from matching ParsedAmazonCharge
+           - Enrich ParsedAmazonCharge with items from matching ParsedAmazonOrder
+        6. Strip card numbers beyond last-4 from any parsed data
+           SECURITY: This must happen immediately after step 3 validation,
+           before any logging or persistence — not as a separate cleanup step.
+           Wrap in a dedicated sanitizeParsedData() function.
+        7. Create AmazonReceiptSession with status 'parsed'
+        8. Load existing sessions, deduplicate by orderNumber, prune stale
+           sessions (see pruning rules above), append new session
+        9. Persist via dataService.saveData()
+        10. Record cost via costTracker.recordUsage()
+        11. Return AmazonReceiptUploadResponse
+
+    - id: "3.2"
+      task: Create PDF parsing prompts in backend/src/services/amazonReceiptPrompt.ts
+      status: not_started
+      details: |
+        Two prompt variants, but Claude auto-detects which to use:
+
+        System prompt:
+        "You are a document parser extracting structured data from Amazon PDFs.
+         The user has uploaded a PDF from Amazon. Determine if it is an Orders
+         page or a Payments > Transactions page, then extract the relevant data.
+
+         For Orders pages: extract order numbers, order dates, totals, and
+         item names with quantities. If per-item prices are visible, include them.
+
+         For Transactions pages: extract charge dates, amounts, order numbers,
+         card last-4 digits, and merchant labels.
+
+         Return structured JSON using the provided tool."
+
+        Tool definition: extract_amazon_data
+        - input_schema: the PDF document content block
+        - output_schema: {
+            pdfType: { type: 'string', enum: ['orders', 'transactions'] },
+            orders?: ParsedAmazonOrder[],
+            charges?: ParsedAmazonCharge[]
+          }
+
+        SECURITY — Prompt injection defense (SEC-002 hardening):
+        The tool output schema should use strict constraints to limit what
+        Claude can return, reducing the surface for prompt injection via
+        adversarial text embedded in Amazon product descriptions:
+        - pdfType: strict enum ['orders', 'transactions']
+        - orderNumber: { type: 'string', pattern: '^[A-Z0-9-]{3,30}$' }
+        - amounts/prices: { type: 'number', minimum: 0, maximum: 99999 }
+        - cardLastFour: { type: 'string', pattern: '^[0-9]{4}$' }
+        - dates: { type: 'string', format: 'date' }
+        - item names: { type: 'string', maxLength: 500 }
+        - items array: { maxItems: 50 }
+        - orders/charges arrays: { maxItems: 500 }
+        These constraints work in tandem with the Zod validation in step 3
+        of task 3.1 — the tool schema is the first line of defense (Claude
+        is guided to produce conformant output), Zod is the second line
+        (rejects anything that slips through).
+
+        SEC-002 compliance: The PDF content is sent as a document content block
+        (base64-encoded PDF), not interpolated into the prompt text. This is
+        consistent with the chatbot's prompt injection defense.
+
+    - id: "3.3"
+      task: Register AmazonReceiptService in backend/src/services/index.ts
+      status: not_started
+      details: |
+        Instantiate with dataService, chatbotCostTracker, and ANTHROPIC_API_KEY.
+        Export as amazonReceiptService singleton.
+        Follow the same singleton pattern as categorizationService.
+
+# =============================================================================
+# PHASE 4: Backend — Transaction Matching Algorithm
+# =============================================================================
+phase_4_matching:
+  status: not_started
+  description: |
+    Pure algorithmic matching — no AI involved. Matches parsed Amazon orders
+    against bank transactions by amount and date. Implements the tiered
+    matching strategy from BRD §4.1.
+
+  tasks:
+    - id: "4.1"
+      task: Add matching method to AmazonReceiptService
+      status: not_started
+      details: |
+        Method: matchOrders(userId, sessionId)
+        1. Load session via loadOwnedSession(userId, sessionId)
+        2. Fetch all Amazon-merchant transactions for the user:
+           - Query transactionService for transactions where merchantName or
+             name matches Amazon patterns: /amazon|amzn|kindle svcs/i
+           - No date filter — match against full transaction history
+        3. Load previous sessions to get already-processed orderNumbers
+           and user decisions (skipped/rejected matchIds)
+        4. Filter out already-processed orders (deduplication)
+        5. For each unprocessed parsed order:
+           a. Find transactions with exact amount match
+           b. Tier 1: exact amount + date within ±3 days → high confidence
+           c. Tier 2: exact amount + date within ±7 days → medium confidence
+           d. Tier 3: multiple matches → ambiguous (low confidence)
+           e. Tier 4: no match → unmatched
+           f. If cross-reference data available (chargeDate from transactions PDF),
+              use chargeDate instead of orderDate for tighter matching
+        6. Create AmazonTransactionMatch records for Tiers 1–3
+        7. Update session with matches, set status to 'matching'
+        8. Persist session
+        9. Return AmazonReceiptMatchResponse
+
+        Helper: isAmazonMerchant(transaction)
+        - Checks merchantName and name against pattern list
+        - Pattern list: ['AMAZON', 'AMZN', 'Amazon.com', 'Kindle Svcs',
+          'AMZN MKTP', 'AMAZON DIGITAL', 'AMAZON MKTPL', 'AMAZON RETA']
+        - Case-insensitive substring match
+
+    - id: "4.2"
+      task: Add match resolution endpoint
+      status: not_started
+      details: |
+        POST /api/v1/amazon-receipts/:sessionId/match
+        - Auth: required
+        - Rate limiting: 10 requests per minute per user
+        - Body: {} (no additional input)
+        - Calls amazonReceiptService.matchOrders(userId, sessionId)
+        - Returns AmazonReceiptMatchResponse
+
+        POST /api/v1/amazon-receipts/:sessionId/resolve-ambiguous
+        - Auth: required
+        - Rate limiting: 10 requests per minute per user
+        - Body: { resolutions: { orderNumber: string, transactionId: string }[] }
+        - For manually resolving ambiguous matches (Tier 3)
+        - Updates match records with user-selected transaction
+        - Sets matchConfidence to 'manual'
+
+# =============================================================================
+# PHASE 5: Backend — Categorization & Split Recommendations
+# =============================================================================
+phase_5_categorization:
+  status: not_started
+  description: |
+    Uses Claude to categorize matched items and recommend splits for
+    multi-item orders. Reuses patterns from CategorizationService
+    (few-shot examples, category hierarchy context, confidence scoring).
+
+  tasks:
+    - id: "5.1"
+      task: Add categorization method to AmazonReceiptService
+      status: not_started
+      details: |
+        Method: categorizeMatches(userId, sessionId, matchIds)
+        1. Check cost cap via costTracker
+        2. Load session via loadOwnedSession(userId, sessionId)
+        3. Fetch user's category hierarchy (via dataService)
+        4. Fetch few-shot examples: last 500 categorized transactions,
+           grouped by category, max 5 per category (same pattern as
+           CategorizationService)
+        5. For each match, prepare item data:
+           - Single-item orders: item name + amount → category recommendation
+           - Multi-item orders: all item names → category per item + split recommendation
+        6. Call Claude with tool_use:
+           - System prompt: categorization context with Amazon-specific guidance
+           - Tool: categorize_amazon_items with structured output
+           - Input: items + categories + examples + existing transaction categories
+        7. Process response:
+           - Single-item with clear category → AmazonCategoryRecommendation
+           - Multi-item with different categories → AmazonSplitRecommendation
+           - Multi-item with same category → AmazonCategoryRecommendation (no split)
+           - Flag already-categorized transactions (REQ-010a)
+        8. For split recommendations where per-item prices are missing:
+           - Claude estimates prices based on product knowledge
+           - Mark isEstimatedPrice: true
+           - Adjust last item to absorb rounding (total must match)
+        9. Record cost, update session status to 'reviewing'
+        10. Return AmazonCategorizationResponse
+
+    - id: "5.2"
+      task: Create categorization prompt for Amazon items
+      status: not_started
+      details: |
+        Add to backend/src/services/amazonReceiptPrompt.ts:
+
+        System prompt:
+        "You are categorizing Amazon purchases for a household budget.
+         For each item, assign the most appropriate category from the user's
+         hierarchy. Use the provided examples of how this user categorizes
+         similar purchases.
+
+         For multi-item orders, also estimate per-item prices if not provided.
+         Mark price estimates clearly. Ensure estimates sum to the order total.
+
+         Assign confidence 0.0–1.0:
+         - ≥0.85: Clear category match (e.g., 'dog food' → Pet Food)
+         - 0.5–0.84: Reasonable but ambiguous
+         - <0.5: Unclear mapping"
+
+        Tool: categorize_amazon_items
+        - input: { matches: [...], categories: [...], examples: [...] }
+        - output: {
+            categorizations: { matchId, suggestedCategoryId, confidence, reasoning }[],
+            splitRecommendations: {
+              matchId, splits: { itemName, estimatedAmount, suggestedCategoryId,
+              confidence, isEstimatedPrice }[]
+            }[]
+          }
+
+    - id: "5.3"
+      task: Add categorize endpoint to routes
+      status: not_started
+      details: |
+        POST /api/v1/amazon-receipts/:sessionId/categorize
+        - Auth: required
+        - Rate limiting: 5 requests per minute per user (calls Claude,
+          burns API budget — tighter limit than non-AI endpoints)
+        - Body: { matchIds: string[] }
+        - Validates matchIds exist in session and are in 'pending' status
+        - Calls amazonReceiptService.categorizeMatches()
+        - Returns AmazonCategorizationResponse
+
+# =============================================================================
+# PHASE 6: Backend — Apply Changes & Rule Suggestions
+# =============================================================================
+phase_6_apply:
+  status: not_started
+  description: |
+    Apply user-approved categorizations and splits via existing transaction
+    APIs. Detect recurring purchase patterns and suggest auto-categorization
+    rules using existing pattern-only format.
+
+  tasks:
+    - id: "6.1"
+      task: Add apply method to AmazonReceiptService
+      status: not_started
+      details: |
+        Method: applyActions(userId, sessionId, actions: AmazonApplyAction[])
+        1. Load session via loadOwnedSession(userId, sessionId)
+        2. For each action:
+           - type 'categorize': update transaction categoryId via transactionService
+           - type 'split': create split via transactionService.splitTransaction()
+             using the existing split infrastructure (parent hidden, children
+             inherit metadata, amounts must sum to original)
+           - type 'skip': mark match as skipped (persisted for future dedup)
+        3. Update match statuses in session
+        4. Set session status to 'completed'
+        5. Persist session
+        6. Calculate summary: total dollars recategorized, categories touched
+        7. Return AmazonApplyResponse
+
+    - id: "6.2"
+      task: Add auto-categorization rule suggestion method
+      status: not_started
+      details: |
+        Method: suggestRules(userId, sessionId)
+        1. Load current session via loadOwnedSession(userId, sessionId),
+           plus load all previous sessions for the same user
+        2. Identify recurring patterns:
+           - Same item name appearing 2+ times across sessions
+           - Subscribe & Save indicators in item names
+        3. For each pattern, check if an existing auto-categorize rule
+           already covers it (via autoCategorizeService.getRules())
+        4. Generate rule suggestions using existing pattern-only format:
+           - Pattern: Amazon merchant name pattern (e.g., "AMAZON MKTPL")
+           - Note: V1 rules match on merchant pattern only, not amount range
+           - Category: the category applied to the recurring item
+        5. Return suggestions in the same RuleSuggestion format used by
+           the AI Categorizer (reuse shared type)
+
+        NOTE: Because Amazon bank descriptions don't contain product names,
+        pattern-only rules for Amazon are broad (they match all Amazon
+        Marketplace transactions, not just the specific product). This is a
+        known limitation. The rule suggestion should include a note about
+        this. The user can accept, edit the pattern, or dismiss.
+
+    - id: "6.3"
+      task: Add apply and rule suggestion endpoints to routes
+      status: not_started
+      details: |
+        POST /api/v1/amazon-receipts/:sessionId/apply
+        - Auth: required
+        - Rate limiting: 10 requests per minute per user (writes to
+          transactions — prevent automated bulk modification)
+        - Body: { actions: AmazonApplyAction[] }
+        - Validates all matchIds belong to the session and user
+        - Validates split amounts sum to original transaction amount
+        - Calls amazonReceiptService.applyActions()
+        - Returns AmazonApplyResponse
+
+        POST /api/v1/amazon-receipts/:sessionId/suggest-rules
+        - Auth: required
+        - Rate limiting: 10 requests per minute per user
+        - Body: {}
+        - Calls amazonReceiptService.suggestRules()
+        - Returns SuggestRulesResponse (shared type from categorizer)
+
+        DELETE /api/v1/amazon-receipts/:sessionId
+        - Auth: required
+        - Rate limiting: 10 requests per minute per user
+        - Validates session ownership via loadOwnedSession before deleting
+        - Deletes session data (REQ-024)
+
+    - id: "6.4"
+      task: Add Zod validators for all amazon-receipts endpoints
+      status: not_started
+      details: |
+        File: backend/src/validators/amazonReceiptValidators.ts
+
+        Schemas for API request validation:
+        - resolveAmbiguousSchema: { resolutions: { orderNumber, transactionId }[] }
+        - categorizeSchema: { matchIds: string[] }
+        - applySchema: { actions: AmazonApplyAction[] } with discriminated
+          union on type field
+        - sessionIdParamSchema: { sessionId: string }
+
+        SECURITY — Schemas for Claude output validation (defense-in-depth):
+        These validate the structured output from Claude's tool_use before
+        it is persisted or processed. Claude output is untrusted because
+        the PDF content could contain adversarial text.
+        - parsedAmazonOrderSchema: validates orderNumber (regex),
+          orderDate (ISO date, reasonable range), totalAmount (positive,
+          bounded), items (array, maxLength 50, item names maxLength 500)
+        - parsedAmazonChargeSchema: validates chargeDate, amount,
+          cardLastFour (exactly 4 digits), merchantLabel (maxLength 200)
+        - categorizationOutputSchema: validates suggestedCategoryId exists
+          in user's actual category list, confidence is 0.0–1.0, amounts
+          are positive and bounded
+
+# =============================================================================
+# PHASE 7: Frontend — API Client
+# =============================================================================
+phase_7_api_client:
+  status: not_started
+  description: |
+    Add Amazon receipt methods to the frontend API client. New file
+    following the modular api/ pattern (like chatbot.ts).
+
+  tasks:
+    - id: "7.1"
+      task: Create frontend/src/lib/api/amazonReceipts.ts
+      status: not_started
+      details: |
+        Following the pattern in frontend/src/lib/api/chatbot.ts:
+
+        Methods (bound in constructor):
+        - uploadReceipts(files: File[]): Promise<AmazonReceiptUploadResponse>
+          Uses FormData with 'pdfs' field for multipart upload
+        - matchOrders(sessionId: string): Promise<AmazonReceiptMatchResponse>
+        - resolveAmbiguous(sessionId, resolutions): Promise<void>
+        - categorizeMatches(sessionId, matchIds): Promise<AmazonCategorizationResponse>
+        - applyActions(sessionId, actions): Promise<AmazonApplyResponse>
+        - suggestRules(sessionId): Promise<SuggestRulesResponse>
+        - deleteSession(sessionId): Promise<void>
+
+        The uploadReceipts method is the only one that uses FormData
+        instead of JSON — all others follow the existing JSON pattern.
+
+    - id: "7.2"
+      task: Register amazon receipt methods in main API client
+      status: not_started
+      details: |
+        Add to frontend/src/lib/api.ts (or api/index.ts depending on
+        current structure). Bind methods and export. Follow the pattern
+        used for chatbot methods.
+
+# =============================================================================
+# PHASE 8: Frontend — Upload & Match Review UI
+# =============================================================================
+phase_8_upload_ui:
+  status: not_started
+  description: |
+    The first half of the frontend flow: entry point button, PDF upload
+    dropzone, parsing progress, and match review with confidence indicators.
+
+  tasks:
+    - id: "8.1"
+      task: Add "Match Amazon Receipts" button to Transactions page
+      status: not_started
+      details: |
+        Add to EnhancedTransactions.tsx near the "AI Categorize" button:
+        - Button with appropriate icon (IconReceipt2 or IconPackage)
+        - Visible when Amazon-merchant transactions exist (query count)
+        - Disabled when no Amazon transactions found
+        - Optional badge showing count of CUSTOM_AMAZON transactions
+        - onClick opens the AmazonReceiptFlowModal
+
+    - id: "8.2"
+      task: Create AmazonReceiptFlowModal — top-level flow component
+      status: not_started
+      details: |
+        File: frontend/src/components/transactions/AmazonReceiptFlowModal.tsx
+
+        Top-level modal managing the multi-step flow. Pattern matches
+        CategorizationFlowModal but with more steps:
+
+        Steps: 'upload' | 'parsing' | 'matching' | 'review-matches' |
+               'categorizing' | 'review-categories' | 'applying' |
+               'rules' | 'summary' | 'error'
+
+        State:
+        - step: current flow step
+        - sessionId: string | null
+        - parsedOrders: ParsedAmazonOrder[]
+        - matches: AmazonTransactionMatch[]
+        - unmatched: ParsedAmazonOrder[]
+        - ambiguous: AmbiguousAmazonMatch[]
+        - recommendations: AmazonCategoryRecommendation[]
+        - splitRecommendations: AmazonSplitRecommendation[]
+        - appliedCount, splitCount, skippedCount: number
+
+    - id: "8.3"
+      task: Create UploadStep component
+      status: not_started
+      details: |
+        File: frontend/src/components/transactions/amazon/UploadStep.tsx
+
+        Mantine Dropzone component accepting 1–2 PDF files:
+        - accept: ['application/pdf']
+        - maxSize: 20MB per file
+        - maxFiles: 2
+        - Helpful text: "Upload your Amazon order history PDF, or both
+          your orders page and payments transactions page for best results"
+        - Shows selected files with type indicators
+        - "Upload & Parse" button to trigger the upload API call
+        - Transitions to 'parsing' step on submit
+
+    - id: "8.4"
+      task: Create MatchReviewStep component
+      status: not_started
+      details: |
+        File: frontend/src/components/transactions/amazon/MatchReviewStep.tsx
+
+        Displays matched pairs for user verification:
+        - Two-column layout per match:
+          Left: Amazon order (item names, order date, total)
+          Right: Bank transaction (description, post date, amount)
+        - Confidence badge (High/Medium/Low) with color coding
+        - Checkboxes for batch confirmation (high-confidence pre-checked)
+        - "Confirm Selected" and "Skip" actions per match
+        - Separate sections for:
+          - Confirmed matches (high confidence, auto-confirmed)
+          - Likely matches (medium confidence, needs review)
+          - Ambiguous matches (multiple candidates, manual selection)
+          - Unmatched orders (no transaction found)
+        - For ambiguous: dropdown to select correct transaction or dismiss
+        - Already-categorized transactions flagged per REQ-010a
+        - "Continue to Categorization" button when review is complete
+
+# =============================================================================
+# PHASE 9: Frontend — Categorization & Split Review UI
+# =============================================================================
+phase_9_categorization_ui:
+  status: not_started
+  description: |
+    The second half of the frontend flow: category recommendations,
+    split review with editable amounts, rule suggestions, and summary.
+
+  tasks:
+    - id: "9.1"
+      task: Create CategoryReviewStep component
+      status: not_started
+      details: |
+        File: frontend/src/components/transactions/amazon/CategoryReviewStep.tsx
+
+        Similar to BucketReviewStep from the AI Categorizer but item-aware:
+        - Groups recommendations by confidence (high first, per REQ-013)
+        - Each recommendation shows:
+          - Amazon item name (the key value-add over plain categorization)
+          - Suggested category with dropdown to change
+          - Confidence score (numeric + High/Medium/Low label)
+          - Reasoning from Claude
+          - "Already categorized as [X]" flag when applicable
+        - Batch actions: "Approve All High Confidence", "Skip All"
+        - Individual approve/change/skip per recommendation
+
+    - id: "9.2"
+      task: Create SplitReviewStep component
+      status: not_started
+      details: |
+        File: frontend/src/components/transactions/amazon/SplitReviewStep.tsx
+
+        For multi-item order split recommendations:
+        - Shows original transaction (amount, description)
+        - Table of recommended splits:
+          - Item name | Amount | Category | Confidence
+          - Amount field is editable (NumberInput)
+          - Category field is dropdown (existing useCategoryOptions)
+          - Estimated prices marked with "~" prefix and tooltip
+        - Running total with validation:
+          - Green check when splits sum to original amount
+          - Red warning when they don't
+          - "Auto-adjust last item" button to absorb rounding
+        - "Apply Split" / "Skip" per recommendation
+        - Single-category multi-item orders shown as simple recategorization
+          (REQ-020), not as splits
+
+    - id: "9.3"
+      task: Create RuleSuggestionsStep (reuse or extend from categorizer)
+      status: not_started
+      details: |
+        If the existing RuleSuggestionsStep from the AI Categorizer is
+        generic enough, reuse it directly. Otherwise create a thin wrapper:
+
+        File: frontend/src/components/transactions/amazon/RuleSuggestionsStep.tsx
+
+        Same pattern: card per suggestion with Create/Edit/Dismiss actions.
+        Additional note for Amazon rules about pattern breadth:
+        "This rule matches all Amazon Marketplace transactions, not just
+         this specific product, since bank descriptions don't include
+         product names."
+
+    - id: "9.4"
+      task: Create SummaryStep component
+      status: not_started
+      details: |
+        File: frontend/src/components/transactions/amazon/SummaryStep.tsx
+
+        Final screen showing:
+        - Transactions recategorized: N
+        - Transactions split: N (into M line items)
+        - Items skipped: N
+        - Unmatched orders: N
+        - Auto-categorization rules created: N
+        - **Total dollars moved out of CUSTOM_AMAZON**: $X.XX (REQ-026)
+        - "Close" button → close modal + invalidate transaction queries
+
+# =============================================================================
+# PHASE 10: Testing & Polish
+# =============================================================================
+phase_10_testing:
+  status: not_started
+  description: |
+    Manual testing with real Amazon PDFs, edge case handling, error states,
+    and UX polish. No automated tests planned for V1 — this is a UI-heavy
+    feature where manual verification against real PDFs is more valuable.
+
+  tasks:
+    - id: "10.1"
+      task: Manual testing — upload and parsing
+      status: not_started
+      details: |
+        Test with real Amazon PDFs:
+        - [ ] Orders page PDF (3-month view) parses correctly
+        - [ ] Orders page PDF (single year) parses correctly
+        - [ ] Payments > Transactions PDF parses correctly
+        - [ ] Both PDFs uploaded together cross-reference on order number
+        - [ ] Multi-page PDF (10+ pages) processes without issues
+        - [ ] Non-Amazon PDF shows clear error message
+        - [ ] Corrupted/empty PDF shows clear error message
+        - [ ] File too large (>20MB) rejected at upload
+        - [ ] Non-PDF file rejected at upload
+        - [ ] Cost tracked correctly in shared cost tracker
+
+    - id: "10.2"
+      task: Manual testing — matching
+      status: not_started
+      details: |
+        - [ ] Exact amount match within 3 days → high confidence
+        - [ ] Exact amount match within 7 days → medium confidence
+        - [ ] Multiple matches for same amount → ambiguous with candidates
+        - [ ] No match → shown in unmatched section
+        - [ ] Previously processed orders are skipped (deduplication)
+        - [ ] Already-categorized transactions flagged correctly
+        - [ ] Manual ambiguous resolution works
+        - [ ] Cross-reference with both PDFs improves match confidence
+
+    - id: "10.3"
+      task: Manual testing — categorization and splits
+      status: not_started
+      details: |
+        - [ ] Single-item order gets category recommendation
+        - [ ] Multi-item order with different categories gets split recommendation
+        - [ ] Multi-item order with same category gets simple recategorization
+        - [ ] Confidence scores are reasonable (high for obvious items)
+        - [ ] Estimated prices clearly marked
+        - [ ] Split amounts are editable
+        - [ ] Split amounts validation (must sum to original)
+        - [ ] Applying categorization updates transaction correctly
+        - [ ] Applying split creates child transactions correctly
+        - [ ] Skipping a recommendation persists the decision
+
+    - id: "10.4"
+      task: Manual testing — rules and summary
+      status: not_started
+      details: |
+        - [ ] Rule suggestions appear for recurring items
+        - [ ] Rules don't duplicate existing auto-categorize rules
+        - [ ] Creating a rule works via existing API
+        - [ ] Summary shows correct counts
+        - [ ] Dollar amount recategorized is accurate
+        - [ ] Closing modal refreshes transaction list
+        - [ ] Cost cap prevents processing when budget exhausted
+
+    - id: "10.5"
+      task: Security verification
+      status: not_started
+      details: |
+        - [ ] SEC-001: Raw PDFs not persisted (verify no temp files, no S3 objects)
+        - [ ] SEC-002: PDF sent as document content block, not interpolated into prompt
+        - [ ] SEC-002+: Tool output schemas enforce strict types/enums/patterns
+        - [ ] SEC-003: Can only modify own transactions (test with 2 users)
+        - [ ] SEC-003+: IDOR test — attempt to access sessionId belonging to
+              another user via all endpoints (match, categorize, apply, delete).
+              All must return 403, not 404 with data leakage.
+        - [ ] SEC-004: Only categoryId and splits modified, no other fields
+        - [ ] SEC-005: Cost tracked against shared $20/month cap
+        - [ ] SEC-006: No PDF content in logs, no card numbers in parsed data
+        - [ ] SEC-006+: Card numbers stripped via sanitizeParsedData() before
+              any logging or persistence — verify no full card numbers in
+              debug logs, session storage, or error messages
+        - [ ] SEC-007: File validation (MIME type, size, page count)
+        - [ ] SEC-007+: Magic byte validation — upload a .txt file renamed
+              to .pdf (spoofed MIME type) and verify it is rejected
+        - [ ] Rate limiting works: 3 req/min for upload, 5 req/min for
+              categorize, 10 req/min for match/apply/suggest-rules/delete
+        - [ ] Claude output validation: craft a test PDF with adversarial
+              product names (e.g., extremely long strings, injection
+              attempts) and verify Zod validation rejects malformed output
+              while processing valid orders from the same PDF
+        - [ ] Session pruning: verify old completed sessions are stripped
+              to dedup-only data, abandoned sessions are cleaned up
+        - [ ] CSRF: confirm JWT is sent via Authorization header (not
+              cookies) for the upload endpoint
+
+# =============================================================================
+# IMPLEMENTATION ORDER
+# =============================================================================
+implementation_order:
+  description: |
+    Mostly linear with the backend built first, then frontend. Phases 2–6
+    are the backend (upload → parse → match → categorize → apply). Phases
+    7–9 are the frontend. Phase 1 (types) unblocks everything.
+
+    The matching algorithm (Phase 4) is pure logic with no AI dependency,
+    so it can be developed and tested independently of the parsing and
+    categorization phases.
+
+  sequence:
+    - phase: 1 — Shared Types
+      reason: Types needed by all other phases
+    - phase: 2 — PDF Upload Infrastructure
+      reason: Introduces multer, creates route shell
+    - phase: 3 — PDF Parsing Service
+      reason: Core AI integration — Claude vision for PDF extraction
+    - phase: 4 — Transaction Matching Algorithm
+      reason: Pure logic, testable independently of AI
+    - phase: 5 — Categorization & Split Recommendations
+      reason: Second AI integration — item classification
+    - phase: 6 — Apply Changes & Rule Suggestions
+      reason: Write path — applies results via existing APIs
+    - phase: 7 — Frontend API Client
+      reason: Frontend needs typed methods before UI
+    - phase: 8 — Upload & Match Review UI
+      reason: First half of user-facing flow
+    - phase: 9 — Categorization & Split Review UI
+      reason: Second half of user-facing flow
+    - phase: 10 — Testing & Polish
+      reason: End-to-end verification with real PDFs
+
+# =============================================================================
+# RISK REGISTER
+# =============================================================================
+risks:
+  - id: R1
+    risk: Claude vision may not reliably parse Amazon's print-to-PDF format
+    likelihood: low
+    impact: high
+    mitigation: |
+      Amazon's order page has a relatively consistent layout. Claude's vision
+      capabilities are strong for structured document extraction. If parsing
+      quality is poor, we can add format-specific prompt tuning or fall back
+      to asking the user to verify/correct parsed data before matching.
+
+  - id: R2
+    risk: Amount-based matching may produce too many ambiguous matches
+    likelihood: medium
+    impact: medium
+    mitigation: |
+      The BRD estimates ~80% exact-match rate. Cross-referencing with the
+      transactions PDF (when provided) significantly reduces ambiguity by
+      adding exact charge dates. The UI handles ambiguous matches gracefully
+      with manual resolution. We can tune the date window after real-world
+      testing.
+
+  - id: R3
+    risk: Multi-item order price estimation may be inaccurate
+    likelihood: medium
+    impact: low
+    mitigation: |
+      Estimates are clearly labeled in the UI. The user must confirm or
+      adjust split amounts before applying. The system validates that
+      amounts sum to the original total. Inaccurate estimates are
+      inconvenient but not dangerous — the user always has final say.
+
+  - id: R4
+    risk: 20MB in-memory buffer per PDF could cause memory pressure
+    likelihood: low
+    impact: medium
+    mitigation: |
+      Max 2 files × 20MB = 40MB worst case per request. This is well
+      within Node.js default memory limits. Rate limiting (3 req/min)
+      prevents concurrent uploads from the same user. If memory becomes
+      an issue, we can stream the PDF to Claude's API instead of buffering.

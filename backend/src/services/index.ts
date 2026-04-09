@@ -23,6 +23,7 @@ import { ChatbotCostTracker } from './chatbotCostTracker';
 import { ChatbotService } from './chatbotService';
 import { CategorizationService } from './categorizationService';
 import { ManualAccountService } from './manualAccountService';
+import { AmazonReceiptService } from './amazonReceiptService';
 
 // Create data service based on environment
 // Uses StorageFactory to automatically switch between filesystem and S3
@@ -88,6 +89,15 @@ export const categorizationService = new CategorizationService(
   config.ai.anthropicApiKey,
 );
 
+export const amazonReceiptService = new AmazonReceiptService(
+  dataService,
+  chatbotDataService,
+  chatbotCostTracker,
+  transactionService,
+  autoCategorizeService,
+  config.ai.anthropicApiKey,
+);
+
 // Export dataService for other services that need it
 export { dataService };
 
@@ -108,4 +118,5 @@ export {
   ChatbotService,
   CategorizationService,
   ManualAccountService,
+  AmazonReceiptService,
 };
