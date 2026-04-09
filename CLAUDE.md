@@ -221,9 +221,12 @@ scripts/               # Deployment scripts
     - BRD: `docs/features/AI-CATEGORIZATION-BRD.md`
     - Plan: `docs/features/AI-CATEGORIZATION-PLAN.yaml`
 12. **URL-Based Page State**: Budget, Reports, and Transactions pages reflect filter state in URL params for chatbot context awareness and bookmarkable filter states.
+13. **Amazon Receipt Matching**: Upload Amazon order PDFs, Claude vision extracts items, matches against bank transactions by amount+date, recommends categories and splits for multi-item orders. Unified "AI Categorize" dropdown menu on Transactions page for both workflows.
+    - BRD: `docs/features/AI-AMAZON-RECEIPT-BRD.md`
+    - Plan: `docs/features/AI-AMAZON-RECEIPT-PLAN.yaml`
 
 ### 🚧 Next Priorities
-1. **AI feature hardening** — Security tests, prompt injection testing, integration tests (Phase 8 of chatbot plan)
+1. **AI feature hardening** — Security tests, prompt injection testing, integration tests (Phase 8 of chatbot plan, Phase 10 of amazon receipt plan)
 2. **Rollover categories for budget carryover**
 3. **Bill reminders and recurring transactions**
 4. **Enhanced reporting and visualizations**
@@ -509,6 +512,9 @@ Having issues?
 - **Categorization Service**: `backend/src/services/categorizationService.ts`
 - **Chat Overlay UI**: `frontend/src/components/chat/ChatOverlay.tsx`
 - **Categorization Flow UI**: `frontend/src/components/transactions/CategorizationFlowModal.tsx`
+- **Amazon Receipt Service**: `backend/src/services/amazonReceiptService.ts`
+- **Amazon Receipt Prompts**: `backend/src/services/amazonReceiptPrompt.ts`
+- **Amazon Receipt Flow UI**: `frontend/src/components/transactions/AmazonReceiptFlowModal.tsx`
 
 ### Testing
 - **Backend Tests**: `backend/src/__tests__/`
@@ -621,6 +627,8 @@ Track important decisions that affect how the codebase should be modified.
 
 | Date | Decision | Rationale | Impact |
 |------|----------|-----------|--------|
+| 2026-04 | Amazon receipt matching via Claude vision | Upload Amazon PDFs, extract items, match to bank transactions, categorize with splits | AmazonReceiptService with tiered matching (amount+date), Zod-validated Claude output, session dedup against completed sessions only, CUSTOM_AMAZON transactions always re-eligible |
+| 2026-04 | Unified AI Categorize dropdown menu | Single entry point for both categorization workflows | TransactionToolbar uses Mantine Menu dropdown with "Uncategorized Transactions" and "Amazon Receipt Matching" options |
 | 2026-04 | AI chatbot with structural security boundary | LLM-powered financial assistant with read-only data access | ChatbotDataService receives ReadOnlyDataService (SEC-018), tool_use for prompt injection defense, $20/month cost cap with mutex, GitHub issue confirmation via frontend-only path |
 | 2026-04 | AI bulk categorization with few-shot learning | Batch classify uncategorized transactions using user's own data as examples | CategorizationService, bucket-based approve/edit/skip UI, auto-rule suggestions post-categorization |
 | 2026-04 | URL-based page state for all filter pages | Chatbot context awareness + bookmarkable/shareable URLs | Budget, Reports, Transactions pages sync filter state to URL params via useSearchParams |

@@ -164,17 +164,40 @@ export class AmazonReceiptService {
       this.crossReference(allOrders, allCharges);
     }
 
-    // 6. Deduplicate against existing sessions
+    // 6. Deduplicate against completed sessions only.
+    // Orders from abandoned/in-progress sessions (status 'parsed', 'matching',
+    // 'reviewing') are eligible for reprocessing — only skip orders that were
+    // fully processed in a completed session (REQ-022).
     const existingSessions = await this.loadSessions(userId);
-    const existingOrderNumbers = new Set(
-      existingSessions.flatMap(s => s.parsedOrders.map(o => o.orderNumber)),
+    const completedOrderNumbers = new Set(
+      existingSessions
+        .filter(s => s.status === 'completed')
+        .flatMap(s => s.parsedOrders.map(o => o.orderNumber)),
     );
+    const totalParsedCount = allOrders.length + allCharges.length;
     const newOrders = allOrders.filter(
-      o => !existingOrderNumbers.has(o.orderNumber),
+      o => !completedOrderNumbers.has(o.orderNumber),
     );
     const newCharges = allCharges.filter(
-      c => !existingOrderNumbers.has(c.orderNumber),
+      c => !completedOrderNumbers.has(c.orderNumber),
     );
+    // If everything was deduped, return early with a clear message
+    if (newOrders.length === 0 && newCharges.length === 0 && totalParsedCount > 0) {
+      await this.costTracker.recordUsage(userId, 'sonnet', totalInputTokens, totalOutputTokens);
+      throw new ValidationError(
+        `All ${totalParsedCount} orders from this PDF were already categorized in a previous session. ` +
+          'Upload a different PDF with new orders, or clear previous sessions to reprocess.',
+      );
+    }
+
+    // Clean up incomplete sessions for the same orders (replace abandoned attempts)
+    const newOrderNumbers = new Set(newOrders.map(o => o.orderNumber));
+    const cleanedSessions = existingSessions.filter(s => {
+      if (s.status === 'completed') return true; // always keep completed
+      // Drop incomplete sessions whose orders overlap with this upload
+      const hasOverlap = s.parsedOrders.some(o => newOrderNumbers.has(o.orderNumber));
+      return !hasOverlap;
+    });
 
     // 7. Create session
     const session: AmazonReceiptSession = {
@@ -188,8 +211,8 @@ export class AmazonReceiptService {
       status: 'parsed',
     };
 
-    // 8. Prune stale sessions & append
-    const prunedSessions = this.pruneSessions(existingSessions);
+    // 8. Prune stale sessions & append (use cleanedSessions, not existingSessions)
+    const prunedSessions = this.pruneSessions(cleanedSessions);
     prunedSessions.push(session);
 
     // 9. Persist
@@ -471,29 +494,46 @@ export class AmazonReceiptService {
       this.isAmazonMerchant(t) && !t.isHidden,
     );
 
-    // 2. Collect already-matched transaction IDs from this + prior sessions
+    console.log(
+      `[AmazonReceiptService] matchOrders: ${session.parsedOrders.length} orders to match, ` +
+        `${amazonTransactions.length} Amazon transactions found (of ${allTransactions.length} total)`,
+    );
+
+    // 2. Determine which transactions to exclude from matching.
+    // The key insight: transactions still in CUSTOM_AMAZON are always eligible
+    // (that's the whole point of this feature). Only exclude transactions where
+    // the user already took action:
+    //   - Explicitly skipped in a prior session → respect the decision
+    //   - Successfully recategorized to a non-Amazon category → already handled
+    // Transactions still in CUSTOM_AMAZON are always re-eligible even if they
+    // appeared in a prior session that was abandoned or incomplete.
     const allSessions = await this.loadSessions(userId);
-    const alreadyMatchedTxIds = new Set<string>();
     const skippedOrderNumbers = new Set<string>();
+    const excludedTxIds = new Set<string>();
 
     for (const s of allSessions) {
-      if (s.id === sessionId) continue; // skip current session
+      if (s.id === sessionId) continue;
       for (const m of s.matches) {
-        alreadyMatchedTxIds.add(m.transactionId);
         if (m.status === 'skipped') {
           skippedOrderNumbers.add(m.orderNumber);
+        }
+        // Only exclude transactions that were successfully recategorized/split
+        if (m.status === 'categorized' || m.status === 'split') {
+          // But check current state: if it's back in CUSTOM_AMAZON, re-include it
+          const tx = amazonTransactions.find(t => t.id === m.transactionId);
+          if (tx && tx.categoryId && tx.categoryId !== CUSTOM_AMAZON_CATEGORY) {
+            excludedTxIds.add(m.transactionId);
+          }
         }
       }
     }
 
-    // 3. Filter out already-processed orders from this session
+    // 3. Filter orders and transactions
     const ordersToMatch = session.parsedOrders.filter(
       o => !skippedOrderNumbers.has(o.orderNumber),
     );
-
-    // Available transactions (not already matched in other sessions)
     const availableTransactions = amazonTransactions.filter(
-      t => !alreadyMatchedTxIds.has(t.id),
+      t => !excludedTxIds.has(t.id),
     );
 
     // 4. Run tiered matching
@@ -1107,5 +1147,12 @@ ${examples}`;
     const sessions = await this.loadSessions(userId);
     const filtered = sessions.filter(s => s.id !== sessionId);
     await this.saveSessions(userId, filtered);
+  }
+
+  async deleteAllSessions(userId: string): Promise<{ deleted: number }> {
+    const sessions = await this.loadSessions(userId);
+    const count = sessions.length;
+    await this.saveSessions(userId, []);
+    return { deleted: count };
   }
 }

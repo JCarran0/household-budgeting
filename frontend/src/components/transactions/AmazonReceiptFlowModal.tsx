@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect } from 'react';
-import { Modal, Text, Stack, Center, Loader } from '@mantine/core';
+import { Modal, Text, Stack, Center, Loader, Button, Group } from '@mantine/core';
 import { useQueryClient } from '@tanstack/react-query';
 import { api } from '../../lib/api';
 import { UploadStep } from './amazon/UploadStep';
@@ -278,14 +278,29 @@ export function AmazonReceiptFlowModal({ opened, onClose }: AmazonReceiptFlowMod
       {step === 'error' && (
         <Stack gap="md" py="md">
           <Text c="red" size="sm">{error}</Text>
-          <Stack gap="xs">
-            <button
-              onClick={() => setStep('upload')}
-              style={{ cursor: 'pointer', background: 'none', border: 'none', color: 'var(--mantine-color-blue-4)', textDecoration: 'underline', padding: 0, font: 'inherit' }}
-            >
+          <Group gap="sm">
+            <Button variant="light" size="xs" onClick={() => setStep('upload')}>
               Try again
-            </button>
-          </Stack>
+            </Button>
+            {error?.includes('already processed') && (
+              <Button
+                variant="light"
+                size="xs"
+                color="orange"
+                onClick={async () => {
+                  try {
+                    await api.deleteAllAmazonReceiptSessions();
+                    setError(null);
+                    setStep('upload');
+                  } catch {
+                    setError('Failed to clear sessions');
+                  }
+                }}
+              >
+                Clear previous sessions & retry
+              </Button>
+            )}
+          </Group>
         </Stack>
       )}
     </Modal>

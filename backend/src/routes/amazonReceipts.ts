@@ -250,6 +250,26 @@ router.get(
 );
 
 // =============================================================================
+// DELETE /sessions/all — Delete all sessions (must be before :sessionId route)
+// =============================================================================
+router.delete(
+  '/sessions/all',
+  authenticate,
+  rateLimitStandard,
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const userId = req.user!.userId;
+      const { amazonReceiptService } = await import('../services');
+
+      const result = await amazonReceiptService.deleteAllSessions(userId);
+      res.json({ success: true, ...result });
+    } catch (error) {
+      next(error);
+    }
+  },
+);
+
+// =============================================================================
 // DELETE /:sessionId — Delete a session
 // =============================================================================
 router.delete(

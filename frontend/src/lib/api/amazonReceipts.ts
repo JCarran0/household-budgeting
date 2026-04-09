@@ -93,5 +93,13 @@ export function createAmazonReceiptsApi(client: AxiosInstance) {
     async deleteAmazonReceiptSession(sessionId: string): Promise<void> {
       await client.delete(`/amazon-receipts/${sessionId}`);
     },
+
+    /** Delete all sessions (clears dedup history, allows reprocessing). */
+    async deleteAllAmazonReceiptSessions(): Promise<{ deleted: number }> {
+      const { data } = await client.delete<{ success: boolean; deleted: number }>(
+        '/amazon-receipts/sessions/all',
+      );
+      return data;
+    },
   };
 }

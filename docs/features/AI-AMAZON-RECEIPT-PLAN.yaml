@@ -119,6 +119,35 @@ decisions:
       a new entry point for splits (AI-recommended), not a new split mechanism.
       The frontend split review UI is new, but the write path is existing.
 
+  - id: D10
+    date: 2026-04-09
+    decision: Dedup only against completed sessions; match based on current transaction state
+    rationale: |
+      Original design deduped against all sessions, which blocked reprocessing
+      after interrupted flows. Refined to: (1) only dedup parsed orders against
+      completed sessions — abandoned sessions don't block re-upload; (2) matching
+      excludes transactions only if they were successfully recategorized to a
+      non-CUSTOM_AMAZON category or explicitly skipped — transactions still in
+      CUSTOM_AMAZON are always re-eligible regardless of prior session history.
+      Incomplete sessions with overlapping orders are auto-cleaned on re-upload.
+
+  - id: D11
+    date: 2026-04-09
+    decision: Unified "AI Categorize" dropdown menu replaces separate buttons
+    rationale: |
+      Both AI Categorize and Amazon Receipt Matching are categorization tools.
+      A single "AI Categorize" button with a dropdown menu (Uncategorized
+      Transactions vs Amazon Receipt Matching) reduces toolbar clutter and
+      presents them as two modes of the same capability.
+
+  - id: D12
+    date: 2026-04-09
+    decision: Dev ports changed to 3021/5183 to avoid conflicts with other local projects
+    rationale: |
+      Ports 3000-3009 are used by another project on the same machine.
+      Backend moved to 3021, frontend to 5183. CORS allowlist updated
+      to include both old and new ports.
+
 # =============================================================================
 # PHASE 1: Shared Types & Interfaces
 # =============================================================================
