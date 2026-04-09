@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+### [5.7.14](https://github.com/JCarran0/household-budgeting/compare/v5.7.13...v5.7.14) (2026-04-09)
+
+
+### Performance Improvements
+
+* **reports:** replace N monthly budget requests with yearly batch (TD-1) ([5ed0bb9](https://github.com/JCarran0/household-budgeting/commit/5ed0bb94c82c7bfdb8055774037558cb1764e5e2))
+
+
+### Code Refactoring
+
+* **frontend:** split api/misc.ts into 7 domain modules (TD-12) ([0cfd902](https://github.com/JCarran0/household-budgeting/commit/0cfd90243533d204e1632140857045278535a5fe))
+* **routes:** migrate remaining 11 routes to typed error patterns (TD-10) ([8d9243e](https://github.com/JCarran0/household-budgeting/commit/8d9243e7a49d5ad52fb70ec1f361b8de6ddeff36))
+
+
+### Documentation
+
+* mark resolved tech debt items and complete doc audit ([750d35c](https://github.com/JCarran0/household-budgeting/commit/750d35cdd388678faf1de715368a8238fe0ed7a3))
+
 ### [5.7.13](https://github.com/JCarran0/household-budgeting/compare/v5.7.12...v5.7.13) (2026-04-09)
 
 
