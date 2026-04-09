@@ -166,23 +166,24 @@ export function EnhancedTransactions() {
     if (!hasInitialized) return;
 
     setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
       const keysToManage = ['search', 'accountId', 'categoryIds', 'tags', 'dateFilter', 'startDate', 'endDate', 'txnType', 'uncategorized', 'onlyFlagged'];
-      keysToManage.forEach((k) => prev.delete(k));
+      keysToManage.forEach((k) => next.delete(k));
 
-      if (debouncedSearchTerm) prev.set('search', debouncedSearchTerm);
-      if (selectedAccount && selectedAccount !== 'all') prev.set('accountId', selectedAccount);
-      if (selectedCategories.length > 0) prev.set('categoryIds', selectedCategories.join(','));
-      if (selectedTags.length > 0) prev.set('tags', selectedTags.join(','));
-      if (dateFilterOption) prev.set('dateFilter', dateFilterOption);
+      if (debouncedSearchTerm) next.set('search', debouncedSearchTerm);
+      if (selectedAccount && selectedAccount !== 'all') next.set('accountId', selectedAccount);
+      if (selectedCategories.length > 0) next.set('categoryIds', selectedCategories.join(','));
+      if (selectedTags.length > 0) next.set('tags', selectedTags.join(','));
+      if (dateFilterOption) next.set('dateFilter', dateFilterOption);
       if (dateFilterOption === 'custom') {
-        if (customDateRange[0]) prev.set('startDate', format(customDateRange[0], 'yyyy-MM-dd'));
-        if (customDateRange[1]) prev.set('endDate', format(customDateRange[1], 'yyyy-MM-dd'));
+        if (customDateRange[0]) next.set('startDate', format(customDateRange[0], 'yyyy-MM-dd'));
+        if (customDateRange[1]) next.set('endDate', format(customDateRange[1], 'yyyy-MM-dd'));
       }
-      if (transactionType && transactionType !== 'all') prev.set('txnType', transactionType);
-      if (selectedCategories.length === 1 && selectedCategories.includes('uncategorized')) prev.set('uncategorized', 'true');
-      if (onlyFlagged) prev.set('onlyFlagged', 'true');
+      if (transactionType && transactionType !== 'all') next.set('txnType', transactionType);
+      if (selectedCategories.length === 1 && selectedCategories.includes('uncategorized')) next.set('uncategorized', 'true');
+      if (onlyFlagged) next.set('onlyFlagged', 'true');
 
-      return prev;
+      return next;
     }, { replace: true });
   }, [hasInitialized, debouncedSearchTerm, selectedAccount, selectedCategories, selectedTags, dateFilterOption, customDateRange, transactionType, onlyUncategorized, onlyFlagged, setSearchParams]);
 
