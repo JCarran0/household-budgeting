@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+### [5.7.7](https://github.com/JCarran0/household-budgeting/compare/v5.7.6...v5.7.7) (2026-04-09)
+
+
+### Code Refactoring
+
+* **routes:** move business logic to services and apply error patterns (R9) ([753ebd5](https://github.com/JCarran0/household-budgeting/commit/753ebd5fcae3e81b8981af6a64a537dd073b4af4))
+
+
+### Documentation
+
+* update refactor plan with R9 completion — Phase 4 complete ([16441a0](https://github.com/JCarran0/household-budgeting/commit/16441a0eda8caa3466c0201bbdb086092153f3e8))
+
 ### [5.7.6](https://github.com/JCarran0/household-budgeting/compare/v5.7.5...v5.7.6) (2026-04-08)
 
 
