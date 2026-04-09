@@ -9,6 +9,7 @@ import {
   IconDatabaseImport,
   IconDownload,
   IconSparkles,
+  IconReceipt2,
 } from '@tabler/icons-react';
 
 interface TransactionToolbarProps {
@@ -16,8 +17,10 @@ interface TransactionToolbarProps {
   hasTransactions: boolean;
   isSyncing: boolean;
   uncategorizedCount: number;
+  amazonTransactionCount: number;
   onSync: () => void;
   onOpenCategorization: () => void;
+  onOpenAmazonReceipts: () => void;
   onOpenImport: () => void;
   onExportTSV: () => void;
 }
@@ -27,8 +30,10 @@ export function TransactionToolbar({
   hasTransactions,
   isSyncing,
   uncategorizedCount,
+  amazonTransactionCount,
   onSync,
   onOpenCategorization,
+  onOpenAmazonReceipts,
   onOpenImport,
   onExportTSV,
 }: TransactionToolbarProps) {
@@ -51,6 +56,15 @@ export function TransactionToolbar({
           disabled={uncategorizedCount === 0}
         >
           AI Categorize{uncategorizedCount > 0 ? ` (${uncategorizedCount})` : ''}
+        </Button>
+        <Button
+          leftSection={<IconReceipt2 size={16} />}
+          onClick={onOpenAmazonReceipts}
+          variant="light"
+          color="orange"
+          disabled={amazonTransactionCount === 0}
+        >
+          Amazon Receipts{amazonTransactionCount > 0 ? ` (${amazonTransactionCount})` : ''}
         </Button>
         <Button
           leftSection={<IconDatabaseImport size={16} />}

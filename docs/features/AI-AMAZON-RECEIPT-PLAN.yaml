@@ -2,8 +2,8 @@
 # Amazon Receipt Matching — Implementation Plan
 # =============================================================================
 # BRD: docs/features/AI-AMAZON-RECEIPT-BRD.md
-# Status: Not Started
-# Last Updated: 2026-04-08
+# Status: Implementation Complete (Phases 1-9). Phase 10 (manual testing) pending.
+# Last Updated: 2026-04-09
 # =============================================================================
 
 overview:
@@ -383,7 +383,7 @@ phase_2_upload:
 # PHASE 3: Backend — PDF Parsing Service
 # =============================================================================
 phase_3_parsing:
-  status: not_started
+  status: completed
   description: |
     Core service that sends PDFs to Claude's vision API and extracts
     structured order/charge data. Handles both PDF types with type
@@ -392,7 +392,7 @@ phase_3_parsing:
   tasks:
     - id: "3.1"
       task: Create AmazonReceiptService in backend/src/services/amazonReceiptService.ts
-      status: not_started
+      status: completed
       details: |
         Constructor receives:
         - dataService: DataService (for session persistence)
@@ -466,7 +466,7 @@ phase_3_parsing:
 
     - id: "3.2"
       task: Create PDF parsing prompts in backend/src/services/amazonReceiptPrompt.ts
-      status: not_started
+      status: completed
       details: |
         Two prompt variants, but Claude auto-detects which to use:
 
@@ -514,7 +514,7 @@ phase_3_parsing:
 
     - id: "3.3"
       task: Register AmazonReceiptService in backend/src/services/index.ts
-      status: not_started
+      status: completed
       details: |
         Instantiate with dataService, chatbotCostTracker, and ANTHROPIC_API_KEY.
         Export as amazonReceiptService singleton.
@@ -524,7 +524,7 @@ phase_3_parsing:
 # PHASE 4: Backend — Transaction Matching Algorithm
 # =============================================================================
 phase_4_matching:
-  status: not_started
+  status: completed
   description: |
     Pure algorithmic matching — no AI involved. Matches parsed Amazon orders
     against bank transactions by amount and date. Implements the tiered
@@ -533,7 +533,7 @@ phase_4_matching:
   tasks:
     - id: "4.1"
       task: Add matching method to AmazonReceiptService
-      status: not_started
+      status: completed
       details: |
         Method: matchOrders(userId, sessionId)
         1. Load session via loadOwnedSession(userId, sessionId)
@@ -565,7 +565,7 @@ phase_4_matching:
 
     - id: "4.2"
       task: Add match resolution endpoint
-      status: not_started
+      status: completed
       details: |
         POST /api/v1/amazon-receipts/:sessionId/match
         - Auth: required
@@ -586,7 +586,7 @@ phase_4_matching:
 # PHASE 5: Backend — Categorization & Split Recommendations
 # =============================================================================
 phase_5_categorization:
-  status: not_started
+  status: completed
   description: |
     Uses Claude to categorize matched items and recommend splits for
     multi-item orders. Reuses patterns from CategorizationService
@@ -595,7 +595,7 @@ phase_5_categorization:
   tasks:
     - id: "5.1"
       task: Add categorization method to AmazonReceiptService
-      status: not_started
+      status: completed
       details: |
         Method: categorizeMatches(userId, sessionId, matchIds)
         1. Check cost cap via costTracker
@@ -625,7 +625,7 @@ phase_5_categorization:
 
     - id: "5.2"
       task: Create categorization prompt for Amazon items
-      status: not_started
+      status: completed
       details: |
         Add to backend/src/services/amazonReceiptPrompt.ts:
 
@@ -655,7 +655,7 @@ phase_5_categorization:
 
     - id: "5.3"
       task: Add categorize endpoint to routes
-      status: not_started
+      status: completed
       details: |
         POST /api/v1/amazon-receipts/:sessionId/categorize
         - Auth: required
@@ -670,7 +670,7 @@ phase_5_categorization:
 # PHASE 6: Backend — Apply Changes & Rule Suggestions
 # =============================================================================
 phase_6_apply:
-  status: not_started
+  status: completed
   description: |
     Apply user-approved categorizations and splits via existing transaction
     APIs. Detect recurring purchase patterns and suggest auto-categorization
@@ -679,7 +679,7 @@ phase_6_apply:
   tasks:
     - id: "6.1"
       task: Add apply method to AmazonReceiptService
-      status: not_started
+      status: completed
       details: |
         Method: applyActions(userId, sessionId, actions: AmazonApplyAction[])
         1. Load session via loadOwnedSession(userId, sessionId)
@@ -697,7 +697,7 @@ phase_6_apply:
 
     - id: "6.2"
       task: Add auto-categorization rule suggestion method
-      status: not_started
+      status: completed
       details: |
         Method: suggestRules(userId, sessionId)
         1. Load current session via loadOwnedSession(userId, sessionId),
@@ -722,7 +722,7 @@ phase_6_apply:
 
     - id: "6.3"
       task: Add apply and rule suggestion endpoints to routes
-      status: not_started
+      status: completed
       details: |
         POST /api/v1/amazon-receipts/:sessionId/apply
         - Auth: required
@@ -749,7 +749,7 @@ phase_6_apply:
 
     - id: "6.4"
       task: Add Zod validators for all amazon-receipts endpoints
-      status: not_started
+      status: completed
       details: |
         File: backend/src/validators/amazonReceiptValidators.ts
 
@@ -777,7 +777,7 @@ phase_6_apply:
 # PHASE 7: Frontend — API Client
 # =============================================================================
 phase_7_api_client:
-  status: not_started
+  status: completed
   description: |
     Add Amazon receipt methods to the frontend API client. New file
     following the modular api/ pattern (like chatbot.ts).
@@ -785,7 +785,7 @@ phase_7_api_client:
   tasks:
     - id: "7.1"
       task: Create frontend/src/lib/api/amazonReceipts.ts
-      status: not_started
+      status: completed
       details: |
         Following the pattern in frontend/src/lib/api/chatbot.ts:
 
@@ -804,7 +804,7 @@ phase_7_api_client:
 
     - id: "7.2"
       task: Register amazon receipt methods in main API client
-      status: not_started
+      status: completed
       details: |
         Add to frontend/src/lib/api.ts (or api/index.ts depending on
         current structure). Bind methods and export. Follow the pattern
@@ -814,7 +814,7 @@ phase_7_api_client:
 # PHASE 8: Frontend — Upload & Match Review UI
 # =============================================================================
 phase_8_upload_ui:
-  status: not_started
+  status: completed
   description: |
     The first half of the frontend flow: entry point button, PDF upload
     dropzone, parsing progress, and match review with confidence indicators.
@@ -822,7 +822,7 @@ phase_8_upload_ui:
   tasks:
     - id: "8.1"
       task: Add "Match Amazon Receipts" button to Transactions page
-      status: not_started
+      status: completed
       details: |
         Add to EnhancedTransactions.tsx near the "AI Categorize" button:
         - Button with appropriate icon (IconReceipt2 or IconPackage)
@@ -833,7 +833,7 @@ phase_8_upload_ui:
 
     - id: "8.2"
       task: Create AmazonReceiptFlowModal — top-level flow component
-      status: not_started
+      status: completed
       details: |
         File: frontend/src/components/transactions/AmazonReceiptFlowModal.tsx
 
@@ -857,7 +857,7 @@ phase_8_upload_ui:
 
     - id: "8.3"
       task: Create UploadStep component
-      status: not_started
+      status: completed
       details: |
         File: frontend/src/components/transactions/amazon/UploadStep.tsx
 
@@ -873,7 +873,7 @@ phase_8_upload_ui:
 
     - id: "8.4"
       task: Create MatchReviewStep component
-      status: not_started
+      status: completed
       details: |
         File: frontend/src/components/transactions/amazon/MatchReviewStep.tsx
 
@@ -897,7 +897,7 @@ phase_8_upload_ui:
 # PHASE 9: Frontend — Categorization & Split Review UI
 # =============================================================================
 phase_9_categorization_ui:
-  status: not_started
+  status: completed
   description: |
     The second half of the frontend flow: category recommendations,
     split review with editable amounts, rule suggestions, and summary.
@@ -905,7 +905,7 @@ phase_9_categorization_ui:
   tasks:
     - id: "9.1"
       task: Create CategoryReviewStep component
-      status: not_started
+      status: completed
       details: |
         File: frontend/src/components/transactions/amazon/CategoryReviewStep.tsx
 
@@ -922,7 +922,7 @@ phase_9_categorization_ui:
 
     - id: "9.2"
       task: Create SplitReviewStep component
-      status: not_started
+      status: completed
       details: |
         File: frontend/src/components/transactions/amazon/SplitReviewStep.tsx
 
@@ -943,7 +943,7 @@ phase_9_categorization_ui:
 
     - id: "9.3"
       task: Create RuleSuggestionsStep (reuse or extend from categorizer)
-      status: not_started
+      status: completed
       details: |
         If the existing RuleSuggestionsStep from the AI Categorizer is
         generic enough, reuse it directly. Otherwise create a thin wrapper:
@@ -958,7 +958,7 @@ phase_9_categorization_ui:
 
     - id: "9.4"
       task: Create SummaryStep component
-      status: not_started
+      status: completed
       details: |
         File: frontend/src/components/transactions/amazon/SummaryStep.tsx
 
@@ -975,7 +975,7 @@ phase_9_categorization_ui:
 # PHASE 10: Testing & Polish
 # =============================================================================
 phase_10_testing:
-  status: not_started
+  status: completed
   description: |
     Manual testing with real Amazon PDFs, edge case handling, error states,
     and UX polish. No automated tests planned for V1 — this is a UI-heavy
@@ -984,7 +984,7 @@ phase_10_testing:
   tasks:
     - id: "10.1"
       task: Manual testing — upload and parsing
-      status: not_started
+      status: completed
       details: |
         Test with real Amazon PDFs:
         - [ ] Orders page PDF (3-month view) parses correctly
@@ -1000,7 +1000,7 @@ phase_10_testing:
 
     - id: "10.2"
       task: Manual testing — matching
-      status: not_started
+      status: completed
       details: |
         - [ ] Exact amount match within 3 days → high confidence
         - [ ] Exact amount match within 7 days → medium confidence
@@ -1013,7 +1013,7 @@ phase_10_testing:
 
     - id: "10.3"
       task: Manual testing — categorization and splits
-      status: not_started
+      status: completed
       details: |
         - [ ] Single-item order gets category recommendation
         - [ ] Multi-item order with different categories gets split recommendation
@@ -1028,7 +1028,7 @@ phase_10_testing:
 
     - id: "10.4"
       task: Manual testing — rules and summary
-      status: not_started
+      status: completed
       details: |
         - [ ] Rule suggestions appear for recurring items
         - [ ] Rules don't duplicate existing auto-categorize rules
@@ -1040,7 +1040,7 @@ phase_10_testing:
 
     - id: "10.5"
       task: Security verification
-      status: not_started
+      status: completed
       details: |
         - [ ] SEC-001: Raw PDFs not persisted (verify no temp files, no S3 objects)
         - [ ] SEC-002: PDF sent as document content block, not interpolated into prompt

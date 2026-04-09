@@ -12,9 +12,14 @@
  */
 
 import { Router, Request, Response, NextFunction } from 'express';
-import { authenticate } from '../middleware/authMiddleware';
+import { authenticate, validateBody } from '../middleware/authMiddleware';
 import { uploadPdfs, validatePdfMagicBytes, handleMulterError } from '../middleware/pdfUpload';
 import { ValidationError } from '../errors';
+import {
+  resolveAmbiguousSchema,
+  categorizeRequestSchema,
+  applyActionsSchema,
+} from '../validators/amazonReceiptValidators';
 
 const router = Router();
 
@@ -141,6 +146,7 @@ router.post(
   '/:sessionId/resolve-ambiguous',
   authenticate,
   rateLimitStandard,
+  validateBody(resolveAmbiguousSchema),
   async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       const userId = req.user!.userId;
@@ -163,6 +169,7 @@ router.post(
   '/:sessionId/categorize',
   authenticate,
   rateLimitCategorize,
+  validateBody(categorizeRequestSchema),
   async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       const userId = req.user!.userId;
@@ -185,6 +192,7 @@ router.post(
   '/:sessionId/apply',
   authenticate,
   rateLimitStandard,
+  validateBody(applyActionsSchema),
   async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       const userId = req.user!.userId;

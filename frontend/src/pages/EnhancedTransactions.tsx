@@ -25,6 +25,7 @@ import { TransactionSplitModal } from '../components/transactions/TransactionSpl
 import { BulkEditBar } from '../components/transactions/BulkEditBar';
 import { BulkEditModal } from '../components/transactions/BulkEditModal';
 import { CategorizationFlowModal } from '../components/transactions/CategorizationFlowModal';
+import { AmazonReceiptFlowModal } from '../components/transactions/AmazonReceiptFlowModal';
 import { TransactionToolbar } from '../components/transactions/TransactionToolbar';
 import { TransactionFilterBar } from '../components/transactions/TransactionFilterBar';
 import { TransactionTable } from '../components/transactions/TransactionTable';
@@ -46,6 +47,7 @@ export function EnhancedTransactions() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [isTransactionImportOpen, setIsTransactionImportOpen] = useState(false);
   const [isCategorizationOpen, setIsCategorizationOpen] = useState(false);
+  const [isAmazonReceiptsOpen, setIsAmazonReceiptsOpen] = useState(false);
 
   // Use persisted filters from localStorage
   const {
@@ -213,6 +215,16 @@ export function EnhancedTransactions() {
   });
 
   const transactions = transactionData?.transactions || [];
+
+  // Count Amazon transactions for the receipt matching button
+  const amazonTransactionCount = useMemo(() => {
+    const patterns = ['amazon', 'amzn', 'kindle svcs'];
+    return transactions.filter(t => {
+      const name = (t.name || '').toLowerCase();
+      const merchant = (t.merchantName || '').toLowerCase();
+      return patterns.some(p => name.includes(p) || merchant.includes(p));
+    }).length;
+  }, [transactions]);
 
   // Paginate transactions
   const totalPages = Math.ceil(transactions.length / TRANSACTIONS_PER_PAGE);
@@ -391,8 +403,10 @@ export function EnhancedTransactions() {
             hasTransactions={transactions.length > 0}
             isSyncing={syncMutation.isPending}
             uncategorizedCount={uncategorizedData?.count ?? 0}
+            amazonTransactionCount={amazonTransactionCount}
             onSync={() => syncMutation.mutate()}
             onOpenCategorization={() => setIsCategorizationOpen(true)}
+            onOpenAmazonReceipts={() => setIsAmazonReceiptsOpen(true)}
             onOpenImport={() => setIsTransactionImportOpen(true)}
             onExportTSV={exportToTSV}
           />
@@ -537,6 +551,10 @@ export function EnhancedTransactions() {
           opened={isCategorizationOpen}
           onClose={() => setIsCategorizationOpen(false)}
           uncategorizedCount={uncategorizedData?.count || 0}
+        />
+        <AmazonReceiptFlowModal
+          opened={isAmazonReceiptsOpen}
+          onClose={() => setIsAmazonReceiptsOpen(false)}
         />
       </Container>
     </>
