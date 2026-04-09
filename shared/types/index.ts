@@ -1,5 +1,60 @@
 // Shared TypeScript types for the budgeting app
 
+// Theme Types
+export interface CustomTheme {
+  id: string;
+  userId: string;
+  name: string;
+  isActive: boolean;
+  primaryColor: string;
+  colors: {
+    [colorName: string]: string[]; // Each color has 10 shades
+  };
+  otherOptions: {
+    defaultRadius: string;
+    cursorType: string;
+    autoContrast: boolean;
+    luminanceThreshold: number;
+  };
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateThemeRequest {
+  name: string;
+  primaryColor: string;
+  colors: {
+    [colorName: string]: string[];
+  };
+  otherOptions: {
+    defaultRadius: string;
+    cursorType: string;
+    autoContrast: boolean;
+    luminanceThreshold: number;
+  };
+}
+
+export interface UpdateThemeRequest {
+  name?: string;
+  primaryColor?: string;
+  colors?: {
+    [colorName: string]: string[];
+  };
+  otherOptions?: {
+    defaultRadius?: string;
+    cursorType?: string;
+    autoContrast?: boolean;
+    luminanceThreshold?: number;
+  };
+}
+
+// Customizable colors constant
+export const CUSTOMIZABLE_COLORS = [
+  'dark', 'gray', 'red', 'pink', 'grape', 'violet',
+  'indigo', 'blue', 'cyan', 'teal', 'green', 'lime',
+  'yellow', 'orange'
+] as const;
+
 export interface User {
   id: string;
   username: string;
