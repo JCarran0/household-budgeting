@@ -21,7 +21,7 @@ import { notifications } from '@mantine/notifications';
 import { IconAlertCircle, IconTag, IconCategory } from '@tabler/icons-react';
 import { api } from '../../lib/api';
 import type { Transaction } from '../../../../shared/types';
-import { formatCurrency } from '../../utils/formatters';
+import { formatCurrency, formatAccountOwner } from '../../utils/formatters';
 import { useCategoryOptions } from '../../hooks/useCategoryOptions';
 
 interface AccountInfo {
@@ -331,7 +331,7 @@ export function TransactionEditModal({
             {transaction.accountOwner && (
               <Group justify="space-between">
                 <Text size="sm" c="dimmed">Purchased by</Text>
-                <Text fw={500}>{transaction.accountOwner}</Text>
+                <Text fw={500}>{formatAccountOwner(transaction.accountOwner)}</Text>
               </Group>
             )}
 

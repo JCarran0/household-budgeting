@@ -45,3 +45,13 @@ export function parseMonthString(monthStr: string): Date {
   const [year, month] = monthStr.split('-').map(Number);
   return new Date(year, month - 1, 1); // Month is 0-indexed in JavaScript
 }
+
+const ACCOUNT_OWNER_NAMES: Record<string, string> = {
+  '7177': 'Jecoliah',
+  '7245': 'Joj',
+  '7008': 'Jared',
+};
+
+export function formatAccountOwner(accountOwner: string): string {
+  return ACCOUNT_OWNER_NAMES[accountOwner] ?? accountOwner;
+}
