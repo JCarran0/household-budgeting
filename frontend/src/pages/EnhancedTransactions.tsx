@@ -1,11 +1,14 @@
 import { useState, useMemo, useCallback, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { format } from 'date-fns';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { notifications } from '@mantine/notifications';
 import { useTransactionFilters } from '../hooks/usePersistedFilters';
 import { useCategoryOptions } from '../hooks/useCategoryOptions';
 import { useTransactionData } from '../hooks/useTransactionData';
 import { useTransactionBulkOps } from '../hooks/useTransactionBulkOps';
 import { exportTransactionsToTSV } from '../utils/transactionExport';
+import { api } from '../lib/api';
 import type { Transaction } from '../../../shared/types';
 import {
   Container,
@@ -18,6 +21,7 @@ import {
 import {
   IconCategory,
   IconAlertCircle,
+  IconRobot,
 } from '@tabler/icons-react';
 import { TransactionEditModal } from '../components/transactions/TransactionEditModal';
 import { TransactionImport } from '../components/transactions/TransactionImport';
@@ -48,6 +52,42 @@ export function EnhancedTransactions() {
   const [isTransactionImportOpen, setIsTransactionImportOpen] = useState(false);
   const [isCategorizationOpen, setIsCategorizationOpen] = useState(false);
   const [isAmazonReceiptsOpen, setIsAmazonReceiptsOpen] = useState(false);
+  const queryClient = useQueryClient();
+
+  // AutoCat: preview then apply all uncategorized
+  const autoCatMutation = useMutation({
+    mutationFn: async () => {
+      const preview = await api.previewAutoCategorization(false);
+      if (preview.changes.length === 0) {
+        return { categorized: 0, recategorized: 0, total: 0, noChanges: true };
+      }
+      const result = await api.applyAutoCategorizeRules(false);
+      return { ...result, noChanges: false };
+    },
+    onSuccess: (result) => {
+      if (result.noChanges) {
+        notifications.show({
+          title: 'No Transactions to Categorize',
+          message: 'No matching auto-categorization rules found for uncategorized transactions.',
+          color: 'blue',
+        });
+      } else {
+        notifications.show({
+          title: 'Rules Applied',
+          message: `Categorized ${result.categorized} of ${result.total} transactions`,
+          color: 'green',
+        });
+        queryClient.invalidateQueries({ queryKey: ['transactions'] });
+      }
+    },
+    onError: (error: unknown) => {
+      notifications.show({
+        title: 'Error',
+        message: error instanceof Error ? error.message : 'Failed to apply auto-categorization rules',
+        color: 'red',
+      });
+    },
+  });
 
   // Use persisted filters from localStorage
   const {
@@ -444,18 +484,33 @@ export function EnhancedTransactions() {
                   ({Math.round((uncategorizedData.count / uncategorizedData.total) * 100)}% of total).
                   Click here to filter to uncategorized transactions only.
                 </Text>
-                <Button
-                  size="xs"
-                  variant="white"
-                  color={uncategorizedData.count > 10 ? 'red' : 'orange'}
-                  leftSection={<IconCategory size={14} />}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    navigate('/categories');
-                  }}
-                >
-                  Manage Categories
-                </Button>
+                <Group gap="xs">
+                  <Button
+                    size="xs"
+                    variant="white"
+                    color={uncategorizedData.count > 10 ? 'red' : 'orange'}
+                    leftSection={<IconRobot size={14} />}
+                    loading={autoCatMutation.isPending}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      autoCatMutation.mutate();
+                    }}
+                  >
+                    Run AutoCat
+                  </Button>
+                  <Button
+                    size="xs"
+                    variant="white"
+                    color={uncategorizedData.count > 10 ? 'red' : 'orange'}
+                    leftSection={<IconCategory size={14} />}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      navigate('/categories');
+                    }}
+                  >
+                    Manage Categories
+                  </Button>
+                </Group>
               </Group>
             </Alert>
           )}
