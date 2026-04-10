@@ -22,6 +22,7 @@ import {
 import { format } from 'date-fns';
 import { parseMonthString } from '../../utils/formatters';
 import { defaultPalette } from '../../theme';
+import { createNearestLineTooltip, useChartMouseTracker } from './NearestLineTooltip';
 
 interface ProjectionItem {
   month: string;
@@ -36,41 +37,6 @@ interface ProjectionsData {
   hasPriorYearData: boolean;
 }
 
-interface CustomLineTooltipProps {
-  active?: boolean;
-  payload?: Array<{ name: string; value: number; dataKey: string; color: string }>;
-  label?: string;
-}
-
-function CustomLineTooltip({ active, payload, label }: CustomLineTooltipProps) {
-  if (active && payload && payload.length > 0) {
-    const activeItems = payload.filter(item => item.value > 0);
-    if (activeItems.length === 1) {
-      const data = activeItems[0];
-      return (
-        <Paper p="xs" withBorder shadow="sm">
-          <Text size="sm" fw={600}>{label}</Text>
-          <Text size="xs" c="dimmed">
-            {data.dataKey}: ${data.value.toFixed(0)}
-          </Text>
-        </Paper>
-      );
-    } else if (activeItems.length > 1) {
-      return (
-        <Paper p="xs" withBorder shadow="sm">
-          <Text size="sm" fw={600}>{label}</Text>
-          {activeItems.map((item, index) => (
-            <Text key={index} size="xs" c="dimmed">
-              {item.dataKey}: ${item.value.toFixed(0)}
-            </Text>
-          ))}
-        </Paper>
-      );
-    }
-  }
-  return null;
-}
-
 interface ProjectionsSectionProps {
   projectionsData: ProjectionsData | undefined;
 }
@@ -79,6 +45,7 @@ export function ProjectionsSection({ projectionsData }: ProjectionsSectionProps)
   const [showBudgetedLine, setShowBudgetedLine] = useState(true);
   const [showPriorYearLine, setShowPriorYearLine] = useState(true);
   const [showAverageLine, setShowAverageLine] = useState(true);
+  const projectionsTracker = useChartMouseTracker();
 
   const projectionsChartData = projectionsData?.projections?.map(item => ({
     month: format(parseMonthString(item.month), 'MMM'),
@@ -87,6 +54,13 @@ export function ProjectionsSection({ projectionsData }: ProjectionsSectionProps)
     average: item.averageCashflow,
     isBudgetExtrapolated: item.isBudgetExtrapolated,
   })) || [];
+
+  const CHART_HEIGHT = 300;
+  const projectionsYMax = Math.max(
+    ...projectionsChartData.flatMap(d => [d.budgeted ?? 0, d.priorYear ?? 0, d.average]),
+    1,
+  );
+  const ProjectionsTooltip = createNearestLineTooltip(projectionsTracker.mouseYRef, projectionsYMax, CHART_HEIGHT);
 
   return (
     <Grid>
@@ -131,12 +105,13 @@ export function ProjectionsSection({ projectionsData }: ProjectionsSectionProps)
             </Group>
           </Group>
 
-          <ResponsiveContainer width="100%" height={300}>
+          <div {...projectionsTracker.containerProps}>
+          <ResponsiveContainer width="100%" height={CHART_HEIGHT}>
             <LineChart data={projectionsChartData}>
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis dataKey="month" />
               <YAxis />
-              <RechartsTooltip content={<CustomLineTooltip />} />
+              <RechartsTooltip content={<ProjectionsTooltip />} />
               <Legend />
 
               {/* Budgeted Line */}
@@ -179,6 +154,7 @@ export function ProjectionsSection({ projectionsData }: ProjectionsSectionProps)
               )}
             </LineChart>
           </ResponsiveContainer>
+          </div>
 
           {/* Legend Explanation */}
           <Stack gap="xs" mt="md" style={{ fontSize: '0.85rem', color: 'var(--mantine-color-dimmed)' }}>
