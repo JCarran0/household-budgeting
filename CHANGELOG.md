@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.13.0](https://github.com/JCarran0/household-budgeting/compare/v5.12.0...v5.13.0) (2026-04-10)
+
+
+### Features
+
+* **categorization:** allow editing transaction descriptions in AI cat flow ([2f0d0f4](https://github.com/JCarran0/household-budgeting/commit/2f0d0f4f0ab2ad63705334a8c6a81f12bef61e98))
+* **transactions:** map account owner IDs to person names ([94504b0](https://github.com/JCarran0/household-budgeting/commit/94504b0da8140b735295ed9850504bacb52f304e))
+
 ## [5.12.0](https://github.com/JCarran0/household-budgeting/compare/v5.11.1...v5.12.0) (2026-04-10)
 
 
