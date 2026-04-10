@@ -30,6 +30,7 @@ import { BulkEditBar } from '../components/transactions/BulkEditBar';
 import { BulkEditModal } from '../components/transactions/BulkEditModal';
 import { CategorizationFlowModal } from '../components/transactions/CategorizationFlowModal';
 import { AmazonReceiptFlowModal } from '../components/transactions/AmazonReceiptFlowModal';
+import { AutoCatPreviewModal, type TransactionChange } from '../components/categories/AutoCatPreviewModal';
 import { TransactionToolbar } from '../components/transactions/TransactionToolbar';
 import { TransactionFilterBar } from '../components/transactions/TransactionFilterBar';
 import { TransactionTable } from '../components/transactions/TransactionTable';
@@ -52,33 +53,25 @@ export function EnhancedTransactions() {
   const [isTransactionImportOpen, setIsTransactionImportOpen] = useState(false);
   const [isCategorizationOpen, setIsCategorizationOpen] = useState(false);
   const [isAmazonReceiptsOpen, setIsAmazonReceiptsOpen] = useState(false);
+  const [isAutoCatPreviewOpen, setIsAutoCatPreviewOpen] = useState(false);
+  const [autoCatChanges, setAutoCatChanges] = useState<TransactionChange[]>([]);
+  const [autoCatCounts, setAutoCatCounts] = useState({ wouldCategorize: 0, wouldRecategorize: 0 });
   const queryClient = useQueryClient();
 
-  // AutoCat: preview then apply all uncategorized
-  const autoCatMutation = useMutation({
-    mutationFn: async () => {
-      const preview = await api.previewAutoCategorization(false);
-      if (preview.changes.length === 0) {
-        return { categorized: 0, recategorized: 0, total: 0, noChanges: true };
-      }
-      const result = await api.applyAutoCategorizeRules(false);
-      return { ...result, noChanges: false };
-    },
+  const autoCatPreviewMutation = useMutation({
+    mutationFn: () => api.previewAutoCategorization(false),
+  });
+
+  const autoCatApplyMutation = useMutation({
+    mutationFn: ({ transactionIds }: { transactionIds?: string[] }) =>
+      api.applyAutoCategorizeRules(false, transactionIds),
     onSuccess: (result) => {
-      if (result.noChanges) {
-        notifications.show({
-          title: 'No Transactions to Categorize',
-          message: 'No matching auto-categorization rules found for uncategorized transactions.',
-          color: 'blue',
-        });
-      } else {
-        notifications.show({
-          title: 'Rules Applied',
-          message: `Categorized ${result.categorized} of ${result.total} transactions`,
-          color: 'green',
-        });
-        queryClient.invalidateQueries({ queryKey: ['transactions'] });
-      }
+      notifications.show({
+        title: 'Rules Applied',
+        message: `Categorized ${result.categorized} of ${result.total} transactions`,
+        color: 'green',
+      });
+      queryClient.invalidateQueries({ queryKey: ['transactions'] });
     },
     onError: (error: unknown) => {
       notifications.show({
@@ -490,10 +483,24 @@ export function EnhancedTransactions() {
                     variant="white"
                     color={uncategorizedData.count > 10 ? 'red' : 'orange'}
                     leftSection={<IconRobot size={14} />}
-                    loading={autoCatMutation.isPending}
-                    onClick={(e) => {
+                    loading={autoCatPreviewMutation.isPending}
+                    onClick={async (e) => {
                       e.stopPropagation();
-                      autoCatMutation.mutate();
+                      const preview = await autoCatPreviewMutation.mutateAsync();
+                      if (preview.changes.length > 0) {
+                        setAutoCatChanges(preview.changes);
+                        setAutoCatCounts({
+                          wouldCategorize: preview.wouldCategorize,
+                          wouldRecategorize: preview.wouldRecategorize,
+                        });
+                        setIsAutoCatPreviewOpen(true);
+                      } else {
+                        notifications.show({
+                          title: 'No Transactions to Categorize',
+                          message: 'No matching auto-categorization rules found.',
+                          color: 'blue',
+                        });
+                      }
                     }}
                   >
                     Run AutoCat
@@ -611,6 +618,17 @@ export function EnhancedTransactions() {
         <AmazonReceiptFlowModal
           opened={isAmazonReceiptsOpen}
           onClose={() => setIsAmazonReceiptsOpen(false)}
+        />
+        <AutoCatPreviewModal
+          opened={isAutoCatPreviewOpen}
+          onClose={() => setIsAutoCatPreviewOpen(false)}
+          changes={autoCatChanges}
+          counts={autoCatCounts}
+          onApply={(selectedIds) => {
+            autoCatApplyMutation.mutate({ transactionIds: selectedIds });
+            setIsAutoCatPreviewOpen(false);
+          }}
+          applyLoading={autoCatApplyMutation.isPending}
         />
       </Container>
     </>
