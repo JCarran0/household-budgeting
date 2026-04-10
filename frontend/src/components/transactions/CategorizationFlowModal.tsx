@@ -4,7 +4,7 @@ import { IconSparkles, IconCheck } from '@tabler/icons-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { api } from '../../lib/api';
 import { notifications } from '@mantine/notifications';
-import { BucketReviewStep } from './BucketReviewStep';
+import { BucketReviewStep, type BucketApplySelection } from './BucketReviewStep';
 import { RuleSuggestionsStep } from './RuleSuggestionsStep';
 import type { ClassificationBucket, RuleSuggestion } from '../../../../shared/types';
 
@@ -95,7 +95,7 @@ export function CategorizationFlowModal({ opened, onClose, uncategorizedCount }:
     }
   }, [currentBucketIndex, totalBuckets, allCategorizations]);
 
-  const handleApply = useCallback(async (selections: { transactionId: string; categoryId: string }[]) => {
+  const handleApply = useCallback(async (selections: BucketApplySelection[]) => {
     setIsApplying(true);
     try {
       // Group by categoryId and send bulk updates
@@ -107,6 +107,12 @@ export function CategorizationFlowModal({ opened, onClose, uncategorizedCount }:
 
       for (const [categoryId, ids] of byCat) {
         await api.bulkUpdateTransactions(ids, { categoryId });
+      }
+
+      // Apply description edits individually
+      const descriptionEdits = selections.filter(s => s.userDescription !== undefined);
+      for (const s of descriptionEdits) {
+        await api.updateTransactionDescription(s.transactionId, s.userDescription!);
       }
 
       setAppliedCount(prev => prev + selections.length);

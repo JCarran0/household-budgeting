@@ -1,15 +1,21 @@
 import { useState } from 'react';
-import { Table, Select, Button, Group, Text, Stack, Badge, ScrollArea } from '@mantine/core';
+import { Table, Select, Button, Group, Text, TextInput, Stack, Badge, ScrollArea } from '@mantine/core';
 import { IconCheck } from '@tabler/icons-react';
 import { useCategoryOptions } from '../../hooks/useCategoryOptions';
 import { formatCurrency } from '../../utils/formatters';
 import type { ClassificationBucket } from '../../../../shared/types';
 
+export interface BucketApplySelection {
+  transactionId: string;
+  categoryId: string;
+  userDescription?: string;
+}
+
 interface BucketReviewStepProps {
   bucket: ClassificationBucket;
   bucketIndex: number;
   totalBuckets: number;
-  onApply: (selections: { transactionId: string; categoryId: string }[]) => void;
+  onApply: (selections: BucketApplySelection[]) => void;
   onSkip: () => void;
   isApplying: boolean;
 }
@@ -33,6 +39,9 @@ export function BucketReviewStep({
     return map;
   });
 
+  // Track per-row description edits
+  const [descriptionEdits, setDescriptionEdits] = useState<Map<string, string>>(new Map());
+
   const handleCategoryChange = (transactionId: string, categoryId: string | null) => {
     setSelections(prev => {
       const next = new Map(prev);
@@ -45,12 +54,25 @@ export function BucketReviewStep({
     });
   };
 
+  const handleDescriptionChange = (transactionId: string, value: string) => {
+    setDescriptionEdits(prev => {
+      const next = new Map(prev);
+      next.set(transactionId, value);
+      return next;
+    });
+  };
+
   const handleApply = () => {
-    const results = bucket.transactions
-      .map(t => ({
-        transactionId: t.id,
-        categoryId: selections.get(t.id) || t.suggestedCategoryId,
-      }))
+    const results: BucketApplySelection[] = bucket.transactions
+      .map(t => {
+        const edited = descriptionEdits.get(t.id);
+        return {
+          transactionId: t.id,
+          categoryId: selections.get(t.id) || t.suggestedCategoryId,
+          // Only include if the user actually changed it
+          ...(edited !== undefined && edited !== t.name ? { userDescription: edited } : {}),
+        };
+      })
       .filter(r => r.categoryId);
     onApply(results);
   };
@@ -96,7 +118,13 @@ export function BucketReviewStep({
               <Table.Tr key={t.id}>
                 <Table.Td style={{ whiteSpace: 'nowrap' }}>{t.date}</Table.Td>
                 <Table.Td>
-                  <Text size="sm" lineClamp={1}>{t.name}</Text>
+                  <TextInput
+                    size="xs"
+                    variant="unstyled"
+                    value={descriptionEdits.get(t.id) ?? t.name}
+                    onChange={(e) => handleDescriptionChange(t.id, e.currentTarget.value)}
+                    styles={{ input: { fontSize: 'var(--mantine-font-size-sm)' } }}
+                  />
                 </Table.Td>
                 <Table.Td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
                   {formatCurrency(Math.abs(t.amount))}
