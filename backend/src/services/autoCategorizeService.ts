@@ -321,11 +321,11 @@ export class AutoCategorizeService {
       const userCategories = await this.dataService.getCategories(userId);
       const categoryMap = new Map(userCategories.map(c => [c.id, c.name]));
 
-      // For preview, include all non-hidden transactions
+      // For preview, include all non-hidden, non-split-child transactions
       const targetTransactions = forceRecategorize
-        ? transactions.filter(t => !t.isHidden)
+        ? transactions.filter(t => !t.isHidden && !t.parentTransactionId)
         : transactions.filter(t => {
-            if (t.isHidden) return false;
+            if (t.isHidden || t.parentTransactionId) return false;
             if (!t.categoryId) return true;
             // Include transactions with invalid category IDs
             const validCategory = userCategories.find(cat => cat.id === t.categoryId);
@@ -395,11 +395,11 @@ export class AutoCategorizeService {
       // Get user's categories for matching
       const userCategories = await this.dataService.getCategories(userId);
 
-      // Include all non-hidden transactions if force recategorizing
+      // Include all non-hidden, non-split-child transactions if force recategorizing
       let targetTransactions = forceRecategorize
-        ? transactions.filter(t => !t.isHidden)
+        ? transactions.filter(t => !t.isHidden && !t.parentTransactionId)
         : transactions.filter(t => {
-            if (t.isHidden) return false;
+            if (t.isHidden || t.parentTransactionId) return false;
             if (!t.categoryId) return true;
             // Include transactions with invalid category IDs
             const validCategory = userCategories.find(cat => cat.id === t.categoryId);
