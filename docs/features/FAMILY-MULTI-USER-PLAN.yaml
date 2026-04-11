@@ -633,13 +633,13 @@ phase_5_family_management:
 # PHASE 6: User Profile API
 # ============================================================================
 phase_6_user_profile:
-  status: not_started
+  status: completed
   description: |
     API endpoints for user profile management: display name, password.
   tasks:
     - id: P6-T1
       task: "Add display name update endpoint"
-      status: not_started
+      status: completed
       details: |
         In authRoutes.ts, add:
         PUT /api/v1/auth/profile
@@ -650,7 +650,7 @@ phase_6_user_profile:
 
     - id: P6-T2
       task: "Ensure change-password works independently"
-      status: not_started
+      status: completed
       details: |
         POST /auth/change-password already exists and uses userId.
         Verify it works correctly with the new model:
@@ -663,14 +663,14 @@ phase_6_user_profile:
 # PHASE 7: Account Owner Mapping API
 # ============================================================================
 phase_7_account_owner_mapping:
-  status: not_started
+  status: completed
   description: |
     Replace the hardcoded frontend account owner mapping with a configurable
     family-level data entity backed by an API.
   tasks:
     - id: P7-T1
       task: "Create AccountOwnerMappingService"
-      status: not_started
+      status: completed
       details: |
         New file: backend/src/services/accountOwnerMappingService.ts
         Storage key: account_owner_mappings_{familyId}
@@ -684,7 +684,7 @@ phase_7_account_owner_mapping:
 
     - id: P7-T2
       task: "Create account owner mapping routes"
-      status: not_started
+      status: completed
       details: |
         Add to existing accounts.ts or new route file:
         GET    /api/v1/account-owners          — List all mappings
@@ -694,7 +694,7 @@ phase_7_account_owner_mapping:
 
     - id: P7-T3
       task: "Seed initial mappings during migration"
-      status: not_started
+      status: completed
       details: |
         During the Phase 4 migration (P4-T2), create initial account owner mappings
         from the existing hardcoded values:

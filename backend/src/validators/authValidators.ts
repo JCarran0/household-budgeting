@@ -82,6 +82,11 @@ export const resetPasswordSchema = z.object({
   path: ['confirmPassword'],
 });
 
+// Profile update schema
+export const updateProfileSchema = z.object({
+  displayName: z.string().min(1, 'Display name is required').max(50, 'Display name must be less than 50 characters'),
+});
+
 // Type exports
 export type RegistrationInput = z.infer<typeof registrationSchema>;
 export type LoginInput = z.infer<typeof loginSchema>;
@@ -89,4 +94,5 @@ export type ChangePasswordInput = z.infer<typeof changePasswordSchema>;
 export type TokenRefreshInput = z.infer<typeof tokenRefreshSchema>;
 export type ResetRequestInput = z.infer<typeof resetRequestSchema>;
 export type ResetPasswordInput = z.infer<typeof resetPasswordSchema>;
+export type UpdateProfileInput = z.infer<typeof updateProfileSchema>;
 export type JWTPayload = z.infer<typeof jwtPayloadSchema>;

@@ -390,6 +390,45 @@ export class AuthService {
     }
   }
 
+  async updateProfile(
+    userId: string,
+    displayName: string,
+  ): Promise<AuthResult> {
+    try {
+      const user = await this.dataService.getUser(userId);
+      if (!user) {
+        return { success: false, error: 'User not found' };
+      }
+
+      // Update user record
+      await this.dataService.updateUser(userId, { displayName });
+
+      // Update displayName in family.members array
+      if (user.familyId) {
+        const family = await this.dataService.getFamily(user.familyId);
+        if (family) {
+          const updatedMembers = family.members.map(m =>
+            m.userId === userId ? { ...m, displayName } : m
+          );
+          await this.dataService.updateFamily(user.familyId, { members: updatedMembers });
+        }
+      }
+
+      return {
+        success: true,
+        user: {
+          id: user.id,
+          username: user.username,
+          displayName,
+          familyId: user.familyId,
+        },
+      };
+    } catch (error) {
+      console.error('Profile update error:', error);
+      return { success: false, error: 'Profile update failed. Please try again.' };
+    }
+  }
+
   async changePassword(
     userId: string,
     currentPassword: string,

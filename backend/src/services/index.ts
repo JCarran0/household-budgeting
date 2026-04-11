@@ -26,6 +26,7 @@ import { CategorizationService } from './categorizationService';
 import { ManualAccountService } from './manualAccountService';
 import { AmazonReceiptService } from './amazonReceiptService';
 import { FamilyService } from './familyService';
+import { AccountOwnerMappingService } from './accountOwnerMappingService';
 
 // Create data service based on environment
 // Uses StorageFactory to automatically switch between filesystem and S3
@@ -102,6 +103,7 @@ export const amazonReceiptService = new AmazonReceiptService(
 );
 
 export const familyService = new FamilyService(dataService);
+export const accountOwnerMappingService = new AccountOwnerMappingService(dataService);
 
 // Export dataService for other services that need it
 export { dataService };
@@ -126,4 +128,5 @@ export {
   ManualAccountService,
   AmazonReceiptService,
   FamilyService,
+  AccountOwnerMappingService,
 };

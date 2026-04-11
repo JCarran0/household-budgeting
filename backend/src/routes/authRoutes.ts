@@ -13,6 +13,7 @@ import {
   tokenRefreshSchema,
   resetRequestSchema,
   resetPasswordSchema,
+  updateProfileSchema,
 } from '../validators/authValidators';
 
 const router = Router();
@@ -170,6 +171,33 @@ router.get(
           familyId: req.user.familyId,
         },
       });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+/**
+ * @route PUT /api/v1/auth/profile
+ * @desc Update user profile (display name)
+ * @access Private
+ */
+router.put(
+  '/profile',
+  authenticate,
+  validateBody(updateProfileSchema),
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      if (!req.user) throw new AuthorizationError();
+
+      const { displayName } = req.body;
+      const result = await authService.updateProfile(req.user.userId, displayName);
+
+      if (result.success) {
+        res.json(result);
+      } else {
+        res.status(400).json(result);
+      }
     } catch (error) {
       next(error);
     }

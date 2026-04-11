@@ -1,5 +1,5 @@
 import express, { NextFunction, Request, Response } from 'express';
-import { categoryService, dataService } from '../services';
+import { categoryService, dataService, accountOwnerMappingService } from '../services';
 import { authMiddleware } from '../middleware/authMiddleware';
 import { AuthorizationError } from '../errors';
 
@@ -434,6 +434,28 @@ router.post('/migrate-to-families', async (_req: Request, res: Response, next: N
 
     // chatbot_costs keys are formatted as chatbot_costs_YYYY-MM (not userId-scoped), skip them.
     console.log('Note: chatbot_costs_* keys are not userId-scoped and are skipped by this migration.');
+
+    // Seed initial account owner mappings for each family (idempotent)
+    const seededFamilies = new Set<string>();
+    for (const user of users) {
+      if (!user.familyId || seededFamilies.has(user.familyId)) continue;
+      seededFamilies.add(user.familyId);
+
+      const existing = await accountOwnerMappingService.getMappings(user.familyId);
+      if (existing.length === 0) {
+        const seedMappings = [
+          { cardIdentifier: '7177', displayName: 'Jecoliah' },
+          { cardIdentifier: '7245', displayName: 'Joj' },
+          { cardIdentifier: '7008', displayName: 'Jared' },
+        ];
+        for (const seed of seedMappings) {
+          await accountOwnerMappingService.createMapping(user.familyId, seed);
+        }
+        console.log(`Seeded ${seedMappings.length} account owner mappings for family ${user.familyId}`);
+      } else {
+        console.log(`Account owner mappings already exist for family ${user.familyId}, skipping seed`);
+      }
+    }
 
     const totalMigrated = userResults.reduce(
       (sum, u) => sum + u.migratedEntities.filter(e => e.result === 'migrated').length,
