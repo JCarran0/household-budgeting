@@ -1,0 +1,924 @@
+overview:
+  title: "Family & Multi-User Support — Implementation Plan"
+  brd: "docs/features/FAMILY-MULTI-USER-BRD.md"
+  date: "2026-04-11"
+  status: in_progress
+  summary: |
+    Introduce a Family entity that groups users together and owns all financial data.
+    Each user gets individual credentials and a display name. All family members see
+    the same data (no per-user scoping). The core change is replacing userId with
+    familyId as the data ownership key across the entire stack.
+
+  key_files:
+    types: "shared/types/index.ts"
+    auth_service: "backend/src/services/authService.ts"
+    auth_routes: "backend/src/routes/authRoutes.ts"
+    auth_middleware: "backend/src/middleware/authMiddleware.ts"
+    auth_validators: "backend/src/validators/authValidators.ts"
+    repository: "backend/src/services/repository.ts"
+    data_service: "backend/src/services/dataService.ts"
+    auth_store: "frontend/src/stores/authStore.ts"
+    api_auth: "frontend/src/lib/api/auth.ts"
+    formatters: "frontend/src/utils/formatters.ts"
+
+  entities_requiring_refactor:
+    - entity: transactions
+      service: backend/src/services/transactionService.ts
+      key_pattern: "transactions_{userId} -> transactions_{familyId}"
+    - entity: accounts
+      service: backend/src/services/accountService.ts
+      key_pattern: "accounts_{userId} -> accounts_{familyId}"
+    - entity: budgets
+      service: backend/src/services/budgetService.ts
+      key_pattern: "budgets_{userId} -> budgets_{familyId}"
+    - entity: categories
+      service: backend/src/services/dataService.ts (getCategories/saveCategories)
+      key_pattern: "categories_{userId} -> categories_{familyId}"
+    - entity: autocategorize_rules
+      service: backend/src/services/autoCategorizeService.ts
+      key_pattern: "autocategorize_rules_{userId} -> autocategorize_rules_{familyId}"
+    - entity: projects
+      service: backend/src/services/projectService.ts
+      key_pattern: "projects_{userId} -> projects_{familyId}"
+    - entity: trips
+      service: backend/src/services/tripService.ts
+      key_pattern: "trips_{userId} -> trips_{familyId}"
+    - entity: manual_accounts
+      service: backend/src/services/manualAccountService.ts
+      key_pattern: "manual_accounts_{userId} -> manual_accounts_{familyId}"
+    - entity: amazon_receipts
+      service: backend/src/services/amazonReceiptService.ts
+      key_pattern: "amazon_receipts_{userId} -> amazon_receipts_{familyId}"
+    - entity: actuals_overrides
+      service: backend/src/services/actualsOverrideService.ts
+      key_pattern: "actuals_overrides_{userId} -> actuals_overrides_{familyId}"
+    - entity: chatbot_costs
+      service: backend/src/services/chatbotCostTracker.ts
+      key_pattern: "chatbot_costs_{month} -> chatbot_costs_{familyId}_{month}"
+
+  stays_user_scoped:
+    - entity: theme_preferences
+      reason: "Individual preference, not family data"
+      key_pattern: "theme_preferences_{userId} (unchanged)"
+
+  routes_requiring_changes:
+    - backend/src/routes/accounts.ts (9 endpoints)
+    - backend/src/routes/transactions.ts (11 endpoints)
+    - backend/src/routes/budgets.ts (11 endpoints)
+    - backend/src/routes/categories.ts (10 endpoints)
+    - backend/src/routes/reports.ts (7 endpoints)
+    - backend/src/routes/chatbot.ts (4 endpoints)
+    - backend/src/routes/autoCategorize.ts (5 endpoints)
+    - backend/src/routes/actualsOverrides.ts (5 endpoints)
+    - backend/src/routes/manualAccounts.ts (4 endpoints)
+    - backend/src/routes/amazonReceipts.ts (7+ endpoints)
+    - backend/src/routes/trips.ts (6+ endpoints)
+    - backend/src/routes/projects.ts (6+ endpoints)
+    - backend/src/routes/themes.ts (3 endpoints — keeps userId)
+    - backend/src/routes/admin.ts (6 endpoints)
+    - backend/src/routes/authRoutes.ts (new family endpoints)
+
+decisions:
+  - id: D1
+    date: "2026-04-11"
+    decision: "Theme preferences stay user-scoped"
+    rationale: |
+      Theme/UI preferences are inherently individual — one user may prefer dark mode
+      while another prefers light. All other data entities move to familyId scoping,
+      but theme_preferences_{userId} remains unchanged.
+
+  - id: D2
+    date: "2026-04-11"
+    decision: "familyId added to JWT payload alongside userId"
+    rationale: |
+      The JWT currently contains { userId, username }. We add familyId so the
+      middleware can attach it to req.user without an extra database lookup on
+      every request. When a user's family membership changes (join/leave), their
+      existing tokens must be invalidated so they get a fresh token with the
+      correct familyId.
+
+  - id: D3
+    date: "2026-04-11"
+    decision: "Repository.key() parameter renamed from userId to familyId"
+    rationale: |
+      The Repository base class (repository.ts) generates storage keys as
+      `${entityName}_${userId}`. Renaming the parameter to familyId propagates
+      the semantic change through all services that extend Repository. Services
+      using direct dataService calls are updated individually.
+
+  - id: D4
+    date: "2026-04-11"
+    decision: "Family and membership stored in families.json alongside users.json"
+    rationale: |
+      Follows the existing global storage pattern (users.json is not user-scoped).
+      families.json stores family objects with a members array. Simple and consistent
+      with the current storage model. No need for a separate junction file.
+
+  - id: D5
+    date: "2026-04-11"
+    decision: "Join codes stored in-memory with TTL, not persisted"
+    rationale: |
+      Join codes are short-lived (48h) and single-use. Persisting them adds complexity
+      for no benefit — if the server restarts, the inviter can generate a new code.
+      Matches the existing pattern for password reset tokens (in-memory Map with expiry).
+
+  - id: D6
+    date: "2026-04-11"
+    decision: "Migration script runs as a standalone admin endpoint"
+    rationale: |
+      Follows the existing migration pattern in admin.ts (migrate-savings-to-rollover,
+      migrate-is-income). Provides a status-check endpoint and an execute endpoint.
+      Works for both filesystem and S3 via StorageAdapter. Idempotent by design.
+
+  - id: D7
+    date: "2026-04-11"
+    decision: "Account owner mappings stored as family-level data file"
+    rationale: |
+      Stored as account_owner_mappings_{familyId}.json. Each mapping has a card
+      identifier, display name, and optional userId link. Replaces the hardcoded
+      ACCOUNT_OWNER_NAMES in frontend/src/utils/formatters.ts with an API-driven
+      approach.
+
+  - id: D8
+    date: "2026-04-11"
+    decision: "Routes use req.user.familyId for data access, req.user.userId for audit/identity"
+    rationale: |
+      Clean separation: familyId determines WHAT data you access, userId determines
+      WHO you are. Most routes switch from req.user.userId to req.user.familyId for
+      service calls. userId is still used for: auth operations, theme preferences,
+      chatbot cost record attribution, and future audit trails.
+
+  - id: D9
+    date: "2026-04-11"
+    decision: "Join codes are simple 8-character alphanumeric codes entered in the registration form"
+    rationale: |
+      Resolved from Q1. Simple code approach — no URL routing needed. User copies
+      the code from the inviter and pastes it into an optional field on the
+      registration form. URL-based join links can be added later if desired.
+
+  - id: D10
+    date: "2026-04-11"
+    decision: "60-second in-memory cache for family membership verification in middleware"
+    rationale: |
+      Resolved from Q2. Middleware verifies the JWT's familyId matches the user's
+      current familyId in users.json, cached for 60 seconds. Acceptable propagation
+      delay for member removal. Avoids JWT versioning complexity while keeping the
+      DB read cost minimal for a 2-user app.
+
+  - id: D11
+    date: "2026-04-11"
+    decision: "Migration triggered via admin API endpoint"
+    rationale: |
+      Resolved from Q3. Consistent with existing migration patterns in admin.ts
+      (migrate-savings-to-rollover, migrate-is-income). Provides status-check
+      and execute endpoints. Can be triggered from admin UI or curl.
+
+# ============================================================================
+# PHASE 1: Types & Data Model
+# ============================================================================
+phase_1_types:
+  status: completed
+  description: |
+    Define the Family entity, update the User model, and add shared types.
+    This phase is purely additive — no existing behavior changes.
+  tasks:
+    - id: P1-T1
+      task: "Add Family and related types to shared/types/index.ts"
+      status: completed
+      details: |
+        New types:
+          interface Family {
+            id: string;              // UUID
+            name: string;            // e.g., "Carrano Family"
+            members: FamilyMember[];
+            createdAt: string;       // ISO string
+            updatedAt: string;       // ISO string
+          }
+
+          interface FamilyMember {
+            userId: string;          // References User.id
+            displayName: string;     // e.g., "Jared"
+            joinedAt: string;        // ISO string
+          }
+
+          interface AccountOwnerMapping {
+            id: string;              // UUID
+            cardIdentifier: string;  // Last-4 digits from Plaid accountOwner
+            displayName: string;     // e.g., "Jared", "Joj"
+            linkedUserId?: string;   // Optional link to a family member
+          }
+
+    - id: P1-T2
+      task: "Update User type to include familyId and displayName"
+      status: completed
+      details: |
+        In shared/types/index.ts, update the User interface:
+          interface User {
+            id: string;
+            username: string;
+            displayName: string;     // NEW — separate from username
+            familyId: string;        // NEW — the family this user belongs to
+            createdAt: string;
+          }
+
+        In backend dataService.ts, update the internal User interface:
+          interface User {
+            id: string;
+            username: string;
+            displayName: string;     // NEW
+            familyId: string;        // NEW
+            passwordHash: string;
+            createdAt: Date;
+            updatedAt?: Date;
+            lastLogin?: Date;
+            failedLoginAttempts?: number;
+            lockedUntil?: Date;
+          }
+
+    - id: P1-T3
+      task: "Add family CRUD methods to DataService"
+      status: completed
+      details: |
+        Add to DataService interface and UnifiedDataService:
+          - getFamilies(): Promise<Family[]>
+          - getFamily(familyId: string): Promise<Family | null>
+          - createFamily(family: Family): Promise<void>
+          - updateFamily(familyId: string, updates: Partial<Family>): Promise<void>
+
+        Storage key: "families" (global, like "users")
+        File: families.json with structure { families: [...] }
+
+    - id: P1-T4
+      task: "Add JWTPayload familyId field"
+      status: completed
+      details: |
+        In authService.ts, update JWTPayload interface (line 19):
+          interface JWTPayload {
+            userId: string;
+            username: string;
+            familyId: string;    // NEW
+            iat?: number;
+            exp?: number;
+          }
+
+# ============================================================================
+# PHASE 2: Auth & Family Creation
+# ============================================================================
+phase_2_auth:
+  status: not_started
+  description: |
+    Update registration to create a family, login to include familyId in JWT,
+    and middleware to attach familyId to req.user. After this phase, the auth
+    system is family-aware but all data access still uses userId (Phase 3 changes that).
+  tasks:
+    - id: P2-T1
+      task: "Update registration flow to create a family"
+      status: not_started
+      details: |
+        In authService.ts register():
+        1. Accept new fields: displayName, familyName (optional, defaults to "{username}'s Family")
+        2. Create Family { id: uuidv4(), name: familyName, members: [{ userId, displayName, joinedAt }], createdAt, updatedAt }
+        3. Save family via dataService.createFamily()
+        4. Set user.familyId = family.id and user.displayName = displayName
+        5. Generate token with { userId, username, familyId }
+
+        Update authValidators.ts registerSchema:
+        - Add displayName: z.string().min(1).max(50)
+        - Add familyName: z.string().min(1).max(100).optional()
+
+    - id: P2-T2
+      task: "Update login flow to include familyId in JWT"
+      status: not_started
+      details: |
+        In authService.ts login():
+        1. After finding user, read user.familyId
+        2. Generate token with { userId, username, familyId }
+        3. Return familyId in the response user object
+
+        In authService.ts generateToken():
+        - Update signature: generateToken(userId, username, familyId)
+        - Include familyId in JWT payload
+
+        In authService.ts validateToken():
+        - Verify familyId exists in decoded payload
+        - Handle backward compatibility: tokens without familyId are invalid
+          (user must re-login after migration)
+
+    - id: P2-T3
+      task: "Update auth middleware to attach familyId to req.user"
+      status: not_started
+      details: |
+        In authMiddleware.ts:
+        1. Update Express Request type extension:
+          interface Request {
+            user?: {
+              userId: string;
+              username: string;
+              familyId: string;    // NEW
+            };
+          }
+        2. In authenticate(), populate req.user.familyId from decoded token
+        3. Validate familyId is present (return 401 if missing — forces re-login)
+
+    - id: P2-T4
+      task: "Update auth routes response shape"
+      status: not_started
+      details: |
+        In authRoutes.ts:
+        - POST /register: Accept displayName, familyName in body. Return
+          { success, token, user: { id, username, displayName, familyId } }
+        - POST /login: Return familyId and displayName in user object
+        - GET /me: Return displayName and familyId
+        - POST /refresh: Include familyId in refreshed token
+
+    - id: P2-T5
+      task: "Update password reset and change-password flows"
+      status: not_started
+      details: |
+        - changePassword(): No familyId changes needed (operates on userId)
+        - resetPassword(): After reset, user must login again (gets fresh token with familyId)
+        - requestPasswordReset(): No changes needed
+
+# ============================================================================
+# PHASE 3: Data Layer Refactor (userId -> familyId)
+# ============================================================================
+phase_3_data_layer:
+  status: not_started
+  description: |
+    The largest phase. Change every service that uses userId for data scoping
+    to use familyId instead. This is a systematic find-and-replace at the
+    service and route layers. The Repository base class change propagates to
+    all Repository-based services automatically.
+  tasks:
+    - id: P3-T1
+      task: "Refactor Repository base class"
+      status: not_started
+      details: |
+        In repository.ts:
+        - Rename key(userId) to key(familyId)
+        - Rename all method parameters: getAll(familyId), saveAll(familyId, items),
+          findBy(familyId, ...), findById(familyId, ...), deleteAll(familyId)
+        - Key pattern: `${this.entityName}_${familyId}` (same format, different semantic)
+
+    - id: P3-T2
+      task: "Refactor TransactionService"
+      status: not_started
+      details: |
+        In transactionService.ts:
+        - Uses Repository<StoredTransaction>: automatic via P3-T1
+        - Update all public method signatures: userId -> familyId
+        - Key methods: syncTransactions(familyId, ...), getTransactions(familyId, ...),
+          updateTransactionCategory(familyId, ...), splitTransaction(familyId, ...),
+          processPlaidTransactions(familyId, ...)
+        - Internal calls to repo.getAll(familyId), repo.saveAll(familyId, ...)
+
+    - id: P3-T3
+      task: "Refactor AccountService"
+      status: not_started
+      details: |
+        In accountService.ts (direct dataService pattern):
+        - Replace all `accounts_${userId}` with `accounts_${familyId}`
+        - Update method signatures: getUserAccounts(familyId),
+          connectAccount(familyId, ...), disconnectAccount(familyId, ...),
+          syncAccountBalances(familyId, ...)
+
+    - id: P3-T4
+      task: "Refactor BudgetService"
+      status: not_started
+      details: |
+        In budgetService.ts (direct dataService pattern):
+        - Replace all `budgets_${userId}` with `budgets_${familyId}`
+        - Update method signatures: getAllBudgets(familyId),
+          getMonthlyBudgets(familyId, month), createOrUpdateBudget(data, familyId)
+        - Note: dual key pattern `budgets_${id}_${month}` in reportService
+          also needs updating
+
+    - id: P3-T5
+      task: "Refactor CategoryService and DataService category methods"
+      status: not_started
+      details: |
+        In dataService.ts:
+        - Rename getCategories(userId) -> getCategories(familyId)
+        - Rename saveCategories(cats, userId) -> saveCategories(cats, familyId)
+        - Key changes: `categories_${familyId}`
+
+        In categoryService.ts:
+        - Update all public method signatures: userId -> familyId
+        - getAllCategories(familyId), createCategory(data, familyId),
+          updateCategory(id, updates, familyId), deleteCategory(id, familyId)
+
+    - id: P3-T6
+      task: "Refactor remaining services"
+      status: not_started
+      details: |
+        All follow the same pattern — replace userId with familyId in:
+        - autoCategorizeService.ts: getRules(familyId), createRule(familyId, data)
+        - projectService.ts: all methods, key = projects_${familyId}
+        - tripService.ts: all methods, key = trips_${familyId}
+        - manualAccountService.ts: all methods, key = manual_accounts_${familyId}
+        - amazonReceiptService.ts: all methods, key = amazon_receipts_${familyId}
+        - actualsOverrideService.ts: all methods, key = actuals_overrides_${familyId}
+
+    - id: P3-T7
+      task: "Refactor ReportService"
+      status: not_started
+      details: |
+        In reportService.ts:
+        - Uses Repository<StoredTransaction> (automatic via P3-T1)
+        - Update all public method signatures: userId -> familyId
+        - Update any direct dataService calls (budget keys)
+
+    - id: P3-T8
+      task: "Refactor ChatbotService and ChatbotDataService"
+      status: not_started
+      details: |
+        ChatbotDataService (read-only security boundary):
+        - Constructor receives services that now expect familyId
+        - All query methods: userId -> familyId
+
+        ChatbotService:
+        - Pass familyId to data service queries
+        - Keep userId for cost tracking attribution (see P3-T9)
+
+    - id: P3-T9
+      task: "Refactor ChatbotCostTracker to family-scoped"
+      status: not_started
+      details: |
+        In chatbotCostTracker.ts:
+        - Change key from `chatbot_costs_${month}` to `chatbot_costs_${familyId}_${month}`
+        - Constructor or method calls must receive familyId
+        - CostRecord keeps userId field for per-user attribution
+        - Monthly limit applies per family (not per user, not system-wide)
+
+    - id: P3-T10
+      task: "Refactor CategorizationService"
+      status: not_started
+      details: |
+        In categorizationService.ts:
+        - Update all method signatures: userId -> familyId
+        - Passes familyId to transactionService and categoryService calls
+
+    - id: P3-T11
+      task: "Update all route files to use req.user.familyId"
+      status: not_started
+      details: |
+        Systematic change across all 14 route files (excluding themes.ts):
+        - Replace `const userId = req.user?.userId` with `const { familyId } = req.user`
+          (or destructure both familyId and userId where userId is still needed)
+        - Pass familyId to all service method calls instead of userId
+        - Keep userId for: theme routes, feedback routes, audit/logging
+
+        Route files to update:
+          accounts.ts, transactions.ts, budgets.ts, categories.ts,
+          reports.ts, chatbot.ts, autoCategorize.ts, actualsOverrides.ts,
+          manualAccounts.ts, amazonReceipts.ts, trips.ts, projects.ts,
+          admin.ts, plaid.ts
+
+        themes.ts: KEEP using req.user.userId (per D1)
+
+# ============================================================================
+# PHASE 4: Data Migration
+# ============================================================================
+phase_4_migration:
+  status: not_started
+  description: |
+    Migrate the existing user's data from userId-scoped keys to familyId-scoped
+    keys. Create a family for the existing user. Must work on both filesystem
+    and S3 storage backends.
+  tasks:
+    - id: P4-T1
+      task: "Create migration status endpoint"
+      status: not_started
+      details: |
+        Add to admin.ts:
+        GET /admin/family-migration-status
+        Returns:
+          {
+            migrationNeeded: boolean,
+            usersWithoutFamily: number,
+            userScopedDataFiles: string[],  // files still keyed by userId
+            familyScopedDataFiles: string[], // files already keyed by familyId
+          }
+
+        Uses storageAdapter.list() to scan for userId-pattern keys
+        vs familyId-pattern keys.
+
+    - id: P4-T2
+      task: "Create migration execution endpoint"
+      status: not_started
+      details: |
+        Add to admin.ts:
+        POST /admin/migrate-to-families
+
+        Steps:
+        1. Load all users from users.json
+        2. For each user without a familyId:
+           a. Create a Family { id: uuidv4(), name: "{username}'s Family", members: [...] }
+           b. Save family to families.json
+           c. Update user record with familyId and displayName (default to username)
+        3. For each entity type (11 total):
+           a. Read data from old key: {entity}_{userId}
+           b. Write data to new key: {entity}_{familyId}
+           c. Do NOT delete old key yet (rollback safety)
+        4. For chatbot costs:
+           a. List all chatbot_costs_YYYY-MM keys
+           b. Rename to chatbot_costs_{familyId}_YYYY-MM
+        5. Return migration summary with counts
+
+        Idempotency: If familyId already exists on user, skip user.
+        If new key already exists, skip file rename.
+
+    - id: P4-T3
+      task: "Create migration cleanup endpoint"
+      status: not_started
+      details: |
+        Add to admin.ts:
+        POST /admin/migrate-to-families/cleanup
+
+        Deletes the old userId-keyed data files AFTER verifying the familyId-keyed
+        files exist and contain data. This is the point of no return.
+
+        Safety: Requires a ?confirm=true query parameter.
+
+    - id: P4-T4
+      task: "Update backup script to handle family-scoped keys"
+      status: not_started
+      details: |
+        In backend/src/scripts/backup-local-data.ts:
+        - Update UUID detection pattern to match both userId and familyId keys
+        - Ensure backup/restore works with the new key naming
+
+# ============================================================================
+# PHASE 5: Family Management API
+# ============================================================================
+phase_5_family_management:
+  status: not_started
+  description: |
+    API endpoints for managing family membership: invite, join, remove, list.
+  tasks:
+    - id: P5-T1
+      task: "Create FamilyService"
+      status: not_started
+      details: |
+        New file: backend/src/services/familyService.ts
+        Singleton pattern (matches existing services).
+
+        Methods:
+        - getFamily(familyId: string): Promise<Family | null>
+        - getFamilyMembers(familyId: string): Promise<FamilyMember[]>
+        - updateFamilyName(familyId: string, name: string): Promise<void>
+        - removeMember(familyId: string, targetUserId: string): Promise<void>
+          - Validates family has > 1 member
+          - Removes member from family.members array
+          - Clears user.familyId on the removed user
+        - createInvitation(familyId: string): Promise<{ code: string; expiresAt: string }>
+          - Generates 8-character alphanumeric code
+          - Stores in-memory Map with { familyId, expiresAt (48h), used: false }
+        - validateInvitation(code: string): Promise<{ valid: boolean; familyId?: string }>
+          - Checks existence, expiry, single-use
+        - consumeInvitation(code: string, userId: string, displayName: string): Promise<Family>
+          - Marks code as used
+          - Adds user to family.members
+          - Sets user.familyId
+
+    - id: P5-T2
+      task: "Create family management routes"
+      status: not_started
+      details: |
+        New file: backend/src/routes/family.ts
+        All routes require authMiddleware.
+
+        GET    /api/v1/family              — Get current user's family + members
+        PUT    /api/v1/family/name         — Update family name
+        POST   /api/v1/family/invite       — Generate join code
+        DELETE /api/v1/family/members/:id  — Remove a member
+          - Cannot remove self if last member
+          - Returns 200 with updated family
+
+    - id: P5-T3
+      task: "Add join-family route to auth"
+      status: not_started
+      details: |
+        In authRoutes.ts, add:
+        POST /api/v1/auth/register
+          - Updated to accept optional joinCode field
+          - If joinCode provided: validate code, register user, add to existing family
+          - If no joinCode: register user, create new family (existing flow)
+          - Returns the same response shape either way
+
+        The join flow is an ALTERNATIVE PATH through registration, not a separate
+        endpoint. This keeps the frontend simple — one registration form with an
+        optional "I have a join code" field.
+
+    - id: P5-T4
+      task: "Handle token invalidation on member removal"
+      status: not_started
+      details: |
+        When a user is removed from a family:
+        - Their existing JWT still contains the old familyId
+        - Add a tokenVersion field to User (integer, incremented on family change)
+        - Middleware checks tokenVersion in JWT matches user's current tokenVersion
+        - Mismatch -> 401 (forces re-login, gets token without familyId)
+
+        Alternative (simpler): Add a familyMembership check in middleware that
+        verifies the user's familyId in the JWT matches their current familyId
+        in the database. This adds one DB read per request but is simple and correct.
+
+        Decision: Use the simpler approach. The DB read is acceptable for a 2-user
+        app, and it avoids JWT versioning complexity. Cache the check with a short
+        TTL (60s) to reduce reads.
+
+# ============================================================================
+# PHASE 6: User Profile API
+# ============================================================================
+phase_6_user_profile:
+  status: not_started
+  description: |
+    API endpoints for user profile management: display name, password.
+  tasks:
+    - id: P6-T1
+      task: "Add display name update endpoint"
+      status: not_started
+      details: |
+        In authRoutes.ts, add:
+        PUT /api/v1/auth/profile
+          - Body: { displayName: string }
+          - Updates user.displayName in users.json
+          - Also updates displayName in family.members array
+          - Returns updated user object
+
+    - id: P6-T2
+      task: "Ensure change-password works independently"
+      status: not_started
+      details: |
+        POST /auth/change-password already exists and uses userId.
+        Verify it works correctly with the new model:
+        - Does NOT invalidate other family members' tokens
+        - Does NOT affect family data
+        - User remains logged in with current token
+        No changes expected — just verify and add a test.
+
+# ============================================================================
+# PHASE 7: Account Owner Mapping API
+# ============================================================================
+phase_7_account_owner_mapping:
+  status: not_started
+  description: |
+    Replace the hardcoded frontend account owner mapping with a configurable
+    family-level data entity backed by an API.
+  tasks:
+    - id: P7-T1
+      task: "Create AccountOwnerMappingService"
+      status: not_started
+      details: |
+        New file: backend/src/services/accountOwnerMappingService.ts
+        Storage key: account_owner_mappings_{familyId}
+
+        Methods:
+        - getMappings(familyId: string): Promise<AccountOwnerMapping[]>
+        - createMapping(familyId: string, data: { cardIdentifier, displayName, linkedUserId? }): Promise<AccountOwnerMapping>
+        - updateMapping(familyId: string, mappingId: string, updates): Promise<AccountOwnerMapping>
+        - deleteMapping(familyId: string, mappingId: string): Promise<void>
+        - getDisplayName(familyId: string, cardIdentifier: string): Promise<string | null>
+
+    - id: P7-T2
+      task: "Create account owner mapping routes"
+      status: not_started
+      details: |
+        Add to existing accounts.ts or new route file:
+        GET    /api/v1/account-owners          — List all mappings
+        POST   /api/v1/account-owners          — Create mapping
+        PUT    /api/v1/account-owners/:id       — Update mapping
+        DELETE /api/v1/account-owners/:id       — Delete mapping
+
+    - id: P7-T3
+      task: "Seed initial mappings during migration"
+      status: not_started
+      details: |
+        During the Phase 4 migration (P4-T2), create initial account owner mappings
+        from the existing hardcoded values:
+          { cardIdentifier: "7177", displayName: "Jecoliah" }
+          { cardIdentifier: "7245", displayName: "Joj" }
+          { cardIdentifier: "7008", displayName: "Jared" }
+
+        After migration, the frontend switches to the API-driven approach
+        and the hardcoded map is removed.
+
+# ============================================================================
+# PHASE 8: Frontend — Auth & Profile
+# ============================================================================
+phase_8_frontend_auth:
+  status: not_started
+  description: |
+    Update the frontend auth store, registration form, login response handling,
+    and add a user profile/settings page.
+  tasks:
+    - id: P8-T1
+      task: "Update auth store to include familyId and displayName"
+      status: not_started
+      details: |
+        In frontend/src/stores/authStore.ts:
+        - Update AuthState.user type to include familyId and displayName
+        - login() and register() store the new fields from API response
+        - Add updateDisplayName() action
+
+    - id: P8-T2
+      task: "Update registration form"
+      status: not_started
+      details: |
+        Update the registration page/component:
+        - Add "Display Name" field (required)
+        - Add "Family Name" field (optional, with placeholder default)
+        - Add "Join Code" field (optional, with hint text like
+          "Have an invitation? Enter the code here")
+        - When join code is provided, hide Family Name field (joining existing family)
+
+    - id: P8-T3
+      task: "Update API client auth functions"
+      status: not_started
+      details: |
+        In frontend/src/lib/api/auth.ts:
+        - Update RegisterCredentials type: add displayName, familyName?, joinCode?
+        - Update AuthResponse type: user includes familyId and displayName
+        - Update type guards to check for new fields
+
+    - id: P8-T4
+      task: "Create user profile/settings page"
+      status: not_started
+      details: |
+        New page: frontend/src/pages/Settings.tsx (or Profile.tsx)
+        Sections:
+        - Profile: display name (editable), username (read-only)
+        - Password: change password form (current + new + confirm)
+        - Family: family name, member list, invite button, remove member buttons
+
+        Add route in App.tsx: /settings
+        Add navigation link in sidebar
+
+    - id: P8-T5
+      task: "Create family members component"
+      status: not_started
+      details: |
+        Component within the settings page showing:
+        - Family name (editable inline)
+        - Member list with display name, username, last login
+        - "Invite Member" button that generates and displays a join code
+        - "Remove" button on each member (with confirmation modal)
+        - Copy-to-clipboard for the join code
+
+# ============================================================================
+# PHASE 9: Frontend — Account Owner Mapping
+# ============================================================================
+phase_9_frontend_owner_mapping:
+  status: not_started
+  description: |
+    Replace the hardcoded account owner mapping with API-driven configuration
+    in the settings page, and update the transaction display.
+  tasks:
+    - id: P9-T1
+      task: "Add account owner mapping management UI"
+      status: not_started
+      details: |
+        Add section to Settings page:
+        - "Card Owner Mappings" section
+        - Table: card identifier, display name, linked member (dropdown), actions
+        - Add/edit/delete mappings
+        - "Linked Member" dropdown lists family members + "Not a member" option
+
+    - id: P9-T2
+      task: "Replace hardcoded formatAccountOwner"
+      status: not_started
+      details: |
+        In frontend/src/utils/formatters.ts:
+        - Remove the ACCOUNT_OWNER_NAMES constant
+        - Update formatAccountOwner() to accept mappings as a parameter
+          or use a React Query hook that fetches mappings from the API
+
+        In TransactionEditModal.tsx:
+        - Fetch mappings via useQuery and pass to formatAccountOwner
+        - Or create a useAccountOwnerMappings() hook
+
+    - id: P9-T3
+      task: "Add account owner API functions to frontend client"
+      status: not_started
+      details: |
+        In frontend/src/lib/api/:
+        - Add getAccountOwnerMappings(), createAccountOwnerMapping(),
+          updateAccountOwnerMapping(), deleteAccountOwnerMapping()
+
+# ============================================================================
+# PHASE 10: Testing & Hardening
+# ============================================================================
+phase_10_testing:
+  status: not_started
+  description: |
+    Integration tests for the new family model, migration testing,
+    and security verification.
+  tasks:
+    - id: P10-T1
+      task: "Auth integration tests"
+      status: not_started
+      details: |
+        Test cases:
+        - Register creates user + family
+        - Register with join code adds user to existing family
+        - Register with invalid/expired join code fails
+        - Login returns familyId in JWT
+        - Token without familyId is rejected (backward compat)
+        - Removed user's token is rejected
+
+    - id: P10-T2
+      task: "Family management integration tests"
+      status: not_started
+      details: |
+        Test cases:
+        - Create invitation, use it, verify single-use
+        - Expired invitation is rejected
+        - Remove member, verify data unaffected
+        - Cannot remove last member
+        - Family name update
+
+    - id: P10-T3
+      task: "Data isolation tests"
+      status: not_started
+      details: |
+        Test cases:
+        - User A in family X cannot access family Y data
+        - Both users in same family see same transactions/budgets/etc.
+        - Theme preferences remain user-scoped (not family-scoped)
+        - Removing user from family doesn't delete family data
+
+    - id: P10-T4
+      task: "Migration integration tests"
+      status: not_started
+      details: |
+        Test cases:
+        - Migration creates family for existing user
+        - All 11 entity types migrated from userId to familyId keys
+        - Migration is idempotent (running twice is safe)
+        - Chatbot costs migrated to family-scoped keys
+        - Account owner mappings seeded from hardcoded values
+        - Old keys preserved until cleanup endpoint called
+        - Cleanup verifies new keys exist before deleting old
+
+    - id: P10-T5
+      task: "Manual testing checklist"
+      status: not_started
+      details: |
+        - [ ] Register new user, verify family created
+        - [ ] Generate invite code, register second user with code
+        - [ ] Both users see same transactions, budgets, categories
+        - [ ] User A categorizes a transaction, User B sees the change
+        - [ ] Change password for one user, other user unaffected
+        - [ ] Update display name, verify it persists
+        - [ ] Remove member, verify they cannot access data
+        - [ ] Run migration on dev data, verify all entities accessible
+        - [ ] Chatbot works with familyId scoping
+        - [ ] Account owner mappings configurable from settings
+        - [ ] Theme preferences are per-user (not shared)
+
+# ============================================================================
+# Risks & Mitigations
+# ============================================================================
+risks:
+  - id: R1
+    risk: "Data loss during migration"
+    likelihood: low
+    impact: critical
+    mitigation: |
+      Migration preserves old keys until explicit cleanup step.
+      Backup script runs before migration. Both filesystem and S3
+      adapters support list() for verification.
+
+  - id: R2
+    risk: "Stale JWT tokens after migration"
+    likelihood: high
+    impact: medium
+    mitigation: |
+      After migration, tokens without familyId are rejected by middleware.
+      Users must re-login to get new tokens. Clear frontend localStorage
+      and show a "please log in again" message if 401 received.
+
+  - id: R3
+    risk: "Large blast radius of Phase 3 refactor"
+    likelihood: medium
+    impact: high
+    mitigation: |
+      Phase 3 is mechanical (find-and-replace userId->familyId in method
+      signatures and storage keys). Do it service-by-service, running
+      TypeScript compilation after each to catch signature mismatches.
+      The compiler will flag every call site that passes the wrong type.
+
+  - id: R4
+    risk: "Production S3 migration failure"
+    likelihood: low
+    impact: critical
+    mitigation: |
+      Test migration against a copy of production data synced locally
+      (existing sync-production-data.ts script). Run migration dry-run
+      first. S3 adapter supports list() for enumeration.
+
+# ============================================================================
+# Open Questions
+# ============================================================================
+open_questions: [] # All resolved — see decisions D9, D10, D11

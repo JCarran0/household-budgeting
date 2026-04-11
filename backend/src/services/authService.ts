@@ -19,6 +19,7 @@ interface AuthResult {
 interface JWTPayload {
   userId: string;
   username: string;
+  familyId: string;
   iat?: number;
   exp?: number;
 }
@@ -106,9 +107,12 @@ export class AuthService {
       const passwordHash = await bcrypt.hash(password, 10);
 
       // Create user
+      // TODO(Phase 2): Create family during registration, set proper displayName/familyId
       const user: User = {
         id: uuidv4(),
         username,
+        displayName: username,
+        familyId: '',
         passwordHash,
         createdAt: new Date(),
       };

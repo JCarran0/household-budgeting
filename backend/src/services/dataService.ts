@@ -1,9 +1,11 @@
-import { Category } from '../shared/types';
+import { Category, Family } from '../shared/types';
 import { StorageAdapter, StorageFactory } from './storage';
 
 export interface User {
   id: string;
   username: string;
+  displayName: string;
+  familyId: string;
   passwordHash: string;
   createdAt: Date;
   updatedAt?: Date;
@@ -19,6 +21,12 @@ export interface DataService {
   createUser(user: User): Promise<User>;
   updateUser(id: string, updates: Partial<User>): Promise<User | null>;
   getAllUsers(): Promise<User[]>;
+
+  // Family methods
+  getFamilies(): Promise<Family[]>;
+  getFamily(familyId: string): Promise<Family | null>;
+  createFamily(family: Family): Promise<void>;
+  updateFamily(familyId: string, updates: Partial<Family>): Promise<void>;
 
   // Category methods
   getCategories(userId: string): Promise<Category[]>;
@@ -37,6 +45,7 @@ export interface DataService {
 export class UnifiedDataService implements DataService {
   private storage: StorageAdapter;
   private readonly USERS_KEY = 'users';
+  private readonly FAMILIES_KEY = 'families';
 
   constructor(storage?: StorageAdapter) {
     this.storage = storage || StorageFactory.getAdapter();
@@ -47,6 +56,10 @@ export class UnifiedDataService implements DataService {
     // Ensure users file exists
     if (!(await this.storage.exists(this.USERS_KEY))) {
       await this.storage.write(this.USERS_KEY, { users: [] });
+    }
+    // Ensure families file exists
+    if (!(await this.storage.exists(this.FAMILIES_KEY))) {
+      await this.storage.write(this.FAMILIES_KEY, { families: [] });
     }
   }
 
@@ -104,6 +117,53 @@ export class UnifiedDataService implements DataService {
     return await this.readUsers();
   }
 
+  // Family Management Methods
+  private async readFamilies(): Promise<Family[]> {
+    try {
+      const data = await this.storage.read<{ families: Family[] }>(this.FAMILIES_KEY);
+      return data?.families || [];
+    } catch (error) {
+      console.error('Error reading families:', error);
+      return [];
+    }
+  }
+
+  private async writeFamilies(families: Family[]): Promise<void> {
+    await this.storage.write(this.FAMILIES_KEY, { families });
+  }
+
+  async getFamilies(): Promise<Family[]> {
+    return await this.readFamilies();
+  }
+
+  async getFamily(familyId: string): Promise<Family | null> {
+    const families = await this.readFamilies();
+    return families.find(f => f.id === familyId) || null;
+  }
+
+  async createFamily(family: Family): Promise<void> {
+    const families = await this.readFamilies();
+    families.push(family);
+    await this.writeFamilies(families);
+  }
+
+  async updateFamily(familyId: string, updates: Partial<Family>): Promise<void> {
+    const families = await this.readFamilies();
+    const index = families.findIndex(f => f.id === familyId);
+
+    if (index === -1) {
+      throw new Error(`Family not found: ${familyId}`);
+    }
+
+    families[index] = {
+      ...families[index],
+      ...updates,
+      updatedAt: new Date().toISOString(),
+    };
+
+    await this.writeFamilies(families);
+  }
+
   // Category Methods
   async getCategories(userId: string): Promise<Category[]> {
     // User-specific categories
@@ -135,8 +195,9 @@ export class UnifiedDataService implements DataService {
 // In-memory implementation for testing
 export class InMemoryDataService implements DataService {
   private users: User[] = [];
+  private families: Family[] = [];
   private userCategories: Map<string, Category[]> = new Map();
-  private genericData: Map<string, any> = new Map();
+  private genericData: Map<string, unknown> = new Map();
 
   async getUser(id: string): Promise<User | null> {
     return this.users.find(u => u.id === id) || null;
@@ -168,6 +229,31 @@ export class InMemoryDataService implements DataService {
     return this.users;
   }
 
+  async getFamilies(): Promise<Family[]> {
+    return this.families;
+  }
+
+  async getFamily(familyId: string): Promise<Family | null> {
+    return this.families.find(f => f.id === familyId) || null;
+  }
+
+  async createFamily(family: Family): Promise<void> {
+    this.families.push(family);
+  }
+
+  async updateFamily(familyId: string, updates: Partial<Family>): Promise<void> {
+    const index = this.families.findIndex(f => f.id === familyId);
+    if (index === -1) {
+      throw new Error(`Family not found: ${familyId}`);
+    }
+
+    this.families[index] = {
+      ...this.families[index],
+      ...updates,
+      updatedAt: new Date().toISOString(),
+    };
+  }
+
   async getCategories(userId: string): Promise<Category[]> {
     return this.userCategories.get(userId) || [];
   }
@@ -177,7 +263,7 @@ export class InMemoryDataService implements DataService {
   }
 
   async getData<T>(key: string): Promise<T | null> {
-    return this.genericData.get(key) || null;
+    return (this.genericData.get(key) as T) || null;
   }
 
   async saveData<T>(key: string, data: T): Promise<void> {
@@ -191,6 +277,7 @@ export class InMemoryDataService implements DataService {
   // Test helper method to clear all data
   clear(): void {
     this.users = [];
+    this.families = [];
     this.userCategories.clear();
     this.genericData.clear();
   }

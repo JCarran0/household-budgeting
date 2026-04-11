@@ -1,5 +1,30 @@
 // Shared TypeScript types for the budgeting app
 
+// =============================================================================
+// Family & Multi-User Types
+// =============================================================================
+
+export interface FamilyMember {
+  userId: string;          // References User.id
+  displayName: string;     // e.g., "Jared"
+  joinedAt: string;        // ISO string
+}
+
+export interface Family {
+  id: string;              // UUID
+  name: string;            // e.g., "Carrano Family"
+  members: FamilyMember[];
+  createdAt: string;       // ISO string
+  updatedAt: string;       // ISO string
+}
+
+export interface AccountOwnerMapping {
+  id: string;              // UUID
+  cardIdentifier: string;  // Last-4 digits from Plaid accountOwner
+  displayName: string;     // e.g., "Jared", "Joj"
+  linkedUserId?: string;   // Optional link to a family member
+}
+
 // Theme Types
 export interface CustomTheme {
   id: string;
@@ -58,6 +83,8 @@ export const CUSTOMIZABLE_COLORS = [
 export interface User {
   id: string;
   username: string;
+  displayName: string;     // Separate from username, shown in UI
+  familyId: string;        // The family this user belongs to
   createdAt: string;
 }
 
@@ -74,6 +101,9 @@ export interface LoginCredentials {
 export interface RegisterCredentials {
   username: string;
   password: string;
+  displayName: string;
+  familyName?: string;     // Optional, defaults to "{username}'s Family"
+  joinCode?: string;       // Optional, to join an existing family
 }
 
 export interface PlaidAccount {
