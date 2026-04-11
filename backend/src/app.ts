@@ -20,6 +20,7 @@ import chatbotRoutes from './routes/chatbot';
 import themeRoutes from './routes/themes';
 import manualAccountRoutes from './routes/manualAccounts';
 import amazonReceiptRoutes from './routes/amazonReceipts';
+import familyRoutes from './routes/family';
 
 // Load environment variables (skip in test mode as it's loaded in setup.ts)
 if (process.env.NODE_ENV !== 'test') {
@@ -117,6 +118,7 @@ app.use(`${apiPrefix}/chatbot`, chatbotRoutes);
 app.use(`${apiPrefix}/themes`, themeRoutes);
 app.use(`${apiPrefix}/manual-accounts`, manualAccountRoutes);
 app.use(`${apiPrefix}/amazon-receipts`, amazonReceiptRoutes);
+app.use(`${apiPrefix}/family`, familyRoutes);
 
 // Version endpoint under API prefix
 app.get(`${apiPrefix}/version`, (_req: Request, res: Response) => {

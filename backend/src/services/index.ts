@@ -25,6 +25,7 @@ import { ChatbotService } from './chatbotService';
 import { CategorizationService } from './categorizationService';
 import { ManualAccountService } from './manualAccountService';
 import { AmazonReceiptService } from './amazonReceiptService';
+import { FamilyService } from './familyService';
 
 // Create data service based on environment
 // Uses StorageFactory to automatically switch between filesystem and S3
@@ -100,6 +101,8 @@ export const amazonReceiptService = new AmazonReceiptService(
   config.ai.anthropicApiKey,
 );
 
+export const familyService = new FamilyService(dataService);
+
 // Export dataService for other services that need it
 export { dataService };
 
@@ -122,4 +125,5 @@ export {
   CategorizationService,
   ManualAccountService,
   AmazonReceiptService,
+  FamilyService,
 };

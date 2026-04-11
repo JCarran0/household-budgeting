@@ -83,6 +83,7 @@ export class AuthService {
     password: string,
     displayName: string,
     familyName?: string,
+    existingFamily?: { familyId: string },
   ): Promise<AuthResult> {
     try {
       // Validate username
@@ -122,26 +123,34 @@ export class AuthService {
       // Hash password
       const passwordHash = await bcrypt.hash(password, 10);
 
-      // Create family
-      const familyId = uuidv4();
       const userId = uuidv4();
       const now = new Date().toISOString();
+      let familyId: string;
 
-      const member: FamilyMember = {
-        userId,
-        displayName,
-        joinedAt: now,
-      };
+      if (existingFamily) {
+        // Joining an existing family — the caller (route) has already validated
+        // the join code and consumed the invitation via FamilyService
+        familyId = existingFamily.familyId;
+      } else {
+        // Create a new family for this user
+        familyId = uuidv4();
 
-      const family: Family = {
-        id: familyId,
-        name: familyName || `${username}'s Family`,
-        members: [member],
-        createdAt: now,
-        updatedAt: now,
-      };
+        const member: FamilyMember = {
+          userId,
+          displayName,
+          joinedAt: now,
+        };
 
-      await this.dataService.createFamily(family);
+        const family: Family = {
+          id: familyId,
+          name: familyName || `${username}'s Family`,
+          members: [member],
+          createdAt: now,
+          updatedAt: now,
+        };
+
+        await this.dataService.createFamily(family);
+      }
 
       // Create user with family association
       const user: User = {
@@ -154,6 +163,22 @@ export class AuthService {
       };
 
       const createdUser = await this.dataService.createUser(user);
+
+      // If joining an existing family, add the member to the family now
+      // (we needed the userId from createUser first)
+      if (existingFamily) {
+        const family = await this.dataService.getFamily(familyId);
+        if (family) {
+          const newMember: FamilyMember = {
+            userId: createdUser.id,
+            displayName,
+            joinedAt: now,
+          };
+          await this.dataService.updateFamily(familyId, {
+            members: [...family.members, newMember],
+          });
+        }
+      }
 
       // Generate JWT token for auto-login after registration
       const token = this.generateToken(createdUser.id, createdUser.username, familyId);

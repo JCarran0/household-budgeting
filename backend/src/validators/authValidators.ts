@@ -34,6 +34,7 @@ export const registrationSchema = z.object({
   password: passwordSchema,
   displayName: z.string().min(1, 'Display name is required').max(50, 'Display name must be less than 50 characters'),
   familyName: z.string().min(1).max(100).optional(),
+  joinCode: z.string().min(1).max(50).optional(),
 });
 
 // Login schema

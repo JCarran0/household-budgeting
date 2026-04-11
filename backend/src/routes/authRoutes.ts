@@ -1,5 +1,5 @@
 import { Router, Request, Response, NextFunction } from 'express';
-import { authService } from '../services';
+import { authService, familyService } from '../services';
 import {
   authenticate,
   rateLimitAuth,
@@ -28,11 +28,29 @@ router.post(
   validateBody(registrationSchema),
   async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
-      const { username, password, displayName, familyName } = req.body;
+      const { username, password, displayName, familyName, joinCode } = req.body;
 
-      const result = await authService.register(username, password, displayName, familyName);
+      // If a join code was provided, validate it before registration
+      let existingFamily: { familyId: string } | undefined;
+      if (joinCode) {
+        const validation = familyService.validateInvitation(joinCode);
+        if (!validation.valid || !validation.familyId) {
+          res.status(400).json({
+            success: false,
+            error: validation.error || 'Invalid invitation code',
+          });
+          return;
+        }
+        existingFamily = { familyId: validation.familyId };
+      }
+
+      const result = await authService.register(username, password, displayName, familyName, existingFamily);
 
       if (result.success) {
+        // Mark the join code as consumed after successful registration
+        if (joinCode) {
+          familyService.markInvitationUsed(joinCode);
+        }
         res.status(201).json(result);
       } else {
         res.status(400).json(result);

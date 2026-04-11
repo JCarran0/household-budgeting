@@ -553,13 +553,13 @@ phase_4_migration:
 # PHASE 5: Family Management API
 # ============================================================================
 phase_5_family_management:
-  status: not_started
+  status: completed
   description: |
     API endpoints for managing family membership: invite, join, remove, list.
   tasks:
     - id: P5-T1
       task: "Create FamilyService"
-      status: not_started
+      status: completed
       details: |
         New file: backend/src/services/familyService.ts
         Singleton pattern (matches existing services).
@@ -584,7 +584,7 @@ phase_5_family_management:
 
     - id: P5-T2
       task: "Create family management routes"
-      status: not_started
+      status: completed
       details: |
         New file: backend/src/routes/family.ts
         All routes require authMiddleware.
@@ -598,7 +598,7 @@ phase_5_family_management:
 
     - id: P5-T3
       task: "Add join-family route to auth"
-      status: not_started
+      status: completed
       details: |
         In authRoutes.ts, add:
         POST /api/v1/auth/register
@@ -613,7 +613,7 @@ phase_5_family_management:
 
     - id: P5-T4
       task: "Handle token invalidation on member removal"
-      status: not_started
+      status: completed
       details: |
         When a user is removed from a family:
         - Their existing JWT still contains the old familyId
