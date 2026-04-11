@@ -1,0 +1,882 @@
+# =============================================================================
+# Household Task Management — Implementation Plan
+# =============================================================================
+# BRD: docs/features/TASK-MANAGEMENT-BRD.md
+# Status: Not Started
+# Last Updated: 2026-04-11
+# =============================================================================
+
+overview:
+  description: |
+    Implementation plan for a Kanban-style task management board for household
+    chores, errands, and to-dos. This is a standalone feature with no connection
+    to financial data. Tasks are family-scoped (like other entities) with an
+    additional personal/family visibility distinction.
+
+    Unlike Trips/Projects which are tag-based wrappers around transactions,
+    Tasks are a fully independent entity with their own storage, status workflow,
+    transition logging, and a Kanban drag-and-drop UI.
+
+  key_files:
+    brd: docs/features/TASK-MANAGEMENT-BRD.md
+    shared_types: shared/types/index.ts
+    backend_services: backend/src/services/index.ts
+    backend_routes: backend/src/routes/
+    frontend_pages: frontend/src/pages/
+    sidebar_nav: frontend/src/components/MantineLayout.tsx
+    api_client: frontend/src/lib/api/
+    app_routes: frontend/src/App.tsx
+    trip_service_reference: backend/src/services/tripService.ts
+
+  dependency:
+    feature: "Family & Multi-User Support"
+    brd: docs/features/FAMILY-MULTI-USER-BRD.md
+    reason: |
+      Tasks require individual user identity for assignment, transition
+      attribution, and leaderboard tracking. The familyId scoping pattern
+      established by the Family feature is used for task storage.
+
+# =============================================================================
+# DECISIONS LOG — Capture key decisions as they're made during implementation
+# =============================================================================
+decisions:
+  - id: D1
+    date: 2026-04-11
+    decision: Tasks are a fully independent entity, not tag-based
+    rationale: |
+      Unlike Trips and Projects which wrap existing transactions via tags,
+      Tasks have no relationship to financial data. They need their own
+      storage key, their own CRUD, and their own UI. No tag system involvement.
+
+  - id: D2
+    date: 2026-04-11
+    decision: Storage key pattern is tasks_{familyId}
+    rationale: |
+      Follows the established familyId scoping pattern. All family members
+      share one task board. Personal tasks use a scope field on the task
+      entity, not separate storage.
+
+  - id: D3
+    date: 2026-04-11
+    decision: Task templates are family-scoped, stored as templates_{familyId}
+    rationale: |
+      All family members should see and use the same set of quick-add
+      templates. No per-user template lists.
+
+  - id: D4
+    date: 2026-04-11
+    decision: Transition log is an embedded array on the task, not a separate entity
+    rationale: |
+      A household task board will have low volume (tens to hundreds of tasks,
+      not thousands). Embedding the log on the task keeps reads simple —
+      one fetch gets the full history. No need for a separate log store.
+
+  - id: D5
+    date: 2026-04-11
+    decision: 14-day archiving is a frontend filter, not a backend cron
+    rationale: |
+      Tasks in done/cancelled for >14 days are simply filtered out of the
+      board query. They remain in storage and appear in Task History.
+      No background cleanup job, no soft-delete flag — just a date check.
+
+  - id: D6
+    date: 2026-04-11
+    decision: Leaderboard is computed server-side from transition logs
+    rationale: |
+      The transition log contains completedAt timestamps and userId for
+      each transition. The backend computes counts by scanning tasks with
+      done transitions in the requested time window. No separate leaderboard
+      store — it's a derived view.
+
+  - id: D7
+    date: 2026-04-11
+    decision: Use @hello-pangea/dnd for Kanban drag-and-drop
+    rationale: |
+      Community fork of react-beautiful-dnd (which is unmaintained). Mature,
+      well-documented, works well with Mantine. If the project already uses
+      a different DnD library, use that instead.
+
+# =============================================================================
+# PHASE 1: Shared Types
+# =============================================================================
+phase_1_types:
+  status: not_started
+  description: |
+    Define all Task-related TypeScript interfaces in shared/types/index.ts.
+    These types are consumed by backend services, routes, and the frontend.
+
+  tasks:
+    - id: "1.1"
+      task: Define Task entity types in shared/types/index.ts
+      status: not_started
+      details: |
+        Core types:
+
+        type TaskStatus = 'todo' | 'started' | 'done' | 'cancelled';
+        type TaskScope = 'family' | 'personal';
+
+        interface TaskTransition {
+          fromStatus: TaskStatus | null;  // null for initial creation
+          toStatus: TaskStatus;
+          timestamp: string;              // ISO datetime
+          userId: string;                 // who made the change
+        }
+
+        interface Task {
+          id: string;                     // UUID
+          title: string;
+          description: string;            // empty string default
+          status: TaskStatus;
+          scope: TaskScope;
+          assigneeId: string | null;      // userId of assignee, null if unassigned
+          dueDate: string | null;         // ISO date, null if no deadline
+          createdAt: string;              // ISO datetime
+          createdBy: string;              // userId
+          startedAt: string | null;       // most recent transition to started
+          completedAt: string | null;     // most recent transition to done
+          cancelledAt: string | null;     // most recent transition to cancelled
+          assignedAt: string | null;      // most recent assignment change
+          transitions: TaskTransition[];  // append-only log
+        }
+
+        interface StoredTask extends Task {
+          familyId: string;
+        }
+
+    - id: "1.2"
+      task: Define Task DTO types
+      status: not_started
+      details: |
+        interface CreateTaskDto {
+          title: string;
+          description?: string;
+          scope?: TaskScope;              // default: 'family'
+          assigneeId?: string | null;
+          dueDate?: string | null;
+        }
+
+        interface UpdateTaskDto {
+          title?: string;
+          description?: string;
+          scope?: TaskScope;
+          assigneeId?: string | null;
+          dueDate?: string | null;
+        }
+
+        interface UpdateTaskStatusDto {
+          status: TaskStatus;
+        }
+
+    - id: "1.3"
+      task: Define Task Template types
+      status: not_started
+      details: |
+        interface TaskTemplate {
+          id: string;                     // UUID
+          name: string;                   // template name = default task title
+          defaultAssigneeId: string | null;
+          defaultScope: TaskScope;        // default: 'family'
+          sortOrder: number;              // display order in dropdown
+        }
+
+        interface StoredTaskTemplate extends TaskTemplate {
+          familyId: string;
+          createdAt: string;
+          updatedAt: string;
+        }
+
+        interface CreateTaskTemplateDto {
+          name: string;
+          defaultAssigneeId?: string | null;
+          defaultScope?: TaskScope;
+        }
+
+        interface UpdateTaskTemplateDto {
+          name?: string;
+          defaultAssigneeId?: string | null;
+          defaultScope?: TaskScope;
+          sortOrder?: number;
+        }
+
+    - id: "1.4"
+      task: Define Leaderboard response type
+      status: not_started
+      details: |
+        interface LeaderboardEntry {
+          userId: string;
+          displayName: string;
+          completedToday: number;
+          completedThisWeek: number;
+          completedThisMonth: number;
+        }
+
+        interface LeaderboardResponse {
+          entries: LeaderboardEntry[];
+          // The time boundaries used for computation (so frontend knows
+          // the exact windows, accounting for timezone)
+          boundaries: {
+            todayStart: string;
+            weekStart: string;
+            monthStart: string;
+          };
+        }
+
+# =============================================================================
+# PHASE 2: Backend — Task Service
+# =============================================================================
+phase_2_task_service:
+  status: not_started
+  description: |
+    Core task CRUD and status management. This is the largest backend phase.
+    Follow the singleton service pattern used by TripService, ProjectService, etc.
+
+  tasks:
+    - id: "2.1"
+      task: Create TaskService in backend/src/services/taskService.ts
+      status: not_started
+      details: |
+        Constructor dependencies: DataService (for persistence)
+        Storage key: tasks_{familyId}
+
+        Methods:
+
+        --- CRUD ---
+        createTask(data: CreateTaskDto, userId: string, familyId: string): Promise<StoredTask>
+          - Generate UUID
+          - Set status to 'todo', createdAt/createdBy
+          - Initialize transitions array with creation entry: { from: null, to: 'todo', timestamp, userId }
+          - If assigneeId provided, set assignedAt
+
+        getTask(taskId: string, familyId: string): Promise<StoredTask | null>
+
+        getAllTasks(familyId: string): Promise<StoredTask[]>
+
+        updateTask(taskId: string, data: UpdateTaskDto, userId: string, familyId: string): Promise<StoredTask>
+          - Update mutable fields (title, description, scope, dueDate)
+          - If assigneeId changes, update assignedAt
+          - Does NOT change status (use updateTaskStatus for that)
+
+        deleteTask(taskId: string, familyId: string): Promise<void>
+          - Hard delete. No confirmation logic here — that's a frontend concern.
+
+        --- STATUS ---
+        updateTaskStatus(taskId: string, newStatus: TaskStatus, userId: string, familyId: string): Promise<StoredTask>
+          - Append to transitions array: { from: currentStatus, to: newStatus, timestamp, userId }
+          - Update convenience timestamps based on newStatus:
+            - 'started' → set startedAt, clear completedAt and cancelledAt
+            - 'done' → set completedAt, clear cancelledAt
+            - 'cancelled' → set cancelledAt, clear completedAt
+            - 'todo' → clear startedAt, completedAt, cancelledAt
+          - If moving from todo to started AND assigneeId is null:
+            auto-assign to userId, set assignedAt
+          - Return updated task
+
+        --- BOARD QUERY ---
+        getBoardTasks(familyId: string): Promise<StoredTask[]>
+          - Returns all tasks EXCEPT those in done/cancelled for > 14 days
+          - Filter: if status is done/cancelled, include only if
+            completedAt or cancelledAt is within the last 14 days
+
+        --- LEADERBOARD ---
+        getLeaderboard(familyId: string, timezone: string): Promise<LeaderboardResponse>
+          - Compute time boundaries (today start, week start, month start) in
+            the given timezone
+          - Scan all tasks for transitions to 'done' within each window
+          - Count by the userId on the transition entry (who completed it),
+            not by assigneeId
+          - For tasks moved to done multiple times, count only the most recent
+            completedAt (same logic as convenience timestamp)
+          - Look up display names from family member data
+
+        Private helpers:
+        - loadTasks(familyId): Read from storage
+        - saveTasks(tasks, familyId): Write to storage
+        - isArchived(task): Check if done/cancelled > 14 days ago
+
+    - id: "2.2"
+      task: Create TaskTemplateService in backend/src/services/taskTemplateService.ts
+      status: not_started
+      details: |
+        Constructor dependencies: DataService
+        Storage key: task_templates_{familyId}
+
+        Methods:
+        - createTemplate(data: CreateTaskTemplateDto, familyId: string): Promise<StoredTaskTemplate>
+          - Auto-assign sortOrder as max(existing) + 1
+        - getTemplates(familyId: string): Promise<StoredTaskTemplate[]>
+          - Return sorted by sortOrder
+        - updateTemplate(id: string, data: UpdateTaskTemplateDto, familyId: string): Promise<StoredTaskTemplate>
+        - deleteTemplate(id: string, familyId: string): Promise<void>
+        - reorderTemplates(orderedIds: string[], familyId: string): Promise<StoredTaskTemplate[]>
+          - Accept array of template IDs in desired order
+          - Reassign sortOrder based on array index
+
+    - id: "2.3"
+      task: Register services in backend/src/services/index.ts
+      status: not_started
+      details: |
+        Instantiate TaskService and TaskTemplateService singletons with
+        DataService dependency. Export for use in routes.
+
+# =============================================================================
+# PHASE 3: Backend — Routes
+# =============================================================================
+phase_3_routes:
+  status: not_started
+  description: |
+    API routes for tasks and task templates. Follow existing route patterns
+    with authMiddleware and Zod validation.
+
+  tasks:
+    - id: "3.1"
+      task: Create task routes in backend/src/routes/tasks.ts
+      status: not_started
+      details: |
+        All endpoints protected by authMiddleware.
+        familyId and userId extracted from req.user (set by auth middleware).
+
+        Endpoints:
+
+        POST   /api/v1/tasks                    — Create task
+        GET    /api/v1/tasks                    — Get all tasks (full list, for history)
+        GET    /api/v1/tasks/board              — Get board tasks (filtered, excludes archived)
+        GET    /api/v1/tasks/leaderboard        — Get leaderboard
+          Query params: timezone (required, e.g., "America/New_York")
+        GET    /api/v1/tasks/:id                — Get single task with full transition log
+        PUT    /api/v1/tasks/:id                — Update task fields (not status)
+        PATCH  /api/v1/tasks/:id/status         — Update task status
+        DELETE /api/v1/tasks/:id                — Delete task
+
+        Zod schemas:
+        - createTaskSchema:
+            title: z.string().min(1).max(200)
+            description: z.string().max(2000).optional()
+            scope: z.enum(['family', 'personal']).optional()
+            assigneeId: z.string().uuid().nullable().optional()
+            dueDate: z.string().date().nullable().optional()
+        - updateTaskSchema: all fields optional, same constraints
+        - updateStatusSchema:
+            status: z.enum(['todo', 'started', 'done', 'cancelled'])
+        - leaderboardQuerySchema:
+            timezone: z.string().min(1)
+
+    - id: "3.2"
+      task: Create task template routes in backend/src/routes/taskTemplates.ts
+      status: not_started
+      details: |
+        POST   /api/v1/task-templates              — Create template
+        GET    /api/v1/task-templates              — List all templates (sorted)
+        PUT    /api/v1/task-templates/:id          — Update template
+        DELETE /api/v1/task-templates/:id          — Delete template
+        PUT    /api/v1/task-templates/reorder      — Reorder templates
+
+        Zod schemas:
+        - createTemplateSchema:
+            name: z.string().min(1).max(100)
+            defaultAssigneeId: z.string().uuid().nullable().optional()
+            defaultScope: z.enum(['family', 'personal']).optional()
+        - updateTemplateSchema: all fields optional
+        - reorderSchema:
+            orderedIds: z.array(z.string().uuid())
+
+    - id: "3.3"
+      task: Register routes in backend app
+      status: not_started
+      details: |
+        Mount task routes at /api/v1/tasks
+        Mount template routes at /api/v1/task-templates
+        Follow existing route registration pattern.
+
+# =============================================================================
+# PHASE 4: API Client
+# =============================================================================
+phase_4_api_client:
+  status: not_started
+  description: Add task and template methods to the frontend API client.
+
+  tasks:
+    - id: "4.1"
+      task: Create frontend/src/lib/api/tasks.ts
+      status: not_started
+      details: |
+        Methods:
+        - createTask(data: CreateTaskDto): Promise<StoredTask>
+        - getTasks(): Promise<StoredTask[]>
+        - getBoardTasks(): Promise<StoredTask[]>
+        - getTask(id: string): Promise<StoredTask>
+        - updateTask(id: string, data: UpdateTaskDto): Promise<StoredTask>
+        - updateTaskStatus(id: string, status: TaskStatus): Promise<StoredTask>
+        - deleteTask(id: string): Promise<void>
+        - getLeaderboard(timezone: string): Promise<LeaderboardResponse>
+
+    - id: "4.2"
+      task: Create frontend/src/lib/api/taskTemplates.ts
+      status: not_started
+      details: |
+        Methods:
+        - createTemplate(data: CreateTaskTemplateDto): Promise<StoredTaskTemplate>
+        - getTemplates(): Promise<StoredTaskTemplate[]>
+        - updateTemplate(id: string, data: UpdateTaskTemplateDto): Promise<StoredTaskTemplate>
+        - deleteTemplate(id: string): Promise<void>
+        - reorderTemplates(orderedIds: string[]): Promise<StoredTaskTemplate[]>
+
+    - id: "4.3"
+      task: Register in main API client and bind methods
+      status: not_started
+      details: |
+        Follow existing pattern in frontend/src/lib/api.ts or api/index.ts.
+        Ensure all methods are properly bound to prevent context loss
+        (lesson learned from existing codebase).
+
+# =============================================================================
+# PHASE 5: Frontend — Kanban Board
+# =============================================================================
+phase_5_kanban:
+  status: not_started
+  description: |
+    The core UI: a four-column Kanban board with drag-and-drop. This is the
+    most complex frontend phase and should be built incrementally.
+
+  tasks:
+    - id: "5.1"
+      task: Add Tasks to sidebar navigation
+      status: not_started
+      details: |
+        In frontend/src/components/MantineLayout.tsx, add to navItems:
+        { label: 'Tasks', icon: IconChecklist, path: '/tasks' }
+
+        Place after Projects in the nav order (or wherever feels natural).
+        Import IconChecklist from @tabler/icons-react.
+
+    - id: "5.2"
+      task: Add /tasks route to frontend/src/App.tsx
+      status: not_started
+      details: |
+        Add protected route for the Tasks page component.
+        Follow existing route pattern with RouteErrorBoundary wrapper.
+
+    - id: "5.3"
+      task: Install and configure @hello-pangea/dnd
+      status: not_started
+      details: |
+        npm install @hello-pangea/dnd
+
+        If the project already has a DnD library installed, evaluate whether
+        to use that instead. @hello-pangea/dnd is the recommendation per D7
+        but avoid adding a second DnD library.
+
+    - id: "5.4"
+      task: Create TaskBoard component
+      status: not_started
+      details: |
+        File: frontend/src/pages/Tasks.tsx (main page)
+        File: frontend/src/components/tasks/TaskBoard.tsx (board component)
+
+        Tasks.tsx is the page shell: title bar, split button, filter bar,
+        leaderboard panel, and the board itself.
+
+        TaskBoard.tsx renders the four-column Kanban:
+        - Uses @hello-pangea/dnd DragDropContext, Droppable, Draggable
+        - Four Droppable columns: todo, started, done, cancelled
+        - Each column header shows status name and task count
+        - Cards are Draggable within and between columns
+
+        Data fetching:
+        - useQuery(['tasks', 'board']) → getBoardTasks()
+        - queryClient.invalidateQueries(['tasks']) on mutations
+
+        Drag handler (onDragEnd):
+        - Extract source column (fromStatus) and destination column (toStatus)
+        - If same column, reorder only (optional, P2)
+        - If different column, call updateTaskStatus mutation
+        - Optimistic update: move card in local state immediately,
+          revert on error
+
+    - id: "5.5"
+      task: Create TaskCard component
+      status: not_started
+      details: |
+        File: frontend/src/components/tasks/TaskCard.tsx
+
+        Mantine Card (compact) displaying:
+        - Task title (bold, truncated with ellipsis if long)
+        - Assignee avatar or name badge (if assigned)
+        - Due date with overdue styling (red text/badge if past due)
+        - Personal scope badge (only shown for personal tasks; family
+          tasks show no badge since family is the default)
+
+        Visual distinction for personal tasks:
+        - Slightly dimmed background or a subtle left border color
+        - Small "Personal" badge or icon
+
+        Clicking the card opens a TaskDetailModal (Phase 6).
+
+    - id: "5.6"
+      task: Create KanbanColumn component
+      status: not_started
+      details: |
+        File: frontend/src/components/tasks/KanbanColumn.tsx
+
+        Wraps a Droppable zone for one status column.
+        - Column header: status label + count badge
+        - Scrollable card list (vertical overflow for many cards)
+        - Visual feedback on drag-over (highlight border/background)
+        - Done and Cancelled columns: consider lighter background to
+          visually de-emphasize
+
+    - id: "5.7"
+      task: Implement auto-assignment on drag
+      status: not_started
+      details: |
+        In the onDragEnd handler within TaskBoard:
+
+        When a task is dragged to the "started" column:
+        1. Check if task.assigneeId is null
+        2. If null: call updateTaskStatus AND updateTask (set assigneeId
+           to current user) — or handle server-side in updateTaskStatus
+           (preferred, see Phase 2 task 2.1)
+        3. If already assigned: only call updateTaskStatus
+
+        The server-side auto-assignment in updateTaskStatus (Phase 2)
+        handles this automatically when status changes to 'started' and
+        assigneeId is null. The frontend just needs to refetch/invalidate
+        to show the updated assignee.
+
+    - id: "5.8"
+      task: Add board filter bar
+      status: not_started
+      details: |
+        Filter controls above the board:
+        - Assignee filter: Select dropdown with family members + "Unassigned"
+          + "All" (default)
+        - Scope filter: Segmented control or select — "All" | "Family" | "Personal"
+
+        Filtering is client-side on the board data (dataset is small).
+        Store filter state in URL params for bookmarkability.
+
+# =============================================================================
+# PHASE 6: Frontend — Task CRUD Modals
+# =============================================================================
+phase_6_task_crud:
+  status: not_started
+  description: |
+    Task creation, editing, and detail views. Includes the split button
+    with template dropdown.
+
+  tasks:
+    - id: "6.1"
+      task: Create TaskFormModal (create/edit)
+      status: not_started
+      details: |
+        File: frontend/src/components/tasks/TaskFormModal.tsx
+
+        Mantine Modal with form fields:
+        - Title (TextInput, required, max 200)
+        - Description (Textarea, optional, max 2000)
+        - Assignee (Select, populated from family members, optional)
+        - Due date (DatePickerInput, optional)
+        - Scope (SegmentedControl: Family | Personal, default Family)
+
+        On submit:
+        - Create: POST /api/v1/tasks
+        - Edit: PUT /api/v1/tasks/:id
+        - useMutation with invalidateQueries(['tasks'])
+
+        Status is NOT editable in this form — status changes happen
+        via drag-and-drop or the detail view.
+
+    - id: "6.2"
+      task: Create TaskDetailModal
+      status: not_started
+      details: |
+        File: frontend/src/components/tasks/TaskDetailModal.tsx
+
+        Opened by clicking a task card on the board or in history.
+
+        Displays:
+        - All task fields (editable inline or via edit button → TaskFormModal)
+        - Current status with manual status change buttons
+          (e.g., "Mark as Done", "Cancel", "Restart")
+        - Assignee with reassign capability
+        - Full transition log as a timeline:
+          - Each entry: "{User} changed status from {from} to {to} — {timestamp}"
+          - Sorted newest first
+        - Delete button (with confirmation)
+
+    - id: "6.3"
+      task: Create split button with template dropdown
+      status: not_started
+      details: |
+        File: frontend/src/components/tasks/CreateTaskButton.tsx
+
+        Mantine Button.Group with Menu:
+        - Left side: "Create Task" button → opens TaskFormModal
+        - Right side: dropdown chevron → opens Menu
+
+        Menu contents:
+        - Section header: "Quick Add"
+        - List of task templates (from useQuery(['taskTemplates']))
+          - Each item: template name, click → instant task creation
+            via POST /api/v1/tasks with template defaults
+            - Show brief success notification (Mantine notifications)
+        - Divider
+        - "Manage Templates..." → opens TemplateManagementModal
+
+        If no templates exist, show a helpful empty state:
+        "No templates yet. Create one to enable one-tap task creation."
+        with a "Create Template" action.
+
+    - id: "6.4"
+      task: Create TemplateManagementModal
+      status: not_started
+      details: |
+        File: frontend/src/components/tasks/TemplateManagementModal.tsx
+
+        Mantine Modal with:
+        - List of existing templates (name, default assignee, default scope)
+        - Drag to reorder (or up/down arrow buttons for simplicity)
+        - Inline edit or edit button per template
+        - Delete button per template (with confirmation)
+        - "Add Template" button at bottom → inline form or sub-modal
+
+        Template form fields:
+        - Name (TextInput, required)
+        - Default assignee (Select, optional)
+        - Default scope (SegmentedControl, default Family)
+
+# =============================================================================
+# PHASE 7: Frontend — Leaderboard
+# =============================================================================
+phase_7_leaderboard:
+  status: not_started
+  description: |
+    Collapsible leaderboard panel on the Tasks page showing completion
+    counts per family member across three time windows.
+
+  tasks:
+    - id: "7.1"
+      task: Create Leaderboard component
+      status: not_started
+      details: |
+        File: frontend/src/components/tasks/Leaderboard.tsx
+
+        Collapsible panel (Mantine Collapse or Accordion) at the top of
+        the Tasks page, above the board. Default: expanded.
+
+        Layout:
+        - Three columns or tabs: Today | This Week | This Month
+        - Each shows family members ranked by completion count
+        - Highlight the leader with a visual indicator (crown icon,
+          bold text, colored background — keep it fun)
+        - Show the count next to each name
+
+        Data: useQuery(['tasks', 'leaderboard'], () =>
+          api.tasks.getLeaderboard(Intl.DateTimeFormat().resolvedOptions().timeZone)
+        )
+
+        Refetch on task status changes (invalidate alongside board queries).
+
+        Collapsed state stored in localStorage so the user's preference
+        persists across page loads.
+
+    - id: "7.2"
+      task: Add motivational touches
+      status: not_started
+      details: |
+        Keep this lightweight — no over-engineering.
+
+        Ideas (pick what feels right during implementation):
+        - Fire emoji or star next to someone with 5+ tasks today
+        - "On a roll!" text when someone completes 3+ in a row
+        - Streak counter if someone has completed tasks every day this week
+
+        These are nice-to-have. The core leaderboard with counts and
+        highlighting is the P0. Celebratory touches are P2.
+
+# =============================================================================
+# PHASE 8: Frontend — Task History
+# =============================================================================
+phase_8_history:
+  status: not_started
+  description: |
+    Archive/history view for all tasks, accessible from the Tasks page.
+
+  tasks:
+    - id: "8.1"
+      task: Create TaskHistory component
+      status: not_started
+      details: |
+        File: frontend/src/components/tasks/TaskHistory.tsx
+
+        Accessible via a tab or toggle on the Tasks page:
+        - "Board" view (default) — Kanban board
+        - "History" view — filterable list
+
+        Alternatively, a "View History" button/link on the Tasks page
+        that opens a modal or navigates to /tasks/history.
+
+        Uses: useQuery(['tasks']) → getTasks() (full list, not board-filtered)
+
+        Mantine Table or list view showing:
+        - Task title
+        - Status (badge with color)
+        - Assignee
+        - Created date
+        - Completed/cancelled date (if applicable)
+
+        Click a row → opens TaskDetailModal with full transition log.
+
+    - id: "8.2"
+      task: Add history filters
+      status: not_started
+      details: |
+        Filter controls:
+        - Status: multi-select (todo, started, done, cancelled, or all)
+        - Assignee: select with family members + unassigned + all
+        - Scope: family / personal / all
+        - Date range: DateRangePicker filtering on createdAt, completedAt,
+          or cancelledAt (selectable)
+
+        Filtering is client-side (task volume is low for a household).
+        Store filter state in URL params.
+
+# =============================================================================
+# PHASE 9: Testing
+# =============================================================================
+phase_9_testing:
+  status: not_started
+  description: |
+    Risk-based testing focused on the areas most likely to break:
+    status transitions, auto-assignment, leaderboard counting, and
+    the transition log integrity.
+
+  tasks:
+    - id: "9.1"
+      task: Integration tests for TaskService
+      status: not_started
+      details: |
+        File: backend/src/__tests__/integration/taskService.test.ts
+
+        Critical test cases:
+
+        Status transitions:
+        - Create task → status is 'todo', transitions has one entry
+        - Move to started → startedAt set, transition logged
+        - Move to done → completedAt set, transition logged
+        - Move to cancelled → cancelledAt set, transition logged
+        - Move back to todo → startedAt/completedAt/cancelledAt cleared
+        - Move to done, then back to started, then to done again →
+          completedAt reflects the second completion, transition log has
+          all entries, leaderboard counts it once
+
+        Auto-assignment:
+        - Move unassigned task to started → assigneeId set to userId
+        - Move assigned task to started → assigneeId unchanged
+
+        Leaderboard:
+        - Tasks completed today counted correctly
+        - Tasks completed by different users attributed correctly
+        - Task moved done→started→done counted once (not twice)
+        - Personal task only counted for owner
+
+        Board query:
+        - Done task within 14 days → included
+        - Done task older than 14 days → excluded
+        - Todo and started tasks → always included
+
+    - id: "9.2"
+      task: Integration tests for TaskTemplateService
+      status: not_started
+      details: |
+        File: backend/src/__tests__/integration/taskTemplateService.test.ts
+
+        Test cases:
+        - CRUD operations
+        - Reorder updates sortOrder correctly
+        - Auto-assigned sortOrder on creation
+
+    - id: "9.3"
+      task: Route-level tests for task API endpoints
+      status: not_started
+      details: |
+        File: backend/src/__tests__/integration/taskRoutes.test.ts
+
+        - Auth middleware protection on all endpoints
+        - Zod validation rejects invalid inputs
+        - Status update endpoint returns updated task with transition
+        - Board endpoint excludes archived tasks
+        - Leaderboard endpoint requires timezone param
+
+    - id: "9.4"
+      task: Manual testing checklist
+      status: not_started
+      details: |
+        Board:
+        - [ ] Create task via full form, appears in Todo column
+        - [ ] Create task via template quick-add, appears in Todo column
+        - [ ] Drag task from Todo to Started
+        - [ ] Drag unassigned task to Started — verify auto-assignment
+        - [ ] Drag assigned task to Started — verify assignee unchanged
+        - [ ] Drag task to Done
+        - [ ] Drag task to Cancelled
+        - [ ] Drag task backward (Started → Todo)
+        - [ ] Task card shows assignee, due date, personal badge correctly
+        - [ ] Overdue task shows visual indicator
+        - [ ] Personal task visually distinguished from family task
+
+        Archiving:
+        - [ ] Completed task visible on board within 14 days
+        - [ ] Completed task disappears from board after 14 days
+        - [ ] Archived task visible in Task History
+
+        Leaderboard:
+        - [ ] Shows correct counts for today/week/month
+        - [ ] Updates after completing a task
+        - [ ] Collapse/expand persists across page loads
+
+        Templates:
+        - [ ] Create template
+        - [ ] Quick-add from template creates task instantly
+        - [ ] Edit template
+        - [ ] Delete template
+        - [ ] Reorder templates reflected in dropdown
+
+        Multi-user:
+        - [ ] Both users see same board
+        - [ ] User A creates task, User B sees it
+        - [ ] User A drags task, User B sees updated status
+        - [ ] Personal task visible to both users with distinction
+        - [ ] Leaderboard shows both users
+
+# =============================================================================
+# IMPLEMENTATION ORDER
+# =============================================================================
+implementation_order:
+  description: |
+    Phases 1-4 are the backend foundation. Phase 5 (Kanban board) is the
+    core frontend deliverable. Phases 6-8 layer on task CRUD, leaderboard,
+    and history. Phase 9 testing runs alongside development.
+
+    Phase 5 is the most complex phase due to drag-and-drop. Recommend
+    getting a basic board working early (even with placeholder data)
+    before wiring up the full API integration.
+
+  sequence:
+    - phase: 1 — Shared Types
+      reason: Types are consumed by all other phases
+    - phase: 2 — Task Service & Template Service
+      reason: Business logic before routes
+    - phase: 3 — Routes
+      reason: API endpoints must exist before frontend can consume them
+    - phase: 4 — API Client
+      reason: Frontend methods needed for UI development
+    - phase: 5 — Kanban Board (core drag-and-drop)
+      reason: Primary user-facing deliverable. Get this working first.
+    - phase: 6 — Task CRUD Modals (create, edit, detail, templates)
+      reason: Adds full task management on top of the board
+    - phase: 7 — Leaderboard
+      reason: Independent panel, can be built in parallel with Phase 6
+    - phase: 8 — Task History
+      reason: Archive view, lowest priority frontend piece
+    - phase: 9 — Testing
+      reason: Write integration tests during Phases 2-3; manual testing after Phase 8
