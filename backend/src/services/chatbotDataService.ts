@@ -8,11 +8,11 @@
  * - Reads directly from storage — never calls other service methods
  *
  * Storage keys used:
- * - transactions_{userId}    — StoredTransaction[]
- * - accounts_{userId}        — StoredAccount[]
- * - budgets_{userId}         — StoredBudget[]
- * - autocategorize_rules_{userId} — StoredAutoCategorizeRule[]
- * - categories via getCategories(userId)
+ * - transactions_{familyId}    — StoredTransaction[]
+ * - accounts_{familyId}        — StoredAccount[]
+ * - budgets_{familyId}         — StoredBudget[]
+ * - autocategorize_rules_{familyId} — StoredAutoCategorizeRule[]
+ * - categories via getCategories(familyId)
  */
 
 import { ReadOnlyDataService } from './readOnlyDataService';
@@ -131,10 +131,10 @@ export class ChatbotDataService {
   constructor(private readonly dataService: ReadOnlyDataService) {}
 
   /**
-   * Query transactions with filters. All results scoped to userId.
+   * Query transactions with filters. All results scoped to familyId.
    */
-  async queryTransactions(userId: string, filters: QueryTransactionsInput): Promise<Transaction[]> {
-    const stored = await this.dataService.getData<StoredTransaction[]>(`transactions_${userId}`);
+  async queryTransactions(familyId: string, filters: QueryTransactionsInput): Promise<Transaction[]> {
+    const stored = await this.dataService.getData<StoredTransaction[]>(`transactions_${familyId}`);
     if (!stored) return [];
 
     let results = stored;
@@ -190,17 +190,17 @@ export class ChatbotDataService {
   }
 
   /**
-   * Get all categories for a user.
+   * Get all categories for a family.
    */
-  async getCategories(userId: string): Promise<Category[]> {
-    return this.dataService.getCategories(userId);
+  async getCategories(familyId: string): Promise<Category[]> {
+    return this.dataService.getCategories(familyId);
   }
 
   /**
    * Get monthly budgets for a specific month.
    */
-  async getBudgets(userId: string, month: string): Promise<MonthlyBudget[]> {
-    const stored = await this.dataService.getData<StoredBudget[]>(`budgets_${userId}`);
+  async getBudgets(familyId: string, month: string): Promise<MonthlyBudget[]> {
+    const stored = await this.dataService.getData<StoredBudget[]>(`budgets_${familyId}`);
     if (!stored) return [];
 
     return stored
@@ -216,11 +216,11 @@ export class ChatbotDataService {
   /**
    * Get budget summary totals for a month (income, expense, variance).
    */
-  async getBudgetSummary(userId: string, month: string): Promise<BudgetSummaryTotals> {
+  async getBudgetSummary(familyId: string, month: string): Promise<BudgetSummaryTotals> {
     const [budgets, categories, transactions] = await Promise.all([
-      this.getBudgets(userId, month),
-      this.getCategories(userId),
-      this.queryTransactions(userId, {
+      this.getBudgets(familyId, month),
+      this.getCategories(familyId),
+      this.queryTransactions(familyId, {
         startDate: `${month}-01`,
         endDate: this.getMonthEndDate(month),
       }),
@@ -250,8 +250,8 @@ export class ChatbotDataService {
    * Get account summaries — strips all sensitive fields (SEC-002).
    * Returns only safe display data: name, type, institution, balances.
    */
-  async getAccounts(userId: string): Promise<AccountSummary[]> {
-    const stored = await this.dataService.getData<StoredAccount[]>(`accounts_${userId}`);
+  async getAccounts(familyId: string): Promise<AccountSummary[]> {
+    const stored = await this.dataService.getData<StoredAccount[]>(`accounts_${familyId}`);
     if (!stored) return [];
 
     return stored.map(a => ({
@@ -276,13 +276,13 @@ export class ChatbotDataService {
    * Get spending aggregated by category for a date range.
    */
   async getSpendingByCategory(
-    userId: string,
+    familyId: string,
     startDate: string,
     endDate: string,
   ): Promise<CategorySpendingSummary[]> {
     const [transactions, categories] = await Promise.all([
-      this.queryTransactions(userId, { startDate, endDate }),
-      this.getCategories(userId),
+      this.queryTransactions(familyId, { startDate, endDate }),
+      this.getCategories(familyId),
     ]);
 
     const categoryMap = new Map(categories.map(c => [c.id, c]));
@@ -320,8 +320,8 @@ export class ChatbotDataService {
   /**
    * Get cash flow summary for a date range.
    */
-  async getCashFlow(userId: string, startDate: string, endDate: string): Promise<CashFlowSummary> {
-    const transactions = await this.queryTransactions(userId, { startDate, endDate });
+  async getCashFlow(familyId: string, startDate: string, endDate: string): Promise<CashFlowSummary> {
+    const transactions = await this.queryTransactions(familyId, { startDate, endDate });
 
     // Use shared utilities for consistent calculation (excludes transfers, hidden, pending)
     const calcTransactions = transactions as unknown as import('../shared/utils/transactionCalculations').TransactionForCalculation[];
@@ -362,9 +362,9 @@ export class ChatbotDataService {
   /**
    * Get auto-categorization rules for a user.
    */
-  async getAutoCategorizeRules(userId: string): Promise<AutoCategorizeRule[]> {
+  async getAutoCategorizeRules(familyId: string): Promise<AutoCategorizeRule[]> {
     const stored = await this.dataService.getData<StoredAutoCategorizeRule[]>(
-      `autocategorize_rules_${userId}`,
+      `autocategorize_rules_${familyId}`,
     );
     if (!stored) return [];
 

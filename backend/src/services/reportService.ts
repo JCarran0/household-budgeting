@@ -124,15 +124,15 @@ export class ReportService {
    * Get spending trends by category over time
    */
   async getSpendingTrends(
-    userId: string,
+    familyId: string,
     startMonth: string,
     endMonth: string,
     categoryIds?: string[]
   ): Promise<SpendingTrendsResult> {
     try {
-      const transactions = await this.transactionRepo.getAll(userId);
-      
-      const categories = await this.dataService.getCategories(userId);
+      const transactions = await this.transactionRepo.getAll(familyId);
+
+      const categories = await this.dataService.getCategories(familyId);
 
       const categoryMap = new Map(categories.map(c => [c.id, c.name]));
       // Create a set of hidden category IDs including subcategories of hidden parents
@@ -199,15 +199,15 @@ export class ReportService {
    * Get income category breakdown for a period
    */
   async getIncomeCategoryBreakdown(
-    userId: string,
+    familyId: string,
     startDate: string,
     endDate: string,
     includeSubcategories: boolean = true
   ): Promise<CategoryBreakdownResult> {
     try {
-      const transactions = await this.transactionRepo.getAll(userId);
-      
-      const categories = await this.dataService.getCategories(userId);
+      const transactions = await this.transactionRepo.getAll(familyId);
+
+      const categories = await this.dataService.getCategories(familyId);
       // Create a set of hidden category IDs including subcategories of hidden parents
       const hiddenCategoryIds = getEffectivelyHiddenCategoryIds(categories);
 
@@ -339,15 +339,15 @@ export class ReportService {
    * Get category breakdown for a period (excludes savings subcategories)
    */
   async getCategoryBreakdown(
-    userId: string,
+    familyId: string,
     startDate: string,
     endDate: string,
     includeSubcategories: boolean = true
   ): Promise<CategoryBreakdownResult> {
     try {
-      const transactions = await this.transactionRepo.getAll(userId);
-      
-      const categories = await this.dataService.getCategories(userId);
+      const transactions = await this.transactionRepo.getAll(familyId);
+
+      const categories = await this.dataService.getCategories(familyId);
       // Create a set of hidden category IDs including subcategories of hidden parents
       const hiddenCategoryIds = getEffectivelyHiddenCategoryIds(categories);
       // Also exclude savings subcategories from spending breakdown
@@ -466,14 +466,14 @@ export class ReportService {
    * Get savings category breakdown for a period (only savings subcategories)
    */
   async getSavingsCategoryBreakdown(
-    userId: string,
+    familyId: string,
     startDate: string,
     endDate: string
   ): Promise<CategoryBreakdownResult> {
     try {
-      const transactions = await this.transactionRepo.getAll(userId);
-      
-      const categories = await this.dataService.getCategories(userId);
+      const transactions = await this.transactionRepo.getAll(familyId);
+
+      const categories = await this.dataService.getCategories(familyId);
       // Get savings subcategories
       const savingsSubcategoryIds = getSavingsSubcategoryIds(categories);
 
@@ -529,14 +529,14 @@ export class ReportService {
    * Get cash flow summary
    */
   async getCashFlowSummary(
-    userId: string,
+    familyId: string,
     startMonth: string,
     endMonth: string
   ): Promise<CashFlowResult> {
     try {
-      const transactions = await this.transactionRepo.getAll(userId);
-      
-      const categories = await this.dataService.getCategories(userId);
+      const transactions = await this.transactionRepo.getAll(familyId);
+
+      const categories = await this.dataService.getCategories(familyId);
       // Create a set of hidden category IDs including subcategories of hidden parents
       const hiddenCategoryIds = getEffectivelyHiddenCategoryIds(categories);
 
@@ -551,7 +551,7 @@ export class ReportService {
         let savingsRate: number;
 
         if (this.actualsOverrideService) {
-          const monthlyActuals = await this.actualsOverrideService.getMonthlyActuals(userId, month);
+          const monthlyActuals = await this.actualsOverrideService.getMonthlyActuals(familyId, month);
 
           if (monthlyActuals.hasOverride) {
             // Use override values
@@ -620,7 +620,7 @@ export class ReportService {
    * Generate cash flow projections
    */
   async generateProjections(
-    userId: string,
+    familyId: string,
     monthsToProject: number = 6
   ): Promise<ProjectionResult> {
     try {
@@ -629,7 +629,7 @@ export class ReportService {
       const sixMonthsAgo = format(subMonths(today, 6), 'yyyy-MM');
       const lastMonth = format(subMonths(today, 1), 'yyyy-MM');
 
-      const historicalResult = await this.getCashFlowSummary(userId, sixMonthsAgo, lastMonth);
+      const historicalResult = await this.getCashFlowSummary(familyId, sixMonthsAgo, lastMonth);
       if (!historicalResult.success || !historicalResult.summary) {
         return { success: false, error: 'Failed to get historical data' };
       }
@@ -682,12 +682,12 @@ export class ReportService {
    * Generate cash flow outlook with budget comparison
    */
   async generateCashFlowProjections(
-    userId: string,
+    familyId: string,
     monthsToProject: number = 6
   ): Promise<CashFlowOutlookResult> {
     try {
       const today = new Date();
-      const categories = await this.dataService.getCategories(userId);
+      const categories = await this.dataService.getCategories(familyId);
 
       // Get last known budget for extrapolation
       let lastKnownBudget: MonthlyBudget[] | null = null;
@@ -695,7 +695,7 @@ export class ReportService {
       // Search backwards to find last month with budgets (up to 12 months)
       for (let i = 0; i <= 12; i++) {
         const monthToCheck = format(subMonths(today, i), 'yyyy-MM');
-        const budgetsKey = `budgets_${userId}_${monthToCheck}`;
+        const budgetsKey = `budgets_${familyId}_${monthToCheck}`;
         const budgets = await this.dataService.getData<MonthlyBudget[]>(budgetsKey) || [];
 
         if (budgets.length > 0) {
@@ -708,7 +708,7 @@ export class ReportService {
       const sixMonthsAgo = format(subMonths(today, 6), 'yyyy-MM');
       const lastMonth = format(subMonths(today, 1), 'yyyy-MM');
 
-      const historicalResult = await this.getCashFlowSummary(userId, sixMonthsAgo, lastMonth);
+      const historicalResult = await this.getCashFlowSummary(familyId, sixMonthsAgo, lastMonth);
       if (!historicalResult.success || !historicalResult.summary) {
         return { success: false, error: 'Failed to get historical data for average calculation' };
       }
@@ -720,7 +720,7 @@ export class ReportService {
       const oneYearAgo = format(subMonths(addMonths(today, 1), 12), 'yyyy-MM');
       const checkPriorYearEnd = format(subMonths(addMonths(today, monthsToProject), 12), 'yyyy-MM');
 
-      const priorYearResult = await this.getCashFlowSummary(userId, oneYearAgo, checkPriorYearEnd);
+      const priorYearResult = await this.getCashFlowSummary(familyId, oneYearAgo, checkPriorYearEnd);
       const hasPriorYearData = priorYearResult.success &&
                                priorYearResult.summary &&
                                priorYearResult.summary.some(m => m.income > 0 || m.expenses > 0);
@@ -732,7 +732,7 @@ export class ReportService {
         const projMonth = format(addMonths(today, i), 'yyyy-MM');
 
         // 1. Get budgeted cashflow
-        const budgetsKey = `budgets_${userId}_${projMonth}`;
+        const budgetsKey = `budgets_${familyId}_${projMonth}`;
         let monthBudgets = await this.dataService.getData<MonthlyBudget[]>(budgetsKey) || [];
         let isBudgetExtrapolated = false;
 
@@ -785,7 +785,7 @@ export class ReportService {
   /**
    * Get year-to-date summary
    */
-  async getYearToDateSummary(userId: string): Promise<YTDResult> {
+  async getYearToDateSummary(familyId: string): Promise<YTDResult> {
     try {
       const currentYear = new Date().getFullYear();
       const startMonth = `${currentYear}-01`;
@@ -793,7 +793,7 @@ export class ReportService {
       const currentMonth = format(currentDate, 'yyyy-MM');
 
       // Use getCashFlowSummary which already handles overrides
-      const cashFlowResult = await this.getCashFlowSummary(userId, startMonth, currentMonth);
+      const cashFlowResult = await this.getCashFlowSummary(familyId, startMonth, currentMonth);
       if (!cashFlowResult.success || !cashFlowResult.summary) {
         return { success: false, error: 'Failed to get cash flow data for YTD summary' };
       }
@@ -840,9 +840,9 @@ export class ReportService {
       const startDate = `${currentYear}-01-01`;
       const endDate = new Date().toISOString().split('T')[0];
 
-      const transactions = await this.transactionRepo.getAll(userId);
+      const transactions = await this.transactionRepo.getAll(familyId);
 
-      const categories = await this.dataService.getCategories(userId);
+      const categories = await this.dataService.getCategories(familyId);
       // Create a set of hidden category IDs including subcategories of hidden parents
       const hiddenCategoryIds = getEffectivelyHiddenCategoryIds(categories);
 

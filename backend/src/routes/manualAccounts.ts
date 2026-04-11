@@ -42,9 +42,9 @@ router.use(authMiddleware);
 // GET /api/v1/manual-accounts
 router.get('/', async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const userId = req.user?.userId;
-    if (!userId) throw new AuthorizationError();
-    const accounts = await manualAccountService.getAll(userId);
+    const familyId = req.user?.familyId;
+    if (!familyId) throw new AuthorizationError();
+    const accounts = await manualAccountService.getAll(familyId);
     res.json(accounts);
   } catch (error) {
     next(error);
@@ -54,10 +54,10 @@ router.get('/', async (req: Request, res: Response, next: NextFunction): Promise
 // POST /api/v1/manual-accounts
 router.post('/', async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const userId = req.user?.userId;
-    if (!userId) throw new AuthorizationError();
+    const familyId = req.user?.familyId;
+    if (!familyId) throw new AuthorizationError();
     const data = createSchema.parse(req.body);
-    const account = await manualAccountService.create(userId, data);
+    const account = await manualAccountService.create(familyId, data);
     res.status(201).json(account);
   } catch (error) {
     if (error instanceof z.ZodError) {
@@ -71,10 +71,10 @@ router.post('/', async (req: Request, res: Response, next: NextFunction): Promis
 // PUT /api/v1/manual-accounts/:id
 router.put('/:id', async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const userId = req.user?.userId;
-    if (!userId) throw new AuthorizationError();
+    const familyId = req.user?.familyId;
+    if (!familyId) throw new AuthorizationError();
     const data = updateSchema.parse(req.body);
-    const account = await manualAccountService.update(userId, req.params.id, data);
+    const account = await manualAccountService.update(familyId, req.params.id, data);
     res.json(account);
   } catch (error) {
     if (error instanceof z.ZodError) {
@@ -92,9 +92,9 @@ router.put('/:id', async (req: Request, res: Response, next: NextFunction): Prom
 // DELETE /api/v1/manual-accounts/:id
 router.delete('/:id', async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const userId = req.user?.userId;
-    if (!userId) throw new AuthorizationError();
-    await manualAccountService.delete(userId, req.params.id);
+    const familyId = req.user?.familyId;
+    if (!familyId) throw new AuthorizationError();
+    await manualAccountService.delete(familyId, req.params.id);
     res.status(204).send();
   } catch (error) {
     if (error instanceof Error && error.message === 'Manual account not found') {

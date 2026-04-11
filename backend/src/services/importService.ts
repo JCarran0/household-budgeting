@@ -61,13 +61,13 @@ export class ImportService {
    * This is the main entry point for all CSV imports
    */
   public async importCSV(
-    userId: string,
+    familyId: string,
     type: ImportType,
     content: string,
     options: ImportOptions = {}
   ): Promise<ImportResult> {
     // Create import job for tracking (preparation for async)
-    const job = this.createImportJob(userId, type);
+    const job = this.createImportJob(familyId, type);
     this.activeJobs.set(job.id, job);
 
     try {
@@ -79,13 +79,13 @@ export class ImportService {
       let result: ImportResult;
       switch (type) {
         case 'categories':
-          result = await this.importCategories(userId, content, options, job);
+          result = await this.importCategories(familyId, content, options, job);
           break;
         case 'transactions':
-          result = await this.importTransactions(userId, content, options, job);
+          result = await this.importTransactions(familyId, content, options, job);
           break;
         case 'mappings':
-          result = await this.importMappings(userId, content, options, job);
+          result = await this.importMappings(familyId, content, options, job);
           break;
         default:
           throw new Error(`Unsupported import type: ${type}`);
@@ -126,7 +126,7 @@ export class ImportService {
    * Import categories from CSV
    */
   private async importCategories(
-    userId: string,
+    familyId: string,
     content: string,
     options: ImportOptions,
     job: ImportJob
@@ -153,7 +153,7 @@ export class ImportService {
     job.processedRows = 0;
 
     // Process categories
-    const existingCategories = await this.dataService.getCategories(userId);
+    const existingCategories = await this.dataService.getCategories(familyId);
     const existingIds = existingCategories.map(c => c.id);
     const existingNames = new Map<string, Category>();
     
@@ -264,7 +264,7 @@ export class ImportService {
       // This improves performance and provides better progress feedback
       if (!options.dryRun && categoriesToAdd.length > 0 && (categoriesToAdd.length >= batchSize || i + batchSize >= parseResult.data.length)) {
         const allCategories = [...existingCategories, ...categoriesToAdd];
-        await this.dataService.saveCategories(allCategories, userId);
+        await this.dataService.saveCategories(allCategories, familyId);
         
         // Update existing categories for next batch
         existingCategories.push(...categoriesToAdd);
@@ -296,7 +296,7 @@ export class ImportService {
    * Import transactions from CSV with duplicate detection and category mapping
    */
   private async importTransactions(
-    userId: string,
+    familyId: string,
     content: string,
     options: ImportOptions,
     job: ImportJob
@@ -325,7 +325,7 @@ export class ImportService {
 
     try {
       // Get existing transactions for matching
-      const existingTransactionsResult = await this.transactionService.getTransactions(userId, {});
+      const existingTransactionsResult = await this.transactionService.getTransactions(familyId, {});
       if (!existingTransactionsResult.success || !existingTransactionsResult.transactions) {
         return {
           success: false,
@@ -361,7 +361,7 @@ export class ImportService {
           
           // Analyze category mappings only for the matched transactions
           const matchedTransactionsToAnalyze = updateableMatches.map(m => m.importTransaction);
-          const categoryMappingStats = await this.analyzeCategoryMappings(userId, matchedTransactionsToAnalyze);
+          const categoryMappingStats = await this.analyzeCategoryMappings(familyId, matchedTransactionsToAnalyze);
           
           return {
             success: true,
@@ -377,7 +377,7 @@ export class ImportService {
           };
         }
         
-        const categoryMappingStats = await this.analyzeCategoryMappings(userId, parseResult.data);
+        const categoryMappingStats = await this.analyzeCategoryMappings(familyId, parseResult.data);
         
         return {
           success: true,
@@ -394,7 +394,7 @@ export class ImportService {
 
       // Handle "Update Categories Only" mode
       if (options.updateCategoriesOnly) {
-        return await this.updateMatchedTransactionCategories(userId, duplicates, job);
+        return await this.updateMatchedTransactionCategories(familyId, duplicates, job);
       }
 
       // Skip duplicates unless explicitly requested
@@ -408,13 +408,13 @@ export class ImportService {
       // Process new transactions
       if (newTransactions.length > 0) {
         // Get existing categories for mapping
-        const existingCategories = await this.categoryService.getAllCategories(userId);
-        
+        const existingCategories = await this.categoryService.getAllCategories(familyId);
+
         for (const importTxn of newTransactions) {
           try {
             // Map category if provided
             if (importTxn.category) {
-              await this.mapImportCategory(userId, importTxn.category, existingCategories);
+              await this.mapImportCategory(familyId, importTxn.category, existingCategories);
             }
 
             // Convert import transaction to app transaction format
@@ -461,8 +461,8 @@ export class ImportService {
   /**
    * Analyze category mappings for import preview
    */
-  private async analyzeCategoryMappings(userId: string, importTransactions: ParsedTransaction[]) {
-    const existingCategories = await this.categoryService.getAllCategories(userId);
+  private async analyzeCategoryMappings(familyId: string, importTransactions: ParsedTransaction[]) {
+    const existingCategories = await this.categoryService.getAllCategories(familyId);
     const categoryMap = new Map(existingCategories.map(cat => [cat.name.toLowerCase(), cat]));
 
     let canMap = 0;
@@ -485,7 +485,7 @@ export class ImportService {
   /**
    * Map import category to existing app category
    */
-  private async mapImportCategory(_userId: string, importCategory: string, existingCategories: Category[]): Promise<string | null> {
+  private async mapImportCategory(_familyId: string, importCategory: string, existingCategories: Category[]): Promise<string | null> {
     // Simple name-based mapping for now
     const match = existingCategories.find(cat => 
       cat.name.toLowerCase() === importCategory.toLowerCase()
@@ -528,7 +528,7 @@ export class ImportService {
    * Import category mappings from CSV (placeholder for future implementation)
    */
   private async importMappings(
-    _userId: string,
+    _familyId: string,
     content: string,
     _options: ImportOptions,
     _job: ImportJob
@@ -567,10 +567,10 @@ export class ImportService {
   /**
    * Create a new import job for tracking
    */
-  private createImportJob(userId: string, type: ImportType): ImportJob {
+  private createImportJob(familyId: string, type: ImportType): ImportJob {
     return {
       id: uuidv4(),
-      userId,
+      userId: familyId,
       type,
       status: 'pending',
       progress: 0,
@@ -587,11 +587,11 @@ export class ImportService {
    * Update categories on matched transactions only
    */
   private async updateMatchedTransactionCategories(
-    userId: string,
+    familyId: string,
     duplicateMatches: TransactionMatch[],
     job: ImportJob
   ): Promise<ImportResult> {
-    const existingCategories = await this.categoryService.getAllCategories(userId);
+    const existingCategories = await this.categoryService.getAllCategories(familyId);
     let updated = 0;
     let skipped = 0;
     const errors: string[] = [];
@@ -611,7 +611,7 @@ export class ImportService {
         const importCategory = match.importTransaction.category!;
         
         // Find or create the category
-        let categoryId = await this.mapImportCategory(userId, importCategory, existingCategories);
+        let categoryId = await this.mapImportCategory(familyId, importCategory, existingCategories);
         
         // If no mapping found, try to find by name similarity
         if (!categoryId) {
@@ -633,7 +633,7 @@ export class ImportService {
 
         // Update the existing transaction's category
         await this.transactionService.updateTransactionCategory(
-          userId,
+          familyId,
           match.existingTransaction.id,
           categoryId
         );

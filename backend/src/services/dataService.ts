@@ -29,13 +29,14 @@ export interface DataService {
   updateFamily(familyId: string, updates: Partial<Family>): Promise<void>;
 
   // Category methods
-  getCategories(userId: string): Promise<Category[]>;
-  saveCategories(categories: Category[], userId: string): Promise<void>;
+  getCategories(familyId: string): Promise<Category[]>;
+  saveCategories(categories: Category[], familyId: string): Promise<void>;
 
   // Generic data storage methods
   getData<T>(key: string): Promise<T | null>;
   saveData<T>(key: string, data: T): Promise<void>;
   deleteData(key: string): Promise<void>;
+  listKeys(prefix: string): Promise<string[]>;
 }
 
 /**
@@ -165,16 +166,14 @@ export class UnifiedDataService implements DataService {
   }
 
   // Category Methods
-  async getCategories(userId: string): Promise<Category[]> {
-    // User-specific categories
-    const key = `categories_${userId}`;
+  async getCategories(familyId: string): Promise<Category[]> {
+    const key = `categories_${familyId}`;
     const data = await this.storage.read<{ categories: Category[] }>(key);
     return data?.categories || [];
   }
 
-  async saveCategories(categories: Category[], userId: string): Promise<void> {
-    // Save user-specific categories
-    const key = `categories_${userId}`;
+  async saveCategories(categories: Category[], familyId: string): Promise<void> {
+    const key = `categories_${familyId}`;
     await this.storage.write(key, { categories });
   }
 
@@ -189,6 +188,10 @@ export class UnifiedDataService implements DataService {
 
   async deleteData(key: string): Promise<void> {
     await this.storage.delete(key);
+  }
+
+  async listKeys(prefix: string): Promise<string[]> {
+    return this.storage.list(prefix);
   }
 }
 
@@ -254,12 +257,12 @@ export class InMemoryDataService implements DataService {
     };
   }
 
-  async getCategories(userId: string): Promise<Category[]> {
-    return this.userCategories.get(userId) || [];
+  async getCategories(familyId: string): Promise<Category[]> {
+    return this.userCategories.get(familyId) || [];
   }
 
-  async saveCategories(categories: Category[], userId: string): Promise<void> {
-    this.userCategories.set(userId, categories);
+  async saveCategories(categories: Category[], familyId: string): Promise<void> {
+    this.userCategories.set(familyId, categories);
   }
 
   async getData<T>(key: string): Promise<T | null> {
@@ -272,6 +275,10 @@ export class InMemoryDataService implements DataService {
 
   async deleteData(key: string): Promise<void> {
     this.genericData.delete(key);
+  }
+
+  async listKeys(prefix: string): Promise<string[]> {
+    return Array.from(this.genericData.keys()).filter(k => k.startsWith(prefix));
   }
 
   // Test helper method to clear all data

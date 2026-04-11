@@ -9,6 +9,7 @@ import { StoredTransaction } from '../../services/transactionService';
 
 describe('User Story: Income vs Expense Transaction Filtering', () => {
   let testUserId: string;
+  let testFamilyId: string;
   let authToken: string;
 
   beforeAll(() => {
@@ -38,6 +39,7 @@ describe('User Story: Income vs Expense Transaction Filtering', () => {
       .send({
         username,
         password: 'this is my secure test passphrase',
+        displayName: username,
       });
     
     if (response.status !== 201) {
@@ -47,6 +49,7 @@ describe('User Story: Income vs Expense Transaction Filtering', () => {
     expect(response.status).toBe(201);
     authToken = response.body.token;
     testUserId = response.body.user.id;
+    testFamilyId = response.body.user.familyId;
   });
 
   describe('As a user, I can filter transactions by income vs expense', () => {
@@ -240,7 +243,7 @@ describe('User Story: Income vs Expense Transaction Filtering', () => {
       ];
 
       // Save test transactions to data service
-      await dataService.saveData(`transactions_${testUserId}`, testTransactions);
+      await dataService.saveData(`transactions_${testFamilyId}`, testTransactions);
 
       // Transactions created for testing
     });
@@ -416,7 +419,7 @@ describe('User Story: Income vs Expense Transaction Filtering', () => {
         updatedAt: new Date(),
       };
 
-      await dataService.saveData(`transactions_${testUserId}`, [zeroTransaction]);
+      await dataService.saveData(`transactions_${testFamilyId}`, [zeroTransaction]);
 
       // Zero amount should be treated as expense (non-negative)
       const expenseResponse = await request(app)

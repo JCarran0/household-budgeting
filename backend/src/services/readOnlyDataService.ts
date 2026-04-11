@@ -14,7 +14,7 @@ import { DataService } from './dataService';
 
 export interface ReadOnlyDataService {
   getData<T>(key: string): Promise<T | null>;
-  getCategories(userId: string): Promise<Category[]>;
+  getCategories(familyId: string): Promise<Category[]>;
 }
 
 export class ReadOnlyDataServiceImpl implements ReadOnlyDataService {
@@ -24,7 +24,7 @@ export class ReadOnlyDataServiceImpl implements ReadOnlyDataService {
     return this.dataService.getData<T>(key);
   }
 
-  getCategories(userId: string): Promise<Category[]> {
-    return this.dataService.getCategories(userId);
+  getCategories(familyId: string): Promise<Category[]> {
+    return this.dataService.getCategories(familyId);
   }
 }

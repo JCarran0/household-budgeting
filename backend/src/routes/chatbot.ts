@@ -67,10 +67,10 @@ router.post(
   validateBody(chatRequestSchema),
   async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
-      const userId = req.user!.userId;
+      const { familyId } = req.user!;
       const chatRequest = req.body as ChatRequest;
 
-      const response = await chatbotService.chat(userId, chatRequest);
+      const response = await chatbotService.chat(familyId, chatRequest);
 
       res.json({ success: true, ...response });
     } catch (error) {
@@ -126,11 +126,11 @@ router.post(
   validateBody(classifyTransactionsSchema),
   async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
-      const userId = req.user!.userId;
+      const { familyId } = req.user!;
       const { transactionIds } = req.body as { transactionIds?: string[] };
 
-      console.log(`[Chatbot] classify-transactions: starting for user ${userId}`);
-      const result = await categorizationService.classifyTransactions(userId, transactionIds);
+      console.log(`[Chatbot] classify-transactions: starting for family ${familyId}`);
+      const result = await categorizationService.classifyTransactions(familyId, transactionIds);
       console.log(`[Chatbot] classify-transactions: done, ${result.totalClassified} classified, ${result.buckets.length} buckets`);
 
       res.json({ success: true, ...result });
@@ -154,10 +154,10 @@ router.post(
   validateBody(suggestRulesSchema),
   async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
-      const userId = req.user!.userId;
+      const { familyId } = req.user!;
       const { categorizations } = req.body as { categorizations: { transactionId: string; categoryId: string }[] };
 
-      const result = await categorizationService.suggestRules(userId, categorizations);
+      const result = await categorizationService.suggestRules(familyId, categorizations);
 
       res.json({ success: true, ...result });
     } catch (error) {

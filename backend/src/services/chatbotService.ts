@@ -65,7 +65,7 @@ export class ChatbotService {
   /**
    * Process a chat message: check budget, call Claude, execute tools, track cost.
    */
-  async chat(userId: string, request: ChatRequest): Promise<ChatResponse> {
+  async chat(familyId: string, request: ChatRequest): Promise<ChatResponse> {
     // 1. Check monthly spend against cap
     const budget = await this.costTracker.checkBudget();
     if (!budget.allowed) {
@@ -86,7 +86,7 @@ export class ChatbotService {
 
     try {
       const result = await this.executeWithTimeout(
-        this.toolLoop(userId, messages, request.model, toolCallLogs),
+        this.toolLoop(familyId, messages, request.model, toolCallLogs),
         REQUEST_TIMEOUT_MS,
       );
 
@@ -97,10 +97,10 @@ export class ChatbotService {
       if (result.type === 'issue_confirmation') {
         // Record usage before returning
         const costResult = await this.costTracker.recordUsage(
-          userId, request.model, totalInputTokens, totalOutputTokens,
+          familyId, request.model, totalInputTokens, totalOutputTokens,
         );
 
-        this.logRequest(userId, request.model, totalInputTokens, totalOutputTokens, costResult.estimatedCost, toolCallLogs, Date.now() - startTime);
+        this.logRequest(familyId, request.model, totalInputTokens, totalOutputTokens, costResult.estimatedCost, toolCallLogs, Date.now() - startTime);
 
         return {
           type: 'issue_confirmation',
@@ -128,10 +128,10 @@ export class ChatbotService {
 
       // 5. Record usage
       const costResult = await this.costTracker.recordUsage(
-        userId, request.model, totalInputTokens, totalOutputTokens,
+        familyId, request.model, totalInputTokens, totalOutputTokens,
       );
 
-      this.logRequest(userId, request.model, totalInputTokens, totalOutputTokens, costResult.estimatedCost, toolCallLogs, Date.now() - startTime);
+      this.logRequest(familyId, request.model, totalInputTokens, totalOutputTokens, costResult.estimatedCost, toolCallLogs, Date.now() - startTime);
 
       return {
         type: 'message',
@@ -158,7 +158,7 @@ export class ChatbotService {
       const message = error instanceof Error ? error.message : 'Unknown error';
       // Log full error details for debugging
       console.error('[ChatbotService] Error:', {
-        userId,
+        familyId,
         model: request.model,
         error: message,
         stack: error instanceof Error ? error.stack : undefined,
@@ -222,7 +222,7 @@ export class ChatbotService {
   // ==========================================================================
 
   private async toolLoop(
-    userId: string,
+    familyId: string,
     messages: Anthropic.MessageParam[],
     model: ChatModel,
     toolCallLogs: ToolCallLog[],
@@ -289,7 +289,7 @@ export class ChatbotService {
           // Execute data tool
           const start = Date.now();
           const toolInput = toolUse.input as Record<string, unknown>;
-          const result = await this.executeTool(userId, toolUse.name, toolInput);
+          const result = await this.executeTool(familyId, toolUse.name, toolInput);
           const latency = Date.now() - start;
 
           const resultStr = JSON.stringify(result);
@@ -322,35 +322,35 @@ export class ChatbotService {
   // ==========================================================================
 
   private async executeTool(
-    userId: string,
+    familyId: string,
     toolName: string,
     input: Record<string, unknown>,
   ): Promise<unknown> {
     switch (toolName) {
       case 'query_transactions':
-        return this.chatbotDataService.queryTransactions(userId, input as unknown as QueryTransactionsInput);
+        return this.chatbotDataService.queryTransactions(familyId, input as unknown as QueryTransactionsInput);
       case 'get_categories':
-        return this.chatbotDataService.getCategories(userId);
+        return this.chatbotDataService.getCategories(familyId);
       case 'get_budgets':
-        return this.chatbotDataService.getBudgets(userId, (input as unknown as GetBudgetsInput).month);
+        return this.chatbotDataService.getBudgets(familyId, (input as unknown as GetBudgetsInput).month);
       case 'get_budget_summary':
-        return this.chatbotDataService.getBudgetSummary(userId, (input as unknown as GetBudgetSummaryInput).month);
+        return this.chatbotDataService.getBudgetSummary(familyId, (input as unknown as GetBudgetSummaryInput).month);
       case 'get_accounts':
-        return this.chatbotDataService.getAccounts(userId);
+        return this.chatbotDataService.getAccounts(familyId);
       case 'get_spending_by_category':
         return this.chatbotDataService.getSpendingByCategory(
-          userId,
+          familyId,
           (input as unknown as GetSpendingByCategoryInput).startDate,
           (input as unknown as GetSpendingByCategoryInput).endDate,
         );
       case 'get_cash_flow':
         return this.chatbotDataService.getCashFlow(
-          userId,
+          familyId,
           (input as unknown as GetCashFlowInput).startDate,
           (input as unknown as GetCashFlowInput).endDate,
         );
       case 'get_auto_categorization_rules':
-        return this.chatbotDataService.getAutoCategorizeRules(userId);
+        return this.chatbotDataService.getAutoCategorizeRules(familyId);
       default:
         return { error: `Unknown tool: ${toolName}` };
     }
@@ -438,7 +438,7 @@ export class ChatbotService {
   }
 
   private logRequest(
-    userId: string,
+    familyId: string,
     model: ChatModel,
     inputTokens: number,
     outputTokens: number,
@@ -447,7 +447,7 @@ export class ChatbotService {
     totalLatencyMs: number,
   ): void {
     console.log('[ChatbotService] Request completed:', {
-      userId,
+      familyId,
       model,
       inputTokens,
       outputTokens,

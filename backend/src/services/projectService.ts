@@ -27,21 +27,21 @@ export class ProjectService {
   // Private helpers
   // ---------------------------------------------------------------------------
 
-  private async loadProjects(userId: string): Promise<StoredProject[]> {
-    return (await this.dataService.getData<StoredProject[]>(`projects_${userId}`)) ?? [];
+  private async loadProjects(familyId: string): Promise<StoredProject[]> {
+    return (await this.dataService.getData<StoredProject[]>(`projects_${familyId}`)) ?? [];
   }
 
-  private async saveProjects(projects: StoredProject[], userId: string): Promise<void> {
-    await this.dataService.saveData(`projects_${userId}`, projects);
+  private async saveProjects(projects: StoredProject[], familyId: string): Promise<void> {
+    await this.dataService.saveData(`projects_${familyId}`, projects);
   }
 
   /**
-   * Strip a tag from all of a user's transactions.
+   * Strip a tag from all of a family's transactions.
    * Works directly against the raw transaction store for batch efficiency.
    */
-  private async removeTagFromTransactions(tag: string, userId: string): Promise<void> {
+  private async removeTagFromTransactions(tag: string, familyId: string): Promise<void> {
     const transactions =
-      (await this.dataService.getData<StoredTransaction[]>(`transactions_${userId}`)) ?? [];
+      (await this.dataService.getData<StoredTransaction[]>(`transactions_${familyId}`)) ?? [];
 
     let changed = false;
     const updated = transactions.map((txn) => {
@@ -55,21 +55,21 @@ export class ProjectService {
     });
 
     if (changed) {
-      await this.dataService.saveData(`transactions_${userId}`, updated);
+      await this.dataService.saveData(`transactions_${familyId}`, updated);
     }
   }
 
   /**
-   * Replace all occurrences of oldTag with newTag in a user's transactions.
+   * Replace all occurrences of oldTag with newTag in a family's transactions.
    * Works directly against the raw transaction store for batch efficiency.
    */
   private async renameTagOnTransactions(
     oldTag: string,
     newTag: string,
-    userId: string
+    familyId: string
   ): Promise<void> {
     const transactions =
-      (await this.dataService.getData<StoredTransaction[]>(`transactions_${userId}`)) ?? [];
+      (await this.dataService.getData<StoredTransaction[]>(`transactions_${familyId}`)) ?? [];
 
     let changed = false;
     const updated = transactions.map((txn) => {
@@ -83,7 +83,7 @@ export class ProjectService {
     });
 
     if (changed) {
-      await this.dataService.saveData(`transactions_${userId}`, updated);
+      await this.dataService.saveData(`transactions_${familyId}`, updated);
     }
   }
 
@@ -95,10 +95,10 @@ export class ProjectService {
    * Create a new project.
    * Generates a tag from the name and start date, then validates uniqueness.
    */
-  async createProject(data: CreateProjectDto, userId: string): Promise<StoredProject> {
+  async createProject(data: CreateProjectDto, familyId: string): Promise<StoredProject> {
     const tag = generateProjectTag(data.name, data.startDate);
 
-    const existingProjects = await this.loadProjects(userId);
+    const existingProjects = await this.loadProjects(familyId);
     if (existingProjects.some((p) => p.tag === tag)) {
       throw new Error('A project with this tag already exists');
     }
@@ -106,7 +106,7 @@ export class ProjectService {
     const now = new Date().toISOString();
     const project: StoredProject = {
       id: uuidv4(),
-      userId,
+      userId: familyId,
       name: data.name,
       tag,
       startDate: data.startDate,
@@ -119,7 +119,7 @@ export class ProjectService {
     };
 
     existingProjects.push(project);
-    await this.saveProjects(existingProjects, userId);
+    await this.saveProjects(existingProjects, familyId);
 
     return project;
   }
@@ -127,17 +127,17 @@ export class ProjectService {
   /**
    * Retrieve a single project by ID.
    */
-  async getProject(projectId: string, userId: string): Promise<StoredProject | null> {
-    const projects = await this.loadProjects(userId);
+  async getProject(projectId: string, familyId: string): Promise<StoredProject | null> {
+    const projects = await this.loadProjects(familyId);
     return projects.find((p) => p.id === projectId) ?? null;
   }
 
   /**
-   * Retrieve all projects for a user, optionally filtered by start year.
+   * Retrieve all projects for a family, optionally filtered by start year.
    * Returns projects sorted by startDate descending (most recent first).
    */
-  async getAllProjects(userId: string, year?: number): Promise<StoredProject[]> {
-    let projects = await this.loadProjects(userId);
+  async getAllProjects(familyId: string, year?: number): Promise<StoredProject[]> {
+    let projects = await this.loadProjects(familyId);
 
     if (year !== undefined) {
       projects = projects.filter((p) => new Date(p.startDate).getFullYear() === year);
@@ -155,9 +155,9 @@ export class ProjectService {
   async updateProject(
     projectId: string,
     data: UpdateProjectDto,
-    userId: string
+    familyId: string
   ): Promise<StoredProject> {
-    const projects = await this.loadProjects(userId);
+    const projects = await this.loadProjects(familyId);
     const index = projects.findIndex((p) => p.id === projectId);
     if (index === -1) {
       throw new Error('Project not found');
@@ -173,14 +173,14 @@ export class ProjectService {
     const tagWillChange = candidateTag !== oldTag;
 
     if (tagWillChange) {
-      // Validate the new tag is unique among this user's other projects
+      // Validate the new tag is unique among this family's other projects
       const otherProjects = projects.filter((p) => p.id !== projectId);
       if (otherProjects.some((p) => p.tag === candidateTag)) {
         throw new Error('A project with this tag already exists');
       }
 
       // Rename tag on transactions BEFORE updating the entity (D7)
-      await this.renameTagOnTransactions(oldTag, candidateTag, userId);
+      await this.renameTagOnTransactions(oldTag, candidateTag, familyId);
     }
 
     const now = new Date().toISOString();
@@ -197,7 +197,7 @@ export class ProjectService {
     };
 
     projects[index] = updatedProject;
-    await this.saveProjects(projects, userId);
+    await this.saveProjects(projects, familyId);
 
     return updatedProject;
   }
@@ -207,18 +207,18 @@ export class ProjectService {
    * Strips the project tag from all transactions BEFORE removing the project
    * entity (D7: transactions before entity deletion).
    */
-  async deleteProject(projectId: string, userId: string): Promise<void> {
-    const projects = await this.loadProjects(userId);
+  async deleteProject(projectId: string, familyId: string): Promise<void> {
+    const projects = await this.loadProjects(familyId);
     const project = projects.find((p) => p.id === projectId);
     if (!project) {
       throw new Error('Project not found');
     }
 
     // Remove tag from transactions first (D7)
-    await this.removeTagFromTransactions(project.tag, userId);
+    await this.removeTagFromTransactions(project.tag, familyId);
 
     const remaining = projects.filter((p) => p.id !== projectId);
-    await this.saveProjects(remaining, userId);
+    await this.saveProjects(remaining, familyId);
   }
 
   /**
@@ -230,15 +230,15 @@ export class ProjectService {
    */
   async getProjectSummary(
     projectId: string,
-    userId: string,
+    familyId: string,
     categories?: Array<{ id: string; name: string }>
   ): Promise<ProjectSummary> {
-    const project = await this.getProject(projectId, userId);
+    const project = await this.getProject(projectId, familyId);
     if (!project) {
       throw new Error('Project not found');
     }
 
-    const result = await this.transactionService.getTransactions(userId, {
+    const result = await this.transactionService.getTransactions(familyId, {
       tags: [project.tag],
       includeHidden: true,
     });
@@ -314,14 +314,14 @@ export class ProjectService {
    * by start year. Returns summaries sorted by startDate descending.
    */
   async getProjectsSummaries(
-    userId: string,
+    familyId: string,
     year?: number,
     categories?: Array<{ id: string; name: string }>
   ): Promise<ProjectSummary[]> {
-    const projects = await this.getAllProjects(userId, year);
+    const projects = await this.getAllProjects(familyId, year);
 
     const summaries = await Promise.all(
-      projects.map((project) => this.getProjectSummary(project.id, userId, categories))
+      projects.map((project) => this.getProjectSummary(project.id, familyId, categories))
     );
 
     return summaries;

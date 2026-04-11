@@ -119,7 +119,7 @@ export class TransactionService {
    * Sync transactions from Plaid for all user accounts
    */
   async syncTransactions(
-    userId: string,
+    familyId: string,
     accounts: StoredAccount[],
     startDate: string = '2025-01-01'
   ): Promise<SyncResult> {
@@ -175,7 +175,7 @@ export class TransactionService {
 
         // Process transactions
         const result = await this.processPlaidTransactions(
-          userId,
+          familyId,
           tokenAccounts,
           plaidResult.transactions
         );
@@ -225,12 +225,12 @@ export class TransactionService {
    * Process Plaid transactions and update our store
    */
   private async processPlaidTransactions(
-    userId: string,
+    familyId: string,
     accounts: StoredAccount[],
     plaidTransactions: PlaidTransaction[]
   ): Promise<{ added: number; modified: number; removed: number }> {
     // Load existing transactions
-    const existingTransactions = await this.repo.getAll(userId);
+    const existingTransactions = await this.repo.getAll(familyId);
 
     // Create lookup maps
     const existingByPlaidId = new Map<string, StoredTransaction>();
@@ -266,7 +266,7 @@ export class TransactionService {
         }
       } else {
         // Add new transaction
-        const newTxn = this.createTransaction(userId, account.id, plaidTxn);
+        const newTxn = this.createTransaction(familyId, account.id, plaidTxn);
         existingTransactions.push(newTxn);
         added++;
       }
@@ -290,7 +290,7 @@ export class TransactionService {
     }
 
     // Save all transactions
-    await this.repo.saveAll(userId, existingTransactions);
+    await this.repo.saveAll(familyId, existingTransactions);
 
     return { added, modified, removed };
   }
@@ -299,13 +299,13 @@ export class TransactionService {
    * Create a new transaction from Plaid data
    */
   private createTransaction(
-    userId: string,
+    familyId: string,
     accountId: string,
     plaidTxn: PlaidTransaction
   ): StoredTransaction {
     return {
       id: uuidv4(),
-      userId,
+      userId: familyId,
       accountId,
       plaidTransactionId: plaidTxn.plaidTransactionId,
       plaidAccountId: plaidTxn.accountId,
@@ -412,11 +412,11 @@ export class TransactionService {
    * Get transactions with filtering
    */
   async getTransactions(
-    userId: string,
+    familyId: string,
     filter: TransactionFilter = {}
   ): Promise<TransactionsResult> {
     try {
-      const allTransactions = await this.repo.getAll(userId);
+      const allTransactions = await this.repo.getAll(familyId);
       return filterTransactions(allTransactions, filter);
     } catch (error) {
       console.error('Error fetching transactions:', error);
@@ -431,12 +431,12 @@ export class TransactionService {
    * Update transaction category
    */
   async updateTransactionCategory(
-    userId: string,
+    familyId: string,
     transactionId: string,
     categoryId: string | null
   ): Promise<{ success: boolean; error?: string }> {
     try {
-      const transactions = await this.repo.getAll(userId);
+      const transactions = await this.repo.getAll(familyId);
 
       const transaction = transactions.find(t => t.id === transactionId);
       if (!transaction) {
@@ -447,7 +447,7 @@ export class TransactionService {
       transaction.categoryId = categoryId;
       transaction.updatedAt = new Date();
 
-      await this.repo.saveAll(userId, transactions);
+      await this.repo.saveAll(familyId, transactions);
 
       return { success: true };
     } catch (error) {
@@ -459,12 +459,12 @@ export class TransactionService {
    * Add tags to transaction (replaces existing tags)
    */
   async addTransactionTags(
-    userId: string,
+    familyId: string,
     transactionId: string,
     tags: string[]
   ): Promise<{ success: boolean; error?: string }> {
     try {
-      const transactions = await this.repo.getAll(userId);
+      const transactions = await this.repo.getAll(familyId);
 
       const transaction = transactions.find(t => t.id === transactionId);
       if (!transaction) {
@@ -475,7 +475,7 @@ export class TransactionService {
       transaction.tags = tags;
       transaction.updatedAt = new Date();
 
-      await this.repo.saveAll(userId, transactions);
+      await this.repo.saveAll(familyId, transactions);
 
       return { success: true };
     } catch (error) {
@@ -487,12 +487,12 @@ export class TransactionService {
    * Add tags to a transaction (merges with existing, no duplicates)
    */
   async appendTransactionTags(
-    userId: string,
+    familyId: string,
     transactionId: string,
     tagsToAdd: string[]
   ): Promise<{ success: boolean; error?: string }> {
     try {
-      const transactions = await this.repo.getAll(userId);
+      const transactions = await this.repo.getAll(familyId);
 
       const transaction = transactions.find(t => t.id === transactionId);
       if (!transaction) {
@@ -506,7 +506,7 @@ export class TransactionService {
 
       transaction.tags = merged;
       transaction.updatedAt = new Date();
-      await this.repo.saveAll(userId, transactions);
+      await this.repo.saveAll(familyId, transactions);
 
       return { success: true };
     } catch (error) {
@@ -518,12 +518,12 @@ export class TransactionService {
    * Remove specific tags from a transaction
    */
   async removeTransactionTags(
-    userId: string,
+    familyId: string,
     transactionId: string,
     tagsToRemove: string[]
   ): Promise<{ success: boolean; error?: string }> {
     try {
-      const transactions = await this.repo.getAll(userId);
+      const transactions = await this.repo.getAll(familyId);
 
       const transaction = transactions.find(t => t.id === transactionId);
       if (!transaction) {
@@ -538,7 +538,7 @@ export class TransactionService {
 
       transaction.tags = filtered;
       transaction.updatedAt = new Date();
-      await this.repo.saveAll(userId, transactions);
+      await this.repo.saveAll(familyId, transactions);
 
       return { success: true };
     } catch (error) {
@@ -550,7 +550,7 @@ export class TransactionService {
    * Split a transaction into multiple parts
    */
   async splitTransaction(
-    userId: string,
+    familyId: string,
     transactionId: string,
     splits: Array<{
       amount: number;
@@ -560,7 +560,7 @@ export class TransactionService {
     }>
   ): Promise<{ success: boolean; error?: string; splitTransactions?: StoredTransaction[] }> {
     try {
-      const transactions = await this.repo.getAll(userId);
+      const transactions = await this.repo.getAll(familyId);
 
       const originalTransaction = transactions.find(t => t.id === transactionId);
       if (!originalTransaction) {
@@ -585,7 +585,7 @@ export class TransactionService {
         const split = splits[i];
         const splitTxn: StoredTransaction = {
           id: uuidv4(),
-          userId,
+          userId: familyId,
           accountId: originalTransaction.accountId,
           plaidTransactionId: null, // Split transactions don't have Plaid IDs
           plaidAccountId: originalTransaction.plaidAccountId,
@@ -626,7 +626,7 @@ export class TransactionService {
       originalTransaction.updatedAt = now;
 
       // Save all transactions
-      await this.repo.saveAll(userId, transactions);
+      await this.repo.saveAll(familyId, transactions);
 
       return { success: true, splitTransactions };
     } catch (error) {
@@ -639,12 +639,12 @@ export class TransactionService {
    * Update transaction description
    */
   async updateTransactionDescription(
-    userId: string,
+    familyId: string,
     transactionId: string,
     description: string | null
   ): Promise<{ success: boolean; error?: string }> {
     try {
-      const transactions = await this.repo.getAll(userId);
+      const transactions = await this.repo.getAll(familyId);
 
       const transaction = transactions.find(t => t.id === transactionId);
       if (!transaction) {
@@ -654,7 +654,7 @@ export class TransactionService {
       transaction.userDescription = description;
       transaction.updatedAt = new Date();
 
-      await this.repo.saveAll(userId, transactions);
+      await this.repo.saveAll(familyId, transactions);
       return { success: true };
     } catch (error) {
       console.error('Error updating transaction description:', error);
@@ -666,12 +666,12 @@ export class TransactionService {
    * Update transaction flagged status
    */
   async updateTransactionFlagged(
-    userId: string,
+    familyId: string,
     transactionId: string,
     isFlagged: boolean
   ): Promise<{ success: boolean; error?: string }> {
     try {
-      const transactions = await this.repo.getAll(userId);
+      const transactions = await this.repo.getAll(familyId);
 
       const transaction = transactions.find(t => t.id === transactionId);
       if (!transaction) {
@@ -681,7 +681,7 @@ export class TransactionService {
       transaction.isFlagged = isFlagged;
       transaction.updatedAt = new Date();
 
-      await this.repo.saveAll(userId, transactions);
+      await this.repo.saveAll(familyId, transactions);
       return { success: true };
     } catch (error) {
       console.error('Error updating transaction flagged status:', error);
@@ -693,12 +693,12 @@ export class TransactionService {
    * Update transaction hidden status
    */
   async updateTransactionHidden(
-    userId: string,
+    familyId: string,
     transactionId: string,
     isHidden: boolean
   ): Promise<{ success: boolean; error?: string }> {
     try {
-      const transactions = await this.repo.getAll(userId);
+      const transactions = await this.repo.getAll(familyId);
 
       const transaction = transactions.find(t => t.id === transactionId);
       if (!transaction) {
@@ -708,7 +708,7 @@ export class TransactionService {
       transaction.isHidden = isHidden;
       transaction.updatedAt = new Date();
 
-      await this.repo.saveAll(userId, transactions);
+      await this.repo.saveAll(familyId, transactions);
       return { success: true };
     } catch (error) {
       console.error('Error updating transaction hidden status:', error);
@@ -737,8 +737,8 @@ export class TransactionService {
    * Uses same filtering logic as getBlockingTransactionDetails to avoid
    * "Cannot delete category with 0 associated transactions" error
    */
-  async hasTransactionsForCategory(categoryId: string, userId: string): Promise<boolean> {
-    const transactions = await this.repo.getAll(userId);
+  async hasTransactionsForCategory(categoryId: string, familyId: string): Promise<boolean> {
+    const transactions = await this.repo.getAll(familyId);
     return transactions.some(t =>
       t.categoryId === categoryId &&
       t.status !== 'removed' &&
@@ -751,15 +751,15 @@ export class TransactionService {
    * Used during category deletion workflow
    * @param oldCategoryId Category to move from
    * @param newCategoryId Category to move to (null for uncategorized)
-   * @param userId User ID
+   * @param familyId Family ID
    * @returns Count of transactions updated
    */
   async bulkRecategorizeByCategory(
     oldCategoryId: string,
     newCategoryId: string | null,
-    userId: string
+    familyId: string
   ): Promise<number> {
-    const transactions = await this.repo.getAll(userId);
+    const transactions = await this.repo.getAll(familyId);
 
     let updateCount = 0;
     const updatedTransactions = transactions.map(transaction => {
@@ -774,7 +774,7 @@ export class TransactionService {
     });
 
     if (updateCount > 0) {
-      await this.repo.saveAll(userId, updatedTransactions);
+      await this.repo.saveAll(familyId, updatedTransactions);
     }
 
     return updateCount;
@@ -784,7 +784,7 @@ export class TransactionService {
    * Get details about transactions that would block category deletion
    * Returns transaction count and sample transaction details for error messages
    */
-  async getBlockingTransactionDetails(categoryId: string, userId: string): Promise<{
+  async getBlockingTransactionDetails(categoryId: string, familyId: string): Promise<{
     count: number;
     sampleTransactions: Array<{
       id: string;
@@ -794,7 +794,7 @@ export class TransactionService {
       accountId: string;
     }>;
   }> {
-    const transactions = await this.repo.getAll(userId);
+    const transactions = await this.repo.getAll(familyId);
 
     const blockingTransactions = transactions.filter(t =>
       t.categoryId === categoryId &&
@@ -821,9 +821,9 @@ export class TransactionService {
    * Get transaction counts for all categories
    * Returns a map of category IDs to their transaction counts
    */
-  async getTransactionCountsByCategory(userId: string): Promise<Record<string, number>> {
+  async getTransactionCountsByCategory(familyId: string): Promise<Record<string, number>> {
     try {
-      const transactions = await this.repo.getAll(userId);
+      const transactions = await this.repo.getAll(familyId);
 
       const counts: Record<string, number> = {};
       
@@ -911,8 +911,8 @@ export class TransactionService {
   /**
    * Get count of uncategorized transactions for a user
    */
-  async getUncategorizedCount(userId: string): Promise<{ count: number; total: number }> {
-    const result = await this.getTransactions(userId);
+  async getUncategorizedCount(familyId: string): Promise<{ count: number; total: number }> {
+    const result = await this.getTransactions(familyId);
     if (!result.success || !result.transactions) {
       throw new Error('Failed to fetch transactions');
     }
@@ -928,7 +928,7 @@ export class TransactionService {
   /**
    * Get a summary of this month's transactions (income, expenses, net)
    */
-  async getMonthlySummary(userId: string): Promise<{
+  async getMonthlySummary(familyId: string): Promise<{
     month: string;
     totalIncome: number;
     totalExpenses: number;
@@ -939,7 +939,7 @@ export class TransactionService {
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
     const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split('T')[0];
 
-    const result = await this.getTransactions(userId, {
+    const result = await this.getTransactions(familyId, {
       startDate: startOfMonth,
       endDate: endOfMonth,
       includePending: false,
@@ -962,7 +962,7 @@ export class TransactionService {
    * Bulk update multiple transactions with the given field updates
    */
   async bulkUpdate(
-    userId: string,
+    familyId: string,
     transactionIds: string[],
     updates: {
       categoryId?: string | null;
@@ -980,7 +980,7 @@ export class TransactionService {
     for (const transactionId of transactionIds) {
       try {
         if (updates.categoryId !== undefined) {
-          const result = await this.updateTransactionCategory(userId, transactionId, updates.categoryId);
+          const result = await this.updateTransactionCategory(familyId, transactionId, updates.categoryId);
           if (!result.success) {
             failedCount++;
             errors.push(`Transaction ${transactionId}: ${result.error}`);
@@ -989,7 +989,7 @@ export class TransactionService {
         }
 
         if (updates.userDescription !== undefined) {
-          const result = await this.updateTransactionDescription(userId, transactionId, updates.userDescription);
+          const result = await this.updateTransactionDescription(familyId, transactionId, updates.userDescription);
           if (!result.success) {
             failedCount++;
             errors.push(`Transaction ${transactionId}: ${result.error}`);
@@ -998,7 +998,7 @@ export class TransactionService {
         }
 
         if (updates.isHidden !== undefined) {
-          const result = await this.updateTransactionHidden(userId, transactionId, updates.isHidden);
+          const result = await this.updateTransactionHidden(familyId, transactionId, updates.isHidden);
           if (!result.success) {
             failedCount++;
             errors.push(`Transaction ${transactionId}: ${result.error}`);
@@ -1007,7 +1007,7 @@ export class TransactionService {
         }
 
         if (updates.isFlagged !== undefined) {
-          const result = await this.updateTransactionFlagged(userId, transactionId, updates.isFlagged);
+          const result = await this.updateTransactionFlagged(familyId, transactionId, updates.isFlagged);
           if (!result.success) {
             failedCount++;
             errors.push(`Transaction ${transactionId}: ${result.error}`);
@@ -1016,7 +1016,7 @@ export class TransactionService {
         }
 
         if (updates.tagsToAdd && updates.tagsToAdd.length > 0) {
-          const result = await this.appendTransactionTags(userId, transactionId, updates.tagsToAdd);
+          const result = await this.appendTransactionTags(familyId, transactionId, updates.tagsToAdd);
           if (!result.success) {
             failedCount++;
             errors.push(`Transaction ${transactionId}: ${result.error}`);
@@ -1025,7 +1025,7 @@ export class TransactionService {
         }
 
         if (updates.tagsToRemove && updates.tagsToRemove.length > 0) {
-          const result = await this.removeTransactionTags(userId, transactionId, updates.tagsToRemove);
+          const result = await this.removeTransactionTags(familyId, transactionId, updates.tagsToRemove);
           if (!result.success) {
             failedCount++;
             errors.push(`Transaction ${transactionId}: ${result.error}`);

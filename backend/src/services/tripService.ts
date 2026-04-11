@@ -27,21 +27,21 @@ export class TripService {
   // Private helpers
   // ---------------------------------------------------------------------------
 
-  private async loadTrips(userId: string): Promise<StoredTrip[]> {
-    return (await this.dataService.getData<StoredTrip[]>(`trips_${userId}`)) ?? [];
+  private async loadTrips(familyId: string): Promise<StoredTrip[]> {
+    return (await this.dataService.getData<StoredTrip[]>(`trips_${familyId}`)) ?? [];
   }
 
-  private async saveTrips(trips: StoredTrip[], userId: string): Promise<void> {
-    await this.dataService.saveData(`trips_${userId}`, trips);
+  private async saveTrips(trips: StoredTrip[], familyId: string): Promise<void> {
+    await this.dataService.saveData(`trips_${familyId}`, trips);
   }
 
   /**
-   * Strip a tag from all of a user's transactions.
+   * Strip a tag from all of a family's transactions.
    * Works directly against the raw transaction store for batch efficiency.
    */
-  private async removeTagFromTransactions(tag: string, userId: string): Promise<void> {
+  private async removeTagFromTransactions(tag: string, familyId: string): Promise<void> {
     const transactions =
-      (await this.dataService.getData<StoredTransaction[]>(`transactions_${userId}`)) ?? [];
+      (await this.dataService.getData<StoredTransaction[]>(`transactions_${familyId}`)) ?? [];
 
     let changed = false;
     const updated = transactions.map((txn) => {
@@ -55,21 +55,21 @@ export class TripService {
     });
 
     if (changed) {
-      await this.dataService.saveData(`transactions_${userId}`, updated);
+      await this.dataService.saveData(`transactions_${familyId}`, updated);
     }
   }
 
   /**
-   * Replace all occurrences of oldTag with newTag in a user's transactions.
+   * Replace all occurrences of oldTag with newTag in a family's transactions.
    * Works directly against the raw transaction store for batch efficiency.
    */
   private async renameTagOnTransactions(
     oldTag: string,
     newTag: string,
-    userId: string
+    familyId: string
   ): Promise<void> {
     const transactions =
-      (await this.dataService.getData<StoredTransaction[]>(`transactions_${userId}`)) ?? [];
+      (await this.dataService.getData<StoredTransaction[]>(`transactions_${familyId}`)) ?? [];
 
     let changed = false;
     const updated = transactions.map((txn) => {
@@ -83,7 +83,7 @@ export class TripService {
     });
 
     if (changed) {
-      await this.dataService.saveData(`transactions_${userId}`, updated);
+      await this.dataService.saveData(`transactions_${familyId}`, updated);
     }
   }
 
@@ -95,10 +95,10 @@ export class TripService {
    * Create a new trip.
    * Generates a tag from the name and start date, then validates uniqueness.
    */
-  async createTrip(data: CreateTripDto, userId: string): Promise<StoredTrip> {
+  async createTrip(data: CreateTripDto, familyId: string): Promise<StoredTrip> {
     const tag = generateTripTag(data.name, data.startDate);
 
-    const existingTrips = await this.loadTrips(userId);
+    const existingTrips = await this.loadTrips(familyId);
     if (existingTrips.some((t) => t.tag === tag)) {
       throw new Error('A trip with this tag already exists');
     }
@@ -106,7 +106,7 @@ export class TripService {
     const now = new Date().toISOString();
     const trip: StoredTrip = {
       id: uuidv4(),
-      userId,
+      userId: familyId,
       name: data.name,
       tag,
       startDate: data.startDate,
@@ -120,7 +120,7 @@ export class TripService {
     };
 
     existingTrips.push(trip);
-    await this.saveTrips(existingTrips, userId);
+    await this.saveTrips(existingTrips, familyId);
 
     return trip;
   }
@@ -128,17 +128,17 @@ export class TripService {
   /**
    * Retrieve a single trip by ID.
    */
-  async getTrip(tripId: string, userId: string): Promise<StoredTrip | null> {
-    const trips = await this.loadTrips(userId);
+  async getTrip(tripId: string, familyId: string): Promise<StoredTrip | null> {
+    const trips = await this.loadTrips(familyId);
     return trips.find((t) => t.id === tripId) ?? null;
   }
 
   /**
-   * Retrieve all trips for a user, optionally filtered by start year.
+   * Retrieve all trips for a family, optionally filtered by start year.
    * Returns trips sorted by startDate descending (most recent first).
    */
-  async getAllTrips(userId: string, year?: number): Promise<StoredTrip[]> {
-    let trips = await this.loadTrips(userId);
+  async getAllTrips(familyId: string, year?: number): Promise<StoredTrip[]> {
+    let trips = await this.loadTrips(familyId);
 
     if (year !== undefined) {
       trips = trips.filter((t) => new Date(t.startDate).getFullYear() === year);
@@ -156,9 +156,9 @@ export class TripService {
   async updateTrip(
     tripId: string,
     data: UpdateTripDto,
-    userId: string
+    familyId: string
   ): Promise<StoredTrip> {
-    const trips = await this.loadTrips(userId);
+    const trips = await this.loadTrips(familyId);
     const index = trips.findIndex((t) => t.id === tripId);
     if (index === -1) {
       throw new Error('Trip not found');
@@ -174,14 +174,14 @@ export class TripService {
     const tagWillChange = candidateTag !== oldTag;
 
     if (tagWillChange) {
-      // Validate the new tag is unique among this user's other trips
+      // Validate the new tag is unique among this family's other trips
       const otherTrips = trips.filter((t) => t.id !== tripId);
       if (otherTrips.some((t) => t.tag === candidateTag)) {
         throw new Error('A trip with this tag already exists');
       }
 
       // Rename tag on transactions BEFORE updating the entity (D6)
-      await this.renameTagOnTransactions(oldTag, candidateTag, userId);
+      await this.renameTagOnTransactions(oldTag, candidateTag, familyId);
     }
 
     const now = new Date().toISOString();
@@ -199,7 +199,7 @@ export class TripService {
     };
 
     trips[index] = updatedTrip;
-    await this.saveTrips(trips, userId);
+    await this.saveTrips(trips, familyId);
 
     return updatedTrip;
   }
@@ -209,18 +209,18 @@ export class TripService {
    * Strips the trip tag from all transactions BEFORE removing the trip entity
    * (D6: transactions before entity deletion).
    */
-  async deleteTrip(tripId: string, userId: string): Promise<void> {
-    const trips = await this.loadTrips(userId);
+  async deleteTrip(tripId: string, familyId: string): Promise<void> {
+    const trips = await this.loadTrips(familyId);
     const trip = trips.find((t) => t.id === tripId);
     if (!trip) {
       throw new Error('Trip not found');
     }
 
     // Remove tag from transactions first (D6)
-    await this.removeTagFromTransactions(trip.tag, userId);
+    await this.removeTagFromTransactions(trip.tag, familyId);
 
     const remaining = trips.filter((t) => t.id !== tripId);
-    await this.saveTrips(remaining, userId);
+    await this.saveTrips(remaining, familyId);
   }
 
   /**
@@ -232,15 +232,15 @@ export class TripService {
    */
   async getTripSummary(
     tripId: string,
-    userId: string,
+    familyId: string,
     categories?: Array<{ id: string; name: string }>
   ): Promise<TripSummary> {
-    const trip = await this.getTrip(tripId, userId);
+    const trip = await this.getTrip(tripId, familyId);
     if (!trip) {
       throw new Error('Trip not found');
     }
 
-    const result = await this.transactionService.getTransactions(userId, {
+    const result = await this.transactionService.getTransactions(familyId, {
       tags: [trip.tag],
       includeHidden: true,
     });
@@ -316,14 +316,14 @@ export class TripService {
    * start year. Returns summaries sorted by startDate descending.
    */
   async getTripsSummaries(
-    userId: string,
+    familyId: string,
     year?: number,
     categories?: Array<{ id: string; name: string }>
   ): Promise<TripSummary[]> {
-    const trips = await this.getAllTrips(userId, year);
+    const trips = await this.getAllTrips(familyId, year);
 
     const summaries = await Promise.all(
-      trips.map((trip) => this.getTripSummary(trip.id, userId, categories))
+      trips.map((trip) => this.getTripSummary(trip.id, familyId, categories))
     );
 
     // getAllTrips already returns trips sorted descending; Promise.all preserves

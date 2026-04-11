@@ -16,13 +16,15 @@ import {
 } from '@mantine/core';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { notifications } from '@mantine/notifications';
-import { IconAlertTriangle, IconCheck, IconInfoCircle, IconSettings, IconPalette, IconTool } from '@tabler/icons-react';
+import { IconAlertTriangle, IconCheck, IconInfoCircle, IconSettings, IconPalette, IconTool, IconUsers, IconTrash } from '@tabler/icons-react';
 import { api } from '../lib/api';
 import { ThemeCustomizer } from '../components/admin/ThemeCustomizer';
 
 export function Admin() {
   const [confirmationOpen, setConfirmationOpen] = useState(false);
   const [locationConfirmationOpen, setLocationConfirmationOpen] = useState(false);
+  const [familyMigrationConfirmationOpen, setFamilyMigrationConfirmationOpen] = useState(false);
+  const [familyCleanupConfirmationOpen, setFamilyCleanupConfirmationOpen] = useState(false);
   const queryClient = useQueryClient();
 
   // Check migration status
@@ -86,6 +88,61 @@ export function Admin() {
         color: 'red',
       });
       setLocationConfirmationOpen(false);
+    },
+  });
+
+  // Check family migration status
+  const { data: familyMigrationStatus, isLoading: isFamilyStatusLoading } = useQuery({
+    queryKey: ['familyMigrationStatus'],
+    queryFn: () => api.getFamilyMigrationStatus(),
+    refetchInterval: 5000,
+  });
+
+  // Family migration mutation
+  const familyMigrationMutation = useMutation({
+    mutationFn: () => api.migrateToFamilies(),
+    onSuccess: (result) => {
+      notifications.show({
+        title: 'Family Migration Successful',
+        message: result.message,
+        color: 'green',
+        icon: <IconCheck size={18} />,
+      });
+      queryClient.invalidateQueries({ queryKey: ['familyMigrationStatus'] });
+      setFamilyMigrationConfirmationOpen(false);
+    },
+    onError: (error: unknown) => {
+      const errorMessage = error instanceof Error ? error.message : 'An error occurred during migration';
+      notifications.show({
+        title: 'Family Migration Failed',
+        message: errorMessage,
+        color: 'red',
+      });
+      setFamilyMigrationConfirmationOpen(false);
+    },
+  });
+
+  // Family cleanup mutation
+  const familyCleanupMutation = useMutation({
+    mutationFn: () => api.cleanupFamilyMigration(),
+    onSuccess: (result) => {
+      notifications.show({
+        title: 'Cleanup Successful',
+        message: result.message,
+        color: 'green',
+        icon: <IconCheck size={18} />,
+      });
+      queryClient.invalidateQueries({ queryKey: ['familyMigrationStatus'] });
+      setFamilyCleanupConfirmationOpen(false);
+    },
+    onError: (error: unknown) => {
+      const errorMessage = error instanceof Error ? error.message : 'An error occurred during cleanup';
+      notifications.show({
+        title: 'Cleanup Failed',
+        message: errorMessage,
+        color: 'red',
+      });
+      setFamilyCleanupConfirmationOpen(false);
     },
   });
 
@@ -306,6 +363,111 @@ export function Admin() {
                   )}
                 </Stack>
               </Card>
+              {/* Family Data Migration Section */}
+              <Card withBorder padding="lg" radius="md">
+                <Stack gap="md">
+                  <Group justify="space-between" align="flex-start">
+                    <div>
+                      <Group gap="xs">
+                        <IconUsers size={20} />
+                        <Title order={3}>Family Data Migration</Title>
+                      </Group>
+                      <Text size="sm" c="dimmed">
+                        Migrate data from user-scoped to family-scoped storage keys
+                      </Text>
+                    </div>
+                    <Badge
+                      color={
+                        !familyMigrationStatus ? 'gray' :
+                        familyMigrationStatus.userScopedKeys.length === 0 && familyMigrationStatus.familyScopedKeys.length > 0 ? 'green' :
+                        familyMigrationStatus.migrationNeeded ? 'yellow' : 'green'
+                      }
+                      variant="light"
+                    >
+                      {!familyMigrationStatus ? 'Loading...' :
+                       familyMigrationStatus.userScopedKeys.length === 0 && familyMigrationStatus.familyScopedKeys.length > 0 ? 'Complete' :
+                       familyMigrationStatus.migrationNeeded ? 'Required' : 'Not Needed'}
+                    </Badge>
+                  </Group>
+
+                  {isFamilyStatusLoading ? (
+                    <Center>
+                      <Loader size="sm" />
+                    </Center>
+                  ) : familyMigrationStatus ? (
+                    <Stack gap="sm">
+                      <Group gap="xl">
+                        <div>
+                          <Text size="sm" fw={500}>User-Scoped Keys</Text>
+                          <Text size="lg" fw={700} c={familyMigrationStatus.userScopedKeys.length > 0 ? 'yellow' : 'green'}>
+                            {familyMigrationStatus.userScopedKeys.length}
+                          </Text>
+                        </div>
+                        <div>
+                          <Text size="sm" fw={500}>Family-Scoped Keys</Text>
+                          <Text size="lg" fw={700} c="green">
+                            {familyMigrationStatus.familyScopedKeys.length}
+                          </Text>
+                        </div>
+                        <div>
+                          <Text size="sm" fw={500}>Users Without Family</Text>
+                          <Text size="lg" fw={700} c={familyMigrationStatus.usersWithoutFamily > 0 ? 'red' : 'green'}>
+                            {familyMigrationStatus.usersWithoutFamily}
+                          </Text>
+                        </div>
+                      </Group>
+
+                      {familyMigrationStatus.migrationNeeded && (
+                        <Alert color="yellow" icon={<IconInfoCircle size={16} />}>
+                          <Text size="sm">
+                            Data files still exist under old user-scoped keys. Run the migration to copy them
+                            to family-scoped keys so the app can access your data.
+                          </Text>
+                        </Alert>
+                      )}
+
+                      {!familyMigrationStatus.migrationNeeded && familyMigrationStatus.userScopedKeys.length > 0 && (
+                        <Alert color="blue" icon={<IconInfoCircle size={16} />}>
+                          <Text size="sm">
+                            Migration complete. Old user-scoped files can be cleaned up to save space.
+                          </Text>
+                        </Alert>
+                      )}
+
+                      {familyMigrationStatus.userScopedKeys.length === 0 && familyMigrationStatus.familyScopedKeys.length > 0 && (
+                        <Alert color="green" icon={<IconCheck size={16} />}>
+                          <Text size="sm">
+                            All data has been migrated and old files have been cleaned up.
+                          </Text>
+                        </Alert>
+                      )}
+
+                      <Group justify="flex-end" gap="sm">
+                        {!familyMigrationStatus.migrationNeeded && familyMigrationStatus.userScopedKeys.length > 0 && (
+                          <Button
+                            onClick={() => setFamilyCleanupConfirmationOpen(true)}
+                            loading={familyCleanupMutation.isPending}
+                            color="red"
+                            variant="light"
+                            leftSection={<IconTrash size={16} />}
+                          >
+                            Clean Up Old Files
+                          </Button>
+                        )}
+                        <Button
+                          onClick={() => setFamilyMigrationConfirmationOpen(true)}
+                          disabled={!familyMigrationStatus.migrationNeeded}
+                          loading={familyMigrationMutation.isPending}
+                          color="violet"
+                          variant={familyMigrationStatus.migrationNeeded ? 'filled' : 'light'}
+                        >
+                          {familyMigrationStatus.migrationNeeded ? 'Run Migration' : 'Migration Not Needed'}
+                        </Button>
+                      </Group>
+                    </Stack>
+                  ) : null}
+                </Stack>
+              </Card>
             </Stack>
           </Tabs.Panel>
 
@@ -400,6 +562,92 @@ export function Admin() {
               loading={locationCleanupMutation.isPending}
             >
               Run Cleanup
+            </Button>
+          </Group>
+        </Stack>
+      </Modal>
+      {/* Family Migration Confirmation Modal */}
+      <Modal
+        opened={familyMigrationConfirmationOpen}
+        onClose={() => setFamilyMigrationConfirmationOpen(false)}
+        title="Confirm Family Data Migration"
+        centered
+      >
+        <Stack gap="md">
+          <Text>
+            This will copy all data files from user-scoped keys to family-scoped keys.
+            Your existing files will be preserved until you explicitly clean them up.
+          </Text>
+
+          <Alert color="blue" icon={<IconInfoCircle size={16} />}>
+            <Text size="sm">
+              <strong>What this does:</strong>
+              <br />• Copies each data file (transactions, accounts, budgets, etc.) to the new family-scoped key
+              <br />• Does NOT delete the original files (safe rollback)
+              <br />• Skips files that have already been migrated
+              <br />• After migration, the app will be able to read your data again
+            </Text>
+          </Alert>
+
+          <Group justify="flex-end" mt="md">
+            <Button
+              variant="default"
+              onClick={() => setFamilyMigrationConfirmationOpen(false)}
+              disabled={familyMigrationMutation.isPending}
+            >
+              Cancel
+            </Button>
+            <Button
+              color="violet"
+              onClick={() => familyMigrationMutation.mutate()}
+              loading={familyMigrationMutation.isPending}
+            >
+              Run Migration
+            </Button>
+          </Group>
+        </Stack>
+      </Modal>
+
+      {/* Family Cleanup Confirmation Modal */}
+      <Modal
+        opened={familyCleanupConfirmationOpen}
+        onClose={() => setFamilyCleanupConfirmationOpen(false)}
+        title="Confirm Cleanup of Old Files"
+        centered
+      >
+        <Stack gap="md">
+          <Text>
+            This will permanently delete the old user-scoped data files. Only proceed if you have
+            verified that the app is working correctly with the new family-scoped files.
+          </Text>
+
+          <Alert color="red" icon={<IconAlertTriangle size={16} />}>
+            <Text size="sm">
+              <strong>Warning:</strong> This action cannot be undone. The old data files will be
+              permanently removed. Make sure the migration was successful before proceeding.
+            </Text>
+          </Alert>
+
+          {familyMigrationStatus && (
+            <Text size="sm" c="dimmed">
+              This will delete {familyMigrationStatus.userScopedKeys.length} old file(s).
+            </Text>
+          )}
+
+          <Group justify="flex-end" mt="md">
+            <Button
+              variant="default"
+              onClick={() => setFamilyCleanupConfirmationOpen(false)}
+              disabled={familyCleanupMutation.isPending}
+            >
+              Cancel
+            </Button>
+            <Button
+              color="red"
+              onClick={() => familyCleanupMutation.mutate()}
+              loading={familyCleanupMutation.isPending}
+            >
+              Delete Old Files
             </Button>
           </Group>
         </Stack>

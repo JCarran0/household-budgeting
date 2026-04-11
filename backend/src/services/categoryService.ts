@@ -7,10 +7,10 @@ import { ImportService } from './importService';
  * This breaks the circular dependency between CategoryService and other services.
  */
 export interface CategoryDependencyChecker {
-  hasBudgetsForCategory(categoryId: string, userId: string): Promise<boolean>;
-  hasRulesForCategory(categoryId: string, userId: string): Promise<boolean>;
-  hasTransactionsForCategory(categoryId: string, userId: string): Promise<boolean>;
-  getBlockingTransactionDetails(categoryId: string, userId: string): Promise<{
+  hasBudgetsForCategory(categoryId: string, familyId: string): Promise<boolean>;
+  hasRulesForCategory(categoryId: string, familyId: string): Promise<boolean>;
+  hasTransactionsForCategory(categoryId: string, familyId: string): Promise<boolean>;
+  getBlockingTransactionDetails(categoryId: string, familyId: string): Promise<{
     count: number;
     sampleTransactions: Array<{
       id: string;
@@ -108,17 +108,17 @@ export class CategoryService {
     return `${baseId}_${counter}`;
   }
 
-  async getAllCategories(userId: string): Promise<Category[]> {
-    return this.dataService.getCategories(userId);
+  async getAllCategories(familyId: string): Promise<Category[]> {
+    return this.dataService.getCategories(familyId);
   }
 
-  async getCategoryById(id: string, userId: string): Promise<Category | null> {
-    const categories = await this.dataService.getCategories(userId);
+  async getCategoryById(id: string, familyId: string): Promise<Category | null> {
+    const categories = await this.dataService.getCategories(familyId);
     return categories.find(cat => cat.id === id) || null;
   }
 
-  async createCategory(data: CreateCategoryDto, userId: string): Promise<Category> {
-    const categories = await this.dataService.getCategories(userId);
+  async createCategory(data: CreateCategoryDto, familyId: string): Promise<Category> {
+    const categories = await this.dataService.getCategories(familyId);
 
     // Validate name is not empty
     if (!data.name || data.name.trim().length === 0) {
@@ -161,12 +161,12 @@ export class CategoryService {
     };
 
     categories.push(newCategory);
-    await this.dataService.saveCategories(categories, userId);
+    await this.dataService.saveCategories(categories, familyId);
     return newCategory;
   }
 
-  async updateCategory(id: string, updates: UpdateCategoryDto, userId: string): Promise<Category> {
-    const categories = await this.dataService.getCategories(userId);
+  async updateCategory(id: string, updates: UpdateCategoryDto, familyId: string): Promise<Category> {
+    const categories = await this.dataService.getCategories(familyId);
     const index = categories.findIndex(cat => cat.id === id);
 
     if (index === -1) {
@@ -184,12 +184,12 @@ export class CategoryService {
     }
 
     categories[index] = updatedCategory;
-    await this.dataService.saveCategories(categories, userId);
+    await this.dataService.saveCategories(categories, familyId);
     return updatedCategory;
   }
 
-  async deleteCategory(id: string, userId: string): Promise<void> {
-    const categories = await this.dataService.getCategories(userId);
+  async deleteCategory(id: string, familyId: string): Promise<void> {
+    const categories = await this.dataService.getCategories(familyId);
 
     // Find the category to delete
     const categoryToDelete = categories.find(cat => cat.id === id);
@@ -205,7 +205,7 @@ export class CategoryService {
     
     // Check if category has associated budgets
     if (this.dependencyChecker) {
-      const hasBudgets = await this.dependencyChecker.hasBudgetsForCategory(id, userId);
+      const hasBudgets = await this.dependencyChecker.hasBudgetsForCategory(id, familyId);
       if (hasBudgets) {
         throw new Error('Cannot delete category with active budgets. Please delete the budgets first.');
       }
@@ -213,7 +213,7 @@ export class CategoryService {
 
     // Check if category is used in auto-categorization rules
     if (this.dependencyChecker) {
-      const hasRules = await this.dependencyChecker.hasRulesForCategory(id, userId);
+      const hasRules = await this.dependencyChecker.hasRulesForCategory(id, familyId);
       if (hasRules) {
         throw new Error('Cannot delete category used in auto-categorization rules. Please update or delete the rules first.');
       }
@@ -221,9 +221,9 @@ export class CategoryService {
 
     // Check if category has associated transactions
     if (this.dependencyChecker) {
-      const hasTransactions = await this.dependencyChecker.hasTransactionsForCategory(id, userId);
+      const hasTransactions = await this.dependencyChecker.hasTransactionsForCategory(id, familyId);
       if (hasTransactions) {
-        const blockingDetails = await this.dependencyChecker.getBlockingTransactionDetails(id, userId);
+        const blockingDetails = await this.dependencyChecker.getBlockingTransactionDetails(id, familyId);
 
         let errorMessage = `Cannot delete category with ${blockingDetails.count} associated transaction${blockingDetails.count > 1 ? 's' : ''}.`;
 
@@ -250,21 +250,21 @@ export class CategoryService {
     
     // Remove the category
     const filteredCategories = categories.filter(cat => cat.id !== id);
-    await this.dataService.saveCategories(filteredCategories, userId);
+    await this.dataService.saveCategories(filteredCategories, familyId);
   }
 
-  async getParentCategories(userId: string): Promise<Category[]> {
-    const categories = await this.dataService.getCategories(userId);
+  async getParentCategories(familyId: string): Promise<Category[]> {
+    const categories = await this.dataService.getCategories(familyId);
     return categories.filter(cat => cat.parentId === null);
   }
 
-  async getSubcategories(parentId: string, userId: string): Promise<Category[]> {
-    const categories = await this.dataService.getCategories(userId);
+  async getSubcategories(parentId: string, familyId: string): Promise<Category[]> {
+    const categories = await this.dataService.getCategories(familyId);
     return categories.filter(cat => cat.parentId === parentId);
   }
 
-  async getCategoryTree(userId: string): Promise<CategoryWithChildren[]> {
-    const categories = await this.dataService.getCategories(userId);
+  async getCategoryTree(familyId: string): Promise<CategoryWithChildren[]> {
+    const categories = await this.dataService.getCategories(familyId);
     const parents = categories.filter(cat => cat.parentId === null);
     
     return parents.map(parent => ({
@@ -275,17 +275,17 @@ export class CategoryService {
 
   // Removed plaidCategory-related methods as they are no longer needed
 
-  async getHiddenCategories(userId: string): Promise<Category[]> {
-    const categories = await this.dataService.getCategories(userId);
+  async getHiddenCategories(familyId: string): Promise<Category[]> {
+    const categories = await this.dataService.getCategories(familyId);
     return categories.filter(cat => cat.isHidden);
   }
 
-  async getRolloverCategories(userId: string): Promise<Category[]> {
-    const categories = await this.dataService.getCategories(userId);
+  async getRolloverCategories(familyId: string): Promise<Category[]> {
+    const categories = await this.dataService.getCategories(familyId);
     return categories.filter(cat => cat.isRollover);
   }
 
-  async initializeDefaultCategories(_userId: string): Promise<void> {
+  async initializeDefaultCategories(_familyId: string): Promise<void> {
     // No longer initialize any default categories
     // Users must create their own category taxonomy
     // This method is kept for backward compatibility but does nothing
@@ -296,8 +296,8 @@ export class CategoryService {
    * Migration method to add isIncome property to existing categories
    * This should be called once to migrate existing data
    */
-  async migrateIsIncomeProperty(userId: string): Promise<{ migrated: number; skipped: number }> {
-    const categories = await this.dataService.getCategories(userId);
+  async migrateIsIncomeProperty(familyId: string): Promise<{ migrated: number; skipped: number }> {
+    const categories = await this.dataService.getCategories(familyId);
     let migrated = 0;
     let skipped = 0;
 
@@ -313,13 +313,13 @@ export class CategoryService {
     });
 
     if (migrated > 0) {
-      await this.dataService.saveCategories(categories, userId);
+      await this.dataService.saveCategories(categories, familyId);
     }
 
     return { migrated, skipped };
   }
 
-  async importFromCSV(csvContent: string, userId: string): Promise<{
+  async importFromCSV(csvContent: string, familyId: string): Promise<{
     success: boolean; 
     importedCount: number; 
     message: string;
@@ -327,7 +327,7 @@ export class CategoryService {
   }> {
     // Delegate to ImportService if available, otherwise use legacy implementation
     if (this.importService) {
-      const result = await this.importService.importCSV(userId, 'categories', csvContent, {
+      const result = await this.importService.importCSV(familyId, 'categories', csvContent, {
         skipDuplicates: true
       });
       

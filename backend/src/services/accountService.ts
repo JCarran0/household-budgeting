@@ -66,7 +66,7 @@ export class AccountService {
    * Connect a new bank account after Plaid Link success
    */
   async connectAccount(
-    userId: string,
+    familyId: string,
     publicToken: string,
     institutionId: string,
     institutionName: string
@@ -74,7 +74,7 @@ export class AccountService {
     try {
       // Exchange public token for access token
       const tokenResult = await this.plaidService.exchangePublicToken(publicToken);
-      
+
       if (!tokenResult.success || !tokenResult.accessToken || !tokenResult.itemId) {
         return {
           success: false,
@@ -84,7 +84,7 @@ export class AccountService {
 
       // Fetch account details from Plaid
       const accountsResult = await this.plaidService.getAccounts(tokenResult.accessToken);
-      
+
       if (!accountsResult.success || !accountsResult.accounts) {
         return {
           success: false,
@@ -94,11 +94,11 @@ export class AccountService {
 
       // Store each account
       const storedAccounts: StoredAccount[] = [];
-      
+
       for (const plaidAccount of accountsResult.accounts) {
         const account: StoredAccount = {
           id: uuidv4(),
-          userId,
+          userId: familyId,
           plaidItemId: tokenResult.itemId,
           plaidAccountId: plaidAccount.plaidAccountId,
           plaidAccessToken: this.encryptToken(tokenResult.accessToken),
@@ -121,7 +121,7 @@ export class AccountService {
         };
 
         // Save to data store
-        await this.saveAccount(account);
+        await this.saveAccount(familyId, account);
         storedAccounts.push(account);
       }
 
@@ -140,12 +140,12 @@ export class AccountService {
   }
 
   /**
-   * Get all accounts for a user
+   * Get all accounts for a family
    */
-  async getUserAccounts(userId: string): Promise<AccountsResult> {
+  async getUserAccounts(familyId: string): Promise<AccountsResult> {
     try {
-      const accounts = await this.dataService.getData<StoredAccount[]>(`accounts_${userId}`) || [];
-      
+      const accounts = await this.dataService.getData<StoredAccount[]>(`accounts_${familyId}`) || [];
+
       return {
         success: true,
         accounts: accounts.filter((a: StoredAccount) => a.status !== 'inactive'),
@@ -162,8 +162,8 @@ export class AccountService {
   /**
    * Get a specific account
    */
-  async getAccount(userId: string, accountId: string): Promise<StoredAccount | null> {
-    const accountsResult = await this.getUserAccounts(userId);
+  async getAccount(familyId: string, accountId: string): Promise<StoredAccount | null> {
+    const accountsResult = await this.getUserAccounts(familyId);
     
     if (!accountsResult.success || !accountsResult.accounts) {
       return null;
@@ -175,9 +175,9 @@ export class AccountService {
   /**
    * Sync account balances from Plaid
    */
-  async syncAccountBalances(userId: string): Promise<SyncResult> {
+  async syncAccountBalances(familyId: string): Promise<SyncResult> {
     try {
-      const accountsResult = await this.getUserAccounts(userId);
+      const accountsResult = await this.getUserAccounts(familyId);
       
       if (!accountsResult.success || !accountsResult.accounts) {
         return {
@@ -209,7 +209,7 @@ export class AccountService {
             for (const account of accounts) {
               account.status = 'requires_reauth';
               account.updatedAt = new Date();
-              await this.saveAccount(account);
+              await this.saveAccount(familyId, account);
             }
           }
           continue;
@@ -228,8 +228,8 @@ export class AccountService {
             storedAccount.lastSynced = new Date();
             storedAccount.updatedAt = new Date();
             storedAccount.status = 'active';
-            
-            await this.saveAccount(storedAccount);
+
+            await this.saveAccount(familyId, storedAccount);
             accountsUpdated++;
           }
         }
@@ -251,10 +251,10 @@ export class AccountService {
   /**
    * Update account nickname
    */
-  async updateAccountNickname(userId: string, accountId: string, nickname: string | null): Promise<{ success: boolean; error?: string }> {
+  async updateAccountNickname(familyId: string, accountId: string, nickname: string | null): Promise<{ success: boolean; error?: string }> {
     try {
-      const account = await this.getAccount(userId, accountId);
-      
+      const account = await this.getAccount(familyId, accountId);
+
       if (!account) {
         return { success: false, error: 'Account not found' };
       }
@@ -264,12 +264,12 @@ export class AccountService {
       account.updatedAt = new Date();
 
       // Save the updated account
-      const accounts = await this.dataService.getData<StoredAccount[]>(`accounts_${userId}`) || [];
-      const updatedAccounts = accounts.map(acc => 
+      const accounts = await this.dataService.getData<StoredAccount[]>(`accounts_${familyId}`) || [];
+      const updatedAccounts = accounts.map(acc =>
         acc.id === accountId ? account : acc
       );
-      
-      await this.dataService.saveData(`accounts_${userId}`, updatedAccounts);
+
+      await this.dataService.saveData(`accounts_${familyId}`, updatedAccounts);
 
       return { success: true };
     } catch (error) {
@@ -284,9 +284,9 @@ export class AccountService {
   /**
    * Disconnect an account
    */
-  async disconnectAccount(userId: string, accountId: string): Promise<{ success: boolean; error?: string }> {
+  async disconnectAccount(familyId: string, accountId: string): Promise<{ success: boolean; error?: string }> {
     try {
-      const account = await this.getAccount(userId, accountId);
+      const account = await this.getAccount(familyId, accountId);
       
       if (!account) {
         return {
@@ -315,7 +315,7 @@ export class AccountService {
       // Mark as inactive locally
       account.status = 'inactive';
       account.updatedAt = new Date();
-      await this.saveAccount(account);
+      await this.saveAccount(familyId, account);
       return { success: true };
     } catch (error) {
       console.error('Error disconnecting account:', error);
@@ -329,36 +329,36 @@ export class AccountService {
   /**
    * Save account to data store
    */
-  private async saveAccount(account: StoredAccount): Promise<void> {
+  private async saveAccount(familyId: string, account: StoredAccount): Promise<void> {
     const accounts = await this.dataService.getData<StoredAccount[]>(
-      `accounts_${account.userId}`
+      `accounts_${familyId}`
     ) || [];
-    
+
     const index = accounts.findIndex((a: StoredAccount) => a.id === account.id);
-    
+
     if (index >= 0) {
       accounts[index] = account;
     } else {
       accounts.push(account);
     }
 
-    await this.dataService.saveData(`accounts_${account.userId}`, accounts);
+    await this.dataService.saveData(`accounts_${familyId}`, accounts);
   }
 
   /**
    * Create a link token for re-authentication (update mode)
    * This allows users to sign in again without disconnecting
    */
-  async createUpdateLinkToken(userId: string, accountId: string): Promise<{ success: boolean; linkToken?: string; expiration?: string; error?: string }> {
+  async createUpdateLinkToken(familyId: string, accountId: string): Promise<{ success: boolean; linkToken?: string; expiration?: string; error?: string }> {
     try {
-      const account = await this.getAccount(userId, accountId);
+      const account = await this.getAccount(familyId, accountId);
 
       if (!account) {
         return { success: false, error: 'Account not found' };
       }
 
       const accessToken = this.decryptToken(account.plaidAccessToken);
-      const result = await this.plaidService.createUpdateLinkToken(userId, accessToken);
+      const result = await this.plaidService.createUpdateLinkToken(familyId, accessToken);
 
       if (!result.success) {
         return { success: false, error: result.error };
@@ -381,9 +381,9 @@ export class AccountService {
   /**
    * Mark account as active after successful re-authentication
    */
-  async markAccountActive(userId: string, accountId: string): Promise<{ success: boolean; error?: string }> {
+  async markAccountActive(familyId: string, accountId: string): Promise<{ success: boolean; error?: string }> {
     try {
-      const account = await this.getAccount(userId, accountId);
+      const account = await this.getAccount(familyId, accountId);
 
       if (!account) {
         return { success: false, error: 'Account not found' };
@@ -392,7 +392,7 @@ export class AccountService {
       account.status = 'active';
       account.lastSynced = new Date();
       account.updatedAt = new Date();
-      await this.saveAccount(account);
+      await this.saveAccount(familyId, account);
 
       return { success: true };
     } catch (error) {

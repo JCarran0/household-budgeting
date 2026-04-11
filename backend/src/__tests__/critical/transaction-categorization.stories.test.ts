@@ -17,6 +17,7 @@ import { StoredTransaction } from '../../services/transactionService';
 describe('User Story: Transaction Categorization', () => {
   let authToken: string;
   let userId: string;
+  let familyId: string;
   let groceryCategory: any;
   let diningCategory: any;
   let testTransaction: StoredTransaction;
@@ -34,6 +35,7 @@ describe('User Story: Transaction Categorization', () => {
     const user = await registerUser(`catuser${rand}`, 'secure categorization test passphrase');
     authToken = user.token;
     userId = user.userId;
+    familyId = user.familyId;
     
     // Create test categories
     const groceryResponse = await authenticatedPost(
@@ -96,7 +98,7 @@ describe('User Story: Transaction Categorization', () => {
       updatedAt: new Date(),
     };
     
-    await dataService.saveData(`transactions_${userId}`, [testTransaction]);
+    await dataService.saveData(`transactions_${familyId}`, [testTransaction]);
   });
   
   describe('As a user, I can update transaction categories inline', () => {
@@ -113,7 +115,7 @@ describe('User Story: Transaction Categorization', () => {
       
       // Verify the transaction was updated
       const transactions = await dataService.getData<StoredTransaction[]>(
-        `transactions_${userId}`
+        `transactions_${familyId}`
       ) || [];
       const updatedTransaction = transactions.find(t => t.id === testTransaction.id);
       
@@ -134,7 +136,7 @@ describe('User Story: Transaction Categorization', () => {
       
       // Verify the transaction is now uncategorized
       const transactions = await dataService.getData<StoredTransaction[]>(
-        `transactions_${userId}`
+        `transactions_${familyId}`
       ) || [];
       const updatedTransaction = transactions.find(t => t.id === testTransaction.id);
       
@@ -145,7 +147,7 @@ describe('User Story: Transaction Categorization', () => {
     test('I can update an uncategorized transaction to have a category', async () => {
       // First, set transaction to uncategorized
       await transactionService.updateTransactionCategory(
-        userId,
+        familyId,
         testTransaction.id,
         null
       );
@@ -162,7 +164,7 @@ describe('User Story: Transaction Categorization', () => {
       
       // Verify the transaction now has the category
       const transactions = await dataService.getData<StoredTransaction[]>(
-        `transactions_${userId}`
+        `transactions_${familyId}`
       ) || [];
       const updatedTransaction = transactions.find(t => t.id === testTransaction.id);
       
@@ -199,7 +201,7 @@ describe('User Story: Transaction Categorization', () => {
       
       // Verify our transaction wasn't changed
       const transactions = await dataService.getData<StoredTransaction[]>(
-        `transactions_${userId}`
+        `transactions_${familyId}`
       ) || [];
       const unchangedTransaction = transactions.find(t => t.id === testTransaction.id);
       
@@ -271,7 +273,7 @@ describe('User Story: Transaction Categorization', () => {
       
       // Verify the transaction was updated correctly
       const transactions = await dataService.getData<StoredTransaction[]>(
-        `transactions_${userId}`
+        `transactions_${familyId}`
       ) || [];
       const updatedTransaction = transactions.find(t => t.id === testTransaction.id);
       
@@ -295,7 +297,7 @@ describe('User Story: Transaction Categorization', () => {
       
       // Initially transaction is in grocery category
       let transactions = await dataService.getData<StoredTransaction[]>(
-        `transactions_${userId}`
+        `transactions_${familyId}`
       ) || [];
       let transaction = transactions.find(t => t.id === testTransaction.id);
       expect(transaction?.categoryId).toBe(groceryCategory.id);
@@ -311,7 +313,7 @@ describe('User Story: Transaction Categorization', () => {
       
       // Transaction should now be uncategorized
       transactions = await dataService.getData<StoredTransaction[]>(
-        `transactions_${userId}`
+        `transactions_${familyId}`
       ) || [];
       transaction = transactions.find(t => t.id === testTransaction.id);
       expect(transaction?.categoryId).toBeNull();
@@ -329,11 +331,11 @@ describe('User Story: Transaction Categorization', () => {
       };
       
       const existingTransactions = await dataService.getData<StoredTransaction[]>(
-        `transactions_${userId}`
+        `transactions_${familyId}`
       ) || [];
       
       await dataService.saveData(
-        `transactions_${userId}`,
+        `transactions_${familyId}`,
         [...existingTransactions, uncategorizedTx]
       );
       

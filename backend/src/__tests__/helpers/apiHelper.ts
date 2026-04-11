@@ -10,6 +10,7 @@ export interface AuthenticatedUser {
   token: string;
   userId: string;
   username: string;
+  familyId: string;
 }
 
 /**
@@ -17,11 +18,12 @@ export interface AuthenticatedUser {
  */
 export async function registerUser(
   username: string,
-  password: string
+  password: string,
+  displayName?: string
 ): Promise<AuthenticatedUser> {
   const response = await request(app)
     .post('/api/v1/auth/register')
-    .send({ username, password });
+    .send({ username, password, displayName: displayName ?? username });
   
   if (response.status !== 201) {
     throw new Error(`Registration failed: ${response.body.error}`);
@@ -31,6 +33,7 @@ export async function registerUser(
     token: response.body.token,
     userId: response.body.user.id,
     username: response.body.user.username,
+    familyId: response.body.user.familyId,
   };
 }
 
@@ -44,15 +47,16 @@ export async function loginUser(
   const response = await request(app)
     .post('/api/v1/auth/login')
     .send({ username, password });
-  
+
   if (response.status !== 200) {
     throw new Error(`Login failed: ${response.body.error}`);
   }
-  
+
   return {
     token: response.body.token,
     userId: response.body.user.id,
     username: response.body.user.username,
+    familyId: response.body.user.familyId,
   };
 }
 

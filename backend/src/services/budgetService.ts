@@ -55,33 +55,33 @@ export class BudgetService {
     }
   }
 
-  async getAllBudgets(userId: string): Promise<StoredBudget[]> {
+  async getAllBudgets(familyId: string): Promise<StoredBudget[]> {
     const budgets = await this.dataService.getData<StoredBudget[]>(
-      `budgets_${userId}`
+      `budgets_${familyId}`
     ) || [];
-    
-    // Return all budgets for this user
+
+    // Return all budgets for this family
     return budgets;
   }
 
-  async getBudget(categoryId: string, month: string, userId: string): Promise<StoredBudget | null> {
-    const budgets = await this.getAllBudgets(userId);
+  async getBudget(categoryId: string, month: string, familyId: string): Promise<StoredBudget | null> {
+    const budgets = await this.getAllBudgets(familyId);
     return budgets.find(b => b.categoryId === categoryId && b.month === month) || null;
   }
 
-  async createOrUpdateBudget(data: CreateBudgetDto, userId: string): Promise<StoredBudget> {
+  async createOrUpdateBudget(data: CreateBudgetDto, familyId: string): Promise<StoredBudget> {
     this.validateMonth(data.month);
     this.validateAmount(data.amount);
 
-    const budgets = await this.getAllBudgets(userId);
-    
+    const budgets = await this.getAllBudgets(familyId);
+
     // Check if budget already exists for this category and month
     const existingIndex = budgets.findIndex(
       b => b.categoryId === data.categoryId && b.month === data.month
     );
 
     const now = new Date();
-    
+
     if (existingIndex !== -1) {
       // Update existing budget
       budgets[existingIndex] = {
@@ -89,13 +89,13 @@ export class BudgetService {
         amount: data.amount,
         updatedAt: now
       };
-      await this.dataService.saveData(`budgets_${userId}`, budgets);
+      await this.dataService.saveData(`budgets_${familyId}`, budgets);
       return budgets[existingIndex];
     } else {
       // Create new budget
       const newBudget: StoredBudget = {
         id: uuidv4(),
-        userId,
+        userId: familyId,
         categoryId: data.categoryId,
         month: data.month,
         amount: data.amount,
@@ -103,33 +103,33 @@ export class BudgetService {
         updatedAt: now
       };
       budgets.push(newBudget);
-      await this.dataService.saveData(`budgets_${userId}`, budgets);
+      await this.dataService.saveData(`budgets_${familyId}`, budgets);
       return newBudget;
     }
   }
 
-  async deleteBudget(id: string, userId: string): Promise<void> {
-    const budgets = await this.getAllBudgets(userId);
+  async deleteBudget(id: string, familyId: string): Promise<void> {
+    const budgets = await this.getAllBudgets(familyId);
     const filteredBudgets = budgets.filter(b => b.id !== id);
-    await this.dataService.saveData(`budgets_${userId}`, filteredBudgets);
+    await this.dataService.saveData(`budgets_${familyId}`, filteredBudgets);
   }
 
-  async getMonthlyBudgets(month: string, userId: string): Promise<StoredBudget[]> {
+  async getMonthlyBudgets(month: string, familyId: string): Promise<StoredBudget[]> {
     this.validateMonth(month);
-    const budgets = await this.getAllBudgets(userId);
+    const budgets = await this.getAllBudgets(familyId);
     return budgets.filter(b => b.month === month);
   }
 
-  async getTotalMonthlyBudget(month: string, userId: string): Promise<number> {
-    const monthlyBudgets = await this.getMonthlyBudgets(month, userId);
+  async getTotalMonthlyBudget(month: string, familyId: string): Promise<number> {
+    const monthlyBudgets = await this.getMonthlyBudgets(month, familyId);
     return monthlyBudgets.reduce((total, budget) => total + budget.amount, 0);
   }
 
-  async getMonthlyBudgetTotals(month: string, userId: string): Promise<BudgetTotals> {
-    const monthlyBudgets = await this.getMonthlyBudgets(month, userId);
+  async getMonthlyBudgetTotals(month: string, familyId: string): Promise<BudgetTotals> {
+    const monthlyBudgets = await this.getMonthlyBudgets(month, familyId);
 
     // Get categories to properly filter the budgets
-    const categories = await this.dataService.getCategories(userId);
+    const categories = await this.dataService.getCategories(familyId);
 
     // Use shared utility to calculate proper budget totals
     return calculateBudgetTotals(monthlyBudgets, categories, {
@@ -138,11 +138,11 @@ export class BudgetService {
     });
   }
 
-  async copyBudgets(fromMonth: string, toMonth: string, userId: string): Promise<StoredBudget[]> {
+  async copyBudgets(fromMonth: string, toMonth: string, familyId: string): Promise<StoredBudget[]> {
     this.validateMonth(fromMonth);
     this.validateMonth(toMonth);
 
-    const sourceBudgets = await this.getMonthlyBudgets(fromMonth, userId);
+    const sourceBudgets = await this.getMonthlyBudgets(fromMonth, familyId);
     const copiedBudgets: StoredBudget[] = [];
 
     for (const sourceBudget of sourceBudgets) {
@@ -150,7 +150,7 @@ export class BudgetService {
         categoryId: sourceBudget.categoryId,
         month: toMonth,
         amount: sourceBudget.amount
-      }, userId);
+      }, familyId);
       copiedBudgets.push(copiedBudget);
     }
 
@@ -161,10 +161,10 @@ export class BudgetService {
     categoryId: string,
     month: string,
     actualAmount: number,
-    userId: string
+    familyId: string
   ): Promise<BudgetComparison | null> {
     // Check if category is budgetable (excludes only transfers)
-    const categories = await this.dataService.getCategories(userId);
+    const categories = await this.dataService.getCategories(familyId);
     if (!isBudgetableCategory(categoryId, categories)) {
       return null;
     }
@@ -172,7 +172,7 @@ export class BudgetService {
     const budgetType = getBudgetType(categoryId, categories);
     const isIncomeCategory = budgetType === 'income';
 
-    const budget = await this.getBudget(categoryId, month, userId);
+    const budget = await this.getBudget(categoryId, month, familyId);
     const budgeted = budget?.amount || 0;
 
     // For income categories, we want to handle inverse logic:
@@ -209,32 +209,32 @@ export class BudgetService {
   async getMonthlyBudgetVsActual(
     month: string,
     actuals: Map<string, number>,
-    userId: string,
+    familyId: string,
     hiddenCategoryIds?: Set<string>
   ): Promise<BudgetComparison[]> {
-    const budgets = await this.getMonthlyBudgets(month, userId);
+    const budgets = await this.getMonthlyBudgets(month, familyId);
     const comparisons: BudgetComparison[] = [];
 
     // Get categories for budget type detection and hierarchy traversal
-    const categories = await this.dataService.getCategories(userId);
+    const categories = await this.dataService.getCategories(familyId);
     const categoryLookup: Map<string, Category> = createCategoryLookup(categories);
 
     // Process budgeted categories (including both income and expense categories, excluding only hidden)
     for (const budget of budgets) {
       // Skip non-budgetable categories (transfers)
       const isBudgetable = isBudgetableCategory(budget.categoryId, Array.from(categoryLookup.values()));
-      
+
       if (!isBudgetable) {
         continue;
       }
-      
+
       // Skip hidden categories if hiddenCategoryIds set is provided
       if (hiddenCategoryIds && hiddenCategoryIds.has(budget.categoryId)) {
         continue;
       }
-      
+
       const actual = actuals.get(budget.categoryId) || 0;
-      const comparison = await this.getBudgetVsActual(budget.categoryId, month, actual, userId);
+      const comparison = await this.getBudgetVsActual(budget.categoryId, month, actual, familyId);
       if (comparison) {
         comparisons.push(comparison);
       }
@@ -244,19 +244,19 @@ export class BudgetService {
     for (const [categoryId, actual] of actuals) {
       // Skip non-budgetable categories (transfers)
       const isBudgetable = isBudgetableCategory(categoryId, Array.from(categoryLookup.values()));
-        
+
       if (!isBudgetable) {
         continue;
       }
-      
+
       // Skip hidden categories if hiddenCategoryIds set is provided
       if (hiddenCategoryIds && hiddenCategoryIds.has(categoryId)) {
         continue;
       }
-      
+
       const hasBudget = budgets.some(b => b.categoryId === categoryId);
       if (!hasBudget) {
-        const comparison = await this.getBudgetVsActual(categoryId, month, actual, userId);
+        const comparison = await this.getBudgetVsActual(categoryId, month, actual, familyId);
         if (comparison) {
           comparisons.push(comparison);
         }
@@ -270,14 +270,14 @@ export class BudgetService {
     categoryId: string,
     startMonth: string,
     endMonth: string,
-    userId: string
+    familyId: string
   ): Promise<StoredBudget[]> {
     this.validateMonth(startMonth);
     this.validateMonth(endMonth);
 
-    const budgets = await this.getAllBudgets(userId);
+    const budgets = await this.getAllBudgets(familyId);
     return budgets
-      .filter(b => 
+      .filter(b =>
         b.categoryId === categoryId &&
         b.month >= startMonth &&
         b.month <= endMonth
@@ -289,10 +289,10 @@ export class BudgetService {
     categoryId: string,
     startMonth: string,
     endMonth: string,
-    userId: string
+    familyId: string
   ): Promise<number> {
-    const history = await this.getCategoryBudgetHistory(categoryId, startMonth, endMonth, userId);
-    
+    const history = await this.getCategoryBudgetHistory(categoryId, startMonth, endMonth, familyId);
+
     if (history.length === 0) {
       return 0;
     }
@@ -305,10 +305,10 @@ export class BudgetService {
     categoryId: string,
     month: string,
     actualAmount: number,
-    userId: string
+    familyId: string
   ): Promise<number> {
-    const budget = await this.getBudget(categoryId, month, userId);
-    
+    const budget = await this.getBudget(categoryId, month, familyId);
+
     if (!budget) {
       return 0;
     }
@@ -321,10 +321,10 @@ export class BudgetService {
     categoryId: string,
     month: string,
     rolloverAmount: number,
-    userId: string
+    familyId: string
   ): Promise<StoredBudget> {
-    const budget = await this.getBudget(categoryId, month, userId);
-    
+    const budget = await this.getBudget(categoryId, month, familyId);
+
     if (!budget) {
       throw new Error('Budget not found for applying rollover');
     }
@@ -333,24 +333,24 @@ export class BudgetService {
       categoryId,
       month,
       amount: budget.amount + rolloverAmount
-    }, userId);
+    }, familyId);
   }
 
-  async getBudgetsByCategory(categoryId: string, userId: string): Promise<StoredBudget[]> {
-    const budgets = await this.getAllBudgets(userId);
+  async getBudgetsByCategory(categoryId: string, familyId: string): Promise<StoredBudget[]> {
+    const budgets = await this.getAllBudgets(familyId);
     return budgets
       .filter(b => b.categoryId === categoryId)
       .sort((a, b) => a.month.localeCompare(b.month));
   }
 
-  async deleteBudgetsByCategory(categoryId: string, userId: string): Promise<void> {
-    const budgets = await this.getAllBudgets(userId);
+  async deleteBudgetsByCategory(categoryId: string, familyId: string): Promise<void> {
+    const budgets = await this.getAllBudgets(familyId);
     const filteredBudgets = budgets.filter(b => b.categoryId !== categoryId);
-    await this.dataService.saveData(`budgets_${userId}`, filteredBudgets);
+    await this.dataService.saveData(`budgets_${familyId}`, filteredBudgets);
   }
 
-  async hasBudgetsForCategory(categoryId: string, userId: string): Promise<boolean> {
-    const budgets = await this.getAllBudgets(userId);
+  async hasBudgetsForCategory(categoryId: string, familyId: string): Promise<boolean> {
+    const budgets = await this.getAllBudgets(familyId);
     return budgets.some(b => b.categoryId === categoryId);
   }
 
@@ -359,21 +359,21 @@ export class BudgetService {
    * Used during category deletion workflow
    * @returns Count of budgets deleted
    */
-  async deleteBudgetsForCategory(categoryId: string, userId: string): Promise<number> {
-    const budgets = await this.getAllBudgets(userId);
+  async deleteBudgetsForCategory(categoryId: string, familyId: string): Promise<number> {
+    const budgets = await this.getAllBudgets(familyId);
     const budgetsToDelete = budgets.filter(b => b.categoryId === categoryId);
     const deleteCount = budgetsToDelete.length;
 
     if (deleteCount > 0) {
       const remainingBudgets = budgets.filter(b => b.categoryId !== categoryId);
-      await this.dataService.saveData(`budgets_${userId}`, remainingBudgets);
+      await this.dataService.saveData(`budgets_${familyId}`, remainingBudgets);
     }
 
     return deleteCount;
   }
 
-  async getDistinctBudgetMonths(userId: string): Promise<{ month: string; count: number }[]> {
-    const budgets = await this.getAllBudgets(userId);
+  async getDistinctBudgetMonths(familyId: string): Promise<{ month: string; count: number }[]> {
+    const budgets = await this.getAllBudgets(familyId);
 
     // Group budgets by month and count them
     const monthMap = new Map<string, number>();
@@ -390,14 +390,14 @@ export class BudgetService {
     return months;
   }
 
-  async getYearlyBudgets(year: number, userId: string): Promise<StoredBudget[]> {
+  async getYearlyBudgets(year: number, familyId: string): Promise<StoredBudget[]> {
     // Validate year
     const currentYear = new Date().getFullYear();
     if (year < 2020 || year > currentYear + 5) {
       throw new Error('Invalid year. Year must be between 2020 and 5 years in the future');
     }
 
-    const budgets = await this.getAllBudgets(userId);
+    const budgets = await this.getAllBudgets(familyId);
 
     // Filter budgets for the specified year
     const yearString = year.toString();
@@ -406,7 +406,7 @@ export class BudgetService {
       .sort((a, b) => a.month.localeCompare(b.month));
   }
 
-  async batchUpdateBudgets(updates: CreateBudgetDto[], userId: string): Promise<StoredBudget[]> {
+  async batchUpdateBudgets(updates: CreateBudgetDto[], familyId: string): Promise<StoredBudget[]> {
     // Validate all updates first
     for (const update of updates) {
       this.validateMonth(update.month);
@@ -421,13 +421,13 @@ export class BudgetService {
     for (const update of updates) {
       if (update.amount === 0) {
         // If amount is 0, delete the budget if it exists
-        const existingBudget = await this.getBudget(update.categoryId, update.month, userId);
+        const existingBudget = await this.getBudget(update.categoryId, update.month, familyId);
         if (existingBudget) {
-          await this.deleteBudget(existingBudget.id, userId);
+          await this.deleteBudget(existingBudget.id, familyId);
         }
       } else {
         // Create or update the budget
-        const budget = await this.createOrUpdateBudget(update, userId);
+        const budget = await this.createOrUpdateBudget(update, familyId);
         updatedBudgets.push(budget);
       }
     }
@@ -442,14 +442,14 @@ export class BudgetService {
   async getBudgetComparisonForMonth(
     month: string,
     actuals: Map<string, number>,
-    userId: string
+    familyId: string
   ): Promise<{
     comparisons: BudgetComparison[];
     totals: { budgeted: number; actual: number; remaining: number; percentUsed: number; isOverBudget: boolean };
   }> {
-    const categories = await this.dataService.getCategories(userId);
+    const categories = await this.dataService.getCategories(familyId);
     const hiddenCategoryIds = getHiddenCategoryIds(categories);
-    const comparisons = await this.getMonthlyBudgetVsActual(month, actuals, userId, hiddenCategoryIds);
+    const comparisons = await this.getMonthlyBudgetVsActual(month, actuals, familyId, hiddenCategoryIds);
 
     const totals = comparisons.reduce(
       (acc, comp) => ({

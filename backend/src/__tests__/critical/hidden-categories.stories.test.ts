@@ -17,6 +17,7 @@ import { StoredTransaction } from '../../services/transactionService';
 describe('User Story: Hidden Categories', () => {
   let authToken: string;
   let userId: string;
+  let familyId: string;
   
   beforeEach(async () => {
     // Clear all test data
@@ -31,6 +32,7 @@ describe('User Story: Hidden Categories', () => {
     const user = await registerUser(`hidden${rand}`, 'hidden category test passphrase');
     authToken = user.token;
     userId = user.userId;
+    familyId = user.familyId;
   });
   
   describe('As a user, I can use hidden categories to exclude transactions from budgets', () => {
@@ -71,7 +73,7 @@ describe('User Story: Hidden Categories', () => {
       
       // Create a test transaction using dataService
       const existingTransactions = await dataService.getData<StoredTransaction[]>(
-        `transactions_${userId}`
+        `transactions_${familyId}`
       ) || [];
       
       const testTransaction: StoredTransaction = {
@@ -106,13 +108,13 @@ describe('User Story: Hidden Categories', () => {
       };
       
       await dataService.saveData(
-        `transactions_${userId}`,
+        `transactions_${familyId}`,
         [...existingTransactions, testTransaction]
       );
       
       // Update transaction with hidden category
       const updateResult = await transactionService.updateTransactionCategory(
-        userId,
+        familyId,
         'test-transfer-123',
         hiddenCategoryId
       );
@@ -121,7 +123,7 @@ describe('User Story: Hidden Categories', () => {
       
       // Verify transaction has the hidden category
       const updatedTransactions = await dataService.getData<StoredTransaction[]>(
-        `transactions_${userId}`
+        `transactions_${familyId}`
       ) || [];
       const updatedTransaction = updatedTransactions.find(t => t.id === 'test-transfer-123');
       
@@ -257,7 +259,7 @@ describe('User Story: Hidden Categories', () => {
         updatedAt: new Date(),
       };
       
-      await dataService.saveData(`transactions_${userId}`, [testTransaction]);
+      await dataService.saveData(`transactions_${familyId}`, [testTransaction]);
       
       // Create actuals map (simulating frontend calculation that should exclude hidden subcategories)
       const actuals: Record<string, number> = {};
@@ -432,7 +434,7 @@ describe('User Story: Hidden Categories', () => {
         },
       ];
       
-      await dataService.saveData(`transactions_${userId}`, transactions);
+      await dataService.saveData(`transactions_${familyId}`, transactions);
       
       // Get transactions and verify both are returned
       const txResponse = await authenticatedGet('/api/v1/transactions?startDate=2025-01-01&endDate=2025-01-31', authToken);

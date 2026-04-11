@@ -32,9 +32,9 @@ router.use(authMiddleware);
 // GET /api/budgets - Get all budgets
 router.get('/', async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const userId = req.user?.userId;
-    if (!userId) throw new AuthorizationError();
-    const budgets = await budgetService.getAllBudgets(userId);
+    const familyId = req.user?.familyId;
+    if (!familyId) throw new AuthorizationError();
+    const budgets = await budgetService.getAllBudgets(familyId);
     res.json(budgets);
   } catch (error) {
     next(error);
@@ -44,9 +44,9 @@ router.get('/', async (req: Request, res: Response, next: NextFunction): Promise
 // GET /api/budgets/available-months - Get distinct months with budgets
 router.get('/available-months', async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const userId = req.user?.userId;
-    if (!userId) throw new AuthorizationError();
-    const months = await budgetService.getDistinctBudgetMonths(userId);
+    const familyId = req.user?.familyId;
+    if (!familyId) throw new AuthorizationError();
+    const months = await budgetService.getDistinctBudgetMonths(familyId);
     res.json(months);
   } catch (error) {
     next(error);
@@ -56,11 +56,11 @@ router.get('/available-months', async (req: Request, res: Response, next: NextFu
 // GET /api/budgets/month/:month - Get budgets for a specific month
 router.get('/month/:month', async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const userId = req.user?.userId;
-    if (!userId) throw new AuthorizationError();
+    const familyId = req.user?.familyId;
+    if (!familyId) throw new AuthorizationError();
     const { month } = req.params;
-    const budgets = await budgetService.getMonthlyBudgets(month, userId);
-    const totals = await budgetService.getMonthlyBudgetTotals(month, userId);
+    const budgets = await budgetService.getMonthlyBudgets(month, familyId);
+    const totals = await budgetService.getMonthlyBudgetTotals(month, familyId);
 
     res.json({
       month,
@@ -80,10 +80,10 @@ router.get('/month/:month', async (req: Request, res: Response, next: NextFuncti
 // GET /api/budgets/category/:categoryId - Get all budgets for a category
 router.get('/category/:categoryId', async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const userId = req.user?.userId;
-    if (!userId) throw new AuthorizationError();
+    const familyId = req.user?.familyId;
+    if (!familyId) throw new AuthorizationError();
     const { categoryId } = req.params;
-    const budgets = await budgetService.getBudgetsByCategory(categoryId, userId);
+    const budgets = await budgetService.getBudgetsByCategory(categoryId, familyId);
     res.json(budgets);
   } catch (error) {
     next(error);
@@ -93,10 +93,10 @@ router.get('/category/:categoryId', async (req: Request, res: Response, next: Ne
 // GET /api/budgets/category/:categoryId/month/:month - Get specific budget
 router.get('/category/:categoryId/month/:month', async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const userId = req.user?.userId;
-    if (!userId) throw new AuthorizationError();
+    const familyId = req.user?.familyId;
+    if (!familyId) throw new AuthorizationError();
     const { categoryId, month } = req.params;
-    const budget = await budgetService.getBudget(categoryId, month, userId);
+    const budget = await budgetService.getBudget(categoryId, month, familyId);
 
     if (!budget) {
       res.status(404).json({ error: 'Budget not found' });
@@ -112,10 +112,10 @@ router.get('/category/:categoryId/month/:month', async (req: Request, res: Respo
 // POST /api/budgets - Create or update a budget
 router.post('/', async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const userId = req.user?.userId;
-    if (!userId) throw new AuthorizationError();
+    const familyId = req.user?.familyId;
+    if (!familyId) throw new AuthorizationError();
     const validatedData = createBudgetSchema.parse(req.body);
-    const budget = await budgetService.createOrUpdateBudget(validatedData, userId);
+    const budget = await budgetService.createOrUpdateBudget(validatedData, familyId);
     res.status(201).json(budget);
   } catch (error) {
     if (error instanceof z.ZodError) {
@@ -135,13 +135,13 @@ router.post('/', async (req: Request, res: Response, next: NextFunction): Promis
 // POST /api/budgets/copy - Copy budgets from one month to another
 router.post('/copy', async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const userId = req.user?.userId;
-    if (!userId) throw new AuthorizationError();
+    const familyId = req.user?.familyId;
+    if (!familyId) throw new AuthorizationError();
     const validatedData = copyBudgetsSchema.parse(req.body);
     const copiedBudgets = await budgetService.copyBudgets(
       validatedData.fromMonth,
       validatedData.toMonth,
-      userId
+      familyId
     );
 
     res.json({
@@ -164,13 +164,13 @@ router.post('/copy', async (req: Request, res: Response, next: NextFunction): Pr
 // GET /api/budgets/comparison/:month - Get budget vs actual for a month
 router.post('/comparison/:month', async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const userId = req.user?.userId;
-    if (!userId) throw new AuthorizationError();
+    const familyId = req.user?.familyId;
+    if (!familyId) throw new AuthorizationError();
     const { month } = req.params;
     const validatedData = budgetVsActualSchema.parse(req.body);
 
     const actuals = new Map(Object.entries(validatedData.actuals));
-    const { comparisons, totals } = await budgetService.getBudgetComparisonForMonth(month, actuals, userId);
+    const { comparisons, totals } = await budgetService.getBudgetComparisonForMonth(month, actuals, familyId);
 
     res.json({
       month,
@@ -189,8 +189,8 @@ router.post('/comparison/:month', async (req: Request, res: Response, next: Next
 // GET /api/budgets/history/:categoryId - Get budget history for a category
 router.get('/history/:categoryId', async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const userId = req.user?.userId;
-    if (!userId) throw new AuthorizationError();
+    const familyId = req.user?.familyId;
+    if (!familyId) throw new AuthorizationError();
     const { categoryId } = req.params;
     const { startMonth, endMonth } = req.query;
 
@@ -203,14 +203,14 @@ router.get('/history/:categoryId', async (req: Request, res: Response, next: Nex
       categoryId,
       startMonth as string,
       endMonth as string,
-      userId
+      familyId
     );
 
     const average = await budgetService.getAverageBudget(
       categoryId,
       startMonth as string,
       endMonth as string,
-      userId
+      familyId
     );
 
     res.json({
@@ -234,9 +234,9 @@ router.get('/history/:categoryId', async (req: Request, res: Response, next: Nex
 // DELETE /api/budgets/:id - Delete a specific budget
 router.delete('/:id', async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const userId = req.user?.userId;
-    if (!userId) throw new AuthorizationError();
-    await budgetService.deleteBudget(req.params.id, userId);
+    const familyId = req.user?.familyId;
+    if (!familyId) throw new AuthorizationError();
+    await budgetService.deleteBudget(req.params.id, familyId);
     res.status(204).send();
   } catch (error) {
     next(error);
@@ -246,9 +246,9 @@ router.delete('/:id', async (req: Request, res: Response, next: NextFunction) =>
 // DELETE /api/budgets/category/:categoryId - Delete all budgets for a category
 router.delete('/category/:categoryId', async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const userId = req.user?.userId;
-    if (!userId) throw new AuthorizationError();
-    await budgetService.deleteBudgetsByCategory(req.params.categoryId, userId);
+    const familyId = req.user?.familyId;
+    if (!familyId) throw new AuthorizationError();
+    await budgetService.deleteBudgetsByCategory(req.params.categoryId, familyId);
     res.status(204).send();
   } catch (error) {
     next(error);
@@ -258,8 +258,8 @@ router.delete('/category/:categoryId', async (req: Request, res: Response, next:
 // POST /api/budgets/rollover - Calculate and apply rollover
 router.post('/rollover', async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const userId = req.user?.userId;
-    if (!userId) throw new AuthorizationError();
+    const familyId = req.user?.familyId;
+    if (!familyId) throw new AuthorizationError();
     const { categoryId, fromMonth, toMonth, actualSpent } = req.body;
 
     if (!categoryId || !fromMonth || !toMonth || actualSpent === undefined) {
@@ -270,11 +270,11 @@ router.post('/rollover', async (req: Request, res: Response, next: NextFunction)
     }
 
     // Calculate rollover from previous month
-    const rollover = await budgetService.calculateRollover(categoryId, fromMonth, actualSpent, userId);
+    const rollover = await budgetService.calculateRollover(categoryId, fromMonth, actualSpent, familyId);
 
     if (rollover > 0) {
       // Apply rollover to next month
-      const updatedBudget = await budgetService.applyRollover(categoryId, toMonth, rollover, userId);
+      const updatedBudget = await budgetService.applyRollover(categoryId, toMonth, rollover, familyId);
 
       res.json({
         categoryId,
@@ -304,8 +304,8 @@ router.post('/rollover', async (req: Request, res: Response, next: NextFunction)
 // GET /api/budgets/year/:year - Get all budgets for a specific year
 router.get('/year/:year', async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const userId = req.user?.userId;
-    if (!userId) throw new AuthorizationError();
+    const familyId = req.user?.familyId;
+    if (!familyId) throw new AuthorizationError();
 
     const year = parseInt(req.params.year, 10);
     if (isNaN(year)) {
@@ -313,7 +313,7 @@ router.get('/year/:year', async (req: Request, res: Response, next: NextFunction
       return;
     }
 
-    const budgets = await budgetService.getYearlyBudgets(year, userId);
+    const budgets = await budgetService.getYearlyBudgets(year, familyId);
 
     res.json({
       year,
@@ -332,11 +332,11 @@ router.get('/year/:year', async (req: Request, res: Response, next: NextFunction
 // POST /api/budgets/batch - Batch update multiple budgets
 router.post('/batch', async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const userId = req.user?.userId;
-    if (!userId) throw new AuthorizationError();
+    const familyId = req.user?.familyId;
+    if (!familyId) throw new AuthorizationError();
 
     const validatedData = batchUpdateBudgetsSchema.parse(req.body);
-    const updatedBudgets = await budgetService.batchUpdateBudgets(validatedData.updates, userId);
+    const updatedBudgets = await budgetService.batchUpdateBudgets(validatedData.updates, familyId);
 
     res.json({
       message: `Successfully updated ${updatedBudgets.length} budgets`,

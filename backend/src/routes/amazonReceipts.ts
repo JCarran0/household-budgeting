@@ -91,7 +91,7 @@ router.post(
   },
   async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
-      const userId = req.user!.userId;
+      const { familyId } = req.user!;
       const files = req.files as Express.Multer.File[] | undefined;
 
       if (!files || files.length === 0) {
@@ -107,7 +107,7 @@ router.post(
       const { amazonReceiptService } = await import('../services');
 
       const result = await amazonReceiptService.parseAndCreateSession(
-        userId,
+        familyId,
         files.map(f => f.buffer),
       );
 
@@ -127,11 +127,11 @@ router.post(
   rateLimitStandard,
   async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
-      const userId = req.user!.userId;
+      const { familyId } = req.user!;
       const { sessionId } = req.params;
       const { amazonReceiptService } = await import('../services');
 
-      const result = await amazonReceiptService.matchOrders(userId, sessionId);
+      const result = await amazonReceiptService.matchOrders(familyId, sessionId);
       res.json({ success: true, ...result });
     } catch (error) {
       next(error);
@@ -149,12 +149,12 @@ router.post(
   validateBody(resolveAmbiguousSchema),
   async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
-      const userId = req.user!.userId;
+      const { familyId } = req.user!;
       const { sessionId } = req.params;
       const { resolutions } = req.body;
       const { amazonReceiptService } = await import('../services');
 
-      await amazonReceiptService.resolveAmbiguous(userId, sessionId, resolutions);
+      await amazonReceiptService.resolveAmbiguous(familyId, sessionId, resolutions);
       res.json({ success: true });
     } catch (error) {
       next(error);
@@ -172,12 +172,12 @@ router.post(
   validateBody(categorizeRequestSchema),
   async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
-      const userId = req.user!.userId;
+      const { familyId } = req.user!;
       const { sessionId } = req.params;
       const { matchIds } = req.body;
       const { amazonReceiptService } = await import('../services');
 
-      const result = await amazonReceiptService.categorizeMatches(userId, sessionId, matchIds);
+      const result = await amazonReceiptService.categorizeMatches(familyId, sessionId, matchIds);
       res.json({ success: true, ...result });
     } catch (error) {
       next(error);
@@ -195,12 +195,12 @@ router.post(
   validateBody(applyActionsSchema),
   async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
-      const userId = req.user!.userId;
+      const { familyId } = req.user!;
       const { sessionId } = req.params;
       const { actions } = req.body;
       const { amazonReceiptService } = await import('../services');
 
-      const result = await amazonReceiptService.applyActions(userId, sessionId, actions);
+      const result = await amazonReceiptService.applyActions(familyId, sessionId, actions);
       res.json({ success: true, ...result });
     } catch (error) {
       next(error);
@@ -217,11 +217,11 @@ router.post(
   rateLimitStandard,
   async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
-      const userId = req.user!.userId;
+      const { familyId } = req.user!;
       const { sessionId } = req.params;
       const { amazonReceiptService } = await import('../services');
 
-      const result = await amazonReceiptService.suggestRules(userId, sessionId);
+      const result = await amazonReceiptService.suggestRules(familyId, sessionId);
       res.json({ success: true, ...result });
     } catch (error) {
       next(error);
@@ -238,10 +238,10 @@ router.get(
   rateLimitStandard,
   async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
-      const userId = req.user!.userId;
+      const { familyId } = req.user!;
       const { amazonReceiptService } = await import('../services');
 
-      const sessions = await amazonReceiptService.getSessions(userId);
+      const sessions = await amazonReceiptService.getSessions(familyId);
       res.json({ success: true, sessions });
     } catch (error) {
       next(error);
@@ -258,10 +258,10 @@ router.delete(
   rateLimitStandard,
   async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
-      const userId = req.user!.userId;
+      const { familyId } = req.user!;
       const { amazonReceiptService } = await import('../services');
 
-      const result = await amazonReceiptService.deleteAllSessions(userId);
+      const result = await amazonReceiptService.deleteAllSessions(familyId);
       res.json({ success: true, ...result });
     } catch (error) {
       next(error);
@@ -278,11 +278,11 @@ router.delete(
   rateLimitStandard,
   async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
-      const userId = req.user!.userId;
+      const { familyId } = req.user!;
       const { sessionId } = req.params;
       const { amazonReceiptService } = await import('../services');
 
-      await amazonReceiptService.deleteSession(userId, sessionId);
+      await amazonReceiptService.deleteSession(familyId, sessionId);
       res.json({ success: true });
     } catch (error) {
       next(error);

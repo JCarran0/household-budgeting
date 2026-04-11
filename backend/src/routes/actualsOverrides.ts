@@ -20,10 +20,10 @@ router.use(authMiddleware);
 // GET /api/actuals-overrides - Get all overrides for user
 router.get('/', async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const userId = req.user?.userId;
-    if (!userId) throw new AuthorizationError();
+    const familyId = req.user?.familyId;
+    if (!familyId) throw new AuthorizationError();
 
-    const result = await actualsOverrideService.getOverrides(userId);
+    const result = await actualsOverrideService.getOverrides(familyId);
     if (!result.success) {
       res.status(500).json({ success: false, error: result.error });
       return;
@@ -38,8 +38,8 @@ router.get('/', async (req: Request, res: Response, next: NextFunction) => {
 // GET /api/actuals-overrides/:month - Get override for specific month
 router.get('/:month', async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const userId = req.user?.userId;
-    if (!userId) throw new AuthorizationError();
+    const familyId = req.user?.familyId;
+    if (!familyId) throw new AuthorizationError();
 
     const { month } = req.params;
 
@@ -49,7 +49,7 @@ router.get('/:month', async (req: Request, res: Response, next: NextFunction) =>
       return;
     }
 
-    const result = await actualsOverrideService.getOverride(userId, month);
+    const result = await actualsOverrideService.getOverride(familyId, month);
 
     if (!result.success || !result.override) {
       res.status(404).json({ success: false, error: result.error || 'Override not found' });
@@ -65,8 +65,8 @@ router.get('/:month', async (req: Request, res: Response, next: NextFunction) =>
 // POST /api/actuals-overrides - Create or update override
 router.post('/', async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const userId = req.user?.userId;
-    if (!userId) throw new AuthorizationError();
+    const familyId = req.user?.familyId;
+    if (!familyId) throw new AuthorizationError();
 
     // Validate request body
     const validation = createActualsOverrideSchema.safeParse(req.body);
@@ -80,7 +80,7 @@ router.post('/', async (req: Request, res: Response, next: NextFunction) => {
 
     const { month, totalIncome, totalExpenses, notes } = validation.data;
 
-    const result = await actualsOverrideService.createOrUpdateOverride(userId, {
+    const result = await actualsOverrideService.createOrUpdateOverride(familyId, {
       month,
       totalIncome,
       totalExpenses,
@@ -101,12 +101,12 @@ router.post('/', async (req: Request, res: Response, next: NextFunction) => {
 // DELETE /api/actuals-overrides/:id - Delete override by ID
 router.delete('/:id', async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const userId = req.user?.userId;
-    if (!userId) throw new AuthorizationError();
+    const familyId = req.user?.familyId;
+    if (!familyId) throw new AuthorizationError();
 
     const { id } = req.params;
 
-    const result = await actualsOverrideService.deleteOverride(userId, id);
+    const result = await actualsOverrideService.deleteOverride(familyId, id);
 
     if (!result.success) {
       res.status(404).json({ success: false, error: result.error || 'Override not found' });
@@ -122,8 +122,8 @@ router.delete('/:id', async (req: Request, res: Response, next: NextFunction) =>
 // GET /api/actuals-overrides/range/:startMonth/:endMonth - Get overrides in date range
 router.get('/range/:startMonth/:endMonth', async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const userId = req.user?.userId;
-    if (!userId) throw new AuthorizationError();
+    const familyId = req.user?.familyId;
+    if (!familyId) throw new AuthorizationError();
 
     const { startMonth, endMonth } = req.params;
 
@@ -133,7 +133,7 @@ router.get('/range/:startMonth/:endMonth', async (req: Request, res: Response, n
       return;
     }
 
-    const result = await actualsOverrideService.getOverridesForRange(userId, startMonth, endMonth);
+    const result = await actualsOverrideService.getOverridesForRange(familyId, startMonth, endMonth);
 
     if (!result.success) {
       res.status(500).json({ success: false, error: result.error });

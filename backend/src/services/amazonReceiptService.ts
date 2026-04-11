@@ -81,29 +81,29 @@ export class AmazonReceiptService {
   // Session helpers
   // ===========================================================================
 
-  private async loadSessions(userId: string): Promise<AmazonReceiptSession[]> {
+  private async loadSessions(familyId: string): Promise<AmazonReceiptSession[]> {
     const data = await this.dataService.getData<AmazonReceiptSession[]>(
-      `amazon_receipts_${userId}`,
+      `amazon_receipts_${familyId}`,
     );
     return data ?? [];
   }
 
   private async saveSessions(
-    userId: string,
+    familyId: string,
     sessions: AmazonReceiptSession[],
   ): Promise<void> {
-    await this.dataService.saveData(`amazon_receipts_${userId}`, sessions);
+    await this.dataService.saveData(`amazon_receipts_${familyId}`, sessions);
   }
 
   /** SEC-003: All public methods must go through this to verify ownership. */
   private async loadOwnedSession(
-    userId: string,
+    familyId: string,
     sessionId: string,
   ): Promise<AmazonReceiptSession> {
-    const sessions = await this.loadSessions(userId);
+    const sessions = await this.loadSessions(familyId);
     const session = sessions.find(s => s.id === sessionId);
     if (!session) throw new NotFoundError('Session not found');
-    if (session.userId !== userId) throw new ForbiddenError('Access denied');
+    if (session.userId !== familyId) throw new ForbiddenError('Access denied');
     return session;
   }
 
@@ -112,7 +112,7 @@ export class AmazonReceiptService {
   // ===========================================================================
 
   async parseAndCreateSession(
-    userId: string,
+    familyId: string,
     pdfBuffers: Buffer[],
   ): Promise<AmazonReceiptUploadResponse> {
     // 1. Check cost cap
@@ -168,7 +168,7 @@ export class AmazonReceiptService {
     // Orders from abandoned/in-progress sessions (status 'parsed', 'matching',
     // 'reviewing') are eligible for reprocessing — only skip orders that were
     // fully processed in a completed session (REQ-022).
-    const existingSessions = await this.loadSessions(userId);
+    const existingSessions = await this.loadSessions(familyId);
     const completedOrderNumbers = new Set(
       existingSessions
         .filter(s => s.status === 'completed')
@@ -183,7 +183,7 @@ export class AmazonReceiptService {
     );
     // If everything was deduped, return early with a clear message
     if (newOrders.length === 0 && newCharges.length === 0 && totalParsedCount > 0) {
-      await this.costTracker.recordUsage(userId, 'sonnet', totalInputTokens, totalOutputTokens);
+      await this.costTracker.recordUsage(familyId, 'sonnet', totalInputTokens, totalOutputTokens);
       throw new ValidationError(
         `All ${totalParsedCount} orders from this PDF were already categorized in a previous session. ` +
           'Upload a different PDF with new orders, or clear previous sessions to reprocess.',
@@ -202,7 +202,7 @@ export class AmazonReceiptService {
     // 7. Create session
     const session: AmazonReceiptSession = {
       id: randomUUID(),
-      userId,
+      userId: familyId,
       uploadedAt: new Date().toISOString(),
       pdfTypes: pdfTypes as ('orders' | 'transactions')[],
       parsedOrders: newOrders,
@@ -216,11 +216,11 @@ export class AmazonReceiptService {
     prunedSessions.push(session);
 
     // 9. Persist
-    await this.saveSessions(userId, prunedSessions);
+    await this.saveSessions(familyId, prunedSessions);
 
     // 10. Record cost
     const costResult = await this.costTracker.recordUsage(
-      userId,
+      familyId,
       'sonnet',
       totalInputTokens,
       totalOutputTokens,
@@ -481,14 +481,14 @@ export class AmazonReceiptService {
   // ===========================================================================
 
   async matchOrders(
-    userId: string,
+    familyId: string,
     sessionId: string,
   ): Promise<AmazonReceiptMatchResponse> {
-    const session = await this.loadOwnedSession(userId, sessionId);
+    const session = await this.loadOwnedSession(familyId, sessionId);
 
     // 1. Fetch all Amazon-merchant transactions (no date filter)
     const allTransactions = await this.chatbotDataService.queryTransactions(
-      userId, {},
+      familyId, {},
     );
     const amazonTransactions = allTransactions.filter(t =>
       this.isAmazonMerchant(t) && !t.isHidden,
@@ -507,7 +507,7 @@ export class AmazonReceiptService {
     //   - Successfully recategorized to a non-Amazon category → already handled
     // Transactions still in CUSTOM_AMAZON are always re-eligible even if they
     // appeared in a prior session that was abandoned or incomplete.
-    const allSessions = await this.loadSessions(userId);
+    const allSessions = await this.loadSessions(familyId);
     const skippedOrderNumbers = new Set<string>();
     const excludedTxIds = new Set<string>();
 
@@ -562,20 +562,20 @@ export class AmazonReceiptService {
     // 5. Update session
     session.matches = matches;
     session.status = 'matching';
-    const sessions = await this.loadSessions(userId);
+    const sessions = await this.loadSessions(familyId);
     const idx = sessions.findIndex(s => s.id === sessionId);
     if (idx >= 0) sessions[idx] = session;
-    await this.saveSessions(userId, sessions);
+    await this.saveSessions(familyId, sessions);
 
     return { matches, unmatched, ambiguous };
   }
 
   async resolveAmbiguous(
-    userId: string,
+    familyId: string,
     sessionId: string,
     resolutions: AmazonResolveAmbiguousRequest['resolutions'],
   ): Promise<void> {
-    const session = await this.loadOwnedSession(userId, sessionId);
+    const session = await this.loadOwnedSession(familyId, sessionId);
 
     for (const resolution of resolutions) {
       // Find the order in parsed data
@@ -614,10 +614,10 @@ export class AmazonReceiptService {
     }
 
     // Persist
-    const sessions = await this.loadSessions(userId);
+    const sessions = await this.loadSessions(familyId);
     const idx = sessions.findIndex(s => s.id === sessionId);
     if (idx >= 0) sessions[idx] = session;
-    await this.saveSessions(userId, sessions);
+    await this.saveSessions(familyId, sessions);
   }
 
   // ===========================================================================
@@ -762,7 +762,7 @@ export class AmazonReceiptService {
   // ===========================================================================
 
   async categorizeMatches(
-    userId: string,
+    familyId: string,
     sessionId: string,
     matchIds: string[],
   ): Promise<AmazonCategorizationResponse> {
@@ -773,7 +773,7 @@ export class AmazonReceiptService {
     }
 
     // 2. Load session and validate matchIds
-    const session = await this.loadOwnedSession(userId, sessionId);
+    const session = await this.loadOwnedSession(familyId, sessionId);
     const matchIdSet = new Set(matchIds);
     const matchesToCategorize = session.matches.filter(
       m => matchIdSet.has(m.id) && m.status === 'pending',
@@ -784,12 +784,12 @@ export class AmazonReceiptService {
     }
 
     // 3. Fetch category hierarchy and examples
-    const categories = await this.chatbotDataService.getCategories(userId);
+    const categories = await this.chatbotDataService.getCategories(familyId);
     const categoryContext = this.buildCategoryContext(categories);
-    const examples = await this.buildExamples(userId, categories);
+    const examples = await this.buildExamples(familyId, categories);
 
     // 4. Fetch transaction data for already-categorized flags
-    const allTransactions = await this.chatbotDataService.queryTransactions(userId, {});
+    const allTransactions = await this.chatbotDataService.queryTransactions(familyId, {});
     const txMap = new Map(allTransactions.map(t => [t.id, t]));
     const catMap = new Map(categories.map(c => [c.id, c]));
 
@@ -831,7 +831,7 @@ ${examples}`;
 
     // Record cost
     const costResult = await this.costTracker.recordUsage(
-      userId, 'sonnet', response.usage.input_tokens, response.usage.output_tokens,
+      familyId, 'sonnet', response.usage.input_tokens, response.usage.output_tokens,
     );
 
     // 7. Extract tool result
@@ -914,10 +914,10 @@ ${examples}`;
 
     // 10. Update session status
     session.status = 'reviewing';
-    const sessions = await this.loadSessions(userId);
+    const sessions = await this.loadSessions(familyId);
     const idx = sessions.findIndex(s => s.id === sessionId);
     if (idx >= 0) sessions[idx] = session;
-    await this.saveSessions(userId, sessions);
+    await this.saveSessions(familyId, sessions);
 
     return {
       recommendations: recommendations.sort((a, b) => b.confidence - a.confidence),
@@ -931,11 +931,11 @@ ${examples}`;
   // ===========================================================================
 
   async applyActions(
-    userId: string,
+    familyId: string,
     sessionId: string,
     actions: AmazonApplyAction[],
   ): Promise<AmazonApplyResponse> {
-    const session = await this.loadOwnedSession(userId, sessionId);
+    const session = await this.loadOwnedSession(familyId, sessionId);
 
     let applied = 0;
     let splits = 0;
@@ -944,7 +944,7 @@ ${examples}`;
     const categoriesUpdated = new Set<string>();
 
     // Fetch transactions for amount tracking
-    const allTransactions = await this.chatbotDataService.queryTransactions(userId, {});
+    const allTransactions = await this.chatbotDataService.queryTransactions(familyId, {});
     const txMap = new Map(allTransactions.map(t => [t.id, t]));
 
     for (const action of actions) {
@@ -955,7 +955,7 @@ ${examples}`;
 
       if (action.type === 'categorize' && action.categoryId) {
         const result = await this.transactionService.updateTransactionCategory(
-          userId, match.transactionId, action.categoryId,
+          familyId, match.transactionId, action.categoryId,
         );
         if (result.success) {
           match.status = 'categorized';
@@ -966,7 +966,7 @@ ${examples}`;
         }
       } else if (action.type === 'split' && action.splits) {
         const result = await this.transactionService.splitTransaction(
-          userId,
+          familyId,
           match.transactionId,
           action.splits.map(s => ({
             amount: s.amount,
@@ -989,10 +989,10 @@ ${examples}`;
 
     // Update session to completed
     session.status = 'completed';
-    const sessions = await this.loadSessions(userId);
+    const sessions = await this.loadSessions(familyId);
     const idx = sessions.findIndex(s => s.id === sessionId);
     if (idx >= 0) sessions[idx] = session;
-    await this.saveSessions(userId, sessions);
+    await this.saveSessions(familyId, sessions);
 
     return {
       applied,
@@ -1007,11 +1007,11 @@ ${examples}`;
   }
 
   async suggestRules(
-    userId: string,
+    familyId: string,
     sessionId: string,
   ): Promise<{ suggestions: RuleSuggestion[] }> {
-    const session = await this.loadOwnedSession(userId, sessionId);
-    const allSessions = await this.loadSessions(userId);
+    const session = await this.loadOwnedSession(familyId, sessionId);
+    const allSessions = await this.loadSessions(familyId);
 
     // Collect all categorized items across sessions
     const itemCategoryMap = new Map<string, { categoryId: string; count: number }>();
@@ -1043,13 +1043,13 @@ ${examples}`;
     }
 
     // Check existing rules to avoid duplicates
-    const existingRules = await this.autoCategorizeService.getRules(userId);
+    const existingRules = await this.autoCategorizeService.getRules(familyId);
     const existingPatterns = new Set(
       existingRules.flatMap(r => r.patterns.map((p: string) => p.toLowerCase())),
     );
 
     // Get categories for names
-    const categories = await this.chatbotDataService.getCategories(userId);
+    const categories = await this.chatbotDataService.getCategories(familyId);
     const catMap = new Map(categories.map(c => [c.id, c]));
 
     const suggestions: RuleSuggestion[] = [];
@@ -1111,8 +1111,8 @@ ${examples}`;
     return lines.join('\n');
   }
 
-  private async buildExamples(userId: string, categories: Category[]): Promise<string> {
-    const categorized = await this.chatbotDataService.queryTransactions(userId, { limit: 500 });
+  private async buildExamples(familyId: string, categories: Category[]): Promise<string> {
+    const categorized = await this.chatbotDataService.queryTransactions(familyId, { limit: 500 });
     const withCategory = categorized.filter(t => t.categoryId);
 
     const byCategory = new Map<string, Transaction[]>();
@@ -1138,21 +1138,21 @@ ${examples}`;
     return lines.join('\n');
   }
 
-  async getSessions(userId: string): Promise<AmazonReceiptSession[]> {
-    return this.loadSessions(userId);
+  async getSessions(familyId: string): Promise<AmazonReceiptSession[]> {
+    return this.loadSessions(familyId);
   }
 
-  async deleteSession(userId: string, sessionId: string): Promise<void> {
-    await this.loadOwnedSession(userId, sessionId);
-    const sessions = await this.loadSessions(userId);
+  async deleteSession(familyId: string, sessionId: string): Promise<void> {
+    await this.loadOwnedSession(familyId, sessionId);
+    const sessions = await this.loadSessions(familyId);
     const filtered = sessions.filter(s => s.id !== sessionId);
-    await this.saveSessions(userId, filtered);
+    await this.saveSessions(familyId, filtered);
   }
 
-  async deleteAllSessions(userId: string): Promise<{ deleted: number }> {
-    const sessions = await this.loadSessions(userId);
+  async deleteAllSessions(familyId: string): Promise<{ deleted: number }> {
+    const sessions = await this.loadSessions(familyId);
     const count = sessions.length;
-    await this.saveSessions(userId, []);
+    await this.saveSessions(familyId, []);
     return { deleted: count };
   }
 }

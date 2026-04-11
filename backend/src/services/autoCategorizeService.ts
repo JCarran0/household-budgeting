@@ -25,11 +25,11 @@ export class AutoCategorizeService {
   /**
    * Get all auto-categorization rules for a user
    */
-  async getRules(userId: string): Promise<StoredAutoCategorizeRule[]> {
+  async getRules(familyId: string): Promise<StoredAutoCategorizeRule[]> {
     const rules = await this.dataService.getData<StoredAutoCategorizeRule[]>(
-      `autocategorize_rules_${userId}`
+      `autocategorize_rules_${familyId}`
     ) || [];
-    
+
     // Migrate old single-pattern rules to patterns array
     const migratedRules = rules.map(rule => {
       if (!rule.patterns && rule.pattern) {
@@ -42,13 +42,13 @@ export class AutoCategorizeService {
       }
       return rule;
     });
-    
+
     // Save migrated rules if any migration occurred
     const needsSave = rules.some(rule => 'pattern' in rule);
     if (needsSave) {
-      await this.dataService.saveData(`autocategorize_rules_${userId}`, migratedRules);
+      await this.dataService.saveData(`autocategorize_rules_${familyId}`, migratedRules);
     }
-    
+
     // Sort by priority (lower number = higher priority)
     return migratedRules.sort((a, b) => a.priority - b.priority);
   }
@@ -57,7 +57,7 @@ export class AutoCategorizeService {
    * Create a new auto-categorization rule
    */
   async createRule(
-    userId: string,
+    familyId: string,
     data: {
       description: string;
       patterns: string[];
@@ -68,8 +68,8 @@ export class AutoCategorizeService {
     }
   ): Promise<{ success: boolean; rule?: StoredAutoCategorizeRule; error?: string }> {
     try {
-      const rules = await this.getRules(userId);
-      
+      const rules = await this.getRules(familyId);
+
       // Check for duplicate patterns
       const lowerPatterns = data.patterns.map(p => p.toLowerCase());
       for (const rule of rules) {
@@ -81,14 +81,14 @@ export class AutoCategorizeService {
       }
 
       // Assign next priority number (highest + 1)
-      const maxPriority = rules.length > 0 
+      const maxPriority = rules.length > 0
         ? Math.max(...rules.map(r => r.priority))
         : 0;
 
       const now = new Date().toISOString();
       const newRule: StoredAutoCategorizeRule = {
         id: uuidv4(),
-        userId,
+        userId: familyId,
         description: data.description,
         patterns: data.patterns,
         matchType: 'contains',
@@ -102,7 +102,7 @@ export class AutoCategorizeService {
       };
 
       rules.push(newRule);
-      await this.dataService.saveData(`autocategorize_rules_${userId}`, rules);
+      await this.dataService.saveData(`autocategorize_rules_${familyId}`, rules);
 
       return { success: true, rule: newRule };
     } catch (error) {
@@ -115,7 +115,7 @@ export class AutoCategorizeService {
    * Update an existing rule
    */
   async updateRule(
-    userId: string,
+    familyId: string,
     ruleId: string,
     updates: Partial<{
       description: string;
@@ -127,9 +127,9 @@ export class AutoCategorizeService {
     }>
   ): Promise<{ success: boolean; error?: string; code?: string }> {
     try {
-      const rules = await this.getRules(userId);
+      const rules = await this.getRules(familyId);
       const rule = rules.find(r => r.id === ruleId);
-      
+
       if (!rule) {
         return { success: false, error: 'Rule not found', code: 'NOT_FOUND' };
       }
@@ -148,7 +148,7 @@ export class AutoCategorizeService {
       }
 
       Object.assign(rule, updates, { updatedAt: new Date().toISOString() });
-      await this.dataService.saveData(`autocategorize_rules_${userId}`, rules);
+      await this.dataService.saveData(`autocategorize_rules_${familyId}`, rules);
 
       return { success: true };
     } catch (error) {
@@ -160,11 +160,11 @@ export class AutoCategorizeService {
   /**
    * Delete a rule
    */
-  async deleteRule(userId: string, ruleId: string): Promise<{ success: boolean; error?: string }> {
+  async deleteRule(familyId: string, ruleId: string): Promise<{ success: boolean; error?: string }> {
     try {
-      const rules = await this.getRules(userId);
+      const rules = await this.getRules(familyId);
       const filteredRules = rules.filter(r => r.id !== ruleId);
-      
+
       if (filteredRules.length === rules.length) {
         return { success: false, error: 'Rule not found' };
       }
@@ -174,7 +174,7 @@ export class AutoCategorizeService {
         rule.priority = index + 1;
       });
 
-      await this.dataService.saveData(`autocategorize_rules_${userId}`, filteredRules);
+      await this.dataService.saveData(`autocategorize_rules_${familyId}`, filteredRules);
       return { success: true };
     } catch (error) {
       console.error('Error deleting auto-categorize rule:', error);
@@ -186,12 +186,12 @@ export class AutoCategorizeService {
    * Reorder rules by updating priorities
    */
   async reorderRules(
-    userId: string,
+    familyId: string,
     ruleIds: string[]
   ): Promise<{ success: boolean; error?: string }> {
     try {
-      const rules = await this.getRules(userId);
-      
+      const rules = await this.getRules(familyId);
+
       // Validate all rule IDs exist
       const ruleMap = new Map(rules.map(r => [r.id, r]));
       for (const id of ruleIds) {
@@ -209,7 +209,7 @@ export class AutoCategorizeService {
         }
       });
 
-      await this.dataService.saveData(`autocategorize_rules_${userId}`, rules);
+      await this.dataService.saveData(`autocategorize_rules_${familyId}`, rules);
       return { success: true };
     } catch (error) {
       console.error('Error reordering auto-categorize rules:', error);
@@ -223,16 +223,16 @@ export class AutoCategorizeService {
    * @param forceRecategorize - If true, will recategorize even already categorized transactions
    */
   async applyRules(
-    userId: string,
+    familyId: string,
     transactions: StoredTransaction[],
     userCategories?: Category[],
     forceRecategorize: boolean = false
   ): Promise<{ categorized: number; recategorized: number; errors: string[] }> {
-    const rules = await this.getRules(userId);
+    const rules = await this.getRules(familyId);
     const activeRules = rules.filter(r => r.isActive);
-    
-    // Get user's categories if not provided
-    const categories = userCategories || await this.dataService.getCategories(userId);
+
+    // Get family's categories if not provided
+    const categories = userCategories || await this.dataService.getCategories(familyId);
     
     let categorized = 0;
     let recategorized = 0;
@@ -292,7 +292,7 @@ export class AutoCategorizeService {
   /**
    * Preview what would be categorized without actually applying changes
    */
-  async previewCategorization(userId: string, forceRecategorize: boolean = false): Promise<{
+  async previewCategorization(familyId: string, forceRecategorize: boolean = false): Promise<{
     success: boolean;
     wouldCategorize?: number;
     wouldRecategorize?: number;
@@ -311,14 +311,14 @@ export class AutoCategorizeService {
   }> {
     try {
       if (this.categoryService) {
-        await this.categoryService.initializeDefaultCategories(userId);
+        await this.categoryService.initializeDefaultCategories(familyId);
       }
 
       const transactions = await this.dataService.getData<StoredTransaction[]>(
-        `transactions_${userId}`
+        `transactions_${familyId}`
       ) || [];
 
-      const userCategories = await this.dataService.getCategories(userId);
+      const userCategories = await this.dataService.getCategories(familyId);
       const categoryMap = new Map(userCategories.map(c => [c.id, c.name]));
 
       // For preview, include all non-hidden, non-split-child transactions
@@ -340,7 +340,7 @@ export class AutoCategorizeService {
       // Make a deep copy to avoid modifying actual data
       const transactionsCopy = targetTransactions.map(t => ({ ...t }));
 
-      const result = await this.applyRules(userId, transactionsCopy, userCategories, forceRecategorize);
+      const result = await this.applyRules(familyId, transactionsCopy, userCategories, forceRecategorize);
 
       // Build detailed change records by comparing before/after
       const changes = transactionsCopy
@@ -375,7 +375,7 @@ export class AutoCategorizeService {
   /**
    * Apply rules to all transactions (with option to force recategorization)
    */
-  async applyRulesToAllTransactions(userId: string, forceRecategorize: boolean = false, transactionIds?: string[]): Promise<{
+  async applyRulesToAllTransactions(familyId: string, forceRecategorize: boolean = false, transactionIds?: string[]): Promise<{
     success: boolean;
     categorized?: number;
     recategorized?: number;
@@ -383,17 +383,17 @@ export class AutoCategorizeService {
     error?: string;
   }> {
     try {
-      // Ensure user has default categories initialized
+      // Ensure family has default categories initialized
       if (this.categoryService) {
-        await this.categoryService.initializeDefaultCategories(userId);
+        await this.categoryService.initializeDefaultCategories(familyId);
       }
 
       const transactions = await this.dataService.getData<StoredTransaction[]>(
-        `transactions_${userId}`
+        `transactions_${familyId}`
       ) || [];
 
-      // Get user's categories for matching
-      const userCategories = await this.dataService.getCategories(userId);
+      // Get family's categories for matching
+      const userCategories = await this.dataService.getCategories(familyId);
 
       // Include all non-hidden, non-split-child transactions if force recategorizing
       let targetTransactions = forceRecategorize
@@ -412,10 +412,10 @@ export class AutoCategorizeService {
         targetTransactions = targetTransactions.filter(t => idSet.has(t.id));
       }
 
-      const result = await this.applyRules(userId, targetTransactions, userCategories, forceRecategorize);
-      
+      const result = await this.applyRules(familyId, targetTransactions, userCategories, forceRecategorize);
+
       // Save updated transactions
-      await this.dataService.saveData(`transactions_${userId}`, transactions);
+      await this.dataService.saveData(`transactions_${familyId}`, transactions);
 
       return {
         success: true,
@@ -432,15 +432,15 @@ export class AutoCategorizeService {
   /**
    * Move a rule up in priority (lower number = higher priority)
    */
-  async moveRuleUp(userId: string, ruleId: string): Promise<{ success: boolean; error?: string }> {
+  async moveRuleUp(familyId: string, ruleId: string): Promise<{ success: boolean; error?: string }> {
     try {
-      const rules = await this.getRules(userId);
+      const rules = await this.getRules(familyId);
       const ruleIndex = rules.findIndex(r => r.id === ruleId);
-      
+
       if (ruleIndex === -1) {
         return { success: false, error: 'Rule not found' };
       }
-      
+
       if (ruleIndex === 0) {
         return { success: false, error: 'Cannot move rule up - already at highest priority' };
       }
@@ -448,15 +448,15 @@ export class AutoCategorizeService {
       // Swap priorities with previous rule
       const currentRule = rules[ruleIndex];
       const previousRule = rules[ruleIndex - 1];
-      
+
       const tempPriority = currentRule.priority;
       currentRule.priority = previousRule.priority;
       previousRule.priority = tempPriority;
-      
+
       currentRule.updatedAt = new Date().toISOString();
       previousRule.updatedAt = new Date().toISOString();
 
-      await this.dataService.saveData(`autocategorize_rules_${userId}`, rules);
+      await this.dataService.saveData(`autocategorize_rules_${familyId}`, rules);
       return { success: true };
     } catch (error) {
       console.error('Error moving rule up:', error);
@@ -467,15 +467,15 @@ export class AutoCategorizeService {
   /**
    * Move a rule down in priority (higher number = lower priority)
    */
-  async moveRuleDown(userId: string, ruleId: string): Promise<{ success: boolean; error?: string }> {
+  async moveRuleDown(familyId: string, ruleId: string): Promise<{ success: boolean; error?: string }> {
     try {
-      const rules = await this.getRules(userId);
+      const rules = await this.getRules(familyId);
       const ruleIndex = rules.findIndex(r => r.id === ruleId);
-      
+
       if (ruleIndex === -1) {
         return { success: false, error: 'Rule not found' };
       }
-      
+
       if (ruleIndex === rules.length - 1) {
         return { success: false, error: 'Cannot move rule down - already at lowest priority' };
       }
@@ -483,15 +483,15 @@ export class AutoCategorizeService {
       // Swap priorities with next rule
       const currentRule = rules[ruleIndex];
       const nextRule = rules[ruleIndex + 1];
-      
+
       const tempPriority = currentRule.priority;
       currentRule.priority = nextRule.priority;
       nextRule.priority = tempPriority;
-      
+
       currentRule.updatedAt = new Date().toISOString();
       nextRule.updatedAt = new Date().toISOString();
 
-      await this.dataService.saveData(`autocategorize_rules_${userId}`, rules);
+      await this.dataService.saveData(`autocategorize_rules_${familyId}`, rules);
       return { success: true };
     } catch (error) {
       console.error('Error moving rule down:', error);
@@ -502,8 +502,8 @@ export class AutoCategorizeService {
   /**
    * Check if any auto-categorization rules reference a category
    */
-  async hasRulesForCategory(categoryId: string, userId: string): Promise<boolean> {
-    const rules = await this.getRules(userId);
+  async hasRulesForCategory(categoryId: string, familyId: string): Promise<boolean> {
+    const rules = await this.getRules(familyId);
     return rules.some(r => r.categoryId === categoryId);
   }
 
@@ -512,8 +512,8 @@ export class AutoCategorizeService {
    * Used during category deletion workflow
    * @returns Count of rules deleted
    */
-  async deleteRulesForCategory(categoryId: string, userId: string): Promise<number> {
-    const rules = await this.getRules(userId);
+  async deleteRulesForCategory(categoryId: string, familyId: string): Promise<number> {
+    const rules = await this.getRules(familyId);
     const rulesToDelete = rules.filter(r => r.categoryId === categoryId);
     const deleteCount = rulesToDelete.length;
 
@@ -526,7 +526,7 @@ export class AutoCategorizeService {
         priority: index + 1
       }));
 
-      await this.dataService.saveData(`autocategorize_rules_${userId}`, reprioritizedRules);
+      await this.dataService.saveData(`autocategorize_rules_${familyId}`, reprioritizedRules);
     }
 
     return deleteCount;

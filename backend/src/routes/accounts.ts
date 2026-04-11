@@ -47,7 +47,7 @@ router.post('/connect', authMiddleware, async (req: AuthRequest, res: Response, 
     const { publicToken, institutionId, institutionName } = validation.data;
 
     const result = await accountService.connectAccount(
-      req.user.userId,
+      req.user.familyId,
       publicToken,
       institutionId,
       institutionName
@@ -79,7 +79,7 @@ router.get('/', authMiddleware, async (req: AuthRequest, res: Response, next: Ne
   try {
     if (!req.user) throw new AuthorizationError();
 
-    const result = await accountService.getUserAccounts(req.user.userId);
+    const result = await accountService.getUserAccounts(req.user.familyId);
 
     if (!result.success) {
       res.status(500).json({ success: false, error: result.error });
@@ -109,7 +109,7 @@ router.post('/sync', authMiddleware, async (req: AuthRequest, res: Response, nex
   try {
     if (!req.user) throw new AuthorizationError();
 
-    const result = await accountService.syncAccountBalances(req.user.userId);
+    const result = await accountService.syncAccountBalances(req.user.familyId);
 
     if (!result.success) {
       res.status(500).json({ success: false, error: result.error });
@@ -147,7 +147,7 @@ router.post('/:accountId/sync-transactions', authMiddleware, async (req: AuthReq
     const { startDate = '2025-01-01' } = validation.data;
 
     // Get the account
-    const account = await accountService.getAccount(req.user.userId, accountId);
+    const account = await accountService.getAccount(req.user.familyId, accountId);
     if (!account) {
       res.status(404).json({ success: false, error: 'Account not found' });
       return;
@@ -155,7 +155,7 @@ router.post('/:accountId/sync-transactions', authMiddleware, async (req: AuthReq
 
     // Sync transactions
     const result = await transactionService.syncTransactions(
-      req.user.userId,
+      req.user.familyId,
       [account],
       startDate
     );
@@ -185,7 +185,7 @@ router.post('/:accountId/link-token', authMiddleware, async (req: AuthRequest, r
     if (!req.user) throw new AuthorizationError();
 
     const { accountId } = req.params;
-    const result = await accountService.createUpdateLinkToken(req.user.userId, accountId);
+    const result = await accountService.createUpdateLinkToken(req.user.familyId, accountId);
 
     if (!result.success) {
       res.status(result.error === 'Account not found' ? 404 : 500).json({
@@ -214,7 +214,7 @@ router.post('/:accountId/reauth-complete', authMiddleware, async (req: AuthReque
     if (!req.user) throw new AuthorizationError();
 
     const { accountId } = req.params;
-    const result = await accountService.markAccountActive(req.user.userId, accountId);
+    const result = await accountService.markAccountActive(req.user.familyId, accountId);
 
     if (!result.success) {
       res.status(result.error === 'Account not found' ? 404 : 500).json({
@@ -258,7 +258,7 @@ router.put('/:accountId', authMiddleware, async (req: AuthRequest, res: Response
     const { nickname } = validation.data;
     
     if (nickname !== undefined) {
-      const result = await accountService.updateAccountNickname(req.user.userId, accountId, nickname);
+      const result = await accountService.updateAccountNickname(req.user.familyId, accountId, nickname);
       
       if (!result.success) {
         res.status(result.error === 'Account not found' ? 404 : 400).json({ 
@@ -285,7 +285,7 @@ router.delete('/:accountId', authMiddleware, async (req: AuthRequest, res: Respo
 
     const { accountId } = req.params;
 
-    const result = await accountService.disconnectAccount(req.user.userId, accountId);
+    const result = await accountService.disconnectAccount(req.user.familyId, accountId);
 
     if (!result.success) {
       res.status(404).json({ success: false, error: result.error });

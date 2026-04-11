@@ -46,10 +46,10 @@ export class ActualsOverrideService {
   /**
    * Get all actuals overrides for a user
    */
-  async getOverrides(userId: string): Promise<ActualsOverrideListResult> {
+  async getOverrides(familyId: string): Promise<ActualsOverrideListResult> {
     try {
       const overrides = await this.dataService.getData<StoredActualsOverride[]>(
-        `actuals_overrides_${userId}`
+        `actuals_overrides_${familyId}`
       ) || [];
 
       // Sort by month descending (most recent first)
@@ -65,10 +65,10 @@ export class ActualsOverrideService {
   /**
    * Get specific month override for a user
    */
-  async getOverride(userId: string, month: string): Promise<ActualsOverrideResult> {
+  async getOverride(familyId: string, month: string): Promise<ActualsOverrideResult> {
     try {
       const overrides = await this.dataService.getData<StoredActualsOverride[]>(
-        `actuals_overrides_${userId}`
+        `actuals_overrides_${familyId}`
       ) || [];
 
       const override = overrides.find(o => o.month === month);
@@ -88,7 +88,7 @@ export class ActualsOverrideService {
    * Create or update an actuals override
    */
   async createOrUpdateOverride(
-    userId: string,
+    familyId: string,
     data: CreateActualsOverrideDto
   ): Promise<ActualsOverrideResult> {
     try {
@@ -103,7 +103,7 @@ export class ActualsOverrideService {
       }
 
       const overrides = await this.dataService.getData<StoredActualsOverride[]>(
-        `actuals_overrides_${userId}`
+        `actuals_overrides_${familyId}`
       ) || [];
 
       const existingIndex = overrides.findIndex(o => o.month === data.month);
@@ -121,14 +121,14 @@ export class ActualsOverrideService {
         };
 
         overrides[existingIndex] = updated;
-        await this.dataService.saveData(`actuals_overrides_${userId}`, overrides);
+        await this.dataService.saveData(`actuals_overrides_${familyId}`, overrides);
 
         return { success: true, override: updated };
       } else {
         // Create new override
         const newOverride: StoredActualsOverride = {
           id: this.generateId(),
-          userId,
+          userId: familyId,
           month: data.month,
           totalIncome: data.totalIncome,
           totalExpenses: data.totalExpenses,
@@ -138,7 +138,7 @@ export class ActualsOverrideService {
         };
 
         overrides.push(newOverride);
-        await this.dataService.saveData(`actuals_overrides_${userId}`, overrides);
+        await this.dataService.saveData(`actuals_overrides_${familyId}`, overrides);
 
         return { success: true, override: newOverride };
       }
@@ -151,10 +151,10 @@ export class ActualsOverrideService {
   /**
    * Delete an actuals override
    */
-  async deleteOverride(userId: string, overrideId: string): Promise<{ success: boolean; error?: string }> {
+  async deleteOverride(familyId: string, overrideId: string): Promise<{ success: boolean; error?: string }> {
     try {
       const overrides = await this.dataService.getData<StoredActualsOverride[]>(
-        `actuals_overrides_${userId}`
+        `actuals_overrides_${familyId}`
       ) || [];
 
       const index = overrides.findIndex(o => o.id === overrideId);
@@ -164,7 +164,7 @@ export class ActualsOverrideService {
       }
 
       overrides.splice(index, 1);
-      await this.dataService.saveData(`actuals_overrides_${userId}`, overrides);
+      await this.dataService.saveData(`actuals_overrides_${familyId}`, overrides);
 
       return { success: true };
     } catch (error) {
@@ -177,13 +177,13 @@ export class ActualsOverrideService {
    * Get overrides for a specific date range
    */
   async getOverridesForRange(
-    userId: string,
+    familyId: string,
     startMonth: string,
     endMonth: string
   ): Promise<ActualsOverrideListResult> {
     try {
       const overrides = await this.dataService.getData<StoredActualsOverride[]>(
-        `actuals_overrides_${userId}`
+        `actuals_overrides_${familyId}`
       ) || [];
 
       const filteredOverrides = overrides.filter(o =>
@@ -203,9 +203,9 @@ export class ActualsOverrideService {
   /**
    * Check if a specific month has an override
    */
-  async hasOverride(userId: string, month: string): Promise<boolean> {
+  async hasOverride(familyId: string, month: string): Promise<boolean> {
     try {
-      const result = await this.getOverride(userId, month);
+      const result = await this.getOverride(familyId, month);
       return result.success && !!result.override;
     } catch (error) {
       return false;
@@ -217,10 +217,10 @@ export class ActualsOverrideService {
    * This is a helper method that reporting services can use
    */
   async getMonthlyActuals(
-    userId: string,
+    familyId: string,
     month: string
   ): Promise<{ hasOverride: boolean; totalIncome: number; totalExpenses: number; notes?: string }> {
-    const overrideResult = await this.getOverride(userId, month);
+    const overrideResult = await this.getOverride(familyId, month);
 
     if (overrideResult.success && overrideResult.override) {
       return {

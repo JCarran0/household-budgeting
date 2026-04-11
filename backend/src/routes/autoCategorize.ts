@@ -48,7 +48,7 @@ router.get('/rules', authMiddleware, async (req: AuthRequest, res: Response, nex
   try {
     if (!req.user) throw new AuthorizationError();
 
-    const rules = await autoCategorizeService.getRules(req.user.userId);
+    const rules = await autoCategorizeService.getRules(req.user.familyId);
     res.json({ success: true, rules });
   } catch (error) {
     next(error);
@@ -74,7 +74,7 @@ router.post('/rules', authMiddleware, async (req: AuthRequest, res: Response, ne
     }
 
     const result = await autoCategorizeService.createRule(
-      req.user.userId,
+      req.user.familyId,
       validation.data
     );
 
@@ -109,7 +109,7 @@ router.put('/rules/reorder', authMiddleware, async (req: AuthRequest, res: Respo
     }
 
     const result = await autoCategorizeService.reorderRules(
-      req.user.userId,
+      req.user.familyId,
       validation.data.ruleIds
     );
 
@@ -134,7 +134,7 @@ router.put('/rules/:ruleId/move-up', authMiddleware, async (req: AuthRequest, re
 
     const { ruleId } = req.params;
     const result = await autoCategorizeService.moveRuleUp(
-      req.user.userId,
+      req.user.familyId,
       ruleId
     );
 
@@ -159,7 +159,7 @@ router.put('/rules/:ruleId/move-down', authMiddleware, async (req: AuthRequest, 
 
     const { ruleId } = req.params;
     const result = await autoCategorizeService.moveRuleDown(
-      req.user.userId,
+      req.user.familyId,
       ruleId
     );
 
@@ -195,7 +195,7 @@ router.put('/rules/:ruleId', authMiddleware, async (req: AuthRequest, res: Respo
 
     const { ruleId } = req.params;
     const result = await autoCategorizeService.updateRule(
-      req.user.userId,
+      req.user.familyId,
       ruleId,
       validation.data
     );
@@ -222,7 +222,7 @@ router.delete('/rules/:ruleId', authMiddleware, async (req: AuthRequest, res: Re
 
     const { ruleId } = req.params;
     const result = await autoCategorizeService.deleteRule(
-      req.user.userId,
+      req.user.familyId,
       ruleId
     );
 
@@ -246,7 +246,7 @@ router.post('/preview', authMiddleware, async (req: AuthRequest, res: Response, 
     if (!req.user) throw new AuthorizationError();
 
     const { forceRecategorize = false } = req.body;
-    const result = await autoCategorizeService.previewCategorization(req.user.userId, forceRecategorize);
+    const result = await autoCategorizeService.previewCategorization(req.user.familyId, forceRecategorize);
 
     if (!result.success) {
       res.status(500).json({ success: false, error: result.error });
@@ -277,7 +277,7 @@ router.post('/apply', authMiddleware, async (req: AuthRequest, res: Response, ne
     if (!req.user) throw new AuthorizationError();
 
     const { forceRecategorize = false, transactionIds } = req.body;
-    const result = await autoCategorizeService.applyRulesToAllTransactions(req.user.userId, forceRecategorize, transactionIds);
+    const result = await autoCategorizeService.applyRulesToAllTransactions(req.user.familyId, forceRecategorize, transactionIds);
 
     if (!result.success) {
       res.status(500).json({ success: false, error: result.error });

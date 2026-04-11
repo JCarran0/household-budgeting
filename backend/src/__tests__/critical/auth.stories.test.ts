@@ -29,14 +29,16 @@ describe('User Story: Authentication and Security', () => {
         .send({
           username,
           password: 'this is my secure passphrase for banking',
+          displayName: username,
         });
-      
+
       expect(response.status).toBe(201);
       expect(response.body.success).toBe(true);
       expect(response.body.token).toBeDefined();
       expect(response.body.user).toMatchObject({
         username,
         id: expect.any(String),
+        familyId: expect.any(String),
       });
       
       // Verify password is not returned
@@ -51,6 +53,7 @@ describe('User Story: Authentication and Security', () => {
         .send({
           username,
           password: 'short', // Too short
+          displayName: username,
         });
       
       expect(response.status).toBe(400);
@@ -194,8 +197,9 @@ describe('User Story: Authentication and Security', () => {
         .send({
           username,
           password: 'second user passphrase here',
+          displayName: username,
         });
-      
+
       expect(response.status).toBe(400);
       expect(response.body.error).toContain('already exists');
     });

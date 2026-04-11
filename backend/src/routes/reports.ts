@@ -67,7 +67,7 @@ router.get('/spending-trends', authMiddleware, async (req: AuthRequest, res: Res
     const { startMonth, endMonth, categoryIds } = validation.data;
 
     const result = await reportService.getSpendingTrends(
-      req.user.userId,
+      req.user.familyId,
       startMonth,
       endMonth,
       categoryIds
@@ -108,7 +108,7 @@ router.get('/category-breakdown', authMiddleware, async (req: AuthRequest, res: 
     const { startDate, endDate, includeSubcategories = true } = validation.data;
 
     const result = await reportService.getCategoryBreakdown(
-      req.user.userId,
+      req.user.familyId,
       startDate,
       endDate,
       includeSubcategories
@@ -150,7 +150,7 @@ router.get('/cash-flow', authMiddleware, async (req: AuthRequest, res: Response,
     const { startMonth, endMonth } = validation.data;
 
     const result = await reportService.getCashFlowSummary(
-      req.user.userId,
+      req.user.familyId,
       startMonth,
       endMonth
     );
@@ -190,7 +190,7 @@ router.get('/projections', authMiddleware, async (req: AuthRequest, res: Respons
     const { monthsToProject = 6 } = validation.data;
 
     const result = await reportService.generateCashFlowProjections(
-      req.user.userId,
+      req.user.familyId,
       monthsToProject
     );
 
@@ -230,7 +230,7 @@ router.get('/income-breakdown', authMiddleware, async (req: AuthRequest, res: Re
     const { startDate, endDate, includeSubcategories = true } = validation.data;
 
     const result = await reportService.getIncomeCategoryBreakdown(
-      req.user.userId,
+      req.user.familyId,
       startDate,
       endDate,
       includeSubcategories
@@ -272,7 +272,7 @@ router.get('/savings-breakdown', authMiddleware, async (req: AuthRequest, res: R
     const { startDate, endDate } = validation.data;
 
     const result = await reportService.getSavingsCategoryBreakdown(
-      req.user.userId,
+      req.user.familyId,
       startDate,
       endDate
     );
@@ -300,7 +300,7 @@ router.get('/year-to-date', authMiddleware, async (req: AuthRequest, res: Respon
   try {
     if (!req.user) throw new AuthorizationError();
 
-    const result = await reportService.getYearToDateSummary(req.user.userId);
+    const result = await reportService.getYearToDateSummary(req.user.familyId);
 
     if (!result.success) {
       res.status(500).json({ success: false, error: result.error });

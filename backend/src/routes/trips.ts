@@ -86,10 +86,10 @@ router.use(authMiddleware);
 // POST /api/v1/trips - Create trip
 router.post('/', async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const userId = req.user?.userId;
-    if (!userId) throw new AuthorizationError();
+    const familyId = req.user?.familyId;
+    if (!familyId) throw new AuthorizationError();
     const validatedData = createTripSchema.parse(req.body);
-    const trip = await tripService.createTrip(validatedData, userId);
+    const trip = await tripService.createTrip(validatedData, familyId);
     res.status(201).json(trip);
   } catch (error) {
     if (error instanceof z.ZodError) {
@@ -107,10 +107,10 @@ router.post('/', async (req: Request, res: Response, next: NextFunction): Promis
 // GET /api/v1/trips - List all trips
 router.get('/', async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const userId = req.user?.userId;
-    if (!userId) throw new AuthorizationError();
+    const familyId = req.user?.familyId;
+    if (!familyId) throw new AuthorizationError();
     const year = req.query.year ? parseInt(req.query.year as string, 10) : undefined;
-    const trips = await tripService.getAllTrips(userId, year);
+    const trips = await tripService.getAllTrips(familyId, year);
     res.json(trips);
   } catch (error) {
     next(error);
@@ -120,12 +120,12 @@ router.get('/', async (req: Request, res: Response, next: NextFunction): Promise
 // GET /api/v1/trips/summaries - Get all trip summaries (for card grid)
 router.get('/summaries', async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const userId = req.user?.userId;
-    if (!userId) throw new AuthorizationError();
+    const familyId = req.user?.familyId;
+    if (!familyId) throw new AuthorizationError();
     const year = req.query.year ? parseInt(req.query.year as string, 10) : undefined;
-    const categories = await categoryService.getAllCategories(userId);
+    const categories = await categoryService.getAllCategories(familyId);
     const categoryInfo = categories.map((c) => ({ id: c.id, name: c.name }));
-    const summaries = await tripService.getTripsSummaries(userId, year, categoryInfo);
+    const summaries = await tripService.getTripsSummaries(familyId, year, categoryInfo);
     res.json(summaries);
   } catch (error) {
     next(error);
@@ -135,9 +135,9 @@ router.get('/summaries', async (req: Request, res: Response, next: NextFunction)
 // GET /api/v1/trips/:id - Get single trip
 router.get('/:id', async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const userId = req.user?.userId;
-    if (!userId) throw new AuthorizationError();
-    const trip = await tripService.getTrip(req.params.id, userId);
+    const familyId = req.user?.familyId;
+    if (!familyId) throw new AuthorizationError();
+    const trip = await tripService.getTrip(req.params.id, familyId);
     if (!trip) {
       next(new NotFoundError('Trip not found'));
       return;
@@ -151,11 +151,11 @@ router.get('/:id', async (req: Request, res: Response, next: NextFunction): Prom
 // GET /api/v1/trips/:id/summary - Get trip with spending breakdown
 router.get('/:id/summary', async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const userId = req.user?.userId;
-    if (!userId) throw new AuthorizationError();
-    const categories = await categoryService.getAllCategories(userId);
+    const familyId = req.user?.familyId;
+    if (!familyId) throw new AuthorizationError();
+    const categories = await categoryService.getAllCategories(familyId);
     const categoryInfo = categories.map((c) => ({ id: c.id, name: c.name }));
-    const summary = await tripService.getTripSummary(req.params.id, userId, categoryInfo);
+    const summary = await tripService.getTripSummary(req.params.id, familyId, categoryInfo);
     if (!summary) {
       next(new NotFoundError('Trip not found'));
       return;
@@ -173,10 +173,10 @@ router.get('/:id/summary', async (req: Request, res: Response, next: NextFunctio
 // PUT /api/v1/trips/:id - Update trip
 router.put('/:id', async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const userId = req.user?.userId;
-    if (!userId) throw new AuthorizationError();
+    const familyId = req.user?.familyId;
+    if (!familyId) throw new AuthorizationError();
     const validatedData = updateTripSchema.parse(req.body);
-    const trip = await tripService.updateTrip(req.params.id, validatedData, userId);
+    const trip = await tripService.updateTrip(req.params.id, validatedData, familyId);
     res.json(trip);
   } catch (error) {
     if (error instanceof z.ZodError) {
@@ -198,9 +198,9 @@ router.put('/:id', async (req: Request, res: Response, next: NextFunction): Prom
 // DELETE /api/v1/trips/:id - Delete trip
 router.delete('/:id', async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const userId = req.user?.userId;
-    if (!userId) throw new AuthorizationError();
-    await tripService.deleteTrip(req.params.id, userId);
+    const familyId = req.user?.familyId;
+    if (!familyId) throw new AuthorizationError();
+    await tripService.deleteTrip(req.params.id, familyId);
     res.status(204).send();
   } catch (error) {
     if (error instanceof Error && error.message === 'Trip not found') {

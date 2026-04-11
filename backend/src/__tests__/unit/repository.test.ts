@@ -27,36 +27,36 @@ describe('Repository', () => {
   // -------------------------------------------------------------------------
 
   describe('key()', () => {
-    it('produces {entityName}_{userId}', () => {
+    it('produces {entityName}_{familyId}', () => {
       // Access protected method via subclass for white-box testing
       class ExposedRepo extends Repository<TestEntity> {
-        public expose(userId: string): string {
-          return this.key(userId);
+        public expose(familyId: string): string {
+          return this.key(familyId);
         }
       }
       const exposed = new ExposedRepo(dataService, 'things');
-      expect(exposed.expose('user-1')).toBe('things_user-1');
+      expect(exposed.expose('family-1')).toBe('things_family-1');
     });
 
     it('different entity names produce different keys', () => {
       class ExposedRepo extends Repository<TestEntity> {
-        public expose(userId: string): string {
-          return this.key(userId);
+        public expose(familyId: string): string {
+          return this.key(familyId);
         }
       }
       const repoA = new ExposedRepo(dataService, 'alpha');
       const repoB = new ExposedRepo(dataService, 'beta');
-      expect(repoA.expose('user-1')).not.toBe(repoB.expose('user-1'));
+      expect(repoA.expose('family-1')).not.toBe(repoB.expose('family-1'));
     });
 
-    it('different user IDs produce different keys', () => {
+    it('different family IDs produce different keys', () => {
       class ExposedRepo extends Repository<TestEntity> {
-        public expose(userId: string): string {
-          return this.key(userId);
+        public expose(familyId: string): string {
+          return this.key(familyId);
         }
       }
       const exposed = new ExposedRepo(dataService, 'items');
-      expect(exposed.expose('user-1')).not.toBe(exposed.expose('user-2'));
+      expect(exposed.expose('family-1')).not.toBe(exposed.expose('family-2'));
     });
   });
 
@@ -66,7 +66,7 @@ describe('Repository', () => {
 
   describe('getAll()', () => {
     it('returns empty array when no data is stored', async () => {
-      const result = await repo.getAll('user-1');
+      const result = await repo.getAll('family-1');
       expect(result).toEqual([]);
     });
 
@@ -75,21 +75,21 @@ describe('Repository', () => {
         { id: 'a', name: 'Alice', value: 1 },
         { id: 'b', name: 'Bob', value: 2 },
       ];
-      await repo.saveAll('user-1', items);
+      await repo.saveAll('family-1', items);
 
-      const result = await repo.getAll('user-1');
+      const result = await repo.getAll('family-1');
       expect(result).toEqual(items);
     });
 
-    it('returns data for the correct user (user isolation)', async () => {
-      const user1Items: TestEntity[] = [{ id: 'a', name: 'Alice', value: 1 }];
-      const user2Items: TestEntity[] = [{ id: 'b', name: 'Bob', value: 2 }];
+    it('returns data for the correct family (family isolation)', async () => {
+      const family1Items: TestEntity[] = [{ id: 'a', name: 'Alice', value: 1 }];
+      const family2Items: TestEntity[] = [{ id: 'b', name: 'Bob', value: 2 }];
 
-      await repo.saveAll('user-1', user1Items);
-      await repo.saveAll('user-2', user2Items);
+      await repo.saveAll('family-1', family1Items);
+      await repo.saveAll('family-2', family2Items);
 
-      expect(await repo.getAll('user-1')).toEqual(user1Items);
-      expect(await repo.getAll('user-2')).toEqual(user2Items);
+      expect(await repo.getAll('family-1')).toEqual(family1Items);
+      expect(await repo.getAll('family-2')).toEqual(family2Items);
     });
   });
 
@@ -100,24 +100,24 @@ describe('Repository', () => {
   describe('saveAll()', () => {
     it('saves data that can be retrieved with getAll', async () => {
       const items: TestEntity[] = [{ id: 'a', name: 'Alice', value: 1 }];
-      await repo.saveAll('user-1', items);
-      expect(await repo.getAll('user-1')).toEqual(items);
+      await repo.saveAll('family-1', items);
+      expect(await repo.getAll('family-1')).toEqual(items);
     });
 
     it('overwrites previous data completely', async () => {
-      await repo.saveAll('user-1', [{ id: 'a', name: 'Alice', value: 1 }]);
+      await repo.saveAll('family-1', [{ id: 'a', name: 'Alice', value: 1 }]);
       const updated: TestEntity[] = [{ id: 'b', name: 'Bob', value: 99 }];
-      await repo.saveAll('user-1', updated);
+      await repo.saveAll('family-1', updated);
 
-      const result = await repo.getAll('user-1');
+      const result = await repo.getAll('family-1');
       expect(result).toEqual(updated);
       expect(result).toHaveLength(1);
     });
 
     it('saving an empty array results in getAll returning []', async () => {
-      await repo.saveAll('user-1', [{ id: 'a', name: 'Alice', value: 1 }]);
-      await repo.saveAll('user-1', []);
-      expect(await repo.getAll('user-1')).toEqual([]);
+      await repo.saveAll('family-1', [{ id: 'a', name: 'Alice', value: 1 }]);
+      await repo.saveAll('family-1', []);
+      expect(await repo.getAll('family-1')).toEqual([]);
     });
   });
 
@@ -133,26 +133,26 @@ describe('Repository', () => {
     ];
 
     beforeEach(async () => {
-      await repo.saveAll('user-1', items);
+      await repo.saveAll('family-1', items);
     });
 
     it('finds an entity by a string field value', async () => {
-      const result = await repo.findBy('user-1', 'name', 'Bob');
+      const result = await repo.findBy('family-1', 'name', 'Bob');
       expect(result).toEqual({ id: 'b', name: 'Bob', value: 20 });
     });
 
     it('finds an entity by a numeric field value', async () => {
-      const result = await repo.findBy('user-1', 'value', 30);
+      const result = await repo.findBy('family-1', 'value', 30);
       expect(result).toEqual({ id: 'c', name: 'Carol', value: 30 });
     });
 
     it('returns undefined when no entity matches', async () => {
-      const result = await repo.findBy('user-1', 'name', 'Zara');
+      const result = await repo.findBy('family-1', 'name', 'Zara');
       expect(result).toBeUndefined();
     });
 
     it('returns undefined when collection is empty', async () => {
-      const result = await repo.findBy('user-2', 'name', 'Alice');
+      const result = await repo.findBy('family-2', 'name', 'Alice');
       expect(result).toBeUndefined();
     });
   });
@@ -168,21 +168,21 @@ describe('Repository', () => {
     ];
 
     beforeEach(async () => {
-      await repo.saveAll('user-1', items);
+      await repo.saveAll('family-1', items);
     });
 
     it('finds an entity by id field', async () => {
-      const result = await repo.findById('user-1', 'x2');
+      const result = await repo.findById('family-1', 'x2');
       expect(result).toEqual({ id: 'x2', name: 'Xena', value: 15 });
     });
 
     it('returns undefined when the id does not exist', async () => {
-      const result = await repo.findById('user-1', 'missing-id');
+      const result = await repo.findById('family-1', 'missing-id');
       expect(result).toBeUndefined();
     });
 
     it('returns undefined when the collection is empty', async () => {
-      const result = await repo.findById('user-2', 'x1');
+      const result = await repo.findById('family-2', 'x1');
       expect(result).toBeUndefined();
     });
   });
@@ -192,71 +192,71 @@ describe('Repository', () => {
   // -------------------------------------------------------------------------
 
   describe('deleteAll()', () => {
-    it('removes all data for a user', async () => {
-      await repo.saveAll('user-1', [{ id: 'a', name: 'Alice', value: 1 }]);
-      await repo.deleteAll('user-1');
-      expect(await repo.getAll('user-1')).toEqual([]);
+    it('removes all data for a family', async () => {
+      await repo.saveAll('family-1', [{ id: 'a', name: 'Alice', value: 1 }]);
+      await repo.deleteAll('family-1');
+      expect(await repo.getAll('family-1')).toEqual([]);
     });
 
     it('getAll returns empty array after deleteAll', async () => {
-      await repo.saveAll('user-1', [
+      await repo.saveAll('family-1', [
         { id: 'a', name: 'Alice', value: 1 },
         { id: 'b', name: 'Bob', value: 2 },
       ]);
-      await repo.deleteAll('user-1');
-      const result = await repo.getAll('user-1');
+      await repo.deleteAll('family-1');
+      const result = await repo.getAll('family-1');
       expect(result).toEqual([]);
     });
 
-    it('does not affect other users data', async () => {
-      const user2Items: TestEntity[] = [{ id: 'b', name: 'Bob', value: 2 }];
-      await repo.saveAll('user-1', [{ id: 'a', name: 'Alice', value: 1 }]);
-      await repo.saveAll('user-2', user2Items);
+    it('does not affect other family data', async () => {
+      const family2Items: TestEntity[] = [{ id: 'b', name: 'Bob', value: 2 }];
+      await repo.saveAll('family-1', [{ id: 'a', name: 'Alice', value: 1 }]);
+      await repo.saveAll('family-2', family2Items);
 
-      await repo.deleteAll('user-1');
+      await repo.deleteAll('family-1');
 
-      expect(await repo.getAll('user-2')).toEqual(user2Items);
+      expect(await repo.getAll('family-2')).toEqual(family2Items);
     });
   });
 
   // -------------------------------------------------------------------------
-  // User isolation (cross-cutting)
+  // Family isolation (cross-cutting)
   // -------------------------------------------------------------------------
 
-  describe('User isolation', () => {
-    it('data saved for user A is not visible to user B', async () => {
-      await repo.saveAll('user-A', [{ id: 'a', name: 'Alice', value: 1 }]);
-      expect(await repo.getAll('user-B')).toEqual([]);
+  describe('Family isolation', () => {
+    it('data saved for family A is not visible to family B', async () => {
+      await repo.saveAll('family-A', [{ id: 'a', name: 'Alice', value: 1 }]);
+      expect(await repo.getAll('family-B')).toEqual([]);
     });
 
-    it('saving for user A does not affect user B', async () => {
-      const user2Items: TestEntity[] = [{ id: 'b', name: 'Bob', value: 2 }];
-      await repo.saveAll('user-B', user2Items);
-      await repo.saveAll('user-A', [{ id: 'a', name: 'Alice', value: 1 }]);
+    it('saving for family A does not affect family B', async () => {
+      const family2Items: TestEntity[] = [{ id: 'b', name: 'Bob', value: 2 }];
+      await repo.saveAll('family-B', family2Items);
+      await repo.saveAll('family-A', [{ id: 'a', name: 'Alice', value: 1 }]);
 
-      expect(await repo.getAll('user-B')).toEqual(user2Items);
+      expect(await repo.getAll('family-B')).toEqual(family2Items);
     });
 
-    it('deleting for user A does not affect user B', async () => {
-      const user2Items: TestEntity[] = [{ id: 'b', name: 'Bob', value: 2 }];
-      await repo.saveAll('user-A', [{ id: 'a', name: 'Alice', value: 1 }]);
-      await repo.saveAll('user-B', user2Items);
+    it('deleting for family A does not affect family B', async () => {
+      const family2Items: TestEntity[] = [{ id: 'b', name: 'Bob', value: 2 }];
+      await repo.saveAll('family-A', [{ id: 'a', name: 'Alice', value: 1 }]);
+      await repo.saveAll('family-B', family2Items);
 
-      await repo.deleteAll('user-A');
+      await repo.deleteAll('family-A');
 
-      expect(await repo.getAll('user-B')).toEqual(user2Items);
+      expect(await repo.getAll('family-B')).toEqual(family2Items);
     });
 
-    it('different entity names for same user are isolated', async () => {
+    it('different entity names for same family are isolated', async () => {
       const transactionRepo = new Repository<TestEntity>(dataService, 'transactions');
       const budgetRepo = new Repository<TestEntity>(dataService, 'budgets');
 
-      await transactionRepo.saveAll('user-1', [{ id: 't1', name: 'Tx', value: 50 }]);
-      await budgetRepo.saveAll('user-1', [{ id: 'bg1', name: 'Budget', value: 200 }]);
+      await transactionRepo.saveAll('family-1', [{ id: 't1', name: 'Tx', value: 50 }]);
+      await budgetRepo.saveAll('family-1', [{ id: 'bg1', name: 'Budget', value: 200 }]);
 
-      expect(await transactionRepo.getAll('user-1')).toHaveLength(1);
-      expect(await budgetRepo.getAll('user-1')).toHaveLength(1);
-      expect(await transactionRepo.getAll('user-1')).not.toEqual(await budgetRepo.getAll('user-1'));
+      expect(await transactionRepo.getAll('family-1')).toHaveLength(1);
+      expect(await budgetRepo.getAll('family-1')).toHaveLength(1);
+      expect(await transactionRepo.getAll('family-1')).not.toEqual(await budgetRepo.getAll('family-1'));
     });
   });
 });

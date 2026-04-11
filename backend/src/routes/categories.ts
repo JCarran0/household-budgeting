@@ -29,9 +29,9 @@ router.use(authMiddleware);
 // GET /api/categories - Get all categories
 router.get('/', async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const userId = req.user?.userId;
-    if (!userId) throw new AuthorizationError();
-    const categories = await categoryService.getAllCategories(userId);
+    const familyId = req.user?.familyId;
+    if (!familyId) throw new AuthorizationError();
+    const categories = await categoryService.getAllCategories(familyId);
     res.json(categories);
   } catch (error) {
     next(error);
@@ -41,9 +41,9 @@ router.get('/', async (req: Request, res: Response, next: NextFunction) => {
 // GET /api/categories/tree - Get categories in tree structure
 router.get('/tree', async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const userId = req.user?.userId;
-    if (!userId) throw new AuthorizationError();
-    const tree = await categoryService.getCategoryTree(userId);
+    const familyId = req.user?.familyId;
+    if (!familyId) throw new AuthorizationError();
+    const tree = await categoryService.getCategoryTree(familyId);
     res.json(tree);
   } catch (error) {
     next(error);
@@ -53,9 +53,9 @@ router.get('/tree', async (req: Request, res: Response, next: NextFunction) => {
 // GET /api/categories/transaction-counts - Get transaction counts for all categories
 router.get('/transaction-counts', async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const userId = req.user?.userId;
-    if (!userId) throw new AuthorizationError();
-    const counts = await transactionService.getTransactionCountsByCategory(userId);
+    const familyId = req.user?.familyId;
+    if (!familyId) throw new AuthorizationError();
+    const counts = await transactionService.getTransactionCountsByCategory(familyId);
     res.json(counts);
   } catch (error) {
     next(error);
@@ -65,9 +65,9 @@ router.get('/transaction-counts', async (req: Request, res: Response, next: Next
 // GET /api/categories/parents - Get all parent categories
 router.get('/parents', async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const userId = req.user?.userId;
-    if (!userId) throw new AuthorizationError();
-    const parents = await categoryService.getParentCategories(userId);
+    const familyId = req.user?.familyId;
+    if (!familyId) throw new AuthorizationError();
+    const parents = await categoryService.getParentCategories(familyId);
     res.json(parents);
   } catch (error) {
     next(error);
@@ -77,9 +77,9 @@ router.get('/parents', async (req: Request, res: Response, next: NextFunction) =
 // GET /api/categories/hidden - Get hidden categories
 router.get('/hidden', async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const userId = req.user?.userId;
-    if (!userId) throw new AuthorizationError();
-    const hidden = await categoryService.getHiddenCategories(userId);
+    const familyId = req.user?.familyId;
+    if (!familyId) throw new AuthorizationError();
+    const hidden = await categoryService.getHiddenCategories(familyId);
     res.json(hidden);
   } catch (error) {
     next(error);
@@ -89,9 +89,9 @@ router.get('/hidden', async (req: Request, res: Response, next: NextFunction) =>
 // GET /api/categories/savings - Get savings categories
 router.get('/savings', async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const userId = req.user?.userId;
-    if (!userId) throw new AuthorizationError();
-    const rollover = await categoryService.getRolloverCategories(userId);
+    const familyId = req.user?.familyId;
+    if (!familyId) throw new AuthorizationError();
+    const rollover = await categoryService.getRolloverCategories(familyId);
     res.json(rollover);
   } catch (error) {
     next(error);
@@ -105,15 +105,15 @@ router.post('/initialize', async (req: Request, res: Response, next: NextFunctio
     console.log('Request headers:', req.headers);
     console.log('Request user object:', req.user);
 
-    const userId = req.user?.userId;
-    if (!userId) {
-      console.error('ERROR: No userId found in request. req.user is:', req.user);
+    const familyId = req.user?.familyId;
+    if (!familyId) {
+      console.error('ERROR: No familyId found in request. req.user is:', req.user);
       throw new AuthorizationError();
     }
 
-    console.log('Initializing categories for user:', userId);
-    await categoryService.initializeDefaultCategories(userId);
-    const categories = await categoryService.getAllCategories(userId);
+    console.log('Initializing categories for family:', familyId);
+    await categoryService.initializeDefaultCategories(familyId);
+    const categories = await categoryService.getAllCategories(familyId);
     console.log('Categories initialized successfully:', categories.length);
     res.json({ message: 'Default categories initialized', categories });
   } catch (error) {
@@ -124,8 +124,8 @@ router.post('/initialize', async (req: Request, res: Response, next: NextFunctio
 // POST /api/categories/import-csv - Import categories from CSV
 router.post('/import-csv', async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const userId = req.user?.userId;
-    if (!userId) throw new AuthorizationError();
+    const familyId = req.user?.familyId;
+    if (!familyId) throw new AuthorizationError();
 
     const { csvContent } = req.body;
 
@@ -137,7 +137,7 @@ router.post('/import-csv', async (req: Request, res: Response, next: NextFunctio
     // Set a longer timeout for this specific endpoint
     res.setTimeout(5 * 60 * 1000); // 5 minutes
 
-    const result = await categoryService.importFromCSV(csvContent, userId);
+    const result = await categoryService.importFromCSV(csvContent, familyId);
 
     if (result.success) {
       res.json({
@@ -161,9 +161,9 @@ router.post('/import-csv', async (req: Request, res: Response, next: NextFunctio
 // GET /api/categories/:id - Get a specific category
 router.get('/:id', async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const userId = req.user?.userId;
-    if (!userId) throw new AuthorizationError();
-    const category = await categoryService.getCategoryById(req.params.id, userId);
+    const familyId = req.user?.familyId;
+    if (!familyId) throw new AuthorizationError();
+    const category = await categoryService.getCategoryById(req.params.id, familyId);
     if (!category) {
       res.status(404).json({ error: 'Category not found' });
       return;
@@ -177,9 +177,9 @@ router.get('/:id', async (req: Request, res: Response, next: NextFunction): Prom
 // GET /api/categories/:id/subcategories - Get subcategories of a parent
 router.get('/:id/subcategories', async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const userId = req.user?.userId;
-    if (!userId) throw new AuthorizationError();
-    const subcategories = await categoryService.getSubcategories(req.params.id, userId);
+    const familyId = req.user?.familyId;
+    if (!familyId) throw new AuthorizationError();
+    const subcategories = await categoryService.getSubcategories(req.params.id, familyId);
     res.json(subcategories);
   } catch (error) {
     next(error);
@@ -189,10 +189,10 @@ router.get('/:id/subcategories', async (req: Request, res: Response, next: NextF
 // POST /api/categories - Create a new category
 router.post('/', async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const userId = req.user?.userId;
-    if (!userId) throw new AuthorizationError();
+    const familyId = req.user?.familyId;
+    if (!familyId) throw new AuthorizationError();
     const validatedData = createCategorySchema.parse(req.body);
-    const category = await categoryService.createCategory(validatedData, userId);
+    const category = await categoryService.createCategory(validatedData, familyId);
     res.status(201).json(category);
   } catch (error) {
     if (error instanceof z.ZodError) {
@@ -215,10 +215,10 @@ router.post('/', async (req: Request, res: Response, next: NextFunction): Promis
 // PUT /api/categories/:id - Update a category
 router.put('/:id', async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const userId = req.user?.userId;
-    if (!userId) throw new AuthorizationError();
+    const familyId = req.user?.familyId;
+    if (!familyId) throw new AuthorizationError();
     const validatedData = updateCategorySchema.parse(req.body);
-    const category = await categoryService.updateCategory(req.params.id, validatedData, userId);
+    const category = await categoryService.updateCategory(req.params.id, validatedData, familyId);
     res.json(category);
   } catch (error) {
     if (error instanceof z.ZodError) {
@@ -236,9 +236,9 @@ router.put('/:id', async (req: Request, res: Response, next: NextFunction) => {
 // POST /api/categories/:id/delete-budgets - Delete all budgets for a category
 router.post('/:id/delete-budgets', async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const userId = req.user?.userId;
-    if (!userId) throw new AuthorizationError();
-    const deletedCount = await budgetService.deleteBudgetsForCategory(req.params.id, userId);
+    const familyId = req.user?.familyId;
+    if (!familyId) throw new AuthorizationError();
+    const deletedCount = await budgetService.deleteBudgetsForCategory(req.params.id, familyId);
     res.json({ success: true, deleted: deletedCount });
   } catch (error) {
     next(error);
@@ -248,9 +248,9 @@ router.post('/:id/delete-budgets', async (req: Request, res: Response, next: Nex
 // POST /api/categories/:id/delete-rules - Delete all auto-categorization rules for a category
 router.post('/:id/delete-rules', async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const userId = req.user?.userId;
-    if (!userId) throw new AuthorizationError();
-    const deletedCount = await autoCategorizeService.deleteRulesForCategory(req.params.id, userId);
+    const familyId = req.user?.familyId;
+    if (!familyId) throw new AuthorizationError();
+    const deletedCount = await autoCategorizeService.deleteRulesForCategory(req.params.id, familyId);
     res.json({ success: true, deleted: deletedCount });
   } catch (error) {
     next(error);
@@ -260,8 +260,8 @@ router.post('/:id/delete-rules', async (req: Request, res: Response, next: NextF
 // POST /api/categories/:id/recategorize-transactions - Recategorize all transactions from one category to another
 router.post('/:id/recategorize-transactions', async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const userId = req.user?.userId;
-    if (!userId) throw new AuthorizationError();
+    const familyId = req.user?.familyId;
+    if (!familyId) throw new AuthorizationError();
 
     const { newCategoryId } = req.body;
 
@@ -274,7 +274,7 @@ router.post('/:id/recategorize-transactions', async (req: Request, res: Response
     const updatedCount = await transactionService.bulkRecategorizeByCategory(
       req.params.id,
       newCategoryId,
-      userId
+      familyId
     );
     res.json({ success: true, updated: updatedCount });
   } catch (error) {
@@ -285,9 +285,9 @@ router.post('/:id/recategorize-transactions', async (req: Request, res: Response
 // DELETE /api/categories/:id - Delete a category
 router.delete('/:id', async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const userId = req.user?.userId;
-    if (!userId) throw new AuthorizationError();
-    await categoryService.deleteCategory(req.params.id, userId);
+    const familyId = req.user?.familyId;
+    if (!familyId) throw new AuthorizationError();
+    await categoryService.deleteCategory(req.params.id, familyId);
     res.status(204).send();
   } catch (error) {
     if (error instanceof Error) {

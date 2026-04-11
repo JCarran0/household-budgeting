@@ -343,7 +343,7 @@ phase_2_auth:
 # PHASE 3: Data Layer Refactor (userId -> familyId)
 # ============================================================================
 phase_3_data_layer:
-  status: not_started
+  status: completed
   description: |
     The largest phase. Change every service that uses userId for data scoping
     to use familyId instead. This is a systematic find-and-replace at the
@@ -352,7 +352,7 @@ phase_3_data_layer:
   tasks:
     - id: P3-T1
       task: "Refactor Repository base class"
-      status: not_started
+      status: completed
       details: |
         In repository.ts:
         - Rename key(userId) to key(familyId)
@@ -362,7 +362,7 @@ phase_3_data_layer:
 
     - id: P3-T2
       task: "Refactor TransactionService"
-      status: not_started
+      status: completed
       details: |
         In transactionService.ts:
         - Uses Repository<StoredTransaction>: automatic via P3-T1
@@ -374,7 +374,7 @@ phase_3_data_layer:
 
     - id: P3-T3
       task: "Refactor AccountService"
-      status: not_started
+      status: completed
       details: |
         In accountService.ts (direct dataService pattern):
         - Replace all `accounts_${userId}` with `accounts_${familyId}`
@@ -384,7 +384,7 @@ phase_3_data_layer:
 
     - id: P3-T4
       task: "Refactor BudgetService"
-      status: not_started
+      status: completed
       details: |
         In budgetService.ts (direct dataService pattern):
         - Replace all `budgets_${userId}` with `budgets_${familyId}`
@@ -395,7 +395,7 @@ phase_3_data_layer:
 
     - id: P3-T5
       task: "Refactor CategoryService and DataService category methods"
-      status: not_started
+      status: completed
       details: |
         In dataService.ts:
         - Rename getCategories(userId) -> getCategories(familyId)
@@ -409,7 +409,7 @@ phase_3_data_layer:
 
     - id: P3-T6
       task: "Refactor remaining services"
-      status: not_started
+      status: completed
       details: |
         All follow the same pattern — replace userId with familyId in:
         - autoCategorizeService.ts: getRules(familyId), createRule(familyId, data)
@@ -421,7 +421,7 @@ phase_3_data_layer:
 
     - id: P3-T7
       task: "Refactor ReportService"
-      status: not_started
+      status: completed
       details: |
         In reportService.ts:
         - Uses Repository<StoredTransaction> (automatic via P3-T1)
@@ -430,7 +430,7 @@ phase_3_data_layer:
 
     - id: P3-T8
       task: "Refactor ChatbotService and ChatbotDataService"
-      status: not_started
+      status: completed
       details: |
         ChatbotDataService (read-only security boundary):
         - Constructor receives services that now expect familyId
@@ -442,7 +442,7 @@ phase_3_data_layer:
 
     - id: P3-T9
       task: "Refactor ChatbotCostTracker to family-scoped"
-      status: not_started
+      status: completed
       details: |
         In chatbotCostTracker.ts:
         - Change key from `chatbot_costs_${month}` to `chatbot_costs_${familyId}_${month}`
@@ -452,7 +452,7 @@ phase_3_data_layer:
 
     - id: P3-T10
       task: "Refactor CategorizationService"
-      status: not_started
+      status: completed
       details: |
         In categorizationService.ts:
         - Update all method signatures: userId -> familyId
@@ -460,7 +460,7 @@ phase_3_data_layer:
 
     - id: P3-T11
       task: "Update all route files to use req.user.familyId"
-      status: not_started
+      status: completed
       details: |
         Systematic change across all 14 route files (excluding themes.ts):
         - Replace `const userId = req.user?.userId` with `const { familyId } = req.user`
@@ -480,7 +480,7 @@ phase_3_data_layer:
 # PHASE 4: Data Migration
 # ============================================================================
 phase_4_migration:
-  status: not_started
+  status: completed
   description: |
     Migrate the existing user's data from userId-scoped keys to familyId-scoped
     keys. Create a family for the existing user. Must work on both filesystem
@@ -488,7 +488,7 @@ phase_4_migration:
   tasks:
     - id: P4-T1
       task: "Create migration status endpoint"
-      status: not_started
+      status: completed
       details: |
         Add to admin.ts:
         GET /admin/family-migration-status
@@ -505,7 +505,7 @@ phase_4_migration:
 
     - id: P4-T2
       task: "Create migration execution endpoint"
-      status: not_started
+      status: completed
       details: |
         Add to admin.ts:
         POST /admin/migrate-to-families
@@ -530,7 +530,7 @@ phase_4_migration:
 
     - id: P4-T3
       task: "Create migration cleanup endpoint"
-      status: not_started
+      status: completed
       details: |
         Add to admin.ts:
         POST /admin/migrate-to-families/cleanup
@@ -542,7 +542,8 @@ phase_4_migration:
 
     - id: P4-T4
       task: "Update backup script to handle family-scoped keys"
-      status: not_started
+      status: deferred
+      note: "Backup script uses UUID pattern matching which works for both userId and familyId keys"
       details: |
         In backend/src/scripts/backup-local-data.ts:
         - Update UUID detection pattern to match both userId and familyId keys

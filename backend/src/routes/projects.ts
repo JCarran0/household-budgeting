@@ -84,10 +84,10 @@ router.use(authMiddleware);
 // POST /api/v1/projects - Create project
 router.post('/', async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const userId = req.user?.userId;
-    if (!userId) throw new AuthorizationError();
+    const familyId = req.user?.familyId;
+    if (!familyId) throw new AuthorizationError();
     const validatedData = createProjectSchema.parse(req.body);
-    const project = await projectService.createProject(validatedData, userId);
+    const project = await projectService.createProject(validatedData, familyId);
     res.status(201).json(project);
   } catch (error) {
     if (error instanceof z.ZodError) {
@@ -105,10 +105,10 @@ router.post('/', async (req: Request, res: Response, next: NextFunction): Promis
 // GET /api/v1/projects - List all projects
 router.get('/', async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const userId = req.user?.userId;
-    if (!userId) throw new AuthorizationError();
+    const familyId = req.user?.familyId;
+    if (!familyId) throw new AuthorizationError();
     const year = req.query.year ? parseInt(req.query.year as string, 10) : undefined;
-    const projects = await projectService.getAllProjects(userId, year);
+    const projects = await projectService.getAllProjects(familyId, year);
     res.json(projects);
   } catch (error) {
     next(error);
@@ -118,12 +118,12 @@ router.get('/', async (req: Request, res: Response, next: NextFunction): Promise
 // GET /api/v1/projects/summaries - Get all project summaries (for card grid)
 router.get('/summaries', async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const userId = req.user?.userId;
-    if (!userId) throw new AuthorizationError();
+    const familyId = req.user?.familyId;
+    if (!familyId) throw new AuthorizationError();
     const year = req.query.year ? parseInt(req.query.year as string, 10) : undefined;
-    const categories = await categoryService.getAllCategories(userId);
+    const categories = await categoryService.getAllCategories(familyId);
     const categoryInfo = categories.map((c) => ({ id: c.id, name: c.name }));
-    const summaries = await projectService.getProjectsSummaries(userId, year, categoryInfo);
+    const summaries = await projectService.getProjectsSummaries(familyId, year, categoryInfo);
     res.json(summaries);
   } catch (error) {
     next(error);
@@ -133,9 +133,9 @@ router.get('/summaries', async (req: Request, res: Response, next: NextFunction)
 // GET /api/v1/projects/:id - Get single project
 router.get('/:id', async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const userId = req.user?.userId;
-    if (!userId) throw new AuthorizationError();
-    const project = await projectService.getProject(req.params.id, userId);
+    const familyId = req.user?.familyId;
+    if (!familyId) throw new AuthorizationError();
+    const project = await projectService.getProject(req.params.id, familyId);
     if (!project) {
       next(new NotFoundError('Project not found'));
       return;
@@ -149,11 +149,11 @@ router.get('/:id', async (req: Request, res: Response, next: NextFunction): Prom
 // GET /api/v1/projects/:id/summary - Get project with spending breakdown
 router.get('/:id/summary', async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const userId = req.user?.userId;
-    if (!userId) throw new AuthorizationError();
-    const categories = await categoryService.getAllCategories(userId);
+    const familyId = req.user?.familyId;
+    if (!familyId) throw new AuthorizationError();
+    const categories = await categoryService.getAllCategories(familyId);
     const categoryInfo = categories.map((c) => ({ id: c.id, name: c.name }));
-    const summary = await projectService.getProjectSummary(req.params.id, userId, categoryInfo);
+    const summary = await projectService.getProjectSummary(req.params.id, familyId, categoryInfo);
     if (!summary) {
       next(new NotFoundError('Project not found'));
       return;
@@ -171,10 +171,10 @@ router.get('/:id/summary', async (req: Request, res: Response, next: NextFunctio
 // PUT /api/v1/projects/:id - Update project
 router.put('/:id', async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const userId = req.user?.userId;
-    if (!userId) throw new AuthorizationError();
+    const familyId = req.user?.familyId;
+    if (!familyId) throw new AuthorizationError();
     const validatedData = updateProjectSchema.parse(req.body);
-    const project = await projectService.updateProject(req.params.id, validatedData, userId);
+    const project = await projectService.updateProject(req.params.id, validatedData, familyId);
     res.json(project);
   } catch (error) {
     if (error instanceof z.ZodError) {
@@ -196,9 +196,9 @@ router.put('/:id', async (req: Request, res: Response, next: NextFunction): Prom
 // DELETE /api/v1/projects/:id - Delete project
 router.delete('/:id', async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const userId = req.user?.userId;
-    if (!userId) throw new AuthorizationError();
-    await projectService.deleteProject(req.params.id, userId);
+    const familyId = req.user?.familyId;
+    if (!familyId) throw new AuthorizationError();
+    await projectService.deleteProject(req.params.id, familyId);
     res.status(204).send();
   } catch (error) {
     if (error instanceof Error && error.message === 'Project not found') {

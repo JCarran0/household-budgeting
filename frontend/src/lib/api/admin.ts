@@ -44,5 +44,45 @@ export function createAdminApi(client: AxiosInstance) {
       const { data } = await client.get('/admin/location-cleanup-status');
       return data;
     },
+
+    async getFamilyMigrationStatus(): Promise<{
+      migrationNeeded: boolean;
+      usersWithoutFamily: number;
+      userStatuses: Array<{
+        userId: string;
+        username: string;
+        familyId: string | null;
+        entities: Record<string, { userScoped: boolean; familyScoped: boolean }>;
+      }>;
+      userScopedKeys: string[];
+      familyScopedKeys: string[];
+    }> {
+      const { data } = await client.get('/admin/family-migration-status');
+      return data;
+    },
+
+    async migrateToFamilies(): Promise<{
+      success: boolean;
+      message: string;
+      results: Array<{
+        userId: string;
+        username: string;
+        familyId: string;
+        entities: Record<string, string>;
+      }>;
+    }> {
+      const { data } = await client.post('/admin/migrate-to-families');
+      return data;
+    },
+
+    async cleanupFamilyMigration(): Promise<{
+      success: boolean;
+      message: string;
+      deleted: string[];
+      skipped: Array<{ key: string; reason: string }>;
+    }> {
+      const { data } = await client.post('/admin/migrate-to-families/cleanup?confirm=true');
+      return data;
+    },
   };
 }

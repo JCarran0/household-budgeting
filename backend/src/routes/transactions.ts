@@ -120,7 +120,7 @@ router.get('/uncategorized/count', authMiddleware, async (req: AuthRequest, res:
   try {
     if (!req.user) throw new AuthorizationError();
 
-    const { count, total } = await transactionService.getUncategorizedCount(req.user.userId);
+    const { count, total } = await transactionService.getUncategorizedCount(req.user.familyId);
 
     res.json({
       success: true,
@@ -159,7 +159,7 @@ router.get('/', authMiddleware, async (req: AuthRequest, res: Response, next: Ne
     };
 
     const result = await transactionService.getTransactions(
-      req.user.userId,
+      req.user.familyId,
       filterData
     );
 
@@ -200,7 +200,7 @@ router.post('/sync', authMiddleware, async (req: AuthRequest, res: Response, nex
     const { startDate = '2025-01-01' } = validation.data;
 
     // Get all user accounts
-    const accountsResult = await accountService.getUserAccounts(req.user.userId);
+    const accountsResult = await accountService.getUserAccounts(req.user.familyId);
     if (!accountsResult.success || !accountsResult.accounts || accountsResult.accounts.length === 0) {
       res.status(404).json({ success: false, error: 'No accounts to sync' });
       return;
@@ -208,7 +208,7 @@ router.post('/sync', authMiddleware, async (req: AuthRequest, res: Response, nex
 
     // Sync transactions for all accounts
     const result = await transactionService.syncTransactions(
-      req.user.userId,
+      req.user.familyId,
       accountsResult.accounts,
       startDate
     );
@@ -219,7 +219,7 @@ router.post('/sync', authMiddleware, async (req: AuthRequest, res: Response, nex
     }
 
     // Also sync account balances
-    await accountService.syncAccountBalances(req.user.userId);
+    await accountService.syncAccountBalances(req.user.familyId);
 
     res.json({
       success: true,
@@ -264,7 +264,7 @@ router.put('/:transactionId/category', authMiddleware, async (req: AuthRequest, 
     const { categoryId } = validation.data;
 
     const result = await transactionService.updateTransactionCategory(
-      req.user.userId,
+      req.user.familyId,
       transactionId,
       categoryId
     );
@@ -302,7 +302,7 @@ router.put('/:transactionId/description', authMiddleware, async (req: AuthReques
     const { description } = validation.data;
 
     const result = await transactionService.updateTransactionDescription(
-      req.user.userId,
+      req.user.familyId,
       transactionId,
       description
     );
@@ -340,7 +340,7 @@ router.put('/:transactionId/hidden', authMiddleware, async (req: AuthRequest, re
     const { isHidden } = validation.data;
 
     const result = await transactionService.updateTransactionHidden(
-      req.user.userId,
+      req.user.familyId,
       transactionId,
       isHidden
     );
@@ -378,7 +378,7 @@ router.put('/:transactionId/flagged', authMiddleware, async (req: AuthRequest, r
     const { isFlagged } = validation.data;
 
     const result = await transactionService.updateTransactionFlagged(
-      req.user.userId,
+      req.user.familyId,
       transactionId,
       isFlagged
     );
@@ -416,7 +416,7 @@ router.post('/:transactionId/tags', authMiddleware, async (req: AuthRequest, res
     const { tags } = validation.data;
 
     const result = await transactionService.addTransactionTags(
-      req.user.userId,
+      req.user.familyId,
       transactionId,
       tags
     );
@@ -454,7 +454,7 @@ router.post('/:transactionId/split', authMiddleware, async (req: AuthRequest, re
     const { splits } = validation.data;
 
     const result = await transactionService.splitTransaction(
-      req.user.userId,
+      req.user.familyId,
       transactionId,
       splits
     );
@@ -491,7 +491,7 @@ router.put('/bulk', authMiddleware, async (req: AuthRequest, res: Response, next
     const { transactionIds, updates } = validation.data;
 
     const { updated, failed, errors } = await transactionService.bulkUpdate(
-      req.user.userId,
+      req.user.familyId,
       transactionIds,
       updates
     );
@@ -515,7 +515,7 @@ router.get('/summary', authMiddleware, async (req: AuthRequest, res: Response, n
   try {
     if (!req.user) throw new AuthorizationError();
 
-    const summary = await transactionService.getMonthlySummary(req.user.userId);
+    const summary = await transactionService.getMonthlySummary(req.user.familyId);
 
     res.json({
       success: true,
@@ -540,7 +540,7 @@ const transactionImportSchema = z.object({
  */
 router.post('/import-csv', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
-    if (!req.user?.userId) throw new AuthorizationError();
+    if (!req.user?.familyId) throw new AuthorizationError();
 
     // Set a longer timeout for this import endpoint
     res.setTimeout(5 * 60 * 1000); // 5 minutes
@@ -562,7 +562,7 @@ router.post('/import-csv', authMiddleware, async (req: AuthRequest, res: Respons
 
     // Import transactions via ImportService
     const result = await importService.importCSV(
-      req.user.userId,
+      req.user.familyId,
       'transactions',
       csvContent,
       {

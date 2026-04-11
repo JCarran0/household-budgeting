@@ -49,7 +49,7 @@ export class CategorizationService {
    * Classify uncategorized transactions into category buckets.
    */
   async classifyTransactions(
-    userId: string,
+    familyId: string,
     transactionIds?: string[],
   ): Promise<ClassifyTransactionsResponse> {
     // Check cost cap
@@ -60,9 +60,9 @@ export class CategorizationService {
 
     // Fetch data
     const [uncategorized, categories, existingRules] = await Promise.all([
-      this.getUncategorizedTransactions(userId, transactionIds),
-      this.chatbotDataService.getCategories(userId),
-      this.chatbotDataService.getAutoCategorizeRules(userId),
+      this.getUncategorizedTransactions(familyId, transactionIds),
+      this.chatbotDataService.getCategories(familyId),
+      this.chatbotDataService.getAutoCategorizeRules(familyId),
     ]);
 
     if (uncategorized.length === 0) {
@@ -73,7 +73,7 @@ export class CategorizationService {
     console.log(`[CategorizationService] Classifying ${uncategorized.length} transactions`);
 
     // Build few-shot examples from previously categorized transactions
-    const examples = await this.buildExamples(userId, categories);
+    const examples = await this.buildExamples(familyId, categories);
 
     // Build category hierarchy context
     const categoryContext = this.buildCategoryContext(categories);
@@ -110,7 +110,7 @@ export class CategorizationService {
    * Suggest auto-categorization rules based on completed categorizations.
    */
   async suggestRules(
-    userId: string,
+    familyId: string,
     categorizations: { transactionId: string; categoryId: string }[],
   ): Promise<SuggestRulesResponse> {
     const budget = await this.costTracker.checkBudget();
@@ -119,11 +119,11 @@ export class CategorizationService {
     }
 
     // Fetch the transactions that were categorized to get their names
-    const allTransactions = await this.chatbotDataService.queryTransactions(userId, {});
+    const allTransactions = await this.chatbotDataService.queryTransactions(familyId, {});
     const txMap = new Map(allTransactions.map(t => [t.id, t]));
-    const categories = await this.chatbotDataService.getCategories(userId);
+    const categories = await this.chatbotDataService.getCategories(familyId);
     const catMap = new Map(categories.map(c => [c.id, c]));
-    const existingRules = await this.chatbotDataService.getAutoCategorizeRules(userId);
+    const existingRules = await this.chatbotDataService.getAutoCategorizeRules(familyId);
 
     // Build categorization data for Claude
     const catData = categorizations
@@ -158,7 +158,7 @@ export class CategorizationService {
 
       // Record cost
       await this.costTracker.recordUsage(
-        userId, 'sonnet', response.usage.input_tokens, response.usage.output_tokens,
+        familyId, 'sonnet', response.usage.input_tokens, response.usage.output_tokens,
       );
 
       const toolUse = response.content.find(
@@ -180,23 +180,23 @@ export class CategorizationService {
   // ==========================================================================
 
   private async getUncategorizedTransactions(
-    userId: string,
+    familyId: string,
     transactionIds?: string[],
   ): Promise<Transaction[]> {
     if (transactionIds?.length) {
-      const all = await this.chatbotDataService.queryTransactions(userId, {});
+      const all = await this.chatbotDataService.queryTransactions(familyId, {});
       const idSet = new Set(transactionIds);
       return all.filter(t => idSet.has(t.id) && !t.categoryId);
     }
-    return this.chatbotDataService.queryTransactions(userId, { onlyUncategorized: true });
+    return this.chatbotDataService.queryTransactions(familyId, { onlyUncategorized: true });
   }
 
   private async buildExamples(
-    userId: string,
+    familyId: string,
     categories: Category[],
   ): Promise<string> {
     // Get recent categorized transactions as few-shot examples
-    const categorized = await this.chatbotDataService.queryTransactions(userId, { limit: 500 });
+    const categorized = await this.chatbotDataService.queryTransactions(familyId, { limit: 500 });
     const withCategory = categorized.filter(t => t.categoryId);
 
     // Group by category, take top N categories with up to M examples each
