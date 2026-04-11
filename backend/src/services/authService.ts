@@ -230,6 +230,32 @@ export class AuthService {
       // Reset failed attempts on successful login
       this.resetFailedAttempts(username);
 
+      // Migrate pre-family users: create a family on first login if missing
+      if (!user.familyId) {
+        const familyId = uuidv4();
+        const now = new Date().toISOString();
+        const displayName = user.displayName || user.username;
+
+        const family: Family = {
+          id: familyId,
+          name: `${user.username}'s Family`,
+          members: [{ userId: user.id, displayName, joinedAt: now }],
+          createdAt: now,
+          updatedAt: now,
+        };
+
+        await this.dataService.createFamily(family);
+        await this.dataService.updateUser(user.id, {
+          familyId,
+          displayName,
+        } as Partial<User>);
+
+        user.familyId = familyId;
+        user.displayName = displayName;
+
+        console.log(`Migrated user "${user.username}" to family "${familyId}"`);
+      }
+
       // Generate JWT token with familyId
       const token = this.generateToken(user.id, user.username, user.familyId);
 
