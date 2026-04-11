@@ -134,6 +134,13 @@ export function MantineLayout() {
                 {user?.username}
               </Menu.Item>
               
+              <Menu.Item
+                leftSection={<IconSettings style={{ width: rem(14), height: rem(14) }} />}
+                onClick={() => navigate('/settings')}
+              >
+                Settings
+              </Menu.Item>
+
               <Menu.Divider />
 
               <Menu.Item

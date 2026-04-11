@@ -26,6 +26,8 @@ export function RegisterForm() {
   
   const [username, setUsername] = useState('');
   const [displayName, setDisplayName] = useState('');
+  const [familyName, setFamilyName] = useState('');
+  const [joinCode, setJoinCode] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [validationError, setValidationError] = useState('');
@@ -58,7 +60,13 @@ export function RegisterForm() {
     }
     
     try {
-      await register({ username, password, displayName });
+      await register({
+        username,
+        password,
+        displayName,
+        ...(joinCode ? { joinCode } : {}),
+        ...(!joinCode && familyName ? { familyName } : {}),
+      });
       navigate('/dashboard');
     } catch {
       // Error is handled in the store
@@ -100,6 +108,24 @@ export function RegisterForm() {
               onChange={(e) => setDisplayName(e.currentTarget.value)}
               required
             />
+
+            <TextInput
+              label="Join Code"
+              placeholder="Have an invitation? Enter the code here"
+              description="Optional — leave blank to create a new family"
+              value={joinCode}
+              onChange={(e) => setJoinCode(e.currentTarget.value)}
+            />
+
+            {!joinCode && (
+              <TextInput
+                label="Family Name"
+                placeholder={username ? `${username}'s Family` : 'My Family'}
+                description="Optional — defaults to your username's Family"
+                value={familyName}
+                onChange={(e) => setFamilyName(e.currentTarget.value)}
+              />
+            )}
 
             <PasswordInput
               label="Password"

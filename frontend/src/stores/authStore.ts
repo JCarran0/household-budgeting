@@ -16,6 +16,7 @@ interface AuthState {
   register: (credentials: RegisterCredentials) => Promise<void>;
   logout: () => void;
   clearError: () => void;
+  updateDisplayName: (displayName: string) => void;
 }
 
 export const useAuthStore = create<AuthState>()(
@@ -107,6 +108,12 @@ export const useAuthStore = create<AuthState>()(
 
       clearError: () => {
         set({ error: null });
+      },
+
+      updateDisplayName: (displayName: string) => {
+        set((state) => ({
+          user: state.user ? { ...state.user, displayName } : null,
+        }));
       },
     }),
     {

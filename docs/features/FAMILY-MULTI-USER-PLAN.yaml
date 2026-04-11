@@ -709,14 +709,14 @@ phase_7_account_owner_mapping:
 # PHASE 8: Frontend — Auth & Profile
 # ============================================================================
 phase_8_frontend_auth:
-  status: not_started
+  status: completed
   description: |
     Update the frontend auth store, registration form, login response handling,
     and add a user profile/settings page.
   tasks:
     - id: P8-T1
       task: "Update auth store to include familyId and displayName"
-      status: not_started
+      status: completed
       details: |
         In frontend/src/stores/authStore.ts:
         - Update AuthState.user type to include familyId and displayName
@@ -725,7 +725,7 @@ phase_8_frontend_auth:
 
     - id: P8-T2
       task: "Update registration form"
-      status: not_started
+      status: completed
       details: |
         Update the registration page/component:
         - Add "Display Name" field (required)
@@ -736,7 +736,7 @@ phase_8_frontend_auth:
 
     - id: P8-T3
       task: "Update API client auth functions"
-      status: not_started
+      status: completed
       details: |
         In frontend/src/lib/api/auth.ts:
         - Update RegisterCredentials type: add displayName, familyName?, joinCode?
@@ -745,7 +745,7 @@ phase_8_frontend_auth:
 
     - id: P8-T4
       task: "Create user profile/settings page"
-      status: not_started
+      status: completed
       details: |
         New page: frontend/src/pages/Settings.tsx (or Profile.tsx)
         Sections:
@@ -758,7 +758,7 @@ phase_8_frontend_auth:
 
     - id: P8-T5
       task: "Create family members component"
-      status: not_started
+      status: completed
       details: |
         Component within the settings page showing:
         - Family name (editable inline)

@@ -16,6 +16,7 @@ import { createManualAccountsApi } from './api/manualAccounts';
 import { createThemesApi } from './api/themes';
 import { createAutoCategorizeApi } from './api/autoCategorize';
 import { createAmazonReceiptsApi } from './api/amazonReceipts';
+import { createFamilyApi } from './api/family';
 
 // Re-export all types so existing imports don't break
 export type { ExtendedPlaidAccount } from './api/accounts';
@@ -53,5 +54,6 @@ export const api = {
   ...createThemesApi(client),
   ...createAutoCategorizeApi(client),
   ...createAmazonReceiptsApi(client),
+  ...createFamilyApi(client),
   ...createMiscApi(client),
 };

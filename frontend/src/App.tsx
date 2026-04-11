@@ -24,6 +24,7 @@ import { Reports } from './pages/Reports';
 import { Admin } from './pages/Admin';
 import { Trips } from './pages/Trips';
 import { Projects } from './pages/Projects';
+import { Settings } from './pages/Settings';
 import { PlaidLinkProvider } from './providers/PlaidLinkProvider';
 import { queryClient } from './lib/queryClient';
 import { ErrorBoundary } from './components/ErrorBoundary';
@@ -89,6 +90,11 @@ function App() {
                     <Route path="/admin" element={
                       <RouteErrorBoundary routeName="Admin">
                         <Admin />
+                      </RouteErrorBoundary>
+                    } />
+                    <Route path="/settings" element={
+                      <RouteErrorBoundary routeName="Settings">
+                        <Settings />
                       </RouteErrorBoundary>
                     } />
                   </Route>
