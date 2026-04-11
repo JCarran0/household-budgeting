@@ -265,7 +265,7 @@ phase_1_types:
 # PHASE 2: Auth & Family Creation
 # ============================================================================
 phase_2_auth:
-  status: not_started
+  status: completed
   description: |
     Update registration to create a family, login to include familyId in JWT,
     and middleware to attach familyId to req.user. After this phase, the auth
@@ -273,7 +273,7 @@ phase_2_auth:
   tasks:
     - id: P2-T1
       task: "Update registration flow to create a family"
-      status: not_started
+      status: completed
       details: |
         In authService.ts register():
         1. Accept new fields: displayName, familyName (optional, defaults to "{username}'s Family")
@@ -288,7 +288,7 @@ phase_2_auth:
 
     - id: P2-T2
       task: "Update login flow to include familyId in JWT"
-      status: not_started
+      status: completed
       details: |
         In authService.ts login():
         1. After finding user, read user.familyId
@@ -306,7 +306,7 @@ phase_2_auth:
 
     - id: P2-T3
       task: "Update auth middleware to attach familyId to req.user"
-      status: not_started
+      status: completed
       details: |
         In authMiddleware.ts:
         1. Update Express Request type extension:
@@ -322,7 +322,7 @@ phase_2_auth:
 
     - id: P2-T4
       task: "Update auth routes response shape"
-      status: not_started
+      status: completed
       details: |
         In authRoutes.ts:
         - POST /register: Accept displayName, familyName in body. Return
@@ -333,7 +333,7 @@ phase_2_auth:
 
     - id: P2-T5
       task: "Update password reset and change-password flows"
-      status: not_started
+      status: completed
       details: |
         - changePassword(): No familyId changes needed (operates on userId)
         - resetPassword(): After reset, user must login again (gets fresh token with familyId)

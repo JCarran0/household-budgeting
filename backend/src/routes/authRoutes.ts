@@ -28,9 +28,9 @@ router.post(
   validateBody(registrationSchema),
   async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
-      const { username, password } = req.body;
+      const { username, password, displayName, familyName } = req.body;
 
-      const result = await authService.register(username, password);
+      const result = await authService.register(username, password, displayName, familyName);
 
       if (result.success) {
         res.status(201).json(result);
@@ -144,17 +144,12 @@ router.get(
     try {
       if (!req.user) throw new AuthorizationError();
 
-      // For now, just return the user info from the token
-      // In a real app, you'd fetch fresh user data from the database
-      const user = { id: req.user.userId, username: req.user.username };
-
       res.json({
         success: true,
         user: {
-          id: user.id,
-          username: user.username,
-          createdAt: new Date().toISOString(),
-          lastLogin: new Date().toISOString(),
+          id: req.user.userId,
+          username: req.user.username,
+          familyId: req.user.familyId,
         },
       });
     } catch (error) {
@@ -271,6 +266,7 @@ router.get(
           user: {
             userId: validation.decoded.userId,
             username: validation.decoded.username,
+            familyId: validation.decoded.familyId,
           },
         });
       } else {

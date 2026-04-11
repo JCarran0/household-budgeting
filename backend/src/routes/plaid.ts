@@ -30,7 +30,7 @@ const removeItemSchema = z.object({
 
 // Extended Request type with user (matching auth middleware)
 interface AuthenticatedRequest extends Request {
-  user?: { userId: string; username: string };
+  user?: { userId: string; username: string; familyId: string };
 }
 
 /**

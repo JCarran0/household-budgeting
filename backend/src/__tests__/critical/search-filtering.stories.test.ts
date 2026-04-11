@@ -343,7 +343,7 @@ describe('User Story: Transaction Search and Filtering', () => {
 
     // Create test user
     const username = `filter${Math.random().toString(36).substring(2, 8)}`;
-    const result = await authService.register(username, 'secure filtering test passphrase');
+    const result = await authService.register(username, 'secure filtering test passphrase', username);
     if (!result.success || !result.user) {
       throw new Error('Failed to create test user');
     }

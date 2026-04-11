@@ -25,6 +25,7 @@ export function RegisterForm() {
   const { register, isLoading, error, clearError } = useAuthStore();
   
   const [username, setUsername] = useState('');
+  const [displayName, setDisplayName] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [validationError, setValidationError] = useState('');
@@ -57,7 +58,7 @@ export function RegisterForm() {
     }
     
     try {
-      await register({ username, password });
+      await register({ username, password, displayName });
       navigate('/dashboard');
     } catch {
       // Error is handled in the store
@@ -89,6 +90,15 @@ export function RegisterForm() {
               onChange={(e) => setUsername(e.currentTarget.value)}
               required
               autoFocus
+            />
+
+            <TextInput
+              label="Display Name"
+              placeholder="How you want to appear (e.g., Jared)"
+              description="This is shown to other family members"
+              value={displayName}
+              onChange={(e) => setDisplayName(e.currentTarget.value)}
+              required
             />
 
             <PasswordInput
@@ -141,7 +151,7 @@ export function RegisterForm() {
               type="submit"
               fullWidth
               loading={isLoading}
-              disabled={!allRequirementsMet || password !== confirmPassword}
+              disabled={!allRequirementsMet || password !== confirmPassword || !displayName.trim()}
               leftSection={<IconUserPlus size={16} />}
               gradient={{ from: 'yellow', to: 'orange' }}
               variant="gradient"

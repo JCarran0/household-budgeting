@@ -9,6 +9,7 @@ declare global {
       user?: {
         userId: string;
         username: string;
+        familyId: string;
       };
     }
   }
@@ -58,10 +59,20 @@ export const authenticate = (req: Request, res: Response, next: NextFunction): v
       return;
     }
 
+    // Require familyId in token (forces re-login for pre-migration tokens)
+    if (!validation.decoded.familyId) {
+      res.status(401).json({
+        success: false,
+        error: 'Token missing familyId. Please log in again.',
+      });
+      return;
+    }
+
     // Attach user info to request
     req.user = {
       userId: validation.decoded.userId,
       username: validation.decoded.username,
+      familyId: validation.decoded.familyId,
     };
 
     // Log successful authentication
@@ -107,10 +118,11 @@ export const optionalAuthenticate = (req: Request, _res: Response, next: NextFun
     const token = parts[1];
     const validation = authService.validateToken(token);
     
-    if (validation.valid && validation.decoded) {
+    if (validation.valid && validation.decoded && validation.decoded.familyId) {
       req.user = {
         userId: validation.decoded.userId,
         username: validation.decoded.username,
+        familyId: validation.decoded.familyId,
       };
     }
 

@@ -14,7 +14,7 @@ const autoCategorizeService = new AutoCategorizeService(dataService);
 
 // Extended Request with user
 interface AuthRequest extends Request {
-  user?: { userId: string; username: string };
+  user?: { userId: string; username: string; familyId: string };
 }
 
 // Input validation schemas

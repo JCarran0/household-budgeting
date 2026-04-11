@@ -3,6 +3,7 @@ import jwt from 'jsonwebtoken';
 import { v4 as uuidv4 } from 'uuid';
 import crypto from 'crypto';
 import { DataService, User } from './dataService';
+import type { Family, FamilyMember } from '../shared/types';
 
 interface AuthResult {
   success: boolean;
@@ -10,6 +11,8 @@ interface AuthResult {
   user?: {
     id: string;
     username: string;
+    displayName: string;
+    familyId: string;
   };
   token?: string;
   message?: string;
@@ -75,13 +78,26 @@ export class AuthService {
     this.dataService = dataService;
   }
 
-  async register(username: string, password: string): Promise<AuthResult> {
+  async register(
+    username: string,
+    password: string,
+    displayName: string,
+    familyName?: string,
+  ): Promise<AuthResult> {
     try {
       // Validate username
       if (!username || username.length < 3 || username.length > 20) {
         return {
           success: false,
           error: 'Username must be between 3 and 20 characters',
+        };
+      }
+
+      // Validate displayName
+      if (!displayName || displayName.length < 1 || displayName.length > 50) {
+        return {
+          success: false,
+          error: 'Display name must be between 1 and 50 characters',
         };
       }
 
@@ -106,13 +122,33 @@ export class AuthService {
       // Hash password
       const passwordHash = await bcrypt.hash(password, 10);
 
-      // Create user
-      // TODO(Phase 2): Create family during registration, set proper displayName/familyId
+      // Create family
+      const familyId = uuidv4();
+      const userId = uuidv4();
+      const now = new Date().toISOString();
+
+      const member: FamilyMember = {
+        userId,
+        displayName,
+        joinedAt: now,
+      };
+
+      const family: Family = {
+        id: familyId,
+        name: familyName || `${username}'s Family`,
+        members: [member],
+        createdAt: now,
+        updatedAt: now,
+      };
+
+      await this.dataService.createFamily(family);
+
+      // Create user with family association
       const user: User = {
-        id: uuidv4(),
+        id: userId,
         username,
-        displayName: username,
-        familyId: '',
+        displayName,
+        familyId,
         passwordHash,
         createdAt: new Date(),
       };
@@ -120,7 +156,7 @@ export class AuthService {
       const createdUser = await this.dataService.createUser(user);
 
       // Generate JWT token for auto-login after registration
-      const token = this.generateToken(createdUser.id, createdUser.username);
+      const token = this.generateToken(createdUser.id, createdUser.username, familyId);
 
       // Log security event
       this.logSecurityEvent({
@@ -136,6 +172,8 @@ export class AuthService {
         user: {
           id: createdUser.id,
           username: createdUser.username,
+          displayName: createdUser.displayName,
+          familyId: createdUser.familyId,
         },
       };
     } catch (error) {
@@ -192,8 +230,8 @@ export class AuthService {
       // Reset failed attempts on successful login
       this.resetFailedAttempts(username);
 
-      // Generate JWT token
-      const token = this.generateToken(user.id, user.username);
+      // Generate JWT token with familyId
+      const token = this.generateToken(user.id, user.username, user.familyId);
 
       // Update last login
       await this.dataService.updateUser(user.id, {
@@ -214,6 +252,8 @@ export class AuthService {
         user: {
           id: user.id,
           username: user.username,
+          displayName: user.displayName,
+          familyId: user.familyId,
         },
       };
     } catch (error) {
@@ -225,14 +265,14 @@ export class AuthService {
     }
   }
 
-  generateToken(userId: string, username: string): string {
+  generateToken(userId: string, username: string, familyId: string): string {
     const secret = process.env.JWT_SECRET;
     if (!secret) {
       throw new Error('JWT_SECRET is not configured');
     }
 
     return jwt.sign(
-      { userId, username },
+      { userId, username, familyId },
       secret,
       { algorithm: 'HS256', expiresIn: process.env.JWT_EXPIRES_IN || '7d' } as jwt.SignOptions
     );
@@ -248,7 +288,7 @@ export class AuthService {
       const decoded = jwt.verify(token, secret, { algorithms: ['HS256'] });
       
       // Ensure decoded is our expected JWTPayload structure
-      if (typeof decoded === 'object' && decoded !== null && 'userId' in decoded && 'username' in decoded) {
+      if (typeof decoded === 'object' && decoded !== null && 'userId' in decoded && 'username' in decoded && 'familyId' in decoded) {
         return {
           valid: true,
           decoded: decoded as JWTPayload,
@@ -284,8 +324,8 @@ export class AuthService {
         };
       }
 
-      const { userId, username } = validation.decoded;
-      const newToken = this.generateToken(userId, username);
+      const { userId, username, familyId } = validation.decoded;
+      const newToken = this.generateToken(userId, username, familyId);
 
       return {
         success: true,

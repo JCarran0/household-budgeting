@@ -32,6 +32,8 @@ const usernameSchema = z.string()
 export const registrationSchema = z.object({
   username: usernameSchema,
   password: passwordSchema,
+  displayName: z.string().min(1, 'Display name is required').max(50, 'Display name must be less than 50 characters'),
+  familyName: z.string().min(1).max(100).optional(),
 });
 
 // Login schema
@@ -59,6 +61,7 @@ export const tokenRefreshSchema = z.object({
 export const jwtPayloadSchema = z.object({
   userId: z.string().uuid('Invalid user ID'),
   username: z.string().min(1),
+  familyId: z.string().uuid('Invalid family ID'),
   iat: z.number().optional(),
   exp: z.number().optional(),
 });

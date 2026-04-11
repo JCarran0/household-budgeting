@@ -31,7 +31,7 @@ describe('User Story: Financial Calculations', () => {
     const username = `ft${Math.random().toString(36).substring(2, 8)}`;
     const password = 'secure financial test passphrase';
     
-    const result = await authService.register(username, password);
+    const result = await authService.register(username, password, username);
     if (!result.success || !result.user) {
       throw new Error(`Failed to create test user: ${result.error || 'Unknown error'}`);
     }

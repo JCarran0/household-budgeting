@@ -28,7 +28,7 @@ describe('User Story: Transaction Synchronization', () => {
     const username = `sync${Math.random().toString(36).substring(2, 8)}`;
     const password = 'secure passphrase for testing sync';
     
-    const result = await authService.register(username, password);
+    const result = await authService.register(username, password, username);
     if (!result.success || !result.user) {
       throw new Error(`Failed to create test user: ${result.error || 'Unknown error'}`);
     }
@@ -572,8 +572,9 @@ describe('User Story: Transaction Synchronization', () => {
       // Create second user
       const secondUsername = `sync2${Math.random().toString(36).substring(2, 8)}`;
       const secondResult = await authService.register(
-        secondUsername, 
-        'another secure passphrase'
+        secondUsername,
+        'another secure passphrase',
+        secondUsername,
       );
       
       if (!secondResult.success || !secondResult.user) {

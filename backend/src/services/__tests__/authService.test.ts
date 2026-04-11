@@ -16,6 +16,10 @@ describe('AuthService', () => {
     createUser: jest.fn(),
     updateUser: jest.fn(),
     getAllUsers: jest.fn(),
+    getFamilies: jest.fn(),
+    getFamily: jest.fn(),
+    createFamily: jest.fn(),
+    updateFamily: jest.fn(),
   };
 
   beforeEach(() => {
@@ -32,20 +36,24 @@ describe('AuthService', () => {
     it('should register a new user with valid credentials', async () => {
       const hashedPassword = 'hashed_password';
       const userId = 'generated-uuid';
-      
+
       (uuidv4 as jest.Mock).mockReturnValue(userId);
       (bcrypt.hash as jest.Mock).mockResolvedValue(hashedPassword);
       mockDataService.getUserByUsername.mockResolvedValue(null);
+      mockDataService.createFamily.mockResolvedValue(undefined);
       mockDataService.createUser.mockResolvedValue({
         id: userId,
         username: validRegistrationData.username,
+        displayName: 'Test User',
+        familyId: userId,
         passwordHash: hashedPassword,
         createdAt: new Date(),
       });
 
       const result = await authService.register(
         validRegistrationData.username,
-        validRegistrationData.password
+        validRegistrationData.password,
+        'Test User',
       );
 
       expect(result).toEqual({
@@ -53,15 +61,19 @@ describe('AuthService', () => {
         user: {
           id: userId,
           username: validRegistrationData.username,
+          displayName: 'Test User',
+          familyId: userId,
         },
       });
       expect(bcrypt.hash).toHaveBeenCalledWith(validRegistrationData.password, 10);
-      expect(mockDataService.createUser).toHaveBeenCalledWith({
+      expect(mockDataService.createFamily).toHaveBeenCalled();
+      expect(mockDataService.createUser).toHaveBeenCalledWith(expect.objectContaining({
         id: userId,
         username: validRegistrationData.username,
+        displayName: 'Test User',
+        familyId: userId,
         passwordHash: hashedPassword,
-        createdAt: expect.any(Date),
-      });
+      }));
     });
 
     it('should reject registration with existing username', async () => {
@@ -72,7 +84,8 @@ describe('AuthService', () => {
 
       const result = await authService.register(
         validRegistrationData.username,
-        validRegistrationData.password
+        validRegistrationData.password,
+        'Test User',
       );
 
       expect(result).toEqual({
@@ -87,12 +100,13 @@ describe('AuthService', () => {
 
       const result = await authService.register(
         validRegistrationData.username,
-        weakPassword
+        weakPassword,
+        'Test User',
       );
 
       expect(result).toEqual({
         success: false,
-        error: 'Password must be at least 8 characters long',
+        error: 'Password must be at least 15 characters long',
       });
       expect(mockDataService.createUser).not.toHaveBeenCalled();
     });
@@ -102,7 +116,8 @@ describe('AuthService', () => {
 
       const result = await authService.register(
         invalidUsername,
-        validRegistrationData.password
+        validRegistrationData.password,
+        'Test User',
       );
 
       expect(result).toEqual({
@@ -119,7 +134,8 @@ describe('AuthService', () => {
 
       const result = await authService.register(
         validRegistrationData.username,
-        validRegistrationData.password
+        validRegistrationData.password,
+        'Test User',
       );
 
       expect(result).toEqual({
@@ -138,13 +154,15 @@ describe('AuthService', () => {
     const mockUser = {
       id: 'user-123',
       username: 'testuser',
+      displayName: 'Test User',
+      familyId: 'family-123',
       passwordHash: 'hashed_password',
       createdAt: new Date(),
     };
 
     it('should login user with correct credentials', async () => {
       const mockToken = 'jwt_token_here';
-      
+
       mockDataService.getUserByUsername.mockResolvedValue(mockUser);
       (bcrypt.compare as jest.Mock).mockResolvedValue(true);
       (jwt.sign as jest.Mock).mockReturnValue(mockToken);
@@ -160,6 +178,8 @@ describe('AuthService', () => {
         user: {
           id: mockUser.id,
           username: mockUser.username,
+          displayName: mockUser.displayName,
+          familyId: mockUser.familyId,
         },
       });
       expect(bcrypt.compare).toHaveBeenCalledWith(
@@ -167,9 +187,9 @@ describe('AuthService', () => {
         mockUser.passwordHash
       );
       expect(jwt.sign).toHaveBeenCalledWith(
-        { userId: mockUser.id, username: mockUser.username },
+        { userId: mockUser.id, username: mockUser.username, familyId: mockUser.familyId },
         process.env.JWT_SECRET,
-        { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
+        { algorithm: 'HS256', expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
       );
     });
 
@@ -231,17 +251,18 @@ describe('AuthService', () => {
     it('should generate a valid JWT token', () => {
       const userId = 'user-123';
       const username = 'testuser';
+      const familyId = 'family-123';
       const mockToken = 'generated_jwt_token';
-      
+
       (jwt.sign as jest.Mock).mockReturnValue(mockToken);
 
-      const token = authService.generateToken(userId, username);
+      const token = authService.generateToken(userId, username, familyId);
 
       expect(token).toBe(mockToken);
       expect(jwt.sign).toHaveBeenCalledWith(
-        { userId, username },
+        { userId, username, familyId },
         process.env.JWT_SECRET,
-        { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
+        { algorithm: 'HS256', expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
       );
     });
 
@@ -250,10 +271,11 @@ describe('AuthService', () => {
       const mockDecoded = {
         userId: 'user-123',
         username: 'testuser',
+        familyId: 'family-123',
         iat: Date.now() / 1000,
         exp: Date.now() / 1000 + 3600,
       };
-      
+
       (jwt.verify as jest.Mock).mockReturnValue(mockDecoded);
 
       const result = authService.validateToken(mockToken);
@@ -262,7 +284,7 @@ describe('AuthService', () => {
         valid: true,
         decoded: mockDecoded,
       });
-      expect(jwt.verify).toHaveBeenCalledWith(mockToken, process.env.JWT_SECRET);
+      expect(jwt.verify).toHaveBeenCalledWith(mockToken, process.env.JWT_SECRET, { algorithms: ['HS256'] });
     });
 
     it('should reject an invalid JWT token', () => {
@@ -303,8 +325,9 @@ describe('AuthService', () => {
       const mockDecoded = {
         userId: 'user-123',
         username: 'testuser',
+        familyId: 'family-123',
       };
-      
+
       (jwt.verify as jest.Mock).mockReturnValue(mockDecoded);
       (jwt.sign as jest.Mock).mockReturnValue(newToken);
 
@@ -314,11 +337,11 @@ describe('AuthService', () => {
         success: true,
         token: newToken,
       });
-      expect(jwt.verify).toHaveBeenCalledWith(oldToken, process.env.JWT_SECRET);
+      expect(jwt.verify).toHaveBeenCalledWith(oldToken, process.env.JWT_SECRET, { algorithms: ['HS256'] });
       expect(jwt.sign).toHaveBeenCalledWith(
-        { userId: mockDecoded.userId, username: mockDecoded.username },
+        { userId: mockDecoded.userId, username: mockDecoded.username, familyId: mockDecoded.familyId },
         process.env.JWT_SECRET,
-        { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
+        { algorithm: 'HS256', expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
       );
     });
   });
@@ -505,7 +528,7 @@ describe('AuthService', () => {
       (bcrypt.hash as jest.Mock).mockResolvedValue('hash');
       (uuidv4 as jest.Mock).mockReturnValue('new-user');
       
-      await authService.register('newuser', 'Password123!');
+      await authService.register('newuser', 'Password123!', 'New User');
       
       expect(logSpy).toHaveBeenCalledWith({
         event: 'USER_REGISTERED',
