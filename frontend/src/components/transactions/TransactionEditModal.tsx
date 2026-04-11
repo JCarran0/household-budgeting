@@ -61,6 +61,14 @@ export function TransactionEditModal({
     enabled: opened,
   });
 
+  // Fetch account owner mappings for display name resolution
+  const { data: ownerMappingsData } = useQuery({
+    queryKey: ['account-owner-mappings'],
+    queryFn: () => api.getAccountOwnerMappings(),
+    enabled: opened,
+    staleTime: 5 * 60 * 1000,
+  });
+
   // Fetch all transactions to extract unique tags
   const { data: allTransactionsData } = useQuery({
     queryKey: ['all-transactions-tags'],
@@ -331,7 +339,7 @@ export function TransactionEditModal({
             {transaction.accountOwner && (
               <Group justify="space-between">
                 <Text size="sm" c="dimmed">Purchased by</Text>
-                <Text fw={500}>{formatAccountOwner(transaction.accountOwner)}</Text>
+                <Text fw={500}>{formatAccountOwner(transaction.accountOwner, ownerMappingsData?.mappings)}</Text>
               </Group>
             )}
 

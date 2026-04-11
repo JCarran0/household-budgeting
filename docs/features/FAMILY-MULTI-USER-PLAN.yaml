@@ -771,14 +771,14 @@ phase_8_frontend_auth:
 # PHASE 9: Frontend — Account Owner Mapping
 # ============================================================================
 phase_9_frontend_owner_mapping:
-  status: not_started
+  status: completed
   description: |
     Replace the hardcoded account owner mapping with API-driven configuration
     in the settings page, and update the transaction display.
   tasks:
     - id: P9-T1
       task: "Add account owner mapping management UI"
-      status: not_started
+      status: completed
       details: |
         Add section to Settings page:
         - "Card Owner Mappings" section
@@ -788,7 +788,7 @@ phase_9_frontend_owner_mapping:
 
     - id: P9-T2
       task: "Replace hardcoded formatAccountOwner"
-      status: not_started
+      status: completed
       details: |
         In frontend/src/utils/formatters.ts:
         - Remove the ACCOUNT_OWNER_NAMES constant
@@ -801,7 +801,7 @@ phase_9_frontend_owner_mapping:
 
     - id: P9-T3
       task: "Add account owner API functions to frontend client"
-      status: not_started
+      status: completed
       details: |
         In frontend/src/lib/api/:
         - Add getAccountOwnerMappings(), createAccountOwnerMapping(),
