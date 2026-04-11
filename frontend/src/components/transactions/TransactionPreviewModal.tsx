@@ -1,6 +1,6 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { 
   Modal, 
   Text, 
@@ -28,6 +28,7 @@ import { format } from 'date-fns';
 import { api } from '../../lib/api';
 import type { Transaction } from '../../../../shared/types';
 import { formatCurrency } from '../../utils/formatters';
+import { TransactionEditModal } from './TransactionEditModal';
 
 interface TransactionPreviewModalProps {
   opened: boolean;
@@ -51,6 +52,8 @@ export function TransactionPreviewModal({
   tags,
 }: TransactionPreviewModalProps) {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
 
   // Fetch transaction preview data
   const { data: transactionData, isLoading, error } = useQuery({
@@ -264,7 +267,11 @@ export function TransactionPreviewModal({
                 </Table.Thead>
                 <Table.Tbody>
                   {transactions.map((transaction) => (
-                    <Table.Tr key={transaction.id}>
+                    <Table.Tr
+                      key={transaction.id}
+                      onClick={() => setEditingTransaction(transaction)}
+                      style={{ cursor: 'pointer' }}
+                    >
                       <Table.Td>
                         <Text size="sm" c="dimmed">
                           {formatDisplayDate(transaction.date)}
@@ -327,6 +334,15 @@ export function TransactionPreviewModal({
           </>
         )}
       </Stack>
+
+      <TransactionEditModal
+        opened={editingTransaction !== null}
+        onClose={() => {
+          setEditingTransaction(null);
+          queryClient.invalidateQueries({ queryKey: ['transaction-preview', categoryId] });
+        }}
+        transaction={editingTransaction}
+      />
     </Modal>
   );
 }
