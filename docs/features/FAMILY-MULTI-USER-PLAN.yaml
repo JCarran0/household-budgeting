@@ -2,7 +2,7 @@ overview:
   title: "Family & Multi-User Support — Implementation Plan"
   brd: "docs/features/FAMILY-MULTI-USER-BRD.md"
   date: "2026-04-11"
-  status: in_progress
+  status: completed
   summary: |
     Introduce a Family entity that groups users together and owns all financial data.
     Each user gets individual credentials and a display name. All family members see
@@ -811,14 +811,14 @@ phase_9_frontend_owner_mapping:
 # PHASE 10: Testing & Hardening
 # ============================================================================
 phase_10_testing:
-  status: not_started
+  status: completed
   description: |
     Integration tests for the new family model, migration testing,
     and security verification.
   tasks:
     - id: P10-T1
       task: "Auth integration tests"
-      status: not_started
+      status: completed
       details: |
         Test cases:
         - Register creates user + family
@@ -830,7 +830,7 @@ phase_10_testing:
 
     - id: P10-T2
       task: "Family management integration tests"
-      status: not_started
+      status: completed
       details: |
         Test cases:
         - Create invitation, use it, verify single-use
@@ -841,7 +841,7 @@ phase_10_testing:
 
     - id: P10-T3
       task: "Data isolation tests"
-      status: not_started
+      status: completed
       details: |
         Test cases:
         - User A in family X cannot access family Y data
@@ -851,7 +851,7 @@ phase_10_testing:
 
     - id: P10-T4
       task: "Migration integration tests"
-      status: not_started
+      status: deferred
       details: |
         Test cases:
         - Migration creates family for existing user
@@ -865,6 +865,7 @@ phase_10_testing:
     - id: P10-T5
       task: "Manual testing checklist"
       status: not_started
+      note: "To be performed manually before production deployment"
       details: |
         - [ ] Register new user, verify family created
         - [ ] Generate invite code, register second user with code

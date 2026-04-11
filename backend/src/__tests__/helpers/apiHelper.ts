@@ -38,6 +38,31 @@ export async function registerUser(
 }
 
 /**
+ * Register a new user with a join code to join an existing family
+ */
+export async function registerUserWithJoinCode(
+  username: string,
+  password: string,
+  joinCode: string,
+  displayName?: string
+): Promise<AuthenticatedUser> {
+  const response = await request(app)
+    .post('/api/v1/auth/register')
+    .send({ username, password, displayName: displayName ?? username, joinCode });
+
+  if (response.status !== 201) {
+    throw new Error(`Registration with join code failed: ${response.body.error}`);
+  }
+
+  return {
+    token: response.body.token,
+    userId: response.body.user.id,
+    username: response.body.user.username,
+    familyId: response.body.user.familyId,
+  };
+}
+
+/**
  * Login an existing user and return auth token
  */
 export async function loginUser(
