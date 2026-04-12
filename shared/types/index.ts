@@ -276,6 +276,7 @@ export interface StoredTrip extends Trip {
   userId: string;
   createdAt: string;
   updatedAt: string;
+  lastModifiedBy?: string;  // userId of the family member who last edited
 }
 
 export interface TripSummary extends Trip {
@@ -332,6 +333,7 @@ export interface StoredProject extends Project {
   userId: string;
   createdAt: string;
   updatedAt: string;
+  lastModifiedBy?: string;  // userId of the family member who last edited
 }
 
 export interface ProjectSummary extends Project {
@@ -399,6 +401,7 @@ export interface ChatRequest {
   conversationHistory: ChatMessage[];
   pageContext: PageContext;
   model: ChatModel;
+  userDisplayName?: string;
 }
 
 export interface ChatResponse {

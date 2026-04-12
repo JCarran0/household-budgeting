@@ -95,7 +95,7 @@ export class TripService {
    * Create a new trip.
    * Generates a tag from the name and start date, then validates uniqueness.
    */
-  async createTrip(data: CreateTripDto, familyId: string): Promise<StoredTrip> {
+  async createTrip(data: CreateTripDto, familyId: string, userId?: string): Promise<StoredTrip> {
     const tag = generateTripTag(data.name, data.startDate);
 
     const existingTrips = await this.loadTrips(familyId);
@@ -117,6 +117,7 @@ export class TripService {
       notes: data.notes ?? '',
       createdAt: now,
       updatedAt: now,
+      lastModifiedBy: userId,
     };
 
     existingTrips.push(trip);
@@ -156,7 +157,8 @@ export class TripService {
   async updateTrip(
     tripId: string,
     data: UpdateTripDto,
-    familyId: string
+    familyId: string,
+    userId?: string
   ): Promise<StoredTrip> {
     const trips = await this.loadTrips(familyId);
     const index = trips.findIndex((t) => t.id === tripId);
@@ -196,6 +198,7 @@ export class TripService {
       notes: data.notes !== undefined ? data.notes : existing.notes,
       tag: tagWillChange ? candidateTag : oldTag,
       updatedAt: now,
+      lastModifiedBy: userId ?? existing.lastModifiedBy,
     };
 
     trips[index] = updatedTrip;

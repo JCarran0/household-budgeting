@@ -86,7 +86,7 @@ export class ChatbotService {
 
     try {
       const result = await this.executeWithTimeout(
-        this.toolLoop(familyId, messages, request.model, toolCallLogs),
+        this.toolLoop(familyId, messages, request.model, toolCallLogs, request.userDisplayName),
         REQUEST_TIMEOUT_MS,
       );
 
@@ -226,6 +226,7 @@ export class ChatbotService {
     messages: Anthropic.MessageParam[],
     model: ChatModel,
     toolCallLogs: ToolCallLog[],
+    userDisplayName?: string,
   ): Promise<{
     type: 'message' | 'issue_confirmation';
     content: string;
@@ -237,10 +238,14 @@ export class ChatbotService {
     let totalOutputTokens = 0;
 
     for (let iteration = 0; iteration < MAX_TOOL_ITERATIONS; iteration++) {
+      const systemPrompt = userDisplayName
+        ? `${CHATBOT_SYSTEM_PROMPT}\n\nThe user you are chatting with is named ${userDisplayName}. Address them by name occasionally.`
+        : CHATBOT_SYSTEM_PROMPT;
+
       const response = await this.client.messages.create({
         model: MODEL_IDS[model],
         max_tokens: MAX_OUTPUT_TOKENS,
-        system: CHATBOT_SYSTEM_PROMPT,
+        system: systemPrompt,
         tools: CHATBOT_TOOLS,
         messages,
       });

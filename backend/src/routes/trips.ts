@@ -87,9 +87,10 @@ router.use(authMiddleware);
 router.post('/', async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const familyId = req.user?.familyId;
+    const userId = req.user?.userId;
     if (!familyId) throw new AuthorizationError();
     const validatedData = createTripSchema.parse(req.body);
-    const trip = await tripService.createTrip(validatedData, familyId);
+    const trip = await tripService.createTrip(validatedData, familyId, userId);
     res.status(201).json(trip);
   } catch (error) {
     if (error instanceof z.ZodError) {
@@ -174,9 +175,10 @@ router.get('/:id/summary', async (req: Request, res: Response, next: NextFunctio
 router.put('/:id', async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const familyId = req.user?.familyId;
+    const userId = req.user?.userId;
     if (!familyId) throw new AuthorizationError();
     const validatedData = updateTripSchema.parse(req.body);
-    const trip = await tripService.updateTrip(req.params.id, validatedData, familyId);
+    const trip = await tripService.updateTrip(req.params.id, validatedData, familyId, userId);
     res.json(trip);
   } catch (error) {
     if (error instanceof z.ZodError) {

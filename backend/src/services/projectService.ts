@@ -95,7 +95,7 @@ export class ProjectService {
    * Create a new project.
    * Generates a tag from the name and start date, then validates uniqueness.
    */
-  async createProject(data: CreateProjectDto, familyId: string): Promise<StoredProject> {
+  async createProject(data: CreateProjectDto, familyId: string, userId?: string): Promise<StoredProject> {
     const tag = generateProjectTag(data.name, data.startDate);
 
     const existingProjects = await this.loadProjects(familyId);
@@ -116,6 +116,7 @@ export class ProjectService {
       notes: data.notes ?? '',
       createdAt: now,
       updatedAt: now,
+      lastModifiedBy: userId,
     };
 
     existingProjects.push(project);
@@ -155,7 +156,8 @@ export class ProjectService {
   async updateProject(
     projectId: string,
     data: UpdateProjectDto,
-    familyId: string
+    familyId: string,
+    userId?: string
   ): Promise<StoredProject> {
     const projects = await this.loadProjects(familyId);
     const index = projects.findIndex((p) => p.id === projectId);
@@ -194,6 +196,7 @@ export class ProjectService {
       notes: data.notes !== undefined ? data.notes : existing.notes,
       tag: tagWillChange ? candidateTag : oldTag,
       updatedAt: now,
+      lastModifiedBy: userId ?? existing.lastModifiedBy,
     };
 
     projects[index] = updatedProject;

@@ -85,9 +85,10 @@ router.use(authMiddleware);
 router.post('/', async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const familyId = req.user?.familyId;
+    const userId = req.user?.userId;
     if (!familyId) throw new AuthorizationError();
     const validatedData = createProjectSchema.parse(req.body);
-    const project = await projectService.createProject(validatedData, familyId);
+    const project = await projectService.createProject(validatedData, familyId, userId);
     res.status(201).json(project);
   } catch (error) {
     if (error instanceof z.ZodError) {
@@ -172,9 +173,10 @@ router.get('/:id/summary', async (req: Request, res: Response, next: NextFunctio
 router.put('/:id', async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const familyId = req.user?.familyId;
+    const userId = req.user?.userId;
     if (!familyId) throw new AuthorizationError();
     const validatedData = updateProjectSchema.parse(req.body);
-    const project = await projectService.updateProject(req.params.id, validatedData, familyId);
+    const project = await projectService.updateProject(req.params.id, validatedData, familyId, userId);
     res.json(project);
   } catch (error) {
     if (error instanceof z.ZodError) {

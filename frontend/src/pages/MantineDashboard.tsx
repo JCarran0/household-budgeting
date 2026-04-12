@@ -34,12 +34,14 @@ import { useQuery } from '@tanstack/react-query';
 import { api } from '../lib/api';
 import { formatDistanceToNow } from 'date-fns';
 import { Link, useNavigate } from 'react-router-dom';
+import { useAuthStore } from '../stores/authStore';
 import { formatCurrency } from '../utils/formatters';
 import { calculateActualTotals } from '../../../shared/utils/budgetCalculations';
 import { format, startOfMonth, addMonths } from 'date-fns';
 
 export function MantineDashboard() {
   const navigate = useNavigate();
+  const user = useAuthStore((s) => s.user);
   
   const { data: accounts, isLoading: accountsLoading } = useQuery({
     queryKey: ['accounts'],
@@ -233,7 +235,7 @@ export function MantineDashboard() {
       <Group justify="space-between">
         <div>
           <Title order={2}>Dashboard</Title>
-          <Text c="dimmed" size="sm">Welcome back, {accounts?.[0]?.name ? 'here\'s your financial overview' : 'let\'s get started'}</Text>
+          <Text c="dimmed" size="sm">Welcome back{user?.displayName ? ` ${user.displayName}` : ''}, {accounts?.length ? 'here\'s your financial overview' : 'let\'s get started'}</Text>
         </div>
         {accounts && accounts.length === 0 && (
           <Button 

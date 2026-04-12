@@ -15,6 +15,7 @@ import {
 } from '@mantine/core';
 import { IconSend, IconTrash } from '@tabler/icons-react';
 import { api } from '../../lib/api';
+import { useAuthStore } from '../../stores/authStore';
 import { usePageContext } from '../../hooks/usePageContext';
 import { ChatMessageBubble } from './ChatMessageBubble';
 import type { ChatMessage, ChatModel, GitHubIssueDraft, ChatResponse } from '../../../../shared/types';
@@ -33,6 +34,7 @@ interface ChatOverlayProps {
 }
 
 export function ChatOverlay({ opened, onClose }: ChatOverlayProps) {
+  const userDisplayName = useAuthStore((s) => s.user?.displayName);
   const [messages, setMessages] = useState<ChatMessage[]>(() => {
     try {
       const stored = sessionStorage.getItem(SESSION_KEY_HISTORY);
@@ -123,6 +125,7 @@ export function ChatOverlay({ opened, onClose }: ChatOverlayProps) {
         conversationHistory: [...messages, userMessage],
         pageContext,
         model,
+        userDisplayName: userDisplayName ?? undefined,
       });
       handleResponse(response);
     } catch (err) {
