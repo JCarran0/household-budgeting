@@ -736,6 +736,109 @@ export interface AmazonCategorizeRequest {
   matchIds: string[];
 }
 
+// =============================================================================
+// Task Management Types
+// =============================================================================
+
+export type TaskStatus = 'todo' | 'started' | 'done' | 'cancelled';
+export type TaskScope = 'family' | 'personal';
+
+export interface TaskTransition {
+  fromStatus: TaskStatus | null;  // null for initial creation
+  toStatus: TaskStatus;
+  timestamp: string;              // ISO datetime
+  userId: string;                 // who made the change
+}
+
+export interface Task {
+  id: string;                     // UUID
+  title: string;
+  description: string;            // empty string default
+  status: TaskStatus;
+  scope: TaskScope;
+  assigneeId: string | null;      // userId of assignee, null if unassigned
+  dueDate: string | null;         // ISO date, null if no deadline
+  createdAt: string;              // ISO datetime
+  createdBy: string;              // userId
+  startedAt: string | null;       // most recent transition to started
+  completedAt: string | null;     // most recent transition to done
+  cancelledAt: string | null;     // most recent transition to cancelled
+  assignedAt: string | null;      // most recent assignment change
+  transitions: TaskTransition[];  // append-only log
+}
+
+export interface StoredTask extends Task {
+  familyId: string;
+}
+
+export interface CreateTaskDto {
+  title: string;
+  description?: string;
+  scope?: TaskScope;              // default: 'family'
+  assigneeId?: string | null;
+  dueDate?: string | null;
+}
+
+export interface UpdateTaskDto {
+  title?: string;
+  description?: string;
+  scope?: TaskScope;
+  assigneeId?: string | null;
+  dueDate?: string | null;
+}
+
+export interface UpdateTaskStatusDto {
+  status: TaskStatus;
+}
+
+// Task Template types
+
+export interface TaskTemplate {
+  id: string;                     // UUID
+  name: string;                   // template name = default task title
+  defaultAssigneeId: string | null;
+  defaultScope: TaskScope;        // default: 'family'
+  sortOrder: number;              // display order in dropdown
+}
+
+export interface StoredTaskTemplate extends TaskTemplate {
+  familyId: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateTaskTemplateDto {
+  name: string;
+  defaultAssigneeId?: string | null;
+  defaultScope?: TaskScope;
+}
+
+export interface UpdateTaskTemplateDto {
+  name?: string;
+  defaultAssigneeId?: string | null;
+  defaultScope?: TaskScope;
+  sortOrder?: number;
+}
+
+// Leaderboard types
+
+export interface LeaderboardEntry {
+  userId: string;
+  displayName: string;
+  completedToday: number;
+  completedThisWeek: number;
+  completedThisMonth: number;
+}
+
+export interface LeaderboardResponse {
+  entries: LeaderboardEntry[];
+  boundaries: {
+    todayStart: string;
+    weekStart: string;
+    monthStart: string;
+  };
+}
+
 // Manual Account Types
 export type ManualAccountCategory =
   | 'real_estate'
