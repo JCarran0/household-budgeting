@@ -73,7 +73,8 @@ household-budgeting/
 #### Service Architecture Patterns
 - **Dependency Injection**: Services receive dependencies via constructor. No `as any` casts — `services/index.ts` builds the dependency graph with typed interfaces.
 - **Repository Pattern**: `Repository<T>` base class (`repository.ts`) encapsulates data access. Used by TransactionService and ReportService.
-- **Filter Engine**: `transactionFilterEngine.ts` — pure `filterTransactions()` function extracted from TransactionService for independent testability.
+- **Transaction Reader**: `transactionReader.ts` — canonical `excludeRemoved()` and `getActiveTransactions()` functions for filtering out Plaid's removed pending holds. All read paths (filter engine, chatbot, auto-categorize, reports) use this as the single source of truth. Mutation paths that load-modify-save (TransactionService mutations, admin routes, TripService, ProjectService) intentionally bypass it to avoid silently dropping removed records on save.
+- **Filter Engine**: `transactionFilterEngine.ts` — pure `filterTransactions()` function extracted from TransactionService for independent testability. Uses `excludeRemoved()` from Transaction Reader.
 - **Report Helpers**: `reportHelpers.ts` — pure functions for date ranges, std dev, hidden category propagation, savings category detection.
 - **Error Handling**: Typed `AppError` hierarchy in `errors/index.ts` with Express `errorHandler` middleware. Services throw typed errors; routes pass via `next(error)`.
 - **Configuration**: `config.ts` validates all env vars at startup via Zod. Exports typed `config` object consumed by services.

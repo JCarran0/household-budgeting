@@ -530,6 +530,7 @@ Having issues?
 - **Amazon Receipt Service**: `backend/src/services/amazonReceiptService.ts`
 - **Amazon Receipt Prompts**: `backend/src/services/amazonReceiptPrompt.ts`
 - **Amazon Receipt Flow UI**: `frontend/src/components/transactions/AmazonReceiptFlowModal.tsx`
+- **Transaction Reader**: `backend/src/services/transactionReader.ts` (canonical removed-transaction filter — all read paths must use this)
 
 ### Testing
 - **Backend Tests**: `backend/src/__tests__/`
@@ -642,6 +643,7 @@ Track important decisions that affect how the codebase should be modified.
 
 | Date | Decision | Rationale | Impact |
 |------|----------|-----------|--------|
+| 2026-04 | Centralized transaction reader utility | Eliminate duplicated `status !== 'removed'` filter across 4 services | New `transactionReader.ts` with `excludeRemoved()` / `getActiveTransactions()` — all read paths use this; mutation paths intentionally bypass it |
 | 2026-04 | Amazon receipt matching via Claude vision | Upload Amazon PDFs, extract items, match to bank transactions, categorize with splits | AmazonReceiptService with tiered matching (amount+date), Zod-validated Claude output, session dedup against completed sessions only, CUSTOM_AMAZON transactions always re-eligible |
 | 2026-04 | Unified AI Categorize dropdown menu | Single entry point for both categorization workflows | TransactionToolbar uses Mantine Menu dropdown with "Uncategorized Transactions" and "Amazon Receipt Matching" options |
 | 2026-04 | AI chatbot with structural security boundary | LLM-powered financial assistant with read-only data access | ChatbotDataService receives ReadOnlyDataService (SEC-018), tool_use for prompt injection defense, $20/month cost cap with mutex, GitHub issue confirmation via frontend-only path |

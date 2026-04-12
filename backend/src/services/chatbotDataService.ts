@@ -16,6 +16,7 @@
  */
 
 import { ReadOnlyDataService } from './readOnlyDataService';
+import { getActiveTransactions } from './transactionReader';
 import type {
   Category,
   Transaction,
@@ -134,11 +135,7 @@ export class ChatbotDataService {
    * Query transactions with filters. All results scoped to familyId.
    */
   async queryTransactions(familyId: string, filters: QueryTransactionsInput): Promise<Transaction[]> {
-    const stored = await this.dataService.getData<StoredTransaction[]>(`transactions_${familyId}`);
-    if (!stored) return [];
-
-    // Always exclude removed transactions (e.g., pending holds replaced by posted versions)
-    let results = stored.filter(t => t.status !== 'removed');
+    let results = await getActiveTransactions<StoredTransaction>(this.dataService, familyId);
 
     if (filters.startDate) {
       results = results.filter(t => t.date >= filters.startDate!);

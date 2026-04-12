@@ -7,6 +7,7 @@
 
 import { StoredTransaction, TransactionFilter, TransactionsResult } from './transactionService';
 import { isTransferCategory } from '../shared/utils/categoryHelpers';
+import { excludeRemoved } from './transactionReader';
 
 /**
  * Apply filters to a list of transactions.
@@ -26,7 +27,7 @@ export function filterTransactions(
   filter: TransactionFilter = {}
 ): TransactionsResult {
   // Get base transactions (excluding removed and pending if not included)
-  let baseTransactions = allTransactions.filter((txn: StoredTransaction) => txn.status !== 'removed');
+  let baseTransactions = excludeRemoved(allTransactions);
 
   // Apply base filters that affect the total count
   if (!filter.includePending) {

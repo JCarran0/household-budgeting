@@ -9,6 +9,7 @@ import { DataService } from './dataService';
 import { StoredTransaction } from './transactionService';
 import { AutoCategorizeRule, Category } from '../shared/types';
 import { CategoryService } from './categoryService';
+import { getActiveTransactions, excludeRemoved } from './transactionReader';
 
 export interface StoredAutoCategorizeRule extends Omit<AutoCategorizeRule, 'patterns'> {
   userId: string;
@@ -314,11 +315,7 @@ export class AutoCategorizeService {
         await this.categoryService.initializeDefaultCategories(familyId);
       }
 
-      const allTransactions = await this.dataService.getData<StoredTransaction[]>(
-        `transactions_${familyId}`
-      ) || [];
-      // Exclude removed transactions (pending holds replaced by posted versions)
-      const transactions = allTransactions.filter(t => t.status !== 'removed');
+      const transactions = await getActiveTransactions<StoredTransaction>(this.dataService, familyId);
 
       const userCategories = await this.dataService.getCategories(familyId);
       const categoryMap = new Map(userCategories.map(c => [c.id, c.name]));
@@ -393,8 +390,7 @@ export class AutoCategorizeService {
       const allTransactions = await this.dataService.getData<StoredTransaction[]>(
         `transactions_${familyId}`
       ) || [];
-      // Exclude removed transactions (pending holds replaced by posted versions)
-      const transactions = allTransactions.filter(t => t.status !== 'removed');
+      const transactions = excludeRemoved(allTransactions);
 
       // Get family's categories for matching
       const userCategories = await this.dataService.getCategories(familyId);

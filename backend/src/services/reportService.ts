@@ -13,6 +13,7 @@ import { calculateIncome, calculateExpenses, calculateNetCashFlow, calculateSavi
 import { calculateBudgetTotals } from '../shared/utils/budgetCalculations';
 import { Repository } from './repository';
 import { getMonthRange, calculateStdDev, getEffectivelyHiddenCategoryIds, getSavingsSubcategoryIds } from './reportHelpers';
+import { excludeRemoved } from './transactionReader';
 
 // Report types
 export interface SpendingTrend {
@@ -123,7 +124,7 @@ export class ReportService {
   /** Get all active transactions for a family, excluding removed pending holds */
   private async getActiveTransactions(familyId: string): Promise<StoredTransaction[]> {
     const all = await this.transactionRepo.getAll(familyId);
-    return all.filter(t => t.status !== 'removed');
+    return excludeRemoved(all);
   }
 
   /**
