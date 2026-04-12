@@ -5,6 +5,35 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.15.0](https://github.com/JCarran0/household-budgeting/compare/v5.14.0...v5.15.0) (2026-04-12)
+
+
+### Features
+
+* **family:** add account owner mapping UI and replace hardcoded formatter (Phase 9) ([89a3724](https://github.com/JCarran0/household-budgeting/commit/89a372433ae75dcfa8d86a841c16ef8fc5e4224d))
+* **family:** add Family entity types, data model, and CRUD methods (Phase 1) ([96ca423](https://github.com/JCarran0/household-budgeting/commit/96ca4230fb97994de5e76d462eb3cf63756a6144))
+* **family:** add family management API, join codes, and membership verification (Phase 5) ([efb9a22](https://github.com/JCarran0/household-budgeting/commit/efb9a223f941dbff03403cb04bf9511301bb2add))
+* **family:** add frontend auth, settings page, and family management UI (Phase 8) ([baf7244](https://github.com/JCarran0/household-budgeting/commit/baf7244427d74f6771d1da408ccc5f9f3a52352d))
+* **family:** add user profile API and account owner mapping service (Phases 6-7) ([beec2d0](https://github.com/JCarran0/household-budgeting/commit/beec2d0a8a720acdc3e4c4b0ea85eb3b4dc726ae))
+* **family:** make auth system family-aware (Phase 2) ([ea4f348](https://github.com/JCarran0/household-budgeting/commit/ea4f3481dcd79286bdc0dde4ea0557fd89c23204))
+* **family:** refactor data layer to family-scoped storage and add migration (Phases 3-4) ([02ce59c](https://github.com/JCarran0/household-budgeting/commit/02ce59c0ceeec7195b234d38f30ce0b537a03d5a))
+
+
+### Bug Fixes
+
+* **family:** auto-migrate pre-family users on login ([b748deb](https://github.com/JCarran0/household-budgeting/commit/b748deb024b342928637fa7cdedd75ff0b3c0ed6))
+
+
+### Tests
+
+* **family:** add integration tests for auth, sharing, and isolation (Phase 10) ([707c87d](https://github.com/JCarran0/household-budgeting/commit/707c87db7158bab30c92c9b87477e7c626106ac1))
+
+
+### Documentation
+
+* **family:** mark manual testing checklist complete ([6504887](https://github.com/JCarran0/household-budgeting/commit/6504887e94a4d987da4ff7326137f792f2519115))
+* **tasks:** add BRD and implementation plan for household task management ([b42bfef](https://github.com/JCarran0/household-budgeting/commit/b42bfefe7c51cc8cf1c9d592e60dc1a8b97d249b))
+
 ## [5.14.0](https://github.com/JCarran0/household-budgeting/compare/v5.13.0...v5.14.0) (2026-04-11)
 
 
