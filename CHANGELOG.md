@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+### [5.16.4](https://github.com/JCarran0/household-budgeting/compare/v5.16.3...v5.16.4) (2026-04-12)
+
+
+### Bug Fixes
+
+* **transactions:** clear all filters when clicking uncategorized transactions alert ([5523bce](https://github.com/JCarran0/household-budgeting/commit/5523bce20fe2b27a2843208df9c5f0755bb82266))
+
 ### [5.16.3](https://github.com/JCarran0/household-budgeting/compare/v5.16.2...v5.16.3) (2026-04-12)
 
 
