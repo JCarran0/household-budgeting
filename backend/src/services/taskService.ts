@@ -32,7 +32,13 @@ export class TaskService {
   // ---------------------------------------------------------------------------
 
   private async loadTasks(familyId: string): Promise<StoredTask[]> {
-    return (await this.dataService.getData<StoredTask[]>(`tasks_${familyId}`)) ?? [];
+    const tasks = (await this.dataService.getData<StoredTask[]>(`tasks_${familyId}`)) ?? [];
+    // Backfill fields added after initial release
+    for (const task of tasks) {
+      if (!task.tags) task.tags = [];
+      if (!task.subTasks) task.subTasks = [];
+    }
+    return tasks;
   }
 
   private async saveTasks(tasks: StoredTask[], familyId: string): Promise<void> {
@@ -89,6 +95,12 @@ export class TaskService {
           userId,
         },
       ],
+      tags: data.tags ?? [],
+      subTasks: (data.subTasks ?? []).map((st) => ({
+        id: uuidv4(),
+        title: st.title,
+        completed: false,
+      })),
     };
 
     const tasks = await this.loadTasks(familyId);
@@ -133,6 +145,8 @@ export class TaskService {
       dueDate: data.dueDate !== undefined ? data.dueDate : existing.dueDate,
       assigneeId: data.assigneeId !== undefined ? data.assigneeId : existing.assigneeId,
       assignedAt: assigneeChanged ? now : existing.assignedAt,
+      tags: data.tags !== undefined ? data.tags : existing.tags,
+      subTasks: data.subTasks !== undefined ? data.subTasks : existing.subTasks,
     };
 
     tasks[index] = updated;

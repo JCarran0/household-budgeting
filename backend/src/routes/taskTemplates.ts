@@ -10,14 +10,20 @@ const router = Router();
 
 const createTemplateSchema = z.object({
   name: z.string().min(1).max(100),
+  defaultDescription: z.string().max(2000).optional(),
   defaultAssigneeId: z.string().nullable().optional(),
   defaultScope: z.enum(['family', 'personal']).optional(),
+  defaultTags: z.array(z.string().min(1).max(50)).max(20).optional(),
+  defaultSubTasks: z.array(z.string().min(1).max(200)).max(50).optional(),
 });
 
 const updateTemplateSchema = z.object({
   name: z.string().min(1).max(100).optional(),
+  defaultDescription: z.string().max(2000).optional(),
   defaultAssigneeId: z.string().nullable().optional(),
   defaultScope: z.enum(['family', 'personal']).optional(),
+  defaultTags: z.array(z.string().min(1).max(50)).max(20).optional(),
+  defaultSubTasks: z.array(z.string().min(1).max(200)).max(50).optional(),
   sortOrder: z.number().int().positive().optional(),
 });
 

@@ -21,11 +21,17 @@ export class TaskTemplateService {
   // ---------------------------------------------------------------------------
 
   private async loadTemplates(familyId: string): Promise<StoredTaskTemplate[]> {
-    return (
+    const templates =
       (await this.dataService.getData<StoredTaskTemplate[]>(
         `task_templates_${familyId}`
-      )) ?? []
-    );
+      )) ?? [];
+    // Backfill fields added after initial release
+    for (const t of templates) {
+      if (t.defaultDescription === undefined) t.defaultDescription = '';
+      if (!t.defaultTags) t.defaultTags = [];
+      if (!t.defaultSubTasks) t.defaultSubTasks = [];
+    }
+    return templates;
   }
 
   private async saveTemplates(
@@ -52,8 +58,11 @@ export class TaskTemplateService {
       id: uuidv4(),
       familyId,
       name: data.name,
+      defaultDescription: data.defaultDescription ?? '',
       defaultAssigneeId: data.defaultAssigneeId ?? null,
       defaultScope: data.defaultScope ?? 'family',
+      defaultTags: data.defaultTags ?? [],
+      defaultSubTasks: data.defaultSubTasks ?? [],
       sortOrder: maxSort + 1,
       createdAt: now,
       updatedAt: now,
@@ -87,11 +96,14 @@ export class TaskTemplateService {
     const updated: StoredTaskTemplate = {
       ...existing,
       name: data.name ?? existing.name,
+      defaultDescription: data.defaultDescription !== undefined ? data.defaultDescription : existing.defaultDescription,
       defaultAssigneeId:
         data.defaultAssigneeId !== undefined
           ? data.defaultAssigneeId
           : existing.defaultAssigneeId,
       defaultScope: data.defaultScope ?? existing.defaultScope,
+      defaultTags: data.defaultTags !== undefined ? data.defaultTags : existing.defaultTags,
+      defaultSubTasks: data.defaultSubTasks !== undefined ? data.defaultSubTasks : existing.defaultSubTasks,
       sortOrder: data.sortOrder ?? existing.sortOrder,
       updatedAt: now,
     };

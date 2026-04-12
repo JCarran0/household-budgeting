@@ -8,12 +8,24 @@ const router = Router();
 
 // Validation schemas
 
+const subTaskCreateSchema = z.object({
+  title: z.string().min(1).max(200),
+});
+
+const subTaskSchema = z.object({
+  id: z.string(),
+  title: z.string().min(1).max(200),
+  completed: z.boolean(),
+});
+
 const createTaskSchema = z.object({
   title: z.string().min(1).max(200),
   description: z.string().max(2000).optional(),
   scope: z.enum(['family', 'personal']).optional(),
   assigneeId: z.string().nullable().optional(),
   dueDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Invalid date format. Use YYYY-MM-DD').nullable().optional(),
+  tags: z.array(z.string().min(1).max(50)).max(20).optional(),
+  subTasks: z.array(subTaskCreateSchema).max(50).optional(),
 });
 
 const updateTaskSchema = z.object({
@@ -22,6 +34,8 @@ const updateTaskSchema = z.object({
   scope: z.enum(['family', 'personal']).optional(),
   assigneeId: z.string().nullable().optional(),
   dueDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Invalid date format. Use YYYY-MM-DD').nullable().optional(),
+  tags: z.array(z.string().min(1).max(50)).max(20).optional(),
+  subTasks: z.array(subTaskSchema).max(50).optional(),
 });
 
 const updateStatusSchema = z.object({

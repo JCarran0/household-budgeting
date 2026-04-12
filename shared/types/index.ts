@@ -746,6 +746,12 @@ export interface AmazonCategorizeRequest {
 export type TaskStatus = 'todo' | 'started' | 'done' | 'cancelled';
 export type TaskScope = 'family' | 'personal';
 
+export interface SubTask {
+  id: string;                     // UUID
+  title: string;
+  completed: boolean;
+}
+
 export interface TaskTransition {
   fromStatus: TaskStatus | null;  // null for initial creation
   toStatus: TaskStatus;
@@ -768,6 +774,8 @@ export interface Task {
   cancelledAt: string | null;     // most recent transition to cancelled
   assignedAt: string | null;      // most recent assignment change
   transitions: TaskTransition[];  // append-only log
+  tags: string[];                 // free-form labels for filtering
+  subTasks: SubTask[];            // checklist items on the task
 }
 
 export interface StoredTask extends Task {
@@ -780,6 +788,8 @@ export interface CreateTaskDto {
   scope?: TaskScope;              // default: 'family'
   assigneeId?: string | null;
   dueDate?: string | null;
+  tags?: string[];
+  subTasks?: { title: string }[];
 }
 
 export interface UpdateTaskDto {
@@ -788,6 +798,8 @@ export interface UpdateTaskDto {
   scope?: TaskScope;
   assigneeId?: string | null;
   dueDate?: string | null;
+  tags?: string[];
+  subTasks?: SubTask[];
 }
 
 export interface UpdateTaskStatusDto {
@@ -799,8 +811,11 @@ export interface UpdateTaskStatusDto {
 export interface TaskTemplate {
   id: string;                     // UUID
   name: string;                   // template name = default task title
+  defaultDescription: string;     // default task description
   defaultAssigneeId: string | null;
   defaultScope: TaskScope;        // default: 'family'
+  defaultTags: string[];          // default tags applied to created task
+  defaultSubTasks: string[];      // default sub-task titles
   sortOrder: number;              // display order in dropdown
 }
 
@@ -812,14 +827,20 @@ export interface StoredTaskTemplate extends TaskTemplate {
 
 export interface CreateTaskTemplateDto {
   name: string;
+  defaultDescription?: string;
   defaultAssigneeId?: string | null;
   defaultScope?: TaskScope;
+  defaultTags?: string[];
+  defaultSubTasks?: string[];
 }
 
 export interface UpdateTaskTemplateDto {
   name?: string;
+  defaultDescription?: string;
   defaultAssigneeId?: string | null;
   defaultScope?: TaskScope;
+  defaultTags?: string[];
+  defaultSubTasks?: string[];
   sortOrder?: number;
 }
 

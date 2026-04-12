@@ -22,6 +22,10 @@ import {
   Paper,
   Table,
   Avatar,
+  Checkbox,
+  MultiSelect,
+  CloseButton,
+  TagsInput,
 } from '@mantine/core';
 import { DatePickerInput } from '@mantine/dates';
 import { useForm } from '@mantine/form';
@@ -42,6 +46,8 @@ import {
   IconPlayerPlay,
   IconBan,
   IconArrowBackUp,
+  IconArrowUp,
+  IconArrowDown,
 } from '@tabler/icons-react';
 import { format, parseISO } from 'date-fns';
 import { api } from '../lib/api';
@@ -56,6 +62,7 @@ import type {
   StoredTaskTemplate,
   CreateTaskTemplateDto,
   LeaderboardResponse,
+  SubTask,
 } from '../../../shared/types';
 
 // ---------------------------------------------------------------------------
@@ -80,6 +87,7 @@ export function Tasks() {
   const [view, setView] = useState<'board' | 'history'>('board');
   const [filterAssignee, setFilterAssignee] = useState<string | null>(null);
   const [filterScope, setFilterScope] = useState<string>('all');
+  const [filterTags, setFilterTags] = useState<string[]>([]);
 
   // Modals
   const [createOpened, { open: openCreate, close: closeCreate }] = useDisclosure(false);
@@ -209,9 +217,22 @@ export function Tasks() {
       }
       if (filterScope === 'family' && t.scope !== 'family') return false;
       if (filterScope === 'personal' && t.scope !== 'personal') return false;
+      if (filterTags.length > 0) {
+        const taskTags = t.tags ?? [];
+        if (!filterTags.every((tag) => taskTags.includes(tag))) return false;
+      }
       return true;
     });
-  }, [boardTasks, filterAssignee, filterScope]);
+  }, [boardTasks, filterAssignee, filterScope, filterTags]);
+
+  // Collect all unique tags across board tasks for the filter dropdown
+  const allTags = useMemo(() => {
+    const tagSet = new Set<string>();
+    for (const t of boardTasks) {
+      for (const tag of t.tags ?? []) tagSet.add(tag);
+    }
+    return Array.from(tagSet).sort();
+  }, [boardTasks]);
 
   const tasksByStatus = useMemo(() => {
     const map: Record<TaskStatus, StoredTask[]> = { todo: [], started: [], done: [], cancelled: [] };
@@ -234,8 +255,13 @@ export function Tasks() {
   const quickCreateFromTemplate = (template: StoredTaskTemplate) => {
     createMutation.mutate({
       title: template.name,
+      description: template.defaultDescription || undefined,
       scope: template.defaultScope,
       assigneeId: template.defaultAssigneeId,
+      tags: template.defaultTags?.length ? template.defaultTags : undefined,
+      subTasks: template.defaultSubTasks?.length
+        ? template.defaultSubTasks.map((title) => ({ title }))
+        : undefined,
     });
   };
 
@@ -280,39 +306,6 @@ export function Tasks() {
             ]}
           />
         </Group>
-
-        <Group>
-          {/* Split button: Create + template dropdown */}
-          <Button.Group>
-            <Button leftSection={<IconPlus size={16} />} onClick={openCreate}>
-              Create Task
-            </Button>
-            <Menu position="bottom-end" withinPortal>
-              <Menu.Target>
-                <Button px="xs" variant="filled">
-                  <IconChevronDown size={16} />
-                </Button>
-              </Menu.Target>
-              <Menu.Dropdown>
-                {templates.length === 0 ? (
-                  <Menu.Item disabled>
-                    <Text size="xs" c="dimmed">No templates yet</Text>
-                  </Menu.Item>
-                ) : (
-                  templates.map((t) => (
-                    <Menu.Item key={t.id} onClick={() => quickCreateFromTemplate(t)}>
-                      {t.name}
-                    </Menu.Item>
-                  ))
-                )}
-                <Menu.Divider />
-                <Menu.Item leftSection={<IconSettings size={14} />} onClick={openTemplates}>
-                  Manage Templates...
-                </Menu.Item>
-              </Menu.Dropdown>
-            </Menu>
-          </Button.Group>
-        </Group>
       </Group>
 
       {/* Leaderboard */}
@@ -337,27 +330,71 @@ export function Tasks() {
 
       {view === 'board' ? (
         <>
-          {/* Filters */}
-          <Group gap="sm" mb="md">
-            <Select
-              placeholder="Assignee"
-              size="xs"
-              clearable
-              value={filterAssignee}
-              onChange={setFilterAssignee}
-              data={assigneeOptions}
-              w={150}
-            />
-            <SegmentedControl
-              size="xs"
-              value={filterScope}
-              onChange={setFilterScope}
-              data={[
-                { label: 'All', value: 'all' },
-                { label: 'Family', value: 'family' },
-                { label: 'Personal', value: 'personal' },
-              ]}
-            />
+          {/* Filters + Create */}
+          <Group gap="sm" mb="md" justify="space-between">
+            <Group gap="sm">
+              <Select
+                placeholder="Assignee"
+                size="xs"
+                clearable
+                value={filterAssignee}
+                onChange={setFilterAssignee}
+                data={assigneeOptions}
+                w={150}
+              />
+              <SegmentedControl
+                size="xs"
+                value={filterScope}
+                onChange={setFilterScope}
+                data={[
+                  { label: 'All', value: 'all' },
+                  { label: 'Family', value: 'family' },
+                  { label: 'Personal', value: 'personal' },
+                ]}
+              />
+              {allTags.length > 0 && (
+                <MultiSelect
+                  placeholder="Tags"
+                  size="xs"
+                  clearable
+                  value={filterTags}
+                  onChange={setFilterTags}
+                  data={allTags}
+                  w={200}
+                />
+              )}
+            </Group>
+
+            {/* Split button: Create + template dropdown */}
+            <Button.Group>
+              <Button size="xs" leftSection={<IconPlus size={14} />} onClick={openCreate}>
+                Create Task
+              </Button>
+              <Menu position="bottom-end" withinPortal>
+                <Menu.Target>
+                  <Button size="xs" px="xs" variant="filled">
+                    <IconChevronDown size={14} />
+                  </Button>
+                </Menu.Target>
+                <Menu.Dropdown>
+                  {templates.length === 0 ? (
+                    <Menu.Item disabled>
+                      <Text size="xs" c="dimmed">No templates yet</Text>
+                    </Menu.Item>
+                  ) : (
+                    templates.map((t) => (
+                      <Menu.Item key={t.id} onClick={() => quickCreateFromTemplate(t)}>
+                        {t.name}
+                      </Menu.Item>
+                    ))
+                  )}
+                  <Menu.Divider />
+                  <Menu.Item leftSection={<IconSettings size={14} />} onClick={openTemplates}>
+                    Manage Templates...
+                  </Menu.Item>
+                </Menu.Dropdown>
+              </Menu>
+            </Button.Group>
           </Group>
 
           {/* Kanban Board */}
@@ -385,7 +422,7 @@ export function Tasks() {
       <TaskFormModal
         opened={createOpened}
         onClose={closeCreate}
-        onSubmit={(data) => createMutation.mutate(data)}
+        onSubmit={(data) => createMutation.mutate(data as CreateTaskDto)}
         members={members}
         loading={createMutation.isPending}
         title="Create Task"
@@ -397,7 +434,7 @@ export function Tasks() {
         onClose={() => setEditingTask(null)}
         onSubmit={(data) => {
           if (!editingTask) return;
-          updateMutation.mutate({ id: editingTask.id, data }, {
+          updateMutation.mutate({ id: editingTask.id, data: data as UpdateTaskDto }, {
             onSuccess: () => {
               setEditingTask(null);
               // Refresh detail if open
@@ -440,6 +477,15 @@ export function Tasks() {
         onDelete={() => {
           if (detailTask) deleteMutation.mutate(detailTask.id);
         }}
+        onSubTaskToggle={(taskId, subTaskId, completed) => {
+          if (!detailTask) return;
+          const updatedSubTasks = (detailTask.subTasks ?? []).map((st) =>
+            st.id === subTaskId ? { ...st, completed } : st
+          );
+          // Optimistically update the detail modal
+          setDetailTask({ ...detailTask, subTasks: updatedSubTasks });
+          updateMutation.mutate({ id: taskId, data: { subTasks: updatedSubTasks } });
+        }}
       />
 
       {/* Template Management Modal */}
@@ -457,10 +503,12 @@ export function Tasks() {
 // Task Form Modal (create/edit)
 // ---------------------------------------------------------------------------
 
+type TaskFormSubmitData = CreateTaskDto | UpdateTaskDto;
+
 interface TaskFormModalProps {
   opened: boolean;
   onClose: () => void;
-  onSubmit: (data: CreateTaskDto) => void;
+  onSubmit: (data: TaskFormSubmitData) => void;
   members: FamilyMember[];
   loading: boolean;
   title: string;
@@ -468,6 +516,12 @@ interface TaskFormModalProps {
 }
 
 function TaskFormModal({ opened, onClose, onSubmit, members, loading, title, initialValues }: TaskFormModalProps) {
+  const [tags, setTags] = useState<string[]>(initialValues?.tags ?? []);
+  const [subTaskTitles, setSubTaskTitles] = useState<string[]>(
+    initialValues?.subTasks?.map((s) => s.title) ?? []
+  );
+  const [newSubTask, setNewSubTask] = useState('');
+
   const form = useForm({
     initialValues: {
       title: initialValues?.title ?? '',
@@ -489,18 +543,57 @@ function TaskFormModal({ opened, onClose, onSubmit, members, loading, title, ini
         dueDate: initialValues?.dueDate ? new Date(initialValues.dueDate) : null,
         scope: (initialValues?.scope ?? 'family') as TaskScope,
       });
+      setTags(initialValues?.tags ?? []);
+      setSubTaskTitles(initialValues?.subTasks?.map((s) => s.title) ?? []);
+      setNewSubTask('');
     }
   }, [opened, initialValues]);
 
   const handleSubmit = form.onSubmit((values) => {
-    onSubmit({
-      title: values.title,
-      description: values.description || undefined,
-      assigneeId: values.assigneeId || null,
-      dueDate: values.dueDate ? format(values.dueDate, 'yyyy-MM-dd') : null,
-      scope: values.scope,
-    });
+    const isEdit = !!initialValues;
+    if (isEdit) {
+      // When editing, preserve sub-task IDs and completed status for existing items
+      const existingSubTasks = initialValues?.subTasks ?? [];
+      const updatedSubTasks: SubTask[] = subTaskTitles.map((st, i) => {
+        const existing = existingSubTasks[i];
+        if (existing && existing.title === st) {
+          return existing;
+        }
+        return existing
+          ? { ...existing, title: st }
+          : { id: crypto.randomUUID(), title: st, completed: false };
+      });
+      onSubmit({
+        title: values.title,
+        description: values.description || undefined,
+        assigneeId: values.assigneeId || null,
+        dueDate: values.dueDate ? format(values.dueDate, 'yyyy-MM-dd') : null,
+        scope: values.scope,
+        tags: tags.length > 0 ? tags : [],
+        subTasks: updatedSubTasks,
+      });
+    } else {
+      onSubmit({
+        title: values.title,
+        description: values.description || undefined,
+        assigneeId: values.assigneeId || null,
+        dueDate: values.dueDate ? format(values.dueDate, 'yyyy-MM-dd') : null,
+        scope: values.scope,
+        tags: tags.length > 0 ? tags : undefined,
+        subTasks: subTaskTitles.length > 0
+          ? subTaskTitles.map((t) => ({ title: t }))
+          : undefined,
+      });
+    }
   });
+
+  const addSubTask = () => {
+    const trimmed = newSubTask.trim();
+    if (trimmed) {
+      setSubTaskTitles((prev) => [...prev, trimmed]);
+      setNewSubTask('');
+    }
+  };
 
   const assigneeData = [
     { value: '', label: 'Unassigned' },
@@ -544,6 +637,71 @@ function TaskFormModal({ opened, onClose, onSubmit, members, loading, title, ini
               { label: 'Personal', value: 'personal' },
             ]}
           />
+          <TagsInput
+            label="Tags"
+            value={tags}
+            onChange={setTags}
+            placeholder="Type and press Enter to add"
+          />
+
+          {/* Sub-tasks */}
+          <div>
+            <Text size="sm" fw={500} mb={4}>Sub-tasks</Text>
+            <Stack gap={4}>
+              {subTaskTitles.map((st, i) => (
+                <Group key={i} gap="xs">
+                  <Text size="sm" style={{ flex: 1 }}>{st}</Text>
+                  <ActionIcon
+                    size="xs"
+                    variant="subtle"
+                    disabled={i === 0}
+                    onClick={() => setSubTaskTitles((prev) => {
+                      const next = [...prev];
+                      [next[i - 1], next[i]] = [next[i], next[i - 1]];
+                      return next;
+                    })}
+                  >
+                    <IconArrowUp size={12} />
+                  </ActionIcon>
+                  <ActionIcon
+                    size="xs"
+                    variant="subtle"
+                    disabled={i === subTaskTitles.length - 1}
+                    onClick={() => setSubTaskTitles((prev) => {
+                      const next = [...prev];
+                      [next[i], next[i + 1]] = [next[i + 1], next[i]];
+                      return next;
+                    })}
+                  >
+                    <IconArrowDown size={12} />
+                  </ActionIcon>
+                  <CloseButton
+                    size="xs"
+                    onClick={() => setSubTaskTitles((prev) => prev.filter((_, idx) => idx !== i))}
+                  />
+                </Group>
+              ))}
+              <Group gap="xs">
+                <TextInput
+                  size="xs"
+                  placeholder="Add a sub-task..."
+                  value={newSubTask}
+                  onChange={(e) => setNewSubTask(e.currentTarget.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      addSubTask();
+                    }
+                  }}
+                  style={{ flex: 1 }}
+                />
+                <Button size="xs" variant="light" onClick={addSubTask} disabled={!newSubTask.trim()}>
+                  Add
+                </Button>
+              </Group>
+            </Stack>
+          </div>
+
           <Button type="submit" loading={loading} fullWidth mt="sm">
             {initialValues ? 'Save Changes' : 'Create Task'}
           </Button>
@@ -564,9 +722,10 @@ interface TaskDetailModalProps {
   onStatusChange: (status: TaskStatus) => void;
   onEdit: () => void;
   onDelete: () => void;
+  onSubTaskToggle: (taskId: string, subTaskId: string, completed: boolean) => void;
 }
 
-function TaskDetailModal({ task, onClose, members, onStatusChange, onEdit, onDelete }: TaskDetailModalProps) {
+function TaskDetailModal({ task, onClose, members, onStatusChange, onEdit, onDelete, onSubTaskToggle }: TaskDetailModalProps) {
   const [confirmDelete, setConfirmDelete] = useState(false);
 
   if (!task) return null;
@@ -580,6 +739,8 @@ function TaskDetailModal({ task, onClose, members, onStatusChange, onEdit, onDel
   if (task.status !== 'cancelled') statusActions.push({ label: 'Cancel', status: 'cancelled', icon: <IconBan size={14} />, color: 'gray' });
   if (task.status !== 'todo') statusActions.push({ label: 'Back to Todo', status: 'todo', icon: <IconArrowBackUp size={14} />, color: 'blue' });
 
+  const subTasks = task.subTasks ?? [];
+
   return (
     <Modal
       opened={!!task}
@@ -589,7 +750,7 @@ function TaskDetailModal({ task, onClose, members, onStatusChange, onEdit, onDel
     >
       <Stack gap="md">
         {/* Status & metadata */}
-        <Group gap="xs">
+        <Group gap="xs" wrap="wrap">
           <Badge color={COLUMNS.find((c) => c.status === task.status)?.color}>{task.status}</Badge>
           <Badge variant="outline" color={task.scope === 'personal' ? 'violet' : 'blue'}>
             {task.scope}
@@ -602,10 +763,33 @@ function TaskDetailModal({ task, onClose, members, onStatusChange, onEdit, onDel
               Due {format(parseISO(task.dueDate), 'MMM d, yyyy')}
             </Badge>
           )}
+          {(task.tags ?? []).map((tag) => (
+            <Badge key={tag} variant="light" color="teal">{tag}</Badge>
+          ))}
         </Group>
 
         {task.description && (
           <Text size="sm" c="dimmed">{task.description}</Text>
+        )}
+
+        {/* Sub-tasks */}
+        {subTasks.length > 0 && (
+          <div>
+            <Text fw={600} size="sm" mb={4}>
+              Sub-tasks ({subTasks.filter((s) => s.completed).length}/{subTasks.length})
+            </Text>
+            <Stack gap={4}>
+              {subTasks.map((st) => (
+                <Checkbox
+                  key={st.id}
+                  label={st.title}
+                  checked={st.completed}
+                  onChange={(e) => onSubTaskToggle(task.id, st.id, e.currentTarget.checked)}
+                  size="sm"
+                />
+              ))}
+            </Stack>
+          </div>
         )}
 
         {/* Status change buttons */}
@@ -890,22 +1074,59 @@ interface TemplateManagementModalProps {
 function TemplateManagementModal({ opened, onClose, templates, members }: TemplateManagementModalProps) {
   const queryClient = useQueryClient();
   const [showForm, setShowForm] = useState(false);
+  const [editingTemplateId, setEditingTemplateId] = useState<string | null>(null);
+  const [templateTags, setTemplateTags] = useState<string[]>([]);
+  const [templateSubTasks, setTemplateSubTasks] = useState<string[]>([]);
+  const [newTemplateSubTask, setNewTemplateSubTask] = useState('');
 
   const form = useForm({
     initialValues: {
       name: '',
+      defaultDescription: '',
       defaultAssigneeId: '',
       defaultScope: 'family' as TaskScope,
     },
   });
 
+  const resetForm = () => {
+    setShowForm(false);
+    setEditingTemplateId(null);
+    form.reset();
+    setTemplateTags([]);
+    setTemplateSubTasks([]);
+    setNewTemplateSubTask('');
+  };
+
+  const startEditing = (t: StoredTaskTemplate) => {
+    setEditingTemplateId(t.id);
+    setShowForm(true);
+    form.setValues({
+      name: t.name,
+      defaultDescription: t.defaultDescription ?? '',
+      defaultAssigneeId: t.defaultAssigneeId ?? '',
+      defaultScope: t.defaultScope,
+    });
+    setTemplateTags(t.defaultTags ?? []);
+    setTemplateSubTasks(t.defaultSubTasks ?? []);
+    setNewTemplateSubTask('');
+  };
+
   const createMutation = useMutation({
     mutationFn: (data: CreateTaskTemplateDto) => api.createTaskTemplate(data),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['taskTemplates'] });
-      form.reset();
-      setShowForm(false);
+      resetForm();
       notifications.show({ message: 'Template created', color: 'green' });
+    },
+  });
+
+  const updateTemplateMutation = useMutation({
+    mutationFn: ({ id, data }: { id: string; data: Parameters<typeof api.updateTaskTemplate>[1] }) =>
+      api.updateTaskTemplate(id, data),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['taskTemplates'] });
+      resetForm();
+      notifications.show({ message: 'Template updated', color: 'green' });
     },
   });
 
@@ -918,17 +1139,36 @@ function TemplateManagementModal({ opened, onClose, templates, members }: Templa
   });
 
   const handleSubmit = form.onSubmit((values) => {
-    createMutation.mutate({
+    const payload = {
       name: values.name,
+      defaultDescription: values.defaultDescription || undefined,
       defaultAssigneeId: values.defaultAssigneeId || null,
       defaultScope: values.defaultScope,
-    });
+      defaultTags: templateTags.length > 0 ? templateTags : [],
+      defaultSubTasks: templateSubTasks.length > 0 ? templateSubTasks : [],
+    };
+
+    if (editingTemplateId) {
+      updateTemplateMutation.mutate({ id: editingTemplateId, data: payload });
+    } else {
+      createMutation.mutate(payload);
+    }
   });
+
+  const addTemplateSubTask = () => {
+    const trimmed = newTemplateSubTask.trim();
+    if (trimmed) {
+      setTemplateSubTasks((prev) => [...prev, trimmed]);
+      setNewTemplateSubTask('');
+    }
+  };
 
   const assigneeData = [
     { value: '', label: 'Unassigned' },
     ...members.map((m) => ({ value: m.userId, label: m.displayName })),
   ];
+
+  const isSaving = createMutation.isPending || updateTemplateMutation.isPending;
 
   return (
     <Modal opened={opened} onClose={onClose} title="Manage Task Templates" size="md">
@@ -946,21 +1186,35 @@ function TemplateManagementModal({ opened, onClose, templates, members }: Templa
               <Text size="xs" c="dimmed">
                 {t.defaultScope === 'personal' ? 'Personal' : 'Family'}
                 {t.defaultAssigneeId && ` · ${members.find((m) => m.userId === t.defaultAssigneeId)?.displayName ?? 'Unknown'}`}
+                {t.defaultTags && t.defaultTags.length > 0 && ` · Tags: ${t.defaultTags.join(', ')}`}
+                {t.defaultSubTasks && t.defaultSubTasks.length > 0 && ` · ${t.defaultSubTasks.length} sub-tasks`}
               </Text>
             </div>
-            <ActionIcon
-              variant="subtle"
-              color="red"
-              size="sm"
-              onClick={() => deleteMutation.mutate(t.id)}
-            >
-              <IconTrash size={14} />
-            </ActionIcon>
+            <Group gap={4}>
+              <ActionIcon
+                variant="subtle"
+                size="sm"
+                onClick={() => startEditing(t)}
+              >
+                <IconEdit size={14} />
+              </ActionIcon>
+              <ActionIcon
+                variant="subtle"
+                color="red"
+                size="sm"
+                onClick={() => deleteMutation.mutate(t.id)}
+              >
+                <IconTrash size={14} />
+              </ActionIcon>
+            </Group>
           </Group>
         ))}
 
         {showForm ? (
           <Paper withBorder p="sm">
+            <Text size="sm" fw={600} mb="xs">
+              {editingTemplateId ? 'Edit Template' : 'New Template'}
+            </Text>
             <form onSubmit={handleSubmit}>
               <Stack gap="xs">
                 <TextInput
@@ -969,6 +1223,14 @@ function TemplateManagementModal({ opened, onClose, templates, members }: Templa
                   maxLength={100}
                   placeholder="e.g., Laundry"
                   {...form.getInputProps('name')}
+                />
+                <Textarea
+                  label="Default Description"
+                  maxLength={2000}
+                  autosize
+                  minRows={2}
+                  maxRows={4}
+                  {...form.getInputProps('defaultDescription')}
                 />
                 <Select
                   label="Default Assignee"
@@ -984,11 +1246,73 @@ function TemplateManagementModal({ opened, onClose, templates, members }: Templa
                     { label: 'Personal', value: 'personal' },
                   ]}
                 />
+                <TagsInput
+                  label="Default Tags"
+                  value={templateTags}
+                  onChange={setTemplateTags}
+                  placeholder="Type and press Enter to add"
+                />
+                <div>
+                  <Text size="sm" fw={500} mb={4}>Default Sub-tasks</Text>
+                  <Stack gap={4}>
+                    {templateSubTasks.map((st, i) => (
+                      <Group key={i} gap="xs">
+                        <Text size="sm" style={{ flex: 1 }}>{st}</Text>
+                        <ActionIcon
+                          size="xs"
+                          variant="subtle"
+                          disabled={i === 0}
+                          onClick={() => setTemplateSubTasks((prev) => {
+                            const next = [...prev];
+                            [next[i - 1], next[i]] = [next[i], next[i - 1]];
+                            return next;
+                          })}
+                        >
+                          <IconArrowUp size={12} />
+                        </ActionIcon>
+                        <ActionIcon
+                          size="xs"
+                          variant="subtle"
+                          disabled={i === templateSubTasks.length - 1}
+                          onClick={() => setTemplateSubTasks((prev) => {
+                            const next = [...prev];
+                            [next[i], next[i + 1]] = [next[i + 1], next[i]];
+                            return next;
+                          })}
+                        >
+                          <IconArrowDown size={12} />
+                        </ActionIcon>
+                        <CloseButton
+                          size="xs"
+                          onClick={() => setTemplateSubTasks((prev) => prev.filter((_, idx) => idx !== i))}
+                        />
+                      </Group>
+                    ))}
+                    <Group gap="xs">
+                      <TextInput
+                        size="xs"
+                        placeholder="Add a sub-task..."
+                        value={newTemplateSubTask}
+                        onChange={(e) => setNewTemplateSubTask(e.currentTarget.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            addTemplateSubTask();
+                          }
+                        }}
+                        style={{ flex: 1 }}
+                      />
+                      <Button size="xs" variant="light" onClick={addTemplateSubTask} disabled={!newTemplateSubTask.trim()}>
+                        Add
+                      </Button>
+                    </Group>
+                  </Stack>
+                </div>
                 <Group gap="xs">
-                  <Button type="submit" size="xs" loading={createMutation.isPending}>
-                    Save
+                  <Button type="submit" size="xs" loading={isSaving}>
+                    {editingTemplateId ? 'Save Changes' : 'Save'}
                   </Button>
-                  <Button size="xs" variant="subtle" onClick={() => { setShowForm(false); form.reset(); }}>
+                  <Button size="xs" variant="subtle" onClick={resetForm}>
                     Cancel
                   </Button>
                 </Group>
@@ -1000,7 +1324,7 @@ function TemplateManagementModal({ opened, onClose, templates, members }: Templa
             variant="light"
             leftSection={<IconPlus size={14} />}
             size="xs"
-            onClick={() => setShowForm(true)}
+            onClick={() => { resetForm(); setShowForm(true); }}
           >
             Add Template
           </Button>

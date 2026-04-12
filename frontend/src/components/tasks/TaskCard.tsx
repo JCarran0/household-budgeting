@@ -1,4 +1,4 @@
-import { Card, Text, Group, Badge, Avatar, Tooltip, ThemeIcon } from '@mantine/core';
+import { Card, Text, Group, Badge, Avatar, Tooltip, ThemeIcon, Box } from '@mantine/core';
 import { IconCalendar, IconCircleCheck } from '@tabler/icons-react';
 import { format, isPast, parseISO } from 'date-fns';
 import type { StoredTask, FamilyMember } from '../../../../shared/types';
@@ -7,6 +7,34 @@ interface TaskCardProps {
   task: StoredTask;
   members: FamilyMember[];
   onClick: () => void;
+}
+
+function SubTaskProgress({ subTasks }: { subTasks: StoredTask['subTasks'] }) {
+  if (!subTasks || subTasks.length === 0) return null;
+  const completed = subTasks.filter((s) => s.completed).length;
+
+  return (
+    <Tooltip label={`${completed}/${subTasks.length} sub-tasks done`}>
+      <Group gap={3} wrap="nowrap">
+        {subTasks.map((st) => (
+          <Box
+            key={st.id}
+            style={{
+              width: 8,
+              height: 8,
+              borderRadius: 2,
+              backgroundColor: st.completed
+                ? 'var(--mantine-color-green-6)'
+                : 'transparent',
+              border: st.completed
+                ? '1.5px solid var(--mantine-color-green-6)'
+                : '1.5px solid var(--mantine-color-dark-3)',
+            }}
+          />
+        ))}
+      </Group>
+    </Tooltip>
+  );
 }
 
 export function TaskCard({ task, members, onClick }: TaskCardProps) {
@@ -40,6 +68,12 @@ export function TaskCard({ task, members, onClick }: TaskCardProps) {
         </Text>
       </Group>
 
+      {task.subTasks && task.subTasks.length > 0 && (
+        <Group mt={4}>
+          <SubTaskProgress subTasks={task.subTasks} />
+        </Group>
+      )}
+
       <Group gap="xs" mt={4}>
         {assignee && (
           <Tooltip label={assignee.displayName}>
@@ -65,6 +99,12 @@ export function TaskCard({ task, members, onClick }: TaskCardProps) {
             Personal
           </Badge>
         )}
+
+        {task.tags && task.tags.length > 0 && task.tags.map((tag) => (
+          <Badge key={tag} size="xs" variant="light" color="teal">
+            {tag}
+          </Badge>
+        ))}
       </Group>
     </Card>
   );
