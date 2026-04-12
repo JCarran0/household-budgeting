@@ -468,6 +468,7 @@ export function EnhancedTransactions() {
                 root: { cursor: 'pointer' },
               }}
               onClick={() => {
+                resetFilters();
                 setSelectedCategories(['uncategorized']);
               }}
             >

@@ -35,6 +35,7 @@ import { api } from '../lib/api';
 import { formatDistanceToNow } from 'date-fns';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../stores/authStore';
+import { useFilterStore } from '../stores/filterStore';
 import { formatCurrency } from '../utils/formatters';
 import { calculateActualTotals } from '../../../shared/utils/budgetCalculations';
 import { format, startOfMonth, addMonths } from 'date-fns';
@@ -281,7 +282,11 @@ export function MantineDashboard() {
           styles={{
             root: { cursor: 'pointer' },
           }}
-          onClick={() => navigate('/transactions')}
+          onClick={() => {
+            useFilterStore.getState().resetTransactionFilters();
+            useFilterStore.getState().setTransactionFilters({ onlyUncategorized: true });
+            navigate('/transactions');
+          }}
         >
           <Group justify="space-between">
             <Text size="sm">
