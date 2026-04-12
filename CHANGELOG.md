@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.17.0](https://github.com/JCarran0/household-budgeting/compare/v5.16.4...v5.17.0) (2026-04-12)
+
+
+### Features
+
+* **tasks:** add tags, sub-tasks, and template editing ([edf7fe6](https://github.com/JCarran0/household-budgeting/commit/edf7fe6437800f22f0ceecd8b916ede9a1656869))
+
 ### [5.16.4](https://github.com/JCarran0/household-budgeting/compare/v5.16.3...v5.16.4) (2026-04-12)
 
 
