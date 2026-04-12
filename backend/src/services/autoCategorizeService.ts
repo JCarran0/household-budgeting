@@ -314,9 +314,11 @@ export class AutoCategorizeService {
         await this.categoryService.initializeDefaultCategories(familyId);
       }
 
-      const transactions = await this.dataService.getData<StoredTransaction[]>(
+      const allTransactions = await this.dataService.getData<StoredTransaction[]>(
         `transactions_${familyId}`
       ) || [];
+      // Exclude removed transactions (pending holds replaced by posted versions)
+      const transactions = allTransactions.filter(t => t.status !== 'removed');
 
       const userCategories = await this.dataService.getCategories(familyId);
       const categoryMap = new Map(userCategories.map(c => [c.id, c.name]));
@@ -388,9 +390,11 @@ export class AutoCategorizeService {
         await this.categoryService.initializeDefaultCategories(familyId);
       }
 
-      const transactions = await this.dataService.getData<StoredTransaction[]>(
+      const allTransactions = await this.dataService.getData<StoredTransaction[]>(
         `transactions_${familyId}`
       ) || [];
+      // Exclude removed transactions (pending holds replaced by posted versions)
+      const transactions = allTransactions.filter(t => t.status !== 'removed');
 
       // Get family's categories for matching
       const userCategories = await this.dataService.getCategories(familyId);
@@ -414,8 +418,8 @@ export class AutoCategorizeService {
 
       const result = await this.applyRules(familyId, targetTransactions, userCategories, forceRecategorize);
 
-      // Save updated transactions
-      await this.dataService.saveData(`transactions_${familyId}`, transactions);
+      // Save all transactions (including removed) to preserve data integrity
+      await this.dataService.saveData(`transactions_${familyId}`, allTransactions);
 
       return {
         success: true,

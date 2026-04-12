@@ -137,7 +137,8 @@ export class ChatbotDataService {
     const stored = await this.dataService.getData<StoredTransaction[]>(`transactions_${familyId}`);
     if (!stored) return [];
 
-    let results = stored;
+    // Always exclude removed transactions (e.g., pending holds replaced by posted versions)
+    let results = stored.filter(t => t.status !== 'removed');
 
     if (filters.startDate) {
       results = results.filter(t => t.date >= filters.startDate!);

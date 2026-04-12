@@ -91,9 +91,7 @@ const TRANSACTIONS: StoredTransaction[] = [
   makeTransaction({ id: 'txn-jan-hidden-txn', amount: 999, date: '2025-01-05', categoryId: 'FOOD_GROCERIES', isHidden: true }),
   // Pending transaction — must be excluded
   makeTransaction({ id: 'txn-jan-pending', amount: 40, date: '2025-01-28', categoryId: 'FOOD_GROCERIES', pending: true }),
-  // Removed transaction — status: 'removed'. Note: ReportService does NOT filter on
-  // status, only on isHidden and pending. A "removed" transaction is still counted
-  // unless it is also hidden. We use a distinctive amount so tests can reason about it.
+  // Removed transaction — excluded by status filter (pending holds replaced by posted versions)
   makeTransaction({ id: 'txn-jan-removed', amount: 200, date: '2025-01-12', categoryId: 'FOOD_GROCERIES', status: 'removed', isHidden: true }),
   // Transaction in a hidden parent category
   makeTransaction({ id: 'txn-jan-hidden-cat', amount: 75, date: '2025-01-18', categoryId: 'HIDDEN_CAT' }),

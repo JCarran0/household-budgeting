@@ -120,6 +120,12 @@ export class ReportService {
     this.transactionRepo = new Repository<StoredTransaction>(dataService, 'transactions');
   }
 
+  /** Get all active transactions for a family, excluding removed pending holds */
+  private async getActiveTransactions(familyId: string): Promise<StoredTransaction[]> {
+    const all = await this.transactionRepo.getAll(familyId);
+    return all.filter(t => t.status !== 'removed');
+  }
+
   /**
    * Get spending trends by category over time
    */
@@ -130,7 +136,7 @@ export class ReportService {
     categoryIds?: string[]
   ): Promise<SpendingTrendsResult> {
     try {
-      const transactions = await this.transactionRepo.getAll(familyId);
+      const transactions = await this.getActiveTransactions(familyId);
 
       const categories = await this.dataService.getCategories(familyId);
 
@@ -205,7 +211,7 @@ export class ReportService {
     includeSubcategories: boolean = true
   ): Promise<CategoryBreakdownResult> {
     try {
-      const transactions = await this.transactionRepo.getAll(familyId);
+      const transactions = await this.getActiveTransactions(familyId);
 
       const categories = await this.dataService.getCategories(familyId);
       // Create a set of hidden category IDs including subcategories of hidden parents
@@ -345,7 +351,7 @@ export class ReportService {
     includeSubcategories: boolean = true
   ): Promise<CategoryBreakdownResult> {
     try {
-      const transactions = await this.transactionRepo.getAll(familyId);
+      const transactions = await this.getActiveTransactions(familyId);
 
       const categories = await this.dataService.getCategories(familyId);
       // Create a set of hidden category IDs including subcategories of hidden parents
@@ -471,7 +477,7 @@ export class ReportService {
     endDate: string
   ): Promise<CategoryBreakdownResult> {
     try {
-      const transactions = await this.transactionRepo.getAll(familyId);
+      const transactions = await this.getActiveTransactions(familyId);
 
       const categories = await this.dataService.getCategories(familyId);
       // Get savings subcategories
@@ -534,7 +540,7 @@ export class ReportService {
     endMonth: string
   ): Promise<CashFlowResult> {
     try {
-      const transactions = await this.transactionRepo.getAll(familyId);
+      const transactions = await this.getActiveTransactions(familyId);
 
       const categories = await this.dataService.getCategories(familyId);
       // Create a set of hidden category IDs including subcategories of hidden parents
@@ -840,7 +846,7 @@ export class ReportService {
       const startDate = `${currentYear}-01-01`;
       const endDate = new Date().toISOString().split('T')[0];
 
-      const transactions = await this.transactionRepo.getAll(familyId);
+      const transactions = await this.getActiveTransactions(familyId);
 
       const categories = await this.dataService.getCategories(familyId);
       // Create a set of hidden category IDs including subcategories of hidden parents
