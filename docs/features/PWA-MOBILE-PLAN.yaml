@@ -1,0 +1,595 @@
+# =============================================================================
+# PWA & Mobile Experience — Implementation Plan (Phase 1)
+# =============================================================================
+# BRD: docs/features/PWA-MOBILE-BRD.md
+# Status: Not Started
+# Last Updated: 2026-04-13
+# =============================================================================
+
+overview:
+  description: |
+    Implementation plan for Phase 1 of the PWA & Mobile Experience feature.
+    Converts the existing React + Mantine web app into an installable PWA with
+    service worker caching, camera capture for receipt photos, and push
+    notifications for budget/account events. Phase 2 (biometric login via
+    Capacitor) is out of scope for this plan.
+
+  key_files:
+    brd: docs/features/PWA-MOBILE-BRD.md
+    vite_config: frontend/vite.config.ts
+    index_html: frontend/index.html
+    app_entry: frontend/src/App.tsx
+    api_client: frontend/src/lib/api.ts
+    amazon_receipt_service: backend/src/services/amazonReceiptService.ts
+    amazon_receipt_routes: backend/src/routes/amazonReceipts.ts
+    amazon_receipt_flow_ui: frontend/src/components/transactions/AmazonReceiptFlowModal.tsx
+    transactions_page: frontend/src/pages/EnhancedTransactions.tsx
+    backend_entry: backend/src/index.ts
+    backend_routes: backend/src/routes/
+
+# =============================================================================
+# DECISIONS LOG
+# =============================================================================
+decisions:
+  - id: D1
+    date: 2026-04-13
+    decision: Use vite-plugin-pwa for service worker and manifest generation
+    rationale: |
+      The app already uses Vite. vite-plugin-pwa (built on Workbox) handles
+      manifest generation, service worker registration, precaching, and update
+      prompts with minimal configuration. Avoids writing service worker code
+      from scratch. Well-maintained, widely used.
+
+  - id: D2
+    date: 2026-04-13
+    decision: PWA-first — no Capacitor in Phase 1
+    rationale: |
+      All Phase 1 requirements (install, camera, push) are achievable with
+      web APIs alone on Android. Adding Capacitor now would introduce a native
+      build toolchain, APK distribution, and testing complexity with no
+      functional benefit. Capacitor is reserved for Phase 2 (biometric login).
+
+  - id: D3
+    date: 2026-04-13
+    decision: Use <input type="file" capture="environment"> for camera, not MediaDevices API
+    rationale: |
+      The file input approach lets the OS handle camera UI, permissions, and
+      gallery selection. It works reliably across Android browsers and PWAs
+      without requesting persistent camera permissions. A custom viewfinder
+      UI (MediaDevices) adds complexity with no benefit for receipt capture.
+
+  - id: D4
+    date: 2026-04-13
+    decision: Web Push via VAPID (self-hosted), no third-party push service
+    rationale: |
+      Firebase Cloud Messaging or OneSignal add dependencies, accounts, and
+      configuration overhead. For 2 users, the web-push npm package with
+      self-generated VAPID keys is simple and sufficient. The backend sends
+      push notifications directly — no intermediary service needed.
+
+  - id: D5
+    date: 2026-04-13
+    decision: App shell caching strategy (precache static assets, network-first for API)
+    rationale: |
+      Static assets (HTML, CSS, JS, fonts, icons) are versioned by Vite's
+      content hashing and can be aggressively cached. API responses must never
+      be cached by the service worker (SEC-005) — all data requests go to the
+      network. This gives instant app launch without risking stale financial
+      data.
+
+  - id: D6
+    date: 2026-04-13
+    decision: Notification subscription stored in backend user data file
+    rationale: |
+      Follows existing storage patterns — JSON file per user via StorageService.
+      Push subscriptions (endpoint, keys) are added to the user's data. Supports
+      multiple devices per user. No new database or storage mechanism needed.
+
+  - id: D7
+    date: 2026-04-13
+    decision: Image upload extends existing Amazon Receipt upload endpoint, not a new endpoint
+    rationale: |
+      The existing POST /api/v1/amazon-receipts/upload already handles multipart
+      form data via multer. Extending it to accept image MIME types (JPEG, PNG)
+      alongside PDFs keeps the API surface small. Claude's vision API handles
+      both formats the same way.
+
+  - id: D8
+    date: 2026-04-13
+    decision: Client-side image compression before upload
+    rationale: |
+      Mobile photos can be 5–15MB at full resolution. Compressing to ~1–2MB
+      on the client before upload reduces bandwidth, upload time, and Claude
+      API token cost (smaller images = fewer image tokens). Use canvas-based
+      resize or a lightweight library (e.g., browser-image-compression).
+
+# =============================================================================
+# PHASE 1: PWA Manifest & Service Worker
+# =============================================================================
+phase_1_pwa_shell:
+  status: not_started
+  description: |
+    Install vite-plugin-pwa, configure the web app manifest, set up
+    service worker with app shell precaching, and add update prompts.
+    After this phase, the app is installable on Android.
+
+  tasks:
+    - id: "1.1"
+      task: Install vite-plugin-pwa and configure in vite.config.ts
+      status: not_started
+      details: |
+        npm install -D vite-plugin-pwa
+
+        Add to vite.config.ts:
+        - VitePWA plugin with manifest configuration
+        - registerType: 'prompt' (user controls when to update)
+        - workbox runtime caching: network-first for API routes,
+          cache-first for static assets
+        - Exclude /api/ routes from precaching
+
+    - id: "1.2"
+      task: Create app icons at required sizes
+      status: not_started
+      details: |
+        Generate from existing app logo/branding:
+        - 192x192 (maskable + any)
+        - 512x512 (maskable + any)
+        - favicon.ico, apple-touch-icon.png
+        Place in frontend/public/
+
+    - id: "1.3"
+      task: Configure web app manifest via vite-plugin-pwa
+      status: not_started
+      details: |
+        Manifest fields:
+        - name: "Household Budget"
+        - short_name: "Budget"
+        - description: "Personal budgeting with Plaid integration"
+        - start_url: "/"
+        - display: "standalone"
+        - theme_color: match Mantine dark theme primary
+        - background_color: match Mantine dark theme background
+        - icons: [192x192, 512x512] with maskable variants
+        - categories: ["finance"]
+
+    - id: "1.4"
+      task: Add meta tags to index.html
+      status: not_started
+      details: |
+        <meta name="theme-color" content="...">
+        <meta name="apple-mobile-web-app-capable" content="yes">
+        <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+        (vite-plugin-pwa may inject some of these automatically)
+
+    - id: "1.5"
+      task: Add update prompt component
+      status: not_started
+      details: |
+        Use useRegisterSW() hook from virtual:pwa-register/react.
+        Show a dismissible toast/banner when a new version is available:
+        "A new version is available. Refresh to update."
+        Clicking refresh calls updateServiceWorker(true).
+        Do not auto-reload — user triggers it (REQ-013).
+
+    - id: "1.6"
+      task: Add install banner for non-installed users
+      status: not_started
+      details: |
+        Listen for 'beforeinstallprompt' event.
+        Show a subtle banner: "Install Budget App for a better experience"
+        with an "Install" button that triggers the prompt.
+        Detect if already installed via display-mode: standalone media query.
+        Don't show banner after dismissal within the same session.
+
+    - id: "1.7"
+      task: Add offline fallback page
+      status: not_started
+      details: |
+        When offline and navigating to an uncached route, show a branded
+        offline page: "You're offline — connect to the internet to continue."
+        The app shell (layout, nav) should still render from cache.
+
+# =============================================================================
+# PHASE 2: Camera Capture & Image Upload
+# =============================================================================
+phase_2_camera:
+  status: not_started
+  description: |
+    Enable camera capture in the app and extend the Amazon Receipt upload
+    flow to accept images (JPEG/PNG) in addition to PDFs. Includes
+    client-side image compression.
+
+  tasks:
+    - id: "2.1"
+      task: Create image compression utility
+      status: not_started
+      details: |
+        Create frontend/src/utils/imageCompression.ts (or use
+        browser-image-compression library).
+
+        compressImage(file: File, options?): Promise<File>
+        - Target max dimension: 2048px (sufficient for receipt text)
+        - Target max file size: ~2MB
+        - Output format: JPEG (smaller than PNG for photos)
+        - Quality: 0.8
+
+    - id: "2.2"
+      task: Update Amazon Receipt upload UI to accept images
+      status: not_started
+      details: |
+        In AmazonReceiptFlowModal.tsx:
+        - Change file input accept attribute:
+          accept="application/pdf,image/jpeg,image/png"
+        - Add capture="environment" attribute for mobile camera
+        - Update UI text: "Upload receipt photo or PDF"
+        - Compress images before upload via the compression utility
+        - Show preview thumbnail for captured images
+
+    - id: "2.3"
+      task: Update backend upload endpoint to accept images
+      status: not_started
+      details: |
+        In amazon receipt routes:
+        - Update multer fileFilter to accept image/jpeg, image/png
+          in addition to application/pdf
+        - Update file size validation (images should be smaller after
+          client compression, but allow up to 10MB as a safety margin)
+
+    - id: "2.4"
+      task: Update Amazon Receipt Service to handle image files
+      status: not_started
+      details: |
+        In amazonReceiptService.ts:
+        - Detect file type from MIME type or buffer magic bytes
+        - For images: send as image content block to Claude vision API
+          (same as PDF pages but using image media type)
+        - For PDFs: existing flow unchanged
+        - Parsing prompt may need minor adjustment for photo vs PDF
+          (photos may have perspective distortion, shadows, etc.)
+
+    - id: "2.5"
+      task: Test camera capture flow on Android device
+      status: not_started
+      details: |
+        Manual testing checklist:
+        - Camera launches from file input in installed PWA
+        - Rear camera is default
+        - Captured photo is compressed before upload
+        - Gallery selection also works
+        - Claude extracts order data from photo comparable to PDF
+        - Multiple photos can be uploaded in one session
+
+# =============================================================================
+# PHASE 3: Push Notification Infrastructure (Backend)
+# =============================================================================
+phase_3_push_backend:
+  status: not_started
+  description: |
+    Set up VAPID keys, push subscription storage, and the backend
+    notification sending service. No notification triggers yet —
+    just the infrastructure to register subscriptions and send.
+
+  tasks:
+    - id: "3.1"
+      task: Install web-push package and generate VAPID keys
+      status: not_started
+      details: |
+        cd backend && npm install web-push
+
+        Generate VAPID key pair:
+        npx web-push generate-vapid-keys
+
+        Add to .env / GitHub Secrets:
+        - VAPID_PUBLIC_KEY
+        - VAPID_PRIVATE_KEY
+        - VAPID_SUBJECT (mailto: URL)
+
+    - id: "3.2"
+      task: Create PushNotificationService
+      status: not_started
+      details: |
+        backend/src/services/pushNotificationService.ts
+
+        Constructor receives:
+        - dataService (for reading/writing subscriptions)
+        - vapidPublicKey, vapidPrivateKey, vapidSubject
+
+        Methods:
+        - registerSubscription(userId, subscription: PushSubscription): void
+          Store subscription in user data. Support multiple per user.
+        - removeSubscription(userId, endpoint: string): void
+          Remove a specific subscription (e.g., user unsubscribes).
+        - sendNotification(userId, payload: NotificationPayload): void
+          Send to all registered devices for the user. Handle expired
+          subscriptions (410 Gone → auto-remove).
+        - sendNotificationToAll(payload: NotificationPayload): void
+          Send to all users (for system-wide alerts).
+
+    - id: "3.3"
+      task: Define notification types in shared/types/index.ts
+      status: not_started
+      details: |
+        type NotificationType =
+          | 'sync_failure'
+          | 'budget_alert'
+          | 'large_transaction'
+          | 'bill_reminder';
+
+        interface NotificationPayload {
+          type: NotificationType;
+          title: string;
+          body: string;
+          url: string;          // Deep link — where to navigate on tap
+          tag: string;          // Dedup key — prevents duplicate notifications
+        }
+
+        interface NotificationPreferences {
+          syncFailures: boolean;
+          budgetAlerts: boolean;
+          budgetAlertThreshold: number;  // percentage, e.g. 80
+          largeTransactions: boolean;
+          largeTransactionThreshold: number;  // dollar amount
+          billReminders: boolean;
+        }
+
+        interface PushSubscriptionRecord {
+          endpoint: string;
+          keys: { p256dh: string; auth: string };
+          deviceLabel?: string;  // optional user-friendly name
+          subscribedAt: string;
+        }
+
+    - id: "3.4"
+      task: Create push notification API routes
+      status: not_started
+      details: |
+        backend/src/routes/notifications.ts
+
+        POST /api/v1/notifications/subscribe
+        - Auth: required
+        - Body: PushSubscription object from browser
+        - Stores subscription for the authenticated user
+
+        DELETE /api/v1/notifications/subscribe
+        - Auth: required
+        - Body: { endpoint: string }
+        - Removes a specific subscription
+
+        GET /api/v1/notifications/preferences
+        - Auth: required
+        - Returns user's notification preferences
+
+        PUT /api/v1/notifications/preferences
+        - Auth: required
+        - Body: NotificationPreferences
+        - Updates preferences
+
+        GET /api/v1/notifications/vapid-public-key
+        - No auth required (needed before login for subscription)
+        - Returns { publicKey: string }
+
+    - id: "3.5"
+      task: Add service worker push event handler
+      status: not_started
+      details: |
+        In the service worker (via vite-plugin-pwa custom SW or
+        injectManifest mode):
+
+        self.addEventListener('push', (event) => {
+          const data = event.data.json();
+          event.waitUntil(
+            self.registration.showNotification(data.title, {
+              body: data.body,
+              icon: '/icons/icon-192x192.png',
+              tag: data.tag,       // prevents duplicates
+              data: { url: data.url }
+            })
+          );
+        });
+
+        self.addEventListener('notificationclick', (event) => {
+          event.notification.close();
+          event.waitUntil(
+            clients.openWindow(event.notification.data.url)
+          );
+        });
+
+# =============================================================================
+# PHASE 4: Push Notification Triggers
+# =============================================================================
+phase_4_push_triggers:
+  status: not_started
+  description: |
+    Wire up notification triggers to existing backend events. Each trigger
+    checks user preferences before sending. No new business logic — just
+    hooking into existing flows.
+
+  tasks:
+    - id: "4.1"
+      task: Sync failure notifications
+      status: not_started
+      details: |
+        After a Plaid sync fails or returns requires_reauth status:
+        - Check if user has syncFailures preference enabled
+        - Send notification:
+          title: "Account needs attention"
+          body: "Your [Bank Name] account needs re-authentication"
+          url: "/accounts"
+          tag: "sync-fail-{accountId}"
+
+        Hook into existing sync flow in accountService or plaidService
+        where sync errors are already caught and logged.
+
+    - id: "4.2"
+      task: Budget threshold notifications
+      status: not_started
+      details: |
+        After a transaction is categorized (manual, AI, or auto-rule):
+        - Recalculate spending for that category in the current month
+        - If spending crosses the user's threshold percentage of budget:
+          - Check if user has budgetAlerts preference enabled
+          - Check dedup: don't re-alert for same category/month/threshold
+          - Send notification:
+            title: "Budget alert: [Category]"
+            body: "[Category] spending is at X% of budget"
+            url: "/budget?month=YYYY-MM"
+            tag: "budget-alert-{categoryId}-{month}-{threshold}"
+
+    - id: "4.3"
+      task: Large transaction notifications
+      status: not_started
+      details: |
+        After transactions are synced from Plaid:
+        - For each new transaction above the user's threshold:
+          - Check if user has largeTransactions preference enabled
+          - Send notification:
+            title: "Large transaction"
+            body: "New $X,XXX transaction from [Merchant]"
+            — NO: per SEC-003, don't include amounts in notifications.
+            body: "A large transaction was posted to [Account Name]"
+            url: "/transactions?sort=amount&order=desc"
+            tag: "large-txn-{transactionId}"
+
+    - id: "4.4"
+      task: Deduplication logic for notifications
+      status: not_started
+      details: |
+        Use the 'tag' field in the notification payload — the browser
+        replaces existing notifications with the same tag rather than
+        stacking duplicates.
+
+        For budget alerts, include the threshold level in the tag so
+        crossing 80% and 100% are separate notifications, but hitting
+        80% twice in the same month only shows once.
+
+# =============================================================================
+# PHASE 5: Frontend — Notification UI
+# =============================================================================
+phase_5_notification_ui:
+  status: not_started
+  description: |
+    Add notification permission request flow, preferences settings page,
+    and subscription management to the frontend.
+
+  tasks:
+    - id: "5.1"
+      task: Create notification permission request component
+      status: not_started
+      details: |
+        Component that explains what notifications will be used for
+        and requests permission. Triggered contextually — e.g., from
+        Settings page or after first budget setup, not on first page load.
+
+        Flow:
+        1. Check Notification.permission status
+        2. If 'default': show explanation + "Enable notifications" button
+        3. On click: call Notification.requestPermission()
+        4. If granted: subscribe via pushManager.subscribe(VAPID key)
+        5. Send subscription to POST /api/v1/notifications/subscribe
+
+    - id: "5.2"
+      task: Create notification preferences page/section
+      status: not_started
+      details: |
+        Add to existing Settings page (or create one if it doesn't exist).
+
+        UI:
+        - Toggle switches for each notification type
+        - Budget alert threshold: number input (default 80%)
+        - Large transaction threshold: number input (default $500)
+        - "Test notification" button (sends a test push)
+        - List of registered devices with remove button
+
+    - id: "5.3"
+      task: Add notification API methods to frontend API client
+      status: not_started
+      details: |
+        In frontend/src/lib/api.ts (or api/notifications.ts):
+        - subscribeToNotifications(subscription)
+        - unsubscribeFromNotifications(endpoint)
+        - getNotificationPreferences()
+        - updateNotificationPreferences(prefs)
+        - getVapidPublicKey()
+
+# =============================================================================
+# PHASE 6: Testing & Polish
+# =============================================================================
+phase_6_testing:
+  status: not_started
+  description: |
+    Manual testing on Android devices, PWA audit, and UX polish.
+
+  tasks:
+    - id: "6.1"
+      task: Run Lighthouse PWA audit
+      status: not_started
+      details: |
+        Chrome DevTools → Lighthouse → PWA audit.
+        Target: all PWA checks pass (installable, service worker,
+        HTTPS, manifest, offline fallback, themed).
+
+    - id: "6.2"
+      task: Test install flow on Android
+      status: not_started
+      details: |
+        - Visit budget.jaredcarrano.com in Chrome on Android
+        - Verify install prompt appears
+        - Install to home screen
+        - Verify standalone mode (no browser chrome)
+        - Verify app icon and splash screen
+        - Verify theme color in status bar
+
+    - id: "6.3"
+      task: Test camera capture on Android
+      status: not_started
+      details: |
+        - Open installed PWA
+        - Navigate to Transactions → AI Categorize → Amazon Receipts
+        - Tap upload → verify camera opens
+        - Take photo of an Amazon receipt/order page
+        - Verify image is compressed before upload
+        - Verify Claude extracts data from photo
+        - Verify gallery selection also works
+
+    - id: "6.4"
+      task: Test push notifications on Android
+      status: not_started
+      details: |
+        - Enable notifications in Settings
+        - Trigger a test notification
+        - Verify notification appears when app is closed
+        - Tap notification → verify app opens to correct page
+        - Trigger sync failure → verify notification
+        - Cross budget threshold → verify notification
+        - Verify no duplicate notifications for same event
+
+    - id: "6.5"
+      task: Test offline behavior
+      status: not_started
+      details: |
+        - Install PWA
+        - Go offline (airplane mode)
+        - Open app → verify app shell loads from cache
+        - Verify offline indicator is shown
+        - Attempt data action → verify clear error message
+        - Go back online → verify app recovers
+
+    - id: "6.6"
+      task: Test update flow
+      status: not_started
+      details: |
+        - Deploy a new version while PWA is installed
+        - Open app → verify update prompt appears
+        - Click refresh → verify new version loads
+        - Verify no data loss or UI glitches during update
+
+    - id: "6.7"
+      task: Security review
+      status: not_started
+      details: |
+        - Verify service worker does NOT cache API responses
+        - Verify notification payloads contain no financial data
+          (no amounts, no account numbers, no balances)
+        - Verify VAPID keys are in env vars, not committed
+        - Verify camera images follow same security handling as PDFs
+        - Verify notification endpoints require authentication
