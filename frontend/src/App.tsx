@@ -30,6 +30,9 @@ import { PlaidLinkProvider } from './providers/PlaidLinkProvider';
 import { queryClient } from './lib/queryClient';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { RouteErrorBoundary } from './components/RouteErrorBoundary';
+import { PWAUpdatePrompt } from './components/pwa/PWAUpdatePrompt';
+import { PWAInstallBanner } from './components/pwa/PWAInstallBanner';
+import { OfflineIndicator } from './components/pwa/OfflineIndicator';
 
 
 function App() {
@@ -39,6 +42,9 @@ function App() {
         <ThemeProvider>
           <ModalsProvider>
             <Notifications position="top-right" />
+            <PWAUpdatePrompt />
+            <PWAInstallBanner />
+            <OfflineIndicator />
             <PlaidLinkProvider>
             <BrowserRouter>
               <Routes>
