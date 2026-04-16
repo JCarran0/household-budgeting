@@ -12,7 +12,8 @@ const createCategorySchema = z.object({
   parentId: z.string().nullable(),
   description: z.string().max(500).optional(),
   isHidden: z.boolean(),
-  isRollover: z.boolean()
+  isRollover: z.boolean(),
+  isSavings: z.boolean().optional(),
 });
 
 const updateCategorySchema = z.object({
@@ -20,7 +21,8 @@ const updateCategorySchema = z.object({
   description: z.string().max(500).optional(),
   parentId: z.string().nullable().optional(),
   isHidden: z.boolean().optional(),
-  isRollover: z.boolean().optional()
+  isRollover: z.boolean().optional(),
+  isSavings: z.boolean().optional(),
 });
 
 // All routes require authentication

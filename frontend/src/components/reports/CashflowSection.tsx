@@ -3,6 +3,8 @@ import {
   Paper,
   Text,
   Center,
+  Group,
+  Switch,
 } from '@mantine/core';
 import {
   XAxis,
@@ -21,6 +23,7 @@ interface CashFlowChartEntry {
   month: string;
   income: number;
   expenses: number;
+  savings: number;
   netFlow: number;
 }
 
@@ -37,9 +40,11 @@ interface BudgetVsActualEntry {
 interface CashflowSectionProps {
   cashFlowChartData: CashFlowChartEntry[];
   budgetVsActualData: BudgetVsActualEntry[] | null;
+  includeSavingsInNet: boolean;
+  onToggleSavingsInNet: () => void;
 }
 
-export function CashflowSection({ cashFlowChartData, budgetVsActualData }: CashflowSectionProps) {
+export function CashflowSection({ cashFlowChartData, budgetVsActualData, includeSavingsInNet, onToggleSavingsInNet }: CashflowSectionProps) {
   const incomeExpenseTracker = useChartMouseTracker();
   const cashFlowTracker = useChartMouseTracker();
 
@@ -60,7 +65,17 @@ export function CashflowSection({ cashFlowChartData, budgetVsActualData }: Cashf
     <Grid>
       <Grid.Col span={12}>
         <Paper withBorder p="md">
-          <Text size="lg" fw={600} mb="md">Income vs Expenses</Text>
+          <Group justify="space-between" mb="md">
+            <Text size="lg" fw={600}>Income vs Expenses</Text>
+            <Group gap="xs">
+              <Text size="sm" c="dimmed">Include savings in net:</Text>
+              <Switch
+                checked={includeSavingsInNet}
+                onChange={onToggleSavingsInNet}
+                size="sm"
+              />
+            </Group>
+          </Group>
           {cashFlowChartData.length > 0 ? (
             <div {...incomeExpenseTracker.containerProps}>
               <ResponsiveContainer width="100%" height={CHART_HEIGHT}>
@@ -83,6 +98,14 @@ export function CashflowSection({ cashFlowChartData, budgetVsActualData }: Cashf
                     stroke={defaultPalette.chart.expense}
                     fill={defaultPalette.chart.expense}
                     fillOpacity={0.6}
+                  />
+                  <Area
+                    type="monotone"
+                    dataKey="savings"
+                    stroke="#20c997"
+                    fill="#20c997"
+                    fillOpacity={0.6}
+                    name="Savings"
                   />
                 </AreaChart>
               </ResponsiveContainer>

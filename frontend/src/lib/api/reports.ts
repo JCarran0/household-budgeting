@@ -102,6 +102,7 @@ export function createReportsApi(client: AxiosInstance) {
         month: string;
         income: number;
         expenses: number;
+        savings: number;
         netFlow: number;
         savingsRate: number;
       }>;

@@ -21,6 +21,7 @@ import {
   IconPigMoney,
   IconCategory,
   IconSubtask,
+  IconBuildingBank,
 } from '@tabler/icons-react';
 import type { CategoryWithChildren } from '../../lib/api';
 import type { Category } from '../../../../shared/types';
@@ -140,6 +141,18 @@ function CategoryNode({ category, onEdit, onDelete, level = 0, transactionCounts
                     leftSection={<IconPigMoney size={10} />}
                   >
                     Rollover
+                  </Badge>
+                </Tooltip>
+              )}
+              {!isSubcategory && (category.isSavings ?? false) && (
+                <Tooltip label="Savings category">
+                  <Badge
+                    size="xs"
+                    variant="light"
+                    color="teal"
+                    leftSection={<IconBuildingBank size={10} />}
+                  >
+                    Savings
                   </Badge>
                 </Tooltip>
               )}

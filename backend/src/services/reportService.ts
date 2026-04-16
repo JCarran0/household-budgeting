@@ -9,10 +9,10 @@ import { ActualsOverrideService } from './actualsOverrideService';
 import { StoredTransaction } from './transactionService';
 import { MonthlyBudget } from '../shared/types';
 import { format, startOfMonth, endOfMonth, subMonths, addMonths } from 'date-fns';
-import { calculateIncome, calculateExpenses, calculateNetCashFlow, calculateSavingsRate } from '../shared/utils/transactionCalculations';
+import { calculateIncome, calculateSavingsRate, calculateSavings, calculateSpending } from '../shared/utils/transactionCalculations';
 import { calculateBudgetTotals } from '../shared/utils/budgetCalculations';
 import { Repository } from './repository';
-import { getMonthRange, calculateStdDev, getEffectivelyHiddenCategoryIds, getSavingsSubcategoryIds } from './reportHelpers';
+import { getMonthRange, calculateStdDev, getEffectivelyHiddenCategoryIds, getSavingsCategoryIds } from './reportHelpers';
 import { excludeRemoved } from './transactionReader';
 
 // Report types
@@ -36,8 +36,9 @@ export interface CategoryBreakdown {
 export interface CashFlowSummary {
   month: string;
   income: number;
-  expenses: number;
-  netFlow: number;
+  expenses: number;   // spending only (excludes savings)
+  savings: number;    // savings category transactions
+  netFlow: number;    // income - expenses (spending only)
   savingsRate: number;
 }
 
@@ -357,18 +358,18 @@ export class ReportService {
       const categories = await this.dataService.getCategories(familyId);
       // Create a set of hidden category IDs including subcategories of hidden parents
       const hiddenCategoryIds = getEffectivelyHiddenCategoryIds(categories);
-      // Also exclude savings subcategories from spending breakdown
-      const savingsSubcategoryIds = getSavingsSubcategoryIds(categories);
+      // Also exclude savings categories from spending breakdown
+      const savingsCatIds = getSavingsCategoryIds(categories);
 
-      // Filter transactions (excluding hidden categories and savings subcategories)
-      const filteredTransactions = transactions.filter(t => 
-        t.date >= startDate && 
-        t.date <= endDate && 
+      // Filter transactions (excluding hidden categories and savings categories)
+      const filteredTransactions = transactions.filter(t =>
+        t.date >= startDate &&
+        t.date <= endDate &&
         !t.isHidden &&
         !t.pending &&
         t.amount > 0 && // Expenses only
         (!t.categoryId || !hiddenCategoryIds.has(t.categoryId)) && // Exclude hidden categories
-        (!t.categoryId || !savingsSubcategoryIds.has(t.categoryId)) // Exclude savings subcategories
+        (!t.categoryId || !savingsCatIds.has(t.categoryId)) // Exclude savings categories
       );
 
       // Calculate total
@@ -481,17 +482,17 @@ export class ReportService {
       const transactions = await this.getActiveTransactions(familyId);
 
       const categories = await this.dataService.getCategories(familyId);
-      // Get savings subcategories
-      const savingsSubcategoryIds = getSavingsSubcategoryIds(categories);
+      // Get savings categories (top-level isSavings=true + their subcategories)
+      const savingsCatIds = getSavingsCategoryIds(categories);
 
-      // Filter transactions for savings subcategories only
-      const filteredTransactions = transactions.filter(t => 
-        t.date >= startDate && 
-        t.date <= endDate && 
+      // Filter transactions for savings categories only
+      const filteredTransactions = transactions.filter(t =>
+        t.date >= startDate &&
+        t.date <= endDate &&
         !t.isHidden &&
         !t.pending &&
         t.amount > 0 && // Expenses only (savings contributions are positive)
-        t.categoryId && savingsSubcategoryIds.has(t.categoryId) // Only savings subcategories
+        t.categoryId && savingsCatIds.has(t.categoryId) // Only savings categories
       );
 
       // Calculate total
@@ -546,6 +547,8 @@ export class ReportService {
       const categories = await this.dataService.getCategories(familyId);
       // Create a set of hidden category IDs including subcategories of hidden parents
       const hiddenCategoryIds = getEffectivelyHiddenCategoryIds(categories);
+      // Get savings category IDs for separating savings from spending
+      const savingsCategoryIds = getSavingsCategoryIds(categories);
 
       const months = getMonthRange(startMonth, endMonth);
       const summary: CashFlowSummary[] = [];
@@ -554,6 +557,7 @@ export class ReportService {
         // Check if there's an override for this month
         let income: number;
         let expenses: number;
+        let savings: number;
         let netFlow: number;
         let savingsRate: number;
 
@@ -561,9 +565,10 @@ export class ReportService {
           const monthlyActuals = await this.actualsOverrideService.getMonthlyActuals(familyId, month);
 
           if (monthlyActuals.hasOverride) {
-            // Use override values
+            // Use override values — override data doesn't have per-category breakdown
             income = monthlyActuals.totalIncome;
             expenses = monthlyActuals.totalExpenses;
+            savings = 0;
             netFlow = income - expenses;
             savingsRate = income > 0 ? ((income - expenses) / income) * 100 : 0;
           } else {
@@ -582,8 +587,9 @@ export class ReportService {
 
             // Calculate using shared utilities (excludes transfers)
             income = calculateIncome(monthTransactions);
-            expenses = calculateExpenses(monthTransactions);
-            netFlow = calculateNetCashFlow(monthTransactions);
+            savings = calculateSavings(monthTransactions, savingsCategoryIds);
+            expenses = calculateSpending(monthTransactions, savingsCategoryIds);
+            netFlow = income - expenses;
             savingsRate = calculateSavingsRate(monthTransactions);
           }
         } else {
@@ -602,8 +608,9 @@ export class ReportService {
 
           // Calculate using shared utilities (excludes transfers)
           income = calculateIncome(monthTransactions);
-          expenses = calculateExpenses(monthTransactions);
-          netFlow = calculateNetCashFlow(monthTransactions);
+          savings = calculateSavings(monthTransactions, savingsCategoryIds);
+          expenses = calculateSpending(monthTransactions, savingsCategoryIds);
+          netFlow = income - expenses;
           savingsRate = calculateSavingsRate(monthTransactions);
         }
 
@@ -611,6 +618,7 @@ export class ReportService {
           month,
           income,
           expenses,
+          savings,
           netFlow,
           savingsRate
         });

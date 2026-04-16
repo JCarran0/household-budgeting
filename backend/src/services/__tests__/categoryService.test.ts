@@ -44,7 +44,7 @@ describe('CategoryService', () => {
         parentId: null,
         isHidden: false,
         isRollover: false,
-        isCustom: true, isIncome: false
+        isCustom: true, isIncome: false, isSavings: false
       };
 
       const newSubcategory = {
@@ -88,7 +88,7 @@ describe('CategoryService', () => {
         parentId: null,
         isHidden: false,
         isRollover: false,
-        isCustom: true, isIncome: false
+        isCustom: true, isIncome: false, isSavings: false
       };
 
       const subcategory: Category = {
@@ -97,7 +97,7 @@ describe('CategoryService', () => {
         parentId: 'parent-1',
         isHidden: false,
         isRollover: false,
-        isCustom: true, isIncome: false
+        isCustom: true, isIncome: false, isSavings: false
       };
 
       await dataService.saveCategories([parentCategory, subcategory], testUserId);
@@ -120,7 +120,7 @@ describe('CategoryService', () => {
         parentId: null,
         isHidden: false,
         isRollover: false,
-        isCustom: true, isIncome: false
+        isCustom: true, isIncome: false, isSavings: false
       };
 
       const updates = {
@@ -154,7 +154,7 @@ describe('CategoryService', () => {
           parentId: null,
             isHidden: false,
           isRollover: false,
-          isCustom: true, isIncome: false
+          isCustom: true, isIncome: false, isSavings: false
         },
         {
           id: 'cat-2',
@@ -162,7 +162,7 @@ describe('CategoryService', () => {
           parentId: null,
           isHidden: false,
           isRollover: false,
-          isCustom: true, isIncome: false
+          isCustom: true, isIncome: false, isSavings: false
         }
       ];
 
@@ -184,7 +184,7 @@ describe('CategoryService', () => {
           parentId: null,
             isHidden: false,
           isRollover: false,
-          isCustom: true, isIncome: false
+          isCustom: true, isIncome: false, isSavings: false
         },
         {
           id: 'sub-1',
@@ -192,7 +192,7 @@ describe('CategoryService', () => {
           parentId: 'parent-1',
             isHidden: false,
           isRollover: false,
-          isCustom: true, isIncome: false
+          isCustom: true, isIncome: false, isSavings: false
         },
         {
           id: 'sub-2',
@@ -200,7 +200,7 @@ describe('CategoryService', () => {
           parentId: 'parent-1',
           isHidden: false,
           isRollover: false,
-          isCustom: true, isIncome: false
+          isCustom: true, isIncome: false, isSavings: false
         },
         {
           id: 'cat-2',
@@ -208,7 +208,7 @@ describe('CategoryService', () => {
           parentId: null,
           isHidden: false,
           isRollover: false,
-          isCustom: true, isIncome: false
+          isCustom: true, isIncome: false, isSavings: false
         }
       ];
 
@@ -232,7 +232,7 @@ describe('CategoryService', () => {
           parentId: null,
             isHidden: false,
           isRollover: false,
-          isCustom: true, isIncome: false
+          isCustom: true, isIncome: false, isSavings: false
         },
         {
           id: 'sub-1',
@@ -240,7 +240,7 @@ describe('CategoryService', () => {
           parentId: 'parent-1',
             isHidden: false,
           isRollover: false,
-          isCustom: true, isIncome: false
+          isCustom: true, isIncome: false, isSavings: false
         },
         {
           id: 'parent-2',
@@ -248,7 +248,7 @@ describe('CategoryService', () => {
           parentId: null,
           isHidden: false,
           isRollover: false,
-          isCustom: true, isIncome: false
+          isCustom: true, isIncome: false, isSavings: false
         }
       ];
 
@@ -268,7 +268,7 @@ describe('CategoryService', () => {
           parentId: null,
             isHidden: false,
           isRollover: false,
-          isCustom: true, isIncome: false
+          isCustom: true, isIncome: false, isSavings: false
         },
         {
           id: 'sub-1',
@@ -276,7 +276,7 @@ describe('CategoryService', () => {
           parentId: 'parent-1',
             isHidden: false,
           isRollover: false,
-          isCustom: true, isIncome: false
+          isCustom: true, isIncome: false, isSavings: false
         },
         {
           id: 'sub-2',
@@ -284,7 +284,7 @@ describe('CategoryService', () => {
           parentId: 'parent-1',
           isHidden: false,
           isRollover: false,
-          isCustom: true, isIncome: false
+          isCustom: true, isIncome: false, isSavings: false
         },
         {
           id: 'sub-3',
@@ -292,7 +292,7 @@ describe('CategoryService', () => {
           parentId: 'parent-2',
           isHidden: false,
           isRollover: false,
-          isCustom: true, isIncome: false
+          isCustom: true, isIncome: false, isSavings: false
         }
       ];
 
@@ -312,7 +312,7 @@ describe('CategoryService', () => {
           parentId: null,
             isHidden: false,
           isRollover: false,
-          isCustom: true, isIncome: false
+          isCustom: true, isIncome: false, isSavings: false
         },
         {
           id: 'sub-1',
@@ -320,7 +320,7 @@ describe('CategoryService', () => {
           parentId: 'parent-1',
             isHidden: false,
           isRollover: false,
-          isCustom: true, isIncome: false
+          isCustom: true, isIncome: false, isSavings: false
         }
       ];
 
@@ -346,7 +346,7 @@ describe('CategoryService', () => {
           parentId: null,
             isHidden: true,
           isRollover: false,
-          isCustom: true, isIncome: false
+          isCustom: true, isIncome: false, isSavings: false
         },
         {
           id: 'cat-2',
@@ -354,7 +354,7 @@ describe('CategoryService', () => {
           parentId: null,
           isHidden: false,
           isRollover: false,
-          isCustom: true, isIncome: false
+          isCustom: true, isIncome: false, isSavings: false
         },
         {
           id: 'cat-3',
@@ -362,7 +362,7 @@ describe('CategoryService', () => {
           parentId: null,
             isHidden: true,
           isRollover: false,
-          isCustom: true, isIncome: false
+          isCustom: true, isIncome: false, isSavings: false
         }
       ];
 
@@ -382,7 +382,7 @@ describe('CategoryService', () => {
           parentId: null,
             isHidden: false,
           isRollover: true,
-          isCustom: true, isIncome: false
+          isCustom: true, isIncome: false, isSavings: false
         },
         {
           id: 'cat-2',
@@ -390,7 +390,7 @@ describe('CategoryService', () => {
           parentId: null,
             isHidden: false,
           isRollover: true,
-          isCustom: true, isIncome: false
+          isCustom: true, isIncome: false, isSavings: false
         },
         {
           id: 'cat-3',
@@ -398,7 +398,7 @@ describe('CategoryService', () => {
           parentId: null,
           isHidden: false,
           isRollover: false,
-          isCustom: true, isIncome: false
+          isCustom: true, isIncome: false, isSavings: false
         }
       ];
 
@@ -430,7 +430,7 @@ describe('CategoryService', () => {
           expect.objectContaining({ name: 'Healthcare', parentId: null }),
           expect.objectContaining({ name: 'Education', parentId: null }),
           expect.objectContaining({ name: 'Personal', parentId: null }),
-          expect.objectContaining({ name: 'Savings', parentId: null, isRollover: true, isIncome: false }),
+          expect.objectContaining({ name: 'Savings', parentId: null, isRollover: true, isIncome: false, isSavings: false }),
           expect.objectContaining({ name: 'Transfers', parentId: null, isHidden: true })
         ])
       );
@@ -443,7 +443,7 @@ describe('CategoryService', () => {
         parentId: null,
         isHidden: false,
         isRollover: false,
-        isCustom: true, isIncome: false
+        isCustom: true, isIncome: false, isSavings: false
       };
 
       await dataService.saveCategories([existingCategory], testUserId);

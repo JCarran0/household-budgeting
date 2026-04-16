@@ -201,7 +201,8 @@ export class ImportService {
                 isCustom: true,
                 isHidden: false,
                 isRollover: false,
-                isIncome: false // Custom parent categories default to expense
+                isIncome: false, // Custom parent categories default to expense
+                isSavings: false,
               };
               
               categoriesToAdd.push(parentCategory!);
@@ -245,7 +246,8 @@ export class ImportService {
             isCustom: true,
             isHidden: parsedCat.isHidden,
             isRollover: parsedCat.isRollover,
-            isIncome: false // Custom child categories default to expense (will be computed correctly by category service if needed)
+            isIncome: false, // Custom child categories default to expense (will be computed correctly by category service if needed)
+            isSavings: false,
           };
 
           categoriesToAdd.push(childCategory);

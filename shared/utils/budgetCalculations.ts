@@ -431,6 +431,27 @@ export function getBudgetableTransactions(
 }
 
 /**
+ * Get IDs of all savings categories (top-level with isSavings=true + their children).
+ *
+ * @param categories Array of all categories
+ * @returns Set of category IDs that are savings categories
+ */
+export function getSavingsCategoryIds(categories: Category[]): Set<string> {
+  const ids = new Set<string>();
+  for (const cat of categories) {
+    if (!cat.parentId && (cat.isSavings ?? false)) {
+      ids.add(cat.id);
+    } else if (cat.parentId) {
+      const parent = categories.find(p => p.id === cat.parentId);
+      if (parent?.isSavings ?? false) {
+        ids.add(cat.id);
+      }
+    }
+  }
+  return ids;
+}
+
+/**
  * Utility function to determine if a category should be excluded from parent/child filtering
  *
  * @param categoryId Category ID to check

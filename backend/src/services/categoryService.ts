@@ -32,6 +32,7 @@ export interface CreateCategoryDto {
   description?: string;
   isHidden: boolean;
   isRollover: boolean;
+  isSavings?: boolean;  // only honored when parentId === null
   // isIncome is computed automatically based on parentId
 }
 
@@ -41,6 +42,7 @@ export interface UpdateCategoryDto {
   parentId?: string | null;
   isHidden?: boolean;
   isRollover?: boolean;
+  isSavings?: boolean;  // only honored when parentId === null
 }
 
 export class CategoryService {
@@ -157,7 +159,8 @@ export class CategoryService {
       isCustom: true, // User-created categories are always custom
       isHidden: data.isHidden,
       isRollover: data.isRollover,
-      isIncome: this.isIncomeCategory(categoryId, data.parentId, categories)
+      isIncome: this.isIncomeCategory(categoryId, data.parentId, categories),
+      isSavings: data.parentId === null ? (data.isSavings ?? false) : false,
     };
 
     categories.push(newCategory);
@@ -181,6 +184,11 @@ export class CategoryService {
     // Recompute isIncome when parentId changes
     if (updates.parentId !== undefined) {
       updatedCategory.isIncome = this.isIncomeCategory(updatedCategory.id, updatedCategory.parentId, categories);
+    }
+
+    // isSavings is only valid on top-level categories
+    if (updatedCategory.parentId !== null) {
+      updatedCategory.isSavings = false;
     }
 
     categories[index] = updatedCategory;
@@ -306,6 +314,31 @@ export class CategoryService {
       if (category.isIncome === undefined) {
         // Determine isIncome based on current hierarchy logic
         category.isIncome = this.isIncomeCategory(category.id, category.parentId, categories);
+        migrated++;
+      } else {
+        skipped++;
+      }
+    });
+
+    if (migrated > 0) {
+      await this.dataService.saveCategories(categories, familyId);
+    }
+
+    return { migrated, skipped };
+  }
+
+  /**
+   * Migration method to add isSavings property to existing categories
+   * This should be called once to migrate existing data
+   */
+  async migrateIsSavingsProperty(familyId: string): Promise<{ migrated: number; skipped: number }> {
+    const categories = await this.dataService.getCategories(familyId);
+    let migrated = 0;
+    let skipped = 0;
+
+    categories.forEach(category => {
+      if ((category as Category & { isSavings?: boolean }).isSavings === undefined) {
+        category.isSavings = false;
         migrated++;
       } else {
         skipped++;

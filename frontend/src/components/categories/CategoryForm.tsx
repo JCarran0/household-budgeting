@@ -29,6 +29,7 @@ interface FormValues {
   description: string;
   isHidden: boolean;
   isRollover: boolean;
+  isSavings: boolean;
 }
 
 // Removed PLAID_CATEGORIES constant - no longer needed
@@ -59,6 +60,7 @@ export function CategoryForm({ opened, onClose, category, onSuccess }: CategoryF
       description: '',
       isHidden: false,
       isRollover: false,
+      isSavings: false,
     },
     validate: {
       name: (value) => {
@@ -83,6 +85,7 @@ export function CategoryForm({ opened, onClose, category, onSuccess }: CategoryF
           description: category.description || '',
           isHidden: category.isHidden,
           isRollover: category.isRollover,
+          isSavings: category.isSavings ?? false,
         });
       } else {
         form.reset();
@@ -143,7 +146,8 @@ export function CategoryForm({ opened, onClose, category, onSuccess }: CategoryF
       if (values.parentId !== category.parentId) updates.parentId = values.parentId;
       if (values.isHidden !== category.isHidden) updates.isHidden = values.isHidden;
       if (values.isRollover !== category.isRollover) updates.isRollover = values.isRollover;
-      
+      if (values.isSavings !== (category.isSavings ?? false)) updates.isSavings = values.isSavings;
+
       if (Object.keys(updates).length > 0) {
         updateMutation.mutate(updates);
       } else {
@@ -156,6 +160,7 @@ export function CategoryForm({ opened, onClose, category, onSuccess }: CategoryF
         description: values.description || undefined,
         isHidden: values.isHidden,
         isRollover: values.isRollover,
+        isSavings: values.isSavings,
       });
     }
   };
@@ -230,6 +235,14 @@ export function CategoryForm({ opened, onClose, category, onSuccess }: CategoryF
               {...form.getInputProps('isRollover', { type: 'checkbox' })}
               description="Mark for rollover to carry unused budget to next month"
             />
+
+            {!form.values.parentId && (!isEdit || !category?.parentId) && (
+              <Checkbox
+                label="Savings Category"
+                {...form.getInputProps('isSavings', { type: 'checkbox' })}
+                description="Mark as savings/investment (excluded from spending totals)"
+              />
+            )}
           </Stack>
 
           <Group justify="flex-end" mt="md">

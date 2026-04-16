@@ -11,6 +11,7 @@ export interface CreateCategoryDto {
   description?: string;
   isHidden: boolean;
   isRollover: boolean;
+  isSavings?: boolean;  // only honored when parentId === null
 }
 
 export interface UpdateCategoryDto {
@@ -19,6 +20,7 @@ export interface UpdateCategoryDto {
   parentId?: string | null;
   isHidden?: boolean;
   isRollover?: boolean;
+  isSavings?: boolean;  // only honored when parentId === null
 }
 
 export function createCategoriesApi(client: AxiosInstance) {

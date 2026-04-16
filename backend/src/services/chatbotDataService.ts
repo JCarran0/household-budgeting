@@ -32,12 +32,13 @@ import type {
 } from '../shared/types';
 import {
   calculateIncome,
-  calculateExpenses,
-  calculateNetCashFlow,
+  calculateSavings,
+  calculateSpending,
 } from '../shared/utils/transactionCalculations';
 import {
   calculateBudgetTotals,
   calculateActualTotals,
+  getSavingsCategoryIds,
 } from '../shared/utils/budgetCalculations';
 
 // Internal storage types (matching what's stored in JSON)
@@ -253,16 +254,23 @@ export class ChatbotDataService {
       { excludeHidden: true },
     );
 
+    const savingsIds = getSavingsCategoryIds(categories);
+    const monthlySavings = calculateSavings(
+      transactions as unknown as import('../shared/utils/transactionCalculations').TransactionForCalculation[],
+      savingsIds,
+    );
+    const actualSpending = actualTotals.expense - monthlySavings;
+
     return {
       month,
       totalBudgetedIncome: budgetTotals.income,
       totalActualIncome: actualTotals.income,
       totalBudgetedExpense: budgetTotals.expense,
-      totalActualExpense: actualTotals.expense,
+      totalActualExpense: actualSpending,  // spending only (excludes savings)
       netBudgeted: budgetTotals.income - budgetTotals.expense,
-      netActual: actualTotals.income - actualTotals.expense,
+      netActual: actualTotals.income - actualSpending,
       incomeVariance: actualTotals.income - budgetTotals.income,
-      expenseVariance: budgetTotals.expense - actualTotals.expense,
+      expenseVariance: budgetTotals.expense - actualSpending,
     };
   }
 
@@ -325,11 +333,13 @@ export class ChatbotDataService {
     ]);
 
     const categoryMap = new Map(categories.map(c => [c.id, c]));
+    const savingsIds = getSavingsCategoryIds(categories);
     const spending = new Map<string, { amount: number; count: number }>();
 
-    // Only count expenses (positive amounts = debits)
+    // Only count expenses (positive amounts = debits), exclude savings categories
     for (const t of transactions) {
       if (t.amount > 0 && t.categoryId && !t.isHidden) {
+        if (savingsIds.has(t.categoryId)) continue;
         const current = spending.get(t.categoryId) || { amount: 0, count: 0 };
         current.amount += t.amount;
         current.count += 1;
@@ -360,13 +370,18 @@ export class ChatbotDataService {
    * Get cash flow summary for a date range.
    */
   async getCashFlow(familyId: string, startDate: string, endDate: string): Promise<CashFlowSummary> {
-    const transactions = await this.queryTransactions(familyId, { startDate, endDate });
+    const [transactions, categories] = await Promise.all([
+      this.queryTransactions(familyId, { startDate, endDate }),
+      this.getCategories(familyId),
+    ]);
+    const savingsIds = getSavingsCategoryIds(categories);
 
     // Use shared utilities for consistent calculation (excludes transfers, hidden, pending)
     const calcTransactions = transactions as unknown as import('../shared/utils/transactionCalculations').TransactionForCalculation[];
     const totalIncome = calculateIncome(calcTransactions);
-    const totalExpenses = calculateExpenses(calcTransactions);
-    const netCashFlow = calculateNetCashFlow(calcTransactions);
+    const totalSavings = calculateSavings(calcTransactions, savingsIds);
+    const totalExpenses = calculateSpending(calcTransactions, savingsIds);
+    const netCashFlow = totalIncome - totalExpenses;
 
     // Build monthly breakdown
     const monthlyMap = new Map<string, typeof transactions>();
@@ -382,8 +397,9 @@ export class ChatbotDataService {
         return {
           month,
           income: calculateIncome(monthCalc),
-          expenses: calculateExpenses(monthCalc),
-          net: calculateNetCashFlow(monthCalc),
+          expenses: calculateSpending(monthCalc, savingsIds),
+          savings: calculateSavings(monthCalc, savingsIds),
+          net: calculateIncome(monthCalc) - calculateSpending(monthCalc, savingsIds),
         };
       })
       .sort((a, b) => a.month.localeCompare(b.month));
@@ -393,6 +409,7 @@ export class ChatbotDataService {
       endDate,
       totalIncome,
       totalExpenses,
+      totalSavings,
       netCashFlow,
       monthlyBreakdown,
     };

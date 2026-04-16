@@ -29,6 +29,7 @@ import {
   IconAlertCircle,
   IconCategory,
   IconChartLine,
+  IconBuildingBank,
 } from '@tabler/icons-react';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../lib/api';
@@ -37,7 +38,8 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../stores/authStore';
 import { useFilterStore } from '../stores/filterStore';
 import { formatCurrency } from '../utils/formatters';
-import { calculateActualTotals } from '../../../shared/utils/budgetCalculations';
+import { calculateActualTotals, getSavingsCategoryIds } from '../../../shared/utils/budgetCalculations';
+import { calculateSavings } from '../../../shared/utils/transactionCalculations';
 import { format, startOfMonth, addMonths } from 'date-fns';
 
 export function MantineDashboard() {
@@ -136,7 +138,20 @@ export function MantineDashboard() {
     return calculateActualTotals(monthlyTransactionData.transactions, categories, { excludeHidden: true });
   }, [monthlyTransactionData, categories]);
 
-  const monthlySpending = actualTotals.expense;
+  const savingsCategoryIds = useMemo(() => {
+    if (!categories) return new Set<string>();
+    return getSavingsCategoryIds(categories);
+  }, [categories]);
+
+  const monthlySavings = useMemo(() => {
+    if (!monthlyTransactionData?.transactions) return 0;
+    return calculateSavings(
+      monthlyTransactionData.transactions as unknown as import('../../../shared/utils/transactionCalculations').TransactionForCalculation[],
+      savingsCategoryIds
+    );
+  }, [monthlyTransactionData, savingsCategoryIds]);
+
+  const monthlySpending = actualTotals.expense - monthlySavings;
   const monthlyIncome = actualTotals.income;
 
   // Calculate projected net income for the year
@@ -209,6 +224,14 @@ export function MantineDashboard() {
       icon: IconTrendingDown,
       color: 'red',
       description: 'This month',
+    },
+    {
+      title: 'Monthly Savings',
+      value: formatCurrency(monthlySavings),
+      exactValue: formatCurrency(monthlySavings, true),
+      icon: IconBuildingBank,
+      color: 'teal',
+      description: 'Savings this month',
     },
     {
       title: 'Monthly Income',

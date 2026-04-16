@@ -29,6 +29,7 @@ import {
   IconList,
   IconFileUpload,
   IconHash,
+  IconBuildingBank,
 } from '@tabler/icons-react';
 import { api, type CategoryWithChildren } from '../lib/api';
 import { CategoryTree } from '../components/categories/CategoryTree';
@@ -166,6 +167,10 @@ export function Categories() {
     return count + parentRollover + childrenRollover;
   }, 0) || 0;
 
+  const savingsCount = categories?.reduce((count: number, cat: CategoryWithChildren) => {
+    return count + ((cat.isSavings ?? false) ? 1 : 0);
+  }, 0) || 0;
+
   if (isLoading) {
     return (
       <Center h={400}>
@@ -233,7 +238,7 @@ export function Categories() {
         {hasCategories && (
           <>
             <Grid>
-              <Grid.Col span={{ base: 12, sm: 4 }}>
+              <Grid.Col span={{ base: 12, sm: 3 }}>
                 <Card>
                   <Group gap="xs">
                     <ThemeIcon color="blue" variant="light" size="lg">
@@ -246,8 +251,8 @@ export function Categories() {
                   </Group>
                 </Card>
               </Grid.Col>
-              
-              <Grid.Col span={{ base: 12, sm: 4 }}>
+
+              <Grid.Col span={{ base: 12, sm: 3 }}>
                 <Card>
                   <Group gap="xs">
                     <ThemeIcon color="yellow" variant="light" size="lg">
@@ -260,8 +265,8 @@ export function Categories() {
                   </Group>
                 </Card>
               </Grid.Col>
-              
-              <Grid.Col span={{ base: 12, sm: 4 }}>
+
+              <Grid.Col span={{ base: 12, sm: 3 }}>
                 <Card>
                   <Group gap="xs">
                     <ThemeIcon color="gray" variant="light" size="lg">
@@ -270,6 +275,20 @@ export function Categories() {
                     <div>
                       <Text size="xs" c="dimmed">Hidden Categories</Text>
                       <Text fw={600} size="lg">{hiddenCount}</Text>
+                    </div>
+                  </Group>
+                </Card>
+              </Grid.Col>
+
+              <Grid.Col span={{ base: 12, sm: 3 }}>
+                <Card>
+                  <Group gap="xs">
+                    <ThemeIcon color="teal" variant="light" size="lg">
+                      <IconBuildingBank size={20} />
+                    </ThemeIcon>
+                    <div>
+                      <Text size="xs" c="dimmed">Savings Categories</Text>
+                      <Text fw={600} size="lg">{savingsCount}</Text>
                     </div>
                   </Group>
                 </Card>

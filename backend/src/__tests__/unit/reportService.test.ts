@@ -58,25 +58,25 @@ function makeTransaction(
 
 const CATEGORIES: Category[] = [
   // Food hierarchy
-  { id: 'FOOD', name: 'Food', parentId: null, isCustom: true, isHidden: false, isRollover: false, isIncome: false },
-  { id: 'FOOD_GROCERIES', name: 'Groceries', parentId: 'FOOD', isCustom: true, isHidden: false, isRollover: false, isIncome: false },
-  { id: 'FOOD_RESTAURANTS', name: 'Restaurants', parentId: 'FOOD', isCustom: true, isHidden: false, isRollover: false, isIncome: false },
+  { id: 'FOOD', name: 'Food', parentId: null, isCustom: true, isHidden: false, isRollover: false, isIncome: false, isSavings: false },
+  { id: 'FOOD_GROCERIES', name: 'Groceries', parentId: 'FOOD', isCustom: true, isHidden: false, isRollover: false, isIncome: false, isSavings: false },
+  { id: 'FOOD_RESTAURANTS', name: 'Restaurants', parentId: 'FOOD', isCustom: true, isHidden: false, isRollover: false, isIncome: false, isSavings: false },
 
   // Transport hierarchy
-  { id: 'TRANSPORT', name: 'Transport', parentId: null, isCustom: true, isHidden: false, isRollover: false, isIncome: false },
-  { id: 'TRANSPORT_GAS', name: 'Gas', parentId: 'TRANSPORT', isCustom: true, isHidden: false, isRollover: false, isIncome: false },
+  { id: 'TRANSPORT', name: 'Transport', parentId: null, isCustom: true, isHidden: false, isRollover: false, isIncome: false, isSavings: false },
+  { id: 'TRANSPORT_GAS', name: 'Gas', parentId: 'TRANSPORT', isCustom: true, isHidden: false, isRollover: false, isIncome: false, isSavings: false },
 
   // Income hierarchy
-  { id: 'INCOME', name: 'Income', parentId: null, isCustom: false, isHidden: false, isRollover: false, isIncome: true },
-  { id: 'INCOME_SALARY', name: 'Salary', parentId: 'INCOME', isCustom: false, isHidden: false, isRollover: false, isIncome: true },
+  { id: 'INCOME', name: 'Income', parentId: null, isCustom: false, isHidden: false, isRollover: false, isIncome: true, isSavings: false },
+  { id: 'INCOME_SALARY', name: 'Salary', parentId: 'INCOME', isCustom: false, isHidden: false, isRollover: false, isIncome: true, isSavings: false },
 
   // Hidden category — children should be effectively hidden
-  { id: 'HIDDEN_CAT', name: 'Hidden', parentId: null, isCustom: true, isHidden: true, isRollover: false, isIncome: false },
-  { id: 'HIDDEN_CHILD', name: 'Hidden Child', parentId: 'HIDDEN_CAT', isCustom: true, isHidden: false, isRollover: false, isIncome: false },
+  { id: 'HIDDEN_CAT', name: 'Hidden', parentId: null, isCustom: true, isHidden: true, isRollover: false, isIncome: false, isSavings: false },
+  { id: 'HIDDEN_CHILD', name: 'Hidden Child', parentId: 'HIDDEN_CAT', isCustom: true, isHidden: false, isRollover: false, isIncome: false, isSavings: false },
 
   // Savings / rollover hierarchy
-  { id: 'CUSTOM_SAVINGS', name: 'Savings', parentId: null, isCustom: true, isHidden: false, isRollover: true, isIncome: false },
-  { id: 'CUSTOM_SAVINGS_EMERGENCY', name: 'Emergency Fund', parentId: 'CUSTOM_SAVINGS', isCustom: true, isHidden: false, isRollover: false, isIncome: false },
+  { id: 'CUSTOM_SAVINGS', name: 'Savings', parentId: null, isCustom: true, isHidden: false, isRollover: true, isIncome: false, isSavings: false },
+  { id: 'CUSTOM_SAVINGS_EMERGENCY', name: 'Emergency Fund', parentId: 'CUSTOM_SAVINGS', isCustom: true, isHidden: false, isRollover: false, isIncome: false, isSavings: false },
 ];
 
 // Dates span 2025-01 through 2025-04 so tests can use fixed month ranges

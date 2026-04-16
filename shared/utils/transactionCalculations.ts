@@ -57,6 +57,45 @@ export function calculateExpenses(transactions: TransactionForCalculation[]): nu
 }
 
 /**
+ * Calculate total savings contributions (positive amounts in savings categories).
+ * @param transactions Array of transactions to calculate from
+ * @param savingsCategoryIds Set of category IDs that are savings categories
+ * @returns Total savings amount (positive value)
+ */
+export function calculateSavings(
+  transactions: TransactionForCalculation[],
+  savingsCategoryIds: Set<string>
+): number {
+  return transactions
+    .filter(t => {
+      if (t.isHidden || t.pending) return false;
+      if (!t.categoryId) return false;
+      return t.amount >= 0 && savingsCategoryIds.has(t.categoryId);
+    })
+    .reduce((sum, t) => sum + t.amount, 0);
+}
+
+/**
+ * Calculate spending (positive amounts excluding transfers and savings categories).
+ * @param transactions Array of transactions to calculate from
+ * @param savingsCategoryIds Set of category IDs that are savings categories
+ * @returns Total spending amount (positive value)
+ */
+export function calculateSpending(
+  transactions: TransactionForCalculation[],
+  savingsCategoryIds: Set<string>
+): number {
+  return transactions
+    .filter(t => {
+      if (t.isHidden || t.pending) return false;
+      if (t.categoryId && isTransferCategory(t.categoryId)) return false;
+      if (t.categoryId && savingsCategoryIds.has(t.categoryId)) return false;
+      return t.amount >= 0;
+    })
+    .reduce((sum, t) => sum + t.amount, 0);
+}
+
+/**
  * Calculate net cash flow (income - expenses, excluding transfers)
  * @param transactions Array of transactions to calculate from
  * @returns Net cash flow (positive = surplus, negative = deficit)

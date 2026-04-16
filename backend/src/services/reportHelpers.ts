@@ -58,17 +58,25 @@ export function getEffectivelyHiddenCategoryIds(categories: Category[]): Set<str
 }
 
 /**
- * Get IDs of subcategories under the CUSTOM_SAVINGS parent.
+ * Get IDs of all savings categories (top-level isSavings=true + their subcategories).
+ * Replaces the old CUSTOM_SAVINGS hardcoded approach.
  */
-export function getSavingsSubcategoryIds(categories: Category[]): Set<string> {
-  const savingsSubcategoryIds = new Set<string>();
-
-  // Find all subcategories of the CUSTOM_SAVINGS parent category
-  categories.forEach(category => {
-    if (category.parentId === 'CUSTOM_SAVINGS') {
-      savingsSubcategoryIds.add(category.id);
+export function getSavingsCategoryIds(categories: Category[]): Set<string> {
+  const ids = new Set<string>();
+  for (const cat of categories) {
+    if (!cat.parentId && (cat.isSavings ?? false)) {
+      ids.add(cat.id);
+    } else if (cat.parentId) {
+      const parent = categories.find(p => p.id === cat.parentId);
+      if (parent?.isSavings ?? false) {
+        ids.add(cat.id);
+      }
     }
-  });
+  }
+  return ids;
+}
 
-  return savingsSubcategoryIds;
+/** @deprecated Use getSavingsCategoryIds */
+export function getSavingsSubcategoryIds(categories: Category[]): Set<string> {
+  return getSavingsCategoryIds(categories);
 }

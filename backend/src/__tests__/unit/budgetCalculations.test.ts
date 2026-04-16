@@ -21,26 +21,26 @@ import { Category, MonthlyBudget, Transaction } from '../../shared/types';
 describe('Budget Calculation Utilities', () => {
   const mockCategories: Category[] = [
     // Root categories
-    { id: 'INCOME', name: 'Income', parentId: null, isCustom: false, isHidden: false, isRollover: false, isIncome: true },
-    { id: 'FOOD_AND_DRINK', name: 'Food and Drink', parentId: null, isCustom: false, isHidden: false, isRollover: false, isIncome: false },
-    { id: 'ENTERTAINMENT', name: 'Entertainment', parentId: null, isCustom: false, isHidden: false, isRollover: false, isIncome: false },
-    { id: 'TRANSFER_IN', name: 'Transfer In', parentId: null, isCustom: false, isHidden: false, isRollover: false, isIncome: false },
-    { id: 'TRANSFER_OUT', name: 'Transfer Out', parentId: null, isCustom: false, isHidden: false, isRollover: false, isIncome: false },
+    { id: 'INCOME', name: 'Income', parentId: null, isCustom: false, isHidden: false, isRollover: false, isIncome: true, isSavings: false },
+    { id: 'FOOD_AND_DRINK', name: 'Food and Drink', parentId: null, isCustom: false, isHidden: false, isRollover: false, isIncome: false, isSavings: false },
+    { id: 'ENTERTAINMENT', name: 'Entertainment', parentId: null, isCustom: false, isHidden: false, isRollover: false, isIncome: false, isSavings: false },
+    { id: 'TRANSFER_IN', name: 'Transfer In', parentId: null, isCustom: false, isHidden: false, isRollover: false, isIncome: false, isSavings: false },
+    { id: 'TRANSFER_OUT', name: 'Transfer Out', parentId: null, isCustom: false, isHidden: false, isRollover: false, isIncome: false, isSavings: false },
 
     // Income subcategories
-    { id: 'INCOME_WAGES', name: 'Wages', parentId: 'INCOME', isCustom: false, isHidden: false, isRollover: false, isIncome: true },
-    { id: 'CUSTOM_SALARY', name: 'Salary', parentId: 'INCOME', isCustom: true, isHidden: false, isRollover: false, isIncome: true },
+    { id: 'INCOME_WAGES', name: 'Wages', parentId: 'INCOME', isCustom: false, isHidden: false, isRollover: false, isIncome: true, isSavings: false },
+    { id: 'CUSTOM_SALARY', name: 'Salary', parentId: 'INCOME', isCustom: true, isHidden: false, isRollover: false, isIncome: true, isSavings: false },
 
     // Expense subcategories
-    { id: 'FOOD_AND_DRINK_COFFEE', name: 'Coffee', parentId: 'FOOD_AND_DRINK', isCustom: false, isHidden: false, isRollover: false, isIncome: false },
-    { id: 'CUSTOM_GROCERIES', name: 'Groceries', parentId: 'FOOD_AND_DRINK', isCustom: true, isHidden: false, isRollover: false, isIncome: false },
-    { id: 'CUSTOM_MOVIES', name: 'Movies', parentId: 'ENTERTAINMENT', isCustom: true, isHidden: false, isRollover: false, isIncome: false },
+    { id: 'FOOD_AND_DRINK_COFFEE', name: 'Coffee', parentId: 'FOOD_AND_DRINK', isCustom: false, isHidden: false, isRollover: false, isIncome: false, isSavings: false },
+    { id: 'CUSTOM_GROCERIES', name: 'Groceries', parentId: 'FOOD_AND_DRINK', isCustom: true, isHidden: false, isRollover: false, isIncome: false, isSavings: false },
+    { id: 'CUSTOM_MOVIES', name: 'Movies', parentId: 'ENTERTAINMENT', isCustom: true, isHidden: false, isRollover: false, isIncome: false, isSavings: false },
 
     // Hidden categories
-    { id: 'HIDDEN_CATEGORY', name: 'Hidden Category', parentId: null, isCustom: true, isHidden: true, isRollover: false, isIncome: false },
-    { id: 'CHILD_OF_HIDDEN', name: 'Child of Hidden', parentId: 'HIDDEN_CATEGORY', isCustom: true, isHidden: false, isRollover: false, isIncome: false },
-    { id: 'VISIBLE_PARENT', name: 'Visible Parent', parentId: null, isCustom: true, isHidden: false, isRollover: false, isIncome: false },
-    { id: 'HIDDEN_CHILD', name: 'Hidden Child', parentId: 'VISIBLE_PARENT', isCustom: true, isHidden: true, isRollover: false, isIncome: false },
+    { id: 'HIDDEN_CATEGORY', name: 'Hidden Category', parentId: null, isCustom: true, isHidden: true, isRollover: false, isIncome: false, isSavings: false },
+    { id: 'CHILD_OF_HIDDEN', name: 'Child of Hidden', parentId: 'HIDDEN_CATEGORY', isCustom: true, isHidden: false, isRollover: false, isIncome: false, isSavings: false },
+    { id: 'VISIBLE_PARENT', name: 'Visible Parent', parentId: null, isCustom: true, isHidden: false, isRollover: false, isIncome: false, isSavings: false },
+    { id: 'HIDDEN_CHILD', name: 'Hidden Child', parentId: 'VISIBLE_PARENT', isCustom: true, isHidden: true, isRollover: false, isIncome: false, isSavings: false },
   ];
 
   const mockBudgets: MonthlyBudget[] = [
@@ -675,7 +675,7 @@ describe('Budget Calculation Utilities', () => {
 
     test('should handle categories with missing parents', () => {
       const orphanCategories: Category[] = [
-        { id: 'ORPHAN', name: 'Orphan', parentId: 'MISSING_PARENT', isCustom: true, isHidden: false, isRollover: false, isIncome: false }
+        { id: 'ORPHAN', name: 'Orphan', parentId: 'MISSING_PARENT', isCustom: true, isHidden: false, isRollover: false, isIncome: false, isSavings: false }
       ];
 
       const hiddenIds = getHiddenCategoryIds(orphanCategories);
@@ -684,8 +684,8 @@ describe('Budget Calculation Utilities', () => {
 
     test('should handle circular parent references', () => {
       const circularCategories: Category[] = [
-        { id: 'A', name: 'Category A', parentId: 'B', isCustom: true, isHidden: false, isRollover: false, isIncome: false },
-        { id: 'B', name: 'Category B', parentId: 'A', isCustom: true, isHidden: false, isRollover: false, isIncome: false }
+        { id: 'A', name: 'Category A', parentId: 'B', isCustom: true, isHidden: false, isRollover: false, isIncome: false, isSavings: false },
+        { id: 'B', name: 'Category B', parentId: 'A', isCustom: true, isHidden: false, isRollover: false, isIncome: false, isSavings: false }
       ];
 
       // Should not crash and should not consider them hidden

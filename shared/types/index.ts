@@ -171,6 +171,7 @@ export interface Category {
   isHidden: boolean;
   isRollover: boolean;
   isIncome: boolean;           // true for income categories (computed from hierarchy)
+  isSavings: boolean;          // true for savings/investment categories (excluded from spending totals)
 }
 
 export interface MonthlyBudget {
@@ -511,12 +512,14 @@ export interface CashFlowSummary {
   startDate: string;
   endDate: string;
   totalIncome: number;
-  totalExpenses: number;
+  totalExpenses: number;  // spending only (excludes savings)
+  totalSavings: number;   // savings category transactions
   netCashFlow: number;
   monthlyBreakdown: {
     month: string;
     income: number;
     expenses: number;
+    savings: number;
     net: number;
   }[];
 }

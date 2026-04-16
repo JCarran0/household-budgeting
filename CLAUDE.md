@@ -643,6 +643,7 @@ Track important decisions that affect how the codebase should be modified.
 
 | Date | Decision | Rationale | Impact |
 |------|----------|-----------|--------|
+| 2026-04 | isSavings flag on top-level categories | Separate savings contributions (401k, IRA, brokerage) from consumption spending. All spending/net surfaces exclude savings by default. Cash flow report shows 3-line layout: Income / Spending / Savings. Toggle on cash flow view lets user include savings in net. | Affects: CategoryService, reportService, dashboard, chatbot |
 | 2026-04 | Centralized transaction reader utility | Eliminate duplicated `status !== 'removed'` filter across 4 services | New `transactionReader.ts` with `excludeRemoved()` / `getActiveTransactions()` — all read paths use this; mutation paths intentionally bypass it |
 | 2026-04 | Amazon receipt matching via Claude vision | Upload Amazon PDFs, extract items, match to bank transactions, categorize with splits | AmazonReceiptService with tiered matching (amount+date), Zod-validated Claude output, session dedup against completed sessions only, CUSTOM_AMAZON transactions always re-eligible |
 | 2026-04 | Unified AI Categorize dropdown menu | Single entry point for both categorization workflows | TransactionToolbar uses Mantine Menu dropdown with "Uncategorized Transactions" and "Amazon Receipt Matching" options |
