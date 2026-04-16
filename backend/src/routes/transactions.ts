@@ -187,7 +187,7 @@ router.post('/sync', authMiddleware, async (req: AuthRequest, res: Response, nex
   try {
     if (!req.user) throw new AuthorizationError();
 
-    const validation = syncAllSchema.safeParse(req.body);
+    const validation = syncAllSchema.safeParse(req.body ?? {});
     if (!validation.success) {
       res.status(400).json({
         success: false,
