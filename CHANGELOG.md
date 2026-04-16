@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+### [5.17.1](https://github.com/JCarran0/household-budgeting/compare/v5.17.0...v5.17.1) (2026-04-16)
+
+
+### Bug Fixes
+
+* **chatbot:** include manual accounts in chatbot getAccounts query ([5fbc63f](https://github.com/JCarran0/household-budgeting/commit/5fbc63faad86c2cb820cf8563e78a96edffc4b8f))
+* **transactions:** handle missing body in sync endpoint ([d6bf269](https://github.com/JCarran0/household-budgeting/commit/d6bf2696d9487e6368101952a99699a4f88bcff2))
+
+
+### Documentation
+
+* **pwa:** add BRD and implementation plan for PWA mobile experience ([d32f52a](https://github.com/JCarran0/household-budgeting/commit/d32f52ada57c5a30343596853d94e04189e56ac6))
+
 ## [5.17.0](https://github.com/JCarran0/household-budgeting/compare/v5.16.4...v5.17.0) (2026-04-12)
 
 
