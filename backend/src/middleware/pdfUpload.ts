@@ -1,7 +1,9 @@
 /**
- * PDF upload middleware using multer with in-memory storage.
+ * Receipt upload middleware using multer with in-memory storage.
  *
- * SEC-001: PDFs are held in memory only — never written to disk or S3.
+ * Accepts PDFs and images (JPEG, PNG) for Amazon receipt matching.
+ *
+ * SEC-001: Files are held in memory only — never written to disk or S3.
  * SEC-007: Validates MIME type, file size (20 MB), and file count (max 2).
  *          Post-upload magic byte validation rejects spoofed MIME types.
  */
@@ -12,14 +14,33 @@ import { ValidationError } from '../errors';
 
 const MAX_FILE_SIZE = 20 * 1024 * 1024; // 20 MB
 const MAX_FILE_COUNT = 2;
-const PDF_MAGIC_BYTES = Buffer.from('%PDF-');
 
-const pdfUpload = multer({
+/** MIME types accepted by the receipt upload endpoint. */
+export type SupportedUploadMimeType = 'application/pdf' | 'image/jpeg' | 'image/png';
+
+const ALLOWED_MIME_TYPES: readonly SupportedUploadMimeType[] = [
+  'application/pdf',
+  'image/jpeg',
+  'image/png',
+] as const;
+
+function isSupportedMimeType(mime: string): mime is SupportedUploadMimeType {
+  return (ALLOWED_MIME_TYPES as readonly string[]).includes(mime);
+}
+
+/** Magic byte signatures for supported file types. */
+const MAGIC_BYTES: Record<SupportedUploadMimeType, { bytes: Buffer; offset: number }> = {
+  'application/pdf': { bytes: Buffer.from('%PDF-'), offset: 0 },
+  'image/jpeg': { bytes: Buffer.from([0xFF, 0xD8, 0xFF]), offset: 0 },
+  'image/png': { bytes: Buffer.from([0x89, 0x50, 0x4E, 0x47]), offset: 0 },
+};
+
+const receiptUpload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: MAX_FILE_SIZE },
   fileFilter: (_req, file, cb) => {
-    if (file.mimetype !== 'application/pdf') {
-      cb(new Error('Only PDF files are accepted'));
+    if (!isSupportedMimeType(file.mimetype)) {
+      cb(new Error('Only PDF, JPEG, and PNG files are accepted'));
       return;
     }
     cb(null, true);
@@ -27,18 +48,29 @@ const pdfUpload = multer({
 });
 
 /** Multer middleware: accepts up to 2 files under the "pdfs" field. */
-export const uploadPdfs = pdfUpload.array('pdfs', MAX_FILE_COUNT);
+export const uploadPdfs = receiptUpload.array('pdfs', MAX_FILE_COUNT);
 
 /**
- * SEC-007 hardening: validate actual file content starts with PDF magic bytes.
+ * SEC-007 hardening: validate actual file content matches expected magic bytes.
  * MIME type from Content-Type is client-controlled and trivially spoofable.
  * Must be called in the route handler immediately after multer middleware.
  */
 export function validatePdfMagicBytes(files: Express.Multer.File[]): void {
   for (const file of files) {
-    if (!file.buffer.subarray(0, 5).equals(PDF_MAGIC_BYTES)) {
+    if (!isSupportedMimeType(file.mimetype)) {
       throw new ValidationError(
-        'Uploaded file is not a valid PDF (invalid file header)'
+        `Unsupported file type: ${file.mimetype}`
+      );
+    }
+    const expected = MAGIC_BYTES[file.mimetype];
+
+    const headerSlice = file.buffer.subarray(
+      expected.offset,
+      expected.offset + expected.bytes.length,
+    );
+    if (!headerSlice.equals(expected.bytes)) {
+      throw new ValidationError(
+        'Uploaded file content does not match its declared type (invalid file header)'
       );
     }
   }
@@ -60,7 +92,7 @@ export function handleMulterError(
         next(new ValidationError('File too large. Maximum size is 20 MB per file.'));
         return;
       case 'LIMIT_FILE_COUNT':
-        next(new ValidationError('Too many files. Maximum is 2 PDFs per upload.'));
+        next(new ValidationError('Too many files. Maximum is 2 files per upload.'));
         return;
       case 'LIMIT_UNEXPECTED_FILE':
         next(new ValidationError('Unexpected file field. Use the "pdfs" field name.'));
@@ -71,7 +103,7 @@ export function handleMulterError(
     }
   }
   // Non-multer errors (e.g. fileFilter rejection)
-  if (err.message === 'Only PDF files are accepted') {
+  if (err.message === 'Only PDF, JPEG, and PNG files are accepted') {
     next(new ValidationError(err.message));
     return;
   }

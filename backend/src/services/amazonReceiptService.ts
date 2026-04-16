@@ -15,6 +15,7 @@ import { TransactionService } from './transactionService';
 import { AutoCategorizeService } from './autoCategorizeService';
 import { ChatbotDataService } from './chatbotDataService';
 import { NotFoundError, ForbiddenError, ValidationError } from '../errors';
+import type { SupportedUploadMimeType } from '../middleware/pdfUpload';
 import {
   PDF_PARSING_SYSTEM_PROMPT,
   PDF_EXTRACTION_TOOL,
@@ -62,6 +63,12 @@ const MS_PER_DAY = 86_400_000;
 const MAX_EXAMPLES_PER_CATEGORY = 5;
 const MAX_EXAMPLE_CATEGORIES = 20;
 const CUSTOM_AMAZON_CATEGORY = 'CUSTOM_AMAZON';
+
+/** A file uploaded for receipt parsing (PDF or image). */
+export interface ReceiptUploadFile {
+  buffer: Buffer;
+  mimeType: SupportedUploadMimeType;
+}
 
 export class AmazonReceiptService {
   private client: Anthropic;
@@ -113,7 +120,7 @@ export class AmazonReceiptService {
 
   async parseAndCreateSession(
     familyId: string,
-    pdfBuffers: Buffer[],
+    files: ReceiptUploadFile[],
   ): Promise<AmazonReceiptUploadResponse> {
     // 1. Check cost cap
     const budget = await this.costTracker.checkBudget();
@@ -123,14 +130,14 @@ export class AmazonReceiptService {
       );
     }
 
-    // 2. Parse each PDF via Claude vision
+    // 2. Parse each file via Claude vision
     let totalInputTokens = 0;
     let totalOutputTokens = 0;
     const parsedResults: PdfExtractionOutput[] = [];
 
-    for (const buffer of pdfBuffers) {
+    for (const file of files) {
       const { parsed, inputTokens, outputTokens } =
-        await this.parsePdfWithClaude(buffer);
+        await this.parseFileWithClaude(file.buffer, file.mimeType);
       totalInputTokens += inputTokens;
       totalOutputTokens += outputTokens;
       parsedResults.push(parsed);
@@ -244,12 +251,37 @@ export class AmazonReceiptService {
    * Send a PDF buffer to Claude's vision API for structured extraction.
    * SEC-002: PDF sent as base64 document content block, not interpolated.
    */
-  private async parsePdfWithClaude(pdfBuffer: Buffer): Promise<{
+  private async parseFileWithClaude(fileBuffer: Buffer, mimeType: SupportedUploadMimeType): Promise<{
     parsed: PdfExtractionOutput;
     inputTokens: number;
     outputTokens: number;
   }> {
-    const base64Pdf = pdfBuffer.toString('base64');
+    const base64Data = fileBuffer.toString('base64');
+    const isImage = mimeType.startsWith('image/');
+
+    // Build the appropriate content block based on file type
+    const fileContentBlock: Anthropic.ImageBlockParam | Anthropic.DocumentBlockParam = isImage
+      ? {
+          type: 'image' as const,
+          source: {
+            type: 'base64' as const,
+            media_type: mimeType as Exclude<SupportedUploadMimeType, 'application/pdf'>,
+            data: base64Data,
+          },
+        }
+      : {
+          type: 'document' as const,
+          source: {
+            type: 'base64' as const,
+            media_type: 'application/pdf' as const,
+            data: base64Data,
+          },
+        };
+
+    const promptText = isImage
+      ? 'Extract all order/charge data from this Amazon receipt photo using the extract_amazon_data tool. ' +
+        'The image may have perspective distortion, shadows, or partial content — extract what you can.'
+      : 'Extract all order/charge data from this Amazon PDF using the extract_amazon_data tool.';
 
     const response = await this.client.messages.create({
       model: MODEL,
@@ -260,17 +292,10 @@ export class AmazonReceiptService {
         {
           role: 'user',
           content: [
-            {
-              type: 'document',
-              source: {
-                type: 'base64',
-                media_type: 'application/pdf',
-                data: base64Pdf,
-              },
-            },
+            fileContentBlock,
             {
               type: 'text',
-              text: 'Extract all order/charge data from this Amazon PDF using the extract_amazon_data tool.',
+              text: promptText,
             },
           ],
         },
@@ -286,7 +311,7 @@ export class AmazonReceiptService {
     if (!toolUse) {
       throw new ValidationError(
         "This doesn't look like an Amazon orders or transactions page. " +
-          'Please upload a PDF exported from your Amazon order history or payment transactions.',
+          'Please upload a PDF or photo from your Amazon order history or payment transactions.',
       );
     }
 

@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect } from 'react';
 import { Modal, Text, Stack, Center, Loader, Button, Group } from '@mantine/core';
 import { useQueryClient } from '@tanstack/react-query';
+import axios from 'axios';
 import { api } from '../../lib/api';
 import { UploadStep } from './amazon/UploadStep';
 import { MatchReviewStep } from './amazon/MatchReviewStep';
@@ -28,6 +29,16 @@ type FlowStep =
   | 'applying'
   | 'summary'
   | 'error';
+
+/** Extract a user-facing error message from an API error. */
+function getErrorMessage(err: unknown): string {
+  if (axios.isAxiosError(err)) {
+    const serverMessage = (err.response?.data as { error?: string } | undefined)?.error;
+    if (serverMessage) return serverMessage;
+  }
+  if (err instanceof Error) return err.message;
+  return 'An unexpected error occurred';
+}
 
 interface AmazonReceiptFlowModalProps {
   opened: boolean;
@@ -86,7 +97,7 @@ export function AmazonReceiptFlowModal({ opened, onClose }: AmazonReceiptFlowMod
       setTotalCostUsed(prev => prev + (result.costUsed || 0));
 
       if (result.parsedOrders.length === 0 && result.parsedCharges.length === 0) {
-        setError('No orders or charges found in the uploaded PDF(s). Please check the file format.');
+        setError('No orders or charges found in the uploaded file(s). Please check the file format.');
         setStep('error');
         return;
       }
@@ -106,9 +117,7 @@ export function AmazonReceiptFlowModal({ opened, onClose }: AmazonReceiptFlowMod
 
       setStep('review-matches');
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Upload failed';
-      const axiosError = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
-      setError(axiosError || message);
+      setError(getErrorMessage(err));
       setStep('error');
     }
   }, []);
@@ -132,9 +141,7 @@ export function AmazonReceiptFlowModal({ opened, onClose }: AmazonReceiptFlowMod
 
       setStep('review-categories');
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Categorization failed';
-      const axiosError = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
-      setError(axiosError || message);
+      setError(getErrorMessage(err));
       setStep('error');
     }
   }, [sessionId]);
@@ -168,9 +175,7 @@ export function AmazonReceiptFlowModal({ opened, onClose }: AmazonReceiptFlowMod
 
       setStep('summary');
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to apply changes';
-      const axiosError = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
-      setError(axiosError || message);
+      setError(getErrorMessage(err));
       setStep('error');
     }
   }, [sessionId]);
@@ -201,7 +206,7 @@ export function AmazonReceiptFlowModal({ opened, onClose }: AmazonReceiptFlowMod
 
   const stepTitle: Record<FlowStep, string> = {
     upload: 'Upload Amazon Receipts',
-    parsing: 'Parsing PDFs...',
+    parsing: 'Parsing Receipts...',
     matching: 'Matching Orders...',
     'review-matches': 'Review Matches',
     categorizing: 'Categorizing Items...',
@@ -229,7 +234,7 @@ export function AmazonReceiptFlowModal({ opened, onClose }: AmazonReceiptFlowMod
           <Stack align="center" gap="sm">
             <Loader size="lg" />
             <Text c="dimmed" size="sm">
-              {step === 'parsing' && 'Extracting order data from your PDFs...'}
+              {step === 'parsing' && 'Extracting order data from your files...'}
               {step === 'matching' && 'Matching orders against your bank transactions...'}
               {step === 'categorizing' && 'Generating category recommendations...'}
               {step === 'applying' && 'Applying your changes...'}

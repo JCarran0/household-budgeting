@@ -193,7 +193,7 @@ phase_1_pwa_shell:
 # PHASE 2: Camera Capture & Image Upload
 # =============================================================================
 phase_2_camera:
-  status: not_started
+  status: complete
   description: |
     Enable camera capture in the app and extend the Amazon Receipt upload
     flow to accept images (JPEG/PNG) in addition to PDFs. Includes
@@ -202,50 +202,54 @@ phase_2_camera:
   tasks:
     - id: "2.1"
       task: Create image compression utility
-      status: not_started
+      status: complete
       details: |
-        Create frontend/src/utils/imageCompression.ts (or use
-        browser-image-compression library).
+        Created frontend/src/utils/imageCompression.ts using canvas-based
+        resize (OffscreenCanvas + createImageBitmap).
 
         compressImage(file: File, options?): Promise<File>
         - Target max dimension: 2048px (sufficient for receipt text)
         - Target max file size: ~2MB
         - Output format: JPEG (smaller than PNG for photos)
-        - Quality: 0.8
+        - Quality: 0.8, with fallback to 0.48 if still over size limit
+        - PDFs and non-image files pass through unchanged
 
     - id: "2.2"
       task: Update Amazon Receipt upload UI to accept images
-      status: not_started
+      status: complete
       details: |
-        In AmazonReceiptFlowModal.tsx:
-        - Change file input accept attribute:
-          accept="application/pdf,image/jpeg,image/png"
-        - Add capture="environment" attribute for mobile camera
-        - Update UI text: "Upload receipt photo or PDF"
-        - Compress images before upload via the compression utility
-        - Show preview thumbnail for captured images
+        Updated UploadStep.tsx:
+        - File input accepts application/pdf,image/jpeg,image/png
+        - Separate camera button with capture="environment" for mobile
+        - Updated UI text to mention photo option
+        - Images compressed before upload via compressImage utility
+        - Preview thumbnails shown for image files
+        - Compression progress indicator while processing
 
     - id: "2.3"
       task: Update backend upload endpoint to accept images
-      status: not_started
+      status: complete
       details: |
-        In amazon receipt routes:
-        - Update multer fileFilter to accept image/jpeg, image/png
-          in addition to application/pdf
-        - Update file size validation (images should be smaller after
-          client compression, but allow up to 10MB as a safety margin)
+        Updated pdfUpload.ts middleware:
+        - multer fileFilter accepts image/jpeg, image/png in addition
+          to application/pdf
+        - Magic byte validation extended for JPEG (FF D8 FF) and
+          PNG (89 50 4E 47) headers
+        - File size limit unchanged at 20 MB (images compressed client-side)
+        - Route passes file MIME type through to service
 
     - id: "2.4"
       task: Update Amazon Receipt Service to handle image files
-      status: not_started
+      status: complete
       details: |
-        In amazonReceiptService.ts:
-        - Detect file type from MIME type or buffer magic bytes
-        - For images: send as image content block to Claude vision API
-          (same as PDF pages but using image media type)
-        - For PDFs: existing flow unchanged
-        - Parsing prompt may need minor adjustment for photo vs PDF
-          (photos may have perspective distortion, shadows, etc.)
+        Updated amazonReceiptService.ts:
+        - parseAndCreateSession now accepts {buffer, mimeType}[] instead
+          of Buffer[]
+        - parsePdfWithClaude renamed to parseFileWithClaude
+        - Detects file type from mimeType parameter
+        - Images: sent as 'image' content block to Claude vision API
+        - PDFs: existing 'document' content block unchanged
+        - Photo prompt includes note about perspective distortion/shadows
 
     - id: "2.5"
       task: Test camera capture flow on Android device
