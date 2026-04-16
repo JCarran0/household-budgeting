@@ -8,9 +8,10 @@
  * - Reads directly from storage — never calls other service methods
  *
  * Storage keys used:
- * - transactions_{familyId}    — StoredTransaction[]
- * - accounts_{familyId}        — StoredAccount[]
- * - budgets_{familyId}         — StoredBudget[]
+ * - transactions_{familyId}         — StoredTransaction[]
+ * - accounts_{familyId}             — StoredAccount[] (Plaid-connected)
+ * - manual_accounts_{familyId}      — ManualAccount[]
+ * - budgets_{familyId}              — StoredBudget[]
  * - autocategorize_rules_{familyId} — StoredAutoCategorizeRule[]
  * - categories via getCategories(familyId)
  */
@@ -23,6 +24,7 @@ import type {
   MonthlyBudget,
   AutoCategorizeRule,
   AccountSummary,
+  ManualAccount,
   QueryTransactionsInput,
   CategorySpendingSummary,
   BudgetSummaryTotals,
@@ -126,6 +128,26 @@ interface StoredAutoCategorizeRule {
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
+}
+
+function manualCategoryToAccountType(category: ManualAccount['category']): AccountSummary['type'] {
+  switch (category) {
+    case 'real_estate':
+    case 'vehicle':
+    case 'cash':
+    case 'crypto':
+    case 'other_asset':
+      return 'other';
+    case 'retirement':
+    case 'brokerage':
+      return 'investment';
+    case 'mortgage':
+    case 'auto_loan':
+    case 'student_loan':
+    case 'personal_loan':
+    case 'other_liability':
+      return 'loan';
+  }
 }
 
 export class ChatbotDataService {
@@ -249,10 +271,12 @@ export class ChatbotDataService {
    * Returns only safe display data: name, type, institution, balances.
    */
   async getAccounts(familyId: string): Promise<AccountSummary[]> {
-    const stored = await this.dataService.getData<StoredAccount[]>(`accounts_${familyId}`);
-    if (!stored) return [];
+    const [stored, manualStored] = await Promise.all([
+      this.dataService.getData<StoredAccount[]>(`accounts_${familyId}`),
+      this.dataService.getData<ManualAccount[]>(`manual_accounts_${familyId}`),
+    ]);
 
-    return stored.map(a => ({
+    const plaidAccounts: AccountSummary[] = (stored ?? []).map(a => ({
       id: a.id,
       name: a.officialName || a.accountName,
       nickname: a.nickname,
@@ -268,6 +292,23 @@ export class ChatbotDataService {
       // Intentionally EXCLUDES: plaidAccountId, plaidItemId, plaidAccessToken,
       // institutionId, creditLimit, currency, createdAt, updatedAt
     }));
+
+    const manualAccounts: AccountSummary[] = (manualStored ?? []).map(a => ({
+      id: a.id,
+      name: a.name,
+      nickname: null,
+      type: manualCategoryToAccountType(a.category),
+      subtype: a.category,
+      institution: 'Manual',
+      mask: null,
+      currentBalance: a.currentBalance,
+      availableBalance: null,
+      isActive: true,
+      status: 'active' as AccountSummary['status'],
+      lastSynced: null,
+    }));
+
+    return [...plaidAccounts, ...manualAccounts];
   }
 
   /**
