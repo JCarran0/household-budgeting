@@ -232,12 +232,21 @@ function NotificationsSection() {
     }
   };
 
-  const handleTestNotification = () => {
+  const handleTestNotification = async () => {
     if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return;
-    new Notification('Test notification', {
-      body: 'Household Budget notifications are working!',
-      icon: '/icons/icon-192x192.png',
-    });
+    // new Notification() is blocked on Android Chrome — must use SW registration
+    if ('serviceWorker' in navigator) {
+      const registration = await navigator.serviceWorker.ready;
+      await registration.showNotification('Test notification', {
+        body: 'Household Budget notifications are working!',
+        icon: '/icons/icon-192x192.png',
+      });
+    } else {
+      new Notification('Test notification', {
+        body: 'Household Budget notifications are working!',
+        icon: '/icons/icon-192x192.png',
+      });
+    }
   };
 
   const canSendTest =
