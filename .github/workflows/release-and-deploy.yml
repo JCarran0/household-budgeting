@@ -308,6 +308,9 @@ jobs:
           ANTHROPIC_API_KEY=${{ secrets.PRODUCTION_ANTHROPIC_API_KEY }}
           GITHUB_ISSUES_PAT=${{ secrets.PRODUCTION_GITHUB_ISSUES_PAT }}
           CHATBOT_MONTHLY_LIMIT=${{ vars.PRODUCTION_CHATBOT_MONTHLY_LIMIT }}
+          VAPID_PUBLIC_KEY=${{ secrets.VAPID_PUBLIC_KEY }}
+          VAPID_PRIVATE_KEY=${{ secrets.VAPID_PRIVATE_KEY }}
+          VAPID_SUBJECT=${{ secrets.VAPID_SUBJECT }}
           DEPLOYMENT_VERSION=${{ steps.deploy_version.outputs.version }}
           EOF
           
