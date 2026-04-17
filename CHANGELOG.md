@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+### [5.19.1](https://github.com/JCarran0/household-budgeting/compare/v5.19.0...v5.19.1) (2026-04-17)
+
+
+### CI/CD
+
+* inject VAPID keys from GitHub Secrets into production .env ([5832566](https://github.com/JCarran0/household-budgeting/commit/58325661269b26d69099c5995a1a44ac0ff476a0))
+
 ## [5.19.0](https://github.com/JCarran0/household-budgeting/compare/v5.18.1...v5.19.0) (2026-04-17)
 
 
