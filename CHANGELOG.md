@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.22.0](https://github.com/JCarran0/household-budgeting/compare/v5.21.0...v5.22.0) (2026-04-17)
+
+
+### Features
+
+* **chatbot:** full-screen mobile layout and skip keyboard auto-focus ([5fe4f75](https://github.com/JCarran0/household-budgeting/commit/5fe4f75e4799535a8e6ecd608a079eddb84783e0))
+
 ## [5.21.0](https://github.com/JCarran0/household-budgeting/compare/v5.20.0...v5.21.0) (2026-04-17)
 
 
