@@ -1,0 +1,103 @@
+feature: Savings Category Flag & Spending Consistency
+brd: docs/features/SAVINGS-CATEGORY-BRD.md
+status: planning
+created: 2026-04-16
+last_updated: 2026-04-16
+
+overview: |
+  Introduce isSavings on top-level categories to separate savings contributions
+  from true consumption spending. Audit and update all app surfaces that display
+  spending, expense totals, or net figures to use savings-aware calculations.
+  Add Monthly Savings widget to dashboard and savings line to cash flow report.
+
+phases:
+
+  - phase: 1
+    name: Data Model & Backend
+    status: pending
+    goals:
+      - Add isSavings to category model and storage
+      - Expose flag via category API (create/update/list)
+      - Add shared utility for savings-aware calculations
+    tasks:
+      - Add isSavings boolean (default false) to Category interface in shared/types/index.ts
+      - Update category create/update DTOs to include isSavings
+      - Update CategoryService to persist and return isSavings
+      - Update category routes (POST/PUT /categories) to accept isSavings
+      - Add getSavingsCategories() helper to shared/utils/budgetCalculations.ts
+      - Update calculateExpenses() in transactionCalculations.ts to accept excludeSavings option
+      - Update calculateNetCashFlow() to accept excludeSavings option
+
+  - phase: 2
+    name: Category Management UI
+    status: pending
+    goals:
+      - Allow users to mark/unmark top-level categories as savings
+      - Visually distinguish savings categories in the category list
+    tasks:
+      - Add isSavings toggle to the top-level category create/edit form
+      - Hide isSavings toggle for subcategory create/edit forms
+      - Add savings badge/icon to savings categories in the category list
+      - Ensure inherited display: subcategories of a savings category show indicator
+
+  - phase: 3
+    name: Cash Flow Report
+    status: pending
+    goals:
+      - Split cash flow into Income / Spending / Savings three-line layout
+      - Add "Include savings in net" toggle
+    tasks:
+      - Update cash flow report backend endpoint to return savings total separately
+      - Update CashFlowReport component to render three-line layout
+      - Add "Include savings in net" toggle (session state only)
+      - Wire toggle to switch net formula between Income−Spending and Income−Spending−Savings
+      - Savings line always visible; toggle only affects net
+
+  - phase: 4
+    name: Dashboard Updates
+    status: pending
+    goals:
+      - Add Monthly Savings widget
+      - Ensure Monthly Spending excludes savings
+      - Ensure all dashboard net figures are savings-aware
+    tasks:
+      - Add Monthly Savings widget to dashboard (total savings-category spend for current month)
+      - Verify Monthly Spending widget excludes savings categories (fix if not)
+      - Audit all other dashboard summary figures for savings consistency
+      - Update dashboard backend data endpoint to return savings total
+
+  - phase: 5
+    name: App-Wide Consistency Audit
+    status: pending
+    goals:
+      - Ensure every spending/net surface excludes savings correctly
+    tasks:
+      - Audit Budget vs. Actual view — exclude savings from expense totals
+      - Audit Yearly Budget Grid — verify savings categories don't inflate expense rows
+      - Audit Reports page category spending summaries
+      - Audit any inline "total spending" figures on Transactions page
+      - Audit chatbot data tools (get_spending_by_category, get_cash_flow, get_budget_summary)
+      - Update chatbot system prompt to explain savings/spending distinction
+
+  - phase: 6
+    name: Polish & Edge Cases
+    status: pending
+    goals:
+      - Handle edge cases and UX details
+    tasks:
+      - Ensure isSavings=false is the safe default for all existing categories (migration)
+      - Handle category with no transactions gracefully in savings totals
+      - Add savings breakdown to category spending summary (show savings separately)
+      - Update CLAUDE.md architecture decisions table with isSavings design decision
+      - Manual testing against all affected surfaces
+
+decisions_log:
+  - date: 2026-04-16
+    decision: isSavings flag lives on top-level categories only; subcategories inherit
+    rationale: No real-world use case for mixed categories; keeps model and UI simple
+  - date: 2026-04-16
+    decision: Savings always shown as third line in cash flow; toggle controls net inclusion
+    rationale: Savings should never be hidden — toggle only affects whether they reduce net
+  - date: 2026-04-16
+    decision: "Spending" across the app always means non-savings expenses
+    rationale: Consistent definition prevents confusion; savings is a distinct concept
