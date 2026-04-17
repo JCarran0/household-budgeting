@@ -1,7 +1,7 @@
 /**
  * Amazon Receipt Matching API Routes
  *
- * POST   /upload              — Upload 1–2 Amazon PDFs, parse via Claude vision
+ * POST   /upload              — Upload 1–2 Amazon receipts (PDF or photo), parse via Claude vision
  * POST   /:sessionId/match    — Match parsed orders against bank transactions
  * POST   /:sessionId/resolve-ambiguous — Manually resolve ambiguous matches
  * POST   /:sessionId/categorize — Get category & split recommendations
@@ -13,7 +13,7 @@
 
 import { Router, Request, Response, NextFunction } from 'express';
 import { authenticate, validateBody } from '../middleware/authMiddleware';
-import { uploadPdfs, validatePdfMagicBytes, handleMulterError } from '../middleware/pdfUpload';
+import { uploadPdfs, validatePdfMagicBytes, handleMulterError, type SupportedUploadMimeType } from '../middleware/pdfUpload';
 import { ValidationError } from '../errors';
 import {
   resolveAmbiguousSchema,
@@ -95,7 +95,7 @@ router.post(
       const files = req.files as Express.Multer.File[] | undefined;
 
       if (!files || files.length === 0) {
-        throw new ValidationError('At least one PDF file is required.');
+        throw new ValidationError('At least one file is required (PDF or photo).');
       }
 
       // SEC-007: Validate actual file content (magic bytes), not just MIME
@@ -108,7 +108,7 @@ router.post(
 
       const result = await amazonReceiptService.parseAndCreateSession(
         familyId,
-        files.map(f => f.buffer),
+        files.map(f => ({ buffer: f.buffer, mimeType: f.mimetype as SupportedUploadMimeType })),
       );
 
       res.json({ success: true, ...result });

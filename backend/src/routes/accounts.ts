@@ -3,7 +3,7 @@
  */
 
 import { Router, Request, Response, NextFunction } from 'express';
-import { accountService, transactionService } from '../services';
+import { accountService, transactionService, pushNotificationService } from '../services';
 import { authMiddleware } from '../middleware/authMiddleware';
 import { AuthorizationError } from '../errors';
 import { z } from 'zod';
@@ -114,6 +114,30 @@ router.post('/sync', authMiddleware, async (req: AuthRequest, res: Response, nex
     if (!result.success) {
       res.status(500).json({ success: false, error: result.error });
       return;
+    }
+
+    // Fire sync failure notifications for any accounts that need re-auth (non-blocking)
+    const { userId } = req.user;
+    if (result.reauthRequiredAccounts && result.reauthRequiredAccounts.length > 0) {
+      const reauthAccounts = result.reauthRequiredAccounts;
+      void (async () => {
+        try {
+          const prefs = await pushNotificationService.getUserPreferences(userId);
+          if (prefs.syncFailures) {
+            for (const acct of reauthAccounts) {
+              await pushNotificationService.sendNotification(userId, {
+                type: 'sync_failure',
+                title: 'Account needs attention',
+                body: `Your ${acct.institutionName} account needs re-authentication`,
+                url: '/accounts',
+                tag: `sync-fail-${acct.id}`,
+              });
+            }
+          }
+        } catch (err) {
+          console.error('[notifications] Failed to send sync failure notifications:', err);
+        }
+      })();
     }
 
     res.json({

@@ -1,6 +1,40 @@
 // Shared TypeScript types for the budgeting app
 
 // =============================================================================
+// Push Notification Types
+// =============================================================================
+
+export type NotificationType =
+  | 'sync_failure'
+  | 'budget_alert'
+  | 'large_transaction'
+  | 'bill_reminder';
+
+export interface NotificationPayload {
+  type: NotificationType;
+  title: string;
+  body: string;
+  url: string;
+  tag: string;
+}
+
+export interface NotificationPreferences {
+  syncFailures: boolean;
+  budgetAlerts: boolean;
+  budgetAlertThreshold: number;  // percentage, e.g. 80
+  largeTransactions: boolean;
+  largeTransactionThreshold: number;  // dollar amount
+  billReminders: boolean;
+}
+
+export interface PushSubscriptionRecord {
+  endpoint: string;
+  keys: { p256dh: string; auth: string };
+  deviceLabel?: string;
+  subscribedAt: string;
+}
+
+// =============================================================================
 // Family & Multi-User Types
 // =============================================================================
 

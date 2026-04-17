@@ -19,6 +19,7 @@ import { createAmazonReceiptsApi } from './api/amazonReceipts';
 import { createFamilyApi } from './api/family';
 import { createTasksApi } from './api/tasks';
 import { createTaskTemplatesApi } from './api/taskTemplates';
+import { createNotificationsApi } from './api/notifications';
 
 // Re-export all types so existing imports don't break
 export type { ExtendedPlaidAccount } from './api/accounts';
@@ -59,5 +60,6 @@ export const api = {
   ...createFamilyApi(client),
   ...createTasksApi(client),
   ...createTaskTemplatesApi(client),
+  ...createNotificationsApi(client),
   ...createMiscApi(client),
 };

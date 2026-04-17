@@ -24,6 +24,7 @@ import familyRoutes from './routes/family';
 import accountOwnerRoutes from './routes/accountOwners';
 import taskRoutes from './routes/tasks';
 import taskTemplateRoutes from './routes/taskTemplates';
+import notificationRoutes from './routes/notifications';
 
 // Load environment variables (skip in test mode as it's loaded in setup.ts)
 if (process.env.NODE_ENV !== 'test') {
@@ -125,6 +126,7 @@ app.use(`${apiPrefix}/family`, familyRoutes);
 app.use(`${apiPrefix}/account-owners`, accountOwnerRoutes);
 app.use(`${apiPrefix}/tasks`, taskRoutes);
 app.use(`${apiPrefix}/task-templates`, taskTemplateRoutes);
+app.use(`${apiPrefix}/notifications`, notificationRoutes);
 
 // Version endpoint under API prefix
 app.get(`${apiPrefix}/version`, (_req: Request, res: Response) => {

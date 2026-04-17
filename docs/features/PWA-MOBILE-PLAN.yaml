@@ -2,8 +2,8 @@
 # PWA & Mobile Experience — Implementation Plan (Phase 1)
 # =============================================================================
 # BRD: docs/features/PWA-MOBILE-BRD.md
-# Status: Not Started
-# Last Updated: 2026-04-13
+# Status: In Progress (Phases 1–5 Complete, Phase 6 Remaining)
+# Last Updated: 2026-04-17
 # =============================================================================
 
 overview:
@@ -13,6 +13,17 @@ overview:
     service worker caching, camera capture for receipt photos, and push
     notifications for budget/account events. Phase 2 (biometric login via
     Capacitor) is out of scope for this plan.
+
+  current_state: |
+    Phases 1–5 are fully implemented and committed on feature/pwa-mobile.
+    VAPID keys have been generated and added to backend/.env (local dev)
+    and GitHub Actions Secrets (production). Only Phase 6 (testing & polish)
+    remains before this branch can be merged.
+
+  production_setup_needed:
+    - VAPID_PUBLIC_KEY: added to GitHub Actions Secrets ✅
+    - VAPID_PRIVATE_KEY: added to GitHub Actions Secrets ✅
+    - VAPID_SUBJECT: mailto:jared.carrano@gmail.com ✅
 
   key_files:
     brd: docs/features/PWA-MOBILE-BRD.md
@@ -107,7 +118,7 @@ decisions:
 # PHASE 1: PWA Manifest & Service Worker
 # =============================================================================
 phase_1_pwa_shell:
-  status: not_started
+  status: complete
   description: |
     Install vite-plugin-pwa, configure the web app manifest, set up
     service worker with app shell precaching, and add update prompts.
@@ -116,7 +127,7 @@ phase_1_pwa_shell:
   tasks:
     - id: "1.1"
       task: Install vite-plugin-pwa and configure in vite.config.ts
-      status: not_started
+      status: complete
       details: |
         npm install -D vite-plugin-pwa
 
@@ -129,7 +140,7 @@ phase_1_pwa_shell:
 
     - id: "1.2"
       task: Create app icons at required sizes
-      status: not_started
+      status: complete
       details: |
         Generate from existing app logo/branding:
         - 192x192 (maskable + any)
@@ -139,7 +150,7 @@ phase_1_pwa_shell:
 
     - id: "1.3"
       task: Configure web app manifest via vite-plugin-pwa
-      status: not_started
+      status: complete
       details: |
         Manifest fields:
         - name: "Household Budget"
@@ -154,7 +165,7 @@ phase_1_pwa_shell:
 
     - id: "1.4"
       task: Add meta tags to index.html
-      status: not_started
+      status: complete
       details: |
         <meta name="theme-color" content="...">
         <meta name="apple-mobile-web-app-capable" content="yes">
@@ -163,7 +174,7 @@ phase_1_pwa_shell:
 
     - id: "1.5"
       task: Add update prompt component
-      status: not_started
+      status: complete
       details: |
         Use useRegisterSW() hook from virtual:pwa-register/react.
         Show a dismissible toast/banner when a new version is available:
@@ -173,7 +184,7 @@ phase_1_pwa_shell:
 
     - id: "1.6"
       task: Add install banner for non-installed users
-      status: not_started
+      status: complete
       details: |
         Listen for 'beforeinstallprompt' event.
         Show a subtle banner: "Install Budget App for a better experience"
@@ -183,7 +194,7 @@ phase_1_pwa_shell:
 
     - id: "1.7"
       task: Add offline fallback page
-      status: not_started
+      status: complete
       details: |
         When offline and navigating to an uncached route, show a branded
         offline page: "You're offline — connect to the internet to continue."
@@ -193,7 +204,7 @@ phase_1_pwa_shell:
 # PHASE 2: Camera Capture & Image Upload
 # =============================================================================
 phase_2_camera:
-  status: not_started
+  status: complete
   description: |
     Enable camera capture in the app and extend the Amazon Receipt upload
     flow to accept images (JPEG/PNG) in addition to PDFs. Includes
@@ -202,54 +213,58 @@ phase_2_camera:
   tasks:
     - id: "2.1"
       task: Create image compression utility
-      status: not_started
+      status: complete
       details: |
-        Create frontend/src/utils/imageCompression.ts (or use
-        browser-image-compression library).
+        Created frontend/src/utils/imageCompression.ts using canvas-based
+        resize (OffscreenCanvas + createImageBitmap).
 
         compressImage(file: File, options?): Promise<File>
         - Target max dimension: 2048px (sufficient for receipt text)
         - Target max file size: ~2MB
         - Output format: JPEG (smaller than PNG for photos)
-        - Quality: 0.8
+        - Quality: 0.8, with fallback to 0.48 if still over size limit
+        - PDFs and non-image files pass through unchanged
 
     - id: "2.2"
       task: Update Amazon Receipt upload UI to accept images
-      status: not_started
+      status: complete
       details: |
-        In AmazonReceiptFlowModal.tsx:
-        - Change file input accept attribute:
-          accept="application/pdf,image/jpeg,image/png"
-        - Add capture="environment" attribute for mobile camera
-        - Update UI text: "Upload receipt photo or PDF"
-        - Compress images before upload via the compression utility
-        - Show preview thumbnail for captured images
+        Updated UploadStep.tsx:
+        - File input accepts application/pdf,image/jpeg,image/png
+        - Separate camera button with capture="environment" for mobile
+        - Updated UI text to mention photo option
+        - Images compressed before upload via compressImage utility
+        - Preview thumbnails shown for image files
+        - Compression progress indicator while processing
 
     - id: "2.3"
       task: Update backend upload endpoint to accept images
-      status: not_started
+      status: complete
       details: |
-        In amazon receipt routes:
-        - Update multer fileFilter to accept image/jpeg, image/png
-          in addition to application/pdf
-        - Update file size validation (images should be smaller after
-          client compression, but allow up to 10MB as a safety margin)
+        Updated pdfUpload.ts middleware:
+        - multer fileFilter accepts image/jpeg, image/png in addition
+          to application/pdf
+        - Magic byte validation extended for JPEG (FF D8 FF) and
+          PNG (89 50 4E 47) headers
+        - File size limit unchanged at 20 MB (images compressed client-side)
+        - Route passes file MIME type through to service
 
     - id: "2.4"
       task: Update Amazon Receipt Service to handle image files
-      status: not_started
+      status: complete
       details: |
-        In amazonReceiptService.ts:
-        - Detect file type from MIME type or buffer magic bytes
-        - For images: send as image content block to Claude vision API
-          (same as PDF pages but using image media type)
-        - For PDFs: existing flow unchanged
-        - Parsing prompt may need minor adjustment for photo vs PDF
-          (photos may have perspective distortion, shadows, etc.)
+        Updated amazonReceiptService.ts:
+        - parseAndCreateSession now accepts {buffer, mimeType}[] instead
+          of Buffer[]
+        - parsePdfWithClaude renamed to parseFileWithClaude
+        - Detects file type from mimeType parameter
+        - Images: sent as 'image' content block to Claude vision API
+        - PDFs: existing 'document' content block unchanged
+        - Photo prompt includes note about perspective distortion/shadows
 
     - id: "2.5"
       task: Test camera capture flow on Android device
-      status: not_started
+      status: complete
       details: |
         Manual testing checklist:
         - Camera launches from file input in installed PWA
@@ -263,7 +278,7 @@ phase_2_camera:
 # PHASE 3: Push Notification Infrastructure (Backend)
 # =============================================================================
 phase_3_push_backend:
-  status: not_started
+  status: complete
   description: |
     Set up VAPID keys, push subscription storage, and the backend
     notification sending service. No notification triggers yet —
@@ -272,7 +287,7 @@ phase_3_push_backend:
   tasks:
     - id: "3.1"
       task: Install web-push package and generate VAPID keys
-      status: not_started
+      status: complete
       details: |
         cd backend && npm install web-push
 
@@ -286,7 +301,7 @@ phase_3_push_backend:
 
     - id: "3.2"
       task: Create PushNotificationService
-      status: not_started
+      status: complete
       details: |
         backend/src/services/pushNotificationService.ts
 
@@ -307,7 +322,7 @@ phase_3_push_backend:
 
     - id: "3.3"
       task: Define notification types in shared/types/index.ts
-      status: not_started
+      status: complete
       details: |
         type NotificationType =
           | 'sync_failure'
@@ -341,7 +356,7 @@ phase_3_push_backend:
 
     - id: "3.4"
       task: Create push notification API routes
-      status: not_started
+      status: complete
       details: |
         backend/src/routes/notifications.ts
 
@@ -370,7 +385,7 @@ phase_3_push_backend:
 
     - id: "3.5"
       task: Add service worker push event handler
-      status: not_started
+      status: complete
       details: |
         In the service worker (via vite-plugin-pwa custom SW or
         injectManifest mode):
@@ -398,7 +413,7 @@ phase_3_push_backend:
 # PHASE 4: Push Notification Triggers
 # =============================================================================
 phase_4_push_triggers:
-  status: not_started
+  status: complete
   description: |
     Wire up notification triggers to existing backend events. Each trigger
     checks user preferences before sending. No new business logic — just
@@ -407,7 +422,7 @@ phase_4_push_triggers:
   tasks:
     - id: "4.1"
       task: Sync failure notifications
-      status: not_started
+      status: complete
       details: |
         After a Plaid sync fails or returns requires_reauth status:
         - Check if user has syncFailures preference enabled
@@ -422,7 +437,7 @@ phase_4_push_triggers:
 
     - id: "4.2"
       task: Budget threshold notifications
-      status: not_started
+      status: complete
       details: |
         After a transaction is categorized (manual, AI, or auto-rule):
         - Recalculate spending for that category in the current month
@@ -437,7 +452,7 @@ phase_4_push_triggers:
 
     - id: "4.3"
       task: Large transaction notifications
-      status: not_started
+      status: complete
       details: |
         After transactions are synced from Plaid:
         - For each new transaction above the user's threshold:
@@ -452,7 +467,7 @@ phase_4_push_triggers:
 
     - id: "4.4"
       task: Deduplication logic for notifications
-      status: not_started
+      status: complete
       details: |
         Use the 'tag' field in the notification payload — the browser
         replaces existing notifications with the same tag rather than
@@ -466,7 +481,7 @@ phase_4_push_triggers:
 # PHASE 5: Frontend — Notification UI
 # =============================================================================
 phase_5_notification_ui:
-  status: not_started
+  status: complete
   description: |
     Add notification permission request flow, preferences settings page,
     and subscription management to the frontend.
@@ -474,7 +489,7 @@ phase_5_notification_ui:
   tasks:
     - id: "5.1"
       task: Create notification permission request component
-      status: not_started
+      status: complete
       details: |
         Component that explains what notifications will be used for
         and requests permission. Triggered contextually — e.g., from
@@ -489,7 +504,7 @@ phase_5_notification_ui:
 
     - id: "5.2"
       task: Create notification preferences page/section
-      status: not_started
+      status: complete
       details: |
         Add to existing Settings page (or create one if it doesn't exist).
 
@@ -502,7 +517,7 @@ phase_5_notification_ui:
 
     - id: "5.3"
       task: Add notification API methods to frontend API client
-      status: not_started
+      status: complete
       details: |
         In frontend/src/lib/api.ts (or api/notifications.ts):
         - subscribeToNotifications(subscription)

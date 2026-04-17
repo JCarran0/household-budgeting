@@ -91,6 +91,8 @@ export interface SyncResult {
   removed?: number;
   error?: string;
   warning?: string;  // For partial success when some accounts fail
+  /** Newly added transactions from this sync (for notification triggers) */
+  newTransactions?: StoredTransaction[];
 }
 
 export class TransactionService {
@@ -128,6 +130,7 @@ export class TransactionService {
       let totalAdded = 0;
       let totalModified = 0;
       let totalRemoved = 0;
+      const allNewTransactions: StoredTransaction[] = [];
       const failedAccounts: string[] = [];
 
       // Group accounts by access token
@@ -183,7 +186,8 @@ export class TransactionService {
         totalAdded += result.added;
         totalModified += result.modified;
         totalRemoved += result.removed;
-        
+        allNewTransactions.push(...result.newTransactions);
+
         console.log(`Sync complete: ${result.added} added, ${result.modified} modified, ${result.removed} removed`);
       }
 
@@ -194,10 +198,11 @@ export class TransactionService {
           added: totalAdded,
           modified: totalModified,
           removed: totalRemoved,
+          newTransactions: allNewTransactions,
           warning: `Some accounts need reconnection: ${failedAccounts.join(', ')}`,
         };
       }
-      
+
       // If all accounts failed, return an error
       if (failedAccounts.length > 0 && totalAdded === 0 && totalModified === 0) {
         return {
@@ -205,12 +210,13 @@ export class TransactionService {
           error: 'All accounts need reconnection. Please reconnect your bank accounts.',
         };
       }
-      
+
       return {
         success: true,
         added: totalAdded,
         modified: totalModified,
         removed: totalRemoved,
+        newTransactions: allNewTransactions,
       };
     } catch (error) {
       console.error('Error syncing transactions:', error);
@@ -228,7 +234,7 @@ export class TransactionService {
     familyId: string,
     accounts: StoredAccount[],
     plaidTransactions: PlaidTransaction[]
-  ): Promise<{ added: number; modified: number; removed: number }> {
+  ): Promise<{ added: number; modified: number; removed: number; newTransactions: StoredTransaction[] }> {
     // Load existing transactions
     const existingTransactions = await this.repo.getAll(familyId);
 
@@ -248,16 +254,17 @@ export class TransactionService {
     let added = 0;
     let modified = 0;
     const processedIds = new Set<string>();
+    const newTransactions: StoredTransaction[] = [];
 
     // Process each Plaid transaction
     for (const plaidTxn of plaidTransactions) {
       processedIds.add(plaidTxn.plaidTransactionId);
-      
+
       const account = accountLookup.get(plaidTxn.accountId);
       if (!account) continue;
 
       const existing = existingByPlaidId.get(plaidTxn.plaidTransactionId);
-      
+
       if (existing) {
         // Update existing transaction
         const updated = this.updateTransaction(existing, plaidTxn);
@@ -268,6 +275,7 @@ export class TransactionService {
         // Add new transaction
         const newTxn = this.createTransaction(familyId, account.id, plaidTxn);
         existingTransactions.push(newTxn);
+        newTransactions.push(newTxn);
         added++;
       }
     }
@@ -292,7 +300,7 @@ export class TransactionService {
     // Save all transactions
     await this.repo.saveAll(familyId, existingTransactions);
 
-    return { added, modified, removed };
+    return { added, modified, removed, newTransactions };
   }
 
   /**
