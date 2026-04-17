@@ -14,6 +14,7 @@ import {
   Box,
 } from '@mantine/core';
 import { IconSend, IconTrash } from '@tabler/icons-react';
+import { useMediaQuery } from '@mantine/hooks';
 import { api } from '../../lib/api';
 import { useAuthStore } from '../../stores/authStore';
 import { usePageContext } from '../../hooks/usePageContext';
@@ -55,6 +56,7 @@ export function ChatOverlay({ opened, onClose }: ChatOverlayProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const pageContext = usePageContext();
+  const isMobile = useMediaQuery('(max-width: 48em)');
 
   // Persist messages and model to sessionStorage
   useEffect(() => {
@@ -71,10 +73,12 @@ export function ChatOverlay({ opened, onClose }: ChatOverlayProps) {
       api.getChatUsage().then((usage) => {
         updateCostDisplay(usage.monthlySpend, usage.monthlyLimit);
       }).catch(() => { /* ignore */ });
-      // Focus input
-      setTimeout(() => inputRef.current?.focus(), 100);
+      // Focus input on desktop only — avoids auto-opening the mobile keyboard
+      if (!isMobile) {
+        setTimeout(() => inputRef.current?.focus(), 100);
+      }
     }
-  }, [opened]);
+  }, [opened, isMobile]);
 
   // Auto-scroll to bottom on new messages
   useEffect(() => {
@@ -183,18 +187,20 @@ export function ChatOverlay({ opened, onClose }: ChatOverlayProps) {
   return (
     <Paper
       shadow="xl"
-      radius="md"
+      radius={isMobile ? 0 : 'md'}
       style={{
         position: 'fixed',
-        bottom: 80,
-        right: 20,
-        width: 400,
-        height: 600,
+        bottom: isMobile ? 0 : 80,
+        right: isMobile ? 0 : 20,
+        left: isMobile ? 0 : undefined,
+        top: isMobile ? 0 : undefined,
+        width: isMobile ? '100vw' : 400,
+        height: isMobile ? '100dvh' : 600,
         zIndex: 1000,
         display: 'flex',
         flexDirection: 'column',
         overflow: 'hidden',
-        border: '1px solid var(--mantine-color-dark-4)',
+        border: isMobile ? 'none' : '1px solid var(--mantine-color-dark-4)',
       }}
     >
       {/* Header */}
@@ -226,7 +232,7 @@ export function ChatOverlay({ opened, onClose }: ChatOverlayProps) {
       {/* Model selector */}
       <Box px="sm" py={4} style={{ borderBottom: '1px solid var(--mantine-color-dark-4)', flexShrink: 0 }}>
         <SegmentedControl
-          size="xs"
+          size={isMobile ? 'sm' : 'xs'}
           fullWidth
           value={model}
           onChange={(v) => setModel(v as ChatModel)}
@@ -288,7 +294,7 @@ export function ChatOverlay({ opened, onClose }: ChatOverlayProps) {
         <TextInput
           ref={inputRef}
           flex={1}
-          size="sm"
+          size={isMobile ? 'md' : 'sm'}
           placeholder="Ask about your finances..."
           value={input}
           onChange={(e) => setInput(e.currentTarget.value)}
@@ -296,12 +302,12 @@ export function ChatOverlay({ opened, onClose }: ChatOverlayProps) {
           disabled={isLoading}
         />
         <ActionIcon
-          size="lg"
+          size={isMobile ? 'xl' : 'lg'}
           variant="filled"
           onClick={sendMessage}
           disabled={!input.trim() || isLoading}
         >
-          <IconSend size={16} />
+          <IconSend size={isMobile ? 20 : 16} />
         </ActionIcon>
       </Group>
     </Paper>
