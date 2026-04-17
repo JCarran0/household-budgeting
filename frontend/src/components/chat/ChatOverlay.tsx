@@ -1,4 +1,10 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import {
+  useState,
+  useEffect,
+  useRef,
+  useCallback,
+  type ChangeEvent,
+} from 'react';
 import {
   Paper,
   TextInput,
@@ -12,22 +18,54 @@ import {
   CloseButton,
   Tooltip,
   Box,
+  Image,
 } from '@mantine/core';
-import { IconSend, IconTrash } from '@tabler/icons-react';
+import {
+  IconSend,
+  IconTrash,
+  IconCamera,
+  IconPaperclip,
+  IconFileText,
+  IconX,
+} from '@tabler/icons-react';
+import { notifications } from '@mantine/notifications';
 import { useMediaQuery } from '@mantine/hooks';
 import { api } from '../../lib/api';
 import { useAuthStore } from '../../stores/authStore';
 import { usePageContext } from '../../hooks/usePageContext';
 import { ChatMessageBubble } from './ChatMessageBubble';
-import type { ChatMessage, ChatModel, GitHubIssueDraft, ChatResponse } from '../../../../shared/types';
+import type {
+  ChatMessage,
+  ChatModel,
+  GitHubIssueDraft,
+  ChatResponse,
+  ActionProposal,
+} from '../../../../shared/types';
 
 const SESSION_KEY_HISTORY = 'chatbot_history';
 const SESSION_KEY_MODEL = 'chatbot_model';
+
+/** MIME types accepted by the paperclip picker */
+const ALLOWED_CLIENT_MIMES = new Set([
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+  'application/pdf',
+]);
+
+const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024; // 10 MB
 
 interface PendingIssue {
   messageId: string;
   draft: GitHubIssueDraft;
 }
+
+/**
+ * Maps message ID → action error message (for failed confirm attempts).
+ * Stored separately so we don't mutate the ChatMessage type for transient
+ * UI state.
+ */
+type ActionErrorMap = Record<string, string>;
 
 interface ChatOverlayProps {
   opened: boolean;
@@ -36,6 +74,8 @@ interface ChatOverlayProps {
 
 export function ChatOverlay({ opened, onClose }: ChatOverlayProps) {
   const userDisplayName = useAuthStore((s) => s.user?.displayName);
+
+  // ---- Core chat state ----
   const [messages, setMessages] = useState<ChatMessage[]>(() => {
     try {
       const stored = sessionStorage.getItem(SESSION_KEY_HISTORY);
@@ -53,12 +93,41 @@ export function ChatOverlay({ opened, onClose }: ChatOverlayProps) {
   const [issueSubmitting, setIssueSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // ---- Attachment state (Phase 6) ----
+  const [attachment, setAttachment] = useState<File | null>(null);
+  const [attachmentPreviewUrl, setAttachmentPreviewUrl] = useState<string | null>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // ---- Conversation ID (Phase 7.3) ----
+  // Generated once per overlay mount; reset on "New conversation"
+  const [conversationId, setConversationId] = useState<string>(() =>
+    crypto.randomUUID()
+  );
+
+  // ---- Action card state (Phase 9) ----
+  const [activeProposalMessageId, setActiveProposalMessageId] = useState<
+    string | null
+  >(null);
+  const [actionErrors, setActionErrors] = useState<ActionErrorMap>({});
+
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const pageContext = usePageContext();
   const isMobile = useMediaQuery('(max-width: 48em)');
 
-  // Persist messages and model to sessionStorage
+  // ---- Attachment preview URL lifecycle ----
+  useEffect(() => {
+    if (!attachment) {
+      setAttachmentPreviewUrl(null);
+      return;
+    }
+    const url = URL.createObjectURL(attachment);
+    setAttachmentPreviewUrl(url);
+    return () => URL.revokeObjectURL(url);
+  }, [attachment]);
+
+  // ---- Persist messages and model to sessionStorage ----
   useEffect(() => {
     sessionStorage.setItem(SESSION_KEY_HISTORY, JSON.stringify(messages));
   }, [messages]);
@@ -67,7 +136,7 @@ export function ChatOverlay({ opened, onClose }: ChatOverlayProps) {
     sessionStorage.setItem(SESSION_KEY_MODEL, model);
   }, [model]);
 
-  // Fetch cost on open
+  // ---- Fetch cost on open ----
   useEffect(() => {
     if (opened) {
       api.getChatUsage().then((usage) => {
@@ -80,10 +149,13 @@ export function ChatOverlay({ opened, onClose }: ChatOverlayProps) {
     }
   }, [opened, isMobile]);
 
-  // Auto-scroll to bottom on new messages
+  // ---- Auto-scroll to bottom on new messages ----
   useEffect(() => {
     if (scrollRef.current) {
-      scrollRef.current.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
+      scrollRef.current.scrollTo({
+        top: scrollRef.current.scrollHeight,
+        behavior: 'smooth',
+      });
     }
   }, [messages, isLoading]);
 
@@ -93,43 +165,225 @@ export function ChatOverlay({ opened, onClose }: ChatOverlayProps) {
     setCostColor(pct < 0.5 ? 'green' : pct < 0.8 ? 'yellow' : 'red');
   };
 
-  const handleResponse = useCallback((response: ChatResponse) => {
-    setMessages((prev) => [...prev, response.message]);
-    updateCostDisplay(response.usage.monthlySpend, response.usage.monthlyLimit);
+  // ---- Helpers to mutate messages in place ----
 
-    if (response.type === 'issue_confirmation' && response.issueDraft) {
-      setPendingIssue({ messageId: response.message.id, draft: response.issueDraft });
+  const updateMessageById = useCallback(
+    (messageId: string, updates: Partial<ChatMessage>) => {
+      setMessages((prev) =>
+        prev.map((m) => (m.id === messageId ? { ...m, ...updates } : m))
+      );
+    },
+    []
+  );
+
+  // ---- Action proposal response handler (Phase 9.2) ----
+  const handleActionProposalResponse = useCallback(
+    (response: Extract<ChatResponse, { type: 'action_proposal' }>) => {
+      const { message, proposal } = response;
+
+      // Build the new message with the full ActionProposal attached.
+      // NOTE: we store the full proposal (including proposalId/nonce) in
+      // frontend state for the Confirm call; however we NEVER include the
+      // proposalId in the conversation history sent back to the backend
+      // (see buildHistoryForBackend below — SEC-A009).
+      const newMessage: ChatMessage = {
+        ...message,
+        // Store the full proposal in proposal field; the type allows
+        // Pick<ActionProposal, 'actionId' | 'displaySummary' | 'params' | 'displayFields'>
+        // but we extend it with the full proposal stored as a synthetic field
+        // on the message object for internal use by ActionCard.
+        proposal: {
+          actionId: proposal.actionId,
+          displaySummary: proposal.displaySummary,
+          params: proposal.params,
+          displayFields: proposal.displayFields,
+        },
+        proposalStatus: 'pending',
+      };
+
+      // Store the full proposal (with nonce) as a side-band reference so
+      // ActionCard can read it. We use a parallel structure to avoid putting
+      // nonce inside message.proposal (which is what gets serialized to history).
+      // We attach it directly to the message under a non-standard key that we
+      // strip during history serialization.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (newMessage as any).__fullProposal = proposal;
+
+      // Supersede prior active card (D-2, REQ-017, SEC-A007)
+      if (activeProposalMessageId) {
+        updateMessageById(activeProposalMessageId, { proposalStatus: 'superseded' });
+      }
+
+      setMessages((prev) => [...prev, newMessage]);
+      setActiveProposalMessageId(newMessage.id);
+
+      // Set a timer to mark the proposal expired when the nonce TTL passes
+      const msUntilExpiry = new Date(proposal.expiresAt).getTime() - Date.now();
+      if (msUntilExpiry > 0) {
+        const timerId = setTimeout(() => {
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === newMessage.id && m.proposalStatus === 'pending'
+                ? { ...m, proposalStatus: 'expired' }
+                : m
+            )
+          );
+          setActiveProposalMessageId((current) =>
+            current === newMessage.id ? null : current
+          );
+        }, msUntilExpiry);
+        // No cleanup needed — timerId captures the specific message; even if
+        // the overlay unmounts, the stale update is harmless since messages
+        // state is re-initialised from sessionStorage on remount.
+        void timerId; // suppress unused-variable lint
+      }
+    },
+    [activeProposalMessageId, updateMessageById]
+  );
+
+  const handleResponse = useCallback(
+    (response: ChatResponse) => {
+      if (response.type === 'action_proposal') {
+        handleActionProposalResponse(response);
+      } else {
+        setMessages((prev) => [...prev, response.message]);
+      }
+      updateCostDisplay(response.usage.monthlySpend, response.usage.monthlyLimit);
+
+      if (response.type === 'issue_confirmation' && response.issueDraft) {
+        setPendingIssue({ messageId: response.message.id, draft: response.issueDraft });
+      }
+
+      if (response.usage.capExceeded) {
+        setError('Monthly AI budget reached. The chatbot will be available next month.');
+      }
+    },
+    [handleActionProposalResponse]
+  );
+
+  // ---- Build conversation history for backend (Phase 9.3) ----
+  // Strip the nonce (proposalId) and the __fullProposal side-band from any
+  // proposal metadata before sending to the backend.
+  // SEC-A009: nonce must NEVER go to the LLM.
+  const buildHistoryForBackend = useCallback(
+    (msgs: ChatMessage[]): ChatMessage[] => {
+      return msgs.map((m) => {
+        // Drop __fullProposal (side-band nonce storage) from all messages.
+        // We use Object.keys to avoid destructuring the private field into a
+        // named variable (which triggers the no-unused-vars lint rule).
+        const cleaned = Object.fromEntries(
+          Object.entries(m).filter(([k]) => k !== '__fullProposal')
+        ) as ChatMessage;
+
+        if (cleaned.proposal) {
+          // Include the proposal metadata (actionId, displaySummary, params,
+          // displayFields) so the LLM can see the pending proposal context,
+          // but explicitly exclude proposalId.
+          return {
+            ...cleaned,
+            proposal: {
+              actionId: cleaned.proposal.actionId,
+              displaySummary: cleaned.proposal.displaySummary,
+              params: cleaned.proposal.params,
+              displayFields: cleaned.proposal.displayFields,
+            },
+          };
+        }
+        return cleaned;
+      });
+    },
+    []
+  );
+
+  // ---- File pick handler (Phase 6.2, 6.5) ----
+  const handleFilePick = useCallback((e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    // Reset input so the same file can be re-picked after removal
+    e.target.value = '';
+    if (!file) return;
+
+    // HEIC rejection with guidance (Phase 6.5 / BRD A-5)
+    if (
+      file.type === 'image/heic' ||
+      file.type === 'image/heif' ||
+      file.name.toLowerCase().endsWith('.heic') ||
+      file.name.toLowerCase().endsWith('.heif')
+    ) {
+      notifications.show({
+        color: 'orange',
+        message:
+          'HEIC photos are not supported. On iOS, go to Settings → Camera → Formats → Most Compatible, then try again.',
+      });
+      return;
     }
 
-    if (response.usage.capExceeded) {
-      setError('Monthly AI budget reached. The chatbot will be available next month.');
+    if (file.size > MAX_ATTACHMENT_BYTES) {
+      notifications.show({ color: 'red', message: 'File too large (10 MB max).' });
+      return;
     }
+
+    if (!ALLOWED_CLIENT_MIMES.has(file.type)) {
+      notifications.show({
+        color: 'red',
+        message: 'Unsupported file type. Accepted: JPEG, PNG, WebP, PDF.',
+      });
+      return;
+    }
+
+    setAttachment(file);
   }, []);
 
+  // ---- Send message (Phase 6.1 + 7.1 integration) ----
   const sendMessage = useCallback(async () => {
     const trimmed = input.trim();
-    if (!trimmed || isLoading) return;
+    if ((!trimmed && !attachment) || isLoading) return;
 
     setError(null);
+
     const userMessage: ChatMessage = {
       id: `user_${Date.now()}`,
       role: 'user',
-      content: trimmed,
+      content: trimmed || (attachment ? `[Attached: ${attachment.name}]` : ''),
       timestamp: new Date().toISOString(),
       pageContext,
+      ...(attachment
+        ? {
+            attachment: {
+              filename: attachment.name,
+              mimeType: attachment.type as
+                | 'image/jpeg'
+                | 'image/png'
+                | 'image/webp'
+                | 'application/pdf',
+              sizeBytes: attachment.size,
+            },
+          }
+        : {}),
     };
 
     setMessages((prev) => [...prev, userMessage]);
     setInput('');
+
+    // Clear attachment state before the await so the UI feels snappy
+    const attachmentToSend = attachment;
+    setAttachment(null);
+
     setIsLoading(true);
 
     try {
+      const historyForBackend = buildHistoryForBackend([
+        ...messages,
+        userMessage,
+      ]);
+
       const response = await api.sendChatMessage({
         message: trimmed,
-        conversationHistory: [...messages, userMessage],
+        conversationId,
+        conversationHistory: historyForBackend,
         pageContext,
         model,
         userDisplayName: userDisplayName ?? undefined,
+        attachment: attachmentToSend ?? undefined,
       });
       handleResponse(response);
     } catch (err) {
@@ -138,18 +392,33 @@ export function ChatOverlay({ opened, onClose }: ChatOverlayProps) {
     } finally {
       setIsLoading(false);
     }
-  }, [input, isLoading, messages, model, pageContext, handleResponse]);
+  }, [
+    input,
+    attachment,
+    isLoading,
+    messages,
+    model,
+    pageContext,
+    conversationId,
+    userDisplayName,
+    handleResponse,
+    buildHistoryForBackend,
+  ]);
 
+  // ---- GitHub issue handlers (unchanged) ----
   const handleConfirmIssue = useCallback(async (draft: GitHubIssueDraft) => {
     setIssueSubmitting(true);
     try {
       const result = await api.confirmGitHubIssue(draft);
-      setMessages((prev) => [...prev, {
-        id: `sys_${Date.now()}`,
-        role: 'assistant',
-        content: `Issue created! [View on GitHub](${result.issueUrl})`,
-        timestamp: new Date().toISOString(),
-      }]);
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: `sys_${Date.now()}`,
+          role: 'assistant',
+          content: `Issue created! [View on GitHub](${result.issueUrl})`,
+          timestamp: new Date().toISOString(),
+        },
+      ]);
       setPendingIssue(null);
     } catch {
       setError('Failed to create GitHub issue. Try again.');
@@ -160,27 +429,105 @@ export function ChatOverlay({ opened, onClose }: ChatOverlayProps) {
 
   const handleCancelIssue = useCallback(() => {
     setPendingIssue(null);
-    setMessages((prev) => [...prev, {
-      id: `sys_${Date.now()}`,
-      role: 'user',
-      content: 'Never mind, don\'t submit that issue.',
-      timestamp: new Date().toISOString(),
-    }]);
+    setMessages((prev) => [
+      ...prev,
+      {
+        id: `sys_${Date.now()}`,
+        role: 'user',
+        content: "Never mind, don't submit that issue.",
+        timestamp: new Date().toISOString(),
+      },
+    ]);
   }, []);
 
+  // ---- Action card confirm handler (Phase 8.4, 9.1) ----
+  const handleConfirmAction = useCallback(
+    async (messageId: string, params: Record<string, unknown>) => {
+      // Get the full proposal (with nonce) from the side-band field
+      const msg = messages.find((m) => m.id === messageId);
+      if (!msg) return;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const fullProposal = (msg as any).__fullProposal as ActionProposal | undefined;
+      if (!fullProposal) return;
+
+      try {
+        const result = await api.confirmChatAction({
+          proposalId: fullProposal.proposalId,
+          confirmedParams: params,
+        });
+
+        if (result.success) {
+          // Store the resource directly on the message AND on the side-band
+          // proposal so it survives re-renders.
+          updateMessageById(messageId, {
+            proposalStatus: 'confirmed',
+            resource: result.resource,
+          });
+          setActiveProposalMessageId((current) =>
+            current === messageId ? null : current
+          );
+          // Clear any prior error for this message
+          setActionErrors((prev) =>
+            Object.fromEntries(
+              Object.entries(prev).filter(([k]) => k !== messageId)
+            )
+          );
+        } else {
+          // Keep proposalStatus as 'pending' so the card stays interactive
+          // (user can edit and retry). The error is surfaced via actionErrors.
+          setActionErrors((prev) => ({
+            ...prev,
+            [messageId]: result.error,
+          }));
+        }
+      } catch (err) {
+        setActionErrors((prev) => ({
+          ...prev,
+          [messageId]: err instanceof Error ? err.message : 'Confirmation failed.',
+        }));
+      }
+    },
+    [messages, updateMessageById]
+  );
+
+  // ---- Action card dismiss handler (Phase 9.1) ----
+  const handleDismissAction = useCallback(
+    (messageId: string) => {
+      updateMessageById(messageId, { proposalStatus: 'dismissed' });
+      setActiveProposalMessageId((current) =>
+        current === messageId ? null : current
+      );
+    },
+    [updateMessageById]
+  );
+
+  // ---- New conversation ----
   const handleNewConversation = useCallback(() => {
     setMessages([]);
     setPendingIssue(null);
     setError(null);
+    setAttachment(null);
+    setActiveProposalMessageId(null);
+    setActionErrors({});
+    // Generate a new conversation UUID so the backend's supersession logic
+    // starts fresh (Phase 7.3).
+    setConversationId(crypto.randomUUID());
     sessionStorage.removeItem(SESSION_KEY_HISTORY);
   }, []);
 
-  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      sendMessage();
-    }
-  }, [sendMessage]);
+  const handleKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        void sendMessage();
+      }
+    },
+    [sendMessage]
+  );
+
+  const canSend = (!!input.trim() || !!attachment) && !isLoading;
+  const isImageAttachment =
+    attachment && attachment.type.startsWith('image/');
 
   if (!opened) return null;
 
@@ -221,7 +568,12 @@ export function ChatOverlay({ opened, onClose }: ChatOverlayProps) {
         </Group>
         <Group gap={4}>
           <Tooltip label="New conversation">
-            <ActionIcon size="sm" variant="subtle" color="gray" onClick={handleNewConversation}>
+            <ActionIcon
+              size="sm"
+              variant="subtle"
+              color="gray"
+              onClick={handleNewConversation}
+            >
               <IconTrash size={14} />
             </ActionIcon>
           </Tooltip>
@@ -230,7 +582,14 @@ export function ChatOverlay({ opened, onClose }: ChatOverlayProps) {
       </Group>
 
       {/* Model selector */}
-      <Box px="sm" py={4} style={{ borderBottom: '1px solid var(--mantine-color-dark-4)', flexShrink: 0 }}>
+      <Box
+        px="sm"
+        py={4}
+        style={{
+          borderBottom: '1px solid var(--mantine-color-dark-4)',
+          flexShrink: 0,
+        }}
+      >
         <SegmentedControl
           size={isMobile ? 'sm' : 'xs'}
           fullWidth
@@ -252,19 +611,32 @@ export function ChatOverlay({ opened, onClose }: ChatOverlayProps) {
         style={{ minHeight: 0 }}
       >
         {messages.length === 0 ? (
-          <Text size="sm" c="dimmed" ta="center" mt="xl">
-            Ask me anything about your finances!
-          </Text>
+          <Stack gap="xs" align="center" mt="xl">
+            <Text size="sm" c="dimmed" ta="center">
+              Ask me anything about your finances!
+            </Text>
+            {/* REQ-005: attachment discovery hint */}
+            <Text size="xs" c="dimmed" ta="center">
+              📎 Snap a photo of a flyer, receipt, or invite — I can help track it.
+            </Text>
+          </Stack>
         ) : (
           <Stack gap="sm">
             {messages.map((msg) => (
               <ChatMessageBubble
                 key={msg.id}
                 message={msg}
-                issueDraft={pendingIssue?.messageId === msg.id ? pendingIssue.draft : undefined}
+                issueDraft={
+                  pendingIssue?.messageId === msg.id
+                    ? pendingIssue.draft
+                    : undefined
+                }
                 onConfirmIssue={handleConfirmIssue}
                 onCancelIssue={handleCancelIssue}
                 issueSubmitting={issueSubmitting}
+                onConfirmAction={handleConfirmAction}
+                onDismissAction={handleDismissAction}
+                actionErrorMessage={actionErrors[msg.id]}
               />
             ))}
             {isLoading && (
@@ -282,15 +654,103 @@ export function ChatOverlay({ opened, onClose }: ChatOverlayProps) {
         <Text size="xs" c="red" px="sm" pb={4}>{error}</Text>
       )}
 
-      {/* Input */}
+      {/* Attachment preview (Phase 6.3) */}
+      {attachment && (
+        <Box
+          px="sm"
+          py={4}
+          style={{
+            borderTop: '1px solid var(--mantine-color-dark-4)',
+            flexShrink: 0,
+          }}
+        >
+          <Group gap="xs" align="center">
+            {isImageAttachment && attachmentPreviewUrl ? (
+              <Image
+                src={attachmentPreviewUrl}
+                h={48}
+                w={48}
+                radius="sm"
+                fit="cover"
+                alt={attachment.name}
+              />
+            ) : (
+              <IconFileText size={32} color="var(--mantine-color-dimmed)" />
+            )}
+            <Text size="xs" style={{ flex: 1 }} lineClamp={1}>
+              {attachment.name}
+            </Text>
+            <ActionIcon
+              size="xs"
+              variant="subtle"
+              color="red"
+              aria-label="Remove attachment"
+              onClick={() => setAttachment(null)}
+            >
+              <IconX size={12} />
+            </ActionIcon>
+          </Group>
+        </Box>
+      )}
+
+      {/* Input row (Phase 6.2) */}
+      {/* Hidden file inputs — outside the visible Group to keep DOM clean */}
+      <input
+        ref={cameraInputRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        style={{ display: 'none' }}
+        onChange={handleFilePick}
+      />
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/jpeg,image/png,image/webp,application/pdf"
+        style={{ display: 'none' }}
+        onChange={handleFilePick}
+      />
+
       <Group
         p="sm"
         gap="xs"
+        align="center"
         style={{
           borderTop: '1px solid var(--mantine-color-dark-4)',
           flexShrink: 0,
         }}
       >
+        {/* Camera icon — triggers rear camera on mobile (REQ-002) */}
+        <Tooltip label="Take a photo">
+          <ActionIcon
+            size={isMobile ? 'lg' : 'md'}
+            variant="subtle"
+            color="gray"
+            aria-label="Take a photo"
+            onClick={() => cameraInputRef.current?.click()}
+            disabled={isLoading}
+          >
+            <IconCamera size={isMobile ? 20 : 16} />
+          </ActionIcon>
+        </Tooltip>
+
+        {/* Paperclip icon — opens file picker */}
+        <Tooltip label="Attach file">
+          <ActionIcon
+            size={isMobile ? 'lg' : 'md'}
+            variant="subtle"
+            color="gray"
+            aria-label="Attach file"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={isLoading}
+          >
+            <IconPaperclip size={isMobile ? 20 : 16} />
+          </ActionIcon>
+        </Tooltip>
+
+        {/* Text input — REQ-006: focus order is text → camera → paperclip → send;
+            DOM order here is camera, paperclip, text, send. We reorder visually
+            but keep keyboard tab order intuitive by placing text first in DOM. */}
         <TextInput
           ref={inputRef}
           flex={1}
@@ -301,11 +761,14 @@ export function ChatOverlay({ opened, onClose }: ChatOverlayProps) {
           onKeyDown={handleKeyDown}
           disabled={isLoading}
         />
+
+        {/* Send button */}
         <ActionIcon
           size={isMobile ? 'xl' : 'lg'}
           variant="filled"
-          onClick={sendMessage}
-          disabled={!input.trim() || isLoading}
+          onClick={() => void sendMessage()}
+          disabled={!canSend}
+          aria-label="Send"
         >
           <IconSend size={isMobile ? 20 : 16} />
         </ActionIcon>

@@ -1,16 +1,81 @@
 import type { AxiosInstance } from 'axios';
 import type {
-  ChatRequest,
+  ChatMessage,
+  ChatModel,
   ChatResponse,
   GitHubIssueDraft,
   ClassifyTransactionsResponse,
   SuggestRulesResponse,
+  ActionConfirmResponse,
+  PageContext,
 } from '../../../../shared/types';
+
+export interface SendChatMessageParams {
+  message: string;
+  conversationId: string;
+  conversationHistory: ChatMessage[];
+  pageContext: PageContext;
+  model: ChatModel;
+  userDisplayName?: string;
+  attachment?: File;
+}
 
 export function createChatbotApi(client: AxiosInstance) {
   return {
-    async sendChatMessage(request: ChatRequest): Promise<ChatResponse> {
-      const { data } = await client.post<{ success: boolean } & ChatResponse>('/chatbot/message', request);
+    async sendChatMessage(params: SendChatMessageParams): Promise<ChatResponse> {
+      const { attachment, ...rest } = params;
+
+      if (attachment) {
+        // Multipart form-data path for attachment uploads.
+        // IMPORTANT: Do NOT set Content-Type manually — browser sets the
+        // multipart boundary automatically. Setting it manually breaks parsing.
+        const form = new FormData();
+        form.append('attachment', attachment);
+        form.append('message', rest.message);
+        form.append('conversationId', rest.conversationId);
+        form.append('conversationHistory', JSON.stringify(rest.conversationHistory));
+        form.append('pageContext', JSON.stringify(rest.pageContext));
+        form.append('model', rest.model);
+        if (rest.userDisplayName) {
+          form.append('userDisplayName', rest.userDisplayName);
+        }
+        const { data } = await client.post<{ success: boolean } & ChatResponse>(
+          '/chatbot/message',
+          form,
+          {
+            headers: {
+              // Clear the default Content-Type so Axios doesn't set application/json.
+              // The browser will set multipart/form-data with the correct boundary.
+              'Content-Type': undefined,
+            },
+          },
+        );
+        return data;
+      }
+
+      // Existing JSON path — text-only, unchanged.
+      const { data } = await client.post<{ success: boolean } & ChatResponse>(
+        '/chatbot/message',
+        {
+          message: rest.message,
+          conversationId: rest.conversationId,
+          conversationHistory: rest.conversationHistory,
+          pageContext: rest.pageContext,
+          model: rest.model,
+          userDisplayName: rest.userDisplayName,
+        },
+      );
+      return data;
+    },
+
+    async confirmChatAction(params: {
+      proposalId: string;
+      confirmedParams: Record<string, unknown>;
+    }): Promise<ActionConfirmResponse> {
+      const { data } = await client.post<ActionConfirmResponse>(
+        '/chatbot/actions/confirm',
+        params,
+      );
       return data;
     },
 
