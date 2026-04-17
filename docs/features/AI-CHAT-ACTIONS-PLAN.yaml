@@ -2,7 +2,9 @@
 # AI Chat Attachments & Action Cards — Implementation Plan
 # =============================================================================
 # BRD: docs/features/AI-CHAT-ACTIONS-BRD.md
-# Status: Not Started
+# Status: Backend Complete (Phases 1–5 + security tests 10.1–10.5, 10.8).
+#         Frontend (Phases 6–9), remaining tests (10.6, 10.7, 10.9, 10.10),
+#         manual QA (Phase 11), and docs (Phase 12) still pending.
 # Last Updated: 2026-04-17
 # =============================================================================
 
@@ -43,13 +45,55 @@ overview:
 # =============================================================================
 # All V1 decisions are in the BRD (D-1 through D-15). This section captures
 # decisions made during implementation that were not in the BRD.
-decisions: []
+decisions:
+  - id: D-IMPL-1
+    date: 2026-04-17
+    decision: |
+      Confirm endpoint mounted at /api/v1/chatbot/actions/confirm, not
+      /api/v1/chat/actions/confirm as the BRD §7.2 specified.
+    rationale: |
+      The existing chatbot router is mounted at /api/v1/chatbot (not /chat).
+      Keeping the confirm endpoint under the same namespace preserves one
+      authority for chat-related routes, one rate-limiter configuration, and
+      one CORS/CSRF posture. BRD §7 will be updated to match. The chat
+      message endpoint also stays at its existing path (/api/v1/chatbot/message)
+      and accepts multipart when Content-Type is multipart/form-data.
+
+  - id: D-IMPL-2
+    date: 2026-04-17
+    decision: |
+      ChatbotService.chat() gains a required userId parameter.
+    rationale: |
+      Nonce ownership (SEC-A001, SEC-A005) must bind the proposal to the
+      requesting user's identity. The service previously took only familyId;
+      adding userId is required so issueProposal can stamp the nonce with
+      it. The route handler populates userId from the JWT — the LLM never
+      sees or supplies it. Single call site, clean change.
+
+  - id: D-IMPL-3
+    date: 2026-04-17
+    decision: |
+      Zod v4 signature change accommodated — z.record now requires two args.
+    rationale: |
+      z.record(z.unknown()) is invalid in the project's pinned Zod version;
+      must be z.record(z.string(), z.unknown()). Noted so future confirm
+      schema edits stay consistent.
+
+  - id: D-IMPL-4
+    date: 2026-04-17
+    decision: |
+      conversationId falls back to `anon_${familyId}` if frontend omits it.
+    rationale: |
+      Defensive default so proposals never share a conversationId across
+      families. The frontend MUST pass a stable client-generated UUID per
+      conversation session to get correct supersession and one-active-card
+      semantics — the fallback is a safety net, not a supported mode.
 
 # =============================================================================
 # PHASE 1: Shared Types & Action Registry Contract
 # =============================================================================
 phase_1_types:
-  status: not_started
+  status: completed
   description: |
     Define all types for attachment upload, action proposals, confirmation
     requests, and the action registry contract. The registry contract is the
@@ -59,7 +103,7 @@ phase_1_types:
   tasks:
     - id: "1.1"
       task: Define action registry types in shared/types/index.ts
-      status: not_started
+      status: completed
       details: |
         // V1 allowlist — extensible enum
         export type ChatActionId = 'create_task';
@@ -125,7 +169,7 @@ phase_1_types:
 
     - id: "1.2"
       task: Extend ChatResponse discriminated union with action_proposal type
-      status: not_started
+      status: completed
       details: |
         Existing shape in shared/types/index.ts (ChatResponse) is:
           { type: 'message' | 'issue_confirmation' | 'error'; ... }
@@ -153,7 +197,7 @@ phase_1_types:
 
     - id: "1.3"
       task: Define create_task action schema (shared)
-      status: not_started
+      status: completed
       details: |
         Mirror the existing createTaskSchema in backend/src/routes/tasks.ts
         so that the backend action handler can re-use it. Export a shared
@@ -166,7 +210,7 @@ phase_1_types:
 
     - id: "1.4"
       task: Define ChatAttachment metadata type
-      status: not_started
+      status: completed
       details: |
         // Represents an attachment in the composer / on an outbound message.
         // Attachments themselves are transient; this type carries metadata only.
@@ -189,7 +233,7 @@ phase_1_types:
 # PHASE 2: Backend — Action Registry & Handler Infrastructure
 # =============================================================================
 phase_2_action_registry:
-  status: not_started
+  status: completed
   description: |
     Build the central action registry. This is the structural backbone that
     ensures (a) only known actions can be proposed, (b) params are always
@@ -199,7 +243,7 @@ phase_2_action_registry:
   tasks:
     - id: "2.1"
       task: Create chatActionRegistry in backend/src/services/chatActions/registry.ts
-      status: not_started
+      status: completed
       details: |
         New directory: backend/src/services/chatActions/
         New file: registry.ts
@@ -253,7 +297,7 @@ phase_2_action_registry:
 
     - id: "2.2"
       task: Create create_task handler in backend/src/services/chatActions/createTaskAction.ts
-      status: not_started
+      status: completed
       details: |
         import { registerChatAction } from './registry';
         import { taskService } from '../index';  // existing singleton
@@ -298,7 +342,7 @@ phase_2_action_registry:
 
     - id: "2.3"
       task: Export createTaskSchema from backend/src/routes/tasks.ts
-      status: not_started
+      status: completed
       details: |
         The schema at tasks.ts:21-30 is currently module-local. Export it so
         the chat action handler can re-use it:
@@ -314,7 +358,7 @@ phase_2_action_registry:
 
     - id: "2.4"
       task: Create chatActionProposals nonce store in backend/src/services/chatActions/proposalStore.ts
-      status: not_started
+      status: completed
       details: |
         In-memory, TTL-based proposal store. No persistence (proposals are
         short-lived and session-scoped). Use a Map keyed by nonce.
@@ -414,7 +458,7 @@ phase_2_action_registry:
 
     - id: "2.5"
       task: Bootstrap the registry at service init
-      status: not_started
+      status: completed
       details: |
         In backend/src/services/chatActions/index.ts:
 
@@ -437,7 +481,7 @@ phase_2_action_registry:
 # PHASE 3: Backend — Image & PDF Upload Infrastructure
 # =============================================================================
 phase_3_upload:
-  status: not_started
+  status: completed
   description: |
     Extend the chat endpoint to accept a single image OR PDF attachment
     alongside a text message. Reuse the multer + magic-byte pattern from
@@ -446,7 +490,7 @@ phase_3_upload:
   tasks:
     - id: "3.1"
       task: Create chat attachment upload middleware in backend/src/middleware/chatAttachmentUpload.ts
-      status: not_started
+      status: completed
       details: |
         import multer from 'multer';
         import { ValidationError } from '../errors';
@@ -511,7 +555,7 @@ phase_3_upload:
 
     - id: "3.2"
       task: Extend chat endpoint to accept multipart form-data
-      status: not_started
+      status: completed
       details: |
         In backend/src/routes/chatbot.ts, current chat endpoint accepts JSON
         body only. Extend to dual-mode:
@@ -581,7 +625,7 @@ phase_3_upload:
 
     - id: "3.3"
       task: Add CSRF guard reminder for multipart endpoints
-      status: not_started
+      status: completed
       details: |
         Multipart form uploads are a classic CSRF vector in browser contexts.
         The existing chat endpoint uses JWT via Authorization header (bearer
@@ -600,7 +644,7 @@ phase_3_upload:
 # PHASE 4: Backend — Claude Tool Wiring (propose_action)
 # =============================================================================
 phase_4_tool:
-  status: not_started
+  status: completed
   description: |
     Add the propose_action tool to the chatbot tool set, extend the tool loop
     to intercept calls to it (the same way submit_github_issue is intercepted
@@ -610,7 +654,7 @@ phase_4_tool:
   tasks:
     - id: "4.1"
       task: Add propose_action tool definition in chatbotPrompt.ts
-      status: not_started
+      status: completed
       details: |
         Append to CHATBOT_TOOLS array:
 
@@ -663,7 +707,7 @@ phase_4_tool:
 
     - id: "4.2"
       task: Update system prompt for action-card behavior
-      status: not_started
+      status: completed
       details: |
         Append to CHATBOT_SYSTEM_PROMPT:
 
@@ -692,7 +736,7 @@ phase_4_tool:
 
     - id: "4.3"
       task: Intercept propose_action in toolLoop (parallel to submit_github_issue interception)
-      status: not_started
+      status: completed
       details: |
         In backend/src/services/chatbotService.ts, inside toolLoop (currently
         intercepts submit_github_issue at line 277), add a parallel branch:
@@ -765,7 +809,7 @@ phase_4_tool:
 
     - id: "4.4"
       task: Extend chat handler to pass attachment through to Claude
-      status: not_started
+      status: completed
       details: |
         ChatbotService.chat currently accepts:
           chat(familyId, request: ChatRequest): Promise<ChatResponse>
@@ -808,7 +852,7 @@ phase_4_tool:
 
     - id: "4.5"
       task: Thread conversationId through the chat request
-      status: not_started
+      status: completed
       details: |
         The proposal store scopes "one active card per conversation" by
         conversationId (see 2.4). The frontend must pass a stable
@@ -824,7 +868,7 @@ phase_4_tool:
 
     - id: "4.6"
       task: Update ChatMessage to carry proposal metadata into history
-      status: not_started
+      status: completed
       details: |
         When the frontend sends conversationHistory back to the backend on
         subsequent turns, messages that previously resulted in a proposal
@@ -854,7 +898,7 @@ phase_4_tool:
 # PHASE 5: Backend — Confirmation Endpoint & Audit Logging
 # =============================================================================
 phase_5_confirm:
-  status: not_started
+  status: completed
   description: |
     The user-clickable confirmation path. This is the ONLY way an action is
     ever executed. It re-validates everything the LLM produced and invokes
@@ -863,7 +907,7 @@ phase_5_confirm:
   tasks:
     - id: "5.1"
       task: Create POST /api/v1/chat/actions/confirm route
-      status: not_started
+      status: completed
       details: |
         In backend/src/routes/chatbot.ts (or a new chatActions.ts router
         mounted under /chat/actions):
@@ -960,7 +1004,7 @@ phase_5_confirm:
 
     - id: "5.2"
       task: Add audit logging utilities in backend/src/services/chatActions/auditLog.ts
-      status: not_started
+      status: completed
       details: |
         Structured JSON logs (consumed by existing log aggregation). No PII
         beyond what's already in the params — caller responsibility to keep
@@ -1007,7 +1051,7 @@ phase_5_confirm:
 
     - id: "5.3"
       task: Observability logging for attachment requests
-      status: not_started
+      status: completed
       details: |
         In the chat handler (phase 4.4), when a request includes an
         attachment, emit a structured log entry AFTER the Claude call returns:
@@ -1427,15 +1471,23 @@ phase_9_conversation_state:
 # PHASE 10: Security Hardening & Tests
 # =============================================================================
 phase_10_security:
-  status: not_started
+  status: in_progress
   description: |
     Targeted tests for the security boundaries established by this feature.
     Risk-based — focused on invariants that would cause real harm if broken.
 
+    COMPLETED: 10.1–10.5 and 10.8 landed alongside the Phase 2–5 backend
+    work (14 passing tests in chatActions.security.test.ts). REMAINING:
+    10.6 (MIME spoofing rejection at the route level), 10.7 (attachment
+    content not logged), 10.9 (prompt injection via attachment), 10.10
+    (cost cap enforcement on attachment requests). These four require
+    end-to-end request cycles or spies on the Claude SDK and are better
+    landed after the frontend exists to exercise them.
+
   tasks:
     - id: "10.1"
       task: Test — LLM cannot execute action without user confirmation
-      status: not_started
+      status: completed
       details: |
         backend/src/__tests__/integration/chatActions.security.test.ts
 
@@ -1450,7 +1502,7 @@ phase_10_security:
 
     - id: "10.2"
       task: Test — Confirmation cross-user attack is blocked
-      status: not_started
+      status: completed
       details: |
         User A triggers a propose_action → gets a nonce. User B attempts to
         confirm that nonce with their own JWT. Expected: 404 nonce_not_found
@@ -1459,7 +1511,7 @@ phase_10_security:
 
     - id: "10.3"
       task: Test — Confirmation replay is blocked
-      status: not_started
+      status: completed
       details: |
         Confirm a valid proposal. Immediately attempt to confirm it again
         with the same nonce. Expected: 409 nonce_already_used. Only one task
@@ -1467,7 +1519,7 @@ phase_10_security:
 
     - id: "10.4"
       task: Test — Supersession invalidates prior nonce
-      status: not_started
+      status: completed
       details: |
         User triggers proposal A, then without confirming sends a refinement
         that triggers proposal B. Expected:
@@ -1478,7 +1530,7 @@ phase_10_security:
 
     - id: "10.5"
       task: Test — Zod validation on confirm rejects tampered params
-      status: not_started
+      status: completed
       details: |
         Get a valid proposal for create_task. POST to confirm with
         confirmedParams: { title: '', dueDate: 'not-a-date', assigneeId: 12345 }
@@ -1502,7 +1554,7 @@ phase_10_security:
 
     - id: "10.8"
       task: Test — Action handler cannot be called with spoofed userId
-      status: not_started
+      status: completed
       details: |
         Unit test on createTaskAction.execute. Call with ctx = { userId: 'attacker', familyId: 'victim' }.
         Assert taskService.createTask is called with those exact IDs (no

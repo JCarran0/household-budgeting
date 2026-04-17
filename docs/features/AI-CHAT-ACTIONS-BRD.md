@@ -52,7 +52,7 @@ The existing chat overlay (floating action button, available on all authenticate
 1. **Compose** — User attaches an image or PDF. The attachment appears as a thumbnail in the input row. User may optionally type a message ("this came home from school today") before sending. The Send button enables as soon as either an attachment or text is present.
 
 2. **Upload & analyze** — On send:
-   - Frontend uploads the file + text to `POST /api/v1/chat` (same endpoint as text chat, extended to accept multipart).
+   - Frontend uploads the file + text to `POST /api/v1/chatbot/message` (same endpoint as text chat, extended to accept multipart).
    - Backend validates MIME type, size, and page count.
    - Backend sends the file to Claude via the document/vision API as a content block, **not** interpolated into the system prompt (consistent with SEC-007 from the chatbot BRD).
    - Claude responds with a natural-language identification: "This looks like a PTA fundraiser flyer for the Edson Elementary faculty lounge. Donations are due Thursday, May 1, and they're asking for $25 per family."
@@ -66,7 +66,7 @@ The existing chat overlay (floating action button, available on all authenticate
    - **Controls**: `Confirm` (primary), `Edit` (secondary), `Dismiss` (tertiary).
 
 5. **User decides** — Three paths:
-   - **Confirm** → frontend POSTs `{ sessionId, proposalId, nonce, confirmedParams }` to `POST /api/v1/chat/actions/confirm`. Backend validates (nonce unused, action in allowlist, params pass Zod schema), calls the existing task service with the authenticated user's context, and returns the created resource. The card updates in place to show success ("✅ Created task: PTA donation — [view]") and is locked from further interaction.
+   - **Confirm** → frontend POSTs `{ sessionId, proposalId, nonce, confirmedParams }` to `POST /api/v1/chatbot/actions/confirm`. Backend validates (nonce unused, action in allowlist, params pass Zod schema), calls the existing task service with the authenticated user's context, and returns the created resource. The card updates in place to show success ("✅ Created task: PTA donation — [view]") and is locked from further interaction.
    - **Edit** → card expands into an inline form with editable fields. User adjusts values and clicks `Confirm` to submit the edited params (same backend path, same validation).
    - **Dismiss** → card collapses to a muted "Dismissed" state. No backend call.
 
@@ -155,7 +155,7 @@ When the backend intercepts `propose_action`, it:
 On Confirm, the frontend sends:
 
 ```typescript
-POST /api/v1/chat/actions/confirm
+POST /api/v1/chatbot/actions/confirm
 {
   proposalId: string;          // nonce
   confirmedParams: unknown;    // May differ from original if user used Edit
@@ -269,7 +269,7 @@ These requirements **extend** the existing chatbot security requirements (AI-CHA
 | REQ-012 | When Claude calls `propose_action`, the backend must intercept the tool call, validate the proposal, generate a nonce, and return an `action_proposal` response. The LLM must never execute an action directly. |
 | REQ-013 | The action card must render all writable fields, a human-readable summary, and three controls: Confirm, Edit, Dismiss. |
 | REQ-014 | The Edit control must open an inline form with the proposal's params prefilled. Fields must be editable according to their `editable` flag in `DisplayField`. |
-| REQ-015 | The Confirm control must POST to `/api/v1/chat/actions/confirm` with the nonce and the (possibly edited) params. The card must update in place to reflect success or failure. |
+| REQ-015 | The Confirm control must POST to `/api/v1/chatbot/actions/confirm` with the nonce and the (possibly edited) params. The card must update in place to reflect success or failure. |
 | REQ-016 | The Dismiss control must mark the card as dismissed without a backend call. |
 | REQ-017 | Only one action card may be active at a time per conversation. A new proposal must supersede any prior pending card. |
 | REQ-018 | Confirmed cards must remain visible in the conversation as a receipt showing the confirmed values and a link to the created resource. |
@@ -296,7 +296,7 @@ These requirements **extend** the existing chatbot security requirements (AI-CHA
 
 ### 7.1 Extended Endpoint
 
-**`POST /api/v1/chat`** (extended)
+**`POST /api/v1/chatbot/message`** (extended)
 - Content-Type: `multipart/form-data` (when attachments present) OR `application/json` (text-only, unchanged).
 - Multipart fields:
   - `message` (text, optional)
@@ -315,14 +315,16 @@ These requirements **extend** the existing chatbot security requirements (AI-CHA
 
 ### 7.2 New Endpoints
 
-**`POST /api/v1/chat/actions/confirm`**
+**`POST /api/v1/chatbot/actions/confirm`**
 - Auth: required (JWT).
 - Body: `{ proposalId: string; confirmedParams: unknown }`.
 - Response: `{ success: true; resource: { id: string; type: 'task'; url?: string } }` or `{ success: false; error: string }`.
 - Validates nonce, re-validates params against the action's Zod schema, invokes the action handler.
 
-**`POST /api/v1/chat/actions/dismiss`** (optional in V1)
+**`POST /api/v1/chatbot/actions/dismiss`** (optional in V1)
 - Could be purely client-side (card collapses without a backend call), or a POST for audit consistency. **Resolution**: client-side only in V1 (D-4).
+
+_Note: endpoints mount under `/api/v1/chatbot/`, not `/api/v1/chat/` as earlier drafts said, to align with the existing chatbot route namespace. Captured as D-IMPL-1 in the implementation plan._
 
 ### 7.3 Existing Endpoints Used
 
