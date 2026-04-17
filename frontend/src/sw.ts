@@ -1,11 +1,20 @@
 /// <reference lib="webworker" />
 import { precacheAndRoute, cleanupOutdatedCaches } from 'workbox-precaching';
+import { clientsClaim } from 'workbox-core';
 
 declare const self: ServiceWorkerGlobalScope;
 
 // Precache all assets injected by vite-plugin-pwa (injectManifest mode)
 precacheAndRoute(self.__WB_MANIFEST);
 cleanupOutdatedCaches();
+clientsClaim();
+
+// Handle SKIP_WAITING message sent by updateServiceWorker(true) in PWAUpdatePrompt
+self.addEventListener('message', (event: ExtendableMessageEvent) => {
+  if (event.data && event.data.type === 'SKIP_WAITING') {
+    void self.skipWaiting();
+  }
+});
 
 // ---------------------------------------------------------------------------
 // Push event — show a notification when the server sends a push message
