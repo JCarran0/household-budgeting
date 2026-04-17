@@ -7,6 +7,10 @@ const pageContextSchema = z.object({
   description: z.string(),
 });
 
+// `.passthrough()` preserves extra fields that the frontend may attach to
+// history items (e.g., `proposal`, `proposalStatus`, `attachment`, `resource`
+// added by the chat-actions feature). Without it, Zod silently strips them
+// and the LLM loses pending-proposal context on refinement turns.
 const chatMessageSchema = z.object({
   id: z.string(),
   role: z.enum(['user', 'assistant']),
@@ -19,15 +23,17 @@ const chatMessageSchema = z.object({
     estimatedCost: z.number(),
   }).optional(),
   pageContext: pageContextSchema.optional(),
-});
+}).passthrough();
 
 export const chatRequestSchema = z.object({
-  message: z.string()
-    .min(1, 'Message cannot be empty')
-    .max(10000, 'Message too long'),
+  // `message` may be empty when the user sends only an attachment. The route
+  // handler rejects requests where both message and attachment are empty.
+  message: z.string().max(10000, 'Message too long'),
+  conversationId: z.string().min(1, 'conversationId required'),
   conversationHistory: z.array(chatMessageSchema).default([]),
   pageContext: pageContextSchema,
   model: z.enum(['haiku', 'sonnet', 'opus']),
+  userDisplayName: z.string().optional(),
 });
 
 export const confirmIssueSchema = z.object({

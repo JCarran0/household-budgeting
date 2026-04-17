@@ -156,6 +156,16 @@ router.post(
       const { familyId, userId } = req.user!;
       const chatRequest = req.body as ChatRequest;
 
+      // Require either text or an attachment (empty text is allowed when
+      // the user sends only an attachment; both empty is nonsense).
+      if (chatRequest.message.trim().length === 0 && !req.file) {
+        res.status(400).json({
+          success: false,
+          error: 'Message or attachment is required',
+        });
+        return;
+      }
+
       // Build attachment object if a file was uploaded
       let attachment: { buffer: Buffer; mimeType: ChatAttachmentMimeType; filename: string } | undefined;
       if (req.file) {
