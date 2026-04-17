@@ -5,6 +5,40 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.23.0](https://github.com/JCarran0/household-budgeting/compare/v5.22.0...v5.23.0) (2026-04-17)
+
+
+### Features
+
+* **chat-actions:** implement frontend phases 6-9 (composer, API client, action cards, conversation state) ([e24c548](https://github.com/JCarran0/household-budgeting/commit/e24c548dc8694ee4c669c718e5e79a5b033c9809))
+* **chat-actions:** Phase 1+2 — shared types, action registry, and create_task handler ([02e1af2](https://github.com/JCarran0/household-budgeting/commit/02e1af20002fc7a697b8236b107d2a084bd7c38a))
+* **chat-actions:** Phases 3–5 — upload middleware, tool wiring, confirm endpoint + security tests ([a4f9a0f](https://github.com/JCarran0/household-budgeting/commit/a4f9a0faf5271ca7a60ce9349d1f5143cacc9539))
+* **tasks:** add Start Task button to create modal for one-step start flow ([8c5369b](https://github.com/JCarran0/household-budgeting/commit/8c5369bf342022a44ad48ccdd9a5f6a93cc21e63))
+
+
+### Bug Fixes
+
+* **chat-actions:** validator accepts empty message when attachment is present ([bf08bfb](https://github.com/JCarran0/household-budgeting/commit/bf08bfbc790d70226ffe5d9a793c3c17810b7252))
+
+
+### Code Refactoring
+
+* **chat-actions:** replace __fullProposal side-band with typed Map ([0f87589](https://github.com/JCarran0/household-budgeting/commit/0f87589955bfb3455bfd225b0d4baff13bed1870))
+
+
+### Tests
+
+* **chat-actions:** add security tests 10.6, 10.7, 10.9, 10.10 ([ee26370](https://github.com/JCarran0/household-budgeting/commit/ee263702fee0a8c39250a8d6401abc5b62524326))
+
+
+### Documentation
+
+* **chat-actions:** add BRD and implementation plan for chat attachments and action cards ([dc34719](https://github.com/JCarran0/household-budgeting/commit/dc347195dd08d18107c06f1ef16710b0321f3a72))
+* **chat-actions:** flip Phase 10 phase-level status to completed ([7a05768](https://github.com/JCarran0/household-budgeting/commit/7a057682d299b36b9ab82bcf75fc3d29d14bd338))
+* **chat-actions:** mark Phases 1–5 complete, capture implementation decisions ([bbbbc50](https://github.com/JCarran0/household-budgeting/commit/bbbbc50bfefd711b2a3eefec37a48f2a8d2b00e6))
+* **chat-actions:** mark Phases 6–9 complete, add D-IMPL-5 and D-IMPL-6 ([f155d11](https://github.com/JCarran0/household-budgeting/commit/f155d11ce909e3d3efadb16726498d6f035f66cc))
+* **chat-actions:** Phase 12 doc updates for action card registry pattern ([af3a95f](https://github.com/JCarran0/household-budgeting/commit/af3a95f76af1d0ba89155c03ad77768ce59f7a32))
+
 ## [5.22.0](https://github.com/JCarran0/household-budgeting/compare/v5.21.0...v5.22.0) (2026-04-17)
 
 
