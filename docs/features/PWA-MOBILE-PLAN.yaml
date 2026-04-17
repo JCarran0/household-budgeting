@@ -2,8 +2,8 @@
 # PWA & Mobile Experience — Implementation Plan (Phase 1)
 # =============================================================================
 # BRD: docs/features/PWA-MOBILE-BRD.md
-# Status: In Progress (Phase 1 Complete)
-# Last Updated: 2026-04-14
+# Status: In Progress (Phases 1–5 Complete, Phase 6 Remaining)
+# Last Updated: 2026-04-17
 # =============================================================================
 
 overview:
@@ -13,6 +13,17 @@ overview:
     service worker caching, camera capture for receipt photos, and push
     notifications for budget/account events. Phase 2 (biometric login via
     Capacitor) is out of scope for this plan.
+
+  current_state: |
+    Phases 1–5 are fully implemented and committed on feature/pwa-mobile.
+    VAPID keys have been generated and added to backend/.env (local dev)
+    and GitHub Actions Secrets (production). Only Phase 6 (testing & polish)
+    remains before this branch can be merged.
+
+  production_setup_needed:
+    - VAPID_PUBLIC_KEY: added to GitHub Actions Secrets ✅
+    - VAPID_PRIVATE_KEY: added to GitHub Actions Secrets ✅
+    - VAPID_SUBJECT: mailto:jared.carrano@gmail.com ✅
 
   key_files:
     brd: docs/features/PWA-MOBILE-BRD.md
@@ -253,7 +264,7 @@ phase_2_camera:
 
     - id: "2.5"
       task: Test camera capture flow on Android device
-      status: not_started
+      status: complete
       details: |
         Manual testing checklist:
         - Camera launches from file input in installed PWA
@@ -276,7 +287,7 @@ phase_3_push_backend:
   tasks:
     - id: "3.1"
       task: Install web-push package and generate VAPID keys
-      status: not_started
+      status: complete
       details: |
         cd backend && npm install web-push
 
@@ -290,7 +301,7 @@ phase_3_push_backend:
 
     - id: "3.2"
       task: Create PushNotificationService
-      status: not_started
+      status: complete
       details: |
         backend/src/services/pushNotificationService.ts
 
@@ -311,7 +322,7 @@ phase_3_push_backend:
 
     - id: "3.3"
       task: Define notification types in shared/types/index.ts
-      status: not_started
+      status: complete
       details: |
         type NotificationType =
           | 'sync_failure'
@@ -345,7 +356,7 @@ phase_3_push_backend:
 
     - id: "3.4"
       task: Create push notification API routes
-      status: not_started
+      status: complete
       details: |
         backend/src/routes/notifications.ts
 
@@ -374,7 +385,7 @@ phase_3_push_backend:
 
     - id: "3.5"
       task: Add service worker push event handler
-      status: not_started
+      status: complete
       details: |
         In the service worker (via vite-plugin-pwa custom SW or
         injectManifest mode):
@@ -411,7 +422,7 @@ phase_4_push_triggers:
   tasks:
     - id: "4.1"
       task: Sync failure notifications
-      status: not_started
+      status: complete
       details: |
         After a Plaid sync fails or returns requires_reauth status:
         - Check if user has syncFailures preference enabled
@@ -426,7 +437,7 @@ phase_4_push_triggers:
 
     - id: "4.2"
       task: Budget threshold notifications
-      status: not_started
+      status: complete
       details: |
         After a transaction is categorized (manual, AI, or auto-rule):
         - Recalculate spending for that category in the current month
@@ -441,7 +452,7 @@ phase_4_push_triggers:
 
     - id: "4.3"
       task: Large transaction notifications
-      status: not_started
+      status: complete
       details: |
         After transactions are synced from Plaid:
         - For each new transaction above the user's threshold:
@@ -456,7 +467,7 @@ phase_4_push_triggers:
 
     - id: "4.4"
       task: Deduplication logic for notifications
-      status: not_started
+      status: complete
       details: |
         Use the 'tag' field in the notification payload — the browser
         replaces existing notifications with the same tag rather than
@@ -478,7 +489,7 @@ phase_5_notification_ui:
   tasks:
     - id: "5.1"
       task: Create notification permission request component
-      status: not_started
+      status: complete
       details: |
         Component that explains what notifications will be used for
         and requests permission. Triggered contextually — e.g., from
@@ -493,7 +504,7 @@ phase_5_notification_ui:
 
     - id: "5.2"
       task: Create notification preferences page/section
-      status: not_started
+      status: complete
       details: |
         Add to existing Settings page (or create one if it doesn't exist).
 
@@ -506,7 +517,7 @@ phase_5_notification_ui:
 
     - id: "5.3"
       task: Add notification API methods to frontend API client
-      status: not_started
+      status: complete
       details: |
         In frontend/src/lib/api.ts (or api/notifications.ts):
         - subscribeToNotifications(subscription)
