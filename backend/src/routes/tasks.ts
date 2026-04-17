@@ -26,6 +26,7 @@ const createTaskSchema = z.object({
   dueDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Invalid date format. Use YYYY-MM-DD').nullable().optional(),
   tags: z.array(z.string().min(1).max(50)).max(20).optional(),
   subTasks: z.array(subTaskCreateSchema).max(50).optional(),
+  status: z.enum(['todo', 'started']).optional(),
 });
 
 const updateTaskSchema = z.object({

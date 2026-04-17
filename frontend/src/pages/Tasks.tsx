@@ -51,6 +51,7 @@ import {
 } from '@tabler/icons-react';
 import { format, parseISO } from 'date-fns';
 import { api } from '../lib/api';
+import { useAuthStore } from '../stores/authStore';
 import { KanbanColumn } from '../components/tasks/KanbanColumn';
 import type {
   StoredTask,
@@ -82,6 +83,7 @@ const COLUMNS: { status: TaskStatus; label: string; color: string }[] = [
 
 export function Tasks() {
   const queryClient = useQueryClient();
+  const currentUser = useAuthStore((s) => s.user);
 
   // View state
   const [view, setView] = useState<'board' | 'history'>('board');
@@ -426,6 +428,7 @@ export function Tasks() {
         members={members}
         loading={createMutation.isPending}
         title="Create Task"
+        currentUserId={currentUser?.id ?? null}
       />
 
       {/* Edit Task Modal */}
@@ -513,14 +516,16 @@ interface TaskFormModalProps {
   loading: boolean;
   title: string;
   initialValues?: StoredTask;
+  currentUserId?: string | null;
 }
 
-function TaskFormModal({ opened, onClose, onSubmit, members, loading, title, initialValues }: TaskFormModalProps) {
+function TaskFormModal({ opened, onClose, onSubmit, members, loading, title, initialValues, currentUserId }: TaskFormModalProps) {
   const [tags, setTags] = useState<string[]>(initialValues?.tags ?? []);
   const [subTaskTitles, setSubTaskTitles] = useState<string[]>(
     initialValues?.subTasks?.map((s) => s.title) ?? []
   );
   const [newSubTask, setNewSubTask] = useState('');
+  const submitModeRef = React.useRef<'create' | 'start'>('create');
 
   const form = useForm({
     initialValues: {
@@ -546,6 +551,7 @@ function TaskFormModal({ opened, onClose, onSubmit, members, loading, title, ini
       setTags(initialValues?.tags ?? []);
       setSubTaskTitles(initialValues?.subTasks?.map((s) => s.title) ?? []);
       setNewSubTask('');
+      submitModeRef.current = 'create';
     }
   }, [opened, initialValues]);
 
@@ -573,16 +579,18 @@ function TaskFormModal({ opened, onClose, onSubmit, members, loading, title, ini
         subTasks: updatedSubTasks,
       });
     } else {
+      const startMode = submitModeRef.current === 'start';
       onSubmit({
         title: values.title,
         description: values.description || undefined,
-        assigneeId: values.assigneeId || null,
+        assigneeId: startMode ? (currentUserId ?? null) : (values.assigneeId || null),
         dueDate: values.dueDate ? format(values.dueDate, 'yyyy-MM-dd') : null,
         scope: values.scope,
         tags: tags.length > 0 ? tags : undefined,
         subTasks: subTaskTitles.length > 0
           ? subTaskTitles.map((t) => ({ title: t }))
           : undefined,
+        ...(startMode ? { status: 'started' as const } : {}),
       });
     }
   });
@@ -702,9 +710,32 @@ function TaskFormModal({ opened, onClose, onSubmit, members, loading, title, ini
             </Stack>
           </div>
 
-          <Button type="submit" loading={loading} fullWidth mt="sm">
-            {initialValues ? 'Save Changes' : 'Create Task'}
-          </Button>
+          {initialValues ? (
+            <Button type="submit" loading={loading} fullWidth mt="sm">
+              Save Changes
+            </Button>
+          ) : (
+            <Group grow mt="sm">
+              <Button
+                type="submit"
+                loading={loading}
+                leftSection={<IconPlus size={14} />}
+                onClick={() => { submitModeRef.current = 'create'; }}
+              >
+                Create Task
+              </Button>
+              <Button
+                type="submit"
+                color="yellow"
+                loading={loading}
+                disabled={!currentUserId}
+                leftSection={<IconPlayerPlay size={14} />}
+                onClick={() => { submitModeRef.current = 'start'; }}
+              >
+                Start Task
+              </Button>
+            </Group>
+          )}
         </Stack>
       </form>
     </Modal>

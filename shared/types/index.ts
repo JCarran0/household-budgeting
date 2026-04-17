@@ -827,6 +827,7 @@ export interface CreateTaskDto {
   dueDate?: string | null;
   tags?: string[];
   subTasks?: { title: string }[];
+  status?: Extract<TaskStatus, 'todo' | 'started'>; // default: 'todo'
 }
 
 export interface UpdateTaskDto {

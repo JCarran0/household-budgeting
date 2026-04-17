@@ -72,25 +72,26 @@ export class TaskService {
     familyId: string
   ): Promise<StoredTask> {
     const now = new Date().toISOString();
+    const initialStatus: TaskStatus = data.status === 'started' ? 'started' : 'todo';
     const task: StoredTask = {
       id: uuidv4(),
       familyId,
       title: data.title,
       description: data.description ?? '',
-      status: 'todo',
+      status: initialStatus,
       scope: data.scope ?? 'family',
       assigneeId: data.assigneeId ?? null,
       dueDate: data.dueDate ?? null,
       createdAt: now,
       createdBy: userId,
-      startedAt: null,
+      startedAt: initialStatus === 'started' ? now : null,
       completedAt: null,
       cancelledAt: null,
       assignedAt: data.assigneeId ? now : null,
       transitions: [
         {
           fromStatus: null,
-          toStatus: 'todo',
+          toStatus: initialStatus,
           timestamp: now,
           userId,
         },
