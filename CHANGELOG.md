@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+### [5.19.4](https://github.com/JCarran0/household-budgeting/compare/v5.19.3...v5.19.4) (2026-04-17)
+
+
+### Bug Fixes
+
+* **pwa:** force reload fallback on update, correct vite-plugin-pwa config ([e37e7b2](https://github.com/JCarran0/household-budgeting/commit/e37e7b267cfe7d1b693342be854817e95a9acf46))
+
 ### [5.19.3](https://github.com/JCarran0/household-budgeting/compare/v5.19.2...v5.19.3) (2026-04-17)
 
 
