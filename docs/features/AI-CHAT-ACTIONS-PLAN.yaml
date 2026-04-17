@@ -1516,18 +1516,15 @@ phase_9_conversation_state:
 # PHASE 10: Security Hardening & Tests
 # =============================================================================
 phase_10_security:
-  status: in_progress
+  status: completed
   description: |
     Targeted tests for the security boundaries established by this feature.
     Risk-based — focused on invariants that would cause real harm if broken.
 
-    COMPLETED: 10.1–10.5 and 10.8 landed alongside the Phase 2–5 backend
-    work (14 passing tests in chatActions.security.test.ts). REMAINING:
-    10.6 (MIME spoofing rejection at the route level), 10.7 (attachment
-    content not logged), 10.9 (prompt injection via attachment), 10.10
-    (cost cap enforcement on attachment requests). These four require
-    end-to-end request cycles or spies on the Claude SDK and are better
-    landed after the frontend exists to exercise them.
+    All 10 tasks landed: 10.1–10.5 and 10.8 alongside the Phase 2–5 backend
+    work; 10.6, 10.7, 10.9, and 10.10 added after the frontend existed to
+    exercise end-to-end cycles. Final count: 22 passing tests in
+    chatActions.security.test.ts.
 
   tasks:
     - id: "10.1"
