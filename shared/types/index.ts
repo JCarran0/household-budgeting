@@ -419,6 +419,78 @@ export interface TokenUsage {
   estimatedCost: number; // USD
 }
 
+// =============================================================================
+// Chat Action Types (Attachments & Action Cards)
+// =============================================================================
+
+/** V1 allowlist — extensible string union */
+export type ChatActionId = 'create_task';
+
+/** Drives card field rendering */
+export type DisplayFieldType = 'text' | 'textarea' | 'date' | 'select' | 'tags';
+
+export interface DisplayField {
+  key: string;                  // Maps to a field in params
+  label: string;                // Human-readable label
+  value: string;                // Formatted value for display
+  editable: boolean;            // Whether Edit mode allows changes
+  type: DisplayFieldType;
+  options?: { value: string; label: string }[]; // for 'select'
+}
+
+/** What the LLM produces via propose_action tool */
+export interface ActionProposalInput {
+  actionId: ChatActionId;
+  params: Record<string, unknown>;
+  displaySummary: string;
+  displayFields: DisplayField[];
+  reasoning: string;
+}
+
+/** What the backend returns to the frontend after interception */
+export interface ActionProposal {
+  proposalId: string;           // nonce — single-use UUID
+  actionId: ChatActionId;
+  params: Record<string, unknown>; // Server-validated, Zod-coerced
+  displaySummary: string;
+  displayFields: DisplayField[];
+  reasoning: string;
+  expiresAt: string;            // ISO, nonce expiry (15 min)
+}
+
+/** Confirmation request body */
+export interface ActionConfirmRequest {
+  proposalId: string;
+  confirmedParams: Record<string, unknown>;
+}
+
+export interface ActionResource {
+  type: 'task';                 // V1 only
+  id: string;
+  url?: string;                 // Frontend-resolvable deep link
+  label: string;                // Human-readable name of the resource
+}
+
+export type ActionConfirmErrorCode =
+  | 'nonce_not_found'
+  | 'nonce_expired'
+  | 'nonce_already_used'
+  | 'validation_failed'
+  | 'action_not_allowed'
+  | 'internal_error';
+
+/** Confirmation response */
+export type ActionConfirmResponse =
+  | { success: true; resource: ActionResource }
+  | { success: false; error: string; errorCode: ActionConfirmErrorCode };
+
+/** Attachment metadata (transient — no content, just meta) */
+export interface ChatAttachmentMeta {
+  filename: string;
+  mimeType: 'image/jpeg' | 'image/png' | 'image/webp' | 'application/pdf';
+  sizeBytes: number;
+}
+
 export interface ChatMessage {
   id: string;
   role: 'user' | 'assistant';
@@ -427,6 +499,13 @@ export interface ChatMessage {
   model?: string;
   tokenUsage?: TokenUsage;
   pageContext?: PageContext;
+  /** Attachment metadata when this message was sent with a file */
+  attachment?: ChatAttachmentMeta;
+  /** Proposal metadata for assistant messages that triggered an action card.
+   *  NOTE: nonce (proposalId) is intentionally excluded — never sent to LLM. */
+  proposal?: Pick<ActionProposal, 'actionId' | 'displaySummary' | 'params' | 'displayFields'>;
+  proposalStatus?: 'pending' | 'confirmed' | 'dismissed' | 'superseded' | 'expired';
+  resource?: ActionResource;    // populated after successful confirm
 }
 
 export type ChatModel = 'haiku' | 'sonnet' | 'opus';
@@ -437,19 +516,36 @@ export interface ChatRequest {
   pageContext: PageContext;
   model: ChatModel;
   userDisplayName?: string;
+  /** Client-generated UUID per conversation. Reset on "New conversation". */
+  conversationId?: string;
 }
 
-export interface ChatResponse {
-  type: 'message' | 'issue_confirmation';
-  message: ChatMessage;
-  issueDraft?: GitHubIssueDraft; // present when type === 'issue_confirmation'
-  usage: {
-    monthlySpend: number;
-    monthlyLimit: number;
-    remainingBudget: number;
-    capExceeded: boolean;
-  };
-}
+export type ChatUsage = {
+  monthlySpend: number;
+  monthlyLimit: number;
+  remainingBudget: number;
+  capExceeded: boolean;
+};
+
+export type ChatResponse =
+  | {
+      type: 'message';
+      message: ChatMessage;
+      usage: ChatUsage;
+    }
+  | {
+      type: 'issue_confirmation';
+      message: ChatMessage;
+      issueDraft: GitHubIssueDraft;
+      usage: ChatUsage;
+    }
+  | {
+      /** Backend intercepted a propose_action tool call; proposal is ready for user */
+      type: 'action_proposal';
+      message: ChatMessage;
+      proposal: ActionProposal;
+      usage: ChatUsage;
+    };
 
 export const MAX_CONVERSATION_HISTORY = 50;
 

@@ -227,13 +227,10 @@ export class ChatbotService {
     model: ChatModel,
     toolCallLogs: ToolCallLog[],
     userDisplayName?: string,
-  ): Promise<{
-    type: 'message' | 'issue_confirmation';
-    content: string;
-    issueDraft?: GitHubIssueDraft;
-    totalInputTokens: number;
-    totalOutputTokens: number;
-  }> {
+  ): Promise<
+    | { type: 'message'; content: string; totalInputTokens: number; totalOutputTokens: number }
+    | { type: 'issue_confirmation'; content: string; issueDraft: GitHubIssueDraft; totalInputTokens: number; totalOutputTokens: number }
+  > {
     let totalInputTokens = 0;
     let totalOutputTokens = 0;
 

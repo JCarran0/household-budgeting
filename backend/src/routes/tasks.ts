@@ -18,7 +18,10 @@ const subTaskSchema = z.object({
   completed: z.boolean(),
 });
 
-const createTaskSchema = z.object({
+// Exported so the chat action handler can re-use the same schema.
+// SECURITY (SEC-A004): One source of truth — tightening this schema
+// automatically applies to both the HTTP route and the chat action path.
+export const createTaskSchema = z.object({
   title: z.string().min(1).max(200),
   description: z.string().max(2000).optional(),
   scope: z.enum(['family', 'personal']).optional(),

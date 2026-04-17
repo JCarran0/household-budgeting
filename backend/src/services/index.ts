@@ -30,6 +30,9 @@ import { AccountOwnerMappingService } from './accountOwnerMappingService';
 import { TaskService } from './taskService';
 import { TaskTemplateService } from './taskTemplateService';
 import { PushNotificationService } from './pushNotificationService';
+// Bootstrap chat action registry — must be imported before any chat request
+// is processed. Side-effect: registers all V1 actions and logs the list.
+import './chatActions';
 
 // Create data service based on environment
 // Uses StorageFactory to automatically switch between filesystem and S3
