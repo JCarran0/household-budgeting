@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.20.0](https://github.com/JCarran0/household-budgeting/compare/v5.19.4...v5.20.0) (2026-04-17)
+
+
+### Features
+
+* **amazon-receipts:** add global eligible-count endpoint for AI Categorize menu ([3c8947b](https://github.com/JCarran0/household-budgeting/commit/3c8947be19cb95f619f2c1d96d7511fcdc93b14d))
+
 ### [5.19.4](https://github.com/JCarran0/household-budgeting/compare/v5.19.3...v5.19.4) (2026-04-17)
 
 
