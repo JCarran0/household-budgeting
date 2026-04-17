@@ -5,6 +5,28 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.19.0](https://github.com/JCarran0/household-budgeting/compare/v5.18.1...v5.19.0) (2026-04-17)
+
+
+### Features
+
+* **pwa:** add notification permission UI and preferences settings (Phase 5) ([a1ef9b3](https://github.com/JCarran0/household-budgeting/commit/a1ef9b3c0513c6a52dd64f4f16576a072fea5d67))
+* **pwa:** add push notification infrastructure (Phase 3) ([3312647](https://github.com/JCarran0/household-budgeting/commit/331264775ba8a61c22a39972ec9137063d19e13d))
+* **pwa:** add PWA manifest, service worker, and installability (Phase 1) ([b0f9e2e](https://github.com/JCarran0/household-budgeting/commit/b0f9e2e6af4157780e0e5478c9ab9a6cf0750389))
+* **pwa:** support image uploads for Amazon receipt matching ([e3d8da3](https://github.com/JCarran0/household-budgeting/commit/e3d8da3c5ec7efc283fa4ec99ffd4481f30c38fd))
+* **pwa:** wire push notification triggers (Phase 4) ([8dd0255](https://github.com/JCarran0/household-budgeting/commit/8dd02556f987c2609883d12ad7f185fba8a42fe4))
+
+
+### Bug Fixes
+
+* **deps:** npm audit fix — resolve high/critical vulnerabilities in backend deps ([2e77105](https://github.com/JCarran0/household-budgeting/commit/2e77105a885c8dc0ed50565fbea203a059fc686d))
+
+
+### Documentation
+
+* **pwa:** mark phases 3–5 complete in plan ([c6c6a1d](https://github.com/JCarran0/household-budgeting/commit/c6c6a1d929412b387e9eaeee736ac95dcdc524d2))
+* **pwa:** update plan — phases 1–5 complete, VAPID keys provisioned ([aacbb09](https://github.com/JCarran0/household-budgeting/commit/aacbb09cbb3e181e4caa699189dcf9d240ebdb2b))
+
 ### [5.18.1](https://github.com/JCarran0/household-budgeting/compare/v5.18.0...v5.18.1) (2026-04-17)
 
 
