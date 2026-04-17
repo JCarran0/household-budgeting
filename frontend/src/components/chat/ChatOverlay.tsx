@@ -44,6 +44,7 @@ import type {
 
 const SESSION_KEY_HISTORY = 'chatbot_history';
 const SESSION_KEY_MODEL = 'chatbot_model';
+const SESSION_KEY_FULL_PROPOSALS = 'chatbot_full_proposals';
 
 /** MIME types accepted by the paperclip picker */
 const ALLOWED_CLIENT_MIMES = new Set([
@@ -111,6 +112,26 @@ export function ChatOverlay({ opened, onClose }: ChatOverlayProps) {
   >(null);
   const [actionErrors, setActionErrors] = useState<ActionErrorMap>({});
 
+  // Parallel lookup keyed by message ID. Holds the full ActionProposal
+  // (including the proposalId/nonce) that the Confirm handler needs to
+  // call the backend. Kept separate from `messages` so the nonce is never
+  // accidentally included when history is serialized for the backend
+  // (SEC-A009). Persisted to sessionStorage so pending cards survive
+  // refreshes within the same session; the nonce's 15-min TTL is the
+  // backstop against stale entries.
+  const [fullProposals, setFullProposals] = useState<
+    Map<string, ActionProposal>
+  >(() => {
+    try {
+      const stored = sessionStorage.getItem(SESSION_KEY_FULL_PROPOSALS);
+      if (!stored) return new Map();
+      const entries = JSON.parse(stored) as [string, ActionProposal][];
+      return new Map(entries);
+    } catch {
+      return new Map();
+    }
+  });
+
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const pageContext = usePageContext();
@@ -135,6 +156,13 @@ export function ChatOverlay({ opened, onClose }: ChatOverlayProps) {
   useEffect(() => {
     sessionStorage.setItem(SESSION_KEY_MODEL, model);
   }, [model]);
+
+  useEffect(() => {
+    sessionStorage.setItem(
+      SESSION_KEY_FULL_PROPOSALS,
+      JSON.stringify(Array.from(fullProposals.entries()))
+    );
+  }, [fullProposals]);
 
   // ---- Fetch cost on open ----
   useEffect(() => {
@@ -181,17 +209,13 @@ export function ChatOverlay({ opened, onClose }: ChatOverlayProps) {
     (response: Extract<ChatResponse, { type: 'action_proposal' }>) => {
       const { message, proposal } = response;
 
-      // Build the new message with the full ActionProposal attached.
-      // NOTE: we store the full proposal (including proposalId/nonce) in
-      // frontend state for the Confirm call; however we NEVER include the
-      // proposalId in the conversation history sent back to the backend
-      // (see buildHistoryForBackend below — SEC-A009).
+      // The ChatMessage.proposal field carries only the sanitized shape
+      // (Pick<ActionProposal, 'actionId'|'displaySummary'|'params'|
+      // 'displayFields'>). The full ActionProposal — including the
+      // proposalId/nonce — lives in the `fullProposals` map below and is
+      // never serialized back to the backend (SEC-A009).
       const newMessage: ChatMessage = {
         ...message,
-        // Store the full proposal in proposal field; the type allows
-        // Pick<ActionProposal, 'actionId' | 'displaySummary' | 'params' | 'displayFields'>
-        // but we extend it with the full proposal stored as a synthetic field
-        // on the message object for internal use by ActionCard.
         proposal: {
           actionId: proposal.actionId,
           displaySummary: proposal.displaySummary,
@@ -201,13 +225,15 @@ export function ChatOverlay({ opened, onClose }: ChatOverlayProps) {
         proposalStatus: 'pending',
       };
 
-      // Store the full proposal (with nonce) as a side-band reference so
-      // ActionCard can read it. We use a parallel structure to avoid putting
-      // nonce inside message.proposal (which is what gets serialized to history).
-      // We attach it directly to the message under a non-standard key that we
-      // strip during history serialization.
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (newMessage as any).__fullProposal = proposal;
+      // Store the full proposal (with nonce) in a parallel Map keyed by
+      // messageId. The ChatMessage shape stays strictly typed and the
+      // nonce never leaks into serialized conversation history
+      // (SEC-A009). ActionCard reads from this map via the callback.
+      setFullProposals((prev) => {
+        const next = new Map(prev);
+        next.set(newMessage.id, proposal);
+        return next;
+      });
 
       // Supersede prior active card (D-2, REQ-017, SEC-A007)
       if (activeProposalMessageId) {
@@ -259,40 +285,6 @@ export function ChatOverlay({ opened, onClose }: ChatOverlayProps) {
       }
     },
     [handleActionProposalResponse]
-  );
-
-  // ---- Build conversation history for backend (Phase 9.3) ----
-  // Strip the nonce (proposalId) and the __fullProposal side-band from any
-  // proposal metadata before sending to the backend.
-  // SEC-A009: nonce must NEVER go to the LLM.
-  const buildHistoryForBackend = useCallback(
-    (msgs: ChatMessage[]): ChatMessage[] => {
-      return msgs.map((m) => {
-        // Drop __fullProposal (side-band nonce storage) from all messages.
-        // We use Object.keys to avoid destructuring the private field into a
-        // named variable (which triggers the no-unused-vars lint rule).
-        const cleaned = Object.fromEntries(
-          Object.entries(m).filter(([k]) => k !== '__fullProposal')
-        ) as ChatMessage;
-
-        if (cleaned.proposal) {
-          // Include the proposal metadata (actionId, displaySummary, params,
-          // displayFields) so the LLM can see the pending proposal context,
-          // but explicitly exclude proposalId.
-          return {
-            ...cleaned,
-            proposal: {
-              actionId: cleaned.proposal.actionId,
-              displaySummary: cleaned.proposal.displaySummary,
-              params: cleaned.proposal.params,
-              displayFields: cleaned.proposal.displayFields,
-            },
-          };
-        }
-        return cleaned;
-      });
-    },
-    []
   );
 
   // ---- File pick handler (Phase 6.2, 6.5) ----
@@ -371,15 +363,14 @@ export function ChatOverlay({ opened, onClose }: ChatOverlayProps) {
     setIsLoading(true);
 
     try {
-      const historyForBackend = buildHistoryForBackend([
-        ...messages,
-        userMessage,
-      ]);
-
+      // SEC-A009: conversationHistory messages only carry the sanitized
+      // proposal shape (Pick<ActionProposal, 'actionId'|'displaySummary'|
+      // 'params'|'displayFields'>) — the nonce lives in the parallel
+      // `fullProposals` map and is never sent to the LLM.
       const response = await api.sendChatMessage({
         message: trimmed,
         conversationId,
-        conversationHistory: historyForBackend,
+        conversationHistory: [...messages, userMessage],
         pageContext,
         model,
         userDisplayName: userDisplayName ?? undefined,
@@ -402,7 +393,6 @@ export function ChatOverlay({ opened, onClose }: ChatOverlayProps) {
     conversationId,
     userDisplayName,
     handleResponse,
-    buildHistoryForBackend,
   ]);
 
   // ---- GitHub issue handlers (unchanged) ----
@@ -443,11 +433,7 @@ export function ChatOverlay({ opened, onClose }: ChatOverlayProps) {
   // ---- Action card confirm handler (Phase 8.4, 9.1) ----
   const handleConfirmAction = useCallback(
     async (messageId: string, params: Record<string, unknown>) => {
-      // Get the full proposal (with nonce) from the side-band field
-      const msg = messages.find((m) => m.id === messageId);
-      if (!msg) return;
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const fullProposal = (msg as any).__fullProposal as ActionProposal | undefined;
+      const fullProposal = fullProposals.get(messageId);
       if (!fullProposal) return;
 
       try {
@@ -457,8 +443,6 @@ export function ChatOverlay({ opened, onClose }: ChatOverlayProps) {
         });
 
         if (result.success) {
-          // Store the resource directly on the message AND on the side-band
-          // proposal so it survives re-renders.
           updateMessageById(messageId, {
             proposalStatus: 'confirmed',
             resource: result.resource,
@@ -487,7 +471,7 @@ export function ChatOverlay({ opened, onClose }: ChatOverlayProps) {
         }));
       }
     },
-    [messages, updateMessageById]
+    [fullProposals, updateMessageById]
   );
 
   // ---- Action card dismiss handler (Phase 9.1) ----
@@ -509,10 +493,12 @@ export function ChatOverlay({ opened, onClose }: ChatOverlayProps) {
     setAttachment(null);
     setActiveProposalMessageId(null);
     setActionErrors({});
+    setFullProposals(new Map());
     // Generate a new conversation UUID so the backend's supersession logic
     // starts fresh (Phase 7.3).
     setConversationId(crypto.randomUUID());
     sessionStorage.removeItem(SESSION_KEY_HISTORY);
+    sessionStorage.removeItem(SESSION_KEY_FULL_PROPOSALS);
   }, []);
 
   const handleKeyDown = useCallback(
