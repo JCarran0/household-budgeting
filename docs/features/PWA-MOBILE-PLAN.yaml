@@ -267,7 +267,7 @@ phase_2_camera:
 # PHASE 3: Push Notification Infrastructure (Backend)
 # =============================================================================
 phase_3_push_backend:
-  status: not_started
+  status: complete
   description: |
     Set up VAPID keys, push subscription storage, and the backend
     notification sending service. No notification triggers yet —
@@ -402,7 +402,7 @@ phase_3_push_backend:
 # PHASE 4: Push Notification Triggers
 # =============================================================================
 phase_4_push_triggers:
-  status: not_started
+  status: complete
   description: |
     Wire up notification triggers to existing backend events. Each trigger
     checks user preferences before sending. No new business logic — just
@@ -470,7 +470,7 @@ phase_4_push_triggers:
 # PHASE 5: Frontend — Notification UI
 # =============================================================================
 phase_5_notification_ui:
-  status: not_started
+  status: complete
   description: |
     Add notification permission request flow, preferences settings page,
     and subscription management to the frontend.
