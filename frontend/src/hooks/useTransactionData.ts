@@ -90,6 +90,12 @@ export function useTransactionData(filters: TransactionFilters) {
     queryFn: api.getUncategorizedCount,
   });
 
+  // Fetch Amazon-eligible transaction count (global, not filter-dependent)
+  const { data: amazonEligibleData } = useQuery({
+    queryKey: ['amazon-receipts', 'eligible-count'],
+    queryFn: api.getAmazonEligibleCount,
+  });
+
   // Build query parameters
   const queryParams = useMemo(() => {
     const params: Record<string, unknown> = {
@@ -170,6 +176,7 @@ export function useTransactionData(filters: TransactionFilters) {
       });
       queryClient.invalidateQueries({ queryKey: ['transactions'] });
       queryClient.invalidateQueries({ queryKey: ['transactions', 'uncategorized', 'count'] });
+      queryClient.invalidateQueries({ queryKey: ['amazon-receipts', 'eligible-count'] });
     },
     onError: () => {
       notifications.show({
@@ -197,6 +204,7 @@ export function useTransactionData(filters: TransactionFilters) {
     accounts,
     categories,
     uncategorizedData,
+    amazonEligibleData,
     accountLookup,
     syncMutation,
     availableTags,

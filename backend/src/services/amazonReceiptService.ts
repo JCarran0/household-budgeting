@@ -511,54 +511,16 @@ export class AmazonReceiptService {
   ): Promise<AmazonReceiptMatchResponse> {
     const session = await this.loadOwnedSession(familyId, sessionId);
 
-    // 1. Fetch all Amazon-merchant transactions (no date filter)
-    const allTransactions = await this.chatbotDataService.queryTransactions(
-      familyId, {},
-    );
-    const amazonTransactions = allTransactions.filter(t =>
-      this.isAmazonMerchant(t) && !t.isHidden,
-    );
+    const { availableTransactions, skippedOrderNumbers, totalAmazonCount, totalCount } =
+      await this.computeEligibleAmazonTransactions(familyId, sessionId);
 
     console.log(
       `[AmazonReceiptService] matchOrders: ${session.parsedOrders.length} orders to match, ` +
-        `${amazonTransactions.length} Amazon transactions found (of ${allTransactions.length} total)`,
+        `${totalAmazonCount} Amazon transactions found (of ${totalCount} total)`,
     );
 
-    // 2. Determine which transactions to exclude from matching.
-    // The key insight: transactions still in CUSTOM_AMAZON are always eligible
-    // (that's the whole point of this feature). Only exclude transactions where
-    // the user already took action:
-    //   - Explicitly skipped in a prior session → respect the decision
-    //   - Successfully recategorized to a non-Amazon category → already handled
-    // Transactions still in CUSTOM_AMAZON are always re-eligible even if they
-    // appeared in a prior session that was abandoned or incomplete.
-    const allSessions = await this.loadSessions(familyId);
-    const skippedOrderNumbers = new Set<string>();
-    const excludedTxIds = new Set<string>();
-
-    for (const s of allSessions) {
-      if (s.id === sessionId) continue;
-      for (const m of s.matches) {
-        if (m.status === 'skipped') {
-          skippedOrderNumbers.add(m.orderNumber);
-        }
-        // Only exclude transactions that were successfully recategorized/split
-        if (m.status === 'categorized' || m.status === 'split') {
-          // But check current state: if it's back in CUSTOM_AMAZON, re-include it
-          const tx = amazonTransactions.find(t => t.id === m.transactionId);
-          if (tx && tx.categoryId && tx.categoryId !== CUSTOM_AMAZON_CATEGORY) {
-            excludedTxIds.add(m.transactionId);
-          }
-        }
-      }
-    }
-
-    // 3. Filter orders and transactions
     const ordersToMatch = session.parsedOrders.filter(
       o => !skippedOrderNumbers.has(o.orderNumber),
-    );
-    const availableTransactions = amazonTransactions.filter(
-      t => !excludedTxIds.has(t.id),
     );
 
     // 4. Run tiered matching
@@ -648,6 +610,66 @@ export class AmazonReceiptService {
   // ===========================================================================
   // Private: Matching helpers
   // ===========================================================================
+
+  /**
+   * Compute the set of Amazon transactions currently eligible for receipt matching.
+   *
+   * Eligibility rules (mirrors matchOrders so the UI count matches what the
+   * matcher actually considers):
+   *   - Transaction is from an Amazon merchant and not hidden
+   *   - Was NOT successfully categorized/split in a prior session into a
+   *     non-CUSTOM_AMAZON category (transactions still in CUSTOM_AMAZON are
+   *     always re-eligible, even if they appeared in a prior session)
+   *
+   * Also returns the set of order numbers the user skipped in prior sessions,
+   * so callers performing a match can filter parsed orders accordingly.
+   */
+  private async computeEligibleAmazonTransactions(
+    familyId: string,
+    excludeSessionId?: string,
+  ): Promise<{
+    availableTransactions: Transaction[];
+    skippedOrderNumbers: Set<string>;
+    totalAmazonCount: number;
+    totalCount: number;
+  }> {
+    const allTransactions = await this.chatbotDataService.queryTransactions(
+      familyId, {},
+    );
+    const amazonTransactions = allTransactions.filter(t =>
+      this.isAmazonMerchant(t) && !t.isHidden,
+    );
+
+    const allSessions = await this.loadSessions(familyId);
+    const skippedOrderNumbers = new Set<string>();
+    const excludedTxIds = new Set<string>();
+
+    for (const s of allSessions) {
+      if (excludeSessionId && s.id === excludeSessionId) continue;
+      for (const m of s.matches) {
+        if (m.status === 'skipped') {
+          skippedOrderNumbers.add(m.orderNumber);
+        }
+        if (m.status === 'categorized' || m.status === 'split') {
+          const tx = amazonTransactions.find(t => t.id === m.transactionId);
+          if (tx && tx.categoryId && tx.categoryId !== CUSTOM_AMAZON_CATEGORY) {
+            excludedTxIds.add(m.transactionId);
+          }
+        }
+      }
+    }
+
+    const availableTransactions = amazonTransactions.filter(
+      t => !excludedTxIds.has(t.id),
+    );
+
+    return {
+      availableTransactions,
+      skippedOrderNumbers,
+      totalAmazonCount: amazonTransactions.length,
+      totalCount: allTransactions.length,
+    };
+  }
 
   /** Check if a transaction is from an Amazon merchant. */
   private isAmazonMerchant(transaction: Transaction): boolean {
@@ -1179,5 +1201,15 @@ ${examples}`;
     const count = sessions.length;
     await this.saveSessions(familyId, []);
     return { deleted: count };
+  }
+
+  /**
+   * Count Amazon-merchant transactions available for receipt matching.
+   * Mirrors matchOrders' eligibility rules so the UI count matches what the
+   * matcher will actually consider.
+   */
+  async getEligibleTransactionCount(familyId: string): Promise<{ count: number }> {
+    const { availableTransactions } = await this.computeEligibleAmazonTransactions(familyId);
+    return { count: availableTransactions.length };
   }
 }

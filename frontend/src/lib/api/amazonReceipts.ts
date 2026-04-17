@@ -81,6 +81,14 @@ export function createAmazonReceiptsApi(client: AxiosInstance) {
       return data;
     },
 
+    /** Count Amazon-merchant transactions available for receipt matching. */
+    async getAmazonEligibleCount(): Promise<{ count: number }> {
+      const { data } = await client.get<{ success: boolean; count: number }>(
+        '/amazon-receipts/eligible-count',
+      );
+      return { count: data.count };
+    },
+
     /** List user's receipt matching sessions. */
     async getAmazonReceiptSessions(): Promise<AmazonReceiptSession[]> {
       const { data } = await client.get<{ success: boolean; sessions: AmazonReceiptSession[] }>(

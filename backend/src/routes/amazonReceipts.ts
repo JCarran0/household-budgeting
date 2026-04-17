@@ -250,6 +250,26 @@ router.get(
 );
 
 // =============================================================================
+// GET /eligible-count — Count Amazon-merchant transactions available for matching
+// =============================================================================
+router.get(
+  '/eligible-count',
+  authenticate,
+  rateLimitStandard,
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const { familyId } = req.user!;
+      const { amazonReceiptService } = await import('../services');
+
+      const { count } = await amazonReceiptService.getEligibleTransactionCount(familyId);
+      res.json({ success: true, count });
+    } catch (error) {
+      next(error);
+    }
+  },
+);
+
+// =============================================================================
 // DELETE /sessions/all — Delete all sessions (must be before :sessionId route)
 // =============================================================================
 router.delete(

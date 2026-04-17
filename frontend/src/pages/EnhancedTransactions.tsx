@@ -229,6 +229,7 @@ export function EnhancedTransactions() {
     accounts,
     categories,
     uncategorizedData,
+    amazonEligibleData,
     accountLookup,
     syncMutation,
     availableTags,
@@ -250,15 +251,7 @@ export function EnhancedTransactions() {
 
   const transactions = useMemo(() => transactionData?.transactions || [], [transactionData?.transactions]);
 
-  // Count Amazon transactions for the receipt matching button
-  const amazonTransactionCount = useMemo(() => {
-    const patterns = ['amazon', 'amzn', 'kindle svcs'];
-    return transactions.filter(t => {
-      const name = (t.name || '').toLowerCase();
-      const merchant = (t.merchantName || '').toLowerCase();
-      return patterns.some(p => name.includes(p) || merchant.includes(p));
-    }).length;
-  }, [transactions]);
+  const amazonTransactionCount = amazonEligibleData?.count ?? 0;
 
   // Paginate transactions
   const totalPages = Math.ceil(transactions.length / TRANSACTIONS_PER_PAGE);
