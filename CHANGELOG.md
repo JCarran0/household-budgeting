@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.21.0](https://github.com/JCarran0/household-budgeting/compare/v5.20.0...v5.21.0) (2026-04-17)
+
+
+### Features
+
+* **branding:** replace pig icon with retro rainbow logo ([02dcf1f](https://github.com/JCarran0/household-budgeting/commit/02dcf1fd9e3804c0ecd4f9cc2437b424eb6a4ce4))
+
 ## [5.20.0](https://github.com/JCarran0/household-budgeting/compare/v5.19.4...v5.20.0) (2026-04-17)
 
 
