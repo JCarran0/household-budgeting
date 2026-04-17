@@ -10,12 +10,14 @@ import {
   IconCash,
   IconArrowUpRight,
   IconArrowDownRight,
+  IconBuildingBank,
 } from '@tabler/icons-react';
 import { formatCurrency } from '../../utils/formatters';
 
 interface KpiSummary {
   totalIncome: number;
   totalExpenses: number;
+  totalSavings: number;
   netIncome: number;
   averageMonthlyIncome: number;
   averageMonthlyExpenses: number;
@@ -29,7 +31,7 @@ interface ReportsKpiCardsProps {
 
 export function ReportsKpiCards({ kpiSummary, timeRangeLabel }: ReportsKpiCardsProps) {
   return (
-    <SimpleGrid cols={{ base: 1, sm: 2, md: 4 }} spacing="md">
+    <SimpleGrid cols={{ base: 1, sm: 2, md: 5 }} spacing="md">
       <Card withBorder>
         <Group justify="space-between">
           <div>
@@ -64,6 +66,25 @@ export function ReportsKpiCards({ kpiSummary, timeRangeLabel }: ReportsKpiCardsP
           </div>
           <ThemeIcon color="red" variant="light" size={38} radius="md">
             <IconArrowDownRight size={22} />
+          </ThemeIcon>
+        </Group>
+      </Card>
+
+      <Card withBorder>
+        <Group justify="space-between">
+          <div>
+            <Text c="dimmed" size="xs" tt="uppercase" fw={700}>
+              {timeRangeLabel} Savings
+            </Text>
+            <Text fw={700} size="xl" c="teal">
+              ${kpiSummary?.totalSavings ? Math.ceil(kpiSummary.totalSavings).toLocaleString() : 0}
+            </Text>
+            <Text size="xs" c="dimmed" mt={7}>
+              Excluded from spending
+            </Text>
+          </div>
+          <ThemeIcon color="teal" variant="light" size={38} radius="md">
+            <IconBuildingBank size={22} />
           </ThemeIcon>
         </Group>
       </Card>

@@ -5,6 +5,9 @@ import {
   Center,
   Group,
   Switch,
+  Stack,
+  Divider,
+  Badge,
 } from '@mantine/core';
 import {
   XAxis,
@@ -42,9 +45,13 @@ interface CashflowSectionProps {
   budgetVsActualData: BudgetVsActualEntry[] | null;
   includeSavingsInNet: boolean;
   onToggleSavingsInNet: () => void;
+  totalIncome: number;
+  totalExpenses: number;
+  totalSavings: number;
+  netIncome: number;
 }
 
-export function CashflowSection({ cashFlowChartData, budgetVsActualData, includeSavingsInNet, onToggleSavingsInNet }: CashflowSectionProps) {
+export function CashflowSection({ cashFlowChartData, budgetVsActualData, includeSavingsInNet, onToggleSavingsInNet, totalIncome, totalExpenses, totalSavings, netIncome }: CashflowSectionProps) {
   const incomeExpenseTracker = useChartMouseTracker();
   const cashFlowTracker = useChartMouseTracker();
 
@@ -66,7 +73,7 @@ export function CashflowSection({ cashFlowChartData, budgetVsActualData, include
       <Grid.Col span={12}>
         <Paper withBorder p="md">
           <Group justify="space-between" mb="md">
-            <Text size="lg" fw={600}>Income vs Expenses</Text>
+            <Text size="lg" fw={600}>Cash Flow Summary</Text>
             <Group gap="xs">
               <Text size="sm" c="dimmed">Include savings in net:</Text>
               <Switch
@@ -76,6 +83,42 @@ export function CashflowSection({ cashFlowChartData, budgetVsActualData, include
               />
             </Group>
           </Group>
+
+          {/* Three-line summary: Income / Spending / Savings / Net */}
+          <Stack gap={4} mb="md">
+            <Group justify="space-between">
+              <Group gap="xs">
+                <Badge color="green" variant="dot" size="sm" />
+                <Text size="sm" c="dimmed">Income</Text>
+              </Group>
+              <Text size="sm" fw={500} c="green">+${Math.round(totalIncome).toLocaleString()}</Text>
+            </Group>
+            <Group justify="space-between">
+              <Group gap="xs">
+                <Badge color="red" variant="dot" size="sm" />
+                <Text size="sm" c="dimmed">Spending</Text>
+              </Group>
+              <Text size="sm" fw={500} c="red">-${Math.round(totalExpenses).toLocaleString()}</Text>
+            </Group>
+            <Group justify="space-between">
+              <Group gap="xs">
+                <Badge color="teal" variant="dot" size="sm" />
+                <Text size="sm" c="dimmed">Savings</Text>
+              </Group>
+              <Text size="sm" fw={500} c="teal">
+                {totalSavings > 0 ? `-$${Math.round(totalSavings).toLocaleString()}` : '$0'}
+                {totalSavings === 0 && <Text span size="xs" c="dimmed"> (no savings categories)</Text>}
+              </Text>
+            </Group>
+            <Divider my={4} />
+            <Group justify="space-between">
+              <Text size="sm" fw={600}>Net</Text>
+              <Text size="sm" fw={600} c={netIncome >= 0 ? 'green' : 'red'}>
+                {netIncome >= 0 ? '+' : '-'}${Math.round(Math.abs(netIncome)).toLocaleString()}
+              </Text>
+            </Group>
+          </Stack>
+
           {cashFlowChartData.length > 0 ? (
             <div {...incomeExpenseTracker.containerProps}>
               <ResponsiveContainer width="100%" height={CHART_HEIGHT}>

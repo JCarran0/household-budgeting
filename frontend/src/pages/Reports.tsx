@@ -392,6 +392,10 @@ export function Reports() {
               budgetVsActualData={budgetVsActualData}
               includeSavingsInNet={includeSavingsInNet}
               onToggleSavingsInNet={() => setIncludeSavingsInNet(v => !v)}
+              totalIncome={kpiSummary?.totalIncome ?? 0}
+              totalExpenses={kpiSummary?.totalExpenses ?? 0}
+              totalSavings={kpiSummary?.totalSavings ?? 0}
+              netIncome={kpiSummary?.netIncome ?? 0}
             />
           </Tabs.Panel>
 
