@@ -63,6 +63,12 @@ const aiSchema = z.object({
   githubIssuesPat: z.string().default(''),
 });
 
+const vapidSchema = z.object({
+  publicKey: z.string().default(''),
+  privateKey: z.string().default(''),
+  subject: z.string().default(''),
+});
+
 const githubSchema = z.object({
   token: z.string().default(''),
   owner: z.string().default('JCarran0'),
@@ -110,6 +116,11 @@ const rawEnvSchema = z.object({
   ANTHROPIC_API_KEY: aiSchema.shape.anthropicApiKey,
   CHATBOT_MONTHLY_LIMIT: aiSchema.shape.chatbotMonthlyLimit,
   GITHUB_ISSUES_PAT: aiSchema.shape.githubIssuesPat,
+
+  // VAPID (Push Notifications)
+  VAPID_PUBLIC_KEY: vapidSchema.shape.publicKey,
+  VAPID_PRIVATE_KEY: vapidSchema.shape.privateKey,
+  VAPID_SUBJECT: vapidSchema.shape.subject,
 
   // GitHub
   GITHUB_TOKEN: githubSchema.shape.token,
@@ -159,6 +170,11 @@ export interface AppConfig {
     anthropicApiKey: string;
     chatbotMonthlyLimit: number;
     githubIssuesPat: string;
+  };
+  vapid: {
+    publicKey: string;
+    privateKey: string;
+    subject: string;
   };
   github: {
     token: string;
@@ -302,6 +318,11 @@ export function loadConfig(
       anthropicApiKey: raw.ANTHROPIC_API_KEY,
       chatbotMonthlyLimit: raw.CHATBOT_MONTHLY_LIMIT,
       githubIssuesPat: raw.GITHUB_ISSUES_PAT,
+    },
+    vapid: {
+      publicKey: raw.VAPID_PUBLIC_KEY,
+      privateKey: raw.VAPID_PRIVATE_KEY,
+      subject: raw.VAPID_SUBJECT,
     },
     github: {
       token: raw.GITHUB_TOKEN,

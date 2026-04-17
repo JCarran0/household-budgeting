@@ -29,6 +29,7 @@ import { FamilyService } from './familyService';
 import { AccountOwnerMappingService } from './accountOwnerMappingService';
 import { TaskService } from './taskService';
 import { TaskTemplateService } from './taskTemplateService';
+import { PushNotificationService } from './pushNotificationService';
 
 // Create data service based on environment
 // Uses StorageFactory to automatically switch between filesystem and S3
@@ -108,6 +109,7 @@ export const familyService = new FamilyService(dataService);
 export const accountOwnerMappingService = new AccountOwnerMappingService(dataService);
 export const taskService = new TaskService(dataService, familyService);
 export const taskTemplateService = new TaskTemplateService(dataService);
+export const pushNotificationService = PushNotificationService.getInstance(dataService);
 
 // Export dataService for other services that need it
 export { dataService };
@@ -135,4 +137,5 @@ export {
   AccountOwnerMappingService,
   TaskService,
   TaskTemplateService,
+  PushNotificationService,
 };
