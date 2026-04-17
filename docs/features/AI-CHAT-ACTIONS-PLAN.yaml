@@ -2,9 +2,9 @@
 # AI Chat Attachments & Action Cards — Implementation Plan
 # =============================================================================
 # BRD: docs/features/AI-CHAT-ACTIONS-BRD.md
-# Status: Backend Complete (Phases 1–5 + security tests 10.1–10.5, 10.8).
-#         Frontend (Phases 6–9), remaining tests (10.6, 10.7, 10.9, 10.10),
-#         manual QA (Phase 11), and docs (Phase 12) still pending.
+# Status: Backend + Frontend Complete (Phases 1–9 + security tests 10.1–10.5,
+#         10.8). Remaining: security tests 10.6, 10.7, 10.9, 10.10, manual
+#         device QA (Phase 11), and CLAUDE.md doc updates (Phase 12).
 # Last Updated: 2026-04-17
 # =============================================================================
 
@@ -88,6 +88,36 @@ decisions:
       families. The frontend MUST pass a stable client-generated UUID per
       conversation session to get correct supersession and one-active-card
       semantics — the fallback is a safety net, not a supported mode.
+
+  - id: D-IMPL-5
+    date: 2026-04-17
+    decision: |
+      Full ActionProposal (with nonce) stored in a parallel Map<messageId,
+      ActionProposal>, not attached to ChatMessage.
+    rationale: |
+      An early implementation attached the full proposal to each
+      ChatMessage under a non-standard `__fullProposal` key and stripped
+      it during history serialization. That forced `any` casts at both
+      read and write sites, violating the project's strict-typing rule.
+      Replaced with a typed Map in ChatOverlay state (persisted to
+      sessionStorage for refresh resilience). The ChatMessage.proposal
+      field carries only the sanitized Pick<ActionProposal, ...> shape —
+      the nonce is structurally unreachable from history serialization
+      (SEC-A009) rather than being stripped defensively.
+
+  - id: D-IMPL-6
+    date: 2026-04-17
+    decision: |
+      `failed` is a frontend-only display state; ChatMessage.proposalStatus
+      stays `'pending'` when a confirm call fails.
+    rationale: |
+      A failed confirmation surfaces the error via a parallel
+      `actionErrors: Record<messageId, string>` map and keeps the card
+      interactive (user can edit and retry). Adding `'failed'` to the
+      shared `proposalStatus` enum would couple the shared type to a
+      transient UI concept. The ActionCard derives the `'failed'` visual
+      variant locally from `(proposalStatus === 'pending' &&
+      actionErrorMessage)`.
 
 # =============================================================================
 # PHASE 1: Shared Types & Action Registry Contract
@@ -1076,7 +1106,7 @@ phase_5_confirm:
 # PHASE 6: Frontend — Composer (Camera + Attach Icons)
 # =============================================================================
 phase_6_composer:
-  status: not_started
+  status: completed
   description: |
     Add inline camera + paperclip icons to the existing chat composer. Support
     native camera on mobile and file picker on all platforms. One attachment
@@ -1085,7 +1115,7 @@ phase_6_composer:
   tasks:
     - id: "6.1"
       task: Add attachment state to ChatOverlay
-      status: not_started
+      status: completed
       details: |
         In frontend/src/components/chat/ChatOverlay.tsx, add local state:
 
@@ -1106,7 +1136,7 @@ phase_6_composer:
 
     - id: "6.2"
       task: Add camera + paperclip icon buttons and file inputs
-      status: not_started
+      status: completed
       details: |
         Two hidden <input type="file"> elements + two ActionIcon buttons that
         trigger them:
@@ -1159,7 +1189,7 @@ phase_6_composer:
 
     - id: "6.3"
       task: Render attachment thumbnail + remove button before send
-      status: not_started
+      status: completed
       details: |
         Above or immediately adjacent to the text input, show a preview row
         when `attachment` is set:
@@ -1175,7 +1205,7 @@ phase_6_composer:
 
     - id: "6.4"
       task: Update empty-chat hint copy
-      status: not_started
+      status: completed
       details: |
         Where the overlay currently shows the empty state, include:
 
@@ -1185,7 +1215,7 @@ phase_6_composer:
 
     - id: "6.5"
       task: HEIC fallback / message
-      status: not_started
+      status: completed
       details: |
         iOS Safari may deliver HEIC files. The accept="image/*" will allow
         these through. Detect in handleFilePick:
@@ -1205,7 +1235,7 @@ phase_6_composer:
 # PHASE 7: Frontend — API Client for Upload + Confirm
 # =============================================================================
 phase_7_api_client:
-  status: not_started
+  status: completed
   description: |
     Extend the chatbot API client to send multipart form data when an
     attachment is present, and to POST confirmations.
@@ -1213,7 +1243,7 @@ phase_7_api_client:
   tasks:
     - id: "7.1"
       task: Update sendChatMessage to accept optional attachment
-      status: not_started
+      status: completed
       details: |
         In frontend/src/lib/api/chatbot.ts:
 
@@ -1249,7 +1279,7 @@ phase_7_api_client:
 
     - id: "7.2"
       task: Add confirmChatAction API client
-      status: not_started
+      status: completed
       details: |
           export async function confirmChatAction(params: {
             proposalId: string;
@@ -1264,7 +1294,7 @@ phase_7_api_client:
 
     - id: "7.3"
       task: Generate + persist conversationId on overlay mount
-      status: not_started
+      status: completed
       details: |
         On ChatOverlay mount (or first message of a conversation), generate
         a UUID:
@@ -1280,7 +1310,7 @@ phase_7_api_client:
 # PHASE 8: Frontend — Action Card Component
 # =============================================================================
 phase_8_action_card:
-  status: not_started
+  status: completed
   description: |
     The inline card rendered below the assistant's message when a proposal
     is issued. Handles Confirm / Edit / Dismiss / Superseded / Confirmed /
@@ -1289,7 +1319,7 @@ phase_8_action_card:
   tasks:
     - id: "8.1"
       task: Create frontend/src/components/chat/ActionCard.tsx
-      status: not_started
+      status: completed
       details: |
         Props:
 
@@ -1332,7 +1362,7 @@ phase_8_action_card:
 
     - id: "8.2"
       task: Create TaskActionCardEditForm for create_task
-      status: not_started
+      status: completed
       details: |
         In frontend/src/components/chat/action-forms/TaskActionCardEditForm.tsx.
 
@@ -1355,7 +1385,7 @@ phase_8_action_card:
 
     - id: "8.3"
       task: Register action forms by actionId
-      status: not_started
+      status: completed
       details: |
         A small dispatch layer so adding a new action only requires adding
         a form component + a registry entry:
@@ -1375,7 +1405,7 @@ phase_8_action_card:
 
     - id: "8.4"
       task: Render ActionCard inside ChatMessageBubble for assistant messages with proposals
-      status: not_started
+      status: completed
       details: |
         In ChatMessageBubble.tsx:
 
@@ -1401,7 +1431,7 @@ phase_8_action_card:
 # PHASE 9: Frontend — Conversation State & Supersession
 # =============================================================================
 phase_9_conversation_state:
-  status: not_started
+  status: completed
   description: |
     Track which proposal is "active" in the conversation, and handle the
     lifecycle transitions (new proposal supersedes old; confirm ends active;
@@ -1410,7 +1440,7 @@ phase_9_conversation_state:
   tasks:
     - id: "9.1"
       task: Add activeProposalMessageId to ChatOverlay state
-      status: not_started
+      status: completed
       details: |
         Only ONE proposal is active at a time (D-2, REQ-017). Track which
         assistant message currently owns the active card:
@@ -1430,7 +1460,7 @@ phase_9_conversation_state:
 
     - id: "9.2"
       task: Handle action_proposal response in send handler
-      status: not_started
+      status: completed
       details: |
         Existing handler already handles 'message' and 'issue_confirmation'.
         Add a branch for 'action_proposal':
@@ -1456,7 +1486,7 @@ phase_9_conversation_state:
 
     - id: "9.3"
       task: Include proposal metadata in conversation history POSTed on subsequent turns
-      status: not_started
+      status: completed
       details: |
         When posting conversationHistory back to the backend on subsequent
         turns, include proposal metadata on the last assistant message so
