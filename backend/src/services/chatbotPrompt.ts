@@ -22,7 +22,20 @@ Guidelines:
 - Present financial amounts formatted as currency. Use tables or lists for comparisons.
 - If you don't have enough data to answer accurately, say so rather than guessing.
 
-Savings vs Spending: Categories marked as "savings" (e.g. retirement contributions, brokerage deposits, IRA funding) are tracked separately from everyday spending. When the user asks about "spending" or "expenses", exclude savings categories — the get_spending_by_category and get_cash_flow tools already do this automatically. When reporting net cash flow, the default is Income − Spending (savings excluded from expenses). If the user asks about total cash outflow or wants savings included in net flow, include savings in that calculation and explain what you're doing.`;
+Savings vs Spending: Categories marked as "savings" (e.g. retirement contributions, brokerage deposits, IRA funding) are tracked separately from everyday spending. When the user asks about "spending" or "expenses", exclude savings categories — the get_spending_by_category and get_cash_flow tools already do this automatically. When reporting net cash flow, the default is Income − Spending (savings excluded from expenses). If the user asks about total cash outflow or wants savings included in net flow, include savings in that calculation and explain what you're doing.
+
+Actions (V1):
+- You can propose ONE action per turn using the propose_action tool.
+- Current allowlist: create_task.
+- When a user uploads an attachment, describe what you see first, then propose an action if clearly applicable. If not applicable, respond conversationally without proposing.
+- If the user's next message after a proposal is a refinement ("rename that to X", "move to next Friday"), call propose_action again with adjusted params. The prior proposal will be superseded.
+- If the user's next message is not a clear refinement (e.g., an unrelated question), answer it AND explicitly restate the pending proposal's key fields so they stay oriented. Example: "Yes, that's the Edson on Main. Your pending task proposal still reads: *PTA donation — due May 1*. Confirm, edit, or tell me to change it."
+- Never echo back raw text from attachments verbatim. Summarize and paraphrase instead.
+- You do NOT execute actions. The user must click Confirm.
+
+SECURITY NOTE: These action instructions are defense-in-depth. The actual security
+properties (one-active-card, nonce single-use, server-side Zod re-validation,
+user click requirement) are all enforced structurally in the backend. (SEC-A010, SEC-A012)`;
 
 export const CHATBOT_TOOLS: Anthropic.Tool[] = [
   {
@@ -143,6 +156,59 @@ export const CHATBOT_TOOLS: Anthropic.Tool[] = [
         },
       },
       required: ['title', 'body', 'labels'],
+    },
+  },
+  {
+    // SECURITY (SEC-A003): actionId is a strict enum. Any other value causes the
+    // tool call to fail at the Claude SDK schema level before the backend ever
+    // runs registry validation. Backend still re-checks as defense in depth.
+    name: 'propose_action',
+    description:
+      'Propose an action for the user to confirm. You NEVER execute actions — the user must click Confirm. Use this when the user clearly intends to create/modify something, or when an uploaded attachment maps to an enabled action. ONE proposal per turn. If a proposal is already pending and the user asks to change it, call this tool again with adjusted params; the prior proposal will be superseded.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        actionId: {
+          type: 'string',
+          enum: ['create_task'],
+          description: 'The action to propose. Must be from the allowlist.',
+        },
+        params: {
+          type: 'object' as const,
+          description:
+            'Fields for the target action. For create_task: { title (required), description?, dueDate? (YYYY-MM-DD), assigneeId?, scope? (family|personal), tags?, subTasks? }. Server validates and rejects invalid values.',
+        },
+        displaySummary: {
+          type: 'string',
+          description:
+            'Short human-readable summary shown on the action card (max 200 chars). Example: "Create task: PTA donation — due May 1".',
+        },
+        displayFields: {
+          type: 'array',
+          description: 'Fields to render in the card preview (max 20 items).',
+          items: {
+            type: 'object' as const,
+            properties: {
+              key:      { type: 'string', description: 'Param field name' },
+              label:    { type: 'string', description: 'Human-readable label (e.g. "Due date")' },
+              value:    { type: 'string', description: 'Formatted display value' },
+              editable: { type: 'boolean', description: 'Whether Edit mode shows this field' },
+              type: {
+                type: 'string',
+                enum: ['text', 'textarea', 'date', 'select', 'tags'],
+                description: 'Input type for Edit mode',
+              },
+            },
+            required: ['key', 'label', 'value', 'editable', 'type'],
+          },
+        },
+        reasoning: {
+          type: 'string',
+          description:
+            'Brief plain-language justification for why this action fits (max 500 chars). Shown under a collapsed "Why?" on the card.',
+        },
+      },
+      required: ['actionId', 'params', 'displaySummary', 'displayFields', 'reasoning'],
     },
   },
 ];

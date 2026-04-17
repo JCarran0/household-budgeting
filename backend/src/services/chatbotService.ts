@@ -10,14 +10,17 @@
  * - max_tokens: 4096 per Claude call (D16, SEC-013)
  * - Conversation history truncated to 50 messages (D14, REQ-028)
  * - GitHub issue interception — never executed by LLM (D13, REQ-024)
+ * - propose_action interception — action cards never executed by LLM (SEC-A001)
  * - Cost tracking with mutex (D12, SEC-017)
  * - Structured logging (REQ-029)
+ * - Attachment content passed as SDK content blocks, never string-interpolated (SEC-A009)
  */
 
 import Anthropic from '@anthropic-ai/sdk';
 import { ChatbotDataService } from './chatbotDataService';
 import { ChatbotCostTracker } from './chatbotCostTracker';
 import { CHATBOT_SYSTEM_PROMPT, CHATBOT_TOOLS } from './chatbotPrompt';
+import { getChatAction, listChatActionIds, issueProposal } from './chatActions';
 import type {
   ChatRequest,
   ChatResponse,
@@ -29,6 +32,7 @@ import type {
   GetBudgetSummaryInput,
   GetSpendingByCategoryInput,
   GetCashFlowInput,
+  ActionProposalInput,
 } from '../shared/types';
 
 const MAX_TOOL_ITERATIONS = 10;
@@ -50,6 +54,19 @@ interface ToolCallLog {
   latencyMs: number;
 }
 
+/** In-request attachment data — transient, never persisted (SEC-A014). */
+export interface ChatAttachment {
+  buffer: Buffer;
+  mimeType: 'image/jpeg' | 'image/png' | 'image/webp' | 'application/pdf';
+  filename: string;
+}
+
+/** Internal toolLoop result shape — discriminated union for type safety */
+type ToolLoopResult =
+  | { type: 'message'; content: string; totalInputTokens: number; totalOutputTokens: number }
+  | { type: 'issue_confirmation'; content: string; issueDraft: GitHubIssueDraft; totalInputTokens: number; totalOutputTokens: number }
+  | { type: 'action_proposal'; content: string; proposal: ReturnType<typeof issueProposal>; totalInputTokens: number; totalOutputTokens: number };
+
 export class ChatbotService {
   private client: Anthropic;
 
@@ -64,9 +81,19 @@ export class ChatbotService {
 
   /**
    * Process a chat message: check budget, call Claude, execute tools, track cost.
+   *
+   * @param familyId  Family context for data tools
+   * @param request   Chat request (message, history, model, etc.)
+   * @param userId    Authenticated user ID — used for action proposal ownership
+   * @param attachment  Optional file attachment (image or PDF)
    */
-  async chat(familyId: string, request: ChatRequest): Promise<ChatResponse> {
-    // 1. Check monthly spend against cap
+  async chat(
+    familyId: string,
+    request: ChatRequest,
+    userId: string,
+    attachment?: ChatAttachment,
+  ): Promise<ChatResponse> {
+    // 1. Check monthly spend against cap (SEC-A019, SEC-A020)
     const budget = await this.costTracker.checkBudget();
     if (!budget.allowed) {
       return this.capReachedResponse(budget.monthlySpend, budget.monthlyLimit);
@@ -75,8 +102,8 @@ export class ChatbotService {
     // 2. Truncate conversation history (D14, REQ-028)
     const history = request.conversationHistory.slice(-MAX_HISTORY);
 
-    // 3. Build Claude messages
-    const messages = this.buildMessages(history, request.message, request.pageContext);
+    // 3. Build Claude messages (attachment content via SDK content blocks, not prompt injection)
+    const messages = this.buildMessages(history, request.message, request.pageContext, attachment);
 
     // 4. Call Claude with tool loop
     const startTime = Date.now();
@@ -84,24 +111,34 @@ export class ChatbotService {
     let totalInputTokens = 0;
     let totalOutputTokens = 0;
 
+    // conversationId defaults to a stable fallback if frontend hasn't sent one yet
+    const conversationId = request.conversationId ?? `anon_${familyId}`;
+
     try {
       const result = await this.executeWithTimeout(
-        this.toolLoop(familyId, messages, request.model, toolCallLogs, request.userDisplayName),
+        this.toolLoop(familyId, userId, conversationId, messages, request.model, toolCallLogs, request.userDisplayName),
         REQUEST_TIMEOUT_MS,
       );
 
       totalInputTokens = result.totalInputTokens;
       totalOutputTokens = result.totalOutputTokens;
 
-      // Check if we intercepted a GitHub issue submission
+      // 5. Record usage
+      const costResult = await this.costTracker.recordUsage(
+        familyId, request.model, totalInputTokens, totalOutputTokens,
+      );
+
+      const usage = {
+        monthlySpend: costResult.monthlySpend,
+        monthlyLimit: budget.monthlyLimit,
+        remainingBudget: Math.max(0, budget.monthlyLimit - costResult.monthlySpend),
+        capExceeded: costResult.capExceeded,
+      };
+
+      this.logRequest(familyId, request.model, totalInputTokens, totalOutputTokens, costResult.estimatedCost, toolCallLogs, Date.now() - startTime);
+
+      // 6. Build response by result type
       if (result.type === 'issue_confirmation') {
-        // Record usage before returning
-        const costResult = await this.costTracker.recordUsage(
-          familyId, request.model, totalInputTokens, totalOutputTokens,
-        );
-
-        this.logRequest(familyId, request.model, totalInputTokens, totalOutputTokens, costResult.estimatedCost, toolCallLogs, Date.now() - startTime);
-
         return {
           type: 'issue_confirmation',
           message: {
@@ -117,21 +154,29 @@ export class ChatbotService {
             },
           },
           issueDraft: result.issueDraft,
-          usage: {
-            monthlySpend: costResult.monthlySpend,
-            monthlyLimit: budget.monthlyLimit,
-            remainingBudget: Math.max(0, budget.monthlyLimit - costResult.monthlySpend),
-            capExceeded: costResult.capExceeded,
-          },
+          usage,
         };
       }
 
-      // 5. Record usage
-      const costResult = await this.costTracker.recordUsage(
-        familyId, request.model, totalInputTokens, totalOutputTokens,
-      );
-
-      this.logRequest(familyId, request.model, totalInputTokens, totalOutputTokens, costResult.estimatedCost, toolCallLogs, Date.now() - startTime);
+      if (result.type === 'action_proposal') {
+        return {
+          type: 'action_proposal',
+          message: {
+            id: this.generateId(),
+            role: 'assistant',
+            content: result.content,
+            timestamp: new Date().toISOString(),
+            model: request.model,
+            tokenUsage: {
+              inputTokens: totalInputTokens,
+              outputTokens: totalOutputTokens,
+              estimatedCost: costResult.estimatedCost,
+            },
+          },
+          proposal: result.proposal,
+          usage,
+        };
+      }
 
       return {
         type: 'message',
@@ -147,22 +192,15 @@ export class ChatbotService {
             estimatedCost: costResult.estimatedCost,
           },
         },
-        usage: {
-          monthlySpend: costResult.monthlySpend,
-          monthlyLimit: budget.monthlyLimit,
-          remainingBudget: Math.max(0, budget.monthlyLimit - costResult.monthlySpend),
-          capExceeded: costResult.capExceeded,
-        },
+        usage,
       };
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unknown error';
-      // Log full error details for debugging
       console.error('[ChatbotService] Error:', {
         familyId,
         model: request.model,
         error: message,
         stack: error instanceof Error ? error.stack : undefined,
-        // Anthropic SDK errors include status and error details
         status: (error as Record<string, unknown>)?.status,
         errorBody: (error as Record<string, unknown>)?.error,
         toolCallLogs,
@@ -223,14 +261,13 @@ export class ChatbotService {
 
   private async toolLoop(
     familyId: string,
+    userId: string,
+    conversationId: string,
     messages: Anthropic.MessageParam[],
     model: ChatModel,
     toolCallLogs: ToolCallLog[],
     userDisplayName?: string,
-  ): Promise<
-    | { type: 'message'; content: string; totalInputTokens: number; totalOutputTokens: number }
-    | { type: 'issue_confirmation'; content: string; issueDraft: GitHubIssueDraft; totalInputTokens: number; totalOutputTokens: number }
-  > {
+  ): Promise<ToolLoopResult> {
     let totalInputTokens = 0;
     let totalOutputTokens = 0;
 
@@ -273,7 +310,6 @@ export class ChatbotService {
           // INTERCEPT: GitHub issue submission — do NOT execute (D13, REQ-024)
           if (toolUse.name === 'submit_github_issue') {
             const input = toolUse.input as { title: string; body: string; labels: string[] };
-            // Extract text content from this response for the confirmation message
             const textBlock = response.content.find((b): b is Anthropic.TextBlock => b.type === 'text');
             return {
               type: 'issue_confirmation',
@@ -283,6 +319,65 @@ export class ChatbotService {
                 body: input.body,
                 labels: input.labels,
               },
+              totalInputTokens,
+              totalOutputTokens,
+            };
+          }
+
+          // INTERCEPT: Action proposal — do NOT execute (SEC-A001, D-8)
+          if (toolUse.name === 'propose_action') {
+            const input = toolUse.input as ActionProposalInput;
+
+            // Registry membership check (SEC-A003)
+            const actionDef = getChatAction(input.actionId);
+            if (!actionDef) {
+              // Return tool error so Claude can self-correct within MAX_TOOL_ITERATIONS
+              toolResults.push({
+                type: 'tool_result',
+                tool_use_id: toolUse.id,
+                content: `Unknown actionId: "${input.actionId}". Valid actions: ${listChatActionIds().join(', ')}`,
+                is_error: true,
+              });
+              continue;
+            }
+
+            // Zod validation of params (SEC-A004)
+            const parsed = actionDef.paramsSchema.safeParse(input.params);
+            if (!parsed.success) {
+              // Return validation error so Claude can retry with corrected values
+              toolResults.push({
+                type: 'tool_result',
+                tool_use_id: toolUse.id,
+                content: `Invalid params for ${input.actionId}: ${parsed.error.message}. Retry with corrected values.`,
+                is_error: true,
+              });
+              continue;
+            }
+
+            // Validation succeeded — issue nonce and return proposal to frontend
+            // SECURITY: nonce is NOT sent to Claude (SEC-A009). The LLM only
+            // sees the proposal ID via conversation context if it re-proposes.
+            const proposal = issueProposal({
+              userId,
+              familyId,
+              conversationId,
+              proposalInput: {
+                actionId: input.actionId,
+                params: parsed.data as Record<string, unknown>,
+                displaySummary: input.displaySummary,
+                displayFields: input.displayFields,
+                reasoning: input.reasoning,
+              },
+            });
+
+            const textBlock = response.content.find(
+              (b): b is Anthropic.TextBlock => b.type === 'text',
+            );
+
+            return {
+              type: 'action_proposal',
+              content: textBlock?.text ?? `${actionDef.label} ready for your review.`,
+              proposal,
               totalInputTokens,
               totalOutputTokens,
             };
@@ -366,25 +461,82 @@ export class ChatbotService {
     history: ChatMessage[],
     currentMessage: string,
     pageContext: ChatRequest['pageContext'],
+    attachment?: ChatAttachment,
   ): Anthropic.MessageParam[] {
     const messages: Anthropic.MessageParam[] = [];
 
     // Convert conversation history
+    // Task 4.6: If a prior message carries proposal metadata, append a
+    // lightweight reminder to the next user turn (not the system prompt) so
+    // Claude knows a proposal is pending. The nonce is NEVER included.
+    let pendingProposalContext: string | undefined;
     for (const msg of history) {
       messages.push({
         role: msg.role,
         content: msg.content,
       });
+      // Track the latest pending proposal so we can inject context on the current turn
+      if (msg.role === 'assistant' && msg.proposal && msg.proposalStatus === 'pending') {
+        pendingProposalContext =
+          `[Context: An action proposal is currently pending — actionId: ${msg.proposal.actionId}, ` +
+          `summary: "${msg.proposal.displaySummary}". ` +
+          `If the user's message is a refinement, call propose_action again with updated params. ` +
+          `Otherwise, answer normally and remind the user of the pending proposal.]`;
+      } else if (msg.role === 'assistant' && msg.proposalStatus && msg.proposalStatus !== 'pending') {
+        // Proposal resolved — stop injecting the context reminder
+        pendingProposalContext = undefined;
+      }
     }
 
-    // Add current message with page context
+    // Build user turn content blocks
     const contextPrefix = pageContext
       ? `[Page context: ${pageContext.description}]\n\n`
       : '';
-    messages.push({
-      role: 'user',
-      content: `${contextPrefix}${currentMessage}`,
-    });
+
+    const proposalPrefix = pendingProposalContext ? `${pendingProposalContext}\n\n` : '';
+    const textContent = `${contextPrefix}${proposalPrefix}${currentMessage}`;
+
+    if (attachment) {
+      // SECURITY (SEC-A009): Attachment content flows through SDK content blocks.
+      // It is NEVER string-interpolated into the system prompt or any message text.
+      const contentBlocks: Anthropic.ContentBlockParam[] = [];
+
+      if (attachment.mimeType === 'application/pdf') {
+        contentBlocks.push({
+          type: 'document',
+          source: {
+            type: 'base64',
+            media_type: 'application/pdf',
+            data: attachment.buffer.toString('base64'),
+          },
+        } as Anthropic.ContentBlockParam);
+      } else {
+        // image/jpeg | image/png | image/webp
+        contentBlocks.push({
+          type: 'image',
+          source: {
+            type: 'base64',
+            media_type: attachment.mimeType as 'image/jpeg' | 'image/png' | 'image/webp' | 'image/gif',
+            data: attachment.buffer.toString('base64'),
+          },
+        });
+      }
+
+      contentBlocks.push({
+        type: 'text',
+        text: textContent || 'What is this?',
+      });
+
+      messages.push({
+        role: 'user',
+        content: contentBlocks,
+      });
+    } else {
+      messages.push({
+        role: 'user',
+        content: textContent,
+      });
+    }
 
     return messages;
   }

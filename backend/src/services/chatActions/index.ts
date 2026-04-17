@@ -12,6 +12,7 @@ import './createTaskAction'; // registers via side-effect
 
 export * from './registry';
 export * from './proposalStore';
+export * from './auditLog';
 
 import { listChatActionIds } from './registry';
 
