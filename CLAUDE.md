@@ -531,6 +531,9 @@ Having issues?
 - **Amazon Receipt Prompts**: `backend/src/services/amazonReceiptPrompt.ts`
 - **Amazon Receipt Flow UI**: `frontend/src/components/transactions/AmazonReceiptFlowModal.tsx`
 - **Transaction Reader**: `backend/src/services/transactionReader.ts` (canonical removed-transaction filter — all read paths must use this)
+- **Chat Action Registry**: `backend/src/services/chatActions/registry.ts`
+- **Chat Action Proposal Store**: `backend/src/services/chatActions/proposalStore.ts`
+- **Action Card UI**: `frontend/src/components/chat/ActionCard.tsx`
 
 ### Testing
 - **Backend Tests**: `backend/src/__tests__/`
@@ -643,6 +646,7 @@ Track important decisions that affect how the codebase should be modified.
 
 | Date | Decision | Rationale | Impact |
 |------|----------|-----------|--------|
+| 2026-04 | Chat action cards with registry-based allowlist | Extend chatbot from read-only to narrow write via user-confirmed action cards. ChatActionRegistry (backend) + FORM_REGISTRY (frontend) + Zod schemas shared between HTTP routes and action handlers. V1: create_task only. Nonce-based single-use confirmation, server-side re-validation, audit logging with source=chatbot_action_card. | Affects: chatbotService (propose_action interception), backend/src/services/chatActions/, frontend/src/components/chat/ |
 | 2026-04 | isSavings flag on top-level categories | Separate savings contributions (401k, IRA, brokerage) from consumption spending. All spending/net surfaces exclude savings by default. Cash flow report shows 3-line layout: Income / Spending / Savings. Toggle on cash flow view lets user include savings in net. | Affects: CategoryService, reportService, dashboard, chatbot |
 | 2026-04 | Centralized transaction reader utility | Eliminate duplicated `status !== 'removed'` filter across 4 services | New `transactionReader.ts` with `excludeRemoved()` / `getActiveTransactions()` — all read paths use this; mutation paths intentionally bypass it |
 | 2026-04 | Amazon receipt matching via Claude vision | Upload Amazon PDFs, extract items, match to bank transactions, categorize with splits | AmazonReceiptService with tiered matching (amount+date), Zod-validated Claude output, session dedup against completed sessions only, CUSTOM_AMAZON transactions always re-eligible |
@@ -667,6 +671,7 @@ Planned changes that haven't been implemented yet.
 
 | Change | Reason | Target Date | Notes |
 |--------|--------|-------------|-------|
+| Migrate GitHub issue confirmation onto action-card registry | Current `submit_github_issue` path is a parallel intercept-and-confirm implementation. Per D-15 in AI-CHAT-ACTIONS-BRD.md, collapse it into the action registry so all confirmation flows share one shape. Non-urgent but prevents two-paths-forever divergence. | V2 | See `docs/features/AI-CHAT-ACTIONS-BRD.md` D-15 |
 | Add transaction caching | Reduce API calls | TBD | Use React Query or similar |
 | Implement webhook support | Real-time transaction updates | TBD | Plaid webhooks for sync |
 | Add data export feature | User data portability | TBD | CSV/JSON export options |

@@ -656,6 +656,97 @@ This pattern is wired in `services/index.ts`, which owns the full dependency gra
 3. Update navigation in `frontend/src/components/Navigation.tsx`
 4. Add API methods if needed
 
+### To Add a New Chat Action
+
+The action-card mechanism requires exactly three touches: a backend handler, a shared type extension, and a frontend form. Adding an action outside this pattern breaks the three-touch extensibility guarantee in the BRD success criteria.
+
+**Step 1 — Backend handler (`backend/src/services/chatActions/`)**
+
+Create `backend/src/services/chatActions/{newAction}Action.ts`:
+
+```typescript
+import { registerChatAction } from './registry';
+import { taskService } from '../index'; // or whatever service the action needs
+import { z } from 'zod';
+import type { ActionResource } from '../../shared/types';
+
+// Export the schema so it can be re-used as a source of truth
+export const createBudgetEntrySchema = z.object({
+  categoryId: z.string().min(1),
+  month: z.string().regex(/^\d{4}-\d{2}$/),
+  amount: z.number().positive(),
+});
+
+type CreateBudgetEntryParams = z.infer<typeof createBudgetEntrySchema>;
+
+registerChatAction<CreateBudgetEntryParams>({
+  actionId: 'create_budget_entry',
+  label: 'Set a budget',
+  paramsSchema: createBudgetEntrySchema,
+  async execute(params, ctx): Promise<ActionResource> {
+    const entry = await budgetService.setBudget(
+      params.categoryId, params.month, params.amount, ctx.userId,
+    );
+    return {
+      type: 'task',           // extend ActionResource.type for new resource types
+      id: entry.id,
+      url: `/budgets?month=${params.month}`,
+      label: `Budget set: ${params.amount} for ${params.month}`,
+    };
+  },
+});
+```
+
+Then add an import in `backend/src/services/chatActions/index.ts`:
+
+```typescript
+import './createBudgetEntryAction'; // registers via side-effect
+```
+
+**Step 2 — Shared type (`shared/types/index.ts`)**
+
+Extend `ChatActionId`:
+
+```typescript
+// Before
+export type ChatActionId = 'create_task';
+
+// After
+export type ChatActionId = 'create_task' | 'create_budget_entry';
+```
+
+Also add the `actionId` value to the `propose_action` tool definition in `backend/src/services/chatbotPrompt.ts` so Claude knows it's available.
+
+**Step 3 — Frontend form (`frontend/src/components/chat/action-forms/`)**
+
+Create `frontend/src/components/chat/action-forms/BudgetEntryActionCardEditForm.tsx`. The component receives `proposal: ActionProposal` and `onSubmit: (params: Record<string, unknown>) => void`. Match the shape of `TaskActionCardEditForm.tsx`.
+
+Then register it in `frontend/src/components/chat/action-forms/index.ts`:
+
+```typescript
+const FORM_REGISTRY: Record<ChatActionId, FC<ActionFormProps>> = {
+  create_task: TaskActionCardEditForm,
+  create_budget_entry: BudgetEntryActionCardEditForm, // add this
+};
+```
+
+**Security invariants that must hold for any new action:**
+
+- Handler receives `ctx: ChatActionHandlerContext` containing `userId` and `familyId` from the JWT. It must never accept identity from `params`.
+- Zod schema must be the single source of truth — the same export used by both the HTTP route (if one exists) and the action handler.
+- Handler must invoke an existing authenticated service method, not a privileged bypass.
+
+**Example: fully-worked `create_budget_entry`**
+
+Using the code above, the full flow for adding a budget action would be:
+1. `createBudgetEntryAction.ts` — registers with `create_budget_entry` actionId and the Zod schema above.
+2. `shared/types/index.ts` — adds `'create_budget_entry'` to `ChatActionId` union.
+3. `BudgetEntryActionCardEditForm.tsx` — inline form with categoryId selector, month picker, and amount field.
+4. `action-forms/index.ts` — adds the form to `FORM_REGISTRY`.
+5. `chatbotPrompt.ts` — adds `'create_budget_entry'` to the `propose_action` tool's `actionId` enum.
+
+No changes to the confirmation endpoint, proposal store, or audit logging — those are action-agnostic.
+
 ### To Modify Data Models
 1. Update interface in relevant service
 2. Update shared types if exposed to frontend
