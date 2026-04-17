@@ -3,12 +3,124 @@
  */
 
 import { Router, Request, Response, NextFunction } from 'express';
-import { transactionService, accountService, importService } from '../services';
+import { transactionService, accountService, importService, pushNotificationService, budgetService, dataService } from '../services';
 import { authMiddleware } from '../middleware/authMiddleware';
 import { AuthorizationError } from '../errors';
 import { z } from 'zod';
+import type { StoredTransaction } from '../services/transactionService';
 
 const router = Router();
+
+// ---------------------------------------------------------------------------
+// Notification helpers — all fire-and-forget (non-blocking)
+// ---------------------------------------------------------------------------
+
+/**
+ * Fire large-transaction push notifications for newly synced transactions.
+ * Checks user preferences; skips silently if disabled or threshold not met.
+ * Never throws — errors are logged but do not interrupt the caller.
+ */
+async function fireLargeTransactionNotifications(
+  userId: string,
+  familyId: string,
+  newTransactions: StoredTransaction[],
+): Promise<void> {
+  try {
+    const prefs = await pushNotificationService.getUserPreferences(userId);
+    if (!prefs.largeTransactions || newTransactions.length === 0) return;
+
+    // Build account name lookup once
+    const accountsResult = await accountService.getUserAccounts(familyId);
+    const accountNameMap = new Map<string, string>();
+    if (accountsResult.success && accountsResult.accounts) {
+      for (const acct of accountsResult.accounts) {
+        const displayName = acct.nickname ?? acct.accountName;
+        accountNameMap.set(acct.id, displayName);
+      }
+    }
+
+    for (const txn of newTransactions) {
+      // Amount is positive = debit (expense). Check absolute value against threshold.
+      if (Math.abs(txn.amount) < prefs.largeTransactionThreshold) continue;
+
+      const accountName = accountNameMap.get(txn.accountId) ?? 'your account';
+
+      await pushNotificationService.sendNotification(userId, {
+        type: 'large_transaction',
+        title: 'Large transaction posted',
+        body: `A large transaction was posted to ${accountName}`,
+        url: '/transactions?sort=amount&order=desc',
+        tag: `large-txn-${txn.id}`,
+      });
+    }
+  } catch (err) {
+    console.error('[notifications] Failed to send large transaction notifications:', err);
+  }
+}
+
+/**
+ * Fire a budget-alert push notification after a transaction is categorized.
+ * Checks user preferences and budget threshold; skips silently if not applicable.
+ * Never throws — errors are logged but do not interrupt the caller.
+ */
+async function fireBudgetAlertNotification(
+  userId: string,
+  familyId: string,
+  transaction: StoredTransaction,
+): Promise<void> {
+  try {
+    if (!transaction.categoryId) return;
+
+    const prefs = await pushNotificationService.getUserPreferences(userId);
+    if (!prefs.budgetAlerts) return;
+
+    // Derive the month (YYYY-MM) from the transaction date
+    const month = transaction.date.slice(0, 7);
+
+    // Get the budget for this category/month — skip if no budget is set
+    const budget = await budgetService.getBudget(transaction.categoryId, month, familyId);
+    if (!budget || budget.amount <= 0) return;
+
+    // Sum all non-hidden, non-removed transactions for this category+month
+    const txnResult = await transactionService.getTransactions(familyId, {
+      startDate: `${month}-01`,
+      endDate: `${month}-31`,
+      categoryIds: [transaction.categoryId],
+      includeHidden: false,
+    });
+
+    if (!txnResult.success || !txnResult.transactions) return;
+
+    const actual = txnResult.transactions
+      .filter(t => t.status !== 'removed' && !t.isHidden && !t.parentTransactionId)
+      .reduce((sum, t) => sum + Math.abs(t.amount), 0);
+
+    const percentUsed = (actual / budget.amount) * 100;
+
+    // Only fire when spending first crosses the user's configured threshold
+    if (percentUsed < prefs.budgetAlertThreshold) return;
+
+    // Use threshold band as part of tag to allow one notification per 10% band crossing
+    const thresholdBand = Math.floor(percentUsed / 10) * 10;
+
+    // Get category name for the notification
+    const categories = await dataService.getCategories(familyId);
+    const category = categories.find(c => c.id === transaction.categoryId);
+    const categoryName = category?.name ?? transaction.categoryId;
+
+    const pctRounded = Math.round(percentUsed);
+
+    await pushNotificationService.sendNotification(userId, {
+      type: 'budget_alert',
+      title: `Budget alert: ${categoryName}`,
+      body: `${categoryName} is at ${pctRounded}% of budget`,
+      url: `/budget?month=${month}`,
+      tag: `budget-alert-${transaction.categoryId}-${month}-${thresholdBand}`,
+    });
+  } catch (err) {
+    console.error('[notifications] Failed to send budget alert notification:', err);
+  }
+}
 
 // Extended Request with user
 interface AuthRequest extends Request {
@@ -221,6 +333,15 @@ router.post('/sync', authMiddleware, async (req: AuthRequest, res: Response, nex
     // Also sync account balances
     await accountService.syncAccountBalances(req.user.familyId);
 
+    // Fire large-transaction notifications (non-blocking)
+    if (result.newTransactions && result.newTransactions.length > 0) {
+      void fireLargeTransactionNotifications(
+        req.user.userId,
+        req.user.familyId,
+        result.newTransactions,
+      );
+    }
+
     res.json({
       success: true,
       added: result.added,
@@ -263,6 +384,12 @@ router.put('/:transactionId/category', authMiddleware, async (req: AuthRequest, 
     const { transactionId } = req.params;
     const { categoryId } = validation.data;
 
+    // Fetch the transaction before updating so we have its metadata for budget alerts
+    const txnResult = await transactionService.getTransactions(req.user.familyId);
+    const transaction = txnResult.success && txnResult.transactions
+      ? txnResult.transactions.find(t => t.id === transactionId)
+      : undefined;
+
     const result = await transactionService.updateTransactionCategory(
       req.user.familyId,
       transactionId,
@@ -272,6 +399,15 @@ router.put('/:transactionId/category', authMiddleware, async (req: AuthRequest, 
     if (!result.success) {
       res.status(404).json({ success: false, error: result.error });
       return;
+    }
+
+    // Fire budget alert notification if a category was assigned (non-blocking)
+    if (categoryId && transaction) {
+      void fireBudgetAlertNotification(
+        req.user.userId,
+        req.user.familyId,
+        { ...transaction, categoryId },
+      );
     }
 
     res.json({ success: true });

@@ -54,6 +54,8 @@ export interface SyncResult {
   success: boolean;
   accountsUpdated?: number;
   error?: string;
+  /** Accounts that were marked requires_reauth during this sync */
+  reauthRequiredAccounts?: Array<{ id: string; institutionName: string }>;
 }
 
 export class AccountService {
@@ -196,13 +198,14 @@ export class AccountService {
       }
 
       let accountsUpdated = 0;
+      const reauthRequiredAccounts: Array<{ id: string; institutionName: string }> = [];
 
       // Sync each item's accounts
       for (const [encryptedToken, accounts] of itemGroups) {
         const accessToken = this.decryptToken(encryptedToken);
-        
+
         const plaidResult = await this.plaidService.getAccounts(accessToken);
-        
+
         if (!plaidResult.success || !plaidResult.accounts) {
           // Mark accounts as requiring reauth if needed
           if (plaidResult.requiresReauth) {
@@ -210,6 +213,7 @@ export class AccountService {
               account.status = 'requires_reauth';
               account.updatedAt = new Date();
               await this.saveAccount(familyId, account);
+              reauthRequiredAccounts.push({ id: account.id, institutionName: account.institutionName });
             }
           }
           continue;
@@ -238,6 +242,7 @@ export class AccountService {
       return {
         success: true,
         accountsUpdated,
+        reauthRequiredAccounts,
       };
     } catch (error) {
       console.error('Error syncing account balances:', error);

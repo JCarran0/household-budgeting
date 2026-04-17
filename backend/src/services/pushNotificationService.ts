@@ -14,7 +14,7 @@
 import webpush, { PushSubscription as WebPushSubscription } from 'web-push';
 import { DataService } from './dataService';
 import { config } from '../config';
-import type { NotificationPayload, PushSubscriptionRecord } from '../shared/types';
+import type { NotificationPayload, NotificationPreferences, PushSubscriptionRecord } from '../shared/types';
 
 // PushSubscription as sent from the browser (matches the Web Push spec JSON shape)
 export interface PushSubscriptionJSON {
@@ -27,6 +27,16 @@ export interface PushSubscriptionJSON {
 }
 
 const SUBSCRIPTIONS_KEY_PREFIX = 'push_subscriptions_';
+const PREFERENCES_KEY_PREFIX = 'push_preferences_';
+
+const DEFAULT_PREFERENCES: NotificationPreferences = {
+  syncFailures: false,
+  budgetAlerts: false,
+  budgetAlertThreshold: 80,
+  largeTransactions: false,
+  largeTransactionThreshold: 500,
+  billReminders: false,
+};
 
 // Sentinel values used as placeholders in .env before real keys are generated
 const PLACEHOLDER_PREFIX = 'placeholder_';
@@ -227,6 +237,23 @@ export class PushNotificationService {
         }
       }),
     );
+  }
+
+  // ---------------------------------------------------------------------------
+  // Preferences helper
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Read notification preferences for a user.
+   * Returns all-false defaults if no preferences have been saved yet
+   * (so callers don't need to know the storage key or default values).
+   */
+  async getUserPreferences(userId: string): Promise<NotificationPreferences> {
+    const stored = await this.dataService.getData<NotificationPreferences>(
+      `${PREFERENCES_KEY_PREFIX}${userId}`,
+    );
+    // Merge stored prefs over defaults so new fields always have a value
+    return { ...DEFAULT_PREFERENCES, ...stored };
   }
 
   // ---------------------------------------------------------------------------
