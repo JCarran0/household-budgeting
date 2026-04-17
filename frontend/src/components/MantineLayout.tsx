@@ -24,6 +24,7 @@ import { ChangelogModal } from './ChangelogModal';
 import { FeedbackModal } from './feedback/FeedbackModal';
 import { ChatFAB } from './chat/ChatFAB';
 import { ChatOverlay } from './chat/ChatOverlay';
+import { AppLogo } from './AppLogo';
 
 export function MantineLayout() {
   const [mobileOpened, { toggle: toggleMobile }] = useDisclosure();
@@ -112,7 +113,7 @@ export function MantineLayout() {
               />
             </Tooltip>
             <Group gap="xs">
-              <IconPigMoney size={28} color="var(--mantine-color-yellow-5)" />
+              <AppLogo size={32} />
               <Text size="xl" fw={700}>
                 Budget Tracker
               </Text>

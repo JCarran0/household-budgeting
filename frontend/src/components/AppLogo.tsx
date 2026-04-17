@@ -1,0 +1,24 @@
+interface AppLogoProps {
+  size?: number;
+}
+
+export function AppLogo({ size = 32 }: AppLogoProps) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 512 512"
+      width={size}
+      height={size}
+      role="img"
+      aria-label="Household Budget"
+    >
+      <rect width="512" height="512" rx="96" ry="96" fill="#8A2318" />
+      <g transform="translate(256 524)">
+        <circle r="504" fill="#B8322A" />
+        <circle r="384" fill="#D4782A" />
+        <circle r="264" fill="#E4BB6E" />
+        <circle r="144" fill="#A07820" />
+      </g>
+    </svg>
+  );
+}
