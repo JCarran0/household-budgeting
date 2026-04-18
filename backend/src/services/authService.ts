@@ -3,7 +3,7 @@ import jwt from 'jsonwebtoken';
 import { v4 as uuidv4 } from 'uuid';
 import crypto from 'crypto';
 import { DataService, User } from './dataService';
-import type { Family, FamilyMember } from '../shared/types';
+import type { Family, FamilyMember, UserColor } from '../shared/types';
 
 interface AuthResult {
   success: boolean;
@@ -199,6 +199,7 @@ export class AuthService {
           username: createdUser.username,
           displayName: createdUser.displayName,
           familyId: createdUser.familyId,
+          ...(createdUser.color !== undefined ? { color: createdUser.color } : {}),
         },
       };
     } catch (error) {
@@ -305,6 +306,7 @@ export class AuthService {
           username: user.username,
           displayName: user.displayName,
           familyId: user.familyId,
+          ...(user.color !== undefined ? { color: user.color } : {}),
         },
       };
     } catch (error) {
@@ -393,6 +395,7 @@ export class AuthService {
   async updateProfile(
     userId: string,
     displayName: string,
+    color?: UserColor,
   ): Promise<AuthResult> {
     try {
       const user = await this.dataService.getUser(userId);
@@ -401,19 +404,24 @@ export class AuthService {
       }
 
       // Update user record
-      await this.dataService.updateUser(userId, { displayName });
+      const userUpdate: Partial<typeof user> = { displayName };
+      if (color !== undefined) userUpdate.color = color;
+      await this.dataService.updateUser(userId, userUpdate);
 
-      // Update displayName in family.members array
+      // Mirror displayName (and color) into family.members so other users see them
       if (user.familyId) {
         const family = await this.dataService.getFamily(user.familyId);
         if (family) {
           const updatedMembers = family.members.map(m =>
-            m.userId === userId ? { ...m, displayName } : m
+            m.userId === userId
+              ? { ...m, displayName, ...(color !== undefined ? { color } : {}) }
+              : m
           );
           await this.dataService.updateFamily(user.familyId, { members: updatedMembers });
         }
       }
 
+      const resolvedColor = color ?? user.color;
       return {
         success: true,
         user: {
@@ -421,6 +429,7 @@ export class AuthService {
           username: user.username,
           displayName,
           familyId: user.familyId,
+          ...(resolvedColor !== undefined ? { color: resolvedColor } : {}),
         },
       };
     } catch (error) {

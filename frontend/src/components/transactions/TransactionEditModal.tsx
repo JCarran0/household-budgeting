@@ -23,6 +23,7 @@ import { api } from '../../lib/api';
 import type { Transaction } from '../../../../shared/types';
 import { formatCurrency, formatAccountOwner } from '../../utils/formatters';
 import { useCategoryOptions } from '../../hooks/useCategoryOptions';
+import { UserColorDot } from '../common/UserColorDot';
 
 interface AccountInfo {
   name: string;
@@ -67,6 +68,14 @@ export function TransactionEditModal({
   const { data: ownerMappingsData } = useQuery({
     queryKey: ['account-owner-mappings'],
     queryFn: () => api.getAccountOwnerMappings(),
+    enabled: opened,
+    staleTime: 5 * 60 * 1000,
+  });
+
+  // Fetch family to resolve the account owner's identity color (when the mapping links to a user)
+  const { data: familyData } = useQuery({
+    queryKey: ['family'],
+    queryFn: () => api.getFamily(),
     enabled: opened,
     staleTime: 5 * 60 * 1000,
   });
@@ -338,12 +347,25 @@ export function TransactionEditModal({
               </Group>
             )}
 
-            {transaction.accountOwner && (
-              <Group justify="space-between">
-                <Text size="sm" c="dimmed">Purchased by</Text>
-                <Text fw={500}>{formatAccountOwner(transaction.accountOwner, ownerMappingsData?.mappings)}</Text>
-              </Group>
-            )}
+            {transaction.accountOwner && (() => {
+              const mapping = ownerMappingsData?.mappings?.find(m =>
+                transaction.accountOwner!.includes(m.cardIdentifier),
+              );
+              const linkedMember = mapping?.linkedUserId
+                ? familyData?.family?.members?.find(m => m.userId === mapping.linkedUserId)
+                : undefined;
+              return (
+                <Group justify="space-between">
+                  <Text size="sm" c="dimmed">Purchased by</Text>
+                  <Group gap="xs" wrap="nowrap">
+                    {linkedMember && <UserColorDot user={linkedMember} />}
+                    <Text fw={500}>
+                      {formatAccountOwner(transaction.accountOwner!, ownerMappingsData?.mappings)}
+                    </Text>
+                  </Group>
+                </Group>
+              );
+            })()}
 
             {transaction.originalDescription && (
               <Group justify="space-between">

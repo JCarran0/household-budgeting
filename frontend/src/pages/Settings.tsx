@@ -41,6 +41,8 @@ import { useAuthStore } from '../stores/authStore';
 import { api } from '../lib/api';
 import type { Family, AccountOwnerMapping, NotificationPreferences } from '../../../shared/types';
 import { NotificationPermission } from '../components/pwa/NotificationPermission';
+import { USER_COLOR_PALETTE, userColor, type UserColor } from '../utils/userColor';
+import { UserColorDot } from '../components/common/UserColorDot';
 
 export function Settings() {
   return (
@@ -60,19 +62,26 @@ export function Settings() {
 // ─── Profile Section ───────────────────────���────────────────────────────────
 
 function ProfileSection() {
-  const { user, updateDisplayName } = useAuthStore();
+  const { user, updateDisplayName, updateColor } = useAuthStore();
   const [displayName, setDisplayName] = useState(user?.displayName || '');
+  const [color, setColor] = useState<UserColor>(userColor(user));
   const [saving, setSaving] = useState(false);
+
+  const currentColor = userColor(user);
+  const nameChanged = displayName.trim() !== (user?.displayName || '');
+  const colorChanged = color !== currentColor;
+  const canSave = !!displayName.trim() && (nameChanged || colorChanged);
 
   const handleSave = async () => {
     if (!displayName.trim()) return;
     setSaving(true);
     try {
-      await api.updateProfile(displayName.trim());
-      updateDisplayName(displayName.trim());
-      notifications.show({ message: 'Display name updated', color: 'green' });
+      await api.updateProfile(displayName.trim(), colorChanged ? color : undefined);
+      if (nameChanged) updateDisplayName(displayName.trim());
+      if (colorChanged) updateColor(color);
+      notifications.show({ message: 'Profile updated', color: 'green' });
     } catch {
-      notifications.show({ message: 'Failed to update display name', color: 'red' });
+      notifications.show({ message: 'Failed to update profile', color: 'red' });
     } finally {
       setSaving(false);
     }
@@ -94,13 +103,40 @@ function ProfileSection() {
           value={displayName}
           onChange={(e) => setDisplayName(e.currentTarget.value)}
         />
+        <div>
+          <Text size="sm" fw={500}>Identity color</Text>
+          <Text size="xs" c="dimmed" mb="xs">
+            Shown next to your name throughout the app so it's easy to tell family members apart.
+          </Text>
+          <Group gap="xs">
+            {USER_COLOR_PALETTE.map((c) => {
+              const selected = c === color;
+              return (
+                <Tooltip key={c} label={c} withArrow>
+                  <ActionIcon
+                    variant={selected ? 'filled' : 'light'}
+                    color={c}
+                    radius="xl"
+                    size="lg"
+                    aria-label={`Choose ${c}`}
+                    aria-pressed={selected}
+                    onClick={() => setColor(c)}
+                    style={selected ? { outline: '2px solid var(--mantine-color-white)', outlineOffset: 2 } : undefined}
+                  >
+                    {selected ? <IconCheck size={14} /> : null}
+                  </ActionIcon>
+                </Tooltip>
+              );
+            })}
+          </Group>
+        </div>
         <Group justify="flex-end">
           <Button
             size="sm"
             leftSection={<IconDeviceFloppy size={16} />}
             onClick={handleSave}
             loading={saving}
-            disabled={!displayName.trim() || displayName.trim() === user?.displayName}
+            disabled={!canSave}
           >
             Save
           </Button>
@@ -493,10 +529,15 @@ function MemberList({ family, currentUserId, onUpdate }: { family: Family; curre
           {family.members.map((member) => (
             <Table.Tr key={member.userId}>
               <Table.Td>
-                {member.displayName}
-                {member.userId === currentUserId && (
-                  <Text span c="dimmed" size="xs"> (you)</Text>
-                )}
+                <Group gap="xs" wrap="nowrap">
+                  <UserColorDot user={member} />
+                  <span>
+                    {member.displayName}
+                    {member.userId === currentUserId && (
+                      <Text span c="dimmed" size="xs"> (you)</Text>
+                    )}
+                  </span>
+                </Group>
               </Table.Td>
               <Table.Td>
                 <Text size="sm" c="dimmed">
@@ -669,9 +710,14 @@ function AccountOwnerMappingsSection() {
                   <Table.Td><Code>{mapping.cardIdentifier}</Code></Table.Td>
                   <Table.Td>{mapping.displayName}</Table.Td>
                   <Table.Td>
-                    <Text size="sm" c={linkedMember ? undefined : 'dimmed'}>
-                      {linkedMember?.displayName || '—'}
-                    </Text>
+                    {linkedMember ? (
+                      <Group gap="xs" wrap="nowrap">
+                        <UserColorDot user={linkedMember} />
+                        <Text size="sm">{linkedMember.displayName}</Text>
+                      </Group>
+                    ) : (
+                      <Text size="sm" c="dimmed">—</Text>
+                    )}
                   </Table.Td>
                   <Table.Td>
                     <Group gap={4}>

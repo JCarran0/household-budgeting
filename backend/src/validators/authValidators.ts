@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { USER_COLOR_PALETTE } from '../../../shared/types';
 
 // Custom password validation - passphrases are more secure!
 const passwordSchema = z.string()
@@ -85,6 +86,7 @@ export const resetPasswordSchema = z.object({
 // Profile update schema
 export const updateProfileSchema = z.object({
   displayName: z.string().min(1, 'Display name is required').max(50, 'Display name must be less than 50 characters'),
+  color: z.enum(USER_COLOR_PALETTE).optional(),
 });
 
 // Type exports

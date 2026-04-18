@@ -190,8 +190,8 @@ router.put(
     try {
       if (!req.user) throw new AuthorizationError();
 
-      const { displayName } = req.body;
-      const result = await authService.updateProfile(req.user.userId, displayName);
+      const { displayName, color } = req.body;
+      const result = await authService.updateProfile(req.user.userId, displayName, color);
 
       if (result.success) {
         res.json(result);

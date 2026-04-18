@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import type { User, LoginCredentials, RegisterCredentials } from '../../../shared/types';
+import type { User, LoginCredentials, RegisterCredentials, UserColor } from '../../../shared/types';
 import { api } from '../lib/api';
 import { queryClient } from '../lib/queryClient';
 import { useFilterStore } from './filterStore';
@@ -17,6 +17,7 @@ interface AuthState {
   logout: () => void;
   clearError: () => void;
   updateDisplayName: (displayName: string) => void;
+  updateColor: (color: UserColor) => void;
 }
 
 export const useAuthStore = create<AuthState>()(
@@ -113,6 +114,12 @@ export const useAuthStore = create<AuthState>()(
       updateDisplayName: (displayName: string) => {
         set((state) => ({
           user: state.user ? { ...state.user, displayName } : null,
+        }));
+      },
+
+      updateColor: (color: UserColor) => {
+        set((state) => ({
+          user: state.user ? { ...state.user, color } : null,
         }));
       },
     }),

@@ -42,7 +42,23 @@ export interface FamilyMember {
   userId: string;          // References User.id
   displayName: string;     // e.g., "Jared"
   joinedAt: string;        // ISO string
+  color?: UserColor;       // Visual identity color chosen by the user
 }
+
+// Fixed palette of contrast-safe Mantine colors used for per-user visual identity.
+// Keep in sync with frontend/src/utils/userColor.ts.
+export const USER_COLOR_PALETTE = [
+  'blue',
+  'teal',
+  'green',
+  'yellow',
+  'orange',
+  'red',
+  'pink',
+  'violet',
+] as const;
+
+export type UserColor = (typeof USER_COLOR_PALETTE)[number];
 
 export interface Family {
   id: string;              // UUID
@@ -120,6 +136,7 @@ export interface User {
   displayName: string;     // Separate from username, shown in UI
   familyId: string;        // The family this user belongs to
   createdAt: string;
+  color?: UserColor;       // Visual identity color chosen by the user
 }
 
 export interface AuthResponse {
@@ -1004,6 +1021,7 @@ export interface LeaderboardEntry {
   completedToday: number;
   completedThisWeek: number;
   completedThisMonth: number;
+  color?: UserColor;
 }
 
 export interface LeaderboardResponse {
