@@ -538,6 +538,11 @@ Having issues?
 - **Chat Action Registry**: `backend/src/services/chatActions/registry.ts`
 - **Chat Action Proposal Store**: `backend/src/services/chatActions/proposalStore.ts`
 - **Action Card UI**: `frontend/src/components/chat/ActionCard.tsx`
+- **Trip Detail Page**: `frontend/src/pages/TripDetail.tsx` (per-trip detail at /trips/:tripId with Itinerary / Spending / Notes tabs)
+- **Agenda**: `frontend/src/components/trips/agenda/Agenda.tsx` (day-by-day itinerary rendering; classifies base-change vs day-trip transits)
+- **Stop Creation Sheet**: `frontend/src/components/trips/agenda/AddStopSheet.tsx` (type-first picker → per-type form)
+- **Stop Service (backend)**: `backend/src/services/tripService.ts` (nested stop CRUD + `StayOverlapError`)
+- **Stop Helpers**: `shared/utils/tripHelpers.ts` (`validateNoStayOverlap`, `computeAgendaDayRange`, `groupStopsByDay`, `findActiveStay`, `isTransitBaseChange`)
 
 ### Testing
 - **Backend Tests**: `backend/src/__tests__/`

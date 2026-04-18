@@ -151,6 +151,16 @@ household-budgeting/
   - Support for orphaned category ID detection and handling
   - Transaction type filtering (all, income, expense, transfer)
 
+### Trip Itineraries — data model & aggregation points
+
+- **Stops are embedded in the Trip entity** (`shared/types/index.ts`: `Trip.stops: Stop[]`). No separate store — `trips_{familyId}.json` already covers it. Older trips persisted before the feature default to `stops: []` on read (backwards-compat handled in `TripService.loadTrips`).
+- **`Stop` is a discriminated union on `type`** (`stay` / `eat` / `play` / `transit`). Each variant carries its own required fields. Zod schemas for CRUD live in `backend/src/validators/stopValidators.ts` — a single `z.discriminatedUnion` so validation is consistent on every write path.
+- **No-overlap rule (REQ-014) is enforced in `TripService.createStop` / `updateStop`** via `validateNoStayOverlap` (shared helper). Overlap throws `StayOverlapError extends ConflictError` — the route returns `409` with `errorCode: STAY_OVERLAP` + a `conflictsWith` payload so the UI can surface the conflicting Stay's name.
+- **Stay dates are night-based**: `endDate` is the last night slept, not the check-out morning. Two Stays may not share a night. Adjacent stays (A ends night X, B starts night X+1) are allowed.
+- **Agenda rendering is derived at render time** from the stop list (`shared/utils/tripHelpers.ts`: `computeAgendaDayRange`, `groupStopsByDay`, `findActiveStay`, `isTransitBaseChange`). Nothing denormalized in storage.
+- **Transit classification**: a transit renders as a full-width connector between Stay chapters when it crosses a seam (`isTransitBaseChange` returns true); otherwise it renders inline within a day as a day-trip.
+- **Location verification** goes through `frontend/src/hooks/useGooglePlaces.ts` (D7). Gated on `VITE_GOOGLE_PLACES_API_KEY`; without a key, Stay creation shows a clear unconfigured state while Eat / Play / Transit still accept free-text.
+
 ### Shared Utilities (`shared/utils/`)
 
 #### Transaction Calculations (`shared/utils/transactionCalculations.ts`)

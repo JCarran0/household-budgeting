@@ -46,6 +46,8 @@ import { TripSpendingBreakdown } from '../components/trips/TripSpendingBreakdown
 import { TransactionPreviewModal } from '../components/transactions/TransactionPreviewModal';
 import { Agenda } from '../components/trips/agenda/Agenda';
 import { AddStopSheet } from '../components/trips/agenda/AddStopSheet';
+import { ItineraryEmptyState } from '../components/trips/agenda/ItineraryEmptyState';
+import { TripTemplateModal } from '../components/trips/agenda/TripTemplateModal';
 import type {
   TripDrillDownTarget,
 } from '../components/trips/TripSpendingBreakdown';
@@ -125,6 +127,7 @@ export function TripDetail() {
     defaultDate: string;
     initialType?: Stop['type'];
     initialTransitMode?: TransitMode;
+    defaultStayNights?: number;
     editingStop?: Stop | null;
   }>({ defaultDate: '' });
 
@@ -136,6 +139,9 @@ export function TripDetail() {
     setStopSheetConfig({ defaultDate: stop.date, editingStop: stop });
     openStopSheet();
   };
+
+  // Template modal
+  const [templateOpened, { open: openTemplate, close: closeTemplate }] = useDisclosure(false);
 
   // Delete stop mutation — Phase 7 polish will replace the confirm with a richer modal.
   const deleteStopMutation = useMutation({
@@ -154,12 +160,19 @@ export function TripDetail() {
   });
 
   const confirmDeleteStop = (stop: Stop) => {
-    const displayName = stop.type === 'transit' ? 'Transit' : stop.name;
+    const displayName =
+      stop.type === 'transit'
+        ? `${stop.mode[0].toUpperCase()}${stop.mode.slice(1)}${
+            stop.toLocation?.label ? ` to ${stop.toLocation.label}` : ''
+          }`
+        : stop.name;
+    const [y, m, d] = stop.date.split('-').map(Number);
+    const dateLabel = format(new Date(y, m - 1, d), 'MMM d, yyyy');
     modals.openConfirmModal({
       title: 'Delete stop',
       children: (
         <Text size="sm">
-          Delete <strong>{displayName}</strong> from {stop.date}? This can't be undone.
+          Delete <strong>{displayName}</strong> on {dateLabel}? This can't be undone.
         </Text>
       ),
       labels: { confirm: 'Delete', cancel: 'Cancel' },
@@ -309,17 +322,26 @@ export function TripDetail() {
 
           <Tabs.Panel value="itinerary" pt="md">
             {trip.stops.length === 0 ? (
-              <Center py="xl">
-                <Stack align="center" gap="sm">
-                  <Text fw={500}>No stops yet</Text>
-                  <Text size="xs" c="dimmed" ta="center">
-                    Add a Stay, Eat, Play, or Transit to start your itinerary.
-                  </Text>
-                  <Button onClick={() => openAddStop(trip.startDate)}>
-                    Add your first stop
-                  </Button>
-                </Stack>
-              </Center>
+              <ItineraryEmptyState
+                onAddStay={() => {
+                  setStopSheetConfig({
+                    defaultDate: trip.startDate,
+                    initialType: 'stay',
+                    editingStop: null,
+                  });
+                  openStopSheet();
+                }}
+                onFlyFirst={() => {
+                  setStopSheetConfig({
+                    defaultDate: trip.startDate,
+                    initialType: 'transit',
+                    initialTransitMode: 'flight',
+                    editingStop: null,
+                  });
+                  openStopSheet();
+                }}
+                onUseTemplate={openTemplate}
+              />
             ) : (
               <Agenda
                 trip={trip}
@@ -394,10 +416,28 @@ export function TripDetail() {
           defaultDate={stopSheetConfig.defaultDate || trip.startDate}
           initialType={stopSheetConfig.initialType}
           initialTransitMode={stopSheetConfig.initialTransitMode}
+          defaultStayNights={stopSheetConfig.defaultStayNights}
           editingStop={stopSheetConfig.editingStop ?? null}
           tripStops={trip.stops}
         />
       )}
+
+      {/* Template picker — pre-fills the Stay form with template defaults */}
+      <TripTemplateModal
+        opened={templateOpened}
+        onClose={closeTemplate}
+        tripStartDate={trip.startDate}
+        tripEndDate={trip.endDate}
+        onApply={(defaults) => {
+          setStopSheetConfig({
+            defaultDate: defaults.defaultDate,
+            initialType: 'stay',
+            defaultStayNights: defaults.defaultNights,
+            editingStop: null,
+          });
+          openStopSheet();
+        }}
+      />
     </Container>
   );
 }

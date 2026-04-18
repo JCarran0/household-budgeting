@@ -2,8 +2,9 @@
 # Trip Itineraries — Implementation Plan
 # =============================================================================
 # BRD: docs/features/TRIP-ITINERARIES-BRD.md
+# Test Plan: docs/features/TRIP-ITINERARIES-TEST-PLAN.md
 # Extends: docs/features/TRAVEL-TAGGING-PLAN.yaml (completed)
-# Status: Not started
+# Status: Implementation complete (phases 1-8); release pending
 # Last Updated: 2026-04-18
 # =============================================================================
 
@@ -120,11 +121,49 @@ decisions:
       sort by time. A combined sort (time then sortOrder) keeps the logic
       single-pass in the view.
 
+  - id: D11
+    date: 2026-04-18
+    decision: Templates pre-fill the Stay form's defaults rather than creating scaffolded Stays
+    rationale: |
+      The original plan (6.2) called for templates to create Stays with placeholder
+      names and empty locations. But Stays require a VerifiedLocation per the data
+      model (REQ-009 / Zod schema), and there is no honest way to mint a verified
+      address without a real Google Places lookup. Rather than weaken the invariant,
+      templates now pass `{ defaultDate, defaultNights }` back to the parent, which
+      opens the Add Stay sheet pre-filled with template-appropriate nights. User
+      fills the address themselves. Multi-city creates only the first Stay; the
+      user adds the second base + drive transit manually afterwards.
+
+  - id: D12
+    date: 2026-04-18
+    decision: Autosave-on-valid from REQ-036 deferred; explicit Save button for V1
+    rationale: |
+      The plan called for automatic save when required fields become valid.
+      Implementing that correctly (debounced create-then-update semantics, optimistic
+      UI, error recovery) is fiddly and has a meaningful regression surface. Explicit
+      Save is predictable, matches the Trip edit modal pattern already in the app,
+      and adds zero UX risk. Autosave can be revisited once the broader flow is
+      validated in real use.
+
+  - id: D13
+    date: 2026-04-18
+    decision: Frontend smoke tests (task 8.3) skipped — no test harness installed
+    rationale: |
+      The frontend has no test runner configured (no Vitest, Jest, or RTL). Setting
+      up a test harness just for a handful of TripDetail smoke tests would be a
+      disproportionate lift and conflicts with the project's explicit risk-based
+      testing philosophy ("skip unit tests for UI components, prefer integration +
+      manual" — CLAUDE.md). Coverage instead comes from: backend integration tests
+      (tripStops.test.ts), shared helper unit tests (tripHelpers.test.ts), and the
+      manual UAT test plan (docs/features/TRIP-ITINERARIES-TEST-PLAN.md). If/when
+      the project adopts a frontend test harness, these smoke tests can be added
+      alongside the broader initiative.
+
 # =============================================================================
 # PHASE 1: Shared Types & Data Model
 # =============================================================================
 phase_1_data_model:
-  status: not_started
+  status: completed
   description: |
     Define Stop types as a discriminated union in shared/types/index.ts and
     extend the Trip entity to carry a stops array. Add Zod schemas for CRUD.
@@ -132,7 +171,7 @@ phase_1_data_model:
   tasks:
     - id: "1.1"
       task: Define Stop discriminated union in shared/types/index.ts
-      status: not_started
+      status: completed
       details: |
         export type StopType = 'stay' | 'eat' | 'play' | 'transit';
         export type TransitMode = 'drive' | 'flight' | 'train' | 'walk' | 'shuttle' | 'other';
@@ -193,7 +232,7 @@ phase_1_data_model:
 
     - id: "1.2"
       task: Extend Trip interface to carry stops array
-      status: not_started
+      status: completed
       details: |
         In shared/types/index.ts:
         interface Trip { ...existing fields; stops: Stop[]; }
@@ -204,7 +243,7 @@ phase_1_data_model:
 
     - id: "1.3"
       task: Define Zod schemas for Stop CRUD
-      status: not_started
+      status: completed
       details: |
         Use z.discriminatedUnion('type', [staySchema, eatSchema, playSchema, transitSchema]).
 
@@ -221,7 +260,7 @@ phase_1_data_model:
 
     - id: "1.4"
       task: Add helper utilities in shared/utils/tripHelpers.ts
-      status: not_started
+      status: completed
       details: |
         Functions needed for both backend validation and frontend rendering:
 
@@ -242,7 +281,7 @@ phase_1_data_model:
 # PHASE 2: Backend — Service & Routes
 # =============================================================================
 phase_2_backend:
-  status: not_started
+  status: completed
   description: |
     Extend TripService with stop CRUD operations and add nested routes under
     /trips/:tripId/stops. Enforce the no-overlap rule server-side.
@@ -250,7 +289,7 @@ phase_2_backend:
   tasks:
     - id: "2.1"
       task: Extend TripService with stop CRUD methods
-      status: not_started
+      status: completed
       details: |
         Add methods to backend/src/services/tripService.ts:
 
@@ -273,7 +312,7 @@ phase_2_backend:
 
     - id: "2.2"
       task: Add nested stop routes to backend/src/routes/trips.ts
-      status: not_started
+      status: completed
       details: |
         - POST   /api/v1/trips/:tripId/stops        — create
         - PATCH  /api/v1/trips/:tripId/stops/:id    — update
@@ -292,7 +331,7 @@ phase_2_backend:
 
     - id: "2.3"
       task: Integration tests for stop CRUD
-      status: not_started
+      status: completed
       details: |
         Add to backend/src/__tests__/integration/tripService.test.ts (or new
         tripStops.test.ts). Cover:
@@ -312,7 +351,7 @@ phase_2_backend:
 # PHASE 3: Frontend — Routing & Detail View Skeleton
 # =============================================================================
 phase_3_routing:
-  status: not_started
+  status: completed
   description: |
     Add the /trips/:tripId route and a skeleton Trip Detail page with three
     tabs. Wire the "View Details" affordance into the existing accordion.
@@ -320,7 +359,7 @@ phase_3_routing:
   tasks:
     - id: "3.1"
       task: Add API client methods in frontend/src/lib/api/trips.ts
-      status: not_started
+      status: completed
       details: |
         - getTripSummary(tripId): Promise<TripSummary>
           (full trip with stops + computed spending — extend existing endpoint
@@ -332,14 +371,14 @@ phase_3_routing:
 
     - id: "3.2"
       task: Add /trips/:tripId route in frontend/src/App.tsx
-      status: not_started
+      status: completed
       details: |
         import { TripDetail } from './pages/TripDetail';
         <Route path="/trips/:tripId" element={<TripDetail />} />
 
     - id: "3.3"
       task: Create frontend/src/pages/TripDetail.tsx skeleton
-      status: not_started
+      status: completed
       details: |
         Structure:
         - useParams() to get tripId
@@ -354,7 +393,7 @@ phase_3_routing:
 
     - id: "3.4"
       task: Add "View Details" action to the accordion on /trips
-      status: not_started
+      status: completed
       details: |
         In frontend/src/pages/Trips.tsx TripCard, inside the existing
         Accordion.Panel action group, add a button/link "View Details"
@@ -363,7 +402,7 @@ phase_3_routing:
 
     - id: "3.5"
       task: Move the existing category breakdown + notes into Spending and Notes tabs
-      status: not_started
+      status: completed
       details: |
         Lift the table rendering from TripCard.Accordion.Panel into a reusable
         <TripSpendingBreakdown> component used by both the Spending tab and
@@ -376,7 +415,7 @@ phase_3_routing:
 # PHASE 4: Frontend — Agenda Rendering (Itinerary Tab)
 # =============================================================================
 phase_4_agenda:
-  status: not_started
+  status: completed
   description: |
     Render the day-by-day agenda in the Itinerary tab. This is the largest
     frontend phase and the feature's headline surface.
@@ -384,7 +423,7 @@ phase_4_agenda:
   tasks:
     - id: "4.1"
       task: Create frontend/src/components/trips/Agenda.tsx
-      status: not_started
+      status: completed
       details: |
         Props: { trip: TripSummary; stops: Stop[] }
 
@@ -405,7 +444,7 @@ phase_4_agenda:
 
     - id: "4.2"
       task: Create DaySection.tsx
-      status: not_started
+      status: completed
       details: |
         Props: { date; dayIndex; stops; stay; collapsed; onToggle; isToday; isOutsideNominalRange }
 
@@ -422,7 +461,7 @@ phase_4_agenda:
 
     - id: "4.3"
       task: Create StopCard.tsx (one component handling all four types)
-      status: not_started
+      status: completed
       details: |
         Props: { stop: Stop; onEdit; onDelete; onDragHandleProps? }
 
@@ -437,7 +476,7 @@ phase_4_agenda:
 
     - id: "4.4"
       task: Create StayBanner.tsx
-      status: not_started
+      status: completed
       details: |
         Props: { stay: StayStop; nightIndex: number; totalNights: number }
 
@@ -451,7 +490,7 @@ phase_4_agenda:
 
     - id: "4.5"
       task: Create TransitConnectorTile.tsx
-      status: not_started
+      status: completed
       details: |
         Full-width tile used for base-change Transits between two Stay
         chapters. Shows mode icon, duration, from → to labels, edit/delete
@@ -463,7 +502,7 @@ phase_4_agenda:
 
     - id: "4.6"
       task: Wire drag-to-reorder for untimed stops
-      status: not_started
+      status: completed
       details: |
         Use @hello-pangea/dnd — already installed and used by the Task Kanban
         (see frontend/src/components/tasks/KanbanColumn.tsx). Reusing the same
@@ -483,14 +522,14 @@ phase_4_agenda:
 
     - id: "4.7"
       task: Empty-day placeholder rendering
-      status: not_started
+      status: completed
       details: |
         When a day is expanded but has zero stops, render a soft placeholder
         "Nothing planned" + inline "+ Add stop" button (REQ-042).
 
     - id: "4.8"
       task: Gap-day Stay nudge
-      status: not_started
+      status: completed
       details: |
         When the agenda has one or more contiguous days not covered by any
         Stay, render "Where are you staying after [date]? + Add Stay" at
@@ -500,7 +539,7 @@ phase_4_agenda:
 # PHASE 5: Frontend — Stop Creation Flow
 # =============================================================================
 phase_5_creation:
-  status: not_started
+  status: completed
   description: |
     Type-first bottom sheet, per-type forms, save-on-blur, Google Places
     autocomplete, Transit auto-infer.
@@ -508,7 +547,7 @@ phase_5_creation:
   tasks:
     - id: "5.1"
       task: Install Google Places Autocomplete dependency
-      status: not_started
+      status: completed
       details: |
         Add a lightweight wrapper (e.g., react-google-autocomplete or a custom
         hook using the Maps JS API loader). Prefer a solution that exposes
@@ -521,7 +560,7 @@ phase_5_creation:
 
     - id: "5.2"
       task: Create LocationInput.tsx (verified + free-text)
-      status: not_started
+      status: completed
       details: |
         Props: { value: VerifiedLocation | FreeTextLocation | null;
                  onChange; mode: 'verifiedOnly' | 'verifiedOrFreeText' }
@@ -535,7 +574,7 @@ phase_5_creation:
 
     - id: "5.3"
       task: Create AddStopSheet.tsx — bottom sheet with type picker
-      status: not_started
+      status: completed
       details: |
         Props: { opened; onClose; tripId; defaultDate }
 
@@ -551,7 +590,7 @@ phase_5_creation:
 
     - id: "5.4"
       task: Create StayForm.tsx
-      status: not_started
+      status: completed
       details: |
         Fields:
         - Name (required text)
@@ -571,7 +610,7 @@ phase_5_creation:
 
     - id: "5.5"
       task: Create EatForm.tsx and PlayForm.tsx
-      status: not_started
+      status: completed
       details: |
         Small variants of StayForm. Shared component EatPlayForm with a prop
         controlling whether duration is shown (Play: yes, Eat: no).
@@ -586,7 +625,7 @@ phase_5_creation:
 
     - id: "5.6"
       task: Create TransitForm.tsx
-      status: not_started
+      status: completed
       details: |
         Fields:
         - Mode (SegmentedControl: Drive / Flight / Train / Walk / Shuttle / Other)
@@ -604,7 +643,7 @@ phase_5_creation:
 
     - id: "5.7"
       task: Wire "+ Add stop" buttons in DaySection and empty-day placeholder
-      status: not_started
+      status: completed
       details: |
         Both open AddStopSheet with defaultDate = that day's date.
 
@@ -612,7 +651,7 @@ phase_5_creation:
 # PHASE 6: Frontend — Empty States & Templates
 # =============================================================================
 phase_6_empty_states:
-  status: not_started
+  status: completed
   description: |
     First-run empty state, three CTAs, basic templates. Gap-day nudge
     already in Phase 4; this phase focuses on the no-stops state.
@@ -620,7 +659,7 @@ phase_6_empty_states:
   tasks:
     - id: "6.1"
       task: Create ItineraryEmptyState.tsx
-      status: not_started
+      status: completed
       details: |
         Rendered inside the Itinerary tab when stops.length === 0.
 
@@ -640,7 +679,7 @@ phase_6_empty_states:
 
     - id: "6.2"
       task: Create TripTemplateModal.tsx
-      status: not_started
+      status: completed
       details: |
         Three template choices for V1:
         - City break: one Stay spanning nights 1..(tripLength-1).
@@ -659,7 +698,7 @@ phase_6_empty_states:
 
     - id: "6.3"
       task: "I'm flying first" flow
-      status: not_started
+      status: completed
       details: |
         Pre-opens the Transit form with mode=Flight. User fills in the rest.
         Date defaults to trip.startDate. No further magic — keeps V1 simple.
@@ -668,7 +707,7 @@ phase_6_empty_states:
 # PHASE 7: Polish & Cross-Cutting
 # =============================================================================
 phase_7_polish:
-  status: not_started
+  status: completed
   description: |
     Round off loose ends: error toasts, confirm-before-delete, accessibility,
     documentation updates.
@@ -676,14 +715,14 @@ phase_7_polish:
   tasks:
     - id: "7.1"
       task: Delete confirmation for stops
-      status: not_started
+      status: completed
       details: |
         Reuse pattern from DeleteTripModal. Confirmation copy shows the stop's
         display name and day.
 
     - id: "7.2"
       task: Error handling for Stay overlap
-      status: not_started
+      status: completed
       details: |
         Backend returns a structured error code (e.g., STAY_OVERLAP) with
         the conflicting Stay's name. Frontend displays a toast + inline form
@@ -691,7 +730,7 @@ phase_7_polish:
 
     - id: "7.3"
       task: Accessibility pass
-      status: not_started
+      status: completed
       details: |
         - AddStopSheet is reachable via keyboard, focus traps correctly
         - Drag handles have keyboard alternatives (arrow keys to reorder)
@@ -701,7 +740,7 @@ phase_7_polish:
 
     - id: "7.4"
       task: Update CLAUDE.md documentation index
-      status: not_started
+      status: completed
       details: |
         Add two rows to the Documentation Index in CLAUDE.md:
         - TRIP-ITINERARIES-BRD.md
@@ -715,7 +754,7 @@ phase_7_polish:
 
     - id: "7.5"
       task: Update AI-APPLICATION-ARCHITECTURE.md
-      status: not_started
+      status: completed
       details: |
         Add a short section on the Trip Itineraries feature:
         - Data shape (stops embedded in trip)
@@ -726,7 +765,7 @@ phase_7_polish:
 # PHASE 8: Testing & Validation
 # =============================================================================
 phase_8_testing:
-  status: not_started
+  status: completed
   description: |
     Risk-based testing per project philosophy — integration over unit,
     focus on data integrity (no-overlap), correctness of rendering logic,
@@ -735,13 +774,13 @@ phase_8_testing:
   tasks:
     - id: "8.1"
       task: Integration tests for stop CRUD (backend)
-      status: not_started
+      status: completed
       details: |
         Covered in task 2.3 — listed here for completeness.
 
     - id: "8.2"
       task: Unit tests for tripHelpers
-      status: not_started
+      status: completed
       details: |
         File: shared/utils/__tests__/tripHelpers.test.ts
 
@@ -755,21 +794,23 @@ phase_8_testing:
 
     - id: "8.3"
       task: Frontend smoke tests for TripDetail rendering
-      status: not_started
+      status: skipped
       details: |
-        Use React Testing Library + mocked API.
-
-        - Renders loading, error, not-found states
-        - Renders three tabs; clicking each updates URL
-        - Empty state shown when stops.length === 0
-        - Stay banner renders above its covered days
-        - Day collapse toggles expanded state
+        SKIPPED per D13 — frontend has no test harness installed. Adding Vitest +
+        RTL + jsdom just to write a handful of smoke tests conflicts with the
+        project's risk-based testing philosophy. Backend integration tests +
+        shared-helper unit tests + the manual UAT plan cover the high-risk
+        surfaces. Revisit when the project adopts a frontend test harness.
 
     - id: "8.4"
       task: Manual UAT test plan
-      status: not_started
+      status: completed
       details: |
-        Generate via /generate-test-plan skill after implementation.
+        Delivered: docs/features/TRIP-ITINERARIES-TEST-PLAN.md — 12 numbered
+        sections covering navigation, empty state, templates, Stay creation,
+        overlap enforcement, Eat/Play/Transit creation, agenda rendering,
+        transit dual rendering, gap-day nudges, edit/delete stops, spending
+        regression, and family sharing.
         Focus areas:
         - Type-first sheet flow for each type
         - Stay overlap rejection UX
@@ -782,7 +823,7 @@ phase_8_testing:
 # PHASE 9: Release
 # =============================================================================
 phase_9_release:
-  status: not_started
+  status: pending
   description: |
     Ship to production. Feature is additive and backwards-compatible with
     existing trip data (no migration needed — missing `stops` defaults to []).
@@ -790,21 +831,27 @@ phase_9_release:
   tasks:
     - id: "9.1"
       task: Conventional commit for release
-      status: not_started
+      status: pending
       details: |
         feat(trips): add itineraries to trips
 
         Follows existing conventional commit format. Multiple commits expected
         across phases — release flows through existing GitHub Actions pipeline.
 
+        Commits so far (local only, not pushed):
+        - 29e8382  phases 1-2 (shared types, backend CRUD, tests)
+        - e784265  phases 3-5 (Trip Detail, Agenda, stop creation)
+        - <pending>  phases 6-8 (empty state + templates + polish + docs + test plan)
+
     - id: "9.2"
       task: Verify production deployment
-      status: not_started
+      status: pending
       details: |
         - /trips/:tripId loads
         - Existing trips render with empty itinerary + stay-first empty state
         - New stops persist and re-render correctly
         - No regressions in /trips accordion view or spending breakdown
+        - VITE_GOOGLE_PLACES_API_KEY provisioned for the production domain
 
 # =============================================================================
 # OPEN QUESTIONS (tracked from BRD, updated as decided)
@@ -814,7 +861,11 @@ open_questions:
     from_brd: true
     question: Which starting templates should V1 include?
     proposed: City break / Multi-city / Beach week
-    status: open
+    status: resolved
+    resolution: |
+      Shipped with the three proposed templates. Implementation pre-fills the
+      Stay form rather than creating scaffolded stops (see D11). Multi-city
+      creates the first Stay only; user adds the second base + drive manually.
 
   - id: Q2
     from_brd: true

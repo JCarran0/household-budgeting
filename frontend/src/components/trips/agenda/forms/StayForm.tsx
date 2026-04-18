@@ -15,6 +15,8 @@ import { addDaysIso, dateToIso, isoToDate } from './formHelpers';
 
 interface StayFormProps {
   defaultDate: string; // ISO
+  /** Optional pre-fill for the nights picker (used by templates). */
+  defaultNights?: number;
   existing: StayStop | null;
   onSubmit: (payload: CreateStayStopDto | UpdateStayStopDto) => void;
   onCancel: () => void;
@@ -42,7 +44,15 @@ function nightsBetween(start: string, end: string): number {
   return Math.max(1, diff + 1);
 }
 
-export function StayForm({ defaultDate, existing, onSubmit, onCancel, onBack, isSubmitting }: StayFormProps) {
+export function StayForm({
+  defaultDate,
+  defaultNights = 1,
+  existing,
+  onSubmit,
+  onCancel,
+  onBack,
+  isSubmitting,
+}: StayFormProps) {
   const places = useGooglePlaces();
   const placesUnconfigured = places.status === 'unconfigured';
 
@@ -51,7 +61,7 @@ export function StayForm({ defaultDate, existing, onSubmit, onCancel, onBack, is
       name: '',
       location: null,
       startDate: isoToDate(defaultDate),
-      nights: 1,
+      nights: defaultNights,
       time: '',
       notes: '',
     },

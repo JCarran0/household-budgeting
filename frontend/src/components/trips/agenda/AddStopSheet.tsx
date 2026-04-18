@@ -45,6 +45,8 @@ interface AddStopSheetProps {
   initialType?: Stop['type'];
   /** When set, pre-selects the transit mode on open (e.g. "I'm flying first"). */
   initialTransitMode?: TransitMode;
+  /** Pre-fill the Stay form's nights picker (used by templates). */
+  defaultStayNights?: number;
   /** When set, the sheet operates in edit mode for this stop. */
   editingStop?: Stop | null;
   /** Other stops on the trip (used to pre-fill Transit from/to endpoints). */
@@ -102,6 +104,7 @@ export function AddStopSheet({
   defaultDate,
   initialType,
   initialTransitMode,
+  defaultStayNights,
   editingStop,
   tripStops = [],
 }: AddStopSheetProps) {
@@ -135,8 +138,7 @@ export function AddStopSheet({
       onClose();
     },
     onError: (err: unknown) => {
-      const message = extractErrorMessage(err) ?? 'Could not add stop.';
-      notifications.show({ title: 'Failed to add stop', message, color: 'red' });
+      showErrorNotification(err, 'Failed to add stop');
     },
   });
 
@@ -149,8 +151,7 @@ export function AddStopSheet({
       onClose();
     },
     onError: (err: unknown) => {
-      const message = extractErrorMessage(err) ?? 'Could not save changes.';
-      notifications.show({ title: 'Failed to save', message, color: 'red' });
+      showErrorNotification(err, 'Failed to save');
     },
   });
 
@@ -177,6 +178,7 @@ export function AddStopSheet({
       return (
         <StayForm
           defaultDate={defaultDate}
+          defaultNights={defaultStayNights}
           existing={editingStop?.type === 'stay' ? editingStop : null}
           onSubmit={(payload) => {
             if (isEdit) submitUpdate(payload as UpdateStopDto);
@@ -292,8 +294,32 @@ export function AddStopSheet({
   );
 }
 
-function extractErrorMessage(err: unknown): string | null {
-  if (!err || typeof err !== 'object') return null;
-  const maybeResp = (err as { response?: { data?: { error?: string } } }).response;
-  return maybeResp?.data?.error ?? null;
+interface StayOverlapPayload {
+  error: string;
+  errorCode: 'STAY_OVERLAP';
+  conflictsWith: {
+    id: string;
+    name: string;
+    date: string;
+    endDate: string;
+  };
+}
+
+function extractErrorPayload(
+  err: unknown,
+): { message: string; overlap?: StayOverlapPayload } {
+  if (!err || typeof err !== 'object') {
+    return { message: 'Something went wrong. Please try again.' };
+  }
+  const data = (err as { response?: { data?: Partial<StayOverlapPayload> } }).response?.data;
+  if (!data) return { message: 'Something went wrong. Please try again.' };
+  if (data.errorCode === 'STAY_OVERLAP' && data.conflictsWith && data.error) {
+    return { message: data.error, overlap: data as StayOverlapPayload };
+  }
+  return { message: data.error ?? 'Something went wrong.' };
+}
+
+function showErrorNotification(err: unknown, title: string) {
+  const { message } = extractErrorPayload(err);
+  notifications.show({ title, message, color: 'red' });
 }
