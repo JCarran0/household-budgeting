@@ -18,7 +18,7 @@ import {
 import { useForm } from '@mantine/form';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { notifications } from '@mantine/notifications';
-import { IconAlertCircle, IconTag, IconCategory } from '@tabler/icons-react';
+import { IconAlertCircle, IconTag, IconCategory, IconScissors } from '@tabler/icons-react';
 import { api } from '../../lib/api';
 import type { Transaction } from '../../../../shared/types';
 import { formatCurrency, formatAccountOwner } from '../../utils/formatters';
@@ -36,6 +36,7 @@ interface TransactionEditModalProps {
   onClose: () => void;
   transaction: Transaction | null;
   accountInfo?: AccountInfo | null;
+  onRequestSplit?: (transaction: Transaction) => void;
 }
 
 interface EditFormValues {
@@ -52,6 +53,7 @@ export function TransactionEditModal({
   onClose,
   transaction,
   accountInfo,
+  onRequestSplit,
 }: TransactionEditModalProps) {
   const queryClient = useQueryClient();
   const [availableTags, setAvailableTags] = useState<string[]>([]);
@@ -456,13 +458,29 @@ export function TransactionEditModal({
             </Alert>
           )}
 
-          <Group justify="flex-end" mt="md">
-            <Button variant="default" onClick={onClose} disabled={isLoading}>
-              Cancel
-            </Button>
-            <Button type="submit" loading={isLoading}>
-              Save Changes
-            </Button>
+          <Group justify="space-between" mt="md">
+            <div>
+              {onRequestSplit && !transaction.isSplit && (
+                <Button
+                  type="button"
+                  variant="light"
+                  color="blue"
+                  leftSection={<IconScissors size={16} />}
+                  onClick={() => onRequestSplit(transaction)}
+                  disabled={isLoading}
+                >
+                  Split transaction
+                </Button>
+              )}
+            </div>
+            <Group>
+              <Button variant="default" onClick={onClose} disabled={isLoading}>
+                Cancel
+              </Button>
+              <Button type="submit" loading={isLoading}>
+                Save Changes
+              </Button>
+            </Group>
           </Group>
         </Stack>
       </form>
