@@ -181,7 +181,23 @@ export function isBudgetableCategory(
   if (isTransferCategory(categoryId)) {
     return false;
   }
-  
+
   // Both income and expense categories are budgetable
   return true;
+}
+
+/**
+ * Format a category for display: "Parent → Child" for child categories,
+ * just "Name" for top-level. Single source of truth for the path arrow used
+ * across the Reports widgets, Budget page, and transaction preview headers.
+ */
+export function formatCategoryPath(
+  categoryId: string,
+  categories: Category[],
+): string {
+  const category = categories.find(c => c.id === categoryId);
+  if (!category) return categoryId;
+  if (!category.parentId) return category.name;
+  const parent = categories.find(c => c.id === category.parentId);
+  return parent ? `${parent.name} \u2192 ${category.name}` : category.name;
 }

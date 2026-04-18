@@ -11,6 +11,7 @@ import {
   Tooltip,
   Button,
   Box,
+  Alert,
 } from '@mantine/core';
 import {
   IconTrendingUp,
@@ -19,6 +20,7 @@ import {
   IconDownload,
   IconBug,
   IconBugOff,
+  IconInfoCircle,
 } from '@tabler/icons-react';
 import { format, startOfMonth, endOfMonth } from 'date-fns';
 import type { BudgetComparisonResponse } from '../../lib/api';
@@ -28,8 +30,10 @@ import { formatCurrency } from '../../utils/formatters';
 import {
   isIncomeCategoryHierarchical,
   isTransferCategory,
-  createCategoryLookup
+  createCategoryLookup,
+  formatCategoryPath,
 } from '../../../../shared/utils/categoryHelpers';
+import { calculateEnhancedParentTotals } from '../../../../shared/utils/budgetCalculations';
 import { BudgetDebugger } from './BudgetDebugger';
 
 interface BudgetComparisonProps {
@@ -81,13 +85,7 @@ export function BudgetComparison({
   const getCategoryName = (categoryId: string): string => {
     const category = categories.find(c => c.id === categoryId);
     if (!category) return 'Unknown Category';
-    
-    if (category.parentId) {
-      const parent = categories.find(c => c.id === category.parentId);
-      return parent ? `${parent.name} → ${category.name}` : category.name;
-    }
-    
-    return category.name;
+    return formatCategoryPath(categoryId, categories);
   };
 
   const getProgressColor = (percentUsed: number, isIncomeCategory: boolean = false): string => {
@@ -169,6 +167,31 @@ export function BudgetComparison({
     };
   }, [comparison.month]);
 
+  // Behavior change notice: shown when this month's data contains at least one
+  // tree with both a parent budget and any child budget — those are the rows
+  // whose displayed total dropped from additive to max under the BRD's REQ-002
+  // change. Dismissal persists in localStorage. Versioned key so a future
+  // semantic change can re-trigger the notice.
+  const ROLLUP_NOTICE_DISMISS_KEY = 'budget-rollup-notice-v1-dismissed';
+  const [rollupNoticeDismissed, setRollupNoticeDismissed] = useState<boolean>(() => {
+    try { return localStorage.getItem(ROLLUP_NOTICE_DISMISS_KEY) === '1'; } catch { return false; }
+  });
+  const hasBothLevelBudgetTree = useMemo(() => {
+    const budgetByCategory = new Map<string, number>();
+    for (const c of comparison.comparisons) budgetByCategory.set(c.categoryId, c.budgeted);
+    for (const cat of categories) {
+      if (!cat.parentId) continue;
+      const childBudget = budgetByCategory.get(cat.id) ?? 0;
+      const parentBudget = budgetByCategory.get(cat.parentId) ?? 0;
+      if (childBudget > 0 && parentBudget > 0) return true;
+    }
+    return false;
+  }, [comparison.comparisons, categories]);
+  const dismissRollupNotice = (): void => {
+    setRollupNoticeDismissed(true);
+    try { localStorage.setItem(ROLLUP_NOTICE_DISMISS_KEY, '1'); } catch { /* ignore quota errors */ }
+  };
+
   // Sort comparisons by variance (most over budget first)
   const sortedComparisons = [...comparison.comparisons].sort((a, b) => {
     if (a.isOverBudget && !b.isOverBudget) return -1;
@@ -176,70 +199,48 @@ export function BudgetComparison({
     return a.remaining - b.remaining;
   });
 
-  // Enhanced hierarchical organization with smart parent aggregation
+  // Enhanced hierarchical organization with smart parent aggregation.
+  // Rollup math is delegated to shared/utils/budgetCalculations.calculateEnhancedParentTotals
+  // per CATEGORY-HIERARCHY-BUDGETING-BRD REQ-007. The shared helper applies the
+  // canonical max rule (REQ-002) for budgets and the additive rule (REQ-004) for actuals.
   const hierarchicalComparisons = useMemo(() => {
-    // Helper function to calculate enhanced parent totals
+    // Wrap shared helper to project its result into HierarchicalComparison shape.
     const calculateParentTotals = (
-      parentId: string, 
-      children: HierarchicalComparison[], 
+      parentId: string,
+      children: HierarchicalComparison[],
       existingParent?: HierarchicalComparison
     ): HierarchicalComparison => {
-      const childBudgetSum = children.reduce((sum, child) => sum + child.budgeted, 0);
-      const childActualSum = children.reduce((sum, child) => sum + child.actual, 0);
-      
-      // Determine if this is an income category based on children or existing parent
-      const isIncomeCategory = existingParent?.isIncomeCategory || 
-        (children.length > 0 && children[0].isIncomeCategory) || false;
-      
-      // Calculate budgeted amount based on category type
-      let budgeted: number;
-      if (isIncomeCategory) {
-        // Income: additive approach - parent budget adds to children
-        budgeted = existingParent
-          ? childBudgetSum + existingParent.budgeted
-          : childBudgetSum;
-      } else {
-        // Expense: additive approach - parent budget adds to children
-        budgeted = existingParent
-          ? childBudgetSum + existingParent.budgeted
-          : childBudgetSum;
-      }
-      
-      // Actual is always additive for both income and expense
-      const actual = existingParent 
-        ? childActualSum + existingParent.actual
-        : childActualSum;
-      
-      // Calculate remaining and over budget based on category type
-      let remaining: number;
-      let isOverBudget: boolean;
-      
-      if (isIncomeCategory) {
-        // Income: positive remaining = exceeding target (good)
-        remaining = actual - budgeted;
-        isOverBudget = actual < budgeted; // Under target is "over budget" for income
-      } else {
-        // Expense: positive remaining = under budget (good)
-        remaining = budgeted - actual;
-        isOverBudget = actual > budgeted;
-      }
-      
-      const percentUsed = budgeted > 0 ? Math.round((actual / budgeted) * 100) : 0;
-      
+      const rolled = calculateEnhancedParentTotals(
+        parentId,
+        children.map(c => ({
+          categoryId: c.categoryId,
+          budgeted: c.budgeted,
+          actual: c.actual,
+          isIncomeCategory: c.isIncomeCategory ?? false,
+        })),
+        existingParent
+          ? {
+              budgeted: existingParent.budgeted,
+              actual: existingParent.actual,
+              isIncomeCategory: existingParent.isIncomeCategory ?? false,
+            }
+          : undefined,
+        categories
+      );
       return {
-        categoryId: parentId,
-        budgeted,
-        actual,
-        remaining,
-        percentUsed,
-        isOverBudget,
-        budgetType: isIncomeCategory ? 'income' : 'expense',
-        isIncomeCategory,
+        categoryId: rolled.categoryId,
+        budgeted: rolled.budgeted,
+        actual: rolled.actual,
+        remaining: rolled.remaining,
+        percentUsed: rolled.percentUsed,
+        isOverBudget: rolled.isOverBudget,
+        budgetType: rolled.isIncomeCategory ? 'income' : 'expense',
+        isIncomeCategory: rolled.isIncomeCategory,
         isParent: true,
-        isCalculated: !existingParent || (childBudgetSum > 0), // Flag if this includes child data
-        childrenIds: children.map(c => c.categoryId),
-        originalBudget: existingParent?.budgeted,
-        originalActual: existingParent?.actual,
+        isCalculated: rolled.isCalculated,
+        childrenIds: rolled.childrenIds,
+        originalBudget: rolled.originalBudget,
+        originalActual: rolled.originalActual,
         parentId: null,
       };
     };
@@ -331,6 +332,20 @@ export function BudgetComparison({
 
   return (
     <Stack gap="lg">
+      {hasBothLevelBudgetTree && !rollupNoticeDismissed && (
+        <Alert
+          icon={<IconInfoCircle size={16} />}
+          color="blue"
+          variant="light"
+          title="Budget rollup updated"
+          withCloseButton
+          onClose={dismissRollupNotice}
+        >
+          <Text size="sm">
+            For categories where both the parent and a subcategory have a budget, parent totals now show <strong>max(parent, sum of children)</strong> instead of summing them. Example: <em>Utilities $228 + Central Hudson $324 + Water $62</em> now shows <strong>$386</strong> (the larger of the two) rather than $614.
+          </Text>
+        </Alert>
+      )}
       <Paper p="md" withBorder>
         <Group justify="space-between" mb="md">
           <Title order={4}>Budget Performance Summary</Title>

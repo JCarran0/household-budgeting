@@ -36,9 +36,9 @@ import {
   calculateSpending,
 } from '../shared/utils/transactionCalculations';
 import {
-  calculateBudgetTotals,
   calculateActualTotals,
   getSavingsCategoryIds,
+  buildCategoryTreeAggregation,
 } from '../shared/utils/budgetCalculations';
 
 // Internal storage types (matching what's stored in JSON)
@@ -235,7 +235,17 @@ export class ChatbotDataService {
   }
 
   /**
-   * Get budget summary totals for a month (income, expense, variance).
+   * Get budget summary totals for a month (income, expense, savings, variance).
+   *
+   * Per CATEGORY-HIERARCHY-BUDGETING-BRD.md REQ-002 + REQ-017: budget totals are
+   * computed using the canonical rollup. Each parent tree contributes its
+   * effectiveBudget = max(directParentBudget, sum(children budgets)) so trees
+   * where the user budgets at both levels are not double-counted. Actuals remain
+   * additive (REQ-004).
+   *
+   * Per SAVINGS-CATEGORY-BRD: savings are a third bucket alongside income and
+   * spending. Both budgets and actuals are split into income / spending / savings
+   * symmetrically so variance numbers stay consistent.
    */
   async getBudgetSummary(familyId: string, month: string): Promise<BudgetSummaryTotals> {
     const [budgets, categories, transactions] = await Promise.all([
@@ -247,30 +257,49 @@ export class ChatbotDataService {
       }),
     ]);
 
-    const budgetTotals = calculateBudgetTotals(budgets, categories, { excludeHidden: true });
+    const savingsIds = getSavingsCategoryIds(categories);
+
+    // Rollup-aware budget totals split into income / spending / savings.
+    // Pass excludeSavings:false so savings trees are present, then bucket them
+    // by parentId rather than relying on isIncome (which is false for savings).
+    const trees = buildCategoryTreeAggregation(categories, budgets, new Map(), {
+      excludeSavings: false,
+      excludeTransfers: true,
+      excludeHidden: true,
+    });
+    let totalBudgetedIncome = 0;
+    let totalBudgetedExpense = 0;
+    let totalBudgetedSavings = 0;
+    for (const t of trees.values()) {
+      if (savingsIds.has(t.parentId)) totalBudgetedSavings += t.effectiveBudget;
+      else if (t.isIncome) totalBudgetedIncome += t.effectiveBudget;
+      else totalBudgetedExpense += t.effectiveBudget;
+    }
+
     const actualTotals = calculateActualTotals(
       transactions as unknown as import('../shared/types').Transaction[],
       categories,
       { excludeHidden: true },
     );
 
-    const savingsIds = getSavingsCategoryIds(categories);
-    const monthlySavings = calculateSavings(
+    const totalActualSavings = calculateSavings(
       transactions as unknown as import('../shared/utils/transactionCalculations').TransactionForCalculation[],
       savingsIds,
     );
-    const actualSpending = actualTotals.expense - monthlySavings;
+    const actualSpending = actualTotals.expense - totalActualSavings;
 
     return {
       month,
-      totalBudgetedIncome: budgetTotals.income,
+      totalBudgetedIncome,
       totalActualIncome: actualTotals.income,
-      totalBudgetedExpense: budgetTotals.expense,
-      totalActualExpense: actualSpending,  // spending only (excludes savings)
-      netBudgeted: budgetTotals.income - budgetTotals.expense,
+      totalBudgetedExpense,
+      totalActualExpense: actualSpending,
+      totalBudgetedSavings,
+      totalActualSavings,
+      netBudgeted: totalBudgetedIncome - totalBudgetedExpense,
       netActual: actualTotals.income - actualSpending,
-      incomeVariance: actualTotals.income - budgetTotals.income,
-      expenseVariance: budgetTotals.expense - actualSpending,
+      incomeVariance: actualTotals.income - totalBudgetedIncome,
+      expenseVariance: totalBudgetedExpense - actualSpending,
     };
   }
 
@@ -321,6 +350,12 @@ export class ChatbotDataService {
 
   /**
    * Get spending aggregated by category for a date range.
+   *
+   * Applies the canonical parent rollup rule per CATEGORY-HIERARCHY-BUDGETING-BRD.md
+   * REQ-017: each row represents a full category tree (parent + all children rolled up).
+   * Each row carries aggregation_level='parent_rollup' so the LLM never compares a
+   * leaf to a rolled-up parent (which would double-count). For leaf-level forensic
+   * detail the model can use query_transactions with specific child category IDs.
    */
   async getSpendingByCategory(
     familyId: string,
@@ -332,35 +367,40 @@ export class ChatbotDataService {
       this.getCategories(familyId),
     ]);
 
-    const categoryMap = new Map(categories.map(c => [c.id, c]));
-    const savingsIds = getSavingsCategoryIds(categories);
-    const spending = new Map<string, { amount: number; count: number }>();
-
-    // Only count expenses (positive amounts = debits), exclude savings categories
+    // Build raw per-category spending and per-category transaction counts.
+    // Filtering for savings/transfers/hidden happens inside buildCategoryTreeAggregation.
+    const actualsByCategory = new Map<string, number>();
+    const countsByCategory = new Map<string, number>();
     for (const t of transactions) {
       if (t.amount > 0 && t.categoryId && !t.isHidden) {
-        if (savingsIds.has(t.categoryId)) continue;
-        const current = spending.get(t.categoryId) || { amount: 0, count: 0 };
-        current.amount += t.amount;
-        current.count += 1;
-        spending.set(t.categoryId, current);
+        actualsByCategory.set(t.categoryId, (actualsByCategory.get(t.categoryId) ?? 0) + t.amount);
+        countsByCategory.set(t.categoryId, (countsByCategory.get(t.categoryId) ?? 0) + 1);
       }
     }
 
-    const totalSpending = Array.from(spending.values()).reduce((sum, s) => sum + s.amount, 0);
+    // Roll up per parent tree using the canonical helper. Empty budgets are fine —
+    // we only need the actuals rollup here.
+    const trees = buildCategoryTreeAggregation(categories, [], actualsByCategory, {
+      excludeSavings: true,
+      excludeTransfers: true,
+      excludeHidden: true,
+    });
 
-    return Array.from(spending.entries())
-      .map(([categoryId, data]) => {
-        const category = categoryMap.get(categoryId);
-        const parent = category?.parentId ? categoryMap.get(category.parentId) : null;
+    const totalSpending = Array.from(trees.values()).reduce((sum, t) => sum + t.effectiveActual, 0);
+
+    return Array.from(trees.values())
+      .filter(t => t.effectiveActual > 0)
+      .map(t => {
+        // Sum transaction counts across the parent + all children in the tree.
+        let count = countsByCategory.get(t.parentId) ?? 0;
+        for (const child of t.children) count += countsByCategory.get(child.categoryId) ?? 0;
         return {
-          categoryId,
-          categoryName: category?.name || 'Unknown',
-          parentCategoryId: category?.parentId || null,
-          parentCategoryName: parent?.name || null,
-          amount: Math.round(data.amount * 100) / 100,
-          transactionCount: data.count,
-          percentage: totalSpending > 0 ? Math.round((data.amount / totalSpending) * 10000) / 100 : 0,
+          categoryId: t.parentId,
+          categoryName: t.parentName,
+          amount: Math.round(t.effectiveActual * 100) / 100,
+          transactionCount: count,
+          percentage: totalSpending > 0 ? Math.round((t.effectiveActual / totalSpending) * 10000) / 100 : 0,
+          aggregation_level: 'parent_rollup' as const,
         };
       })
       .sort((a, b) => b.amount - a.amount);

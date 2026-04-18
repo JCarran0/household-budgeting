@@ -1,0 +1,178 @@
+feature: Category Hierarchy in Budgeting & Reports
+brd: docs/features/CATEGORY-HIERARCHY-BUDGETING-BRD.md
+status: planning
+created: 2026-04-17
+last_updated: 2026-04-17
+
+overview: |
+  Codify parent/child budget rollup semantics in shared utilities and apply them
+  consistently across Reports → Budget Performance, the chatbot data tools, and
+  the dashboard. Fix the bug where parent-budgeted / child-categorized spending
+  appears as both "Unused Budget" and "Unbudgeted Spending". Add a Spending
+  Composition widget to serve the leaf-level forensic intent without polluting
+  variance widgets.
+
+  Adopt max(parent, sum(children)) as the canonical effective-budget rule for
+  both income and expense parents (BRD REQ-002 v1.3). This is a behavior change
+  from what BudgetComparison.tsx currently ships (additive); a migration check
+  is included in Phase 2 to surface affected trees in user data.
+
+phases:
+
+  - phase: 1
+    name: Canonical Rollup Utilities
+    status: pending
+    goals:
+      - Land canonical, single-source-of-truth rollup helpers in shared/utils
+      - Implement max-rule rollup (BRD REQ-002) uniformly for income and expense
+    tasks:
+      - Add buildCategoryTreeAggregation(categories, budgets, actuals, options) to shared/utils/budgetCalculations.ts — returns Map<parentId, { effectiveBudget, effectiveActual, directBudget, directActual, childBudgetSum, children: ChildAgg[] }>. effectiveBudget = max(directBudget, childBudgetSum) per REQ-002. effectiveActual = directActual + sum(child actuals) per REQ-004. Options include excludeSavings, excludeTransfers, excludeHidden.
+      - Add classifyTreeBudgetState(tree) returning 'parent_budgeted' | 'child_budgeted_only' | 'unbudgeted' to support REQ-010's three-case rule. Note: under max rule, "parent_budgeted" means directBudget > 0 regardless of child budgets.
+      - Add isTreeUnused(tree, threshold) and isTreeOverBudget(tree) classification helpers for the variance widgets
+      - Mark calculateEnhancedParentTotals as @deprecated in JSDoc — its additive logic now contradicts the max rule. Currently has zero UI callers; only unit tests reference it. Slated for deletion in Phase 8.
+      - Unit tests for each new helper covering: parent-only budget, child-only budgets, both levels (must equal max, NOT sum), no budgets, savings exclusion, transfer exclusion, income vs expense parents (math identical, only variance display differs)
+      - Drift-prevention test asserting effectiveBudget never exceeds max(directBudget, childBudgetSum) — guards against accidental regression to additive
+
+  - phase: 1.5
+    name: Both-Level Budget Migration Check
+    status: pending
+    goals:
+      - Surface every tree in user data with both parent and child budgets in the same month
+      - Let the user audit each tree before the max rule changes their displayed totals
+    tasks:
+      - Add a one-shot script at backend/src/scripts/audit-both-level-budgets.ts that scans all family budget data and prints a report of trees where directParentBudget > 0 AND any child has a budget > 0 in the same month
+      - Report format per row, oldest month first — Family / Month / Parent name / Parent budget / Child budgets (name + amount) / current additive total / new max total / difference
+      - Run against local production-synced data (per CLAUDE.md, sync via cd backend && AWS_PROFILE=budget-app-prod npm run sync:production)
+      - User reviews the report. For each tree, decide if the original intent matches max (likely yes — that's the BRD assumption) or if any tree was deliberately additive (rare). Document any exceptions; if non-trivial, return to BRD for revision before Phase 2.
+      - This phase blocks Phase 2 — do not ship the widget refactor until the audit is reviewed.
+
+  - phase: 2
+    name: Reports — Budget Performance Widget Refactor
+    status: pending
+    goals:
+      - Apply parent rollup to all 5 existing widgets per REQ-008/009
+      - Implement refined REQ-010 three-case rule for Unbudgeted Spending
+    tasks:
+      - Replace the flat categoryAgg Map<categoryId, ...> in frontend/src/components/reports/BudgetPerformanceSection.tsx with a tree-rolled-up aggregation built via Phase 1 helpers
+      - Update Budget Accuracy Score to sum effectiveBudget vs effectiveActual at parent level
+      - Update Top 10 Budget Gaps to compute gap at parent level
+      - Update Consistently Over-Budget to use effective_actual(M) > effective_budget(M); document the behavior change (single-child overspends in otherwise-under trees no longer trigger)
+      - Update Unused Budgets to use rolled-up actual / rolled-up budget
+      - Update Unbudgeted Spending per REQ-010 three cases: parent-budgeted hides whole tree; child-budgeted-only shows unbudgeted siblings as leaf rows; fully unbudgeted shows leaves
+      - Verify isExpense / isTransfer / isSavings filters are applied BEFORE rollup so excluded categories don't pollute parent totals
+      - Manual repro of the Travel→Flights/Lodging/Other bug confirms it's fixed
+
+  - phase: 3
+    name: Reports — Drill-Down UX
+    status: pending
+    goals:
+      - Let users see leaf composition behind any rolled-up parent row
+    tasks:
+      - Decide drill-down affordance: expandable row vs popover vs modal (recommend expandable row for table-based widgets, popover for compact widgets)
+      - Implement drill-down on rolled-up parent rows in all 5 variance widgets per REQ-012
+      - Default view shows only children with non-zero activity for the period
+      - Add "Show all categories" affordance to reveal zero-activity children
+      - Reuse TransactionPreviewTrigger pattern where appropriate
+
+  - phase: 4
+    name: Reports — Spending Composition Widget (New)
+    status: pending
+    goals:
+      - Add the forensic leaf-level widget per §2.3
+    tasks:
+      - Add SpendingCompositionWidget component to frontend/src/components/reports/
+      - Lists each parent with non-zero effectiveBudget AND spending on at least one child
+      - For each parent: show effectiveBudget, then leaf rows (name, actual, % of parent's actual)
+      - Direct-on-parent spending shown as its own row labeled "(direct)"
+      - No thresholds, no "good/bad" coloring — purely informational
+      - Add to BudgetPerformanceSection layout, positioned after the existing 5 widgets
+      - Empty state when no parents qualify
+
+  - phase: 5
+    name: Chatbot Tool Updates
+    status: pending
+    goals:
+      - Apply rollup semantics to chatbot data tools per REQ-017
+      - Make rollup explicit in tool responses to survive context-window drift
+    tasks:
+      - Update get_spending_by_category in backend/src/services/chatbotDataService.ts to apply rollup helpers from Phase 1
+      - Update get_budget_summary similarly
+      - Add aggregation_level: 'parent_rollup' | 'leaf' field to each row in tool responses
+      - Update Zod schemas for tool responses
+      - Update chatbot system prompt in backend/src/services/chatbotPrompt.ts to explain parent/child rollup semantics and the aggregation_level field
+      - Add integration test exercising the Travel example through the chatbot flow
+
+  - phase: 6
+    name: Dashboard Audit
+    status: pending
+    goals:
+      - Apply rollup semantics to dashboard budget surfaces per REQ-018
+    tasks:
+      - Identify all dashboard widgets that surface "over budget" / "under budget" / category-level budget status
+      - Apply Phase 1 rollup helpers to each
+      - Verify isSavings exclusion still works correctly post-rollup (savings parents excluded as a unit, not by leaf)
+
+  - phase: 7
+    name: Tests & Edge Cases
+    status: pending
+    goals:
+      - Lock in correct behavior with high-leverage tests
+    tasks:
+      - Add story-style test in backend/src/__tests__/critical/financial-calc.stories.test.ts for the Travel→Flights/Lodging/Other repro from the BRD
+      - Add tests for REQ-010 three cases (parent-budgeted, child-budgeted-only, fully-unbudgeted)
+      - Add test for "Consistently Over-Budget" behavior change (single-child overspend in under-budget tree no longer flags)
+      - Add test for income parent rollup (additive per REQ-003)
+      - Add test for savings + rollup interaction (savings parent fully excluded, not partial)
+      - Add test for transfers + rollup interaction (transfers excluded before rollup)
+
+  - phase: 8
+    name: Polish & Documentation
+    status: pending
+    goals:
+      - Update living docs and verify no regressions on adjacent surfaces
+    tasks:
+      - Add architecture decision row to CLAUDE.md decisions table for "Canonical parent rollup utilities + Reports widget refactor"
+      - Update docs/AI-USER-STORIES.md "Hierarchical Budget Display" to reference this BRD as the canonical source rather than restating the rules
+      - Manual smoke test of Budget page (no regression — existing rollup behavior preserved)
+      - Manual smoke test of Yearly Budget Grid (out of scope per REQ-019, verify untouched)
+      - Manual test of Reports page Travel scenario end-to-end
+      - Update CHANGELOG via conventional commit (feat for Spending Composition, fix for the Travel bug)
+      - REQUIRED (not optional): migrate BudgetComparison.tsx inline calculateParentTotals (lines 181-245) to use the new shared helpers from Phase 1. This is a behavior change for any user with both-level budgets — the audit from Phase 1.5 must be complete first. Effective parent totals will switch from additive to max.
+      - Delete calculateEnhancedParentTotals from shared/utils/budgetCalculations.ts and its unit tests in backend/src/__tests__/unit/budgetCalculations.test.ts once no callers remain.
+      - Audit BudgetGrid.tsx and YearlyBudgetGrid.tsx for any inline rollup logic; route through shared helpers (Yearly Budget Grid display untouched per REQ-019, but if it has rollup math anywhere, it must agree).
+
+decisions_log:
+  - date: 2026-04-17
+    decision: Unbudgeted Spending uses three-case rule (parent-budgeted / child-budgeted-only / unbudgeted)
+    rationale: Parent-level budget signals "treat as a pool" — covers whole tree. Child-level budget signals deliberate granularity — unbudgeted siblings should surface. Single-rule approaches lose this signal. (Resolves OQ-001)
+  - date: 2026-04-17
+    decision: No "view leaves" toggle on variance widgets
+    rationale: Variance and forensic intents are served by separate widgets (variance per §2.2, Spending Composition per §2.3) rather than one widget in two modes. Avoids deferring the design decision onto the user every visit. (Resolves OQ-002)
+  - date: 2026-04-17
+    decision: Consistently Over-Budget uses effective_actual(M) > effective_budget(M) at parent level
+    rationale: Single-child overspends inside an otherwise-under tree will no longer flag — correct behavior since the user's plan was the parent total. Acknowledged as an intentional behavior change. (Resolves OQ-003)
+  - date: 2026-04-17
+    decision: Chatbot tool responses get an aggregation_level field AND a system prompt update
+    rationale: System prompts degrade on long contexts; structural field is cheap, self-documenting, and gives a hook for a future level=leaf tool variant. (Resolves OQ-004)
+  - date: 2026-04-17
+    decision: Drill-down defaults to non-zero children with "show all" affordance
+    rationale: Default forensic intent ("where did the money go?") wants signal, not noise. Show-all covers the planning intent. (Resolves OQ-005)
+  - date: 2026-04-17
+    decision: SUPERSEDED — initially adopted additive rollup (v1.2)
+    rationale: |
+      Spike findings: (a) BudgetComparison.tsx ships inline additive rollup for both types since at least commit a6e8a21; (b) shared util calculateEnhancedParentTotals also additive but has zero UI callers; (c) AI-USER-STORIES.md §"Hierarchical Budget Display" documents max-for-expense but never matched shipped code; (d) the Travel bug doesn't depend on this resolution. Original recommendation was pragmatic (least-disruption) — see superseding decision below for the principled outcome.
+
+  - date: 2026-04-17
+    decision: Adopt max(parent, sum(children)) rollup uniformly for income and expense parents (BRD REQ-002 v1.3)
+    rationale: |
+      User pushback prompted re-examination. The cap mental model — "parent budget is the umbrella for the tree; children are subdivisions within it" — matches user intent for both income and expense. Concrete test cases:
+        Expense: $5k Travel + $2k Flights → max gives $5k cap (correct); additive gives $7k phantom budget.
+        Income: $80k Salary parent + $70k Base + $10k Bonus → max gives $80k target (correct); additive gives $160k nonsense.
+      The original income/expense split in AI-USER-STORIES.md conflated variance interpretation (income: under = bad; expense: over = bad — REQ-002a, orthogonal) with aggregation math (should be uniform). Every comparable budgeting app (YNAB, Monarch, Copilot, Lunch Money) treats parent as cap, not as additional bucket. The "no complaints on additive" pragmatic argument is weak given the app has 2 users and one of them just complained about exactly this surface.
+    behavior_change_note: |
+      BudgetComparison.tsx currently ships additive. Any tree where the user has both a parent budget and at least one child budget in the same month will see its effective parent total shrink from (parent + sum(children)) to max(parent, sum(children)). Phase 1.5 (migration audit) surfaces these trees before the change ships so the user can confirm intent.
+    spike_artifacts:
+      - shared/utils/budgetCalculations.ts:361 — current additive comment "additive approach for both income and expense" (to be replaced)
+      - frontend/src/components/budgets/BudgetComparison.tsx:197-205 — current inline additive rollup (to be migrated in Phase 8)
+      - git commit a6e8a21 — origin of the additive implementation
+      - AI-USER-STORIES.md §"Hierarchical Budget Display" — partially aligned with v1.3 (max-for-expense); superseded entirely; cleanup task in Phase 8

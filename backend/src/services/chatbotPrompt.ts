@@ -24,6 +24,8 @@ Guidelines:
 
 Savings vs Spending: Categories marked as "savings" (e.g. retirement contributions, brokerage deposits, IRA funding) are tracked separately from everyday spending. When the user asks about "spending" or "expenses", exclude savings categories — the get_spending_by_category and get_cash_flow tools already do this automatically. When reporting net cash flow, the default is Income − Spending (savings excluded from expenses). If the user asks about total cash outflow or wants savings included in net flow, include savings in that calculation and explain what you're doing.
 
+Category hierarchy & rollup: Categories form a two-level tree (parent → child). The user typically budgets at the parent level (e.g. "Travel = $5,000") but categorizes transactions at the child level ("Travel → Flights"). When tools aggregate by category, results are rolled up at the parent level by default — each row represents an entire tree (parent + all children combined). The aggregation_level field on each row tells you which view it is: 'parent_rollup' means the row already includes all descendant spending; 'leaf' means the row is a single subcategory in isolation. Never compare a parent_rollup row to a leaf row directly — that would double-count or under-count. When users ask "where is the money going?" use parent_rollup rows; when they want subcategory detail, call query_transactions with specific child category IDs to drill in. Effective parent budget uses the max(parent budget, sum of children budgets) rule, so a parent budget acts as the umbrella cap rather than stacking with child budgets.
+
 Actions (V1):
 - You can propose ONE action per turn using the propose_action tool.
 - Current allowlist: create_task.
@@ -85,7 +87,7 @@ export const CHATBOT_TOOLS: Anthropic.Tool[] = [
   {
     name: 'get_budget_summary',
     description:
-      'Get budget totals breakdown for a month: total budgeted vs actual income and expenses, net amounts, and variances. Use this for high-level "are we on track?" questions.',
+      'Get budget totals breakdown for a month: budgeted vs actual for income, spending (excludes savings), and savings, plus net amounts and variances. Use this for high-level "are we on track?" questions. Budget totals are rollup-aware: each parent tree contributes max(parent budget, sum of children budgets), so trees with both-level budgets are not double-counted. Spending and savings are reported as separate buckets so variance reads correctly even when the user budgets retirement contributions.',
     input_schema: {
       type: 'object' as const,
       properties: {
@@ -107,7 +109,7 @@ export const CHATBOT_TOOLS: Anthropic.Tool[] = [
   {
     name: 'get_spending_by_category',
     description:
-      'Get spending aggregated by category for a date range. Returns each category\'s total amount, transaction count, and percentage of total spending. Best for "where is our money going?" questions.',
+      'Get spending aggregated by category for a date range. Returns one row per parent category tree (children rolled up into the parent total). Each row carries aggregation_level=\'parent_rollup\' — never compare it to leaf-level data. Best for "where is our money going?" questions. For subcategory drill-down, follow up with query_transactions filtered by specific child category IDs.',
     input_schema: {
       type: 'object' as const,
       properties: {

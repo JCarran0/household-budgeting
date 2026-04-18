@@ -348,15 +348,14 @@
 - A user should be able to export budget comparisons to CSV
 
 ### Hierarchical Budget Display
+
+> **Canonical aggregation rules now live in [docs/features/CATEGORY-HIERARCHY-BUDGETING-BRD.md](features/CATEGORY-HIERARCHY-BUDGETING-BRD.md).** Earlier versions of this section described an income/expense split for budget rollup that never matched shipped code; that text has been removed in favor of pointing at the BRD. Implementation lives in `shared/utils/budgetCalculations.ts` (`buildCategoryTreeAggregation`, `calculateEnhancedParentTotals`).
+
 - A user should be able to see budget categories organized hierarchically
 - A user should be able to see parent categories displayed above their child categories
 - A user should be able to see child categories indented under their parent categories
-- A user should be able to see parent category totals that intelligently aggregate from children
-- A user should be able to see different aggregation logic for expense vs income categories:
-  - **Expense Categories:** Parent budget = maximum of (direct parent budget, sum of children budgets) to prevent double-counting
-  - **Income Categories:** Parent budget = direct parent budget + sum of children budgets (additive for income targets)
-- A user should be able to see parent actuals calculated as (direct parent spending/income + sum of children spending/income) for both types
-- A user should be able to see income categories with inverse "over budget" logic (under target = bad, exceeding target = good)
+- A user should be able to see parent category totals that aggregate from children using the canonical rules from the BRD (effective parent budget = `max(direct parent budget, sum of children budgets)`; effective parent actual = `direct parent + sum of children`, always additive)
+- A user should be able to see income categories with inverse "over budget" logic (under target = bad, exceeding target = good) — this is variance interpretation only, not aggregation math
 - A user should be able to see visual distinction between income (💰) and expense (💳) categories
 - A user should be able to see parent categories even when they have no direct budget but have budgeted children
 - A user should be able to see parent categories even when they have no direct transactions but children have transactions

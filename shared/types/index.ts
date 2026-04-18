@@ -616,22 +616,40 @@ export interface GetCashFlowInput {
 }
 
 // Tool outputs
+
+/**
+ * How a CategorySpendingSummary row was computed.
+ *  - 'parent_rollup' — row represents an entire category tree (parent + all children rolled up)
+ *  - 'leaf'          — row represents a single leaf category in isolation (no rollup)
+ *
+ * Per CATEGORY-HIERARCHY-BUDGETING-BRD.md REQ-017 — the field exists so the model
+ * can distinguish rolled-up totals from leaf-level detail and avoid presenting them
+ * as comparable. Current chatbot tools return parent_rollup rows only; the field is
+ * a stable hook for a future leaf-level variant.
+ */
+export type CategoryAggregationLevel = 'parent_rollup' | 'leaf';
+
 export interface CategorySpendingSummary {
   categoryId: string;
   categoryName: string;
-  parentCategoryId: string | null;
-  parentCategoryName: string | null;
   amount: number;
   transactionCount: number;
   percentage: number;
+  aggregation_level: CategoryAggregationLevel;
 }
 
 export interface BudgetSummaryTotals {
   month: string;
   totalBudgetedIncome: number;
   totalActualIncome: number;
+  /** Budgeted spending (excludes savings categories per SAVINGS-CATEGORY-BRD). */
   totalBudgetedExpense: number;
+  /** Actual spending (excludes savings categories). */
   totalActualExpense: number;
+  /** Budgeted savings contributions (e.g. retirement targets). Symmetric with totalActualSavings. */
+  totalBudgetedSavings: number;
+  /** Actual savings transactions for the period. */
+  totalActualSavings: number;
   netBudgeted: number;
   netActual: number;
   incomeVariance: number;

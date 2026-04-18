@@ -11,11 +11,16 @@ import {
   Loader,
   Progress,
   RingProgress,
+  Accordion,
 } from '@mantine/core';
 import { formatCurrency } from '../../utils/formatters';
-import { isExpenseCategoryExplicit, isTransferCategory } from '../../../../shared/utils/categoryHelpers';
+import {
+  buildPeriodRollup,
+  classifyTreeBudgetState,
+  type PeriodTreeRollup,
+} from '../../../../shared/utils/budgetCalculations';
 import { TransactionPreviewTrigger } from '../transactions';
-import type { Category } from '../../../../shared/types';
+import type { Category, MonthlyBudget } from '../../../../shared/types';
 
 interface Budget {
   categoryId: string;
@@ -61,127 +66,136 @@ export function BudgetPerformanceSection({
   endDate,
   timeRange,
 }: BudgetPerformanceSectionProps) {
-  // Compute budget health metrics from existing fetched data
-  const budgetHealthData = useMemo(() => {
+  // Step 1 — build the per-tree period rollup once. Variance widgets and the
+  // Spending Composition widget both consume this. Filters (transfers/hidden/
+  // savings) are applied inside buildCategoryTreeAggregation so excluded
+  // categories never contribute to parent totals.
+  const periodTrees = useMemo<Map<string, PeriodTreeRollup> | null>(() => {
     if (!budgetMonthlyData || !categories || !trendsData) return null;
 
-    // Determine how many months are in the range (for adjusting "consistently over" threshold)
-    const totalMonthsInRange = budgetMonthlyData.length;
-
-    // Helper: check if a category is a pure expense category (not income, not transfer, not hidden)
-    const isExpense = (categoryId: string): boolean => {
-      const cat = categories.find(c => c.id === categoryId);
-      if (!cat || cat.isHidden) return false;
-      if (isTransferCategory(categoryId)) return false;
-      return isExpenseCategoryExplicit(categoryId, categories);
-    };
-
-    // Helper: build a human-readable name (parent → child)
-    const getCategoryName = (categoryId: string): string => {
-      const cat = categories.find(c => c.id === categoryId);
-      if (!cat) return categoryId;
-      const parent = cat.parentId ? categories.find(c => c.id === cat.parentId) : null;
-      return parent ? `${parent.name} \u2192 ${cat.name}` : cat.name;
-    };
-
-    // Aggregate per-category budget and actual data across all months
-    const categoryAgg = new Map<string, {
-      budgeted: number;
-      actual: number;
-      monthsOverBudget: number;
-      monthsWithBudget: number;
-    }>();
-
-    // Accumulate budgeted amounts from budgetMonthlyData
-    budgetMonthlyData.forEach(monthData => {
-      monthData.budgets.forEach(budget => {
-        const existing = categoryAgg.get(budget.categoryId) ?? {
-          budgeted: 0, actual: 0, monthsOverBudget: 0, monthsWithBudget: 0,
-        };
-        existing.budgeted += budget.amount;
-        existing.monthsWithBudget += 1;
-        categoryAgg.set(budget.categoryId, existing);
-      });
+    const trendsByMonth = new Map<string, Map<string, number>>();
+    trendsData.trends?.forEach(t => {
+      let monthMap = trendsByMonth.get(t.month);
+      if (!monthMap) { monthMap = new Map(); trendsByMonth.set(t.month, monthMap); }
+      monthMap.set(t.categoryId, (monthMap.get(t.categoryId) ?? 0) + t.amount);
     });
 
-    // Accumulate actual spending from trendsData and track per-month over-budget
-    trendsData.trends?.forEach(trend => {
-      const existing = categoryAgg.get(trend.categoryId) ?? {
-        budgeted: 0, actual: 0, monthsOverBudget: 0, monthsWithBudget: 0,
+    const monthlyData = budgetMonthlyData.map(monthData => {
+      const monthBudgets: MonthlyBudget[] = monthData.budgets.map(b => ({
+        id: `${monthData.month}-${b.categoryId}`,
+        categoryId: b.categoryId,
+        month: monthData.month,
+        amount: b.amount,
+      }));
+      return {
+        month: monthData.month,
+        budgets: monthBudgets,
+        actuals: trendsByMonth.get(monthData.month) ?? new Map<string, number>(),
       };
-      existing.actual += trend.amount;
-
-      // Check if this specific month exceeded the budget for this category
-      const monthBudget = budgetMonthlyData.find(m => m.month === trend.month);
-      const budgetForCat = monthBudget?.budgets.find(b => b.categoryId === trend.categoryId);
-      if (budgetForCat && trend.amount > budgetForCat.amount) {
-        existing.monthsOverBudget += 1;
-      }
-
-      categoryAgg.set(trend.categoryId, existing);
     });
 
-    // ---- Widget 1: Budget Accuracy Score ----
+    return buildPeriodRollup(categories, monthlyData, {
+      excludeSavings: true, excludeTransfers: true, excludeHidden: true,
+    });
+  }, [budgetMonthlyData, trendsData, categories]);
+
+  // Step 2 — variance widgets (REQ-009/010/011). Expense-only.
+  const variance = useMemo(() => {
+    if (!periodTrees || !budgetMonthlyData) return null;
+    const totalMonthsInRange = budgetMonthlyData.length;
+    const expenseTrees = Array.from(periodTrees.values()).filter(t => !t.isIncome);
+
+    // Widget 1: Budget Accuracy Score
     let totalBudgeted = 0;
     let totalActualForBudgeted = 0;
-    categoryAgg.forEach((data, id) => {
-      if (data.budgeted > 0 && isExpense(id)) {
-        totalBudgeted += data.budgeted;
-        totalActualForBudgeted += data.actual;
+    for (const t of expenseTrees) {
+      if (t.effectiveBudget > 0) {
+        totalBudgeted += t.effectiveBudget;
+        totalActualForBudgeted += t.effectiveActual;
       }
-    });
+    }
     const accuracyScore = totalBudgeted > 0
       ? Math.max(0, 100 - Math.abs((totalActualForBudgeted - totalBudgeted) / totalBudgeted * 100))
       : 0;
 
-    // ---- Widget 2: Top 10 Budget Gaps ----
-    const budgetGaps = Array.from(categoryAgg.entries())
-      .filter(([id, data]) => data.budgeted > 0 && isExpense(id))
-      .map(([id, data]) => ({
-        categoryId: id,
-        categoryName: getCategoryName(id),
-        budgeted: data.budgeted,
-        actual: data.actual,
-        gap: data.actual - data.budgeted,
-        percentUsed: data.budgeted > 0 ? (data.actual / data.budgeted) * 100 : 0,
+    // Widget 2: Top 10 Budget Gaps
+    const budgetGaps = expenseTrees
+      .filter(t => t.effectiveBudget > 0)
+      .map(t => ({
+        categoryId: t.parentId,
+        categoryName: t.parentName,
+        childCategoryIds: t.childIds,
+        budgeted: t.effectiveBudget,
+        actual: t.effectiveActual,
+        gap: t.effectiveActual - t.effectiveBudget,
+        percentUsed: (t.effectiveActual / t.effectiveBudget) * 100,
       }))
       .sort((a, b) => b.gap - a.gap)
       .slice(0, 10);
 
-    // ---- Widget 3: Consistently Over-Budget ----
+    // Widget 3: Consistently Over-Budget (per-month signal preserved by buildPeriodRollup)
     const overBudgetThreshold = Math.min(3, totalMonthsInRange);
-    const consistentlyOver = Array.from(categoryAgg.entries())
-      .filter(([id, data]) => data.monthsOverBudget >= overBudgetThreshold && isExpense(id))
-      .map(([id, data]) => ({
-        categoryId: id,
-        categoryName: getCategoryName(id),
-        monthsOverBudget: data.monthsOverBudget,
-        monthsWithBudget: data.monthsWithBudget,
-        totalOverspend: data.actual - data.budgeted,
+    const consistentlyOver = expenseTrees
+      .filter(t => t.monthsOverBudget >= overBudgetThreshold)
+      .map(t => ({
+        categoryId: t.parentId,
+        categoryName: t.parentName,
+        monthsOverBudget: t.monthsOverBudget,
+        monthsWithBudget: t.monthsWithBudget,
+        totalOverspend: t.effectiveActual - t.effectiveBudget,
       }))
       .sort((a, b) => b.monthsOverBudget - a.monthsOverBudget);
 
-    // ---- Widget 4: Unused Budgets (<10% spent) ----
-    const unusedBudgets = Array.from(categoryAgg.entries())
-      .filter(([id, data]) => data.budgeted > 0 && (data.actual / data.budgeted) < 0.1 && isExpense(id))
-      .map(([id, data]) => ({
-        categoryId: id,
-        categoryName: getCategoryName(id),
-        budgeted: data.budgeted,
-        actual: data.actual,
-        percentUsed: (data.actual / data.budgeted) * 100,
+    // Widget 4: Unused Budgets (REQ-011 — child spending counts toward parent threshold)
+    const unusedBudgets = expenseTrees
+      .filter(t => t.effectiveBudget > 0 && (t.effectiveActual / t.effectiveBudget) < 0.1)
+      .map(t => ({
+        categoryId: t.parentId,
+        categoryName: t.parentName,
+        childCategoryIds: t.childIds,
+        budgeted: t.effectiveBudget,
+        actual: t.effectiveActual,
+        percentUsed: (t.effectiveActual / t.effectiveBudget) * 100,
       }))
       .sort((a, b) => a.percentUsed - b.percentUsed);
 
-    // ---- Widget 5: Unbudgeted Spending ----
-    const unbudgetedSpending = Array.from(categoryAgg.entries())
-      .filter(([id, data]) => data.budgeted === 0 && data.actual > 0 && isExpense(id))
-      .map(([id, data]) => ({
-        categoryId: id,
-        categoryName: getCategoryName(id),
-        actual: data.actual,
-      }))
-      .sort((a, b) => b.actual - a.actual);
+    // Widget 5: Unbudgeted Spending (REQ-010 three-case rule).
+    // Using inline join here rather than formatCategoryPath because we already
+    // have the parent name on the tree object — avoids an extra category lookup
+    // per row at render time.
+    const treePath = (t: PeriodTreeRollup, childName: string): string => `${t.parentName} \u2192 ${childName}`;
+    const unbudgetedSpending: { categoryId: string; categoryName: string; childCategoryIds: string[]; actual: number }[] = [];
+    for (const t of expenseTrees) {
+      const state = classifyTreeBudgetState(t);
+      if (state === 'parent_budgeted') continue;
+
+      if (state === 'child_budgeted_only') {
+        for (const child of t.children) {
+          if (child.actual > 0 && child.budgeted === 0) {
+            unbudgetedSpending.push({ categoryId: child.categoryId, categoryName: treePath(t, child.categoryName), childCategoryIds: [], actual: child.actual });
+          }
+        }
+        if (t.directActual > 0) {
+          unbudgetedSpending.push({ categoryId: t.parentId, categoryName: `${t.parentName} (direct)`, childCategoryIds: [], actual: t.directActual });
+        }
+        continue;
+      }
+
+      // 'unbudgeted' — no node in tree has a budget
+      if (t.effectiveActual <= 0) continue;
+      const childrenWithSpending = t.children.filter(c => c.actual > 0);
+      if (childrenWithSpending.length === 0) {
+        unbudgetedSpending.push({ categoryId: t.parentId, categoryName: t.parentName, childCategoryIds: t.childIds, actual: t.effectiveActual });
+      } else {
+        for (const child of childrenWithSpending) {
+          unbudgetedSpending.push({ categoryId: child.categoryId, categoryName: treePath(t, child.categoryName), childCategoryIds: [], actual: child.actual });
+        }
+        if (t.directActual > 0) {
+          unbudgetedSpending.push({ categoryId: t.parentId, categoryName: `${t.parentName} (direct)`, childCategoryIds: [], actual: t.directActual });
+        }
+      }
+    }
+    unbudgetedSpending.sort((a, b) => b.actual - a.actual);
 
     return {
       accuracyScore,
@@ -193,7 +207,56 @@ export function BudgetPerformanceSection({
       unbudgetedSpending,
       overBudgetThreshold,
     };
-  }, [budgetMonthlyData, trendsData, categories]);
+  }, [periodTrees, budgetMonthlyData]);
+
+  // Step 3 — Spending Composition widget (BRD §2.3, independent of variance per REQ-016).
+  const spendingComposition = useMemo(() => {
+    if (!periodTrees) return null;
+    const out: {
+      parentId: string;
+      parentName: string;
+      effectiveBudget: number;
+      effectiveActual: number;
+      leaves: { categoryId: string; categoryName: string; actual: number; percentOfParentActual: number }[];
+    }[] = [];
+    for (const t of periodTrees.values()) {
+      if (t.isIncome) continue;
+      if (t.effectiveBudget <= 0) continue;
+      const childrenWithSpending = t.children.filter(c => c.actual > 0);
+      if (childrenWithSpending.length === 0) continue;
+
+      const leaves = childrenWithSpending.map(child => ({
+        categoryId: child.categoryId,
+        categoryName: child.categoryName,
+        actual: child.actual,
+        percentOfParentActual: t.effectiveActual > 0 ? (child.actual / t.effectiveActual) * 100 : 0,
+      }));
+      if (t.directActual > 0) {
+        leaves.push({
+          categoryId: t.parentId,
+          categoryName: '(direct)',
+          actual: t.directActual,
+          percentOfParentActual: t.effectiveActual > 0 ? (t.directActual / t.effectiveActual) * 100 : 0,
+        });
+      }
+      leaves.sort((a, b) => b.actual - a.actual);
+      out.push({
+        parentId: t.parentId,
+        parentName: t.parentName,
+        effectiveBudget: t.effectiveBudget,
+        effectiveActual: t.effectiveActual,
+        leaves,
+      });
+    }
+    out.sort((a, b) => b.effectiveActual - a.effectiveActual);
+    return out;
+  }, [periodTrees]);
+
+  // Combined object the JSX still expects.
+  const budgetHealthData = useMemo(() => {
+    if (!variance || !spendingComposition) return null;
+    return { ...variance, spendingComposition };
+  }, [variance, spendingComposition]);
 
   if (budgetLoading || trendsLoading) {
     return (
@@ -295,9 +358,12 @@ export function BudgetPerformanceSection({
                     <TransactionPreviewTrigger
                       categoryId={row.categoryId}
                       categoryName={row.categoryName}
+                      additionalCategoryIds={row.childCategoryIds}
                       dateRange={{ startDate, endDate }}
                       timeRangeFilter={timeRange}
-                      tooltipText="Click to preview transactions"
+                      tooltipText={row.childCategoryIds.length > 0
+                        ? `Click to preview transactions across ${row.categoryName} and ${row.childCategoryIds.length} subcategor${row.childCategoryIds.length === 1 ? 'y' : 'ies'}`
+                        : "Click to preview transactions"}
                     >
                       <Text size="sm" c={row.actual > row.budgeted ? 'red' : 'green'} fw={500} style={{ cursor: 'pointer', textDecoration: 'underline', textDecorationStyle: 'dotted', textUnderlineOffset: 3 }}>
                         {formatCurrency(row.actual)}
@@ -412,9 +478,12 @@ export function BudgetPerformanceSection({
                         <TransactionPreviewTrigger
                           categoryId={row.categoryId}
                           categoryName={row.categoryName}
+                          additionalCategoryIds={row.childCategoryIds}
                           dateRange={{ startDate, endDate }}
                           timeRangeFilter={timeRange}
-                          tooltipText="Click to preview transactions"
+                          tooltipText={row.childCategoryIds.length > 0
+                            ? `Click to preview transactions across ${row.categoryName} and ${row.childCategoryIds.length} subcategor${row.childCategoryIds.length === 1 ? 'y' : 'ies'}`
+                            : "Click to preview transactions"}
                         >
                           <Text size="sm" style={{ cursor: 'pointer', textDecoration: 'underline', textDecorationStyle: 'dotted', textUnderlineOffset: 3 }}>
                             {formatCurrency(row.actual)}
@@ -453,19 +522,107 @@ export function BudgetPerformanceSection({
             </Table.Thead>
             <Table.Tbody>
               {budgetHealthData.unbudgetedSpending.map(row => (
-                <Table.Tr key={row.categoryId}>
+                <Table.Tr key={row.categoryId + row.categoryName}>
                   <Table.Td>
                     <Text size="sm">{row.categoryName}</Text>
                   </Table.Td>
                   <Table.Td>
-                    <Text size="sm" c="orange" fw={500}>
-                      {formatCurrency(row.actual)}
-                    </Text>
+                    <TransactionPreviewTrigger
+                      categoryId={row.categoryId}
+                      categoryName={row.categoryName}
+                      additionalCategoryIds={row.childCategoryIds.length > 0 ? row.childCategoryIds : undefined}
+                      dateRange={{ startDate, endDate }}
+                      timeRangeFilter={timeRange}
+                      tooltipText={row.childCategoryIds.length > 0
+                        ? `Click to preview transactions across ${row.categoryName} and ${row.childCategoryIds.length} subcategor${row.childCategoryIds.length === 1 ? 'y' : 'ies'}`
+                        : "Click to preview transactions"}
+                    >
+                      <Text size="sm" c="orange" fw={500} style={{ cursor: 'pointer', textDecoration: 'underline', textDecorationStyle: 'dotted', textUnderlineOffset: 3 }}>
+                        {formatCurrency(row.actual)}
+                      </Text>
+                    </TransactionPreviewTrigger>
                   </Table.Td>
                 </Table.Tr>
               ))}
             </Table.Tbody>
           </Table>
+        )}
+      </Paper>
+
+      {/* Widget 6: Spending Composition */}
+      <Paper withBorder p="md">
+        <Text size="lg" fw={600} mb={4}>Spending Composition</Text>
+        <Text size="sm" c="dimmed" mb="md">
+          Within categories you budgeted at the parent level, how did your spending break down across subcategories?
+          Click a row to expand its breakdown.
+        </Text>
+        {budgetHealthData.spendingComposition.length === 0 ? (
+          <Text c="dimmed" size="sm">No budgeted parent categories with subcategory spending in this period.</Text>
+        ) : (
+          <Accordion variant="separated" multiple chevronPosition="left">
+            {budgetHealthData.spendingComposition.map(tree => (
+              <Accordion.Item key={tree.parentId} value={tree.parentId}>
+                <Accordion.Control>
+                  <Group justify="space-between" align="baseline" wrap="nowrap" gap="md">
+                    <Text size="sm" fw={600}>{tree.parentName}</Text>
+                    <Group gap="xs" wrap="nowrap">
+                      <Text size="xs" c="dimmed">Budget</Text>
+                      <Text size="sm" fw={500}>{formatCurrency(tree.effectiveBudget)}</Text>
+                      <Text size="xs" c="dimmed">·</Text>
+                      <Text size="xs" c="dimmed">Spent</Text>
+                      <Text size="sm" fw={500}>{formatCurrency(tree.effectiveActual)}</Text>
+                      <Badge size="xs" variant="light" color="gray">
+                        {tree.leaves.length} subcategor{tree.leaves.length === 1 ? 'y' : 'ies'}
+                      </Badge>
+                    </Group>
+                  </Group>
+                </Accordion.Control>
+                <Accordion.Panel>
+                  <Table>
+                    <Table.Thead>
+                      <Table.Tr>
+                        <Table.Th>Subcategory</Table.Th>
+                        <Table.Th>Spent</Table.Th>
+                        <Table.Th style={{ minWidth: 160 }}>% of Spending</Table.Th>
+                      </Table.Tr>
+                    </Table.Thead>
+                    <Table.Tbody>
+                      {tree.leaves.map(leaf => (
+                        <Table.Tr key={leaf.categoryId + leaf.categoryName}>
+                          <Table.Td>
+                            <Text size="sm" c={leaf.categoryName === '(direct)' ? 'dimmed' : undefined}>
+                              {leaf.categoryName}
+                            </Text>
+                          </Table.Td>
+                          <Table.Td>
+                            <TransactionPreviewTrigger
+                              categoryId={leaf.categoryId}
+                              categoryName={leaf.categoryName === '(direct)' ? `${tree.parentName} (direct)` : leaf.categoryName}
+                              dateRange={{ startDate, endDate }}
+                              timeRangeFilter={timeRange}
+                              tooltipText="Click to preview transactions"
+                            >
+                              <Text size="sm" style={{ cursor: 'pointer', textDecoration: 'underline', textDecorationStyle: 'dotted', textUnderlineOffset: 3 }}>
+                                {formatCurrency(leaf.actual)}
+                              </Text>
+                            </TransactionPreviewTrigger>
+                          </Table.Td>
+                          <Table.Td>
+                            <Group gap="xs" align="center">
+                              <Progress.Root size="sm" style={{ flex: 1 }}>
+                                <Progress.Section value={Math.min(100, leaf.percentOfParentActual)} color="blue" />
+                              </Progress.Root>
+                              <Text size="xs" w={40} ta="right">{leaf.percentOfParentActual.toFixed(0)}%</Text>
+                            </Group>
+                          </Table.Td>
+                        </Table.Tr>
+                      ))}
+                    </Table.Tbody>
+                  </Table>
+                </Accordion.Panel>
+              </Accordion.Item>
+            ))}
+          </Accordion>
         )}
       </Paper>
     </Stack>

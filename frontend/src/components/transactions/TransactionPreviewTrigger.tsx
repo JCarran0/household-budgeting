@@ -14,6 +14,12 @@ interface TransactionPreviewTriggerProps {
   showTooltip?: boolean; // Whether to show hover tooltip
   tooltipText?: string; // Custom tooltip text
   timeRangeFilter?: string; // Reports page time range filter (e.g., 'thisMonth', 'yearToDate')
+  /**
+   * Additional category IDs to include in the preview alongside `categoryId`.
+   * Used by rolled-up parent rows to show transactions from the entire tree
+   * (parent + all children) per CATEGORY-HIERARCHY-BUDGETING-BRD REQ-012.
+   */
+  additionalCategoryIds?: string[];
 }
 
 export function TransactionPreviewTrigger({
@@ -27,6 +33,7 @@ export function TransactionPreviewTrigger({
   showTooltip = true,
   tooltipText = "Click to preview transactions",
   timeRangeFilter,
+  additionalCategoryIds,
 }: TransactionPreviewTriggerProps) {
   const [isModalOpen, setIsModalOpen] = useState(false);
 
@@ -102,6 +109,7 @@ export function TransactionPreviewTrigger({
         dateRange={dateRange}
         limit={limit}
         timeRangeFilter={timeRangeFilter}
+        additionalCategoryIds={additionalCategoryIds}
       />
     </>
   );

@@ -39,6 +39,12 @@ interface TransactionPreviewModalProps {
   limit?: number; // default 25
   timeRangeFilter?: string; // Reports page time range filter (e.g., 'thisMonth', 'yearToDate')
   tags?: string[]; // Optional tag filter (e.g., trip tags)
+  /**
+   * Additional category IDs to include alongside `categoryId`. Used by rolled-up
+   * parent rows in Reports → Budget Performance to show transactions from the
+   * entire tree (parent + children) per CATEGORY-HIERARCHY-BUDGETING-BRD REQ-012.
+   */
+  additionalCategoryIds?: string[];
 }
 
 export function TransactionPreviewModal({
@@ -50,16 +56,28 @@ export function TransactionPreviewModal({
   limit = 25,
   timeRangeFilter,
   tags,
+  additionalCategoryIds,
 }: TransactionPreviewModalProps) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
 
+  // Combine the primary category ID with any additional IDs (e.g. children of a
+  // rolled-up parent row) into a single de-duplicated, stably-sorted list.
+  const effectiveCategoryIds = useMemo<string[] | undefined>(() => {
+    if (categoryId === null) return undefined; // Uncategorized mode
+    const ids = new Set<string>();
+    if (categoryId) ids.add(categoryId);
+    if (additionalCategoryIds) for (const id of additionalCategoryIds) ids.add(id);
+    if (ids.size === 0) return undefined;
+    return Array.from(ids).sort();
+  }, [categoryId, additionalCategoryIds]);
+
   // Fetch transaction preview data
   const { data: transactionData, isLoading, error } = useQuery({
-    queryKey: ['transaction-preview', categoryId, dateRange?.startDate, dateRange?.endDate, limit, tags],
+    queryKey: ['transaction-preview', categoryId, effectiveCategoryIds, dateRange?.startDate, dateRange?.endDate, limit, tags],
     queryFn: () => api.getTransactions({
-      categoryIds: categoryId ? [categoryId] : undefined,
+      categoryIds: effectiveCategoryIds,
       onlyUncategorized: categoryId === null,
       startDate: dateRange?.startDate,
       endDate: dateRange?.endDate,
@@ -89,9 +107,9 @@ export function TransactionPreviewModal({
   // Navigate to transactions page with filters applied
   const navigateToTransactionsWithFilter = () => {
     const params = new URLSearchParams();
-    if (categoryId) {
-      params.set('categoryIds', categoryId);
-    } else {
+    if (effectiveCategoryIds && effectiveCategoryIds.length > 0) {
+      params.set('categoryIds', effectiveCategoryIds.join(','));
+    } else if (categoryId === null) {
       params.set('onlyUncategorized', 'true');
     }
     if (dateRange) {
