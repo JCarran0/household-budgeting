@@ -1,6 +1,6 @@
 # GitHub Actions CI/CD Setup
 
-This directory contains the CI/CD pipeline for the Budget Tracker application.
+This directory contains the CI/CD pipeline for Family Tracker.
 
 ## Workflows
 

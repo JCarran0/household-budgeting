@@ -1,7 +1,7 @@
-# Personal Budgeting App Development Guide
+# Family Tracker — Development Guide
 
 ## Project Overview
-Building a personal budgeting app for 2 users with Plaid integration. Using Risk-Based Testing with TypeScript strict mode for rapid, type-safe development.
+Building **Family Tracker** — a family-scale app for 2 users covering personal budgeting (with Plaid integration), shared tasks, and trip tracking. Formerly branded "Household Budgeting App" / "Budget Tracker"; the chatbot was renamed from "Budget Bot" to "Helper Bot" in the same rebrand. Using Risk-Based Testing with TypeScript strict mode for rapid, type-safe development.
 
 ## 📚 Documentation Index for AI Agents
 

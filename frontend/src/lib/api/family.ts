@@ -1,5 +1,5 @@
 import type { AxiosInstance } from 'axios';
-import type { Family, AccountOwnerMapping } from '../../../../shared/types';
+import type { Family, AccountOwnerMapping, UserColor } from '../../../../shared/types';
 
 interface FamilyResponse {
   success: boolean;
@@ -31,6 +31,7 @@ interface ProfileResponse {
     username: string;
     displayName: string;
     familyId: string;
+    color?: UserColor;
   };
 }
 
@@ -64,8 +65,10 @@ export function createFamilyApi(client: AxiosInstance) {
     },
 
     // Profile management
-    async updateProfile(displayName: string): Promise<ProfileResponse> {
-      const { data } = await client.put<ProfileResponse>('/auth/profile', { displayName });
+    async updateProfile(displayName: string, color?: UserColor): Promise<ProfileResponse> {
+      const payload: { displayName: string; color?: UserColor } = { displayName };
+      if (color !== undefined) payload.color = color;
+      const { data } = await client.put<ProfileResponse>('/auth/profile', payload);
       return data;
     },
 

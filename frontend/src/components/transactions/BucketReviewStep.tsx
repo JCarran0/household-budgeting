@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { Table, Select, Button, Group, Text, TextInput, Stack, Badge, ScrollArea } from '@mantine/core';
-import { IconCheck } from '@tabler/icons-react';
+import { Table, Select, Button, Group, Text, TextInput, Stack, Badge, ScrollArea, ActionIcon, Tooltip } from '@mantine/core';
+import { IconCheck, IconX, IconArrowBackUp } from '@tabler/icons-react';
 import { useCategoryOptions } from '../../hooks/useCategoryOptions';
 import { formatCurrency } from '../../utils/formatters';
 import type { ClassificationBucket } from '../../../../shared/types';
@@ -42,6 +42,18 @@ export function BucketReviewStep({
   // Track per-row description edits
   const [descriptionEdits, setDescriptionEdits] = useState<Map<string, string>>(new Map());
 
+  // Track which rows the user has skipped within this bucket (won't be included in Apply)
+  const [skippedIds, setSkippedIds] = useState<Set<string>>(new Set());
+
+  const toggleSkip = (transactionId: string) => {
+    setSkippedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(transactionId)) next.delete(transactionId);
+      else next.add(transactionId);
+      return next;
+    });
+  };
+
   const handleCategoryChange = (transactionId: string, categoryId: string | null) => {
     setSelections(prev => {
       const next = new Map(prev);
@@ -64,6 +76,7 @@ export function BucketReviewStep({
 
   const handleApply = () => {
     const results: BucketApplySelection[] = bucket.transactions
+      .filter(t => !skippedIds.has(t.id))
       .map(t => {
         const edited = descriptionEdits.get(t.id);
         return {
@@ -79,6 +92,7 @@ export function BucketReviewStep({
 
   const isUnsure = bucket.categoryId === '';
   const confidenceColor = bucket.confidence === 'high' ? 'green' : bucket.confidence === 'medium' ? 'yellow' : 'gray';
+  const applyCount = bucket.transactions.length - skippedIds.size;
 
   return (
     <Stack gap="md">
@@ -107,6 +121,7 @@ export function BucketReviewStep({
         <Table striped highlightOnHover>
           <Table.Thead>
             <Table.Tr>
+              <Table.Th style={{ width: 40 }} />
               <Table.Th>Date</Table.Th>
               <Table.Th>Description</Table.Th>
               <Table.Th style={{ textAlign: 'right' }}>Amount</Table.Th>
@@ -114,49 +129,73 @@ export function BucketReviewStep({
             </Table.Tr>
           </Table.Thead>
           <Table.Tbody>
-            {bucket.transactions.map(t => (
-              <Table.Tr key={t.id}>
-                <Table.Td style={{ whiteSpace: 'nowrap' }}>{t.date}</Table.Td>
-                <Table.Td>
-                  <TextInput
-                    size="xs"
-                    variant="unstyled"
-                    value={descriptionEdits.get(t.id) ?? t.name}
-                    onChange={(e) => handleDescriptionChange(t.id, e.currentTarget.value)}
-                    styles={{ input: { fontSize: 'var(--mantine-font-size-sm)' } }}
-                  />
-                </Table.Td>
-                <Table.Td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
-                  {formatCurrency(Math.abs(t.amount))}
-                </Table.Td>
-                <Table.Td style={{ minWidth: 200 }}>
-                  <Select
-                    size="xs"
-                    data={categoryOptions}
-                    value={selections.get(t.id) || t.suggestedCategoryId || null}
-                    onChange={(v) => handleCategoryChange(t.id, v)}
-                    searchable
-                    clearable={isUnsure}
-                    placeholder={isUnsure ? 'Select category...' : undefined}
-                  />
-                </Table.Td>
-              </Table.Tr>
-            ))}
+            {bucket.transactions.map(t => {
+              const isSkipped = skippedIds.has(t.id);
+              return (
+                <Table.Tr key={t.id} style={{ opacity: isSkipped ? 0.45 : 1 }}>
+                  <Table.Td>
+                    <Tooltip label={isSkipped ? 'Include this transaction' : 'Skip this transaction'} withArrow>
+                      <ActionIcon
+                        size="sm"
+                        variant={isSkipped ? 'light' : 'subtle'}
+                        color={isSkipped ? 'orange' : 'gray'}
+                        onClick={() => toggleSkip(t.id)}
+                        aria-label={isSkipped ? 'Include this transaction' : 'Skip this transaction'}
+                      >
+                        {isSkipped ? <IconArrowBackUp size={14} /> : <IconX size={14} />}
+                      </ActionIcon>
+                    </Tooltip>
+                  </Table.Td>
+                  <Table.Td style={{ whiteSpace: 'nowrap', textDecoration: isSkipped ? 'line-through' : undefined }}>{t.date}</Table.Td>
+                  <Table.Td>
+                    <TextInput
+                      size="xs"
+                      variant="unstyled"
+                      value={descriptionEdits.get(t.id) ?? t.name}
+                      onChange={(e) => handleDescriptionChange(t.id, e.currentTarget.value)}
+                      disabled={isSkipped}
+                      styles={{ input: { fontSize: 'var(--mantine-font-size-sm)', textDecoration: isSkipped ? 'line-through' : undefined } }}
+                    />
+                  </Table.Td>
+                  <Table.Td style={{ textAlign: 'right', whiteSpace: 'nowrap', textDecoration: isSkipped ? 'line-through' : undefined }}>
+                    {formatCurrency(Math.abs(t.amount))}
+                  </Table.Td>
+                  <Table.Td style={{ minWidth: 200 }}>
+                    <Select
+                      size="xs"
+                      data={categoryOptions}
+                      value={selections.get(t.id) || t.suggestedCategoryId || null}
+                      onChange={(v) => handleCategoryChange(t.id, v)}
+                      disabled={isSkipped}
+                      searchable
+                      clearable={isUnsure}
+                      placeholder={isUnsure ? 'Select category...' : undefined}
+                    />
+                  </Table.Td>
+                </Table.Tr>
+              );
+            })}
           </Table.Tbody>
         </Table>
       </ScrollArea>
 
-      <Group justify="flex-end">
-        <Button variant="subtle" color="gray" onClick={onSkip} disabled={isApplying}>
-          Skip
-        </Button>
-        <Button
-          leftSection={<IconCheck size={16} />}
-          onClick={handleApply}
-          loading={isApplying}
-        >
-          Apply {bucket.transactions.length} categorization{bucket.transactions.length !== 1 ? 's' : ''}
-        </Button>
+      <Group justify="space-between">
+        {skippedIds.size > 0 ? (
+          <Text size="xs" c="dimmed">{skippedIds.size} skipped in this bucket</Text>
+        ) : <span />}
+        <Group gap="xs">
+          <Button variant="subtle" color="gray" onClick={onSkip} disabled={isApplying}>
+            Skip bucket
+          </Button>
+          <Button
+            leftSection={<IconCheck size={16} />}
+            onClick={handleApply}
+            loading={isApplying}
+            disabled={applyCount === 0}
+          >
+            Apply {applyCount} categorization{applyCount !== 1 ? 's' : ''}
+          </Button>
+        </Group>
       </Group>
     </Stack>
   );

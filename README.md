@@ -1,9 +1,9 @@
-# Household Budgeting App
+# Family Tracker
 
 ![Version](https://img.shields.io/badge/version-1.0.0--alpha.1-blue)
 [![Changelog](https://img.shields.io/badge/changelog-Keep%20a%20Changelog-brightgreen)](CHANGELOG.md)
 
-A modern personal budgeting application with bank account integration via Plaid, built with React and Node.js.
+A family-scale app covering personal budgeting (with Plaid), shared tasks, and trip tracking — built with React and Node.js. Previously known as "Household Budgeting App" / "Budget Tracker".
 
 ## 🚀 Production Deployment Status
 

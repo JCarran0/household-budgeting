@@ -1,6 +1,6 @@
-# AWS Infrastructure Setup for Household Budgeting App
+# AWS Infrastructure Setup for Family Tracker
 
-This directory contains Terraform configuration for deploying the household budgeting application to AWS.
+This directory contains Terraform configuration for deploying Family Tracker (the family finance / tasks / trips app, formerly "Household Budgeting App") to AWS.
 
 ## Architecture Overview
 

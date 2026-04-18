@@ -2,6 +2,7 @@ import { Card, Text, Group, Badge, Avatar, Tooltip, ThemeIcon, Box } from '@mant
 import { IconCalendar, IconCircleCheck } from '@tabler/icons-react';
 import { format, isPast, parseISO } from 'date-fns';
 import type { StoredTask, FamilyMember } from '../../../../shared/types';
+import { userColor } from '../../utils/userColor';
 
 interface TaskCardProps {
   task: StoredTask;
@@ -77,7 +78,7 @@ export function TaskCard({ task, members, onClick }: TaskCardProps) {
       <Group gap="xs" mt={4}>
         {assignee && (
           <Tooltip label={assignee.displayName}>
-            <Avatar size="xs" radius="xl" color="blue">
+            <Avatar size="xs" radius="xl" color={userColor(assignee)}>
               {assignee.displayName.charAt(0).toUpperCase()}
             </Avatar>
           </Tooltip>

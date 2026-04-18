@@ -1,4 +1,4 @@
-import { Category, Family } from '../shared/types';
+import { Category, Family, UserColor } from '../shared/types';
 import { StorageAdapter, StorageFactory } from './storage';
 
 export interface User {
@@ -12,6 +12,7 @@ export interface User {
   lastLogin?: Date;
   failedLoginAttempts?: number;
   lockedUntil?: Date;
+  color?: UserColor;
 }
 
 export interface DataService {

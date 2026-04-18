@@ -11,7 +11,7 @@ export function ChatFAB({ onClick, isOpen }: ChatFABProps) {
 
   return (
     <Affix position={{ bottom: 20, right: 20 }} zIndex={999}>
-      <Tooltip label="Chat with Budget Bot" position="left">
+      <Tooltip label="Chat with Helper Bot" position="left">
         <ActionIcon
           size={56}
           radius="xl"

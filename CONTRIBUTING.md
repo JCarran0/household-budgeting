@@ -1,4 +1,4 @@
-# Contributing to Household Budgeting App
+# Contributing to Family Tracker
 
 ## Versioning and Release Process
 

@@ -547,7 +547,7 @@ export function ChatOverlay({ opened, onClose }: ChatOverlayProps) {
         }}
       >
         <Group gap="xs">
-          <Text fw={600} size="sm">Budget Bot</Text>
+          <Text fw={600} size="sm">Helper Bot</Text>
           {costDisplay && (
             <Text size="xs" c={costColor}>{costDisplay}</Text>
           )}

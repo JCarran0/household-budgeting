@@ -25,6 +25,7 @@ import { FeedbackModal } from './feedback/FeedbackModal';
 import { ChatFAB } from './chat/ChatFAB';
 import { ChatOverlay } from './chat/ChatOverlay';
 import { AppLogo } from './AppLogo';
+import { userColor } from '../utils/userColor';
 
 export function MantineLayout() {
   const [mobileOpened, { toggle: toggleMobile }] = useDisclosure();
@@ -115,7 +116,7 @@ export function MantineLayout() {
             <Group gap="xs">
               <AppLogo size={32} />
               <Text size="xl" fw={700}>
-                Budget Tracker
+                Family Tracker
               </Text>
             </Group>
           </Group>
@@ -123,7 +124,7 @@ export function MantineLayout() {
           <Menu shadow="md" width={200}>
             <Menu.Target>
               <ActionIcon variant="subtle" size="lg">
-                <Avatar color="yellow" radius="xl" size="md">
+                <Avatar color={userColor(user)} radius="xl" size="md">
                   {user?.username?.charAt(0).toUpperCase()}
                 </Avatar>
               </ActionIcon>
@@ -203,7 +204,7 @@ export function MantineLayout() {
 
         <AppShell.Section>
           <Text size="xs" c="dimmed" ta="center">
-            © 2024 Budget Tracker
+            © 2024 Family Tracker
           </Text>
         </AppShell.Section>
       </AppShell.Navbar>

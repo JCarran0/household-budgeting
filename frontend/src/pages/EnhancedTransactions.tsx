@@ -381,7 +381,7 @@ export function EnhancedTransactions() {
     })) || []),
   ];
 
-  const handleEditClick = (transaction: Transaction) => {
+  const handleRowClick = (transaction: Transaction) => {
     setEditingTransaction(transaction);
     setIsEditModalOpen(true);
   };
@@ -391,7 +391,10 @@ export function EnhancedTransactions() {
     setEditingTransaction(null);
   };
 
-  const handleSplitClick = (transaction: Transaction) => {
+  const handleRequestSplit = (transaction: Transaction) => {
+    // Transition from Edit modal into Split modal
+    setIsEditModalOpen(false);
+    setEditingTransaction(null);
     setSplittingTransaction(transaction);
     setIsSplitModalOpen(true);
   };
@@ -567,8 +570,7 @@ export function EnhancedTransactions() {
             totalPages={totalPages}
             onSelectAll={handleSelectAll}
             onSelectTransaction={handleSelectTransaction}
-            onEditClick={handleEditClick}
-            onSplitClick={handleSplitClick}
+            onRowClick={handleRowClick}
             onPageChange={setCurrentPage}
           />
         </Stack>
@@ -579,6 +581,7 @@ export function EnhancedTransactions() {
           onClose={handleEditModalClose}
           transaction={editingTransaction}
           accountInfo={editingTransaction ? accountLookup.get(editingTransaction.accountId) : null}
+          onRequestSplit={handleRequestSplit}
         />
 
         {/* Split Modal */}

@@ -13,11 +13,8 @@ import {
   Table,
   ScrollArea,
   ThemeIcon,
-  ActionIcon,
   Tooltip,
   Checkbox,
-  Menu,
-  rem,
   Skeleton,
   LoadingOverlay,
   Pagination,
@@ -29,11 +26,9 @@ import { notifications } from '@mantine/notifications';
 import {
   IconArrowUpRight,
   IconArrowDownRight,
-  IconEdit,
   IconCategory,
   IconEyeOff,
   IconScissors,
-  IconDots,
   IconFlag,
 } from '@tabler/icons-react';
 
@@ -56,8 +51,7 @@ interface TransactionTableProps {
   totalPages: number;
   onSelectAll: () => void;
   onSelectTransaction: (transactionId: string, index: number, event: React.ChangeEvent<HTMLInputElement>) => void;
-  onEditClick: (transaction: Transaction) => void;
-  onSplitClick: (transaction: Transaction) => void;
+  onRowClick: (transaction: Transaction) => void;
   onPageChange: (page: number) => void;
 }
 
@@ -73,8 +67,7 @@ export function TransactionTable({
   totalPages,
   onSelectAll,
   onSelectTransaction,
-  onEditClick,
-  onSplitClick,
+  onRowClick,
   onPageChange,
 }: TransactionTableProps) {
   const queryClient = useQueryClient();
@@ -165,7 +158,6 @@ export function TransactionTable({
               <Table.Th>Tags</Table.Th>
               <Table.Th>Account</Table.Th>
               <Table.Th>Amount</Table.Th>
-              <Table.Th>Actions</Table.Th>
             </Table.Tr>
           </Table.Thead>
           <Table.Tbody>
@@ -179,12 +171,11 @@ export function TransactionTable({
                   <Table.Td><Skeleton height={20} width={80} /></Table.Td>
                   <Table.Td><Skeleton height={20} width={40} /></Table.Td>
                   <Table.Td><Skeleton height={20} width={80} /></Table.Td>
-                  <Table.Td><Skeleton height={20} width={60} /></Table.Td>
                 </Table.Tr>
               ))
             ) : paginatedTransactions.length === 0 ? (
               <Table.Tr>
-                <Table.Td colSpan={8}>
+                <Table.Td colSpan={7}>
                   <Center py="xl">
                     <Text c="dimmed">No transactions found</Text>
                   </Center>
@@ -192,8 +183,12 @@ export function TransactionTable({
               </Table.Tr>
             ) : (
               paginatedTransactions.map((transaction, index) => (
-                <Table.Tr key={transaction.id}>
-                  <Table.Td>
+                <Table.Tr
+                  key={transaction.id}
+                  onClick={() => onRowClick(transaction)}
+                  style={{ cursor: 'pointer' }}
+                >
+                  <Table.Td onClick={(e) => e.stopPropagation()}>
                     <Checkbox
                       checked={selectedTransactionIds.has(transaction.id)}
                       onChange={(event) => onSelectTransaction(transaction.id, index, event)}
@@ -219,7 +214,19 @@ export function TransactionTable({
                           <Text fw={500}>{transaction.merchantName || transaction.name}</Text>
                         )}
                         {transaction.isFlagged && (
-                          <IconFlag size={14} style={{ color: 'var(--mantine-color-orange-5)', flexShrink: 0 }} />
+                          <Tooltip label="Flagged for discussion" openDelay={500} closeDelay={200}>
+                            <IconFlag size={14} style={{ color: 'var(--mantine-color-orange-5)', flexShrink: 0 }} />
+                          </Tooltip>
+                        )}
+                        {transaction.isHidden && (
+                          <Tooltip label="Hidden from budgets" openDelay={500} closeDelay={200}>
+                            <IconEyeOff size={14} style={{ color: 'var(--mantine-color-gray-5)', flexShrink: 0 }} />
+                          </Tooltip>
+                        )}
+                        {transaction.isSplit && (
+                          <Tooltip label="Split transaction" openDelay={500} closeDelay={200}>
+                            <IconScissors size={14} style={{ color: 'var(--mantine-color-blue-5)', flexShrink: 0 }} />
+                          </Tooltip>
                         )}
                       </Group>
                       {transaction.notes && (
@@ -228,7 +235,7 @@ export function TransactionTable({
                     </Stack>
                   </Table.Td>
 
-                  <Table.Td>
+                  <Table.Td onClick={(e) => e.stopPropagation()}>
                     {editingCategoryId === transaction.id ? (
                       <Select
                         data={flatCategoryOptions}
@@ -349,49 +356,6 @@ export function TransactionTable({
                         </Text>
                       </Group>
                     </Tooltip>
-                  </Table.Td>
-
-                  <Table.Td>
-                    <Group gap={4}>
-                      {transaction.isHidden && (
-                        <Tooltip label="Hidden from budgets" openDelay={1000} closeDelay={200}>
-                          <ThemeIcon size="xs" variant="light" color="gray">
-                            <IconEyeOff size={12} />
-                          </ThemeIcon>
-                        </Tooltip>
-                      )}
-                      {transaction.isSplit && (
-                        <Tooltip label="Split transaction" openDelay={1000} closeDelay={200}>
-                          <ThemeIcon size="xs" variant="light" color="blue">
-                            <IconScissors size={12} />
-                          </ThemeIcon>
-                        </Tooltip>
-                      )}
-                      <Menu shadow="md" width={200}>
-                        <Menu.Target>
-                          <ActionIcon variant="subtle">
-                            <IconDots size={16} />
-                          </ActionIcon>
-                        </Menu.Target>
-
-                        <Menu.Dropdown>
-                          <Menu.Item
-                            leftSection={<IconEdit style={{ width: rem(14), height: rem(14) }} />}
-                            onClick={() => onEditClick(transaction)}
-                          >
-                            Edit
-                          </Menu.Item>
-
-                          <Menu.Item
-                            leftSection={<IconScissors style={{ width: rem(14), height: rem(14) }} />}
-                            disabled={transaction.isSplit}
-                            onClick={() => onSplitClick(transaction)}
-                          >
-                            Split Transaction
-                          </Menu.Item>
-                        </Menu.Dropdown>
-                      </Menu>
-                    </Group>
                   </Table.Td>
                 </Table.Tr>
               ))

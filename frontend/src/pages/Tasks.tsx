@@ -53,6 +53,8 @@ import { format, parseISO } from 'date-fns';
 import { api } from '../lib/api';
 import { useAuthStore } from '../stores/authStore';
 import { KanbanColumn } from '../components/tasks/KanbanColumn';
+import { userColor } from '../utils/userColor';
+import { UserColorDot } from '../components/common/UserColorDot';
 import type {
   StoredTask,
   TaskStatus,
@@ -761,8 +763,8 @@ function TaskDetailModal({ task, onClose, members, onStatusChange, onEdit, onDel
 
   if (!task) return null;
 
-  const getMemberName = (userId: string) =>
-    members.find((m) => m.userId === userId)?.displayName ?? userId;
+  const getMember = (userId: string) => members.find((m) => m.userId === userId);
+  const getMemberName = (userId: string) => getMember(userId)?.displayName ?? userId;
 
   const statusActions: { label: string; status: TaskStatus; icon: React.ReactNode; color: string }[] = [];
   if (task.status !== 'started') statusActions.push({ label: 'Start', status: 'started', icon: <IconPlayerPlay size={14} />, color: 'yellow' });
@@ -787,7 +789,9 @@ function TaskDetailModal({ task, onClose, members, onStatusChange, onEdit, onDel
             {task.scope}
           </Badge>
           {task.assigneeId && (
-            <Badge variant="light">{getMemberName(task.assigneeId)}</Badge>
+            <Badge variant="light" color={userColor(getMember(task.assigneeId))}>
+              {getMemberName(task.assigneeId)}
+            </Badge>
           )}
           {task.dueDate && (
             <Badge variant="light" color="gray">
@@ -846,14 +850,17 @@ function TaskDetailModal({ task, onClose, members, onStatusChange, onEdit, onDel
             <Timeline.Item
               key={i}
               title={
-                <Text size="xs">
-                  <Text span fw={600}>{getMemberName(t.userId)}</Text>
-                  {' '}
-                  {t.fromStatus
-                    ? `moved from ${t.fromStatus} to ${t.toStatus}`
-                    : `created as ${t.toStatus}`
-                  }
-                </Text>
+                <Group gap={6} wrap="nowrap" component="span">
+                  <UserColorDot user={getMember(t.userId)} size={8} tooltip={false} />
+                  <Text size="xs">
+                    <Text span fw={600}>{getMemberName(t.userId)}</Text>
+                    {' '}
+                    {t.fromStatus
+                      ? `moved from ${t.fromStatus} to ${t.toStatus}`
+                      : `created as ${t.toStatus}`
+                    }
+                  </Text>
+                </Group>
               }
             >
               <Text size="xs" c="dimmed">
@@ -931,7 +938,7 @@ function LeaderboardPanel({ leaderboard }: LeaderboardPanelProps) {
           <Table.Tr key={entry.userId}>
             <Table.Td>
               <Group gap="xs">
-                <Avatar size="xs" radius="xl" color="blue">
+                <Avatar size="xs" radius="xl" color={userColor(entry)}>
                   {entry.displayName.charAt(0).toUpperCase()}
                 </Avatar>
                 <Text size="sm">{entry.displayName}</Text>
@@ -977,6 +984,8 @@ function TaskHistoryView({ tasks, members, onTaskClick }: TaskHistoryViewProps) 
   const [assigneeFilter, setAssigneeFilter] = useState<string | null>(null);
   const [scopeFilter, setScopeFilter] = useState<string>('all');
 
+  const getMember = (userId: string | null) =>
+    userId ? members.find((m) => m.userId === userId) : undefined;
   const getMemberName = (userId: string | null) => {
     if (!userId) return 'Unassigned';
     return members.find((m) => m.userId === userId)?.displayName ?? userId;
@@ -1069,7 +1078,10 @@ function TaskHistoryView({ tasks, members, onTaskClick }: TaskHistoryViewProps) 
                 </Badge>
               </Table.Td>
               <Table.Td>
-                <Text size="sm">{getMemberName(task.assigneeId)}</Text>
+                <Group gap="xs" wrap="nowrap">
+                  {task.assigneeId && <UserColorDot user={getMember(task.assigneeId)} />}
+                  <Text size="sm">{getMemberName(task.assigneeId)}</Text>
+                </Group>
               </Table.Td>
               <Table.Td>
                 <Text size="sm">{format(parseISO(task.createdAt), 'MMM d, yyyy')}</Text>

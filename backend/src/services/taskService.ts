@@ -300,16 +300,18 @@ export class TaskService {
     }
 
     // Build entries
-    const memberMap = new Map(members.map((m) => [m.userId, m.displayName]));
+    const memberMap = new Map(members.map((m) => [m.userId, m]));
     const entries: LeaderboardEntry[] = [];
 
     for (const [userId, c] of counts) {
+      const member = memberMap.get(userId);
       entries.push({
         userId,
-        displayName: memberMap.get(userId) ?? 'Unknown',
+        displayName: member?.displayName ?? 'Unknown',
         completedToday: c.today,
         completedThisWeek: c.week,
         completedThisMonth: c.month,
+        ...(member?.color !== undefined ? { color: member.color } : {}),
       });
     }
 
