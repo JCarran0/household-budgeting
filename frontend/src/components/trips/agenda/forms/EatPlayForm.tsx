@@ -121,6 +121,9 @@ export function EatPlayForm({
           label={titleLabel}
           placeholder={titlePlaceholder}
           required
+          autoComplete="off"
+          data-1p-ignore
+          data-lpignore="true"
           {...form.getInputProps('name')}
         />
         <LocationInput

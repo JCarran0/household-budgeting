@@ -131,9 +131,12 @@ export function StayForm({
           </Alert>
         )}
         <TextInput
-          label="Name"
+          label="Stay name"
           placeholder="Hotel Arts Barcelona"
           required
+          autoComplete="off"
+          data-1p-ignore
+          data-lpignore="true"
           {...form.getInputProps('name')}
         />
         <LocationInput
