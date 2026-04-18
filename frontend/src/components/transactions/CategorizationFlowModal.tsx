@@ -116,6 +116,12 @@ export function CategorizationFlowModal({ opened, onClose, uncategorizedCount }:
       }
 
       setAppliedCount(prev => prev + selections.length);
+      // Any transactions in the bucket that weren't applied were skipped per-row
+      const bucketSize = currentBucket?.transactions.length ?? selections.length;
+      const perRowSkipped = bucketSize - selections.length;
+      if (perRowSkipped > 0) {
+        setSkippedCount(prev => prev + perRowSkipped);
+      }
       setAllCategorizations(prev => [...prev, ...selections]);
       advanceBucket();
     } catch {
@@ -123,7 +129,7 @@ export function CategorizationFlowModal({ opened, onClose, uncategorizedCount }:
     } finally {
       setIsApplying(false);
     }
-  }, [advanceBucket]);
+  }, [advanceBucket, currentBucket]);
 
   const handleSkip = useCallback(() => {
     if (currentBucket) {
