@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import {
   Container,
   Title,
@@ -20,8 +21,6 @@ import {
   NumberInput,
   Textarea,
   Rating,
-  Table,
-  Paper,
   Code,
   Divider,
 } from '@mantine/core';
@@ -41,12 +40,14 @@ import {
   IconMapPin,
   IconCalendar,
   IconCopy,
+  IconArrowRight,
 } from '@tabler/icons-react';
 import { format } from 'date-fns';
 import { api } from '../lib/api';
 import { useCategoryOptions } from '../hooks/useCategoryOptions';
 import { formatCurrency } from '../utils/formatters';
 import { TransactionPreviewModal } from '../components/transactions/TransactionPreviewModal';
+import { TripSpendingBreakdown, type TripDrillDownTarget } from '../components/trips/TripSpendingBreakdown';
 import type { TripSummary, TripCategoryBudget, CreateTripDto, UpdateTripDto } from '../../../shared/types';
 import { generateTripTag } from '../../../shared/utils/tripHelpers';
 
@@ -79,23 +80,19 @@ interface TripFormValues {
   categoryBudgets: TripCategoryBudget[];
 }
 
-interface DrillDownState {
-  categoryId: string | null;
-  categoryName: string;
-  tripTag: string;
-}
+type DrillDownState = TripDrillDownTarget;
 
 // ---------------------------------------------------------------------------
 // TripFormModal — create or edit a trip
 // ---------------------------------------------------------------------------
 
-interface TripFormModalProps {
+export interface TripFormModalProps {
   opened: boolean;
   onClose: () => void;
   trip: TripSummary | null; // null = create mode
 }
 
-function TripFormModal({ opened, onClose, trip }: TripFormModalProps) {
+export function TripFormModal({ opened, onClose, trip }: TripFormModalProps) {
   const queryClient = useQueryClient();
   const isEdit = trip !== null;
 
@@ -430,13 +427,15 @@ function TripFormModal({ opened, onClose, trip }: TripFormModalProps) {
 // DeleteTripModal — confirmation dialog
 // ---------------------------------------------------------------------------
 
-interface DeleteTripModalProps {
+export interface DeleteTripModalProps {
   opened: boolean;
   onClose: () => void;
   trip: TripSummary | null;
+  /** Fires after a successful delete — use to navigate away from a detail view. */
+  onDeleted?: () => void;
 }
 
-function DeleteTripModal({ opened, onClose, trip }: DeleteTripModalProps) {
+export function DeleteTripModal({ opened, onClose, trip, onDeleted }: DeleteTripModalProps) {
   const queryClient = useQueryClient();
 
   const deleteMutation = useMutation({
@@ -450,6 +449,7 @@ function DeleteTripModal({ opened, onClose, trip }: DeleteTripModalProps) {
         icon: <IconCheck size={16} />,
       });
       onClose();
+      onDeleted?.();
     },
     onError: () => {
       notifications.show({
@@ -600,78 +600,11 @@ function TripCard({ trip, onEdit, onDelete, onCategoryClick }: TripCardProps) {
           )}
 
           {/* Category breakdown */}
-          {trip.categorySpending.length > 0 ? (
-            <Paper withBorder p="xs">
-              <Table striped highlightOnHover>
-                <Table.Thead>
-                  <Table.Tr>
-                    <Table.Th>Category</Table.Th>
-                    <Table.Th ta="right">Spent</Table.Th>
-                    <Table.Th ta="right">Budget</Table.Th>
-                    <Table.Th ta="right">Variance</Table.Th>
-                  </Table.Tr>
-                </Table.Thead>
-                <Table.Tbody>
-                  {trip.categorySpending.map((row) => {
-                    const variance =
-                      row.budgeted !== null
-                        ? row.budgeted - row.spent
-                        : null;
-                    return (
-                      <Table.Tr
-                        key={row.categoryId}
-                        style={{ cursor: 'pointer' }}
-                        onClick={() =>
-                          onCategoryClick({
-                            categoryId: row.categoryId === '__uncategorized__' ? null : row.categoryId,
-                            categoryName: row.categoryName,
-                            tripTag: trip.tag,
-                          })
-                        }
-                      >
-                        <Table.Td>
-                          <Text size="sm">{row.categoryName}</Text>
-                        </Table.Td>
-                        <Table.Td ta="right">
-                          <Text size="sm">{formatCurrency(row.spent, true)}</Text>
-                        </Table.Td>
-                        <Table.Td ta="right">
-                          <Text size="sm" c="dimmed">
-                            {row.budgeted !== null
-                              ? formatCurrency(row.budgeted, true)
-                              : '—'}
-                          </Text>
-                        </Table.Td>
-                        <Table.Td ta="right">
-                          {variance !== null ? (
-                            <Text
-                              size="sm"
-                              c={variance < 0 ? 'red' : 'green'}
-                            >
-                              {variance < 0 ? '-' : '+'}
-                              {formatCurrency(Math.abs(variance), true)}
-                            </Text>
-                          ) : (
-                            <Text size="sm" c="dimmed">
-                              —
-                            </Text>
-                          )}
-                        </Table.Td>
-                      </Table.Tr>
-                    );
-                  })}
-                </Table.Tbody>
-              </Table>
-            </Paper>
-          ) : (
-            <Text size="sm" c="dimmed">
-              No categorized spending found for this trip.
-            </Text>
-          )}
+          <TripSpendingBreakdown trip={trip} onCategoryClick={onCategoryClick} />
 
           <Divider />
 
-          {/* Tag + Edit / Delete actions */}
+          {/* Tag + View Details + Edit / Delete actions */}
           <Group gap="xs" justify="flex-end">
             <Tooltip label={clipboard.copied ? 'Copied!' : 'Click to copy tag'}>
               <Code
@@ -684,6 +617,15 @@ function TripCard({ trip, onEdit, onDelete, onCategoryClick }: TripCardProps) {
                 </Group>
               </Code>
             </Tooltip>
+            <Button
+              component={Link}
+              to={`/trips/${trip.id}`}
+              variant="light"
+              size="xs"
+              rightSection={<IconArrowRight size={14} />}
+            >
+              View Details
+            </Button>
             <Tooltip label="Edit trip">
               <ActionIcon
                 variant="subtle"

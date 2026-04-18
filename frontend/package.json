@@ -15,6 +15,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@googlemaps/js-api-loader": "^2.0.2",
     "@hello-pangea/dnd": "^18.0.1",
     "@mantine/charts": "^8.2.7",
     "@mantine/core": "^8.2.7",

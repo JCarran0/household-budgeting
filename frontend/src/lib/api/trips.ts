@@ -4,6 +4,10 @@ import type {
   TripSummary,
   CreateTripDto,
   UpdateTripDto,
+  Stop,
+  CreateStopDto,
+  UpdateStopDto,
+  ReorderStopsDto,
 } from '../../../../shared/types';
 
 export function createTripsApi(client: AxiosInstance) {
@@ -44,6 +48,32 @@ export function createTripsApi(client: AxiosInstance) {
 
     async deleteTrip(id: string): Promise<void> {
       await client.delete(`/trips/${id}`);
+    },
+
+    // -----------------------------------------------------------------------
+    // Stops (itineraries)
+    // -----------------------------------------------------------------------
+
+    async createStop(tripId: string, stop: CreateStopDto): Promise<Stop> {
+      const { data } = await client.post<Stop>(`/trips/${tripId}/stops`, stop);
+      return data;
+    },
+
+    async updateStop(tripId: string, stopId: string, updates: UpdateStopDto): Promise<Stop> {
+      const { data } = await client.patch<Stop>(`/trips/${tripId}/stops/${stopId}`, updates);
+      return data;
+    },
+
+    async deleteStop(tripId: string, stopId: string): Promise<void> {
+      await client.delete(`/trips/${tripId}/stops/${stopId}`);
+    },
+
+    async reorderStops(tripId: string, updates: ReorderStopsDto): Promise<Stop[]> {
+      const { data } = await client.post<{ stops: Stop[] }>(
+        `/trips/${tripId}/stops/reorder`,
+        updates,
+      );
+      return data.stops;
     },
   };
 }

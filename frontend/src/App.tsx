@@ -23,6 +23,7 @@ import { Budgets } from './pages/Budgets';
 import { Reports } from './pages/Reports';
 import { Admin } from './pages/Admin';
 import { Trips } from './pages/Trips';
+import { TripDetail } from './pages/TripDetail';
 import { Projects } from './pages/Projects';
 import { Settings } from './pages/Settings';
 import { Tasks } from './pages/Tasks';
@@ -87,6 +88,11 @@ function App() {
                     <Route path="/trips" element={
                       <RouteErrorBoundary routeName="Trips">
                         <Trips />
+                      </RouteErrorBoundary>
+                    } />
+                    <Route path="/trips/:tripId" element={
+                      <RouteErrorBoundary routeName="Trip Detail">
+                        <TripDetail />
                       </RouteErrorBoundary>
                     } />
                     <Route path="/projects" element={
