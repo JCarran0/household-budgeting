@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.25.0](https://github.com/JCarran0/household-budgeting/compare/v5.24.0...v5.25.0) (2026-04-18)
+
+
+### Features
+
+* **ai-categorization:** per-row skip inside bucket review ([ed3049c](https://github.com/JCarran0/household-budgeting/commit/ed3049c12c940a378a3390eccf6f90737d28007d))
+* **rebrand:** Budget Tracker → Family Tracker, Budget Bot → Helper Bot ([f8f1e4f](https://github.com/JCarran0/household-budgeting/commit/f8f1e4fc0d29e5d75fea207d52f12706fbd6220d))
+* **transactions:** row-click opens edit modal; split moves into modal ([9dfd01c](https://github.com/JCarran0/household-budgeting/commit/9dfd01c4615ed1a5570a269c7239f522c7c32910))
+* **users:** per-user identity color ([7620e8e](https://github.com/JCarran0/household-budgeting/commit/7620e8e277e224a422e982d9a4101435be4e5a79))
+
 ## [5.24.0](https://github.com/JCarran0/household-budgeting/compare/v5.23.0...v5.24.0) (2026-04-18)
 
 
