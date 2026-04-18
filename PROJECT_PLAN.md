@@ -481,6 +481,67 @@ New sidebar section with trip card grid, per-trip budgets (independent from mont
 - [ ] Integration tests for TripService (tag generation, spending aggregation, rename/delete propagation)
 - [ ] Manual testing checklist
 
+## Phase 14: Family Tracker Rebrand & UX Polish ⏳ NOT STARTED
+
+Rename the app from "Budget Tracker" to "Family Tracker" as scope expands beyond budgeting, introduce per-user visual identity, and clean up a few transaction-page UX papercuts.
+
+### 14.1 AI Categorization — Per-Row Skip in Buckets
+- [ ] Allow skipping individual transactions inside a bucket (today you can only apply or skip the whole bucket)
+- [ ] Add per-row skip affordance in `CategorizationFlowModal`
+- [ ] Preserve the existing bulk apply/skip actions
+
+### 14.2 Transactions Page — Row-Click Edit + Split-in-Modal
+- [ ] Remove the Actions column (Edit / Split menu) from the Transactions table
+- [ ] Clicking anywhere on a row (outside the category picker / checkbox) opens the edit modal
+- [ ] Move the Split action into the edit modal
+- [ ] Verify category picker and row-select checkbox click targets don't trigger the modal
+
+### 14.3 User Visual Identity (Color per User)
+- [ ] Assign a theme-appropriate color to each user (both family users' names start with "J", hard to distinguish at a glance)
+- [ ] Let users change their own color in User Settings
+- [ ] Apply the color wherever a user is referenced (transactions, chat messages, audit trail, avatars, action cards)
+- [ ] Ensure color choices meet contrast requirements against the dark theme
+
+### 14.4 Rebrand — Budget Tracker → Family Tracker, Budget Bot → Helper Bot
+- [ ] Update visible strings "Budget Tracker" → "Family Tracker" (frontend layout, page titles, docs)
+- [ ] Rename chatbot "Budget Bot" → "Helper Bot" (`ChatFAB`, `ChatOverlay`, `chatbotPrompt`, MantineLayout)
+- [ ] Update page `<title>`, PWA manifest, favicon/branding assets
+- [ ] Audit CLAUDE.md, READMEs, and BRDs for name references (update live docs, leave historical logs alone)
+
+### 14.5 Subdomain Migration — budget.jaredcarrano.com → family.jaredcarrano.com
+Keep the old subdomain alive as a 301 redirect to the new one.
+
+**Code / infra tasks (in-worktree):**
+- [ ] nginx: add `family.*` to `server_name` on the app block, then add a separate server block that 301-redirects `budget.*` → `family.*` after cutover
+- [ ] Backend CORS allowed origins (`backend/src/app.ts`) include the new host
+- [ ] Update frontend hardcoded references (`ResetRequestForm.tsx`, chatbot prompts, PWA manifest)
+- [ ] Update deploy workflows (`.github/workflows/release-and-deploy.yml`, `deploy-production.yml`, `rollback.yml`)
+- [ ] Update docs (CLAUDE.md, README, `docs/AI-DEPLOYMENTS.md`)
+
+**External / manual tasks (Jared):**
+- [ ] DNS: add `family.jaredcarrano.com` A record → same EC2 Elastic IP
+- [ ] TLS: reissue Let's Encrypt cert covering both hostnames (`certbot --expand`)
+- [ ] Plaid dashboard: update registered redirect URIs if Plaid OAuth is in use
+- [ ] UptimeRobot: update monitor hostname (or add a second monitor)
+- [ ] Cutover sequence: deploy code accepting both hosts → add DNS → expand cert → update bookmarks → flip 301 redirect on `budget.*`
+
+---
+
+## Ideas to Flesh Out Further (Not Yet Planned)
+
+### Chatbot — `read_brd` Tool for Design Context
+**Status:** Parked. Needs more thought before committing.
+
+Idea: give the chatbot a tool (`list_brds` + `read_brd`) so it can pull BRD content into context on demand, rather than statically injecting all BRDs into every turn. Security model is defense-in-depth and server-enforced, so exposing BRDs doesn't create a bypass — the real risks are context drift (BRD says X, code does Y → chatbot confidently misleads user) and token cost.
+
+Open questions to work through before scheduling:
+- Scope: only `docs/features/*-BRD.md`, or implementation plans too? Completed/historical docs?
+- How do we prevent the chatbot from stating "the BRD says X" when the implementation has drifted?
+- Caching / rate-limiting — do we need server-side controls on how often this tool fires?
+- Any sensitive internals in BRDs that we'd prefer not to surface, even read-only?
+
+---
+
 ## Phase 13: Future Enhancements (Optional)
 
 ### 13.1 Cost-Effective Improvements
