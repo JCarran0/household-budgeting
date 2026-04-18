@@ -1,6 +1,6 @@
-# Frontend - Household Budgeting App
+# Frontend — Family Tracker
 
-React TypeScript frontend for the Household Budgeting application with Plaid Link integration.
+React TypeScript frontend for Family Tracker, with Plaid Link integration.
 
 ## 🚀 Quick Start
 
@@ -254,4 +254,4 @@ VITE_API_URL=https://api.yourdomain.com
 
 ---
 
-Part of the [Household Budgeting App](../README.md)
+Part of [Family Tracker](../README.md)

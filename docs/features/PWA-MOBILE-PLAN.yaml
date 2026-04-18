@@ -152,10 +152,10 @@ phase_1_pwa_shell:
       task: Configure web app manifest via vite-plugin-pwa
       status: complete
       details: |
-        Manifest fields:
-        - name: "Household Budget"
-        - short_name: "Budget"
-        - description: "Personal budgeting with Plaid integration"
+        Manifest fields (updated in Phase 14 rebrand; previously "Household Budget" / "Budget"):
+        - name: "Family Tracker"
+        - short_name: "Family"
+        - description: "Family finances, tasks, and trips — with Plaid integration"
         - start_url: "/"
         - display: "standalone"
         - theme_color: match Mantine dark theme primary

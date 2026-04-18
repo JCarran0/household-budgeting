@@ -13,9 +13,9 @@ export default defineConfig({
       registerType: 'prompt',
       includeAssets: ['favicon.ico', 'apple-touch-icon.png'],
       manifest: {
-        name: 'Household Budget',
-        short_name: 'Budget',
-        description: 'Personal budgeting with Plaid integration',
+        name: 'Family Tracker',
+        short_name: 'Family',
+        description: 'Family finances, tasks, and trips — with Plaid integration',
         start_url: '/',
         display: 'standalone',
         theme_color: '#A07820',

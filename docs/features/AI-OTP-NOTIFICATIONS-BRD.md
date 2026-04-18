@@ -170,8 +170,8 @@ Add phone number as an alternative OTP channel and notification delivery method.
 | # | Requirement |
 |---|-------------|
 | REQ-029 | Emails must be simple, responsive HTML with a plain-text fallback. No heavy frameworks — a lightweight template system or string interpolation. |
-| REQ-030 | All emails must include: app name/logo, notification content, link to relevant app page, unsubscribe/preferences link, and a footer stating "This is an automated notification from your household budgeting app." |
-| REQ-031 | Email "from" name must be the app name (e.g., "Household Budget"), not a personal name. |
+| REQ-030 | All emails must include: app name/logo, notification content, link to relevant app page, unsubscribe/preferences link, and a footer stating "This is an automated notification from Family Tracker." |
+| REQ-031 | Email "from" name must be the app name ("Family Tracker"), not a personal name. |
 
 ---
 

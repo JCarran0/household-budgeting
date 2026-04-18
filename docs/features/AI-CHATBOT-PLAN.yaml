@@ -802,7 +802,7 @@ phase_6_frontend:
 
         Structure:
         - Fixed-position panel (bottom-right, 400×600 as per D5)
-        - Header: "Budget Bot" title, model selector, cost display, close button,
+        - Header: "Helper Bot" title (renamed from "Budget Bot" in Phase 14 rebrand), model selector, cost display, close button,
           "New conversation" button
         - Body: scrollable message list (auto-scroll to bottom on new messages)
         - Footer: text input with send button

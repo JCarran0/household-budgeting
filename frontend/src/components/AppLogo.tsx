@@ -10,7 +10,7 @@ export function AppLogo({ size = 32 }: AppLogoProps) {
       width={size}
       height={size}
       role="img"
-      aria-label="Household Budget"
+      aria-label="Family Tracker"
     >
       <rect width="512" height="512" rx="96" ry="96" fill="#8A2318" />
       <g transform="translate(256 524)">

@@ -274,12 +274,12 @@ function NotificationsSection() {
     if ('serviceWorker' in navigator) {
       const registration = await navigator.serviceWorker.ready;
       await registration.showNotification('Test notification', {
-        body: 'Household Budget notifications are working!',
+        body: 'Family Tracker notifications are working!',
         icon: '/icons/icon-192x192.png',
       });
     } else {
       new Notification('Test notification', {
-        body: 'Household Budget notifications are working!',
+        body: 'Family Tracker notifications are working!',
         icon: '/icons/icon-192x192.png',
       });
     }

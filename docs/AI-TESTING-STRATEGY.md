@@ -1,4 +1,4 @@
-# AI Testing Strategy - Household Budgeting Application
+# AI Testing Strategy — Family Tracker
 
 ## 📚 Related Documentation
 - **[CLAUDE.md](../CLAUDE.md)** - Main index and project overview

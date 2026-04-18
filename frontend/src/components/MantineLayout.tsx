@@ -116,7 +116,7 @@ export function MantineLayout() {
             <Group gap="xs">
               <AppLogo size={32} />
               <Text size="xl" fw={700}>
-                Budget Tracker
+                Family Tracker
               </Text>
             </Group>
           </Group>
@@ -204,7 +204,7 @@ export function MantineLayout() {
 
         <AppShell.Section>
           <Text size="xs" c="dimmed" ta="center">
-            © 2024 Budget Tracker
+            © 2024 Family Tracker
           </Text>
         </AppShell.Section>
       </AppShell.Navbar>
