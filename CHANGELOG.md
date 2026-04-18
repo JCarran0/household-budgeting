@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.24.0](https://github.com/JCarran0/household-budgeting/compare/v5.23.0...v5.24.0) (2026-04-18)
+
+
+### Features
+
+* **budget-rollup:** canonical parent rollup utilities + Reports widget refactor ([c308fd5](https://github.com/JCarran0/household-budgeting/commit/c308fd58bf1e1c585deb949f296154b85a521264))
+
 ## [5.23.0](https://github.com/JCarran0/household-budgeting/compare/v5.22.0...v5.23.0) (2026-04-17)
 
 
