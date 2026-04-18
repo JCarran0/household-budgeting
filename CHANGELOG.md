@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+### [5.26.2](https://github.com/JCarran0/household-budgeting/compare/v5.26.1...v5.26.2) (2026-04-18)
+
+
+### Bug Fixes
+
+* **trips:** prevent password-manager autofill on stop name fields ([8cd40a4](https://github.com/JCarran0/household-budgeting/commit/8cd40a476d03b5ac244b048a67dd795b078d8a7f))
+
 ### [5.26.1](https://github.com/JCarran0/household-budgeting/compare/v5.26.0...v5.26.1) (2026-04-18)
 
 
