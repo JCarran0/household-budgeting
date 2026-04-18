@@ -62,6 +62,8 @@ jobs:
           
       - name: Install and build frontend
         working-directory: ./frontend
+        env:
+          VITE_GOOGLE_PLACES_API_KEY: ${{ secrets.VITE_GOOGLE_PLACES_API_KEY }}
         run: |
           echo "📦 Installing frontend dependencies..."
           npm ci
@@ -197,6 +199,8 @@ jobs:
           
       - name: Install and build frontend
         working-directory: ./frontend
+        env:
+          VITE_GOOGLE_PLACES_API_KEY: ${{ secrets.VITE_GOOGLE_PLACES_API_KEY }}
         run: |
           echo "📦 Installing frontend dependencies..."
           npm ci
@@ -258,10 +262,12 @@ jobs:
           
       - name: Build frontend
         working-directory: ./frontend
+        env:
+          VITE_GOOGLE_PLACES_API_KEY: ${{ secrets.VITE_GOOGLE_PLACES_API_KEY }}
         run: |
           npm ci
           npm run build
-          
+
       - name: Create deployment package
         run: |
           # Create package structure

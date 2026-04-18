@@ -70,8 +70,10 @@ jobs:
           
       - name: Build frontend
         working-directory: ./frontend
+        env:
+          VITE_GOOGLE_PLACES_API_KEY: ${{ secrets.VITE_GOOGLE_PLACES_API_KEY }}
         run: npm run build
-        
+
       - name: Check bundle size
         working-directory: ./frontend
         run: |
