@@ -317,11 +317,184 @@ export interface Trip {
   categoryBudgets: TripCategoryBudget[];
   rating: number | null;
   notes: string;
+  stops: Stop[];
 }
 
 export interface TripCategoryBudget {
   categoryId: string;
   amount: number;
+}
+
+// =============================================================================
+// Trip Stop Types (Itineraries)
+// =============================================================================
+
+export type StopType = 'stay' | 'eat' | 'play' | 'transit';
+
+export type TransitMode =
+  | 'drive'
+  | 'flight'
+  | 'train'
+  | 'walk'
+  | 'shuttle'
+  | 'other';
+
+export interface VerifiedLocation {
+  kind: 'verified';
+  label: string;     // Short display name, e.g. "Hotel Arts Barcelona"
+  address: string;   // Full formatted address
+  lat: number;
+  lng: number;
+  placeId: string;   // Provider-specific (Google Places), for dedup/update
+}
+
+export interface FreeTextLocation {
+  kind: 'freeText';
+  label: string;     // e.g. "Grandma's house"
+}
+
+export type StopLocation = VerifiedLocation | FreeTextLocation;
+
+interface StopBase {
+  id: string;                   // UUID
+  date: string;                 // ISO date (YYYY-MM-DD)
+  time: string | null;          // "HH:mm" 24-hour or null
+  notes: string;                // Free text, default ''
+  sortOrder: number;            // Manual ordering for untimed stops within a day
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface StayStop extends StopBase {
+  type: 'stay';
+  name: string;
+  location: VerifiedLocation;   // Stays must be verified (REQ-009)
+  endDate: string;              // ISO date — last night of stay (D2)
+}
+
+export interface EatStop extends StopBase {
+  type: 'eat';
+  name: string;
+  location: StopLocation | null;
+}
+
+export interface PlayStop extends StopBase {
+  type: 'play';
+  name: string;
+  location: StopLocation | null;
+  durationMinutes: number | null;
+}
+
+export interface TransitStop extends StopBase {
+  type: 'transit';
+  mode: TransitMode;
+  fromLocation: StopLocation | null;
+  toLocation: StopLocation | null;
+  durationMinutes: number | null;
+}
+
+export type Stop = StayStop | EatStop | PlayStop | TransitStop;
+
+// Create DTOs — server generates id/createdAt/updatedAt/sortOrder
+export interface CreateStayStopDto {
+  type: 'stay';
+  date: string;
+  time?: string | null;
+  notes?: string;
+  sortOrder?: number;
+  name: string;
+  location: VerifiedLocation;
+  endDate: string;
+}
+
+export interface CreateEatStopDto {
+  type: 'eat';
+  date: string;
+  time?: string | null;
+  notes?: string;
+  sortOrder?: number;
+  name: string;
+  location?: StopLocation | null;
+}
+
+export interface CreatePlayStopDto {
+  type: 'play';
+  date: string;
+  time?: string | null;
+  notes?: string;
+  sortOrder?: number;
+  name: string;
+  location?: StopLocation | null;
+  durationMinutes?: number | null;
+}
+
+export interface CreateTransitStopDto {
+  type: 'transit';
+  date: string;
+  time?: string | null;
+  notes?: string;
+  sortOrder?: number;
+  mode: TransitMode;
+  fromLocation?: StopLocation | null;
+  toLocation?: StopLocation | null;
+  durationMinutes?: number | null;
+}
+
+export type CreateStopDto =
+  | CreateStayStopDto
+  | CreateEatStopDto
+  | CreatePlayStopDto
+  | CreateTransitStopDto;
+
+// Update DTOs — every field optional; type cannot change after creation.
+export interface UpdateStayStopDto {
+  date?: string;
+  time?: string | null;
+  notes?: string;
+  sortOrder?: number;
+  name?: string;
+  location?: VerifiedLocation;
+  endDate?: string;
+}
+
+export interface UpdateEatStopDto {
+  date?: string;
+  time?: string | null;
+  notes?: string;
+  sortOrder?: number;
+  name?: string;
+  location?: StopLocation | null;
+}
+
+export interface UpdatePlayStopDto {
+  date?: string;
+  time?: string | null;
+  notes?: string;
+  sortOrder?: number;
+  name?: string;
+  location?: StopLocation | null;
+  durationMinutes?: number | null;
+}
+
+export interface UpdateTransitStopDto {
+  date?: string;
+  time?: string | null;
+  notes?: string;
+  sortOrder?: number;
+  mode?: TransitMode;
+  fromLocation?: StopLocation | null;
+  toLocation?: StopLocation | null;
+  durationMinutes?: number | null;
+}
+
+export type UpdateStopDto =
+  | UpdateStayStopDto
+  | UpdateEatStopDto
+  | UpdatePlayStopDto
+  | UpdateTransitStopDto;
+
+export interface ReorderStopsDto {
+  updates: { id: string; sortOrder: number }[];
 }
 
 export interface StoredTrip extends Trip {

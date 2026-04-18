@@ -3,6 +3,12 @@ import { z } from 'zod';
 import { tripService, categoryService } from '../services';
 import { authMiddleware } from '../middleware/authMiddleware';
 import { AuthorizationError, NotFoundError, ConflictError } from '../errors';
+import { StayOverlapError } from '../services/tripService';
+import {
+  createStopSchema,
+  updateStopSchema,
+  reorderStopsSchema,
+} from '../validators/stopValidators';
 
 const router = Router();
 
@@ -212,5 +218,124 @@ router.delete('/:id', async (req: Request, res: Response, next: NextFunction): P
     next(error);
   }
 });
+
+// ---------------------------------------------------------------------------
+// Stop routes — nested under /trips/:tripId/stops
+// ---------------------------------------------------------------------------
+
+// POST /api/v1/trips/:tripId/stops — create a stop
+router.post(
+  '/:tripId/stops',
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const familyId = req.user?.familyId;
+      const userId = req.user?.userId;
+      if (!familyId) throw new AuthorizationError();
+
+      const data = createStopSchema.parse(req.body);
+      const stop = await tripService.createStop(req.params.tripId, familyId, data, userId);
+      res.status(201).json(stop);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        res.status(400).json({ error: 'Invalid request data', details: error.format() });
+        return;
+      }
+      if (error instanceof StayOverlapError) {
+        res.status(409).json({
+          error: error.message,
+          errorCode: error.code,
+          conflictsWith: {
+            id: error.conflictsWith.id,
+            name: error.conflictsWith.name,
+            date: error.conflictsWith.date,
+            endDate: error.conflictsWith.endDate,
+          },
+        });
+        return;
+      }
+      next(error);
+    }
+  },
+);
+
+// PATCH /api/v1/trips/:tripId/stops/:stopId — update a stop
+router.patch(
+  '/:tripId/stops/:stopId',
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const familyId = req.user?.familyId;
+      const userId = req.user?.userId;
+      if (!familyId) throw new AuthorizationError();
+
+      const data = updateStopSchema.parse(req.body);
+      const stop = await tripService.updateStop(
+        req.params.tripId,
+        req.params.stopId,
+        familyId,
+        data,
+        userId,
+      );
+      res.json(stop);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        res.status(400).json({ error: 'Invalid request data', details: error.format() });
+        return;
+      }
+      if (error instanceof StayOverlapError) {
+        res.status(409).json({
+          error: error.message,
+          errorCode: error.code,
+          conflictsWith: {
+            id: error.conflictsWith.id,
+            name: error.conflictsWith.name,
+            date: error.conflictsWith.date,
+            endDate: error.conflictsWith.endDate,
+          },
+        });
+        return;
+      }
+      next(error);
+    }
+  },
+);
+
+// DELETE /api/v1/trips/:tripId/stops/:stopId — delete a stop
+router.delete(
+  '/:tripId/stops/:stopId',
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const familyId = req.user?.familyId;
+      const userId = req.user?.userId;
+      if (!familyId) throw new AuthorizationError();
+
+      await tripService.deleteStop(req.params.tripId, req.params.stopId, familyId, userId);
+      res.status(204).send();
+    } catch (error) {
+      next(error);
+    }
+  },
+);
+
+// POST /api/v1/trips/:tripId/stops/reorder — batch-update sortOrder values
+router.post(
+  '/:tripId/stops/reorder',
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const familyId = req.user?.familyId;
+      const userId = req.user?.userId;
+      if (!familyId) throw new AuthorizationError();
+
+      const data = reorderStopsSchema.parse(req.body);
+      const stops = await tripService.reorderStops(req.params.tripId, familyId, data, userId);
+      res.json({ stops });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        res.status(400).json({ error: 'Invalid request data', details: error.format() });
+        return;
+      }
+      next(error);
+    }
+  },
+);
 
 export default router;

@@ -1,0 +1,822 @@
+# =============================================================================
+# Trip Itineraries — Implementation Plan
+# =============================================================================
+# BRD: docs/features/TRIP-ITINERARIES-BRD.md
+# Extends: docs/features/TRAVEL-TAGGING-PLAN.yaml (completed)
+# Status: Not started
+# Last Updated: 2026-04-18
+# =============================================================================
+
+overview:
+  description: |
+    Implementation plan for the Trip Itineraries feature. Extends the existing
+    Trip entity with a collection of Stops (Stay, Eat, Play, Transit) and a new
+    Trip Detail view at /trips/:tripId rendered as a day-by-day agenda.
+
+    The existing /trips accordion list view is preserved for retrospective
+    budget review (unchanged financial behavior). Stops do not modify
+    transaction tags — link-to-transaction is an explicit V2 item.
+
+  key_files:
+    brd: docs/features/TRIP-ITINERARIES-BRD.md
+    extends_plan: docs/features/TRAVEL-TAGGING-PLAN.yaml
+    shared_types: shared/types/index.ts
+    trip_service: backend/src/services/tripService.ts
+    trip_routes: backend/src/routes/trips.ts
+    trips_page: frontend/src/pages/Trips.tsx
+    api_client: frontend/src/lib/api/trips.ts
+    app_routes: frontend/src/App.tsx
+
+# =============================================================================
+# DECISIONS LOG — Capture key decisions as they're made during implementation
+# =============================================================================
+decisions:
+  - id: D1
+    date: 2026-04-18
+    decision: Stop is a first-class typed entity, not a union of loosely related records
+    rationale: |
+      Stay/Eat/Play/Transit share a spine (date, location, notes) but diverge
+      enough (Stay has endDate, Transit has mode + from/to) that modeling as a
+      discriminated union on `type` keeps the rest of the system honest. TypeScript
+      discriminated unions + Zod discriminated unions both support this cleanly.
+
+  - id: D2
+    date: 2026-04-18
+    decision: Stay dates are night-based, not day-based
+    rationale: |
+      A Stay's startDate is the first night slept there; endDate is the last night.
+      Check-out morning is implicit (endDate + 1) and not represented in data. This
+      dissolves the overlapping-stays question — two stays can be adjacent but never
+      cover the same night. Matches how humans think about hotels ("3 nights").
+
+  - id: D3
+    date: 2026-04-18
+    decision: No-overlap rule for Stays is enforced server-side with a clear error
+    rationale: |
+      REQ-014. Two Stays whose [startDate, endDate] ranges intersect on any night
+      are rejected on create/update. Frontend validates pre-submit for UX; backend
+      is the source of truth. Error message must name the conflicting Stay.
+
+  - id: D4
+    date: 2026-04-18
+    decision: Stops are embedded in the Trip entity, not stored separately
+    rationale: |
+      Trips are loaded individually for the detail view; stops are always read
+      and written with their parent Trip. A trip with 50 stops is still a small
+      JSON payload (<100KB). Embedding keeps the storage model simple and
+      matches the existing pattern (categoryBudgets embedded). If performance
+      becomes an issue (unlikely), splitting into trip_stops_{familyId}.json
+      is a backwards-compatible migration.
+
+  - id: D5
+    date: 2026-04-18
+    decision: Stop create/edit/delete endpoints are nested under trips — /trips/:tripId/stops
+    rationale: |
+      Clean REST shape, makes the parent-child relationship explicit, and uses
+      the existing trip-level auth/family-scoping middleware without change.
+
+  - id: D6
+    date: 2026-04-18
+    decision: Stops do not modify transaction tags
+    rationale: |
+      REQ A-02. Link-to-transaction is a V2 item. MVP treats planning and
+      financial tracking as two independent lenses on the same Trip. Keeps
+      MVP scope contained and avoids bidirectional sync complexity.
+
+  - id: D7
+    date: 2026-04-18
+    decision: Address verification uses Google Places Autocomplete (V1)
+    rationale: |
+      De facto standard, generous free tier (first 10k sessions/month free at
+      current pricing), matches user expectation for "real addresses" in a
+      travel planner. Provider is swappable via a thin adapter interface;
+      Mapbox is a viable alternative if billing becomes a concern.
+
+  - id: D8
+    date: 2026-04-18
+    decision: Trip Detail view is a new route at /trips/:tripId with tabs
+    rationale: |
+      REQ-017. Tabs (Itinerary | Spending | Notes) keep the information dense
+      but unambiguous. The list view at /trips stays as the at-a-glance /
+      retrospective surface. React Router nested route; tab state in URL
+      via ?tab=itinerary for bookmarkability (matches project convention,
+      per CLAUDE.md "URL-Based Page State").
+
+  - id: D9
+    date: 2026-04-18
+    decision: Agenda rendering is derived, not stored
+    rationale: |
+      Day sections, Stay chapter banners, "Today" highlighting, and the
+      base-change-vs-day-trip Transit distinction are all computed from the
+      stop list at render time. No denormalization in storage. Keeps the data
+      model minimal; the view layer owns the presentational logic.
+
+  - id: D10
+    date: 2026-04-18
+    decision: Stop ordering for untimed stops is a persisted field, not derived
+    rationale: |
+      REQ-025. Untimed stops support manual drag reorder, so each stop needs
+      a sortOrder field scoped to its day. Timed stops ignore sortOrder and
+      sort by time. A combined sort (time then sortOrder) keeps the logic
+      single-pass in the view.
+
+# =============================================================================
+# PHASE 1: Shared Types & Data Model
+# =============================================================================
+phase_1_data_model:
+  status: not_started
+  description: |
+    Define Stop types as a discriminated union in shared/types/index.ts and
+    extend the Trip entity to carry a stops array. Add Zod schemas for CRUD.
+
+  tasks:
+    - id: "1.1"
+      task: Define Stop discriminated union in shared/types/index.ts
+      status: not_started
+      details: |
+        export type StopType = 'stay' | 'eat' | 'play' | 'transit';
+        export type TransitMode = 'drive' | 'flight' | 'train' | 'walk' | 'shuttle' | 'other';
+
+        interface StopBase {
+          id: string;                 // UUID
+          date: string;               // ISO date (required)
+          time: string | null;        // "HH:mm" 24h, nullable
+          notes: string;              // free text, default ''
+          sortOrder: number;          // user-controlled ordering for untimed stops within a day
+          createdAt: string;
+          updatedAt: string;
+        }
+
+        interface StayStop extends StopBase {
+          type: 'stay';
+          name: string;                       // required
+          location: VerifiedLocation;         // required
+          endDate: string;                    // ISO date, last night of stay (D2)
+        }
+
+        interface EatStop extends StopBase {
+          type: 'eat';
+          name: string;                       // required
+          location: VerifiedLocation | FreeTextLocation | null;
+        }
+
+        interface PlayStop extends StopBase {
+          type: 'play';
+          name: string;                       // required
+          location: VerifiedLocation | FreeTextLocation | null;
+          durationMinutes: number | null;     // optional
+        }
+
+        interface TransitStop extends StopBase {
+          type: 'transit';
+          mode: TransitMode;                  // required
+          fromLocation: VerifiedLocation | FreeTextLocation | null;
+          toLocation: VerifiedLocation | FreeTextLocation | null;
+          durationMinutes: number | null;
+        }
+
+        interface VerifiedLocation {
+          kind: 'verified';
+          label: string;                // short human display ("Hotel Arts Barcelona")
+          address: string;              // full formatted address
+          lat: number;
+          lng: number;
+          placeId: string;              // provider-specific, for dedup/update
+        }
+
+        interface FreeTextLocation {
+          kind: 'freeText';
+          label: string;                // e.g., "Grandma's house"
+        }
+
+        export type Stop = StayStop | EatStop | PlayStop | TransitStop;
+
+    - id: "1.2"
+      task: Extend Trip interface to carry stops array
+      status: not_started
+      details: |
+        In shared/types/index.ts:
+        interface Trip { ...existing fields; stops: Stop[]; }
+
+        Default value on existing trips (migration): empty array. Handled in
+        TripService.loadTrips() by defaulting missing `stops` to [] rather
+        than a migration pass (backwards-compatible read).
+
+    - id: "1.3"
+      task: Define Zod schemas for Stop CRUD
+      status: not_started
+      details: |
+        Use z.discriminatedUnion('type', [staySchema, eatSchema, playSchema, transitSchema]).
+
+        Shared refinements:
+        - date is valid ISO date
+        - time matches /^([01]\d|2[0-3]):[0-5]\d$/ when present
+        - Stay: endDate >= startDate
+        - Stay: location.kind === 'verified' (forced via schema — not FreeText)
+        - Transit: mode is a valid TransitMode
+        - notes max length 2000
+
+        Two schemas: createStopSchema (all required fields) and updateStopSchema
+        (partial, same refinements).
+
+    - id: "1.4"
+      task: Add helper utilities in shared/utils/tripHelpers.ts
+      status: not_started
+      details: |
+        Functions needed for both backend validation and frontend rendering:
+
+        - stayCoversDate(stay, date): boolean
+        - stayOverlapsStay(a, b): boolean  // used for no-overlap validation
+        - validateNoStayOverlap(stops, newStop): { ok: boolean; conflictsWith?: StayStop }
+        - computeAgendaDayRange(stops, trip): { start: string; end: string }
+        - groupStopsByDay(stops): Map<string /*date*/, Stop[]>
+        - findActiveStay(stops, date): StayStop | null
+        - isTransitBaseChange(transit, stops): boolean
+            // true if the transit date is the last day of one Stay AND the
+            // next Stay starts on or immediately after the transit date
+
+        Tests: unit test each helper with edge cases (empty stops, adjacent
+        stays, single-day trip, multi-day stay, overlapping transit).
+
+# =============================================================================
+# PHASE 2: Backend — Service & Routes
+# =============================================================================
+phase_2_backend:
+  status: not_started
+  description: |
+    Extend TripService with stop CRUD operations and add nested routes under
+    /trips/:tripId/stops. Enforce the no-overlap rule server-side.
+
+  tasks:
+    - id: "2.1"
+      task: Extend TripService with stop CRUD methods
+      status: not_started
+      details: |
+        Add methods to backend/src/services/tripService.ts:
+
+        - createStop(tripId, familyId, data: CreateStopDto, userId?): Promise<Stop>
+        - updateStop(tripId, stopId, familyId, data: UpdateStopDto, userId?): Promise<Stop>
+        - deleteStop(tripId, stopId, familyId): Promise<void>
+        - reorderStops(tripId, familyId, updates: { id: string; sortOrder: number }[]): Promise<void>
+
+        Each method:
+        1. Load the trip (404 if not found)
+        2. For create/update of a Stay: run validateNoStayOverlap; throw
+           a named error with the conflicting Stay's name (SEC: do not leak
+           other trips' data)
+        3. Mutate the trip's stops array
+        4. Save the trip; bump trip.updatedAt and lastModifiedBy
+
+        All operations are whole-trip writes (simple, consistent with existing
+        trip save pattern). Single-user concurrency is acceptable for a 2-user
+        family app — last-write-wins matches existing trip edit semantics.
+
+    - id: "2.2"
+      task: Add nested stop routes to backend/src/routes/trips.ts
+      status: not_started
+      details: |
+        - POST   /api/v1/trips/:tripId/stops        — create
+        - PATCH  /api/v1/trips/:tripId/stops/:id    — update
+        - DELETE /api/v1/trips/:tripId/stops/:id    — delete
+        - POST   /api/v1/trips/:tripId/stops/reorder — batch sortOrder update
+                                                      body: { updates: { id, sortOrder }[] }
+
+        All routes:
+        - authenticateToken middleware (existing)
+        - family-scoping via authenticated user's familyId
+        - Zod validation on body using schemas from 1.3
+        - Return 400 with stop-overlap error code when validateNoStayOverlap fails
+
+        Reuse existing trip route patterns for error handling, logging, and
+        response shape.
+
+    - id: "2.3"
+      task: Integration tests for stop CRUD
+      status: not_started
+      details: |
+        Add to backend/src/__tests__/integration/tripService.test.ts (or new
+        tripStops.test.ts). Cover:
+
+        - Create each stop type; verify persistence and shape
+        - Update a stop; verify updatedAt bumps
+        - Delete a stop; verify removal
+        - Reorder: verify sortOrder updates are applied
+        - Stay overlap rejection: adjacent stays allowed, overlapping rejected
+        - Stay overlap error names the conflicting stay
+        - Deleting a trip also deletes its stops (already covered by existing
+          trip deletion; verify stops field too)
+        - Permissions: any family member can CRUD (use two user contexts)
+        - Stop date outside trip's nominal range: allowed (REQ-012)
+
+# =============================================================================
+# PHASE 3: Frontend — Routing & Detail View Skeleton
+# =============================================================================
+phase_3_routing:
+  status: not_started
+  description: |
+    Add the /trips/:tripId route and a skeleton Trip Detail page with three
+    tabs. Wire the "View Details" affordance into the existing accordion.
+
+  tasks:
+    - id: "3.1"
+      task: Add API client methods in frontend/src/lib/api/trips.ts
+      status: not_started
+      details: |
+        - getTripSummary(tripId): Promise<TripSummary>
+          (full trip with stops + computed spending — extend existing endpoint
+          if needed, or add a new /trips/:tripId endpoint)
+        - createStop(tripId, data): Promise<Stop>
+        - updateStop(tripId, stopId, data): Promise<Stop>
+        - deleteStop(tripId, stopId): Promise<void>
+        - reorderStops(tripId, updates): Promise<void>
+
+    - id: "3.2"
+      task: Add /trips/:tripId route in frontend/src/App.tsx
+      status: not_started
+      details: |
+        import { TripDetail } from './pages/TripDetail';
+        <Route path="/trips/:tripId" element={<TripDetail />} />
+
+    - id: "3.3"
+      task: Create frontend/src/pages/TripDetail.tsx skeleton
+      status: not_started
+      details: |
+        Structure:
+        - useParams() to get tripId
+        - useSearchParams() to sync active tab (?tab=itinerary|spending|notes)
+        - React Query: ['trip', tripId] with staleTime 5 min
+        - Header: back link, trip name, date range, status badge, rating,
+          edit/delete actions (reuse TripFormModal + DeleteTripModal)
+        - Mantine <Tabs> with three panels, defaulting to 'itinerary'
+        - Loading, error, not-found states
+
+        Defer the actual tab contents to later phases. Use placeholder panels.
+
+    - id: "3.4"
+      task: Add "View Details" action to the accordion on /trips
+      status: not_started
+      details: |
+        In frontend/src/pages/Trips.tsx TripCard, inside the existing
+        Accordion.Panel action group, add a button/link "View Details"
+        that navigates to /trips/:id. Place it left of edit/delete so it's
+        the primary action on the expanded panel.
+
+    - id: "3.5"
+      task: Move the existing category breakdown + notes into Spending and Notes tabs
+      status: not_started
+      details: |
+        Lift the table rendering from TripCard.Accordion.Panel into a reusable
+        <TripSpendingBreakdown> component used by both the Spending tab and
+        the existing accordion panel. Same for the notes text.
+
+        Result: the accordion continues to render the breakdown (REQ-043),
+        the detail view's Spending tab shows the same content without drift.
+
+# =============================================================================
+# PHASE 4: Frontend — Agenda Rendering (Itinerary Tab)
+# =============================================================================
+phase_4_agenda:
+  status: not_started
+  description: |
+    Render the day-by-day agenda in the Itinerary tab. This is the largest
+    frontend phase and the feature's headline surface.
+
+  tasks:
+    - id: "4.1"
+      task: Create frontend/src/components/trips/Agenda.tsx
+      status: not_started
+      details: |
+        Props: { trip: TripSummary; stops: Stop[] }
+
+        Responsibilities:
+        - Compute agenda day range via computeAgendaDayRange (stops + trip)
+        - Build day list; for each day:
+          - Find active Stay (findActiveStay)
+          - Partition stops: timed (sorted ascending), untimed (by sortOrder)
+          - Classify each Transit as base-change or day-trip
+        - Render:
+          - Stay chapter banner above the first day of its range (spans visually)
+          - Day section (DaySection component)
+          - Base-change Transit as a full-width connector tile between chapters
+          - "Today" highlight when date === today
+
+        Visual style: match the mockup from the BRD design phase — vertical
+        scroll, muted dividers, chapter banners with subtle emphasis.
+
+    - id: "4.2"
+      task: Create DaySection.tsx
+      status: not_started
+      details: |
+        Props: { date; dayIndex; stops; stay; collapsed; onToggle; isToday; isOutsideNominalRange }
+
+        Renders:
+        - Collapsible header: "Sat, Apr 19 · Day 1" + collapse chevron
+        - When collapsed: summary line "3 stops · Sagrada Família + 2 more"
+        - When expanded: list of Stop cards, ordered per REQ-025
+
+        Default state: expanded. Collapse state persisted per-trip to
+        sessionStorage (not server) — cheap, fine for MVP.
+
+        "Today" treatment: accent border or colored date text.
+        Out-of-nominal-range: dimmed header.
+
+    - id: "4.3"
+      task: Create StopCard.tsx (one component handling all four types)
+      status: not_started
+      details: |
+        Props: { stop: Stop; onEdit; onDelete; onDragHandleProps? }
+
+        Renders (horizontal row, mobile-first):
+        - Type icon (Stay: IconBed, Eat: IconToolsKitchen2, Play: IconMasksTheater, Transit varies by mode)
+        - Time (if set) or "—" for untimed
+        - Title/description
+        - Secondary line: location label (if set) or derived travel info for Transit
+        - Hover actions: edit, delete, drag handle (drag handle only for untimed)
+
+        Stop type → icon mapping lives in a small utility file for reuse.
+
+    - id: "4.4"
+      task: Create StayBanner.tsx
+      status: not_started
+      details: |
+        Props: { stay: StayStop; nightIndex: number; totalNights: number }
+
+        Renders a sticky/visible chapter header above the day sections its
+        Stay covers. Shows "🏨 Hotel Arts Barcelona — night 2 of 3" with
+        edit affordance.
+
+        Mechanics: the parent Agenda renders one StayBanner per unique Stay,
+        positioned before the first day it covers. Days within the Stay
+        don't repeat the banner (REQ-023).
+
+    - id: "4.5"
+      task: Create TransitConnectorTile.tsx
+      status: not_started
+      details: |
+        Full-width tile used for base-change Transits between two Stay
+        chapters. Shows mode icon, duration, from → to labels, edit/delete
+        actions.
+
+        Rendered inline in the Agenda's day list — between the last day of
+        the outgoing Stay's chapter and the first day of the incoming Stay's
+        chapter.
+
+    - id: "4.6"
+      task: Wire drag-to-reorder for untimed stops
+      status: not_started
+      details: |
+        Use @hello-pangea/dnd — already installed and used by the Task Kanban
+        (see frontend/src/components/tasks/KanbanColumn.tsx). Reusing the same
+        library keeps the drag implementation consistent across features.
+
+        Scope: drag is allowed only between untimed stops within the same day.
+        Timed stops and drags across days are disabled.
+
+        On drop: compute new sortOrder values, call reorderStops mutation,
+        optimistically update React Query cache.
+
+        Note: the itinerary's use case is a subset of the kanban's (intra-list
+        reorder only, no cross-column moves), so the implementation is simpler.
+        See tech debt item #10 (AI-TECHNICAL-DEBT.md) for the broader goal of
+        extracting a shared SortableList component across kanban + task edit
+        subtasks + itinerary — not in scope for this feature's V1.
+
+    - id: "4.7"
+      task: Empty-day placeholder rendering
+      status: not_started
+      details: |
+        When a day is expanded but has zero stops, render a soft placeholder
+        "Nothing planned" + inline "+ Add stop" button (REQ-042).
+
+    - id: "4.8"
+      task: Gap-day Stay nudge
+      status: not_started
+      details: |
+        When the agenda has one or more contiguous days not covered by any
+        Stay, render "Where are you staying after [date]? + Add Stay" at
+        the boundary (REQ-041). Deduplicated per uncovered range.
+
+# =============================================================================
+# PHASE 5: Frontend — Stop Creation Flow
+# =============================================================================
+phase_5_creation:
+  status: not_started
+  description: |
+    Type-first bottom sheet, per-type forms, save-on-blur, Google Places
+    autocomplete, Transit auto-infer.
+
+  tasks:
+    - id: "5.1"
+      task: Install Google Places Autocomplete dependency
+      status: not_started
+      details: |
+        Add a lightweight wrapper (e.g., react-google-autocomplete or a custom
+        hook using the Maps JS API loader). Prefer a solution that exposes
+        placeId + lat/lng in the callback — we need all three for
+        VerifiedLocation.
+
+        Add VITE_GOOGLE_PLACES_API_KEY to frontend env config.
+        Document in deployment docs (key restrictions: HTTP referrers =
+        production domains + localhost).
+
+    - id: "5.2"
+      task: Create LocationInput.tsx (verified + free-text)
+      status: not_started
+      details: |
+        Props: { value: VerifiedLocation | FreeTextLocation | null;
+                 onChange; mode: 'verifiedOnly' | 'verifiedOrFreeText' }
+
+        'verifiedOnly' mode: input is a Google Places autocomplete only.
+        Used for Stay.
+
+        'verifiedOrFreeText' mode: shows autocomplete with a "Use as typed"
+        fallback (fires a FreeTextLocation). Used for Eat/Play/Transit
+        endpoints.
+
+    - id: "5.3"
+      task: Create AddStopSheet.tsx — bottom sheet with type picker
+      status: not_started
+      details: |
+        Props: { opened; onClose; tripId; defaultDate }
+
+        States:
+        1. picker — four chips: Stay / Eat / Play / Transit
+        2. form — the selected type's form
+
+        Transitions: chip tap → swap chip grid for form. Back arrow in form
+        header returns to picker.
+
+        Mobile-first: use Mantine Modal with transitionProps slide-up,
+        fullScreen on small viewports.
+
+    - id: "5.4"
+      task: Create StayForm.tsx
+      status: not_started
+      details: |
+        Fields:
+        - Name (required text)
+        - Location (LocationInput, verifiedOnly)
+        - Start date (DatePickerInput, defaults to sheet's defaultDate)
+        - Nights (SegmentedControl with quick picks 1/2/3/7 + NumberInput fallback)
+          endDate derived as startDate + (nights - 1)
+        - Time of check-in (optional, TimeInput)
+        - "More details" disclosure: notes, URL, confirmation code (notes only stored in V1)
+
+        Validation: Zod-based via the shared createStopSchema with type=stay.
+        Client-side no-overlap check against the trip's existing Stays for
+        fast feedback; server enforces definitively.
+
+        Save: on blur or debounced change, if valid, call createStop or
+        updateStop. Show inline "Saved" indicator.
+
+    - id: "5.5"
+      task: Create EatForm.tsx and PlayForm.tsx
+      status: not_started
+      details: |
+        Small variants of StayForm. Shared component EatPlayForm with a prop
+        controlling whether duration is shown (Play: yes, Eat: no).
+
+        Fields:
+        - Name (required text)
+        - Location (LocationInput, verifiedOrFreeText, optional)
+        - Date (required)
+        - Time (optional)
+        - Duration in minutes (Play only, optional)
+        - "More details": notes
+
+    - id: "5.6"
+      task: Create TransitForm.tsx
+      status: not_started
+      details: |
+        Fields:
+        - Mode (SegmentedControl: Drive / Flight / Train / Walk / Shuttle / Other)
+        - Date (required)
+        - Time (optional)
+        - From (LocationInput, verifiedOrFreeText — pre-filled from the
+          previous stop's location/toLocation when available)
+        - To (LocationInput, verifiedOrFreeText — pre-filled from the next
+          stop's location/fromLocation when available)
+        - Duration minutes (optional)
+        - "More details": notes
+
+        Pre-fill is computed once when the form opens based on the current
+        agenda context. User can override.
+
+    - id: "5.7"
+      task: Wire "+ Add stop" buttons in DaySection and empty-day placeholder
+      status: not_started
+      details: |
+        Both open AddStopSheet with defaultDate = that day's date.
+
+# =============================================================================
+# PHASE 6: Frontend — Empty States & Templates
+# =============================================================================
+phase_6_empty_states:
+  status: not_started
+  description: |
+    First-run empty state, three CTAs, basic templates. Gap-day nudge
+    already in Phase 4; this phase focuses on the no-stops state.
+
+  tasks:
+    - id: "6.1"
+      task: Create ItineraryEmptyState.tsx
+      status: not_started
+      details: |
+        Rendered inside the Itinerary tab when stops.length === 0.
+
+        Large friendly card:
+        "🏨 Where are you staying?
+         Adding a place to stay anchors your trip."
+
+        CTAs (in priority order):
+        - Primary button: "+ Add a Stay" → opens AddStopSheet with type=stay
+          pre-selected and defaultDate = trip.startDate
+        - Secondary link: "I'm flying first" → AddStopSheet with type=transit
+          + mode=flight pre-selected
+        - Tertiary link: "Use template" → opens TripTemplateModal
+
+        Dismisses automatically when any stop is created (driven by the
+        stops prop becoming non-empty).
+
+    - id: "6.2"
+      task: Create TripTemplateModal.tsx
+      status: not_started
+      details: |
+        Three template choices for V1:
+        - City break: one Stay spanning nights 1..(tripLength-1).
+        - Multi-city: two Stays split roughly evenly across the trip, with
+          a Drive Transit between them.
+        - Beach week: one Stay spanning all nights of the trip.
+
+        Each template, when applied:
+        - Generates the Stays with placeholder names ("Hotel", "City A hotel")
+          and empty location (user fills in after)
+        - For multi-city: also creates a base-change Transit between them
+        - Stops are created via the regular createStop API — no new endpoint
+
+        Templates are simple pre-canned sequences of create calls; no need
+        for server-side template definitions in V1.
+
+    - id: "6.3"
+      task: "I'm flying first" flow
+      status: not_started
+      details: |
+        Pre-opens the Transit form with mode=Flight. User fills in the rest.
+        Date defaults to trip.startDate. No further magic — keeps V1 simple.
+
+# =============================================================================
+# PHASE 7: Polish & Cross-Cutting
+# =============================================================================
+phase_7_polish:
+  status: not_started
+  description: |
+    Round off loose ends: error toasts, confirm-before-delete, accessibility,
+    documentation updates.
+
+  tasks:
+    - id: "7.1"
+      task: Delete confirmation for stops
+      status: not_started
+      details: |
+        Reuse pattern from DeleteTripModal. Confirmation copy shows the stop's
+        display name and day.
+
+    - id: "7.2"
+      task: Error handling for Stay overlap
+      status: not_started
+      details: |
+        Backend returns a structured error code (e.g., STAY_OVERLAP) with
+        the conflicting Stay's name. Frontend displays a toast + inline form
+        error: "This Stay overlaps with [Other Stay Name] (Apr 21–23)."
+
+    - id: "7.3"
+      task: Accessibility pass
+      status: not_started
+      details: |
+        - AddStopSheet is reachable via keyboard, focus traps correctly
+        - Drag handles have keyboard alternatives (arrow keys to reorder)
+        - Day collapse chevrons have aria-expanded
+        - Stay banner is a landmark / region
+        - Icons have aria-labels where they carry meaning alone
+
+    - id: "7.4"
+      task: Update CLAUDE.md documentation index
+      status: not_started
+      details: |
+        Add two rows to the Documentation Index in CLAUDE.md:
+        - TRIP-ITINERARIES-BRD.md
+        - TRIP-ITINERARIES-PLAN.yaml
+
+        Add an entry under "Critical Files" for the new TripDetail page,
+        Agenda component, and AddStopSheet.
+
+        Add a row under "Recent Architecture Decisions" summarizing the
+        stops-embedded-in-trip + night-based-Stay-dates decisions.
+
+    - id: "7.5"
+      task: Update AI-APPLICATION-ARCHITECTURE.md
+      status: not_started
+      details: |
+        Add a short section on the Trip Itineraries feature:
+        - Data shape (stops embedded in trip)
+        - Key helpers (tripHelpers.ts)
+        - No-overlap rule enforcement point (TripService)
+
+# =============================================================================
+# PHASE 8: Testing & Validation
+# =============================================================================
+phase_8_testing:
+  status: not_started
+  description: |
+    Risk-based testing per project philosophy — integration over unit,
+    focus on data integrity (no-overlap), correctness of rendering logic,
+    and critical paths (create/edit/delete stops).
+
+  tasks:
+    - id: "8.1"
+      task: Integration tests for stop CRUD (backend)
+      status: not_started
+      details: |
+        Covered in task 2.3 — listed here for completeness.
+
+    - id: "8.2"
+      task: Unit tests for tripHelpers
+      status: not_started
+      details: |
+        File: shared/utils/__tests__/tripHelpers.test.ts
+
+        Cover:
+        - stayCoversDate: boundary conditions (first night, last night, day after)
+        - stayOverlapsStay: adjacency allowed, single-night overlap rejected
+        - computeAgendaDayRange: stops inside/outside nominal range
+        - groupStopsByDay: empty, single-day, multi-day stays
+        - findActiveStay: no stays, single stay, adjacent stays
+        - isTransitBaseChange: day-trip vs. transition scenarios
+
+    - id: "8.3"
+      task: Frontend smoke tests for TripDetail rendering
+      status: not_started
+      details: |
+        Use React Testing Library + mocked API.
+
+        - Renders loading, error, not-found states
+        - Renders three tabs; clicking each updates URL
+        - Empty state shown when stops.length === 0
+        - Stay banner renders above its covered days
+        - Day collapse toggles expanded state
+
+    - id: "8.4"
+      task: Manual UAT test plan
+      status: not_started
+      details: |
+        Generate via /generate-test-plan skill after implementation.
+        Focus areas:
+        - Type-first sheet flow for each type
+        - Stay overlap rejection UX
+        - Drag-to-reorder untimed stops
+        - Navigation between list and detail
+        - Templates producing correct stop sequences
+        - Agenda rendering on real family trip data
+
+# =============================================================================
+# PHASE 9: Release
+# =============================================================================
+phase_9_release:
+  status: not_started
+  description: |
+    Ship to production. Feature is additive and backwards-compatible with
+    existing trip data (no migration needed — missing `stops` defaults to []).
+
+  tasks:
+    - id: "9.1"
+      task: Conventional commit for release
+      status: not_started
+      details: |
+        feat(trips): add itineraries to trips
+
+        Follows existing conventional commit format. Multiple commits expected
+        across phases — release flows through existing GitHub Actions pipeline.
+
+    - id: "9.2"
+      task: Verify production deployment
+      status: not_started
+      details: |
+        - /trips/:tripId loads
+        - Existing trips render with empty itinerary + stay-first empty state
+        - New stops persist and re-render correctly
+        - No regressions in /trips accordion view or spending breakdown
+
+# =============================================================================
+# OPEN QUESTIONS (tracked from BRD, updated as decided)
+# =============================================================================
+open_questions:
+  - id: Q1
+    from_brd: true
+    question: Which starting templates should V1 include?
+    proposed: City break / Multi-city / Beach week
+    status: open
+
+  - id: Q2
+    from_brd: true
+    question: Should the agenda auto-include today's date during an active trip even if no stop covers it?
+    status: open
