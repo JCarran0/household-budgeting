@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { USER_COLOR_PALETTE } from '../../../shared/types';
+import { USER_COLOR_PALETTE } from '../shared/types';
 
 // Custom password validation - passphrases are more secure!
 const passwordSchema = z.string()
