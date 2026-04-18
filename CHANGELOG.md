@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.26.0](https://github.com/JCarran0/household-budgeting/compare/v5.25.0...v5.26.0) (2026-04-18)
+
+
+### Features
+
+* **trips:** add itinerary stops to trips (phases 1-2, backend) ([5659875](https://github.com/JCarran0/household-budgeting/commit/5659875e5b7cf08d60d6d0ea49171780f3f27e41))
+* **trips:** itinerary empty state, templates, polish + docs (phases 6-8) ([8758542](https://github.com/JCarran0/household-budgeting/commit/8758542099753bf316c2b5e1a6cd0c8913025ffe))
+* **trips:** Trip Detail page + agenda + stop creation (phases 3-5) ([c2f9b23](https://github.com/JCarran0/household-budgeting/commit/c2f9b236e0780ae9c0940039b3f960e3df700334))
+
+
+### Documentation
+
+* **project-plan:** add Phase 14 and parked read_brd idea ([2f4b2fa](https://github.com/JCarran0/household-budgeting/commit/2f4b2fa05bfa93a5d57378a24c0c6219382d7d99))
+
+
+### CI/CD
+
+* **workflows:** expose VITE_GOOGLE_PLACES_API_KEY to frontend builds ([617c143](https://github.com/JCarran0/household-budgeting/commit/617c1438e316aace9a482f8831d2151badc83924))
+
 ## [5.25.0](https://github.com/JCarran0/household-budgeting/compare/v5.24.0...v5.25.0) (2026-04-18)
 
 
