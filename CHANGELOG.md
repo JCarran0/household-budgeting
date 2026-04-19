@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.30.0](https://github.com/JCarran0/household-budgeting/compare/v5.29.0...v5.30.0) (2026-04-19)
+
+
+### Features
+
+* **trips:** V2 — Map tab + photo album link ([6e82437](https://github.com/JCarran0/household-budgeting/commit/6e82437bccbb346f59e2438dc9573d0928258287))
+
 ## [5.29.0](https://github.com/JCarran0/household-budgeting/compare/v5.28.0...v5.29.0) (2026-04-19)
 
 
