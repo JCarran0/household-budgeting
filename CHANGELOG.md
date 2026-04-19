@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.31.0](https://github.com/JCarran0/household-budgeting/compare/v5.30.0...v5.31.0) (2026-04-19)
+
+
+### Features
+
+* **trips:** list rows link to detail, highlight today, fix stop-update ([7447c71](https://github.com/JCarran0/household-budgeting/commit/7447c71cbfc29197f112accf3bafd5c51e2de294))
+
+
+### Chores
+
+* **ui:** suppress 1Password autofill inside app shell ([9559d32](https://github.com/JCarran0/household-budgeting/commit/9559d3251e36ccdb40f692361f92013124a66639))
+
 ## [5.30.0](https://github.com/JCarran0/household-budgeting/compare/v5.29.0...v5.30.0) (2026-04-19)
 
 
