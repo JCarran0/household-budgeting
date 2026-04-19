@@ -55,6 +55,7 @@ import {
 } from '@tabler/icons-react';
 import { format, parseISO } from 'date-fns';
 import { api } from '../lib/api';
+import { parseDateString } from '../utils/formatters';
 import { useAuthStore } from '../stores/authStore';
 import { KanbanColumn } from '../components/tasks/KanbanColumn';
 import { TaskCard } from '../components/tasks/TaskCard';
@@ -370,6 +371,41 @@ export function Tasks() {
     const task = boardTasks.find((t) => t.id === taskId);
     if (!task) return;
 
+    // Done / cancelled columns are canonically ordered server-side
+    // (by `completedAt` / `cancelledAt` DESC respectively) and the reorder
+    // endpoint explicitly rejects them. A drop into those columns is a pure
+    // status change — route through statusMutation instead.
+    const isTerminalDrop = newStatus === 'done' || newStatus === 'cancelled';
+
+    const previousBoard = boardTasks;
+
+    if (isTerminalDrop) {
+      // Optimistic: drop the task into the destination column so the render
+      // doesn't snap back during the request. The server refetch on success
+      // will restore the canonical ordering.
+      setBoardTasks((prev) =>
+        spliceBoardForDrop(prev, taskId, newStatus, task.sortOrder, result.destination!.index),
+      );
+
+      statusMutation.mutate(
+        { id: taskId, status: newStatus },
+        {
+          onSuccess: (updatedTask) => {
+            setBoardTasks((prev) =>
+              prev.map((t) => (t.id === updatedTask.id ? updatedTask : t)),
+            );
+            void queryClient.invalidateQueries({ queryKey: ['tasks', 'leaderboard'] });
+            void queryClient.invalidateQueries({ queryKey: ['tasks', 'board'] });
+          },
+          onError: () => {
+            setBoardTasks(previousBoard);
+            notifications.show({ message: 'Failed to move task', color: 'red' });
+          },
+        },
+      );
+      return;
+    }
+
     // Neighbors are taken from the destination column AS CURRENTLY RENDERED
     // (boardTasks is already in render order; drop the dragged task from that
     // slice). This guarantees the sortOrder math lines up with pangea's index.
@@ -385,7 +421,6 @@ export function Tasks() {
     // Optimistic: splice the task to its new position (not a re-sort). This is
     // what pangea-dnd expects post-drop — re-sorting via sortForColumn would
     // race the drop animation and make the card briefly bounce back.
-    const previousBoard = boardTasks;
     setBoardTasks((prev) =>
       spliceBoardForDrop(prev, taskId, newStatus, newSortOrder, destinationIndex),
     );
@@ -401,11 +436,6 @@ export function Tasks() {
           );
           if (task.status !== newStatus) {
             void queryClient.invalidateQueries({ queryKey: ['tasks', 'leaderboard'] });
-            // Done column is canonically ordered by completedAt DESC — refetch
-            // so its render reflects the server-side rule.
-            if (newStatus === 'done') {
-              void queryClient.invalidateQueries({ queryKey: ['tasks', 'board'] });
-            }
           }
         },
         onError: () => {
@@ -849,12 +879,21 @@ export function TaskFormModal({ opened, onClose, onSubmit, members, loading, tit
   const [newSubTask, setNewSubTask] = useState('');
   const submitModeRef = React.useRef<'create' | 'start'>('create');
 
-  const form = useForm({
+  const form = useForm<{
+    title: string;
+    description: string;
+    assigneeId: string;
+    dueDate: string | null;
+    scope: TaskScope;
+  }>({
     initialValues: {
       title: initialValues?.title ?? '',
       description: initialValues?.description ?? '',
       assigneeId: initialValues?.assigneeId ?? '',
-      dueDate: initialValues?.dueDate ? new Date(initialValues.dueDate) : null,
+      // Store YYYY-MM-DD directly — Mantine v8 DatePickerInput works natively
+      // with date strings, avoiding the UTC-shift off-by-one that a Date
+      // round-trip introduces.
+      dueDate: initialValues?.dueDate ?? null,
       scope: (initialValues?.scope ?? 'family') as TaskScope,
     },
   });
@@ -867,7 +906,7 @@ export function TaskFormModal({ opened, onClose, onSubmit, members, loading, tit
         title: initialValues?.title ?? '',
         description: initialValues?.description ?? '',
         assigneeId: initialValues?.assigneeId ?? '',
-        dueDate: initialValues?.dueDate ? new Date(initialValues.dueDate) : null,
+        dueDate: initialValues?.dueDate ?? null,
         scope: (initialValues?.scope ?? 'family') as TaskScope,
       });
       // Start with locked tags plus any existing tags (deduped)
@@ -899,7 +938,7 @@ export function TaskFormModal({ opened, onClose, onSubmit, members, loading, tit
         title: values.title,
         description: values.description || undefined,
         assigneeId: values.assigneeId || null,
-        dueDate: values.dueDate ? format(values.dueDate, 'yyyy-MM-dd') : null,
+        dueDate: values.dueDate ?? null,
         scope: values.scope,
         tags: tags.length > 0 ? tags : [],
         subTasks: updatedSubTasks,
@@ -910,7 +949,7 @@ export function TaskFormModal({ opened, onClose, onSubmit, members, loading, tit
         title: values.title,
         description: values.description || undefined,
         assigneeId: startMode ? (currentUserId ?? null) : (values.assigneeId || null),
-        dueDate: values.dueDate ? format(values.dueDate, 'yyyy-MM-dd') : null,
+        dueDate: values.dueDate ?? null,
         scope: values.scope,
         tags: tags.length > 0 ? tags : undefined,
         subTasks: subTaskTitles.length > 0
@@ -1126,7 +1165,7 @@ export function TaskDetailModal({ task, onClose, members, onStatusChange, onEdit
           )}
           {task.dueDate && (
             <Badge variant="light" color="gray">
-              Due {format(parseISO(task.dueDate), 'MMM d, yyyy')}
+              Due {format(parseDateString(task.dueDate), 'MMM d, yyyy')}
             </Badge>
           )}
           {(task.tags ?? []).map((tag) => (
