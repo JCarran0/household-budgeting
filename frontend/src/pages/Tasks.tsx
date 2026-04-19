@@ -56,6 +56,7 @@ import {
 import { format, parseISO } from 'date-fns';
 import { api } from '../lib/api';
 import { parseDateString } from '../utils/formatters';
+import { playCompletionChime } from '../utils/completionSound';
 import { useAuthStore } from '../stores/authStore';
 import { KanbanColumn } from '../components/tasks/KanbanColumn';
 import { TaskCard } from '../components/tasks/TaskCard';
@@ -332,6 +333,9 @@ export function Tasks() {
   const statusMutation = useMutation({
     mutationFn: ({ id, status }: { id: string; status: TaskStatus }) =>
       api.updateTaskStatus(id, status),
+    onSuccess: (updated) => {
+      if (updated.status === 'done') playCompletionChime();
+    },
   });
 
   const reorderMutation = useMutation({

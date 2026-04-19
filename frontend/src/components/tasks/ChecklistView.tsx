@@ -23,6 +23,7 @@ import { useMediaQuery } from '@mantine/hooks';
 import { notifications } from '@mantine/notifications';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../../lib/api';
+import { playCompletionChime } from '../../utils/completionSound';
 import { computeSortOrder, topOfColumn } from '../../../../shared/utils/taskSortOrder';
 import type {
   StoredTask,
@@ -152,9 +153,10 @@ export function ChecklistView({ tasks, members, onEdit }: ChecklistViewProps) {
       }
       notifications.show({ message: 'Failed to change status', color: 'red' });
     },
-    onSuccess: () => {
+    onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: ['tasks'] });
       queryClient.invalidateQueries({ queryKey: ['tasks', 'leaderboard'] });
+      if (variables.status === 'done') playCompletionChime();
     },
   });
 

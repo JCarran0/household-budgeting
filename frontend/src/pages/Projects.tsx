@@ -28,6 +28,7 @@ import {
   IconHammer,
 } from '@tabler/icons-react';
 import { api } from '../lib/api';
+import { playCompletionChime } from '../utils/completionSound';
 import { useAuthStore } from '../stores/authStore';
 import { TransactionPreviewModal } from '../components/transactions/TransactionPreviewModal';
 import { TaskFormModal, TaskDetailModal } from './Tasks';
@@ -246,6 +247,7 @@ export function Projects() {
     onSuccess: (updatedTask) => {
       void queryClient.invalidateQueries({ queryKey: ['tasks'] });
       setDetailTask(updatedTask);
+      if (updatedTask.status === 'done') playCompletionChime();
     },
   });
 
