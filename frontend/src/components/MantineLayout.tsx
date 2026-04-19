@@ -85,6 +85,7 @@ export function MantineLayout() {
         collapsed: { mobile: !mobileOpened, desktop: !desktopOpened },
       }}
       padding={0}
+      data-1p-ignore
     >
       <AppShell.Header>
         <Group h="100%" px="md" justify="space-between">
