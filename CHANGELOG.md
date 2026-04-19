@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.33.0](https://github.com/JCarran0/household-budgeting/compare/v5.32.0...v5.33.0) (2026-04-19)
+
+
+### Features
+
+* **tasks:** checklist drag fix, leaderboard assignee credit, subtask credit ([6069096](https://github.com/JCarran0/household-budgeting/commit/6069096d274de241608eb7e74694caddcedbd8d7))
+* **ui:** highlightToday across remaining date pickers ([6d5fc66](https://github.com/JCarran0/household-budgeting/commit/6d5fc6620d33ee1156b965a35015a7acc3bfdf8e))
+
 ## [5.32.0](https://github.com/JCarran0/household-budgeting/compare/v5.31.0...v5.32.0) (2026-04-19)
 
 
