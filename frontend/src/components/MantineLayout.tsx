@@ -24,8 +24,10 @@ import { ChangelogModal } from './ChangelogModal';
 import { FeedbackModal } from './feedback/FeedbackModal';
 import { ChatFAB } from './chat/ChatFAB';
 import { ChatOverlay } from './chat/ChatOverlay';
+import { InspirationModal } from './InspirationModal';
 import { AppLogo } from './AppLogo';
 import { userColor } from '../utils/userColor';
+import { useDailyInspiration } from '../hooks/useDailyInspiration';
 
 export function MantineLayout() {
   const [mobileOpened, { toggle: toggleMobile }] = useDisclosure();
@@ -33,6 +35,7 @@ export function MantineLayout() {
   const [changelogOpened, { open: openChangelog, close: closeChangelog }] = useDisclosure(false);
   const [feedbackOpened, { open: openFeedback, close: closeFeedback }] = useDisclosure(false);
   const [chatOpened, { toggle: toggleChat, close: closeChat }] = useDisclosure(false);
+  const { opened: inspirationOpened, close: closeInspiration } = useDailyInspiration();
   const [version, setVersion] = useState<string | null>(null);
   const navigate = useNavigate();
   const location = useLocation();
@@ -226,6 +229,8 @@ export function MantineLayout() {
 
       <ChatFAB onClick={toggleChat} isOpen={chatOpened} />
       <ChatOverlay opened={chatOpened} onClose={closeChat} />
+
+      <InspirationModal opened={inspirationOpened} onClose={closeInspiration} />
     </AppShell>
   );
 }
