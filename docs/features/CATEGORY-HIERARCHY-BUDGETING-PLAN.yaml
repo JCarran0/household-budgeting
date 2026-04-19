@@ -1,8 +1,16 @@
 feature: Category Hierarchy in Budgeting & Reports
 brd: docs/features/CATEGORY-HIERARCHY-BUDGETING-BRD.md
-status: planning
+status: shipped
 created: 2026-04-17
-last_updated: 2026-04-17
+last_updated: 2026-04-19
+shipped_summary: |
+  Canonical rollup helpers (buildCategoryTreeAggregation, classifyTreeBudgetState,
+  isTreeUnused, isTreeOverBudget) live in shared/utils/budgetCalculations.ts.
+  Reports → Budget Performance refactored to max-rule rollup; Spending Composition
+  widget added. Chatbot tools (get_spending_by_category, get_budget_summary)
+  apply rollup with aggregation_level field. BudgetComparison.tsx migrated from
+  additive to max. calculateEnhancedParentTotals deprecated/deleted.
+  See CLAUDE.md architecture decisions table (2026-04 entry).
 
 overview: |
   Codify parent/child budget rollup semantics in shared utilities and apply them

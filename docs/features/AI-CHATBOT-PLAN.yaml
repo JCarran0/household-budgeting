@@ -2,8 +2,10 @@
 # AI Financial Chatbot — Implementation Plan (Phase 1: Read-Only)
 # =============================================================================
 # BRD: docs/features/AI-CHATBOT-BRD.md
-# Status: Not Started
-# Last Updated: 2026-04-05
+# Status: Shipped (Phase 1 Read-Only live in production; overlay, cost tracking, tool_use, GitHub issue confirmation all live)
+# Last Updated: 2026-04-19
+# Deferred: Phase 8 security hardening tests (SEC-001..SEC-018 verification suite).
+#           submit_github_issue migration onto the chat-action-card registry per AI-CHAT-ACTIONS-BRD D-15.
 # =============================================================================
 
 overview:

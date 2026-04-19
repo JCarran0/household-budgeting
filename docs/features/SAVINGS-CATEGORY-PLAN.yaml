@@ -1,8 +1,15 @@
 feature: Savings Category Flag & Spending Consistency
 brd: docs/features/SAVINGS-CATEGORY-BRD.md
-status: planning
+status: shipped
 created: 2026-04-16
-last_updated: 2026-04-16
+last_updated: 2026-04-19
+shipped_summary: |
+  isSavings flag lives on Category model (shared/types/index.ts). CategoryForm
+  exposes the toggle for top-level categories. Cash Flow report renders
+  three-line Income / Spending / Savings layout (CashflowSection.tsx). Dashboard
+  has Monthly Savings widget; Monthly Spending excludes savings. Budget, Reports,
+  Yearly Grid, Chatbot tools all apply excludeSavings consistently.
+  See CLAUDE.md architecture decisions table (2026-04 entry).
 
 overview: |
   Introduce isSavings on top-level categories to separate savings contributions

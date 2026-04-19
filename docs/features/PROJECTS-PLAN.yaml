@@ -2,8 +2,9 @@
 # Project Tracking & Budget Management — Implementation Plan
 # =============================================================================
 # BRD: docs/features/PROJECTS-BRD.md
-# Status: Not Started
-# Last Updated: 2026-04-09
+# Status: Shipped (core Projects feature live; Projects Enhancements — line item estimates + Tasks tab — shipped in commit aba0da0, 2026-04-19)
+# Last Updated: 2026-04-19
+# See: docs/features/PROJECTS-ENHANCEMENTS-PLAN.yaml for the shipped enhancements layer.
 # =============================================================================
 
 overview:

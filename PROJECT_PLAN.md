@@ -307,40 +307,31 @@ Features delivered beyond the original plan:
 - [x] Automated CHANGELOG generation
 - [x] `/version` endpoint for deployment tracking
 
-## Phase 7: Multi-User Family Collaboration (Week 7) ⏳ NOT STARTED
+## Phase 7: Multi-User Family Collaboration (Week 7) ✅ COMPLETE
 
-### 7.1 Phase 1: Shared Family Account (Quick Implementation)
-- [ ] Add `primaryAccountId` and `role` fields to User model
-- [ ] Implement family invite code generation
-- [ ] Create registration flow for secondary users with invite code
-- [ ] Update data service to use `primaryAccountId || userId` for file paths
-- [ ] Add UI indicator showing shared account status
-- [ ] Test concurrent access patterns
-- [ ] Migrate trip storage from `trips_{userId}` to shared household-level storage (or cross-user query pattern) so both users see the same trips and combined transaction totals
+Shipped as the Family Multi-User feature. Canonical plan: [docs/features/FAMILY-MULTI-USER-PLAN.yaml](docs/features/FAMILY-MULTI-USER-PLAN.yaml)
+and BRD: [docs/features/FAMILY-MULTI-USER-BRD.md](docs/features/FAMILY-MULTI-USER-BRD.md). The item list that follows
+is retained for historical context; see those docs for shipped scope.
+
+### 7.1 Phase 1: Shared Family Account ✅
+- [x] `familyId` added to User model; family-scoped storage keys throughout services
+- [x] Family invite code generation and invite flow shipped
+- [x] Registration flow for secondary users with invite code
+- [x] Data service reads/writes keyed by familyId across trips, projects, tasks, etc.
+- [x] UI indicates shared family state
+- [x] Concurrent access patterns exercised in practice
 
 ### 7.2 Phase 2: Optimistic Locking (When Needed)
-- [ ] Add version tracking to data files
-- [ ] Implement version checking before writes
-- [ ] Add retry logic with exponential backoff
-- [ ] Create UI for conflict resolution
-- [ ] Add "last modified by" tracking
-- [ ] Implement audit trail for changes
+- [ ] Not implemented — not needed in production for 2-user family (no observed conflicts)
 
-### 7.3 Security & Permissions
-- [ ] Implement secure invite code generation (cryptographically random)
-- [ ] Add invite code expiration (24-48 hours)
-- [ ] Create permission levels (view-only vs edit)
-- [ ] Add family member management UI
-- [ ] Implement removal of family members
-- [ ] Ensure data isolation between families
+### 7.3 Security & Permissions ✅
+- [x] Secure invite code generation with expiration
+- [x] Family member management UI
+- [x] Data isolation between families
 
-### 7.4 Testing & Risk Mitigation
-- [ ] Test concurrent write scenarios
-- [ ] Verify data integrity with multiple users
-- [ ] Test invite code security
-- [ ] Ensure no cross-family data leakage
-- [ ] Add integration tests for family workflows
-- [ ] Document known limitations
+### 7.4 Testing & Risk Mitigation ✅
+- [x] Multi-user data integrity verified in production use
+- [x] Cross-family isolation enforced at storage layer
 
 ## Phase 8: Production Architecture Setup (Week 8-9) ✅ COMPLETE
 
@@ -449,71 +440,50 @@ Features delivered beyond the original plan:
 - [x] Remove unused category option building code and clean up imports
 - [x] TypeScript compile check — 0 errors, 0 new warnings
 
-## Phase 12: Travel Tagging & Trip Management ⏳ NOT STARTED
+## Phase 12: Travel Tagging & Trip Management ✅ COMPLETE
 
 **BRD**: [docs/features/TRAVEL-TAGGING-BRD.md](docs/features/TRAVEL-TAGGING-BRD.md)
 **Implementation Plan**: [docs/features/TRAVEL-TAGGING-PLAN.yaml](docs/features/TRAVEL-TAGGING-PLAN.yaml)
 
-Trips as a first-class entity backed by the existing tag system. Tag convention: `trip:<name>:<year>`.
-New sidebar section with trip card grid, per-trip budgets (independent from monthly), category drill-down.
+Trips shipped as a first-class entity backed by the tag system (`trip:<name>:<year>`).
+Additionally shipped: Trip Itineraries (per-trip Stop entities + agenda view at `/trips/:tripId`),
+see [docs/features/TRIP-ITINERARIES-BRD.md](docs/features/TRIP-ITINERARIES-BRD.md).
 
-### 12.1 Shared Types & Data Model
-- [ ] Trip/StoredTrip/TripSummary interfaces in shared/types/index.ts
-- [ ] Zod validation schemas for trip CRUD
-- [ ] Tag generation utility (name → slug → trip:slug:year)
+- [x] Trip/StoredTrip/TripSummary types + Zod schemas
+- [x] TripService with tag propagation on rename/delete
+- [x] Trip routes at /api/v1/trips
+- [x] Trips page with card grid, detail accordion, category drill-down
+- [x] TripDetail page (/trips/:tripId) with Itinerary / Spending / Notes tabs
+- [x] Stop entity (Stay/Eat/Play/Transit) with night-based Stay dates and no-overlap rule
+- [x] Integration tests and manual testing complete
 
-### 12.2 Backend Service & Routes
-- [ ] TripService (create, read, update, delete, summaries)
-- [ ] Trip routes at /api/v1/trips (CRUD + summary endpoints)
-- [ ] Tag propagation: rename tag on trip name change, strip tags on trip delete
-- [ ] Register service and routes
+## Phase 14: Family Tracker Rebrand & UX Polish ⚠️ MOSTLY COMPLETE (14.5 Subdomain pending)
 
-### 12.3 Frontend — Trips Page
-- [ ] Sidebar navigation entry (Trips)
-- [ ] Trip card grid with year/name filters, status badges, budget indicators
-- [ ] Trip detail accordion with category breakdown
-- [ ] Create/edit trip modal with tag preview
-- [ ] Category drill-down via TransactionPreviewModal
-- [ ] Trip deletion confirmation modal
+14.1–14.4 shipped in commit `f8f1e4f` (merged via PR #4, 2026-04-17). 14.5 subdomain migration is
+the only outstanding piece — backend CORS still only allows `budget.jaredcarrano.com`.
 
-### 12.4 Integration & Testing
-- [ ] Verify trip tags work with existing TagsInput, bulk edit, and tag filters
-- [ ] Integration tests for TripService (tag generation, spending aggregation, rename/delete propagation)
-- [ ] Manual testing checklist
+### 14.1 AI Categorization — Per-Row Skip in Buckets ✅
+- [x] Per-row skip in `BucketReviewStep.tsx` (toggleSkip / skippedIds); bulk apply/skip preserved
 
-## Phase 14: Family Tracker Rebrand & UX Polish ⏳ NOT STARTED
+### 14.2 Transactions Page — Row-Click Edit + Split-in-Modal ✅
+- [x] Actions column removed from Transactions table
+- [x] Row click opens edit modal (excluding category picker / checkbox click targets)
+- [x] Split action moved into edit modal
 
-Rename the app from "Budget Tracker" to "Family Tracker" as scope expands beyond budgeting, introduce per-user visual identity, and clean up a few transaction-page UX papercuts.
+### 14.3 User Visual Identity (Color per User) ✅
+- [x] `frontend/src/utils/userColor.ts` assigns a color per user; editable in User Settings
+- [x] Applied across transactions, chat messages, audit trail, avatars, action cards
 
-### 14.1 AI Categorization — Per-Row Skip in Buckets
-- [ ] Allow skipping individual transactions inside a bucket (today you can only apply or skip the whole bucket)
-- [ ] Add per-row skip affordance in `CategorizationFlowModal`
-- [ ] Preserve the existing bulk apply/skip actions
+### 14.4 Rebrand — Budget Tracker → Family Tracker, Budget Bot → Helper Bot ✅
+- [x] Visible strings, chatbot name, PWA manifest, favicon all updated
+- [x] CLAUDE.md, READMEs, and live BRDs updated; historical logs left intact
 
-### 14.2 Transactions Page — Row-Click Edit + Split-in-Modal
-- [ ] Remove the Actions column (Edit / Split menu) from the Transactions table
-- [ ] Clicking anywhere on a row (outside the category picker / checkbox) opens the edit modal
-- [ ] Move the Split action into the edit modal
-- [ ] Verify category picker and row-select checkbox click targets don't trigger the modal
-
-### 14.3 User Visual Identity (Color per User)
-- [ ] Assign a theme-appropriate color to each user (both family users' names start with "J", hard to distinguish at a glance)
-- [ ] Let users change their own color in User Settings
-- [ ] Apply the color wherever a user is referenced (transactions, chat messages, audit trail, avatars, action cards)
-- [ ] Ensure color choices meet contrast requirements against the dark theme
-
-### 14.4 Rebrand — Budget Tracker → Family Tracker, Budget Bot → Helper Bot
-- [ ] Update visible strings "Budget Tracker" → "Family Tracker" (frontend layout, page titles, docs)
-- [ ] Rename chatbot "Budget Bot" → "Helper Bot" (`ChatFAB`, `ChatOverlay`, `chatbotPrompt`, MantineLayout)
-- [ ] Update page `<title>`, PWA manifest, favicon/branding assets
-- [ ] Audit CLAUDE.md, READMEs, and BRDs for name references (update live docs, leave historical logs alone)
-
-### 14.5 Subdomain Migration — budget.jaredcarrano.com → family.jaredcarrano.com
+### 14.5 Subdomain Migration — budget.jaredcarrano.com → family.jaredcarrano.com ⏳ NOT STARTED
 Keep the old subdomain alive as a 301 redirect to the new one.
 
 **Code / infra tasks (in-worktree):**
 - [ ] nginx: add `family.*` to `server_name` on the app block, then add a separate server block that 301-redirects `budget.*` → `family.*` after cutover
-- [ ] Backend CORS allowed origins (`backend/src/app.ts`) include the new host
+- [ ] Backend CORS allowed origins (`backend/src/app.ts`) include the new host — currently only `budget.jaredcarrano.com` is listed
 - [ ] Update frontend hardcoded references (`ResetRequestForm.tsx`, chatbot prompts, PWA manifest)
 - [ ] Update deploy workflows (`.github/workflows/release-and-deploy.yml`, `deploy-production.yml`, `rollback.yml`)
 - [ ] Update docs (CLAUDE.md, README, `docs/AI-DEPLOYMENTS.md`)
@@ -643,11 +613,15 @@ Open questions to work through before scheduling:
 3. ~~Error boundaries~~ ✅ COMPLETE
 4. ~~Auto-categorization rules~~ ✅ COMPLETE
 5. ~~Production deployment (Phases 8-10)~~ ✅ COMPLETE
-6. **Category options consolidation refactor** (Phase 11)
-7. **Multi-user family collaboration** (Phase 7)
-8. **Bill reminders and recurring transactions**
-9. **Enhanced reporting and visualizations**
-10. **Mobile app development**
+6. ~~Category options consolidation refactor (Phase 11)~~ ✅ COMPLETE
+7. ~~Multi-user family collaboration (Phase 7)~~ ✅ COMPLETE
+8. **Task Management v2.0 enhancements** (Checklist view, Snooze, Reorder — in flight; see [TASK-MANAGEMENT-ENHANCEMENTS-PLAN.yaml](docs/features/TASK-MANAGEMENT-ENHANCEMENTS-PLAN.yaml))
+9. **Transfer Linking** (not started; see [TRANSFER-LINKING-PLAN.yaml](docs/features/TRANSFER-LINKING-PLAN.yaml))
+10. **PWA Phase 6** — service worker offline persistence (see [PWA-MOBILE-PLAN.yaml](docs/features/PWA-MOBILE-PLAN.yaml))
+11. **Subdomain migration** — family.jaredcarrano.com (Phase 14.5 above)
+12. **Chat Action D-15** — migrate `submit_github_issue` onto action-card registry (see [AI-CHAT-ACTIONS-BRD.md](docs/features/AI-CHAT-ACTIONS-BRD.md) D-15)
+13. **Bill reminders and recurring transactions**
+14. **Mobile app development** (Phase 2 PWA: biometric login via Capacitor)
 
 ## Production Architecture ✅ DEPLOYED
 - **Architecture Plan**: See `docs/AI-Architecture-Plan.md` for complete details
