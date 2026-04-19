@@ -244,10 +244,17 @@ export function Tasks() {
     catch { return true; }
   });
 
-  // v2.0 — Show-snoozed toggle (per-user, persisted)
+  // v2.0 — Show-snoozed toggle (per-user, persisted). Default ON — snoozed
+  // surface via the left-of-Todo column and users can turn it off.
   const [showSnoozed, setShowSnoozed] = useState(() => {
-    try { return localStorage.getItem('tasks.kanban.showSnoozed') === 'true'; }
-    catch { return false; }
+    try {
+      const stored = localStorage.getItem('tasks.kanban.showSnoozed');
+      // Treat only an explicit 'false' as off; anything else (unset or 'true')
+      // starts on so first-time users see the snoozed column immediately.
+      return stored !== 'false';
+    } catch {
+      return true;
+    }
   });
   const toggleShowSnoozed = (next: boolean) => {
     setShowSnoozed(next);
@@ -638,6 +645,16 @@ export function Tasks() {
           {/* Kanban Board */}
           <DragDropContext onDragEnd={onDragEnd}>
             <Group align="flex-start" gap="md" wrap="nowrap" style={{ overflowX: 'auto' }}>
+              {/* Snoozed column renders to the LEFT of Todo when the toggle is on. */}
+              {showSnoozed && (
+                <SnoozedColumn
+                  tasks={snoozedTasks}
+                  members={members}
+                  onTaskClick={setDetailTask}
+                  onUnsnooze={(taskId) => snoozeMutation.mutate({ id: taskId, snoozedUntil: null })}
+                  onEdit={(task) => setEditingTask(task)}
+                />
+              )}
               {BOARD_COLUMNS.map((col) => (
                 <KanbanColumn
                   key={col.status}
@@ -657,15 +674,6 @@ export function Tasks() {
                   onEdit={(task) => setEditingTask(task)}
                 />
               ))}
-              {showSnoozed && (
-                <SnoozedColumn
-                  tasks={snoozedTasks}
-                  members={members}
-                  onTaskClick={setDetailTask}
-                  onUnsnooze={(taskId) => snoozeMutation.mutate({ id: taskId, snoozedUntil: null })}
-                  onEdit={(task) => setEditingTask(task)}
-                />
-              )}
             </Group>
           </DragDropContext>
         </>

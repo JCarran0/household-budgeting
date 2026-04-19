@@ -30,6 +30,12 @@ export const createTaskSchema = z.object({
   tags: z.array(z.string().min(1).max(50)).max(20).optional(),
   subTasks: z.array(subTaskCreateSchema).max(50).optional(),
   status: z.enum(['todo', 'started']).optional(),
+  /**
+   * Optional explicit sortOrder. When omitted the service assigns top-of-column.
+   * Used by Checklist v2.1 quick entry to insert a new task directly below the
+   * user's cursor position rather than at the top of the column.
+   */
+  sortOrder: z.number().finite().optional(),
 });
 
 const updateTaskSchema = z.object({

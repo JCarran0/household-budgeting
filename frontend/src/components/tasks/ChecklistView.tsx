@@ -1,28 +1,49 @@
-import { useState, useEffect, useRef, useMemo } from 'react';
+/**
+ * Checklist view (v2.1 — Google Keep–style).
+ *
+ * Flat list of active tasks + a single in-progress draft row + trailing
+ * ghost row + collapsed "Completed (N)" accordion below.
+ *
+ * See docs/features/TASK-MANAGEMENT-BRD.md §3.2 and
+ *     docs/features/TASK-MANAGEMENT-ENHANCEMENTS-PLAN.yaml Phase 6
+ * for the interaction model.
+ */
+
+import { useState, useMemo, useEffect, useCallback } from 'react';
 import {
   Stack,
-  TextInput,
-  Group,
   Paper,
   Text,
   Accordion,
-  ActionIcon,
-  Button,
+  Box,
 } from '@mantine/core';
 import { DragDropContext, Droppable, Draggable, type DropResult } from '@hello-pangea/dnd';
-import { IconArrowBarRight, IconArrowBarToLeft } from '@tabler/icons-react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMediaQuery } from '@mantine/hooks';
 import { notifications } from '@mantine/notifications';
+import { useNavigate } from 'react-router-dom';
 import { api } from '../../lib/api';
-import { computeSortOrder } from '../../../../shared/utils/taskSortOrder';
+import { computeSortOrder, topOfColumn } from '../../../../shared/utils/taskSortOrder';
 import type {
   StoredTask,
   FamilyMember,
   TaskStatus,
   UpdateTaskDto,
   CreateTaskDto,
+  SubTask,
 } from '../../../../shared/types';
-import { ChecklistRow } from './ChecklistRow';
+import {
+  TaskRow,
+  CompletedRow,
+  SubtaskRow,
+  DraftRow,
+  GhostRow,
+  type RowCallbacks,
+} from './ChecklistRow';
+
+// =============================================================================
+// Public API
+// =============================================================================
 
 export interface ChecklistViewProps {
   tasks: StoredTask[];
@@ -30,16 +51,22 @@ export interface ChecklistViewProps {
   onEdit: (task: StoredTask) => void;
 }
 
-/**
- * Checklist view — flat list with quick-entry input.
- *
- * Active (todo + started) render at the top in sortOrder ASC.
- * Done tasks (within 14d window per board rules) render in a collapsed
- * "Completed (N)" accordion below.
- * Cancelled and currently-snoozed tasks are filtered out entirely.
- */
+// =============================================================================
+// Draft state model
+//
+// A single "draft" is in-progress at any time. When anchored to a task that
+// was just created, its `afterTaskId` / `parentTaskId` points at the new task.
+// Server-assigned ids win out over optimistic temp ids — see createMutation.
+// =============================================================================
+
+type Draft =
+  | { kind: 'top'; afterTaskId: string | null }
+  | { kind: 'subtask'; parentTaskId: string };
+
 export function ChecklistView({ tasks, members, onEdit }: ChecklistViewProps) {
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
+  const isMobile = useMediaQuery('(max-width: 768px)');
 
   const [completedExpanded, setCompletedExpanded] = useState(() => {
     try { return localStorage.getItem('tasks.checklist.completedExpanded') === 'true'; }
@@ -50,155 +77,355 @@ export function ChecklistView({ tasks, members, onEdit }: ChecklistViewProps) {
     catch { /* ignore */ }
   }, [completedExpanded]);
 
-  // Quick entry state: either 'top' (top-level task) or { mode: 'subtask', parentId }
-  type EntryMode = { kind: 'top' } | { kind: 'subtask'; parentId: string };
-  const [entryMode, setEntryMode] = useState<EntryMode>({ kind: 'top' });
-  const [entryValue, setEntryValue] = useState('');
-  const entryInputRef = useRef<HTMLInputElement>(null);
+  const [snoozedExpanded, setSnoozedExpanded] = useState(() => {
+    try { return localStorage.getItem('tasks.checklist.snoozedExpanded') === 'true'; }
+    catch { return false; }
+  });
+  useEffect(() => {
+    try { localStorage.setItem('tasks.checklist.snoozedExpanded', snoozedExpanded ? 'true' : 'false'); }
+    catch { /* ignore */ }
+  }, [snoozedExpanded]);
 
-  // --------- Client-side grouping ---------
-  // Snoozed tasks are filtered out entirely — they don't surface in checklist.
-  const { active, completed } = useMemo(() => {
+  const [draft, setDraft] = useState<Draft | null>(null);
+  // Bumped whenever we want to force-remount DraftRow (re-autofocus).
+  const [draftNonce, setDraftNonce] = useState(0);
+  const bumpDraft = () => setDraftNonce((n) => n + 1);
+
+  // --------- Group + sort tasks ---------
+  const { active, snoozed, completed } = useMemo(() => {
     const now = Date.now();
     const activeArr: StoredTask[] = [];
+    const snoozedArr: StoredTask[] = [];
     const completedArr: StoredTask[] = [];
     for (const t of tasks) {
-      const snoozed = t.snoozedUntil && new Date(t.snoozedUntil).getTime() > now;
-      if (snoozed) continue;
+      const isSnoozed = t.snoozedUntil && new Date(t.snoozedUntil).getTime() > now;
+      if (isSnoozed) { snoozedArr.push(t); continue; }
       if (t.status === 'cancelled') continue;
       if (t.status === 'done') { completedArr.push(t); continue; }
       activeArr.push(t);
     }
     activeArr.sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
+    snoozedArr.sort((a, b) =>
+      (a.snoozedUntil ?? '').localeCompare(b.snoozedUntil ?? ''),
+    );
     completedArr.sort((a, b) => (b.completedAt ?? '').localeCompare(a.completedAt ?? ''));
-    return { active: activeArr, completed: completedArr };
+    return { active: activeArr, snoozed: snoozedArr, completed: completedArr };
   }, [tasks]);
 
   // --------- Mutations ---------
-  const invalidate = () => queryClient.invalidateQueries({ queryKey: ['tasks'] });
 
-  const createMutation = useMutation({
-    mutationFn: (dto: CreateTaskDto) => api.createTask(dto),
-    onSuccess: invalidate,
-  });
   const updateMutation = useMutation({
     mutationFn: ({ id, data }: { id: string; data: UpdateTaskDto }) => api.updateTask(id, data),
-    onSuccess: invalidate,
-  });
-  const statusMutation = useMutation({
-    mutationFn: ({ id, status, startedAt }: { id: string; status: TaskStatus; startedAt?: string }) =>
-      api.updateTaskStatus(id, status, startedAt ? { startedAt } : {}),
     onSuccess: () => {
-      invalidate();
-      void queryClient.invalidateQueries({ queryKey: ['tasks', 'leaderboard'] });
+      queryClient.invalidateQueries({ queryKey: ['tasks'] });
+    },
+    onError: () => {
+      notifications.show({ message: 'Failed to save task', color: 'red' });
     },
   });
+
+  const statusMutation = useMutation({
+    mutationFn: ({
+      id,
+      status,
+      startedAt,
+    }: {
+      id: string;
+      status: TaskStatus;
+      startedAt?: string;
+    }) => api.updateTaskStatus(id, status, startedAt ? { startedAt } : {}),
+    onMutate: async ({ id, status }) => {
+      await queryClient.cancelQueries({ queryKey: ['tasks', 'board'] });
+      const snapshot = queryClient.getQueriesData<StoredTask[]>({ queryKey: ['tasks', 'board'] });
+      queryClient.setQueriesData<StoredTask[]>(
+        { queryKey: ['tasks', 'board'] },
+        (prev) =>
+          prev
+            ? prev.map((t) => (t.id === id ? { ...t, status } : t))
+            : prev,
+      );
+      return { snapshot };
+    },
+    onError: (_err, _vars, ctx) => {
+      if (ctx?.snapshot) {
+        for (const [key, data] of ctx.snapshot) queryClient.setQueryData(key, data);
+      }
+      notifications.show({ message: 'Failed to change status', color: 'red' });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['tasks'] });
+      queryClient.invalidateQueries({ queryKey: ['tasks', 'leaderboard'] });
+    },
+  });
+
   const snoozeMutation = useMutation({
     mutationFn: ({ id, snoozedUntil }: { id: string; snoozedUntil: string | null }) =>
       api.snoozeTask(id, snoozedUntil),
-    onSuccess: invalidate,
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['tasks'] }),
   });
+
   const reorderMutation = useMutation({
-    mutationFn: ({ id, status, sortOrder }: { id: string; status: TaskStatus; sortOrder: number }) =>
-      api.reorderTask(id, status, sortOrder),
-    // NOTE: no auto-invalidate — we apply optimistic sortOrder locally via
-    // the queryClient cache (see onDragEnd) to keep pangea-dnd's drop
-    // animation in sync with the rendered list.
+    mutationFn: ({
+      id,
+      status,
+      sortOrder,
+    }: {
+      id: string;
+      status: TaskStatus;
+      sortOrder: number;
+    }) => api.reorderTask(id, status, sortOrder),
   });
 
-  // --------- Handlers ---------
+  type CreateVars = { dto: CreateTaskDto; tempId: string };
+  type CreateCtx = { snapshotQueries: [readonly unknown[], StoredTask[] | undefined][] };
 
-  const handleEntrySubmit = () => {
-    const trimmed = entryValue.trim();
-    if (!trimmed) return;
-
-    if (entryMode.kind === 'top') {
-      createMutation.mutate({ title: trimmed }, {
-        onSuccess: () => { setEntryValue(''); entryInputRef.current?.focus(); },
+  const createMutation = useMutation<StoredTask, Error, CreateVars, CreateCtx>({
+    mutationFn: ({ dto }) => api.createTask(dto),
+    onMutate: async ({ dto, tempId }) => {
+      await queryClient.cancelQueries({ queryKey: ['tasks', 'board'] });
+      const snapshotQueries = queryClient.getQueriesData<StoredTask[]>({
+        queryKey: ['tasks', 'board'],
       });
-    } else {
-      const parent = tasks.find((t) => t.id === entryMode.parentId);
-      if (!parent) return;
-      const updatedSubTasks = [
-        ...(parent.subTasks ?? []),
-        { id: crypto.randomUUID(), title: trimmed, completed: false },
-      ];
-      updateMutation.mutate(
-        { id: parent.id, data: { subTasks: updatedSubTasks } },
-        { onSuccess: () => { setEntryValue(''); entryInputRef.current?.focus(); } }
+      const now = new Date().toISOString();
+      const sortOrder =
+        typeof dto.sortOrder === 'number' ? dto.sortOrder : topOfColumn(null);
+      const optimistic: StoredTask = {
+        id: tempId,
+        familyId: '',
+        title: dto.title,
+        description: dto.description ?? '',
+        status: dto.status ?? 'todo',
+        scope: dto.scope ?? 'family',
+        assigneeId: dto.assigneeId ?? null,
+        dueDate: dto.dueDate ?? null,
+        createdAt: now,
+        createdBy: '',
+        startedAt: null,
+        completedAt: null,
+        cancelledAt: null,
+        assignedAt: null,
+        transitions: [],
+        tags: dto.tags ?? [],
+        subTasks: (dto.subTasks ?? []).map((s) => ({
+          id: crypto.randomUUID(),
+          title: s.title,
+          completed: false,
+        })),
+        snoozedUntil: null,
+        sortOrder,
+      };
+      queryClient.setQueriesData<StoredTask[]>(
+        { queryKey: ['tasks', 'board'] },
+        (prev) => (prev ? [...prev, optimistic] : [optimistic]),
       );
-    }
-  };
-
-  const handleEntryKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      handleEntrySubmit();
-    } else if (e.key === 'Escape') {
-      setEntryValue('');
-      setEntryMode({ kind: 'top' });
-      (e.target as HTMLInputElement).blur();
-    } else if (e.key === 'Tab') {
-      e.preventDefault();
-      if (e.shiftKey) {
-        // Outdent: back to top-level
-        if (entryMode.kind === 'subtask') setEntryMode({ kind: 'top' });
-      } else {
-        // Indent: subtask mode under the first (top) active task
-        if (entryMode.kind === 'top' && active.length > 0) {
-          setEntryMode({ kind: 'subtask', parentId: active[0].id });
+      return { snapshotQueries };
+    },
+    onSuccess: (serverTask, { tempId }) => {
+      queryClient.setQueriesData<StoredTask[]>(
+        { queryKey: ['tasks', 'board'] },
+        (prev) => (prev ? prev.map((t) => (t.id === tempId ? serverTask : t)) : prev),
+      );
+      // If the draft is anchored to the optimistic temp id, swap to server id.
+      setDraft((d) => {
+        if (d && d.kind === 'top' && d.afterTaskId === tempId) {
+          return { kind: 'top', afterTaskId: serverTask.id };
+        }
+        if (d && d.kind === 'subtask' && d.parentTaskId === tempId) {
+          return { kind: 'subtask', parentTaskId: serverTask.id };
+        }
+        return d;
+      });
+    },
+    onError: (_err, _vars, ctx) => {
+      if (ctx?.snapshotQueries) {
+        for (const [key, data] of ctx.snapshotQueries) {
+          queryClient.setQueryData(key, data);
         }
       }
-    }
-  };
+      notifications.show({ message: 'Failed to create task', color: 'red' });
+    },
+  });
 
-  const onStartedToggle = (task: StoredTask, started: boolean) => {
-    // started checkbox toggles between todo ↔ started
-    statusMutation.mutate({ id: task.id, status: started ? 'started' : 'todo' });
-  };
-
-  const onDoneToggle = (task: StoredTask, done: boolean) => {
-    if (done) {
-      // synthetic startedAt stamp if task was todo (startedAt was null)
-      const opts: { startedAt?: string } = {};
-      if (!task.startedAt) opts.startedAt = new Date().toISOString();
-      statusMutation.mutate({ id: task.id, status: 'done', ...opts });
-    } else {
-      statusMutation.mutate({ id: task.id, status: 'started' });
-    }
-  };
-
-  const onTitleSave = (task: StoredTask, title: string) => {
-    updateMutation.mutate({ id: task.id, data: { title } });
-  };
-
-  const onMetadataSave = (
-    task: StoredTask,
-    patch: { assigneeId?: string | null; dueDate?: string | null }
-  ) => {
-    updateMutation.mutate({ id: task.id, data: patch });
-  };
-
-  const onSnooze = (task: StoredTask, snoozedUntil: string | null) => {
-    snoozeMutation.mutate({ id: task.id, snoozedUntil });
-  };
-
-  const onCancel = (task: StoredTask) => {
-    statusMutation.mutate({ id: task.id, status: 'cancelled' });
-  };
-
-  const onSubTaskToggle = (task: StoredTask, subTaskId: string, completed: boolean) => {
-    const updatedSubTasks = (task.subTasks ?? []).map((st) =>
-      st.id === subTaskId ? { ...st, completed } : st
-    );
-    updateMutation.mutate({ id: task.id, data: { subTasks: updatedSubTasks } });
-  };
-
-  // Drag reorder within active list.
+  // --------- sortOrder computation for insertions ---------
   //
-  // We optimistically patch the React Query cache so the rendered list reflects
-  // the new sortOrder immediately — pangea-dnd's drop animation then lines up
-  // with the post-drop position instead of briefly snapping back.
+  // When inserting a new task directly below an existing task T at the same
+  // (top-level) scope, compute midpoint between T.sortOrder and the next
+  // top-level task's sortOrder. If T is the last one, use T.sortOrder + 1.
+  // If no anchor (insert at top), use topOfColumn of current minimum.
+
+  const computeNewTopLevelSortOrder = useCallback(
+    (afterTaskId: string | null): number => {
+      if (afterTaskId === null) {
+        const min = active.length > 0 ? active[0].sortOrder : null;
+        return topOfColumn(min);
+      }
+      const idx = active.findIndex((t) => t.id === afterTaskId);
+      if (idx === -1) {
+        const min = active.length > 0 ? active[0].sortOrder : null;
+        return topOfColumn(min);
+      }
+      const before = active[idx].sortOrder;
+      const afterTask = active[idx + 1];
+      return computeSortOrder(before, afterTask ? afterTask.sortOrder : null);
+    },
+    [active],
+  );
+
+  // --------- Helpers ---------
+
+  const lastTopLevelId = active.length > 0 ? active[active.length - 1].id : null;
+
+  const startGhostDraft = () => {
+    setDraft({ kind: 'top', afterTaskId: lastTopLevelId });
+    bumpDraft();
+  };
+
+  const patchStatus = useCallback(
+    (task: StoredTask, status: TaskStatus, extra?: { startedAt?: string }) => {
+      statusMutation.mutate({ id: task.id, status, ...(extra ?? {}) });
+    },
+    [statusMutation],
+  );
+
+  const submitDraft = (value: string) => {
+    if (!draft) return;
+    const trimmed = value.trim();
+    if (!trimmed) return;
+
+    if (draft.kind === 'top') {
+      const tempId = `tmp-${crypto.randomUUID()}`;
+      const sortOrder = computeNewTopLevelSortOrder(draft.afterTaskId);
+      // Anchor the NEXT draft to this new task before we mutate so the focus
+      // lands in the right place after remount.
+      setDraft({ kind: 'top', afterTaskId: tempId });
+      bumpDraft();
+      createMutation.mutate({ dto: { title: trimmed, status: 'todo', sortOrder }, tempId });
+    } else {
+      const parent = tasks.find((t) => t.id === draft.parentTaskId);
+      if (!parent) return;
+      const newSub: SubTask = {
+        id: crypto.randomUUID(),
+        title: trimmed,
+        completed: false,
+      };
+      const next = [...(parent.subTasks ?? []), newSub];
+      // Optimistic cache patch
+      queryClient.setQueriesData<StoredTask[]>(
+        { queryKey: ['tasks', 'board'] },
+        (prev) =>
+          prev
+            ? prev.map((t) => (t.id === parent.id ? { ...t, subTasks: next } : t))
+            : prev,
+      );
+      updateMutation.mutate({ id: parent.id, data: { subTasks: next } });
+      // Keep draft on same parent — next Enter adds another subtask.
+      bumpDraft();
+    }
+  };
+
+  const onDraftTab = () => {
+    if (!draft) return;
+    if (draft.kind === 'top' && draft.afterTaskId) {
+      setDraft({ kind: 'subtask', parentTaskId: draft.afterTaskId });
+      bumpDraft();
+    }
+  };
+
+  const onDraftShiftTab = () => {
+    if (!draft) return;
+    if (draft.kind === 'subtask') {
+      setDraft({ kind: 'top', afterTaskId: draft.parentTaskId });
+      bumpDraft();
+    }
+  };
+
+  const onDraftEnterEmpty = () => {
+    if (!draft) return;
+    if (draft.kind === 'subtask') {
+      setDraft({ kind: 'top', afterTaskId: draft.parentTaskId });
+      bumpDraft();
+    }
+    // Empty top-level + Enter → no-op (Escape to exit).
+  };
+
+  const onDraftBlurEmpty = () => {
+    setDraft(null);
+  };
+
+  // --------- Row callbacks ---------
+
+  const callbacks: RowCallbacks = useMemo(() => ({
+    onStart: (task) => patchStatus(task, 'started'),
+    onComplete: (task) => {
+      const extra: { startedAt?: string } = {};
+      if (!task.startedAt) extra.startedAt = new Date().toISOString();
+      patchStatus(task, 'done', extra);
+    },
+    onMoveToTodo: (task) => patchStatus(task, 'todo'),
+    onReopen: (task) => patchStatus(task, 'started'),
+    onCancel: (task) => patchStatus(task, 'cancelled'),
+
+    onAssigneeChange: (task, userId) => {
+      updateMutation.mutate({ id: task.id, data: { assigneeId: userId } });
+    },
+    onDueDateChange: (task, date) => {
+      updateMutation.mutate({ id: task.id, data: { dueDate: date } });
+    },
+    onSnooze: (task, snoozedUntil) => {
+      snoozeMutation.mutate({ id: task.id, snoozedUntil });
+    },
+
+    onTitleChange: (task, title) => {
+      if (title.trim() === task.title.trim()) return;
+      updateMutation.mutate({ id: task.id, data: { title: title.trim() } });
+    },
+
+    onEnterAtRow: (task) => {
+      setDraft({ kind: 'top', afterTaskId: task.id });
+      bumpDraft();
+    },
+
+    onEdit: (task) => onEdit(task),
+
+    onProjectClick: (projectTag: string) => {
+      navigate(`/projects?tag=${encodeURIComponent(projectTag)}`);
+    },
+
+    onSubtaskToggle: (task, subtaskId, completed) => {
+      const next = (task.subTasks ?? []).map((s) =>
+        s.id === subtaskId ? { ...s, completed } : s,
+      );
+      queryClient.setQueriesData<StoredTask[]>(
+        { queryKey: ['tasks', 'board'] },
+        (prev) => (prev ? prev.map((t) => (t.id === task.id ? { ...t, subTasks: next } : t)) : prev),
+      );
+      updateMutation.mutate({ id: task.id, data: { subTasks: next } });
+    },
+
+    onSubtaskTitleChange: (task, subtaskId, title) => {
+      const next = (task.subTasks ?? []).map((s) =>
+        s.id === subtaskId ? { ...s, title: title.trim() } : s,
+      );
+      updateMutation.mutate({ id: task.id, data: { subTasks: next } });
+    },
+
+    onSubtaskDelete: (task, subtaskId) => {
+      const next = (task.subTasks ?? []).filter((s) => s.id !== subtaskId);
+      queryClient.setQueriesData<StoredTask[]>(
+        { queryKey: ['tasks', 'board'] },
+        (prev) => (prev ? prev.map((t) => (t.id === task.id ? { ...t, subTasks: next } : t)) : prev),
+      );
+      updateMutation.mutate({ id: task.id, data: { subTasks: next } });
+    },
+
+    onEnterAtSubtask: (task) => {
+      setDraft({ kind: 'subtask', parentTaskId: task.id });
+      bumpDraft();
+    },
+  }), [navigate, onEdit, patchStatus, queryClient, snoozeMutation, updateMutation]);
+
+  // --------- Drag-reorder (top-level only) ---------
+
   const onDragEnd = (result: DropResult) => {
     if (!result.destination) return;
     const fromIdx = result.source.index;
@@ -208,117 +435,164 @@ export function ChecklistView({ tasks, members, onEdit }: ChecklistViewProps) {
     const task = active[fromIdx];
     if (!task) return;
 
-    // Compute neighbors in the destination position (excluding dragged task)
     const without = active.filter((_, i) => i !== fromIdx);
     const before = without[toIdx - 1]?.sortOrder ?? null;
-    const after = without[toIdx]?.sortOrder ?? null;
-    const newSortOrder = computeSortOrder(before, after);
+    const afterN = without[toIdx]?.sortOrder ?? null;
+    const newSortOrder = computeSortOrder(before, afterN);
 
-    // Optimistic cache update — patch every board-board query's cached data.
-    // We update sortOrder on the moved task so the `active` memo re-sorts it
-    // into the dropped position on the next render.
+    // Optimistic cache patch (matches the pattern used in Kanban v2.0 — avoids
+    // pangea drop animation racing the render re-sort).
     const snapshot = queryClient.getQueriesData<StoredTask[]>({ queryKey: ['tasks', 'board'] });
-    queryClient.setQueriesData<StoredTask[]>({ queryKey: ['tasks', 'board'] }, (prev) =>
-      prev ? prev.map((t) => (t.id === task.id ? { ...t, sortOrder: newSortOrder } : t)) : prev
+    queryClient.setQueriesData<StoredTask[]>(
+      { queryKey: ['tasks', 'board'] },
+      (prev) =>
+        prev ? prev.map((t) => (t.id === task.id ? { ...t, sortOrder: newSortOrder } : t)) : prev,
     );
 
     reorderMutation.mutate(
       { id: task.id, status: task.status, sortOrder: newSortOrder },
       {
-        onSuccess: (updatedTask) => {
-          queryClient.setQueriesData<StoredTask[]>({ queryKey: ['tasks', 'board'] }, (prev) =>
-            prev ? prev.map((t) => (t.id === updatedTask.id ? updatedTask : t)) : prev
+        onSuccess: (updated) => {
+          queryClient.setQueriesData<StoredTask[]>(
+            { queryKey: ['tasks', 'board'] },
+            (prev) =>
+              prev ? prev.map((t) => (t.id === updated.id ? updated : t)) : prev,
           );
         },
         onError: () => {
-          // Roll back the cache to what it was before the optimistic patch.
-          for (const [key, data] of snapshot) {
-            queryClient.setQueryData(key, data);
-          }
+          for (const [key, data] of snapshot) queryClient.setQueryData(key, data);
           notifications.show({ message: 'Failed to reorder task', color: 'red' });
         },
-      }
+      },
     );
   };
 
+  // --------- Render helpers ---------
+
+  const draftAtTopLevelAfter = (taskId: string) =>
+    draft?.kind === 'top' && draft.afterTaskId === taskId;
+  const draftSubtaskOf = (taskId: string) =>
+    draft?.kind === 'subtask' && draft.parentTaskId === taskId;
+
+  const showIndentButtons = isMobile ?? false;
+
   return (
     <Paper withBorder p="sm" radius="sm">
-      {/* Quick entry */}
-      <Group gap="xs" mb="sm" align="center" pl={entryMode.kind === 'subtask' ? 'xl' : 0}>
-        <ActionIcon
-          variant="subtle"
-          size="sm"
-          disabled={entryMode.kind === 'top' || active.length === 0}
-          aria-label="Outdent"
-          onClick={() => setEntryMode({ kind: 'top' })}
-        >
-          <IconArrowBarToLeft size={14} />
-        </ActionIcon>
-        <ActionIcon
-          variant="subtle"
-          size="sm"
-          disabled={entryMode.kind !== 'top' || active.length === 0}
-          aria-label="Indent"
-          onClick={() => active[0] && setEntryMode({ kind: 'subtask', parentId: active[0].id })}
-        >
-          <IconArrowBarRight size={14} />
-        </ActionIcon>
-        <TextInput
-          ref={entryInputRef}
-          size="sm"
-          style={{ flex: 1 }}
-          placeholder={
-            entryMode.kind === 'top'
-              ? 'Add a task… (Enter to save, Tab to indent)'
-              : 'Add a sub-task… (Shift-Tab to outdent)'
-          }
-          value={entryValue}
-          onChange={(e) => setEntryValue(e.currentTarget.value)}
-          onKeyDown={handleEntryKeyDown}
-        />
-        <Button size="xs" onClick={handleEntrySubmit} disabled={!entryValue.trim()}>
-          Add
-        </Button>
-      </Group>
-
-      {/* Active list */}
       <DragDropContext onDragEnd={onDragEnd}>
         <Droppable droppableId="checklist-active">
           {(provided) => (
-            <Stack gap={4} ref={provided.innerRef} {...provided.droppableProps}>
-              {active.length === 0 && (
+            <Stack gap={2} ref={provided.innerRef} {...provided.droppableProps}>
+              {active.length === 0 && !draft && (
                 <Text size="sm" c="dimmed" ta="center" py="md">
-                  Nothing active. Add one above.
+                  Nothing to do yet. Click below to add a task.
                 </Text>
               )}
+
+              {/* Top-anchored draft when list is empty and user promoted from subtask */}
+              {draft?.kind === 'top' && draft.afterTaskId === null && (
+                <DraftRow
+                  key={`draft-${draftNonce}`}
+                  kind="top"
+                  onSubmit={submitDraft}
+                  onTab={onDraftTab}
+                  onShiftTab={onDraftShiftTab}
+                  onEnterEmpty={onDraftEnterEmpty}
+                  onBlurEmpty={onDraftBlurEmpty}
+                  showIndentButtons={showIndentButtons}
+                />
+              )}
+
               {active.map((task, index) => (
-                <Draggable key={task.id} draggableId={task.id} index={index}>
-                  {(dragProvided) => (
-                    <div ref={dragProvided.innerRef} {...dragProvided.draggableProps}>
-                      <ChecklistRow
-                        task={task}
-                        members={members}
-                        dragHandleProps={dragProvided.dragHandleProps as unknown as Record<string, unknown> | undefined}
-                        onStartedToggle={onStartedToggle}
-                        onDoneToggle={onDoneToggle}
-                        onTitleSave={onTitleSave}
-                        onMetadataSave={onMetadataSave}
-                        onSnooze={onSnooze}
-                        onCancel={onCancel}
-                        onEdit={onEdit}
-                        onSubTaskToggle={onSubTaskToggle}
-                      />
-                    </div>
+                <Box key={task.id}>
+                  <Draggable draggableId={task.id} index={index}>
+                    {(dragProvided) => (
+                      <div ref={dragProvided.innerRef} {...dragProvided.draggableProps}>
+                        <TaskRow
+                          task={task}
+                          members={members}
+                          callbacks={callbacks}
+                          dragHandleProps={
+                            dragProvided.dragHandleProps as unknown as
+                              | Record<string, unknown>
+                              | undefined
+                          }
+                        />
+                      </div>
+                    )}
+                  </Draggable>
+
+                  {(task.subTasks ?? []).map((st) => (
+                    <SubtaskRow key={st.id} parent={task} subtask={st} callbacks={callbacks} />
+                  ))}
+
+                  {draftSubtaskOf(task.id) && (
+                    <DraftRow
+                      key={`draft-${draftNonce}`}
+                      kind="subtask"
+                      onSubmit={submitDraft}
+                      onTab={onDraftTab}
+                      onShiftTab={onDraftShiftTab}
+                      onEnterEmpty={onDraftEnterEmpty}
+                      onBlurEmpty={onDraftBlurEmpty}
+                      showIndentButtons={showIndentButtons}
+                    />
                   )}
-                </Draggable>
+
+                  {/* Top-level draft anchored to this task renders AFTER its
+                      subtasks — clicking the ghost row (or pressing Enter on
+                      a parent task) should keep the cursor visually at the
+                      bottom of the subtree, not wedged between parent and
+                      children. */}
+                  {draftAtTopLevelAfter(task.id) && (
+                    <DraftRow
+                      key={`draft-${draftNonce}`}
+                      kind="top"
+                      onSubmit={submitDraft}
+                      onTab={onDraftTab}
+                      onShiftTab={onDraftShiftTab}
+                      onEnterEmpty={onDraftEnterEmpty}
+                      onBlurEmpty={onDraftBlurEmpty}
+                      showIndentButtons={showIndentButtons}
+                    />
+                  )}
+                </Box>
               ))}
+
               {provided.placeholder}
+
+              {/* Ghost row — only when no draft is open */}
+              {!draft && <GhostRow onActivate={startGhostDraft} />}
             </Stack>
           )}
         </Droppable>
       </DragDropContext>
 
-      {/* Completed accordion */}
+      {snoozed.length > 0 && (
+        <Accordion
+          mt="md"
+          value={snoozedExpanded ? 'snoozed' : null}
+          onChange={(v) => setSnoozedExpanded(v === 'snoozed')}
+        >
+          <Accordion.Item value="snoozed">
+            <Accordion.Control>
+              <Text size="sm" fw={500}>Snoozed ({snoozed.length})</Text>
+            </Accordion.Control>
+            <Accordion.Panel>
+              <Stack gap={2}>
+                {snoozed.map((task) => (
+                  <Box key={task.id}>
+                    <TaskRow task={task} members={members} callbacks={callbacks} />
+                    {(task.subTasks ?? []).map((st) => (
+                      <SubtaskRow key={st.id} parent={task} subtask={st} callbacks={callbacks} />
+                    ))}
+                  </Box>
+                ))}
+              </Stack>
+            </Accordion.Panel>
+          </Accordion.Item>
+        </Accordion>
+      )}
+
       {completed.length > 0 && (
         <Accordion
           mt="md"
@@ -330,21 +604,9 @@ export function ChecklistView({ tasks, members, onEdit }: ChecklistViewProps) {
               <Text size="sm" fw={500}>Completed ({completed.length})</Text>
             </Accordion.Control>
             <Accordion.Panel>
-              <Stack gap={4}>
+              <Stack gap={2}>
                 {completed.map((task) => (
-                  <ChecklistRow
-                    key={task.id}
-                    task={task}
-                    members={members}
-                    onStartedToggle={onStartedToggle}
-                    onDoneToggle={onDoneToggle}
-                    onTitleSave={onTitleSave}
-                    onMetadataSave={onMetadataSave}
-                    onSnooze={onSnooze}
-                    onCancel={onCancel}
-                    onEdit={onEdit}
-                    onSubTaskToggle={onSubTaskToggle}
-                  />
+                  <CompletedRow key={task.id} task={task} members={members} callbacks={callbacks} />
                 ))}
               </Stack>
             </Accordion.Panel>

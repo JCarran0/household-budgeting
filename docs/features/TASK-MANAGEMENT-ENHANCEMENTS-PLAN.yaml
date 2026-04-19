@@ -1,9 +1,9 @@
 # =============================================================================
-# Task Management Enhancements (v2.0) — Implementation Plan
+# Task Management Enhancements (v2.0 + v2.1) — Implementation Plan
 # =============================================================================
-# BRD: docs/features/TASK-MANAGEMENT-BRD.md (v2.0)
+# BRD: docs/features/TASK-MANAGEMENT-BRD.md (v2.1 — Checklist redesign)
 # Related BRDs: docs/features/PROJECTS-BRD.md (§4.5), docs/features/FAMILY-MULTI-USER-BRD.md
-# Status: Implemented — Slice A + Slice B shipped
+# Status: v2.0 shipped (commit f2391f2); v2.1 Checklist redesign — shipped
 # Last Updated: 2026-04-19
 # =============================================================================
 
@@ -981,3 +981,440 @@ implementation_notes:
       tasks.kanban.showSnoozed, tasks.checklist.completedExpanded); pre-existing
       leaderboard key is hyphenated (tasks-leaderboard). Left alone for now;
       consider normalizing in a follow-up pass.
+
+# =============================================================================
+# v2.1 — CHECKLIST REDESIGN (Google Keep–style)
+# =============================================================================
+# Driven by user feedback after using v2.0 Checklist:
+#   • "The design is a bit cluttered and clunky to interact with."
+#   • Targets Google Keep parity for entry fluency.
+#   • Two-checkbox pattern replaced with single forward-only button.
+#   • Placeholder +assignee / +due chips removed; metadata lives in kebab.
+# Status: Not Started
+# =============================================================================
+
+v2_1_decisions:
+  - id: D18
+    date: 2026-04-19
+    decision: "Done-state → row moves to the Completed (N) accordion immediately"
+    rationale: |
+      Matches Keep's "checking a list item removes it from the active section."
+      Eliminates the "two checkboxes both checked on a sitting row" clutter.
+      Revert (done → started) happens via kebab ("Reopen"), not by unchecking.
+
+  - id: D19
+    date: 2026-04-19
+    decision: "Action button is forward-only (todo → started → done); no back via button"
+    rationale: |
+      One control, one direction, zero ambiguity. Reversal is a deliberate
+      action via the kebab menu ("Move to todo" / "Reopen"). Avoids the
+      checkbox paradox where unchecking could mean "undo start" or "undo done."
+
+  - id: D20
+    date: 2026-04-19
+    decision: "Subtasks stay binary (SubTask[] inside parent); no promotion to full Task entities"
+    rationale: |
+      Keeps data model unchanged from v2.0. Subtasks visually = indented
+      checklist items, but with a simple checkbox (no kebab, no status, no
+      assignee/due/snooze). If a subtask needs rich state, user promotes it
+      to a top-level task (out of scope for v2.1 — D21).
+
+  - id: D21
+    date: 2026-04-19
+    decision: "Tab/Shift-Tab work on EMPTY new-entry rows only, not on existing non-empty tasks"
+    rationale: |
+      Full Keep parity (Tab to demote an existing task to a subtask) requires
+      moving data between Task.subTasks[] and standalone Task entities — bigger
+      blast radius. Current approach: Tab on empty new row → demote; Shift-Tab
+      on empty subtask new row → promote. Existing tasks reparent via delete
+      + retype or drag.
+
+  - id: D22
+    date: 2026-04-19
+    decision: "Remove sticky '+ Add task' input; use trailing ghost-row pattern"
+    rationale: |
+      Google Keep doesn't have a separate add input — every row is live. The
+      faint bottom "ghost row" becomes active on focus/click. After Enter on a
+      real task row, a new empty row appears directly below. After saving a
+      task via ghost row, a fresh ghost row regenerates. Total keyboard flow.
+
+  - id: D23
+    date: 2026-04-19
+    decision: "Enter mid-title inserts empty row below; does NOT split the title text"
+    rationale: |
+      Splitting requires diffing intent (did the user want to split or just
+      insert below?). Always inserting blank below is predictable and matches
+      most flat checklist apps. Users who want to split can cut/paste.
+
+  - id: D24
+    date: 2026-04-19
+    decision: "Remove '+assignee' and '+due' placeholder chips; metadata set via kebab menu"
+    rationale: |
+      Placeholder chips add visual noise on every empty-metadata row (most
+      rows at creation). Kebab is a familiar per-row menu pattern and already
+      hosts Snooze/Cancel/Edit. Absence of a chip = no value, which is
+      clearer than "+assignee" buttons inviting clicks on every row.
+
+# =============================================================================
+# PHASE 6: Frontend — Checklist V2.1 rebuild
+# =============================================================================
+phase_6_checklist_v2_1:
+  status: completed
+  description: |
+    Rewrite the Checklist view to match the Google Keep–style BRD §3.2
+    redesign. No backend or shared/types changes — this phase is purely a
+    frontend refactor of ChecklistView.tsx and ChecklistRow.tsx.
+
+  key_files:
+    rewrite: frontend/src/components/tasks/ChecklistView.tsx
+    rewrite: frontend/src/components/tasks/ChecklistRow.tsx
+    modify: frontend/src/pages/Tasks.tsx  # view toggle already exists; no new wiring
+
+  tasks:
+    - id: "6.1"
+      task: Rewrite ChecklistRow with single action button + no metadata placeholders
+      status: completed
+      details: |
+        Row layout (active state):
+          [ActionButton]  [inline title input]        [chips if set]  [kebab]
+
+        Action button:
+          - task.status === 'todo'   → label "Start",    color neutral, onClick → status='started'
+          - task.status === 'started'→ label "Done", color success, onClick → status='done' (+synthetic startedAt if null)
+          - task.status === 'done'   → small checkmark glyph (no button), strikethrough title
+          - task.status === 'cancelled' → row not rendered (filtered out at parent)
+        Button never moves status backward. Backwards paths are in the kebab.
+
+        Title:
+          - Always an inline <TextInput variant="unstyled"> (no click-to-edit ceremony).
+          - Autosave on blur, Enter (also inserts new row below — see 6.2), or after a debounce during typing.
+
+        Chips:
+          - Render assignee avatar ONLY if task.assigneeId.
+          - Render due-date badge ONLY if task.dueDate (with overdue color when past due).
+          - Render project chip ONLY if task.tags has a project tag.
+          - **Remove** the "+assignee" / "+due" placeholder chips from v2.0.
+
+        Kebab menu (all metadata + status-reversal paths live here):
+          - Assign to… (submenu of members + "Unassigned")
+          - Due date… (opens date picker popover)
+          - Snooze ▸ (Tomorrow / Next week / Next month / Custom…)
+          - Move to todo   — visible when status === 'started'
+          - Reopen         — visible when status === 'done'
+          - Cancel task    — visible when status !== 'cancelled' and !== 'done' (confirm dialog)
+          - Edit…          — opens existing full detail modal
+
+        Subtask row (unchanged model, simplified UI):
+          [Checkbox]  [inline title input]  [× delete on hover]
+          - Checkbox toggles SubTask.completed (binary). No kebab.
+          - Title inline-editable; Enter creates new subtask below (see 6.2).
+          - Indent visually (1.5rem left pad + faint vertical guide line).
+
+    - id: "6.2"
+      task: Rewrite ChecklistView quick-entry model — inline Enter + ghost row
+      status: completed
+      details: |
+        Eliminate the sticky "+ Add task" input from v2.0.
+
+        Data structure for rendering:
+          - Render active tasks in sortOrder ASC, each followed by its subtasks.
+          - Append a single "ghost row" at the end of the active list.
+
+        Ghost row:
+          - Rendered with faint styling ("Add a task…" placeholder, low-contrast border).
+          - Becomes a real editable row on click/focus/Tab-into.
+          - On Enter with non-empty value → call createTask, then a fresh ghost row
+            regenerates automatically. Focus stays in the new row (which was the
+            ghost but now has been replaced by a real row + new ghost below).
+
+        Enter key behavior on a real row:
+          - Cursor at END of a TOP-LEVEL task title → save title; insert new empty
+            top-level row **after the current task's entire subtree** (below its
+            subtasks, not above them — see D26 below). Focus moves to new row.
+          - Cursor at END of a SUBTASK title → save title; insert new empty subtask
+            row below, under the same parent.
+          - Cursor MID-title → save current title as-is; insert new empty row below.
+            **Do not split** the title text.
+          - On an empty row → auto-promote empty subtask to top-level; no-op on
+            empty top-level.
+
+        Tab / Shift-Tab behavior (EMPTY new-row lines only):
+          - Tab on empty top-level new row → demote to subtask of task above.
+          - Shift-Tab on empty subtask new row → promote to top-level below parent.
+          - On non-empty rows: Tab/Shift-Tab do nothing special (per D21).
+
+        Escape: blur current input, save whatever is typed (if non-empty),
+        discard empty new rows.
+
+        Implementation decisions:
+          - Single `draft` state in ChecklistView: { kind: 'top' | 'subtask', anchor }.
+          - DraftRow is keyed by an incrementing `draftNonce` so remount-on-bump
+            re-fires its autofocus useEffect — no imperative ref map needed.
+          - Creates are optimistic: client generates a temp id, onMutate inserts
+            the task into the ['tasks','board'] cache with the computed sortOrder;
+            onSuccess swaps temp id → server id (including the draft anchor if
+            it still references the temp id).
+          - Backend change: CreateTaskDto gained an optional `sortOrder` field
+            so the client can place the new task at the cursor position instead
+            of top-of-column. taskService.createTask honors it when present.
+
+    - id: "6.3"
+      task: Completed section behavior
+      status: completed
+      details: |
+        When a task transitions to 'done':
+          - statusMutation.onMutate optimistically patches the ['tasks','board']
+            query cache with the new status → the row disappears from the active
+            list immediately and re-appears inside the Completed accordion
+            (since completed's memo partitions by status).
+          - Accordion count updates in real time via the partition memo.
+          - No explicit animation wrapper — the default React reconciliation is
+            fast enough that the transition feels instant. Revisit (O6) only if
+            the instant move turns out to be disorienting in practice.
+
+        Completed accordion rows:
+          - CompletedRow variant: strikethrough title, static check glyph in
+            the action-button slot, kebab retained (Reopen / Cancel / Edit).
+
+        Reopen (kebab → Reopen on a done task):
+          - PATCH status = 'started'.
+          - Row moves back into active list at TOP of the started sortOrder range
+            (the existing non-drag top-of-column rule from REQ-043 applies).
+
+    - id: "6.4"
+      task: Kebab metadata editors (assignee + due date + snooze submenu)
+      status: completed
+      details: |
+        Implement via Mantine Menu + nested Popover for pickers.
+
+        Assign to… submenu:
+          - Members list (current assignee highlighted), plus "Unassigned" option.
+          - Click → PATCH /api/v1/tasks/:id { assigneeId }.
+
+        Due date…:
+          - Click opens DatePickerInput inside a Popover.
+          - Change → PATCH /api/v1/tasks/:id { dueDate }.
+          - Clear affordance sets dueDate=null.
+
+        Snooze submenu (reuse existing resolveSnoozeDate + api.snoozeTask):
+          - Tomorrow / Next week / Next month → resolveSnoozeDate + POST /snooze.
+          - Custom… → small date-picker modal, then POST /snooze.
+
+        Reuse Mantine components already imported elsewhere in Tasks.tsx to
+        keep bundle size stable.
+
+    - id: "6.5"
+      task: Drag-to-reorder preserved (no regression)
+      status: completed
+      details: |
+        Keep the existing @hello-pangea/dnd wiring from v2.0:
+          - Drag handle on hover (desktop) / long-press (mobile) — may need to
+            re-evaluate handle affordance since row chrome changes.
+          - Top-level task reorder → computeSortOrder → POST /reorder.
+          - Subtask reorder within parent → update parent.subTasks[] array →
+            PUT /tasks/:id.
+
+        Reconcile with the pangea "drop animation race" fix from the v2.0
+        drag-reorder work: optimistic query-cache patch on drop, rollback on
+        error, no render-time re-sort.
+
+    - id: "6.6"
+      task: Mobile indent/outdent buttons next to focused ghost/empty row
+      status: completed
+      details: |
+        When the focused row is empty and the device is touch-only (no Tab
+        key on soft keyboard):
+          - Render a small ◀  ▶ button pair near the input.
+          - ▶ = Tab (demote empty new row to subtask).
+          - ◀ = Shift-Tab (promote empty subtask new row to top-level).
+        Detect via useMediaQuery('(max-width: 768px)') or pointer-coarse media query.
+
+    - id: "6.7"
+      task: Delete v2.0 Checklist artifacts not carried forward
+      status: completed
+      details: |
+        - Remove the v2.0 two-checkbox ChecklistRow implementation.
+        - Remove the v2.0 sticky "+ Add task" TextInput block in ChecklistView.
+        - Remove the inline assignee / due-date Popover pickers from the row
+          (now in kebab per D24).
+        - Keep the existing api.updateTaskStatus / api.reorderTask /
+          api.snoozeTask / api.createTask / api.updateTask hooks — contracts
+          unchanged.
+
+    - id: "6.8"
+      task: Manual testing — Checklist v2.1
+      status: pending_manual_test
+      details: |
+        Desktop:
+          - [ ] "Start" button on todo → status becomes started; button relabels to "Done".
+          - [ ] "Done" button on started → status becomes done; row moves to Completed accordion immediately.
+          - [ ] "Done" button on a todo task (skipping started) → status done, startedAt auto-stamped.
+          - [ ] Reopen via kebab → row returns to top of started in active list.
+          - [ ] No +assignee / +due placeholder chips ever render.
+          - [ ] Assignee avatar chip only shows when assigneeId is set.
+          - [ ] Due-date chip only shows when dueDate is set; overdue color when past due.
+          - [ ] Kebab menu: Assign to…, Due date…, Snooze ▸, Move to todo/Reopen, Cancel, Edit…
+          - [ ] Click into title mid-text → cursor placed there; typing inserts.
+          - [ ] Enter at end of top-level task → new empty top-level below; focus moves.
+          - [ ] Enter at end of subtask → new empty subtask below same parent; focus moves.
+          - [ ] Enter mid-title → new empty row below; current title NOT split.
+          - [ ] Enter on empty subtask → promotes to top-level.
+          - [ ] Enter on empty top-level → no-op (doesn't create endless blanks).
+          - [ ] Ghost row becomes real row on click; new ghost regenerates after save.
+          - [ ] Tab on empty new top-level row → demotes to subtask.
+          - [ ] Shift-Tab on empty subtask new row → promotes to top-level.
+          - [ ] Tab/Shift-Tab on non-empty rows: no special behavior (just focus move).
+          - [ ] Escape blurs; empty new rows discarded.
+          - [ ] Drag-to-reorder works; no glitch; sortOrder persists.
+          - [ ] Subtask checkbox toggles binary completion; parent doesn't auto-complete.
+          - [ ] Cancelled tasks never appear.
+          - [ ] Snoozed tasks never appear.
+        Mobile:
+          - [ ] Indent/outdent buttons render next to the focused empty row.
+          - [ ] Taps work for kebab, chips, checkboxes.
+          - [ ] Long-press initiates drag.
+
+  # No Phase 5-style unit-test work is expected for the redesign — the
+  # underlying data model, shared utils, and API client are unchanged.
+  # Manual test checklist in 6.8 is the primary verification.
+  testing_scope:
+    - No new unit tests (no new pure functions introduced).
+    - No new integration tests (endpoint contracts unchanged).
+    - Manual browser testing per 6.8 is the primary verification.
+
+open_items_v2_1:
+  - id: O6
+    item: Confirm exact animation treatment for row → Completed transition (D18)
+    blocks: 6.3
+    note: |
+      Fade-out from active, fade-in inside Completed is the default. If the
+      user finds the animation distracting in practice, we swap for a plain
+      instant move. Decide during first-pass UI review.
+
+  - id: O7
+    item: Decide if subtasks support inline title editing via a separate <TextInput>
+    blocks: 6.1
+    note: |
+      Subtasks currently have no inline edit (only the parent task's Edit modal).
+      For v2.1 Keep parity, inline subtask title editing should work the same
+      as parent title editing. No backend change — just update `parent.subTasks[i].title`
+      via the existing PUT /tasks/:id endpoint.
+
+  - id: O8
+    item: Ghost row accessibility — how do screen readers announce it?
+    blocks: 6.2
+    note: |
+      Use role="textbox" with aria-label="Add a task" for the ghost row.
+      Verify with VoiceOver + JAWS before shipping.
+
+# =============================================================================
+# v2.1 — Post-ship decisions (captured mid-implementation, after user feedback)
+# =============================================================================
+v2_1_post_ship_decisions:
+  - id: D25
+    date: 2026-04-19
+    decision: "Action button label is 'Done' (not 'Complete')"
+    rationale: |
+      Shorter, matches the existing Done column / Completed accordion / Task
+      History vocabulary. BRD §3.2.2, REQ-029, and Phase 6 test checklist
+      updated in the same pass.
+
+  - id: D26
+    date: 2026-04-19
+    decision: "Top-level draft renders AFTER parent's subtree (not above its subtasks)"
+    rationale: |
+      BRD §3.2.3 initially specified 'directly below the current task (above
+      that task's subtasks, if any)'. In practice this put the cursor visually
+      between a parent and its own subtasks when the user clicked the ghost
+      row at the bottom — awkward enough that the user flagged it on first
+      try. New rule: draft renders after the parent + all its subtasks, so
+      clicking at the bottom keeps the cursor at the bottom. sortOrder math
+      is unchanged (still midpoint between T and T's next top-level sibling).
+      BRD §3.2.3 and REQ-030 rewritten to match.
+
+  - id: D27
+    date: 2026-04-19
+    decision: "Snoozed column renders to the LEFT of Todo in Kanban"
+    rationale: |
+      Shipping order ended up right-of-Done (appended). User prefers it on
+      the left — snoozed tasks read as 'pre-todo' (queued for later), which
+      matches their mental model. Toggle gating behavior unchanged.
+
+  - id: D28
+    date: 2026-04-19
+    decision: "Show-snoozed toggle defaults ON for new users"
+    rationale: |
+      First-time users see the snoozed column immediately so the feature is
+      discoverable. localStorage logic treats only an explicit 'false' as off,
+      so anyone who previously toggled it off keeps their preference.
+
+  - id: D29
+    date: 2026-04-19
+    decision: "Checklist gains a 'Snoozed (N)' accordion above 'Completed (N)'"
+    rationale: |
+      Matches the Kanban Snoozed column's discoverability in the Checklist
+      view. Collapsed by default; state persisted to
+      localStorage['tasks.checklist.snoozedExpanded']. Rows render as normal
+      TaskRows (not draggable) — sorted by snoozedUntil ASC like Kanban. A
+      'Wake now' kebab item was added to TaskKebabMenu when
+      task.snoozedUntil is set, providing the unsnooze path from within the
+      accordion without the full Edit modal.
+
+# =============================================================================
+# v2.1 IMPLEMENTATION NOTES (2026-04-19 — single-session ship)
+# =============================================================================
+v2_1_implementation_notes:
+  summary: |
+    Phase 6 Checklist redesign + follow-on refinements shipped in one pass:
+
+    Backend (scope add, 1 decision):
+      • shared/types/index.ts — CreateTaskDto.sortOrder?: number (optional)
+      • backend/src/routes/tasks.ts — createTaskSchema accepts optional sortOrder
+      • backend/src/services/taskService.ts — createTask honors explicit
+        sortOrder when provided (else defaults to top-of-column, v2.0 behavior)
+      → Enables Checklist quick-entry to place new tasks at the cursor position
+        instead of top of column. Contract-additive; all existing callers work
+        unchanged.
+
+    Frontend — full rewrite of the two Checklist files:
+      • frontend/src/components/tasks/ChecklistRow.tsx — five row variants
+        (TaskRow, CompletedRow, SubtaskRow, DraftRow, GhostRow) + shared
+        TitleInput + TaskMetadataChips + TaskKebabMenu. Single forward-only
+        action button ('Start' / 'Done'); metadata chips only when set;
+        kebab owns Assign-to, Due-date, Snooze, Move-to-todo, Reopen, Edit,
+        Cancel, Wake-now (D29).
+      • frontend/src/components/tasks/ChecklistView.tsx — draft state model,
+        ghost row, inline Enter/Tab/Shift-Tab/Escape, optimistic createMutation
+        with temp-id → server-id swap, Snoozed + Completed accordions.
+
+    Post-ship refinements (user feedback during the same session):
+      • D25 — 'Complete' button → 'Done'.
+      • D26 — top-level draft renders AFTER the parent's subtree (not above
+        its subtasks). BRD §3.2.3 and REQ-030 rewritten.
+      • D27 — Kanban Snoozed column moved to the LEFT of Todo.
+      • D28 — Show-snoozed toggle defaults ON.
+      • D29 — Checklist gained a 'Snoozed (N)' accordion above 'Completed (N)'
+        with localStorage-persisted expand state and a Wake-now kebab item.
+
+  verification:
+    - Backend tsc --noEmit: clean
+    - Frontend tsc -b --noEmit: clean
+    - Frontend eslint: 0 errors (3 pre-existing warnings on Tasks.tsx)
+    - Frontend vite build: clean
+    - Critical suite: 186/186 passing
+    - No new unit/integration tests required — underlying data model and
+      API contracts unchanged; backend scope add (sortOrder on create) is
+      additive and default-preserving
+
+  follow_ups:
+    - Manual browser testing per 6.8 still outstanding (user runs this locally).
+    - Consider a small usePreference<T>(key, default) hook to collapse the
+      inline localStorage calls across 4 files (~8 keys, inconsistent naming).
+      User decided to keep inline for now; revisit if preferences grow.
+    - O6 (animation treatment) closed implicitly: instant React re-render was
+      acceptable; no explicit fade added. Revisit only if users find it
+      disorienting.
+    - O7 (subtask inline title edit) closed: SubtaskRow now uses TitleInput
+      for inline editing, same pattern as TaskRow.
+    - O8 (ghost row a11y) still open: role='button' + aria-label='Add a task'
+      applied; screen-reader verification pending.

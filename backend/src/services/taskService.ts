@@ -99,7 +99,13 @@ export class TaskService {
     const initialStatus: TaskStatus = data.status === 'started' ? 'started' : 'todo';
 
     const tasks = await this.loadTasks(familyId);
-    const sortOrder = topOfColumn(this.minSortOrder(tasks, initialStatus));
+    // v2.1: honor an explicit sortOrder from the client (Checklist quick entry
+    // uses this to place new tasks at the user's cursor position). Default to
+    // top-of-column when not provided.
+    const sortOrder =
+      typeof data.sortOrder === 'number' && Number.isFinite(data.sortOrder)
+        ? data.sortOrder
+        : topOfColumn(this.minSortOrder(tasks, initialStatus));
 
     const task: StoredTask = {
       id: uuidv4(),

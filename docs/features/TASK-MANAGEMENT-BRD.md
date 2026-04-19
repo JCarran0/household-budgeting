@@ -260,46 +260,81 @@ Default view: all tasks (family + personal, all assignees). The "Show snoozed" c
 
 ### 3.2 Checklist View
 
-The Checklist view is an alternate presentation of the same task data, optimized for rapid entry and reordering on both desktop and mobile.
+The Checklist view is a Google Keep–inspired flat list, optimized for rapid keyboard entry on both desktop and mobile. The initial v2.0 two-checkbox design proved cluttered in use — the redesign below replaces it with a single forward-progressing action button, removes placeholder metadata chips, and makes new-row creation implicit (no sticky "+ Add" input).
 
 #### 3.2.1 Layout
 
-Tasks render as a single flat list, top-to-bottom:
+Tasks render as a single flat list, top-to-bottom, with three zones:
 
-- **Active tasks** (status `todo` or `started`) render at the top, ordered by `sortOrder` ASC.
-- Below active tasks, a **collapsed accordion** labeled **"Completed (N)"** — the count is always visible; the list is hidden until the user expands the accordion. When expanded: tasks sorted by `completedAt` DESC, subject to the same 14-day archive window as Kanban. Accordion expand/collapse state is persisted per user.
-- **Cancelled tasks are not surfaced** in the Checklist view. They live only in Task History.
-- **Snoozed tasks are not surfaced** in the Checklist view. They appear only in the Kanban Snoozed column (via the "Show snoozed" toggle).
+- **Active tasks** (status `todo` or `started`) at the top, ordered by `sortOrder` ASC.
+- A **blank "ghost row"** at the bottom of the active list. It renders as a faint placeholder and becomes an active input the moment the user clicks into it or Tabs to it. A new ghost row regenerates automatically after each new task is saved.
+- Below the active list, a **collapsed accordion** labeled **"Completed (N)"**. Count always visible; list hidden until expanded. When expanded: tasks sorted by `completedAt` DESC, subject to the same 14-day archive window as Kanban. Accordion state is persisted per user.
+
+Not surfaced in Checklist:
+
+- **Cancelled tasks** — live only in Task History.
+- **Snoozed tasks** — appear only in the Kanban Snoozed column (via "Show snoozed" toggle).
 
 #### 3.2.2 Row Anatomy
 
-Each active-task row shows, left to right:
+The visual hierarchy mimics a paper checklist: minimal per-row chrome, content forward. Each **active task row** shows, left to right:
 
-1. **Started checkbox** — checked when status is `started` or `done`. Unchecking moves a `started` task back to `todo`. The started checkbox is **locked** while the done checkbox is checked (done implies started; the user cannot uncheck started on a done task without first un-doing).
-2. **Done checkbox** — checked when status is `done`. Checking it moves status to `done` and, if `startedAt` was previously null, **auto-stamps `startedAt` equal to `completedAt`** (see "synthetic start" below). Unchecking moves status back to `started` (preserving the stamped `startedAt`).
-3. **Title** — click/tap to edit inline.
-4. **Metadata chips:** assignee avatar, due date (with overdue indicator), project chip (if tagged).
-5. **Kebab menu** — Snooze ▸ submenu, Cancel task, Edit (opens detail view).
+1. **Action button** — the single control that advances the task's status:
+   - Status `todo` → button label **"Start"**. Click → status becomes `started`.
+   - Status `started` → button label **"Done"**. Click → status becomes `done`, and if `startedAt` was previously null, `startedAt` is auto-stamped equal to `completedAt` (see "synthetic start" below).
+   - The button only moves a task forward. To send a task backward (e.g. `started` → `todo`), use the kebab menu → "Move to todo" / "Reopen".
+2. **Title** — always an inline-editable text input (click anywhere in the text to place a cursor).
+3. **Metadata chips** — rendered **only when the value is set**:
+   - Assignee avatar (if any).
+   - Due date chip with overdue indicator (if any).
+   - Project chip (if tagged).
+   - No placeholder "+ assignee" / "+ due" chips — absent values are represented by absence, not by a call-to-action.
+4. **Kebab menu** (appears on row hover/focus) — all field editing, backwards moves, Snooze, Cancel, and full Edit live here:
+   - Set/change assignee
+   - Set/change due date
+   - Snooze ▸ submenu (Tomorrow / Next week / Next month / Custom)
+   - Move to todo (if `started`) / Reopen (if `done`)
+   - Cancel task (with confirm dialog)
+   - Edit… (opens full detail modal)
 
-**Synthetic start:** When a user checks done without ever checking started, the task jumps from `todo` → `done`. The transition log records this real transition (`fromStatus: 'todo'`, `toStatus: 'done'`). A synthetic `startedAt` equal to `completedAt` is stamped on the task record so downstream consumers can rely on the field being non-null for any done task. No synthetic `started` transition is written to the log.
+**Subtasks** render **indented** beneath their parent (increased left padding; faint vertical guide line to the parent). Subtasks keep the current binary model:
 
-**Subtasks** render **indented** beneath their parent. Each subtask has a single done checkbox (subtasks are binary — no started state).
+- A simple **checkbox** on the left (no Start/Complete button, no kebab metadata — subtasks are intentionally lightweight).
+- Title is inline-editable.
+- A small × delete control on hover.
+- Subtasks have no status, no assignee, no due date, no snooze. If a subtask needs rich state, the user promotes it to a top-level task (see §3.2.3 Tab behavior).
+
+Subtasks belong to their parent's `subTasks[]` array. They are NOT independent `Task` entities — this keeps the data model unchanged from v2.0.
+
+**Completed section** — tasks with status `done` that have moved out of the active list render here:
+
+- Strikethrough title.
+- A small check glyph where the action button was.
+- Kebab menu remains (Reopen, Cancel, Edit).
+- Sorted by `completedAt` DESC; subject to the 14-day archive window.
+- Clicking "Done" on an active row **immediately removes it from the active list and inserts it into the Completed section**; the visual transition should be obvious (animate out of active, into completed) so the user confirms the state change.
+
+**Synthetic start:** When "Done" is clicked on a `todo` task (i.e., `startedAt` was null), the task jumps `todo` → `done`. The transition log records the real `fromStatus: 'todo', toStatus: 'done'` entry. A synthetic `startedAt` equal to `completedAt` is stamped on the record so downstream consumers can rely on `startedAt` being non-null for any done task. No synthetic `started` transition is written to the log.
 
 #### 3.2.3 Quick Entry
 
-A persistent **"+ Add task"** input at the top of the active list supports keyboard-driven rapid entry:
+There is **no separate "+ Add task" input**. Entry happens inline, driven from the active-task rows themselves plus the trailing ghost row.
 
 | Key | Context | Behavior |
 |-----|---------|----------|
-| **Enter** | Top-level task input | Save the current line as a new task; create a new top-level input below, cursor focused |
-| **Enter** | Subtask input | Save the current subtask; create a new subtask under the same parent, cursor focused |
-| **Tab** | Empty new-task line | Demote to subtask of the task above |
-| **Shift-Tab** | Empty subtask line | Promote to top-level task |
-| **Escape** | Empty line | Exit quick-entry mode |
+| **Enter** | Cursor at end of a **top-level** task title | Save current title; insert a **new empty top-level row** immediately **after the current task's subtree** (i.e., below the parent and all of its subtasks); focus the new row. The new task's `sortOrder` sorts between the current task and the next top-level task. |
+| **Enter** | Cursor at end of a **subtask** title | Save current title; insert a **new empty subtask row** below, under the same parent; focus the new row. |
+| **Enter** | Cursor **mid-title** | Save current title; insert a new empty row below. **Do not split the title text.** The cursor-original line keeps all of its text; the new row starts blank. |
+| **Enter** | Empty row (no characters typed) | **Auto-promote** the empty row to top-level and stay focused. If already top-level, no-op. Exits the repeated-Enter-creates-blank-rows loop cleanly. |
+| **Tab** | Empty new-row line | Demote to subtask of the task above (same as v2.0). |
+| **Shift-Tab** | Empty subtask line | Promote to top-level task (same as v2.0). |
+| **Escape** | Any row | Blur the input; save whatever is typed (if non-empty); abandon pending new-row creation. |
+
+**Scope note:** Tab and Shift-Tab affect **empty new-row lines only**. Using Tab/Shift-Tab to promote or demote an **existing non-empty task** is out of scope for this iteration — users who want to reparent a task do so by deleting and re-typing, or by using drag-to-reorder. (Decision D21 below.)
+
+Tasks created via quick entry are saved in `todo` status with the current user as `createdBy`, no assignee, no due date, and default scope. Blurring or clicking elsewhere saves whatever is typed (if non-empty); empty rows are discarded.
 
 **Mobile accommodation:** On mobile browsers where Tab may not be exposed on the on-screen keyboard, a small **indent/outdent button pair** is rendered next to the focused line, providing equivalent functionality.
-
-Tasks created via quick entry are saved in `todo` status with the current user as `createdBy`, no assignee, no due date, and default scope. Rich fields (assignee, due date, description) can be edited later via inline chips or the full detail view.
 
 #### 3.2.4 Reorder
 
@@ -312,10 +347,10 @@ Tasks can be reordered by drag — each row exposes a drag handle on hover (desk
 
 #### 3.2.5 Inline Edit
 
-- Click/tap a task title to edit it in place.
-- Click/tap a metadata chip to open a small popover (assignee picker, date picker, project picker).
-- Edits autosave on blur or Enter. There is no explicit save button.
-- Full edit (description, all fields) is available via the kebab menu → Edit, which opens the task detail view.
+- Task titles are always inline-editable — no explicit "click to edit" affordance; the row IS a text input styled to look like plain text.
+- Edits autosave on blur, on Enter (which also creates a new row — see §3.2.3), or after a short debounce during typing.
+- Metadata (assignee, due date, description, etc.) is edited exclusively through the kebab menu. There are no inline metadata pickers in the default row chrome.
+- The full detail modal (kebab → Edit…) remains available for editing description, tags, full sub-task list, and other fields not exposed on the row.
 
 ---
 
@@ -444,8 +479,14 @@ A cancelled or archived done task can be moved back to `todo` or `started` from 
 | REQ-017c | Cancel action is available via (a) the card kebab menu and (b) the task detail view, each with a confirmation dialog. Drag-to-cancel is not supported |
 | REQ-027 | Subtasks are first-class and documented: ordered (family-wide), binary (complete/incomplete), indented under parent in Checklist view, shown as a progress counter on Kanban cards. Completing all subtasks does not auto-complete the parent |
 | REQ-028 | Checklist view — alternate flat-list presentation of tasks with active tasks at top and a collapsed "Completed (N)" accordion below |
-| REQ-029 | Checklist row has two checkboxes (started, done). Checking done on a task with `startedAt == null` auto-stamps `startedAt = completedAt` (no synthetic transition log entry). Started checkbox is locked while done is checked |
-| REQ-030 | Checklist quick-entry: Enter saves the current line and creates the next; Tab/Shift-Tab demote/promote within top-level/subtask; Escape exits. Mobile exposes indent/outdent buttons next to the focused line |
+| REQ-029 | Checklist row has a **single forward-only action button** — label "Start" when `todo`, "Done" when `started`. Clicking advances status (todo → started → done). The button does not move tasks backward; reversals happen via the kebab menu. Clicking "Done" on a `todo` task auto-stamps `startedAt = completedAt` (no synthetic transition log entry) |
+| REQ-029a | After status reaches `done`, the row is **removed from the active list and inserted into the "Completed (N)" accordion** immediately. The Completed section sorts by `completedAt` DESC and is subject to the 14-day archive window |
+| REQ-029b | Subtasks in Checklist keep the current binary model: a single checkbox per subtask (no Start/Complete button, no kebab, no status). Subtasks are not independent `Task` entities — they live in the parent's `subTasks[]` array |
+| REQ-029c | Metadata chips (assignee, due date, project) render on a Checklist row **only when the value is set**. No placeholder "+ assignee" / "+ due" chips. Setting or changing metadata happens through the kebab menu |
+| REQ-030 | Checklist quick-entry is driven from inline-editable task titles, not a separate input. Pressing **Enter** in a task title saves the current line and inserts a new empty row at the appropriate position: top-level → immediately after the current task's subtree (i.e., below its subtasks); subtask → immediately after the current subtask under the same parent. Enter mid-title does **not** split text — the new row starts blank |
+| REQ-030a | **Tab** on an **empty** new-row line demotes it to a subtask of the task above. **Shift-Tab** on an empty subtask line promotes it to a top-level task. Tab/Shift-Tab on non-empty existing tasks is **out of scope** for v2.1 — users reparent via delete/retype or drag |
+| REQ-030b | **Enter on an empty row auto-promotes it to top-level** (if it was a subtask). Repeated Enter on an empty top-level row is a no-op |
+| REQ-030c | There is **no sticky "+ Add task" input**. A faint trailing "ghost row" at the bottom of the active list becomes the active input on click/focus; a fresh ghost row regenerates after each save |
 | REQ-031 | Checklist supports drag-to-reorder for top-level tasks and for subtasks within a parent |
 | REQ-032 | Checklist hides cancelled and snoozed tasks entirely (both surface only via their dedicated paths: Task History for cancelled, Kanban "Show snoozed" toggle for snoozed) |
 | REQ-033 | Task has `sortOrder` (fractional float, family-wide, scoped per status) driving manual order in Kanban Todo/Started and Checklist active list. The same field powers both views |

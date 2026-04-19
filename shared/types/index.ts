@@ -1147,6 +1147,12 @@ export interface CreateTaskDto {
   tags?: string[];
   subTasks?: { title: string }[];
   status?: Extract<TaskStatus, 'todo' | 'started'>; // default: 'todo'
+  /**
+   * Optional explicit sortOrder for the new task (v2.1). When omitted, the
+   * server assigns top-of-column. Used by Checklist quick entry to place
+   * new tasks at the user's cursor position.
+   */
+  sortOrder?: number;
 }
 
 export interface UpdateTaskDto {
