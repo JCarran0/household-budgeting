@@ -111,27 +111,30 @@ describe('Time Range Filter Mappings', () => {
         }
         case 'yearToDate': {
           const yearStart = startOfYear(now);
+          const rangeEnd = endOfMonth(subMonths(now, 1));
           return {
             startDate: format(yearStart, 'yyyy-MM-dd'),
-            endDate: format(now, 'yyyy-MM-dd')
+            endDate: format(rangeEnd, 'yyyy-MM-dd')
           };
         }
         case 'last3':
         case 'last6':
         case 'last12': {
           const months = parseInt(option.replace('last', ''));
-          const startDate = subMonths(now, months);
+          const rangeEnd = endOfMonth(subMonths(now, 1));
+          const rangeStart = startOfMonth(subMonths(now, months));
           return {
-            startDate: format(startDate, 'yyyy-MM-dd'),
-            endDate: format(now, 'yyyy-MM-dd')
+            startDate: format(rangeStart, 'yyyy-MM-dd'),
+            endDate: format(rangeEnd, 'yyyy-MM-dd')
           };
         }
         default: {
-          // Default to last 6 months for backwards compatibility
-          const startDate = subMonths(now, 6);
+          // Default to last 6 complete months for backwards compatibility
+          const rangeEnd = endOfMonth(subMonths(now, 1));
+          const rangeStart = startOfMonth(subMonths(now, 6));
           return {
-            startDate: format(startDate, 'yyyy-MM-dd'),
-            endDate: format(now, 'yyyy-MM-dd')
+            startDate: format(rangeStart, 'yyyy-MM-dd'),
+            endDate: format(rangeEnd, 'yyyy-MM-dd')
           };
         }
       }
@@ -163,12 +166,12 @@ describe('Time Range Filter Mappings', () => {
       expect(result.endDate).toMatch(/^\d{4}-\d{2}-\d{2}$/); // Should be valid date format
     });
     
-    it('should calculate "yearToDate" correctly', () => {
+    it('should calculate "yearToDate" correctly (excluding current month)', () => {
       const result = getDateRange('yearToDate');
       const now = new Date();
       const expectedStart = format(startOfYear(now), 'yyyy-MM-dd');
-      const expectedEnd = format(now, 'yyyy-MM-dd');
-      
+      const expectedEnd = format(endOfMonth(subMonths(now, 1)), 'yyyy-MM-dd');
+
       expect(result.startDate).toBe(expectedStart);
       expect(result.endDate).toBe(expectedEnd);
       expect(result.startDate).toMatch(/^\d{4}-01-01$/); // Should start on Jan 1st
@@ -186,63 +189,45 @@ describe('Time Range Filter Mappings', () => {
       expect(result.endDate).toMatch(/^\d{4}-12-31$/); // Should end on Dec 31st
     });
     
-    it('should calculate "last3" months correctly', () => {
+    it('should calculate "last3" months correctly (3 complete months ending prior to current)', () => {
       const result = getDateRange('last3');
       const now = new Date();
-      const expectedStart = format(subMonths(now, 3), 'yyyy-MM-dd');
-      const expectedEnd = format(now, 'yyyy-MM-dd');
-      
+      const expectedStart = format(startOfMonth(subMonths(now, 3)), 'yyyy-MM-dd');
+      const expectedEnd = format(endOfMonth(subMonths(now, 1)), 'yyyy-MM-dd');
+
       expect(result.startDate).toBe(expectedStart);
       expect(result.endDate).toBe(expectedEnd);
-      
-      // Should be approximately 3 months difference
-      const startDate = new Date(result.startDate);
-      const endDate = new Date(result.endDate);
-      const monthsDiff = (endDate.getFullYear() - startDate.getFullYear()) * 12 + 
-                        (endDate.getMonth() - startDate.getMonth());
-      expect(monthsDiff).toBeCloseTo(3, 0); // Allow for some variance due to different month lengths
+      expect(result.startDate).toMatch(/^\d{4}-\d{2}-01$/); // Starts on 1st of month
     });
-    
-    it('should calculate "last6" months correctly', () => {
+
+    it('should calculate "last6" months correctly (6 complete months ending prior to current)', () => {
       const result = getDateRange('last6');
       const now = new Date();
-      const expectedStart = format(subMonths(now, 6), 'yyyy-MM-dd');
-      const expectedEnd = format(now, 'yyyy-MM-dd');
-      
+      const expectedStart = format(startOfMonth(subMonths(now, 6)), 'yyyy-MM-dd');
+      const expectedEnd = format(endOfMonth(subMonths(now, 1)), 'yyyy-MM-dd');
+
       expect(result.startDate).toBe(expectedStart);
       expect(result.endDate).toBe(expectedEnd);
-      
-      // Should be approximately 6 months difference
-      const startDate = new Date(result.startDate);
-      const endDate = new Date(result.endDate);
-      const monthsDiff = (endDate.getFullYear() - startDate.getFullYear()) * 12 + 
-                        (endDate.getMonth() - startDate.getMonth());
-      expect(monthsDiff).toBeCloseTo(6, 0);
+      expect(result.startDate).toMatch(/^\d{4}-\d{2}-01$/);
     });
-    
-    it('should calculate "last12" months correctly', () => {
+
+    it('should calculate "last12" months correctly (12 complete months ending prior to current)', () => {
       const result = getDateRange('last12');
       const now = new Date();
-      const expectedStart = format(subMonths(now, 12), 'yyyy-MM-dd');
-      const expectedEnd = format(now, 'yyyy-MM-dd');
-      
+      const expectedStart = format(startOfMonth(subMonths(now, 12)), 'yyyy-MM-dd');
+      const expectedEnd = format(endOfMonth(subMonths(now, 1)), 'yyyy-MM-dd');
+
       expect(result.startDate).toBe(expectedStart);
       expect(result.endDate).toBe(expectedEnd);
-      
-      // Should be approximately 12 months (1 year) difference
-      const startDate = new Date(result.startDate);
-      const endDate = new Date(result.endDate);
-      const monthsDiff = (endDate.getFullYear() - startDate.getFullYear()) * 12 + 
-                        (endDate.getMonth() - startDate.getMonth());
-      expect(monthsDiff).toBeCloseTo(12, 0);
+      expect(result.startDate).toMatch(/^\d{4}-\d{2}-01$/);
     });
-    
-    it('should handle unknown filter with default fallback', () => {
+
+    it('should handle unknown filter with default fallback (last 6 complete months)', () => {
       const result = getDateRange('unknownFilter');
       const now = new Date();
-      const expectedStart = format(subMonths(now, 6), 'yyyy-MM-dd'); // Default is last 6 months
-      const expectedEnd = format(now, 'yyyy-MM-dd');
-      
+      const expectedStart = format(startOfMonth(subMonths(now, 6)), 'yyyy-MM-dd');
+      const expectedEnd = format(endOfMonth(subMonths(now, 1)), 'yyyy-MM-dd');
+
       expect(result.startDate).toBe(expectedStart);
       expect(result.endDate).toBe(expectedEnd);
     });

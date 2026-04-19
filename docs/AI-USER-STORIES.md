@@ -415,6 +415,7 @@
 - A user should be able to see YTD net income
 - A user should be able to see YTD average monthly spending
 - A user should be able to see top spending categories YTD
+- A user should see YTD totals computed over complete months only, excluding the current (partial) month — so in-progress months with unfunded income do not distort the apparent income/spending gap
 
 ### Cash Flow Analysis
 - A user should be able to see income vs expenses over time
@@ -425,11 +426,13 @@
 ### Date Range Options
 - A user should be able to select "This Month" as a date range option
 - A user should be able to select "Last Month" as a date range option
-- A user should be able to select "This Year" as a date range option
-- A user should be able to select "Year to Date" as a date range option
+- A user should be able to select "This Year" as a date range option (full calendar year, includes the current month)
+- A user should be able to select "Year to Date" as a date range option (Jan 1 through the end of the prior complete month — excludes the current partial month)
+- A user should be able to select "Last 3/6/12 Months" as date range options, each representing N complete months ending with the prior month (e.g., in April, "Last 3 Months" = Jan–Mar)
 - A user should have "This Month" as the default selection
 - A user should see reports update immediately when changing date ranges
 - A user should have date ranges calculate correctly regardless of current date
+- A user should not see KPIs skewed by an in-progress month whose income has not yet posted; only "This Month" and "This Year" deliberately include the current month
 
 ### Spending Trends
 - A user should be able to see spending by category over time

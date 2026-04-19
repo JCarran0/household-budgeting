@@ -44,34 +44,39 @@ export function getDateRange(option: string): DateRange {
       };
     }
     case 'yearToDate': {
+      // Exclude the current (partial) month to avoid an incomplete-income "spending gap".
       const yearStart = startOfYear(now);
+      const rangeEnd = endOfMonth(subMonths(now, 1));
       return {
         startDate: format(yearStart, 'yyyy-MM-dd'),
-        endDate: format(now, 'yyyy-MM-dd'),
+        endDate: format(rangeEnd, 'yyyy-MM-dd'),
         startMonth: format(yearStart, 'yyyy-MM'),
-        endMonth: format(now, 'yyyy-MM')
+        endMonth: format(rangeEnd, 'yyyy-MM')
       };
     }
     case 'last3':
     case 'last6':
     case 'last12': {
+      // N complete months ending with the prior month (exclusive of current).
       const months = parseInt(option.replace('last', ''));
-      const startDate = subMonths(now, months);
+      const rangeEnd = endOfMonth(subMonths(now, 1));
+      const rangeStart = startOfMonth(subMonths(now, months));
       return {
-        startDate: format(startDate, 'yyyy-MM-dd'),
-        endDate: format(now, 'yyyy-MM-dd'),
-        startMonth: format(startDate, 'yyyy-MM'),
-        endMonth: format(now, 'yyyy-MM')
+        startDate: format(rangeStart, 'yyyy-MM-dd'),
+        endDate: format(rangeEnd, 'yyyy-MM-dd'),
+        startMonth: format(rangeStart, 'yyyy-MM'),
+        endMonth: format(rangeEnd, 'yyyy-MM')
       };
     }
     default: {
-      // Default to last 6 months for backwards compatibility
-      const startDate = subMonths(now, 6);
+      // Default to last 6 complete months for backwards compatibility
+      const rangeEnd = endOfMonth(subMonths(now, 1));
+      const rangeStart = startOfMonth(subMonths(now, 6));
       return {
-        startDate: format(startDate, 'yyyy-MM-dd'),
-        endDate: format(now, 'yyyy-MM-dd'),
-        startMonth: format(startDate, 'yyyy-MM'),
-        endMonth: format(now, 'yyyy-MM')
+        startDate: format(rangeStart, 'yyyy-MM-dd'),
+        endDate: format(rangeEnd, 'yyyy-MM-dd'),
+        startMonth: format(rangeStart, 'yyyy-MM'),
+        endMonth: format(rangeEnd, 'yyyy-MM')
       };
     }
   }
