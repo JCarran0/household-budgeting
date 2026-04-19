@@ -3,8 +3,8 @@
 # =============================================================================
 # BRD: docs/features/PROJECTS-BRD.md (§4.5 Project Tasks, §5.5 Line Item Estimates)
 # Related BRD: docs/features/TASK-MANAGEMENT-BRD.md (§1.4, REQ-017a/b)
-# Status: Not Started
-# Last Updated: 2026-04-18
+# Status: Shipped (commit aba0da0 on main, 2026-04-19)
+# Last Updated: 2026-04-19
 # =============================================================================
 
 overview:
@@ -128,11 +128,53 @@ decisions:
       to recover from than a stale entity reference. Order within the sweep:
       transactions first (existing behavior), then tasks, then entity.
 
+  # ---------------------------------------------------------------------------
+  # Post-implementation decisions (surfaced during simplify pass + UAT)
+  # ---------------------------------------------------------------------------
+
+  - id: D11
+    date: 2026-04-19
+    decision: Split Projects.tsx into components/projects/; extract shared computeAllocationHint helper
+    rationale: |
+      Post-implementation simplify pass. Projects.tsx had grown to ~1330 lines
+      with four responsibilities (page, ProjectFormModal, ProjectCard, task
+      wiring). Extracted ProjectCard, ProjectFormModal, LineItemEditor into
+      frontend/src/components/projects/. Moved the "Unallocated / Over-allocated"
+      math into shared/utils/projectHelpers.ts as `computeAllocationHint`
+      (accepts a formatCurrency injector so the shared layer stays free of
+      frontend deps). Eliminated duplicated logic between edit mode (form) and
+      display mode (card). No behavior change.
+
+  - id: D12
+    date: 2026-04-19
+    decision: Allow amount=0 category budgets when line items are present
+    rationale: |
+      Bug fix. The create/edit form silently filtered out category budget rows
+      with `amount === 0` before sending to the backend, and the backend Zod
+      schema required `amount: z.number().positive()`. Users intending to
+      estimate purely via line items (amount=0 with named items) saw their
+      entire row dropped with no error. Frontend now keeps rows that have
+      `amount > 0` OR meaningful line items, and strips blank-named items on
+      save; backend accepts `z.number().nonnegative()`. D2 preserved — `amount`
+      stays authoritative and is not auto-derived from the line-item sum.
+
+  - id: D13
+    date: 2026-04-19
+    decision: Empty state shows only when both spending AND budgeted items are absent
+    rationale: |
+      UX fix. The Spending tab previously showed "No categorized spending
+      found for this project" whenever `categorySpending` was empty, hiding
+      budgeted line items on fresh projects with no actual spending yet.
+      Backend already merged spending + budget entries into categorySpending
+      (getProjectSummary), so the only change was the empty-state copy —
+      now reads "No categorized spending or budgeted items found for this
+      project" and only renders when the merged list is truly empty.
+
 # =============================================================================
 # PHASE 1: Shared Types
 # =============================================================================
 phase_1_types:
-  status: not_started
+  status: complete
   description: |
     Extend ProjectCategoryBudget with optional lineItems. No new types needed
     for the tasks tab — it reuses existing Task and Project types.
@@ -140,7 +182,7 @@ phase_1_types:
   tasks:
     - id: "1.1"
       task: Extend ProjectCategoryBudget in shared/types/index.ts
-      status: not_started
+      status: complete
       details: |
         Add optional lineItems field and a new ProjectLineItem interface:
 
@@ -163,7 +205,7 @@ phase_1_types:
 
     - id: "1.2"
       task: Update CreateProjectDto / UpdateProjectDto Zod schemas
-      status: not_started
+      status: complete
       details: |
         In backend/src/routes/projects.ts the Zod schemas for categoryBudgets
         accept lineItems arrays with the fields above. Validate:
@@ -177,7 +219,7 @@ phase_1_types:
 # PHASE 2: Backend — Line Items & Task Tag Sweeps
 # =============================================================================
 phase_2_backend:
-  status: not_started
+  status: complete
   description: |
     Two narrow changes in ProjectService:
       - Ensure line items persist correctly (mostly a pass-through; confirm
@@ -191,7 +233,7 @@ phase_2_backend:
   tasks:
     - id: "2.1"
       task: Persist line item ids in ProjectService.createProject / updateProject
-      status: not_started
+      status: complete
       details: |
         When saving a project:
           - For each categoryBudget.lineItems entry without an id, assign uuidv4()
@@ -201,7 +243,7 @@ phase_2_backend:
 
     - id: "2.2"
       task: Add removeTagFromTasks helper in ProjectService
-      status: not_started
+      status: complete
       details: |
         Mirror the existing removeTagFromTransactions private helper. Operates
         on the `tasks_{familyId}` store directly for batch efficiency.
@@ -217,14 +259,14 @@ phase_2_backend:
 
     - id: "2.3"
       task: Add renameTagOnTasks helper in ProjectService
-      status: not_started
+      status: complete
       details: |
         Mirror renameTagOnTransactions. Replace all occurrences of oldTag
         with newTag in each task's tags array. Save only if changed.
 
     - id: "2.4"
       task: Call task sweep helpers from deleteProject and updateProject
-      status: not_started
+      status: complete
       details: |
         In deleteProject: call removeTagFromTasks AFTER removeTagFromTransactions
         and BEFORE removing the entity (D10 order — data stores first, entity last).
@@ -239,7 +281,7 @@ phase_2_backend:
 
     - id: "2.5"
       task: Verify project route validation accepts line item payloads
-      status: not_started
+      status: complete
       details: |
         Integration-test the POST /api/v1/projects and PUT /api/v1/projects/:id
         endpoints with categoryBudgets containing lineItems. Confirm:
@@ -252,7 +294,7 @@ phase_2_backend:
 # PHASE 3: Frontend — Line Item Estimates UI
 # =============================================================================
 phase_3_frontend_line_items:
-  status: not_started
+  status: complete
   description: |
     Add line item editing to the project create/edit form, and line item
     display to the project detail view.
@@ -260,7 +302,7 @@ phase_3_frontend_line_items:
   tasks:
     - id: "3.1"
       task: Extend project create/edit modal to support line items
-      status: not_started
+      status: complete
       details: |
         File: the existing project form modal (created in PROJECTS-PLAN phase 4.5).
 
@@ -284,7 +326,7 @@ phase_3_frontend_line_items:
 
     - id: "3.2"
       task: Display line items in project detail view (always shown)
-      status: not_started
+      status: complete
       details: |
         File: the accordion expansion in Projects.tsx (built in PROJECTS-PLAN phase 4.4).
 
@@ -306,7 +348,7 @@ phase_3_frontend_line_items:
 
     - id: "3.3"
       task: Manual testing — line items
-      status: not_started
+      status: complete
       details: |
         - [ ] Create a new project with line items under one category
         - [ ] Verify line items persist after page reload
@@ -322,7 +364,7 @@ phase_3_frontend_line_items:
 # PHASE 4: Frontend — Project Tasks Tab
 # =============================================================================
 phase_4_frontend_tasks_tab:
-  status: not_started
+  status: complete
   description: |
     New Tasks tab inside the project detail accordion. Pulls tasks from the
     existing task list endpoint, filters by project tag on the frontend.
@@ -331,7 +373,7 @@ phase_4_frontend_tasks_tab:
   tasks:
     - id: "4.1"
       task: Add "Tasks" tab to project detail accordion
-      status: not_started
+      status: complete
       details: |
         File: Projects.tsx project detail section.
 
@@ -356,7 +398,7 @@ phase_4_frontend_tasks_tab:
 
     - id: "4.2"
       task: Render the project tasks list inside the Tasks tab
-      status: not_started
+      status: complete
       details: |
         Use the same TaskCard component as the Kanban board
         (frontend/src/components/tasks/TaskCard.tsx), rendered as a vertical
@@ -374,7 +416,7 @@ phase_4_frontend_tasks_tab:
 
     - id: "4.3"
       task: Add "+ Add Task" button that pre-tags with the project's tag
-      status: not_started
+      status: complete
       details: |
         Button sits at the top of the Tasks tab. Clicking opens the existing
         full task creation form with the project tag pre-populated in the
@@ -395,7 +437,7 @@ phase_4_frontend_tasks_tab:
 
     - id: "4.4"
       task: Add inverse project chip to TaskCard and task detail
-      status: not_started
+      status: complete
       details: |
         File: frontend/src/components/tasks/TaskCard.tsx and the task detail modal.
 
@@ -418,7 +460,7 @@ phase_4_frontend_tasks_tab:
 
     - id: "4.5"
       task: Wire project accordion deep-link via URL param
-      status: not_started
+      status: complete
       details: |
         The chip navigates to /projects?expand={projectId}. Projects.tsx
         must read this param on mount and auto-expand the matching project
@@ -430,7 +472,7 @@ phase_4_frontend_tasks_tab:
 
     - id: "4.6"
       task: Manual testing — tasks tab
-      status: not_started
+      status: complete
       details: |
         - [ ] Create a project; Tasks tab shows "0 of 0 complete" and empty state
         - [ ] Click + Add Task from the project; form has the project tag locked
@@ -452,7 +494,7 @@ phase_4_frontend_tasks_tab:
 # PHASE 5: Testing
 # =============================================================================
 phase_5_testing:
-  status: not_started
+  status: complete
   description: |
     Risk-based. Focus on the tag-sweep paths (rename / delete) and line item
     persistence round-trips. The Tasks tab is mostly read-only UI composition
@@ -461,7 +503,7 @@ phase_5_testing:
   tasks:
     - id: "5.1"
       task: Extend ProjectService integration tests for task tag sweeps
-      status: not_started
+      status: complete
       details: |
         File: backend/src/__tests__/integration/projectService.test.ts
         (or create if not yet present).
@@ -477,7 +519,7 @@ phase_5_testing:
 
     - id: "5.2"
       task: Round-trip test for line items on create/update
-      status: not_started
+      status: complete
       details: |
         - Create a project with categoryBudgets containing lineItems; verify
           server generates ids and persists all fields
@@ -488,7 +530,7 @@ phase_5_testing:
 
     - id: "5.3"
       task: Unit test the filterTasksForProject helper
-      status: not_started
+      status: complete
       details: |
         File: frontend/src/lib/__tests__/projectTaskFilters.test.ts
 
