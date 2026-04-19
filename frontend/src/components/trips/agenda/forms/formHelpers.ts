@@ -1,8 +1,19 @@
 import { format } from 'date-fns';
 
-/** Convert a Date (local midnight) to YYYY-MM-DD. */
-export function dateToIso(date: Date | null): string | null {
+/**
+ * Convert a Mantine date-picker value to YYYY-MM-DD.
+ *
+ * Mantine 8's DatePickerInput emits YYYY-MM-DD strings via onChange (see
+ * `@mantine/dates` useUncontrolledDates → toDateString), but the form's
+ * initial value may still be a Date we constructed ourselves. Accept both.
+ *
+ * Do NOT pipe a string through date-fns `format` here — in v4, `format`
+ * parses a YYYY-MM-DD string as UTC midnight and re-formats it in local
+ * time, shifting the result back one day in every timezone west of UTC.
+ */
+export function dateToIso(date: Date | string | null): string | null {
   if (!date) return null;
+  if (typeof date === 'string') return date.slice(0, 10);
   return format(date, 'yyyy-MM-dd');
 }
 

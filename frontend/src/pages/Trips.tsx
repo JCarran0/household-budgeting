@@ -71,6 +71,15 @@ interface TripFormValues {
   photoAlbumUrl: string;
 }
 
+// Mantine 8's DatePickerInput returns YYYY-MM-DD strings on change but our
+// form state may still hold the initial Date object. Piping a string through
+// date-fns `format` reparses it as UTC midnight and shifts the day back in
+// any timezone west of UTC — pass strings through untouched.
+function pickerToYmd(value: Date | string): string {
+  if (typeof value === 'string') return value.slice(0, 10);
+  return format(value, 'yyyy-MM-dd');
+}
+
 // ---------------------------------------------------------------------------
 // TripFormModal — create or edit a trip
 // ---------------------------------------------------------------------------
@@ -167,7 +176,7 @@ export function TripFormModal({ opened, onClose, trip }: TripFormModalProps) {
   const tagPreview = useMemo(() => {
     const { name, startDate } = form.values;
     if (!name.trim() || !startDate) return null;
-    return generateTripTag(name.trim(), format(startDate, 'yyyy-MM-dd'));
+    return generateTripTag(name.trim(), pickerToYmd(startDate));
   }, [form.values]);
 
   // Create mutation
@@ -222,8 +231,8 @@ export function TripFormModal({ opened, onClose, trip }: TripFormModalProps) {
   const handleSubmit = (values: TripFormValues) => {
     if (!values.startDate || !values.endDate) return;
 
-    const startDateStr = format(values.startDate, 'yyyy-MM-dd');
-    const endDateStr = format(values.endDate, 'yyyy-MM-dd');
+    const startDateStr = pickerToYmd(values.startDate);
+    const endDateStr = pickerToYmd(values.endDate);
     const totalBudget =
       values.totalBudget === '' || values.totalBudget === null
         ? null

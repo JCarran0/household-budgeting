@@ -561,7 +561,10 @@ function TaskKebabMenu({ task, members, callbacks }: TaskKebabMenuProps) {
   const [confirmCancel, setConfirmCancel] = useState(false);
   const [dueDateOpen, setDueDateOpen] = useState(false);
   const [customSnoozeOpen, setCustomSnoozeOpen] = useState(false);
-  const [customSnoozeDate, setCustomSnoozeDate] = useState<Date | null>(null);
+  // Mantine 8's DatePickerInput emits YYYY-MM-DD strings. Keep state as a
+  // string to avoid a Date round-trip that shifts the day in timezones west
+  // of UTC (see formHelpers.dateToIso).
+  const [customSnoozeDate, setCustomSnoozeDate] = useState<string | null>(null);
 
   const isDone = task.status === 'done';
   const isStarted = task.status === 'started';
@@ -575,8 +578,7 @@ function TaskKebabMenu({ task, members, callbacks }: TaskKebabMenuProps) {
 
   const confirmCustomSnooze = () => {
     if (!customSnoozeDate) return;
-    const ymd = format(customSnoozeDate, 'yyyy-MM-dd');
-    const iso = resolveSnoozeDate('custom', new Date(), new Date().getTimezoneOffset(), ymd);
+    const iso = resolveSnoozeDate('custom', new Date(), new Date().getTimezoneOffset(), customSnoozeDate);
     callbacks.onSnooze(task, iso);
     setCustomSnoozeOpen(false);
     setCustomSnoozeDate(null);
@@ -758,7 +760,7 @@ function TaskKebabMenu({ task, members, callbacks }: TaskKebabMenuProps) {
           <DatePickerInput
             label="Wake date"
             value={customSnoozeDate}
-            onChange={(val) => setCustomSnoozeDate(val ? new Date(val) : null)}
+            onChange={setCustomSnoozeDate}
             minDate={new Date()}
             highlightToday
             popoverProps={{ withinPortal: true }}

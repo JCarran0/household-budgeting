@@ -4,6 +4,7 @@ import { format } from 'date-fns';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { notifications } from '@mantine/notifications';
 import { useTransactionFilters } from '../hooks/usePersistedFilters';
+import { parseDateFromStorage } from '../stores/filterStore';
 import { useCategoryOptions } from '../hooks/useCategoryOptions';
 import { useTransactionData } from '../hooks/useTransactionData';
 import { useTransactionBulkOps } from '../hooks/useTransactionBulkOps';
@@ -174,19 +175,22 @@ export function EnhancedTransactions() {
         setSelectedCategories([]);
       }
 
+      // `new Date("YYYY-MM-DD")` parses as UTC midnight, which then reads as
+      // the previous day under `getDate()`/`format()` in any timezone west of
+      // UTC. Use the local-date parser instead.
       if (dateFilterParam) {
         setDateFilterOption(dateFilterParam as DateFilterOption);
         if (dateFilterParam === 'custom' && startDate && endDate) {
-          setCustomDateRange([new Date(startDate), new Date(endDate)]);
+          setCustomDateRange([parseDateFromStorage(startDate), parseDateFromStorage(endDate)]);
         }
       } else if (timeRangeFilter) {
         const dateFilterValue = convertTimeRangeToDateFilter(timeRangeFilter);
         setDateFilterOption(dateFilterValue);
         if (dateFilterValue === 'custom' && startDate && endDate) {
-          setCustomDateRange([new Date(startDate), new Date(endDate)]);
+          setCustomDateRange([parseDateFromStorage(startDate), parseDateFromStorage(endDate)]);
         }
       } else if (startDate && endDate) {
-        setCustomDateRange([new Date(startDate), new Date(endDate)]);
+        setCustomDateRange([parseDateFromStorage(startDate), parseDateFromStorage(endDate)]);
         setDateFilterOption('custom');
       }
 

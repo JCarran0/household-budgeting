@@ -80,7 +80,10 @@ export function TaskCard({ task, members, onClick, onSnooze, onCancel, onEdit, i
   const projectTagLookup = useProjectTagLookup();
   const [confirmCancelOpen, setConfirmCancelOpen] = useState(false);
   const [customSnoozeOpen, setCustomSnoozeOpen] = useState(false);
-  const [customSnoozeDate, setCustomSnoozeDate] = useState<Date | null>(null);
+  // Mantine 8's DatePickerInput emits YYYY-MM-DD strings. Keep state as a
+  // string to avoid a Date round-trip that shifts the day in timezones west
+  // of UTC (see formHelpers.dateToIso).
+  const [customSnoozeDate, setCustomSnoozeDate] = useState<string | null>(null);
 
   const assignee = members.find((m) => m.userId === task.assigneeId);
   const isOverdue = task.dueDate && task.status !== 'done' && task.status !== 'cancelled'
@@ -104,8 +107,7 @@ export function TaskCard({ task, members, onClick, onSnooze, onCancel, onEdit, i
 
   const handleCustomSnoozeConfirm = () => {
     if (!onSnooze || !customSnoozeDate) return;
-    const ymd = format(customSnoozeDate, 'yyyy-MM-dd');
-    const iso = resolveSnoozeDate('custom', new Date(), new Date().getTimezoneOffset(), ymd);
+    const iso = resolveSnoozeDate('custom', new Date(), new Date().getTimezoneOffset(), customSnoozeDate);
     onSnooze(task.id, iso);
     setCustomSnoozeOpen(false);
     setCustomSnoozeDate(null);
@@ -316,7 +318,7 @@ export function TaskCard({ task, members, onClick, onSnooze, onCancel, onEdit, i
           <DatePickerInput
             label="Wake date"
             value={customSnoozeDate}
-            onChange={(val) => setCustomSnoozeDate(val ? new Date(val) : null)}
+            onChange={setCustomSnoozeDate}
             minDate={new Date()}
             highlightToday
             popoverProps={{ withinPortal: true }}

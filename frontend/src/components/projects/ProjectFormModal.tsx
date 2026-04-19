@@ -40,6 +40,15 @@ interface ProjectFormValues {
   categoryBudgets: ProjectCategoryBudgetInput[];
 }
 
+// Mantine 8's DatePickerInput returns YYYY-MM-DD strings on change but our
+// form state may still hold the initial Date object. Piping a string through
+// date-fns `format` reparses it as UTC midnight and shifts the day back in
+// any timezone west of UTC — pass strings through untouched.
+function pickerToYmd(value: Date | string): string {
+  if (typeof value === 'string') return value.slice(0, 10);
+  return format(value, 'yyyy-MM-dd');
+}
+
 interface ProjectFormModalProps {
   opened: boolean;
   onClose: () => void;
@@ -113,7 +122,7 @@ export function ProjectFormModal({ opened, onClose, project }: ProjectFormModalP
   const tagPreview = useMemo(() => {
     const { name, startDate } = form.values;
     if (!name.trim() || !startDate) return null;
-    return generateProjectTag(name.trim(), format(startDate, 'yyyy-MM-dd'));
+    return generateProjectTag(name.trim(), pickerToYmd(startDate));
   }, [form.values]);
 
   const createMutation = useMutation({
@@ -166,8 +175,8 @@ export function ProjectFormModal({ opened, onClose, project }: ProjectFormModalP
   const handleSubmit = (values: ProjectFormValues) => {
     if (!values.startDate || !values.endDate) return;
 
-    const startDateStr = format(values.startDate, 'yyyy-MM-dd');
-    const endDateStr = format(values.endDate, 'yyyy-MM-dd');
+    const startDateStr = pickerToYmd(values.startDate);
+    const endDateStr = pickerToYmd(values.endDate);
     const totalBudget =
       values.totalBudget === '' || values.totalBudget === null
         ? null
