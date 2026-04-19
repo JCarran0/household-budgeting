@@ -317,6 +317,7 @@ export function TaskCard({ task, members, onClick, onSnooze, onCancel, onEdit, i
             value={customSnoozeDate}
             onChange={(val) => setCustomSnoozeDate(val ? new Date(val) : null)}
             minDate={new Date()}
+            highlightToday
             popoverProps={{ withinPortal: true }}
           />
           <Text size="xs" c="dimmed">Task will reappear at 6am local.</Text>

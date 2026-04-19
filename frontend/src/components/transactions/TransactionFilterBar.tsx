@@ -301,6 +301,7 @@ export function TransactionFilterBar({
                 }}
                 leftSection={<IconCalendar size={16} />}
                 clearable
+                highlightToday
                 popoverProps={{ withinPortal: true, zIndex: 1000 }}
               />
               <Group gap="xs" justify="flex-end">

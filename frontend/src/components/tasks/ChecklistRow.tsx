@@ -713,6 +713,7 @@ function TaskKebabMenu({ task, members, callbacks }: TaskKebabMenuProps) {
               callbacks.onDueDateChange(task, iso);
             }}
             clearable
+            highlightToday
             popoverProps={{ withinPortal: true }}
           />
           <Group justify="flex-end">
@@ -757,6 +758,7 @@ function TaskKebabMenu({ task, members, callbacks }: TaskKebabMenuProps) {
             value={customSnoozeDate}
             onChange={(val) => setCustomSnoozeDate(val ? new Date(val) : null)}
             minDate={new Date()}
+            highlightToday
             popoverProps={{ withinPortal: true }}
           />
           <Text size="xs" c="dimmed">Task will reappear at 6am local.</Text>

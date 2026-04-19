@@ -166,6 +166,7 @@ export function TaskActionCardEditForm({
           label="Due Date"
           clearable
           size="sm"
+          highlightToday
           {...form.getInputProps('dueDate')}
         />
         <SegmentedControl

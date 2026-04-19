@@ -269,6 +269,7 @@ export function ProjectFormModal({ opened, onClose, project }: ProjectFormModalP
               placeholder="Pick start date"
               required
               valueFormat="MMM D, YYYY"
+              highlightToday
               {...form.getInputProps('startDate')}
             />
             <DatePickerInput
@@ -276,6 +277,7 @@ export function ProjectFormModal({ opened, onClose, project }: ProjectFormModalP
               placeholder="Pick end date"
               required
               valueFormat="MMM D, YYYY"
+              highlightToday
               minDate={form.values.startDate ?? undefined}
               {...form.getInputProps('endDate')}
             />
