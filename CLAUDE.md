@@ -1,701 +1,243 @@
 # Family Tracker — Development Guide
 
-## Project Overview
-Building **Family Tracker** — a family-scale app for 2 users covering personal budgeting (with Plaid integration), shared tasks, and trip tracking. Formerly branded "Household Budgeting App" / "Budget Tracker"; the chatbot was renamed from "Budget Bot" to "Helper Bot" in the same rebrand. Using Risk-Based Testing with TypeScript strict mode for rapid, type-safe development.
+Family-scale app for 2 users: personal budgeting (with Plaid), shared tasks, trips, and projects. Formerly branded "Household Budgeting App" / "Budget Tracker"; the chatbot was renamed from "Budget Bot" to "Helper Bot" in the same rebrand. Risk-based testing, TypeScript strict mode.
 
-## 📚 Documentation Index for AI Agents
+## 📚 Documentation Index
 
-### Quick Navigation Map
-| Document | Purpose | When to Use |
-|----------|---------|-------------|
-| **[AI-APPLICATION-ARCHITECTURE.md](docs/AI-APPLICATION-ARCHITECTURE.md)** | Technical implementation guide | Adding features, understanding service patterns, modifying APIs |
-| **[AI-DEPLOYMENTS.md](docs/AI-DEPLOYMENTS.md)** | Operational procedures | Deploying code, troubleshooting production, configuring CI/CD |
-| **[AI-Architecture-Plan.md](docs/completed/AI-Architecture-Plan.md)** | Strategic planning & costs (historical) | Infrastructure cost analysis, architecture decisions from initial deployment |
-| **[AI-TESTING-STRATEGY.md](docs/AI-TESTING-STRATEGY.md)** | Test philosophy & examples | Writing tests, understanding test patterns, debugging test failures |
-| **[AI-USER-STORIES.md](docs/AI-USER-STORIES.md)** | Product requirements | Understanding features, acceptance criteria, user scenarios |
-| **[AI-TECHNICAL-DEBT.md](docs/completed/AI-TECHNICAL-DEBT.md)** | Technical debt tracking | Reviewing known issues, planning improvements, understanding workarounds |
-| **[AI-CHATBOT-BRD.md](docs/features/AI-CHATBOT-BRD.md)** | AI chatbot requirements | Chatbot feature requirements, security model, tool definitions |
-| **[AI-CHATBOT-PLAN.yaml](docs/features/AI-CHATBOT-PLAN.yaml)** | AI chatbot implementation plan | Phase-by-phase implementation with decisions log |
-| **[AI-CATEGORIZATION-BRD.md](docs/features/AI-CATEGORIZATION-BRD.md)** | AI categorization requirements | Bulk categorization feature requirements and UX flow |
-| **[AI-CATEGORIZATION-PLAN.yaml](docs/features/AI-CATEGORIZATION-PLAN.yaml)** | AI categorization plan | Implementation phases with decisions log |
-| **[CATEGORY-HIERARCHY-BUDGETING-BRD.md](docs/features/CATEGORY-HIERARCHY-BUDGETING-BRD.md)** | Parent/child budget rollup semantics | Canonical aggregation rules (max for budgets, additive for actuals); Reports widget rollup behavior; chatbot tool aggregation_level field |
-| **[CATEGORY-HIERARCHY-BUDGETING-PLAN.yaml](docs/features/CATEGORY-HIERARCHY-BUDGETING-PLAN.yaml)** | Hierarchy rollup implementation plan | Phase-by-phase rollup utility + widget refactor + audit script |
-| **[TRIP-ITINERARIES-BRD.md](docs/features/TRIP-ITINERARIES-BRD.md)** | Trip itinerary/agenda requirements | Stop entity (Stay/Eat/Play/Transit), agenda view at /trips/:tripId, night-based Stay dates, no-overlap rule; extends TRAVEL-TAGGING-BRD |
-| **[TRIP-ITINERARIES-PLAN.yaml](docs/features/TRIP-ITINERARIES-PLAN.yaml)** | Trip itineraries implementation plan | Phase-by-phase plan: shared types → backend CRUD → detail view → agenda → stop creation → empty states → polish |
-| **[PROJECTS-ENHANCEMENTS-PLAN.yaml](docs/features/PROJECTS-ENHANCEMENTS-PLAN.yaml)** | Projects enhancements implementation plan | Line Item Estimates (§5.5) + Project Tasks Tab (§4.5) additive to shipped Projects; no breaking data changes |
-| **[TASK-MANAGEMENT-BRD.md](docs/features/TASK-MANAGEMENT-BRD.md)** | Task management requirements (v2.0) | Kanban + Checklist views, subtasks, snooze (`snoozedUntil` field), manual reorder (`sortOrder` fractional float, family-wide, per-status), Cancelled column retired, leaderboard counts family-scope only |
-| **[TASK-MANAGEMENT-ENHANCEMENTS-PLAN.yaml](docs/features/TASK-MANAGEMENT-ENHANCEMENTS-PLAN.yaml)** | Task v2.0 implementation plan | Slice A (data model + Kanban changes) → Slice B (Checklist view); 17 decisions codified; shared utils for snooze-date resolution and sortOrder fractional indexing |
+| Document | Purpose |
+|----------|---------|
+| [AI-APPLICATION-ARCHITECTURE.md](docs/AI-APPLICATION-ARCHITECTURE.md) | Service patterns, API structure, data flow |
+| [AI-DEPLOYMENTS.md](docs/AI-DEPLOYMENTS.md) | CI/CD, AWS infra, production ops |
+| [AI-TESTING-STRATEGY.md](docs/AI-TESTING-STRATEGY.md) | Test philosophy, examples, troubleshooting |
+| [AI-USER-STORIES.md](docs/AI-USER-STORIES.md) | Product requirements, acceptance criteria |
+| [AWS-LOCAL-SETUP.md](docs/AWS-LOCAL-SETUP.md) | Local dev with synced production data |
+| [completed/AI-TECHNICAL-DEBT.md](docs/completed/AI-TECHNICAL-DEBT.md) | Known issues, workarounds |
+| [completed/AI-Architecture-Plan.md](docs/completed/AI-Architecture-Plan.md) | Historical cost analysis & ADRs |
 
-### Document Contents Overview
+### Feature BRDs & Plans
+| Feature | BRD | Plan |
+|---------|-----|------|
+| AI Chatbot | [AI-CHATBOT-BRD.md](docs/features/AI-CHATBOT-BRD.md) | [AI-CHATBOT-PLAN.yaml](docs/features/AI-CHATBOT-PLAN.yaml) |
+| AI Categorization | [AI-CATEGORIZATION-BRD.md](docs/features/AI-CATEGORIZATION-BRD.md) | [AI-CATEGORIZATION-PLAN.yaml](docs/features/AI-CATEGORIZATION-PLAN.yaml) |
+| AI Amazon Receipts | [AI-AMAZON-RECEIPT-BRD.md](docs/features/AI-AMAZON-RECEIPT-BRD.md) | [AI-AMAZON-RECEIPT-PLAN.yaml](docs/features/AI-AMAZON-RECEIPT-PLAN.yaml) |
+| AI Chat Actions | [AI-CHAT-ACTIONS-BRD.md](docs/features/AI-CHAT-ACTIONS-BRD.md) | [AI-CHAT-ACTIONS-PLAN.yaml](docs/features/AI-CHAT-ACTIONS-PLAN.yaml) |
+| Category Hierarchy | [CATEGORY-HIERARCHY-BUDGETING-BRD.md](docs/features/CATEGORY-HIERARCHY-BUDGETING-BRD.md) | [CATEGORY-HIERARCHY-BUDGETING-PLAN.yaml](docs/features/CATEGORY-HIERARCHY-BUDGETING-PLAN.yaml) |
+| Trip Itineraries | [TRIP-ITINERARIES-BRD.md](docs/features/TRIP-ITINERARIES-BRD.md) | [TRIP-ITINERARIES-PLAN.yaml](docs/features/TRIP-ITINERARIES-PLAN.yaml) |
+| Projects | [PROJECTS-BRD.md](docs/features/PROJECTS-BRD.md) | [PROJECTS-ENHANCEMENTS-PLAN.yaml](docs/features/PROJECTS-ENHANCEMENTS-PLAN.yaml) |
+| Task Management v2.0 | [TASK-MANAGEMENT-BRD.md](docs/features/TASK-MANAGEMENT-BRD.md) | [TASK-MANAGEMENT-ENHANCEMENTS-PLAN.yaml](docs/features/TASK-MANAGEMENT-ENHANCEMENTS-PLAN.yaml) |
 
-#### Technical Architecture
-**[docs/AI-APPLICATION-ARCHITECTURE.md](docs/AI-APPLICATION-ARCHITECTURE.md)** - Core technical guide
-- Service architecture (singleton patterns, JWT handling)
-- API structure and patterns
-- Data flow and storage patterns
-- Frontend component organization
-- Common modification tasks with examples
+## 🤖 Critical Rules — Never Violate
 
-#### Deployment and Operations
-**[docs/AI-DEPLOYMENTS.md](docs/AI-DEPLOYMENTS.md)** - Operational playbook
-- GitHub Actions CI/CD configuration
-- AWS infrastructure management via SSM
-- Environment variable setup
-- Troubleshooting production issues
-- Monitoring and logging
+1. **Never use `any` types** — use `unknown` with type guards, generics, or proper types
+2. **Never commit secrets** — all sensitive data goes through environment variables
+3. **Never skip security validation** — validate inputs (Zod), sanitize outputs
+4. **Never modify production directly** — all changes go through GitHub → CI/CD
+5. **Never ignore TypeScript errors** — fix them properly, don't suppress
 
-**[docs/AWS-LOCAL-SETUP.md](docs/AWS-LOCAL-SETUP.md)** - Local development with production data
-- AWS credentials setup for developers
-- Production data sync utilities
-- Security best practices for handling production data
-- Troubleshooting AWS authentication issues
+## 🔧 Critical Files
 
-**[docs/completed/AI-Architecture-Plan.md](docs/completed/AI-Architecture-Plan.md)** - Strategic planning (historical)
-- Cost analysis and projections ($10/month target)
-- Architecture Decision Records (ADRs)
-- Risk assessment framework
-- Terraform infrastructure code
-- Deployment milestones and timeline
+**Core:**
+- `backend/src/services/authService.ts` — JWT auth
+- `backend/src/services/accountService.ts` — account management
+- `frontend/src/App.tsx` — frontend entry
+- `frontend/src/lib/api.ts` — API client
 
-#### Testing Strategy
-**[docs/AI-TESTING-STRATEGY.md](docs/AI-TESTING-STRATEGY.md)** - Test guidance
-- Risk-based testing philosophy
-- Integration > unit test approach
-- Real code examples from the codebase
-- Anti-patterns and lessons learned
-- Test troubleshooting guide
+**Financial calculations (always use shared utils, never duplicate):**
+- `shared/utils/transactionCalculations.ts` — transfer exclusion
+- `shared/utils/budgetCalculations.ts` — budget rollup (`buildCategoryTreeAggregation`, `classifyTreeBudgetState`, `isTreeUnused`, `isTreeOverBudget`)
+- `backend/src/services/transactionReader.ts` — canonical removed-transaction filter; all read paths must use this
 
-**[docs/AI-USER-STORIES.md](docs/AI-USER-STORIES.md)** - Product requirements
-- Complete user story specifications
-- Acceptance criteria for each feature
-- UI/UX requirements
-- Test scenarios and edge cases
+**AI:**
+- `backend/src/services/chatbotService.ts` + `chatbotDataService.ts` (read-only security boundary) + `chatbotPrompt.ts`
+- `backend/src/services/chatActions/registry.ts` + `proposalStore.ts` — chat action cards
+- `backend/src/services/categorizationService.ts` — bulk AI categorization
+- `backend/src/services/amazonReceiptService.ts` + `amazonReceiptPrompt.ts`
+- `frontend/src/components/chat/ChatOverlay.tsx` + `ActionCard.tsx`
 
-## 🔧 Common AI Agent Tasks - Quick Reference
+**Trips:**
+- `frontend/src/pages/TripDetail.tsx` — `/trips/:tripId` (Itinerary / Spending / Notes)
+- `frontend/src/components/trips/agenda/Agenda.tsx`, `AddStopSheet.tsx`
+- `backend/src/services/tripService.ts` — nested stop CRUD + `StayOverlapError`
+- `shared/utils/tripHelpers.ts` — `validateNoStayOverlap`, `computeAgendaDayRange`, `groupStopsByDay`, `findActiveStay`, `isTransitBaseChange`
 
-### Adding New Features
-| Task | Instructions | Reference |
-|------|-------------|-----------|
-| **Add API endpoint** | 1. Create route in `backend/src/routes/`<br>2. Add service method in `backend/src/services/`<br>3. Update API client in `frontend/src/lib/api.ts` | [Architecture Guide](docs/AI-APPLICATION-ARCHITECTURE.md#to-add-a-new-api-endpoint) |
-| **Add React page** | 1. Create component in `frontend/src/pages/`<br>2. Add route in `frontend/src/App.tsx`<br>3. Update navigation if needed | [Architecture Guide](docs/AI-APPLICATION-ARCHITECTURE.md#to-add-a-new-page) |
-| **Add database model** | 1. Create interface in `backend/src/types/`<br>2. Add service in `backend/src/services/`<br>3. Use StorageService for persistence | [Architecture Guide](docs/AI-APPLICATION-ARCHITECTURE.md#service-architecture) |
-
-### Deployment Tasks
-| Task | Command/Action | Reference |
-|------|---------------|-----------|
-| **Release and deploy** | GitHub Actions → "Release and Deploy to Production" workflow | [Deployment Guide](docs/AI-DEPLOYMENTS.md#integrated-release-and-deployment-recommended) |
-| **Deploy only (no release)** | GitHub Actions → "Deploy to Production" workflow | [Deployment Guide](docs/AI-DEPLOYMENTS.md#legacy-deployment-without-release) |
-| **Manual deployment** | Run `./scripts/deploy-server.sh` from project root | [Deployment Guide](docs/AI-DEPLOYMENTS.md#manual-deployment) |
-| **Check deployment logs** | AWS SSM Session Manager or CloudWatch | [Deployment Guide](docs/AI-DEPLOYMENTS.md#monitoring-and-logs) |
-| **Update environment vars** | GitHub Settings → Secrets/Variables → Actions | [Deployment Guide](docs/AI-DEPLOYMENTS.md#deployment-configuration) |
-
-### Testing Tasks
-| Task | Command | Reference |
-|------|---------|-----------|
-| **Run all tests** | `npm test` in backend or frontend directory | [Testing Guide](docs/AI-TESTING-STRATEGY.md#running-tests) |
-| **Run specific test** | `npm test -- path/to/test.spec.ts` | [Testing Guide](docs/AI-TESTING-STRATEGY.md#running-tests) |
-| **Add integration test** | Create in `backend/src/__tests__/integration/` | [Testing Guide](docs/AI-TESTING-STRATEGY.md#integration-test-examples) |
-| **Debug test failures** | Check for auth tokens, async issues, mock problems | [Testing Guide](docs/AI-TESTING-STRATEGY.md#troubleshooting-test-failures) |
-
-### Common Debugging
-| Issue | Solution | Reference |
-|-------|----------|-----------|
-| **Plaid connection errors** | Check PLAID_PRODUCTS doesn't include "accounts" | [Architecture Guide](docs/AI-APPLICATION-ARCHITECTURE.md#common-plaid-issues) |
-| **Auth failures** | Verify JWT_SECRET is set, check token expiration | [Architecture Guide](docs/AI-APPLICATION-ARCHITECTURE.md#authentication-flow) |
-| **S3 storage issues** | Verify STORAGE_TYPE=s3 and bucket permissions | [Deployment Guide](docs/AI-DEPLOYMENTS.md#storage-configuration) |
-| **Budget calculation inconsistencies** | Use shared utilities from `shared/utils/budgetCalculations.ts` instead of duplicate logic | [Architecture Guide](docs/AI-APPLICATION-ARCHITECTURE.md#budget-calculation-utilities) |
-| **TypeScript errors** | Never use `any`, use `unknown` with type guards | See TypeScript section below |
-| **Account shows "requires_reauth"** | User needs to re-authenticate via "Sign in to Bank" in account menu | [Architecture Guide](docs/AI-APPLICATION-ARCHITECTURE.md#re-authentication-flow) |
-| **Sync shows success but account not updated** | Check for `warning` field in response - some accounts may need re-auth | [Architecture Guide](docs/AI-APPLICATION-ARCHITECTURE.md#account-management) |
-
-### File Locations Quick Reference
+## File Layout
 ```
-backend/
-├── src/
-│   ├── routes/        # API endpoints
-│   ├── services/      # Business logic (singletons)
-│   ├── middleware/    # Auth, error handling
-│   ├── types/         # TypeScript interfaces
-│   └── __tests__/     # Backend tests
-frontend/
-├── src/
-│   ├── pages/         # Route components
-│   ├── components/    # Reusable UI components
-│   ├── lib/api.ts     # API client
-│   └── hooks/         # React hooks
-docs/
-├── AI-*.md            # AI agent documentation
-terraform/             # Infrastructure as code
-scripts/               # Deployment scripts
+backend/src/{routes,services,middleware,types,__tests__}/
+frontend/src/{pages,components,lib,hooks}/
+shared/{types,utils}/
+docs/{features,AI-*.md,information-security}/
+terraform/   scripts/
 ```
+
+## Common Debugging
+| Issue | Fix |
+|-------|-----|
+| Plaid: `invalid product names: [accounts]` | Remove `accounts` from `PLAID_PRODUCTS` — it's included automatically with `transactions` |
+| Plaid Link phone validation | Enter with country code: `+15551234567` (no spaces/dashes) |
+| Account shows `requires_reauth` | User re-auths via "Sign in to Bank" in account menu (Plaid Link update mode) |
+| Sync returns success but account not updated | Check for `warning` field in response — account may need re-auth |
+| Budget calculation inconsistencies | Use `shared/utils/budgetCalculations.ts`, never duplicate |
+| Transfer double-counting | Use `shared/utils/transactionCalculations.ts` — it excludes transfers |
+| TypeScript `any` errors | Use `unknown` + type guards; see [AI-APPLICATION-ARCHITECTURE.md](docs/AI-APPLICATION-ARCHITECTURE.md) |
 
 ## Development Philosophy
+- **Risk-based testing** — test what could break the business or lose money (auth, financial calc, data integrity). Integration > unit tests; use real Plaid sandbox, not mocks. Add tests when you find bugs or complex logic. Skip trivial tests.
+- **Spike and stabilize** — build fast, add tests for bugs/complexity.
+- **Shared utilities** — `shared/utils/*` is the single source of truth for calculations. Duplicating logic is an anti-pattern.
 
-### Core Principles
-1. **Risk-Based Testing** - Test what could break the business or lose user money
-2. **TypeScript Strict Mode** - Zero `any` types, full type safety
-3. **Integration > Unit Tests** - Test real behavior with sandbox environments
-4. **Spike and Stabilize** - Build features fast, add tests for bugs/complexity
+## Security
+Handles sensitive financial data — security is top priority.
+- **At rest**: AES-256 encryption. **In transit**: TLS 1.3+.
+- **Auth**: JWT with expiration, rate limiting, account lockout.
+- **Input**: Zod schemas, parameterized queries, XSS prevention.
+- **Compliance**: PCI DSS, GDPR/CCPA. 24-hour breach notification.
+- Detailed policy: `docs/information-security/` (info_security_policy, incident_response_plan, risk_assessment_template, security_review_log).
 
-### Testing Strategy
-- **Critical Path Testing**: Authentication, financial calculations, data integrity
-- **Sandbox Integration Tests**: Real Plaid API, not mocks
-- **Manual Test Checklists**: UI flows, exploratory testing
-- **Test on Demand**: Add tests when you find bugs or complex logic
+## Development Environment
 
-### TypeScript Configuration
-```json
-{
-  "compilerOptions": {
-    "strict": true,
-    "noImplicitAny": true,
-    "strictNullChecks": true,
-    "strictFunctionTypes": true,
-    "strictBindCallApply": true,
-    "strictPropertyInitialization": true,
-    "noImplicitThis": true,
-    "alwaysStrict": true,
-    "noUnusedLocals": true,
-    "noUnusedParameters": true,
-    "noImplicitReturns": true,
-    "noFallthroughCasesInSwitch": true
-  }
-}
-```
-
-## MVP User Stories
-
-### 1. Authentication System
-**User Story**: As a user, I can log in with username/password to access the budgeting app
-- ✅ User can register with 15+ character passphrase
-- ✅ JWT authentication with rate limiting
-- ✅ Account lockout after failed attempts
-- ✅ Password reset flow with secure token generation (token no longer logged for security)
-
-### 2. Plaid Account Linking  
-**User Story**: As a user, I can connect my Bank of America and Capital One accounts
-- ✅ Plaid Link integration
-- ✅ Account connection and disconnection
-- ✅ Encrypted token storage
-
-### 3. Transaction Management
-**User Story**: As a user, I can sync and view my transactions from connected accounts
-- ✅ Automatic transaction sync with pagination
-- ✅ Transaction categorization and tagging
-- ✅ Transaction splitting support
-
-### 4. Budget Categories
-**User Story**: As a user, I can create and manage budget categories
-- ✅ Two-level hierarchy (Category → Subcategory)
-- ✅ Plaid PFC integration with 121 default categories
-- ✅ Automatic transaction categorization using Plaid taxonomy
-- ✅ Custom categories with SNAKE_CASE ID generation
-- ✅ Category descriptions for better understanding
-- ✅ Rollover categories for budget carryover
-
-### 5. Monthly Budgeting
-**User Story**: As a user, I can set monthly budgets and track spending
-- ✅ Budget vs actual comparison
-- ✅ Copy budgets from previous month
-- ✅ Variance tracking
-
-### 6. Reporting & Trends
-**User Story**: As a user, I can view spending trends and reports
-- ✅ Category spending trends
-- ✅ Income vs expense analysis
-- ✅ Budget performance reports
-- ✅ Income category dashboards with drill-down
-- ✅ Toggle between income and expense views
-
-## Development Status
-
-### ✅ Completed Features (September 2025)
-1. **Backend Infrastructure**: JWT auth, Plaid integration, service architecture
-2. **Frontend Foundation**: React + Mantine UI, responsive design
-3. **Account Management**: Connect, sync, and disconnect bank accounts
-4. **Transaction Sync**: Full pagination, 730-day history request
-5. **Budget Tracking**: Monthly budgets with comparison views and yearly grid view
-6. **Security**: AES-256 encryption, rate limiting, passphrase auth
-7. **Income Analytics**: Category dashboards with income/expense toggle views
-8. **Admin Panel**: Data migration tools, system monitoring, batch operations
-9. **Yearly Budget Grid**: Comprehensive yearly budget planning with inline editing and auto-save
-
-### ✅ Completed Features (April 2026)
-10. **AI Financial Chatbot**: Conversational assistant using Claude API with tool_use for read-only financial data queries. Floating overlay on all pages with model selection (Haiku/Sonnet/Opus), cost tracking ($20/month cap), page context awareness, and GitHub issue filing.
-    - BRD: `docs/features/AI-CHATBOT-BRD.md`
-    - Plan: `docs/features/AI-CHATBOT-PLAN.yaml`
-11. **AI Bulk Categorization**: Batch transaction classification using Claude with few-shot learning from user data. Bucket-based approve/edit/skip flow with auto-categorization rule suggestions.
-    - BRD: `docs/features/AI-CATEGORIZATION-BRD.md`
-    - Plan: `docs/features/AI-CATEGORIZATION-PLAN.yaml`
-12. **URL-Based Page State**: Budget, Reports, and Transactions pages reflect filter state in URL params for chatbot context awareness and bookmarkable filter states.
-13. **Amazon Receipt Matching**: Upload Amazon order PDFs, Claude vision extracts items, matches against bank transactions by amount+date, recommends categories and splits for multi-item orders. Unified "AI Categorize" dropdown menu on Transactions page for both workflows.
-    - BRD: `docs/features/AI-AMAZON-RECEIPT-BRD.md`
-    - Plan: `docs/features/AI-AMAZON-RECEIPT-PLAN.yaml`
-
-### 🚧 Next Priorities
-1. **AI feature hardening** — Security tests, prompt injection testing, integration tests (Phase 8 of chatbot plan, Phase 10 of amazon receipt plan)
-2. **Rollover categories for budget carryover**
-3. **Bill reminders and recurring transactions**
-4. **Enhanced reporting and visualizations**
-5. **Mobile app development**
-
-## Security Best Practices
-
-**CRITICAL: This application handles sensitive financial data. Security must be the top priority.**
-
-### Core Security Requirements
-1. **Data Protection**: AES-256 encryption at rest, TLS 1.3+ in transit
-2. **Authentication**: JWT with expiration, rate limiting, account lockout
-3. **Input Validation**: Zod schemas, parameterized queries, XSS prevention
-4. **Compliance**: PCI DSS guidelines, GDPR/CCPA privacy requirements
-5. **Incident Response**: 24-hour breach notification, audit logging
-
-### Security Documentation
-- **Information Security Policy:** docs/information-security/info_security_policy.md
-- **Incident Response Plan:** docs/information-security/incident_response_plan.md
-- **Risk Assessment:** docs/information-security/risk_assessment_template.md
-- **Security Review Log:** docs/information-security/security_review_log.md
-
-## Key Implementation Guidelines
-
-### TypeScript Best Practices
-- **NO `any` TYPES** - Use `unknown`, generics, or proper types
-- **Strict null checks** - Handle `undefined` and `null` explicitly
-- **Type all function parameters and returns**
-- **Create domain types** for business entities
-- **Use discriminated unions** for complex state
-- **Use shared calculation utilities** - Always use functions from `shared/utils/` instead of duplicating logic
-
-### Type-Safe Error Handling
-```typescript
-// Good: Type-safe result pattern
-type Result<T, E = Error> = 
-  | { success: true; data: T }
-  | { success: false; error: E };
-
-// Bad: Using any
-function processData(data: any) { } // ❌ Never do this
-
-// Good: Using unknown with guards
-function processData(data: unknown) {
-  if (isValidData(data)) { /* ... */ }
-}
-```
-
-## Git Commit Conventions
-
-### Conventional Commits Format
-```
-<type>[optional scope]: <description>
-
-[optional body]
-
-[optional footer(s)]
-```
-
-### Commit Types
-- **feat**: New feature or functionality (triggers MINOR version bump)
-- **fix**: Bug fix (triggers PATCH version bump)
-- **docs**: Documentation changes only
-- **style**: Code style changes
-- **refactor**: Code refactoring
-- **test**: Adding or updating tests
-- **chore**: Maintenance tasks
-- **perf**: Performance improvements
-- **build**: Build system or dependency changes
-- **ci**: CI/CD configuration changes
-
-### Breaking Changes
-To indicate a breaking change (triggers MAJOR version bump):
-- Add `!` after type: `feat!: replace auth system`
-- OR add `BREAKING CHANGE:` in the footer
-
-### Examples
+### Servers often already running
 ```bash
-feat(auth): add JWT token generation for user login
-fix(transaction): correct date parsing for Plaid transactions
-feat!: migrate from REST to GraphQL API
-test(auth): add tests for password validation
-docs: update README with setup instructions
-refactor(budget): simplify monthly calculation logic
+npm run dev:check     # check status
+npm run dev:restart   # stop + start
+```
+Frontend: `http://localhost:5183` · Backend: `http://localhost:3021`
+
+### Required env vars (backend/.env)
+```bash
+NODE_ENV=development
+PORT=3001
+
+# Plaid — IMPORTANT: don't include "accounts" in PLAID_PRODUCTS, it's automatic
+PLAID_CLIENT_ID=...
+PLAID_SECRET=...
+PLAID_ENV=sandbox
+PLAID_PRODUCTS=transactions
+PLAID_COUNTRY_CODES=US
+
+# Security (ENCRYPTION_KEY must be 32-byte hex)
+JWT_SECRET=...
+JWT_EXPIRES_IN=7d
+ENCRYPTION_KEY=...
+
+# Storage (filesystem for dev, s3 for prod)
+DATA_DIR=./data
+STORAGE_TYPE=filesystem
+# S3_BUCKET_NAME / S3_PREFIX / AWS_REGION required if STORAGE_TYPE=s3
+
+# AI
+ANTHROPIC_API_KEY=...
+# GITHUB_ISSUES_PAT=... (optional — for chatbot issue filing)
+# CHATBOT_MONTHLY_LIMIT=20 (optional — $ cap)
 ```
 
-📚 **For detailed commit guidelines and examples, see [CONTRIBUTING.md](CONTRIBUTING.md)**
+### Production data locally
+Must run from `backend/` with `budget-app-prod` AWS profile:
+```bash
+cd backend && AWS_PROFILE=budget-app-prod npm run sync:production:dry-run
+cd backend && AWS_PROFILE=budget-app-prod npm run sync:production
+npm run backup:local     # back up first
+npm run backup:restore   # revert
+```
 
-### Pushing to Remote
-**IMPORTANT**: Every push to `main` triggers a GitHub Action that runs `standard-version`, which may create a `chore(release)` commit and push it back to `main`. This means the remote often has commits that don't exist locally.
+## Commits & Releases
 
-**Before every `git push`**, run:
+Conventional Commits required. See [CONTRIBUTING.md](CONTRIBUTING.md) for the full spec. Types that affect versioning: `feat` → MINOR, `fix` → PATCH, `feat!` or `BREAKING CHANGE:` footer → MAJOR.
+
+### Pushing to main — non-obvious
+Every push to `main` triggers `standard-version`, which may create a `chore(release)` commit and push it back. The remote often has commits you don't have locally.
+
+**Before every push**:
 ```bash
 git pull --rebase origin main
 ```
-
-If the pull introduces a `chore(release)` commit, that's expected — just proceed with the push. If there are rebase conflicts with changelog/version files (`CHANGELOG.md`, `package.json` version field, `package-lock.json`), accept the remote (incoming) version since it was machine-generated:
+If rebase conflicts on `CHANGELOG.md` / `package.json` / `package-lock.json`, accept incoming (they're machine-generated):
 ```bash
 git checkout --theirs CHANGELOG.md package.json package-lock.json
 git add CHANGELOG.md package.json package-lock.json
 git rebase --continue
 ```
 
-## Getting Started
+### Release flow
+1. Daily dev on `main` with conventional commits.
+2. Push → CHANGELOG auto-updates.
+3. `npm run release:prepare` when ready to cut a new version.
+4. GitHub Actions includes version in deployments.
+5. Check `/version` or `/health` endpoints for deployed version.
 
-### Prerequisites
-- Node.js 20+
-- npm or yarn
-- Plaid sandbox account (free at https://dashboard.plaid.com/signup)
+## Common Tasks
+- **Add API endpoint** → route in `backend/src/routes/`, service method in `backend/src/services/`, client method in `frontend/src/lib/api.ts` (see [AI-APPLICATION-ARCHITECTURE.md](docs/AI-APPLICATION-ARCHITECTURE.md#to-add-a-new-api-endpoint))
+- **Add React page** → component in `frontend/src/pages/`, route in `frontend/src/App.tsx` (see [AI-APPLICATION-ARCHITECTURE.md](docs/AI-APPLICATION-ARCHITECTURE.md#to-add-a-new-page))
+- **Run tests** → `npm test` (in backend or frontend); `npm test -- path/to/file.spec.ts` for single file; integration tests in `backend/src/__tests__/integration/`
+- **Password reset lockout recovery** → request reset via UI; tokens are in-memory, 15-min expiry
+- **⚠️ Category migration** → before deploying Plaid PFC changes, delete existing category data: `rm backend/data/categories_*.json`
+- **Deploy** → GitHub Actions "Release and Deploy to Production" (full), "Deploy to Production" (no release), or `./scripts/deploy-server.sh` (manual); see [AI-DEPLOYMENTS.md](docs/AI-DEPLOYMENTS.md)
 
-### Initial Setup
+## Production Access
+
+SSH:
 ```bash
-# Clone the repository
-git clone <repository-url>
-cd household-budgeting
-
-# Install dependencies
-cd backend && npm install
-cd ../frontend && npm install
-
-# Set up environment variables
-cp .env.example .env
-# Edit .env with your Plaid credentials
-```
-
-### Development Commands
-```bash
-# Start backend in watch mode
-cd backend && npm run dev
-
-# Start frontend in development mode  
-cd frontend && npm run dev
-
-# Run tests
-npm run test
-
-# Build for production
-npm run build
-```
-
-### Development Server Management
-
-**IMPORTANT**: Development servers are often already running. Before starting servers:
-1. Check if they're running: `npm run dev:check`
-2. If running, skip startup commands
-3. If needed to restart: `npm run dev:restart` (stops then starts)
-
-Frontend runs on: http://localhost:5183
-Backend runs on: http://localhost:3021
-
-### Required Environment Variables
-```bash
-# Backend (.env)
-NODE_ENV=development
-PORT=3001
-
-# Plaid Configuration
-PLAID_CLIENT_ID=your_sandbox_client_id
-PLAID_SECRET=your_sandbox_secret  
-PLAID_ENV=sandbox
-PLAID_PRODUCTS=transactions  # Note: Don't include "accounts" - it's automatic
-PLAID_COUNTRY_CODES=US
-
-# Security
-JWT_SECRET=your_development_jwt_secret
-JWT_EXPIRES_IN=7d
-ENCRYPTION_KEY=32_byte_hex_string
-
-# Storage
-DATA_DIR=./data
-STORAGE_TYPE=filesystem  # Use 's3' for production (see docs/AI-DEPLOYMENTS.md)
-# S3_BUCKET_NAME=your-bucket  # Required if STORAGE_TYPE=s3
-# S3_PREFIX=data/  # Optional S3 prefix
-# AWS_REGION=us-east-1  # Required for S3
-
-# AI Chatbot & Categorization
-ANTHROPIC_API_KEY=your_anthropic_api_key  # https://console.anthropic.com/settings/keys
-# GITHUB_ISSUES_PAT=your_pat  # Optional: for chatbot GitHub issue filing
-# CHATBOT_MONTHLY_LIMIT=20  # Optional: monthly AI spend cap in dollars
-```
-
-### Common Plaid Issues
-- **"invalid product names: [accounts]"**: Remove "accounts" from PLAID_PRODUCTS - it's included automatically with "transactions"
-- **Phone validation in Plaid Link**: Always enter with country code: `+15551234567` (no spaces/dashes)
-- **"client_id must be properly formatted"**: Ensure you have actual Plaid credentials, not placeholder values
-
-## Success Metrics
-- ✅ **Zero runtime type errors** - TypeScript catches all
-- ✅ **Critical paths tested** - Auth, money, data integrity
-- ✅ **Fast feedback loops** - Direct testing > mocking
-- ✅ **No `any` types** in production code
-- ✅ **Sandbox integration working** end-to-end
-- ✅ **Professional UI** - Mantine component library with dark theme
-- ✅ **Responsive design** - Mobile-friendly with collapsible sidebar
-
-## Development Workflow Recommendations
-
-### For AI Agents
-1. **Start Here**: Review this file for project philosophy and guidelines
-2. **Technical Details**: Consult `docs/AI-APPLICATION-ARCHITECTURE.md` for implementation
-3. **Security First**: Always consider security implications
-4. **Type Safety**: Never use `any` types
-5. **Test Critical Paths**: Focus on auth, money, and data integrity
-
-### Versioning & Release Workflow
-1. **Daily Development**: Use conventional commits on main branch
-2. **Automatic Changelog**: Push to GitHub triggers changelog updates
-3. **Check Pending Changes**: Visit `/version` endpoint or review CHANGELOG.md
-4. **Create Release**: Run `npm run release:prepare` when ready for new version
-5. **Deploy with Version**: GitHub Actions includes version in deployments
-
-Current Version: **1.0.0-alpha.1** (Check `/health` or `/version` endpoints for latest)
-
-### Risk-Based Development
-- **Spike features quickly** with minimal tests
-- **Add tests when you find bugs**
-- **Refactor with confidence** when types guide you
-- **Integration test** critical financial flows
-- **Skip trivial tests** like getters/setters
-
-## 🤖 AI Agent Directives
-
-### CRITICAL RULES - Never Violate These
-1. **NEVER use `any` types** - Use `unknown`, generics, or proper types instead
-2. **NEVER commit secrets** - All sensitive data must use environment variables
-3. **NEVER skip security validation** - Always validate inputs, sanitize outputs
-4. **NEVER modify production directly** - All changes go through GitHub → CI/CD
-5. **NEVER ignore TypeScript errors** - Fix them properly, don't suppress
-
-### Standard Operating Procedures
-
-#### When Starting a Task
-1. **Review relevant documentation** - Check the documentation index above
-2. **Understand existing patterns** - Look at similar code before implementing
-3. **Check for existing utilities** - Don't reinvent what already exists
-4. **Verify dependencies** - Ensure libraries are installed before using them
-
-#### When Modifying Code
-1. **Preserve existing patterns** - Match the style of surrounding code
-2. **Update types first** - Change TypeScript interfaces before implementation
-3. **Test critical paths** - Ensure auth, money, and data operations work
-4. **Handle errors properly** - Use Result pattern or proper try/catch blocks
-
-#### When Debugging Issues
-1. **Check the obvious first** - Environment variables, configuration, permissions
-2. **Read error messages carefully** - They often contain the solution
-3. **Consult troubleshooting guides** - See deployment and architecture docs
-4. **Test in isolation** - Narrow down the problem to specific components
-
-#### When Deploying
-1. **Test locally first** - Ensure `npm run build` succeeds
-2. **Check GitHub Actions** - Verify CI/CD pipeline configuration
-3. **Monitor deployment** - Watch logs during and after deployment
-4. **Verify health checks** - Ensure application is responding correctly
-
-#### When Working with Development Servers
-1. **Check first** - Always verify if servers are running with `npm run dev:check`
-2. **Don't duplicate** - Never start servers that are already running
-3. **Use existing** - Connect to running servers instead of starting new ones
-4. **Restart if needed** - Only restart if explicitly asked or if debugging server issues
-
-### Decision Tree for Common Scenarios
-
-```
-Need to add a feature?
-├─ Is it a new API endpoint?
-│  └─ See AI-APPLICATION-ARCHITECTURE.md → "To Add a New API Endpoint"
-├─ Is it a new UI page?
-│  └─ See AI-APPLICATION-ARCHITECTURE.md → "To Add a New Page"
-├─ Is it a data model change?
-│  └─ Update types/ → services/ → ensure backward compatibility
-└─ Is it a third-party integration?
-   └─ Check existing patterns (e.g., Plaid integration)
-
-Having issues?
-├─ TypeScript errors?
-│  └─ Never use `any` - fix types properly
-├─ Test failures?
-│  └─ See AI-TESTING-STRATEGY.md → "Troubleshooting Test Failures"
-├─ Deployment problems?
-│  └─ See AI-DEPLOYMENTS.md → "Troubleshooting"
-└─ Plaid/API issues?
-   └─ See AI-APPLICATION-ARCHITECTURE.md → "Common Issues"
-```
-
-## Quick References
-
-### Critical Files
-- **Architecture Guide**: `docs/AI-APPLICATION-ARCHITECTURE.md`
-- **Deployment Guide**: `docs/AI-DEPLOYMENTS.md`
-- **Auth Service**: `backend/src/services/authService.ts`
-- **Account Management**: `backend/src/services/accountService.ts`
-- **Frontend Entry**: `frontend/src/App.tsx`
-- **API Client**: `frontend/src/lib/api.ts`
-- **Chatbot Service**: `backend/src/services/chatbotService.ts`
-- **Chatbot Data Service**: `backend/src/services/chatbotDataService.ts` (read-only security boundary)
-- **Chatbot Prompt**: `backend/src/services/chatbotPrompt.ts`
-- **Categorization Service**: `backend/src/services/categorizationService.ts`
-- **Chat Overlay UI**: `frontend/src/components/chat/ChatOverlay.tsx`
-- **Categorization Flow UI**: `frontend/src/components/transactions/CategorizationFlowModal.tsx`
-- **Amazon Receipt Service**: `backend/src/services/amazonReceiptService.ts`
-- **Amazon Receipt Prompts**: `backend/src/services/amazonReceiptPrompt.ts`
-- **Amazon Receipt Flow UI**: `frontend/src/components/transactions/AmazonReceiptFlowModal.tsx`
-- **Transaction Reader**: `backend/src/services/transactionReader.ts` (canonical removed-transaction filter — all read paths must use this)
-- **Chat Action Registry**: `backend/src/services/chatActions/registry.ts`
-- **Chat Action Proposal Store**: `backend/src/services/chatActions/proposalStore.ts`
-- **Action Card UI**: `frontend/src/components/chat/ActionCard.tsx`
-- **Trip Detail Page**: `frontend/src/pages/TripDetail.tsx` (per-trip detail at /trips/:tripId with Itinerary / Spending / Notes tabs)
-- **Agenda**: `frontend/src/components/trips/agenda/Agenda.tsx` (day-by-day itinerary rendering; classifies base-change vs day-trip transits)
-- **Stop Creation Sheet**: `frontend/src/components/trips/agenda/AddStopSheet.tsx` (type-first picker → per-type form)
-- **Stop Service (backend)**: `backend/src/services/tripService.ts` (nested stop CRUD + `StayOverlapError`)
-- **Stop Helpers**: `shared/utils/tripHelpers.ts` (`validateNoStayOverlap`, `computeAgendaDayRange`, `groupStopsByDay`, `findActiveStay`, `isTransitBaseChange`)
-
-### Testing
-- **Backend Tests**: `backend/src/__tests__/`
-- **Run Tests**: `npm test`
-- **Coverage**: `npm run test:coverage`
-
-### Common Tasks
-- **Add new API endpoint**: See architecture guide section "To Add a New API Endpoint"
-- **Create new page**: See architecture guide section "To Add a New Page"
-- **Debug Plaid issues**: Check troubleshooting in architecture guide
-- **Handle auth errors**: Review JWT middleware patterns
-- **Financial calculations**: Always use shared utilities from `shared/utils/transactionCalculations.ts` to exclude transfers and `shared/utils/budgetCalculations.ts` for budget calculations
-- **Create a release**: Run `npm run release:prepare` and follow prompts
-- **Check version**: Visit `/version` endpoint or run `curl localhost:3021/version`
-- **Password reset recovery**: If locked out, request a reset via the UI. Reset tokens are stored in-memory and expire after 15 minutes
-- **⚠️ Category Migration**: Before deploying Plaid PFC changes, delete existing category data: `rm backend/data/categories_*.json`
-- **Production data debugging**: Sync production data locally (must run from `backend/` with `budget-app-prod` AWS profile):
-  - Preview: `cd backend && AWS_PROFILE=budget-app-prod npm run sync:production:dry-run`
-  - Sync: `cd backend && AWS_PROFILE=budget-app-prod npm run sync:production`
-- **Local data backup**: Create backup before sync: `npm run backup:local`, restore with: `npm run backup:restore`
-
-## Deployment
-
-For comprehensive deployment guidance including infrastructure, CI/CD configuration, troubleshooting, and production operations, see **[docs/AI-DEPLOYMENTS.md](docs/AI-DEPLOYMENTS.md)**.
-
-### Production Server Access
-For direct investigation and debugging, SSH access is available:
-```bash
-# Connect to server
 ssh -i ~/.ssh/budget-app-key ubuntu@budget.jaredcarrano.com
-
-# Switch to application user
 sudo -u appuser bash
-
-# Key locations
-# App directory: /home/appuser/app
-# Backend: /home/appuser/app/backend
-# Frontend: /home/appuser/app/frontend
-# PM2 logs: pm2 logs budget-backend
-# PM2 status: pm2 status
+# App: /home/appuser/app — backend/ frontend/ ecosystem.config.js
+# PM2: pm2 status, pm2 logs budget-backend, pm2 restart budget-backend, pm2 flush
 ```
 
-#### Quick Deployment Validation
-After deployment, run these checks to verify everything is correct:
+Post-deploy validation (run as `appuser`):
 ```bash
-# One-line validation (run as appuser)
 cd /home/appuser/app && \
-test -d backend/dist && echo "✅ dist/" || echo "❌ dist/" && \
-test -f backend/dist/index.js && echo "✅ index.js" || echo "❌ index.js" && \
-test -f backend/.env && echo "✅ .env" || echo "❌ .env" && \
-test -f ecosystem.config.js && echo "✅ PM2 config" || echo "❌ PM2 config" && \
-pm2 status | grep -q budget-backend && echo "✅ PM2 running" || echo "❌ PM2 not running" && \
-curl -s http://localhost:3021/health | grep -q "ok" && echo "✅ Health OK" || echo "❌ Health FAIL"
+test -d backend/dist && test -f backend/dist/index.js && test -f backend/.env && \
+test -f ecosystem.config.js && pm2 status | grep -q budget-backend && \
+curl -s http://localhost:3021/health | grep -q "ok" && echo "OK" || echo "FAIL"
 ```
 
-#### Common Troubleshooting Commands
+Debugging:
 ```bash
-# Check PM2 logs for errors
 pm2 logs budget-backend --lines 50
-
-# Restart application
-pm2 restart budget-backend
-
-# Check environment variables are loaded
 pm2 env budget-backend | grep -E "(JWT|PLAID|NODE_ENV)"
-
-# Test API directly
 curl -s http://localhost:3021/health | jq '.'
-
-# Check disk space
 df -h /home/appuser
-
-# Clean up old PM2 logs
-pm2 flush
 ```
 
-**Note**: Use this for debugging production issues when AWS SSM is not sufficient. The application runs as `appuser` and is managed by PM2.
+## 📝 Architecture Decisions
 
-## Notes for Future Development
+| Date | Decision | Why |
+|------|----------|-----|
+| 2026-04 | Task Management v2.0 — Checklist view, Snooze, manual reorder, Cancelled column retired, family-only leaderboard | Five concurrent enhancements. Snooze is `snoozedUntil: string \| null` (a visibility modifier, NOT a status). Manual reorder via `sortOrder` fractional float, family-wide, per-status. Leaderboard family-scope only (behavior change from v1.0). See [TASK-MANAGEMENT-BRD.md](docs/features/TASK-MANAGEMENT-BRD.md). |
+| 2026-04 | Trip Itineraries — day-by-day agenda | Reverses original "not a travel planner" exclusion. `Stop` entity (Stay/Eat/Play/Transit) embedded in Trip. Stay dates are **night-based** (endDate = last night). System enforces no-overlap. Agenda derived, not stored. See [TRIP-ITINERARIES-BRD.md](docs/features/TRIP-ITINERARIES-BRD.md). |
+| 2026-04 | Canonical parent rollup utilities + Reports widget refactor | Effective parent budget = `max(parent, sum(children))` for income AND expense; effective actual = additive. New Spending Composition widget for leaf-level intent. Behavior change: `BudgetComparison.tsx` switched from additive to max. See [CATEGORY-HIERARCHY-BUDGETING-BRD.md](docs/features/CATEGORY-HIERARCHY-BUDGETING-BRD.md). |
+| 2026-04 | Chat action cards with registry-based allowlist | Extends chatbot from read-only to narrow write via user-confirmed cards. V1 actions: `create_task`, `submit_github_issue` (the latter migrated from bespoke intercept per AI-CHAT-ACTIONS-BRD D-15). Nonce-based single-use, server-side Zod re-validation, audit log with `source=chatbot_action_card`. See [AI-CHAT-ACTIONS-BRD.md](docs/features/AI-CHAT-ACTIONS-BRD.md). |
+| 2026-04 | `isSavings` flag on top-level categories | Separate savings contributions (401k, IRA, brokerage) from consumption spending. All spending/net surfaces exclude savings by default. Cash Flow shows 3-line layout Income / Spending / Savings. See [SAVINGS-CATEGORY-BRD.md](docs/features/SAVINGS-CATEGORY-BRD.md). |
+| 2026-04 | Centralized transaction reader utility | Eliminate duplicated `status !== 'removed'` filter across 4 services. New `transactionReader.ts` — all read paths use `excludeRemoved()` / `getActiveTransactions()`; mutation paths intentionally bypass. |
+| 2026-04 | Amazon receipt matching via Claude vision | Upload PDFs/photos, extract items, match to bank transactions, split/categorize. Zod-validated Claude output; session dedup against completed sessions only; `CUSTOM_AMAZON` transactions always re-eligible. |
+| 2026-04 | AI chatbot structural security boundary | `ChatbotDataService` receives `ReadOnlyDataService` only (SEC-018). `tool_use` for prompt-injection defense. $20/mo cap with mutex. Write actions flow through chat-action-card registry — never LLM-executed. See [AI-CHATBOT-BRD.md](docs/features/AI-CHATBOT-BRD.md). |
+| 2026-04 | AI bulk categorization with few-shot learning | Batch classify uncategorized transactions using the user's own data. Bucket-based approve/edit/skip with auto-rule suggestions. |
+| 2026-04 | URL-based page state | Chatbot context awareness + bookmarkable URLs. Budget, Reports, Transactions sync filter state via `useSearchParams`. |
+| 2026-01 | Plaid Link update mode for re-auth | Allow re-auth of expired bank connections. Visual indicators on accounts page + dashboard. |
+| 2025-09 | Shared transaction calculation utilities | Consistent transfer exclusion across app (`shared/utils/transactionCalculations.ts`). |
+| 2025-09 | Rename `isSavings` → `isRollover` | Free up "savings" terminology for actual savings feature. |
+| 2025-01 | SNAKE_CASE category IDs with Plaid PFC | Direct mapping eliminates complexity. **BREAKING**: must delete existing category data before deployment. |
+| 2024-12 | User-specific categories | Multi-user support requirement — all categories have `userId`. |
+| 2024-11 | Transaction pagination (50/page) | Performance with 800+ items. |
+| 2024-10 | Service singletons (`getInstance()`) | Prevent auth token inconsistencies. |
+| 2024-09 | S3 for production storage | Filesystem unreliable on EC2; `StorageService` abstracts backend. |
+| 2024-09 | Mantine UI over Tailwind | Faster dev with pre-built dashboard components. |
 
-### Lessons Learned
-- Integration tests with real Plaid sandbox > heavily mocked unit tests
-- Service singletons prevent auth token inconsistencies
-- Mantine provides better out-of-box experience than Tailwind for dashboards
-- Conditional rendering prevents Plaid Link duplicate script errors
-- Return JWT token on registration for auto-login UX
-- Method binding in API client prevents context loss
-- Use GitHub Variables for non-sensitive config to improve maintainability
-- StorageFactory should have single source of truth for config (ENV vars)
-- Categories must be user-specific from the start - no global categories
-- Transaction removal logic must only check accounts being synced
-- Performance issues with 800+ items require pagination (50 per page works well)
-- React Query staleTime vs gcTime: staleTime keeps data fresh, gcTime keeps in cache
-- TypeScript rootDir issues when importing from outside src/ - use postbuild script to flatten dist
+## 🔄 Pending Architectural Changes
 
-## 📋 Living Documentation
+| Change | Notes |
+|--------|-------|
+| Transfer Linking | Pair two transfer transactions via shared `transferGroupId`; not yet started. See [TRANSFER-LINKING-BRD.md](docs/features/TRANSFER-LINKING-BRD.md). |
+| Subdomain migration | `budget.jaredcarrano.com` → `family.jaredcarrano.com`. Code + DNS/TLS. See PROJECT_PLAN.md Phase 14.5. |
+| Transaction caching | React Query or similar. Reduce API calls. |
+| Webhook support | Plaid webhooks for real-time sync. |
+| Data export | CSV/JSON export for portability. |
+| Mobile app | React Native, future. |
 
-### 🚨 Current Known Issues
-Track active problems that AI agents should be aware of when working on the codebase.
+## 🚨 Known Issues
 
-| Issue | Impact | Workaround | Priority |
-|-------|--------|------------|----------|
-| Frontend TypeScript errors | Build warnings | Fix types as encountered | Medium |
-| Some components use `any` type | Type safety compromised | Replace with proper types | High |
-| Expired Plaid token recovery | User can re-authenticate via account menu | Plaid Link update mode implemented | Resolved ✅ |
-| Performance with 800+ transactions | Slow page load | Pagination implemented (50/page) | Resolved ✅ |
+| Issue | Impact | Workaround |
+|-------|--------|------------|
+| Frontend has residual `any` types in some components | Type safety | Fix opportunistically while touching nearby code |
+| Reports page makes excessive parallel API requests | Load time | Mitigated via nginx rate-limit increase; longer-term fix needed |
 
-### 📝 Recent Architecture Decisions
-Track important decisions that affect how the codebase should be modified.
-
-| Date | Decision | Rationale | Impact |
-|------|----------|-----------|--------|
-| 2026-04 | Task Management v2.0 — Checklist view, Snooze, manual reorder, Cancelled column retired, family-only leaderboard | Five concurrent enhancements to shipped v1.0 Tasks. Checklist view is mobile-first rapid entry (Enter saves + creates next; Tab/Shift-Tab demote/promote; two checkboxes — started + done with synthetic-start auto-stamp; indented subtasks; collapsed Completed accordion). Snooze is a `snoozedUntil: string \| null` field (visibility modifier, NOT a status — preserves underlying status; no transition log entry; expiry at 06:00 local; options Tomorrow/Next-Monday/1st-of-next-month/Custom). Manual reorder via `sortOrder` fractional float (family-wide, scoped per status, shared between Kanban and Checklist; Done auto-sorts by completedAt DESC, Snoozed by snoozedUntil ASC). Cancelled column dropped from Kanban (now 3 columns + optional Snoozed via toggle); cancel is via card kebab menu + confirm dialog; cancelled tasks archive immediately to Task History (no 14-day window; done retains 14-day rule). Leaderboard counts ONLY family-scope tasks — behavior change from v1.0 which counted personal toward owner. | Affects: shared/types/index.ts (`snoozedUntil`, `sortOrder` on Task; new SnoozeTaskDto, ReorderTaskDto), shared/utils/taskSnooze.ts (new), shared/utils/taskSortOrder.ts (new), backend/src/services/taskService.ts (snooze/reorder/list-filter/leaderboard-scope), backend/src/routes/tasks.ts (POST /:id/snooze, POST /:id/reorder), frontend/src/pages/Tasks.tsx (view toggle), frontend/src/components/tasks/ (Kanban edits + new ChecklistView, ChecklistRow). Backward-compatible read-path backfill for legacy records; no destructive migration. BRD: docs/features/TASK-MANAGEMENT-BRD.md (v2.0); Plan: docs/features/TASK-MANAGEMENT-ENHANCEMENTS-PLAN.yaml |
-| 2026-04 | Trip Itineraries extend Trips with day-by-day agenda planning | Reverses the original TRAVEL-TAGGING BRD's "not a travel planner" exclusion as the app reframes around broader family/household use. New `Stop` entity (discriminated union: Stay/Eat/Play/Transit) embedded in Trip. Stay dates are night-based (endDate = last night, not check-out morning) — dissolves the overlapping-stays question; system enforces no-overlap. New detail view at `/trips/:tripId` with tabs (Itinerary / Spending / Notes); list view at `/trips` stays as retrospective budget lens. Agenda derived (not stored) — day sections, Stay-as-chapter banners, Transit dual-rendering (inline day-trip vs. full-width base-change connector). MVP excludes: map view, email parsing, link-to-transaction, road-trip style. | Affects: shared/types/index.ts (Stop union), backend/src/services/tripService.ts (nested stop CRUD), backend/src/routes/trips.ts (/trips/:tripId/stops routes), frontend/src/pages/TripDetail.tsx (new), frontend/src/components/trips/ (new components), frontend/src/pages/Trips.tsx (add View Details action). Reuses @hello-pangea/dnd for untimed stop reorder (see tech debt #10). BRD: docs/features/TRIP-ITINERARIES-BRD.md; Plan: docs/features/TRIP-ITINERARIES-PLAN.yaml |
-| 2026-04 | Canonical parent rollup utilities + Reports widget refactor | Codify parent/child budget aggregation in shared/utils. Effective parent budget = max(direct parent, sum of children) for both income and expense; effective parent actual = direct + sum of children (always additive). Reports → Budget Performance widgets refactored to use rollup; new Spending Composition widget added for leaf-level forensic intent. Chatbot get_spending_by_category and get_budget_summary use rollup; rows carry aggregation_level field. Behavior change: BudgetComparison.tsx switched from additive to max — affected ~114 tree-months across families (Utilities/Pets/etc.) confirmed as max-intent via audit script. | Affects: shared/utils/budgetCalculations.ts (buildCategoryTreeAggregation, classifyTreeBudgetState, isTreeUnused, isTreeOverBudget), frontend/src/components/reports/BudgetPerformanceSection.tsx, frontend/src/components/budgets/BudgetComparison.tsx, backend/src/services/chatbotDataService.ts, chatbotPrompt.ts. BRD: docs/features/CATEGORY-HIERARCHY-BUDGETING-BRD.md |
-| 2026-04 | Chat action cards with registry-based allowlist | Extend chatbot from read-only to narrow write via user-confirmed action cards. ChatActionRegistry (backend) + FORM_REGISTRY (frontend) + Zod schemas shared between HTTP routes and action handlers. V1 actions: `create_task` and `submit_github_issue` (the latter migrated from a bespoke intercept-and-confirm path per AI-CHAT-ACTIONS-BRD D-15, commit b3ab071). Nonce-based single-use confirmation, server-side re-validation, audit logging with source=chatbot_action_card. | Affects: chatbotService (propose_action interception), backend/src/services/chatActions/, frontend/src/components/chat/ |
-| 2026-04 | isSavings flag on top-level categories | Separate savings contributions (401k, IRA, brokerage) from consumption spending. All spending/net surfaces exclude savings by default. Cash flow report shows 3-line layout: Income / Spending / Savings. Toggle on cash flow view lets user include savings in net. | Affects: CategoryService, reportService, dashboard, chatbot |
-| 2026-04 | Centralized transaction reader utility | Eliminate duplicated `status !== 'removed'` filter across 4 services | New `transactionReader.ts` with `excludeRemoved()` / `getActiveTransactions()` — all read paths use this; mutation paths intentionally bypass it |
-| 2026-04 | Amazon receipt matching via Claude vision | Upload Amazon PDFs, extract items, match to bank transactions, categorize with splits | AmazonReceiptService with tiered matching (amount+date), Zod-validated Claude output, session dedup against completed sessions only, CUSTOM_AMAZON transactions always re-eligible |
-| 2026-04 | Unified AI Categorize dropdown menu | Single entry point for both categorization workflows | TransactionToolbar uses Mantine Menu dropdown with "Uncategorized Transactions" and "Amazon Receipt Matching" options |
-| 2026-04 | AI chatbot with structural security boundary | LLM-powered financial assistant with read-only data access | ChatbotDataService receives ReadOnlyDataService (SEC-018), tool_use for prompt injection defense, $20/month cost cap with mutex. Write actions (create_task, submit_github_issue) flow through the chat-action-card registry with nonce-based user confirmation — never executed by the LLM directly. |
-| 2026-04 | AI bulk categorization with few-shot learning | Batch classify uncategorized transactions using user's own data as examples | CategorizationService, bucket-based approve/edit/skip UI, auto-rule suggestions post-categorization |
-| 2026-04 | URL-based page state for all filter pages | Chatbot context awareness + bookmarkable/shareable URLs | Budget, Reports, Transactions pages sync filter state to URL params via useSearchParams |
-| 2026-01 | Plaid Link update mode for re-authentication | Allow users to re-authenticate expired bank connections | New endpoints, PlaidLinkContext update mode, visual indicators on accounts page and dashboard |
-| 2025-09 | Shared transaction calculation utilities | Consistent transfer exclusion across app | Created shared/utils/transactionCalculations.ts for all financial calculations |
-| 2025-09 | Field migration pattern with Admin UI | Safe data migrations with user control | Direct dataService access with destructuring for clean field removal |
-| 2025-09 | Rename "savings" to "rollover" | Avoid confusion with future savings features | Updated all references from isSavings to isRollover across codebase |
-| 2025-09 | Generalized CSV import framework | Support multiple CSV import types beyond categories | Created extensible BaseCSVParser system with ImportService for future transaction/mapping imports |
-| 2025-01 | SNAKE_CASE category IDs with Plaid PFC | Direct mapping eliminates complexity | **BREAKING**: Must delete existing category data before deployment |
-| 2024-12 | User-specific categories | Multi-user support requirement | All categories now have userId field |
-| 2024-11 | Pagination for transactions | Performance issues with large datasets | 50 items per page default |
-| 2024-10 | Service singletons | Prevent auth token inconsistencies | All services use getInstance() pattern |
-| 2024-09 | S3 for production storage | Filesystem not reliable on EC2 | StorageService abstracts storage backend |
-| 2024-09 | Mantine UI over Tailwind | Faster development with pre-built components | Consistent dark theme UI |
-
-### 🔄 Pending Architectural Changes
-Planned changes that haven't been implemented yet.
-
-| Change | Reason | Target Date | Notes |
-|--------|--------|-------------|-------|
-| Add transaction caching | Reduce API calls | TBD | Use React Query or similar |
-| Implement webhook support | Real-time transaction updates | TBD | Plaid webhooks for sync |
-| Add data export feature | User data portability | TBD | CSV/JSON export options |
-| Mobile app development | Better user experience | TBD | React Native likely choice |
-
-### Technical Debt
-**For comprehensive technical debt tracking, see [docs/completed/AI-TECHNICAL-DEBT.md](docs/completed/AI-TECHNICAL-DEBT.md)**
-
-Quick summary of high-priority items:
-- Reports page makes excessive parallel API requests (mitigated with nginx rate limit increase)
-- Frontend has TypeScript `any` types that need proper typing
-- Some components use `any` type that need proper typing
-- Test coverage could be improved for UI components
+Full technical debt: [AI-TECHNICAL-DEBT.md](docs/completed/AI-TECHNICAL-DEBT.md).
