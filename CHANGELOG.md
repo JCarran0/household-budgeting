@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.29.0](https://github.com/JCarran0/household-budgeting/compare/v5.28.0...v5.29.0) (2026-04-19)
+
+
+### Features
+
+* **tasks:** v2.1 Checklist redesign — Keep-style single button + kebab metadata ([c9ae232](https://github.com/JCarran0/household-budgeting/commit/c9ae232059bcbb14da48d32baa3d739318f5f43b))
+
+
+### Documentation
+
+* **claude:** trim CLAUDE.md from 700 to 243 lines (~65% reduction) ([ac45e3d](https://github.com/JCarran0/household-budgeting/commit/ac45e3dab984d588d509802a05a3e49a7e31e12a))
+
 ## [5.28.0](https://github.com/JCarran0/household-budgeting/compare/v5.27.1...v5.28.0) (2026-04-19)
 
 
