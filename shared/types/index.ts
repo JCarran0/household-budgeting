@@ -1114,6 +1114,18 @@ export interface SubTask {
   id: string;                     // UUID
   title: string;
   completed: boolean;
+  /**
+   * Server-stamped timestamp when `completed` transitioned false → true.
+   * Cleared (null) when the subtask is unchecked. Populated by the server
+   * on each toggle; client-supplied values are ignored.
+   */
+  completedAt: string | null;
+  /**
+   * Server-stamped userId of whoever most recently checked this subtask.
+   * Cleared when unchecked. Subtask leaderboard credit falls through to
+   * this field when the parent task has no assignee.
+   */
+  completedBy: string | null;
 }
 
 export interface TaskTransition {
@@ -1165,6 +1177,13 @@ export interface CreateTaskDto {
   sortOrder?: number;
 }
 
+/**
+ * Wire shape for subtask updates. Only id/title/completed are accepted —
+ * `completedAt` / `completedBy` are server-stamped based on toggles and
+ * cannot be set by the client.
+ */
+export type SubTaskUpdate = Pick<SubTask, 'id' | 'title' | 'completed'>;
+
 export interface UpdateTaskDto {
   title?: string;
   description?: string;
@@ -1172,7 +1191,7 @@ export interface UpdateTaskDto {
   assigneeId?: string | null;
   dueDate?: string | null;
   tags?: string[];
-  subTasks?: SubTask[];
+  subTasks?: SubTaskUpdate[];
 }
 
 export interface UpdateTaskStatusDto {

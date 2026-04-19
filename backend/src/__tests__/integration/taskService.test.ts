@@ -753,6 +753,186 @@ describe('Task Service Integration Tests', () => {
         .set('Authorization', `Bearer ${authToken}`)
         .expect(400);
     });
+
+    it('should credit the assignee, not the completer, when assignee is set', async () => {
+      // Create a family task assigned to a different user, then complete it
+      // as the authenticated user. The credit should land on the assignee.
+      const OTHER_USER = '11111111-2222-3333-4444-555555555555';
+
+      const createRes = await request(app)
+        .post('/api/v1/tasks')
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({ title: 'Task for someone else', assigneeId: OTHER_USER })
+        .expect(201);
+
+      await request(app)
+        .patch(`/api/v1/tasks/${createRes.body.id}/status`)
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({ status: 'done' })
+        .expect(200);
+
+      const res = await request(app)
+        .get('/api/v1/tasks/leaderboard')
+        .query({ timezone: 'America/New_York' })
+        .set('Authorization', `Bearer ${authToken}`)
+        .expect(200);
+
+      const completerEntry = res.body.entries.find((e: any) => e.userId === userId);
+      const assigneeEntry = res.body.entries.find((e: any) => e.userId === OTHER_USER);
+
+      expect(completerEntry.completedToday).toBe(0);
+      expect(assigneeEntry).toBeDefined();
+      expect(assigneeEntry.completedToday).toBe(1);
+    });
+
+    it('should credit each checked subtask toward the leaderboard', async () => {
+      // Parent stays in 'todo' so it doesn't contribute a parent-task point.
+      const createRes = await request(app)
+        .post('/api/v1/tasks')
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({
+          title: 'Laundry routine',
+          subTasks: [{ title: 'Wash' }, { title: 'Dry' }, { title: 'Fold' }],
+        })
+        .expect(201);
+
+      // Check two of three subtasks.
+      const subTasks = createRes.body.subTasks.map(
+        (st: { id: string; title: string; completed: boolean }, i: number) => ({
+          id: st.id,
+          title: st.title,
+          completed: i < 2,
+        }),
+      );
+      await request(app)
+        .put(`/api/v1/tasks/${createRes.body.id}`)
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({ subTasks })
+        .expect(200);
+
+      const res = await request(app)
+        .get('/api/v1/tasks/leaderboard')
+        .query({ timezone: 'America/New_York' })
+        .set('Authorization', `Bearer ${authToken}`)
+        .expect(200);
+
+      const entry = res.body.entries.find((e: any) => e.userId === userId);
+      expect(entry.completedToday).toBe(2);
+    });
+
+    it('should credit subtasks to the parent assignee when set', async () => {
+      const OTHER_USER = '22222222-3333-4444-5555-666666666666';
+
+      const createRes = await request(app)
+        .post('/api/v1/tasks')
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({
+          title: 'Shared chore with subs',
+          assigneeId: OTHER_USER,
+          subTasks: [{ title: 'Step 1' }],
+        })
+        .expect(201);
+
+      const subTasks = createRes.body.subTasks.map(
+        (st: { id: string; title: string }) => ({
+          id: st.id,
+          title: st.title,
+          completed: true,
+        }),
+      );
+      await request(app)
+        .put(`/api/v1/tasks/${createRes.body.id}`)
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({ subTasks })
+        .expect(200);
+
+      const res = await request(app)
+        .get('/api/v1/tasks/leaderboard')
+        .query({ timezone: 'America/New_York' })
+        .set('Authorization', `Bearer ${authToken}`)
+        .expect(200);
+
+      const completerEntry = res.body.entries.find((e: any) => e.userId === userId);
+      const assigneeEntry = res.body.entries.find((e: any) => e.userId === OTHER_USER);
+
+      expect(completerEntry.completedToday).toBe(0);
+      expect(assigneeEntry.completedToday).toBe(1);
+    });
+
+    it('should un-credit a subtask when it is unchecked', async () => {
+      const createRes = await request(app)
+        .post('/api/v1/tasks')
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({ title: 'Toggle test', subTasks: [{ title: 'A' }] })
+        .expect(201);
+
+      const subId = createRes.body.subTasks[0].id;
+
+      // Check
+      await request(app)
+        .put(`/api/v1/tasks/${createRes.body.id}`)
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({ subTasks: [{ id: subId, title: 'A', completed: true }] })
+        .expect(200);
+
+      // Uncheck
+      await request(app)
+        .put(`/api/v1/tasks/${createRes.body.id}`)
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({ subTasks: [{ id: subId, title: 'A', completed: false }] })
+        .expect(200);
+
+      const res = await request(app)
+        .get('/api/v1/tasks/leaderboard')
+        .query({ timezone: 'America/New_York' })
+        .set('Authorization', `Bearer ${authToken}`)
+        .expect(200);
+
+      const entry = res.body.entries.find((e: any) => e.userId === userId);
+      expect(entry.completedToday).toBe(0);
+    });
+
+    it('should ignore client-supplied subtask timestamps (server stamps authoritatively)', async () => {
+      const createRes = await request(app)
+        .post('/api/v1/tasks')
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({ title: 'Stamp test', subTasks: [{ title: 'A' }] })
+        .expect(201);
+
+      const subId = createRes.body.subTasks[0].id;
+
+      // Client tries to backdate the subtask to last year; server must ignore.
+      const updateRes = await request(app)
+        .put(`/api/v1/tasks/${createRes.body.id}`)
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({
+          subTasks: [
+            {
+              id: subId,
+              title: 'A',
+              completed: true,
+              completedAt: '2025-01-01T00:00:00.000Z',
+              completedBy: 'attacker-user-id',
+            },
+          ],
+        })
+        .expect(200);
+
+      const stored = updateRes.body.subTasks[0];
+      expect(stored.completed).toBe(true);
+      // Server stamps its own timestamp — not what the client sent.
+      expect(stored.completedAt).not.toBe('2025-01-01T00:00:00.000Z');
+      expect(stored.completedBy).toBe(userId);
+
+      // And it lands in today, not a year ago.
+      const res = await request(app)
+        .get('/api/v1/tasks/leaderboard')
+        .query({ timezone: 'America/New_York' })
+        .set('Authorization', `Bearer ${authToken}`)
+        .expect(200);
+      const entry = res.body.entries.find((e: any) => e.userId === userId);
+      expect(entry.completedToday).toBe(1);
+    });
   });
 
   // -------------------------------------------------------------------------

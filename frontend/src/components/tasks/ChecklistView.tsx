@@ -210,6 +210,8 @@ export function ChecklistView({ tasks, members, onEdit }: ChecklistViewProps) {
           id: crypto.randomUUID(),
           title: s.title,
           completed: false,
+          completedAt: null,
+          completedBy: null,
         })),
         snoozedUntil: null,
         sortOrder,
@@ -307,6 +309,8 @@ export function ChecklistView({ tasks, members, onEdit }: ChecklistViewProps) {
         id: crypto.randomUUID(),
         title: trimmed,
         completed: false,
+        completedAt: null,
+        completedBy: null,
       };
       const next = [...(parent.subTasks ?? []), newSub];
       // Optimistic cache patch
@@ -517,32 +521,33 @@ export function ChecklistView({ tasks, members, onEdit }: ChecklistViewProps) {
                               | undefined
                           }
                         />
+
+                        {/* Subtasks and subtask-draft live inside the Draggable
+                            so they travel with the parent during drag. */}
+                        {(task.subTasks ?? []).map((st) => (
+                          <SubtaskRow key={st.id} parent={task} subtask={st} callbacks={callbacks} />
+                        ))}
+
+                        {draftSubtaskOf(task.id) && (
+                          <DraftRow
+                            key={`draft-${draftNonce}`}
+                            kind="subtask"
+                            onSubmit={submitDraft}
+                            onTab={onDraftTab}
+                            onShiftTab={onDraftShiftTab}
+                            onEnterEmpty={onDraftEnterEmpty}
+                            onBlurEmpty={onDraftBlurEmpty}
+                            showIndentButtons={showIndentButtons}
+                          />
+                        )}
                       </div>
                     )}
                   </Draggable>
 
-                  {(task.subTasks ?? []).map((st) => (
-                    <SubtaskRow key={st.id} parent={task} subtask={st} callbacks={callbacks} />
-                  ))}
-
-                  {draftSubtaskOf(task.id) && (
-                    <DraftRow
-                      key={`draft-${draftNonce}`}
-                      kind="subtask"
-                      onSubmit={submitDraft}
-                      onTab={onDraftTab}
-                      onShiftTab={onDraftShiftTab}
-                      onEnterEmpty={onDraftEnterEmpty}
-                      onBlurEmpty={onDraftBlurEmpty}
-                      showIndentButtons={showIndentButtons}
-                    />
-                  )}
-
                   {/* Top-level draft anchored to this task renders AFTER its
-                      subtasks — clicking the ghost row (or pressing Enter on
-                      a parent task) should keep the cursor visually at the
-                      bottom of the subtree, not wedged between parent and
-                      children. */}
+                      subtasks and OUTSIDE the Draggable — it represents the
+                      insertion point for a new sibling, not part of this
+                      parent's drag unit. */}
                   {draftAtTopLevelAfter(task.id) && (
                     <DraftRow
                       key={`draft-${draftNonce}`}

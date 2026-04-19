@@ -57,7 +57,7 @@ A task is a unit of work to be done by a family member.
 
 | Scope | Board Visibility | Leaderboard | Editable By |
 |-------|-----------------|-------------|-------------|
-| **Family** | Visible to all family members | Counts for the completer (see §5.3) | Any family member |
+| **Family** | Visible to all family members | Counts for the assignee (or completer if unassigned — see §5.3) | Any family member |
 | **Personal** | Visible to all family members, **visually distinguished** (e.g., dimmed, badge, or subtle indicator) | Does not count (see §5.3) | Any family member |
 
 Personal tasks are never hidden. All family members can see all tasks. The visual distinction communicates "this is someone's personal item" without creating information silos.
@@ -131,12 +131,14 @@ A task may contain zero or more **subtasks** — ordered checklist items beneath
 | `id` | UUID |
 | `title` | Subtask title |
 | `completed` | Boolean |
+| `completedAt` | ISO datetime stamped server-side when `completed` transitions false → true; null otherwise. Client-supplied values are ignored. |
+| `completedBy` | userId stamped server-side alongside `completedAt`; null when unchecked. |
 
 Subtasks are:
 - **Ordered.** Order is persisted on the parent task and is family-wide (shared).
 - **Binary.** Subtasks have no `started` state — only `completed: true | false`.
 - **Not independently assigned, scoped, or dated.** All metadata lives on the parent.
-- **Not counted on the leaderboard.** Completing a subtask is not a leaderboard event.
+- **Counted on the leaderboard (v2.1+).** Each checked subtask on a family-scope parent contributes one additional point, attributed under the same rule as parent tasks (parent's `assigneeId` when set, else `completedBy`). Unchecking removes the point.
 - **Displayed indented** beneath their parent in Checklist view (§3.2).
 - **Displayed as a progress counter** ("2/5 complete") on Kanban cards.
 
@@ -405,10 +407,15 @@ Each family member's count is displayed. The member with the highest count in ea
 ### 5.3 Counting Rules (**v2.0 change**)
 
 - **Only tasks with `scope === 'family'` count toward the leaderboard.** Personal tasks are **excluded entirely** — they do not count for the owner, the completer, or any family member.
-- A family task counts toward the leaderboard of the **user who moved it to `done`**, regardless of assignee.
+- A family task counts toward the leaderboard of its **assignee** when one is set; if unassigned, it falls through to the user who moved it to `done`.
 - If a task is moved to `done`, then back to `started`, then to `done` again, it counts **once** — based on the most recent `completedAt` timestamp.
+- **Subtasks (v2.1+) contribute independently.** Each checked subtask on a family-scope parent scores **one point** attributed under the same rule: the parent's `assigneeId` when set, else the user who checked the subtask (`completedBy`). Unchecking the subtask removes the point. Legacy subtasks that were checked before this feature shipped (no `completedAt` stamp) are not retroactively credited.
 
 > **v1.0 → v2.0 behavior change:** In v1.0 personal tasks counted toward the owner's totals. They no longer count anywhere. See §9 for rationale.
+>
+> **v2.0 → v2.1 behavior change:** v2.0 attributed completions to whoever clicked Done. v2.1 attributes to the assignee when set, falling back to the completer only when no assignee is recorded. Rationale: in a shared household board one spouse often checks tasks off on the other's behalf, which hoarded credit under the v2.0 rule.
+>
+> **v2.1 addition:** Subtasks now count toward the leaderboard (one point per checked subtask, same attribution rule). Rationale: subtasks represent real completed work and excluding them under-counted members whose completions were dominated by checklist progress on long-running parent tasks.
 
 ### 5.4 Tone
 
@@ -472,7 +479,7 @@ A cancelled or archived done task can be moved back to `todo` or `started` from 
 | REQ-013 | Task History view for accessing archived and all historical tasks; supports recovery back to active status |
 | REQ-014 | Full task creation form (title, assignee, due date, scope, description) |
 | REQ-015 | Leaderboard showing family tasks completed per family member: today, this week, this month |
-| REQ-016 | **Leaderboard counts only family-scope tasks**, attributed to the user who moved the task to `done`. Personal tasks are excluded entirely |
+| REQ-016 | **Leaderboard counts only family-scope tasks and their subtasks.** Parent tasks attributed to `assigneeId` when set, otherwise to the user who moved the task to `done`. Each checked subtask contributes one additional point under the same rule (parent's `assigneeId` when set, otherwise `completedBy`). Legacy subtasks without a `completedAt` stamp are not retroactively credited. Personal tasks are excluded entirely |
 | REQ-017 | Tasks page accessible from sidebar navigation |
 | REQ-017a | Tasks support a project tag in their `tags` array for contextual grouping (see PROJECTS-BRD.md §4.5); tag is applied via a project picker, not free-text entry |
 | REQ-017b | Task cards and task detail view display a project chip that navigates to the associated project when a project tag is present |

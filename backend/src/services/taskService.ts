@@ -12,6 +12,8 @@ import {
   CreateTaskDto,
   UpdateTaskDto,
   TaskStatus,
+  SubTask,
+  SubTaskUpdate,
   LeaderboardResponse,
   LeaderboardEntry,
 } from '../shared/types';
@@ -38,6 +40,14 @@ export class TaskService {
     for (const task of tasks) {
       if (!task.tags) task.tags = [];
       if (!task.subTasks) task.subTasks = [];
+      // v2.1+ subtask completion stamps — lazy heal on read. Existing
+      // subtasks with `completed: true` but no timestamp are intentionally
+      // NOT backfilled to the parent's completedAt; they simply won't
+      // score (non-retroactive credit).
+      for (const st of task.subTasks) {
+        if (st.completedAt === undefined) st.completedAt = null;
+        if (st.completedBy === undefined) st.completedBy = null;
+      }
       // v2.0 fields — lazy heal on read
       if (task.snoozedUntil === undefined) task.snoozedUntil = null;
       if (typeof task.sortOrder !== 'number') {
@@ -135,6 +145,8 @@ export class TaskService {
         id: uuidv4(),
         title: st.title,
         completed: false,
+        completedAt: null,
+        completedBy: null,
       })),
       snoozedUntil: null,
       sortOrder,
@@ -158,7 +170,7 @@ export class TaskService {
   async updateTask(
     taskId: string,
     data: UpdateTaskDto,
-    _userId: string,
+    userId: string,
     familyId: string
   ): Promise<StoredTask> {
     const tasks = await this.loadTasks(familyId);
@@ -173,6 +185,11 @@ export class TaskService {
     const assigneeChanged =
       data.assigneeId !== undefined && data.assigneeId !== existing.assigneeId;
 
+    const nextSubTasks =
+      data.subTasks !== undefined
+        ? reconcileSubtaskStamps(existing.subTasks, data.subTasks, userId, now)
+        : existing.subTasks;
+
     const updated: StoredTask = {
       ...existing,
       title: data.title ?? existing.title,
@@ -182,7 +199,7 @@ export class TaskService {
       assigneeId: data.assigneeId !== undefined ? data.assigneeId : existing.assigneeId,
       assignedAt: assigneeChanged ? now : existing.assignedAt,
       tags: data.tags !== undefined ? data.tags : existing.tags,
-      subTasks: data.subTasks !== undefined ? data.subTasks : existing.subTasks,
+      subTasks: nextSubTasks,
     };
 
     tasks[index] = updated;
@@ -432,29 +449,48 @@ export class TaskService {
     }
 
     // Scan tasks for completions.
-    // v2.0 (D13): count based on most recent completedAt, attributed to the
-    // user who performed that transition — but ONLY for family-scope tasks.
-    // Personal tasks contribute zero to any leaderboard total.
+    // Attribution rule: credit the `assigneeId` when set, otherwise fall back
+    // to the user who performed the most recent 'done' transition. This
+    // matches the "my assigned tasks are on my leaderboard" intuition for a
+    // shared household board where one spouse often clicks Done on the
+    // other's tasks. (Supersedes v2.0 D13, which credited only the
+    // completer.) Family scope only — personal tasks never contribute.
+    //
+    // Subtasks (v2.1+): each completed subtask on a family-scope parent
+    // contributes one additional point, independent of the parent's
+    // completion. Attribution follows the same rule: parent's assigneeId
+    // when set, else the user who checked the subtask (`completedBy`).
+    const creditCount = (userIdToCredit: string, completedAtMs: number) => {
+      if (!counts.has(userIdToCredit)) {
+        counts.set(userIdToCredit, { today: 0, week: 0, month: 0 });
+      }
+      const c = counts.get(userIdToCredit)!;
+      if (completedAtMs >= monthStart.getTime()) c.month++;
+      if (completedAtMs >= weekStart.getTime()) c.week++;
+      if (completedAtMs >= todayStart.getTime()) c.today++;
+    };
+
     for (const task of tasks) {
-      if (!task.completedAt) continue;
       if (task.scope !== 'family') continue;
 
-      // Find the transition that corresponds to the most recent completedAt
-      const completionTransition = findCompletionTransition(task);
-      if (!completionTransition) continue;
-
-      const completedTime = new Date(task.completedAt);
-      const completedByUserId = completionTransition.userId;
-
-      // Ensure the user has a counter (might be a former member)
-      if (!counts.has(completedByUserId)) {
-        counts.set(completedByUserId, { today: 0, week: 0, month: 0 });
+      // Parent task completion
+      if (task.completedAt) {
+        const completionTransition = findCompletionTransition(task);
+        if (completionTransition) {
+          const creditedUserId = task.assigneeId ?? completionTransition.userId;
+          creditCount(creditedUserId, new Date(task.completedAt).getTime());
+        }
       }
-      const userCounts = counts.get(completedByUserId)!;
 
-      if (completedTime >= monthStart) userCounts.month++;
-      if (completedTime >= weekStart) userCounts.week++;
-      if (completedTime >= todayStart) userCounts.today++;
+      // Subtask completions
+      for (const st of task.subTasks) {
+        if (!st.completed) continue;
+        if (!st.completedAt) continue; // legacy unstamped — skip
+        // Prefer parent assignee; fall back to whoever checked the subtask.
+        const creditedUserId = task.assigneeId ?? st.completedBy;
+        if (!creditedUserId) continue;
+        creditCount(creditedUserId, new Date(st.completedAt).getTime());
+      }
     }
 
     // Build entries
@@ -490,6 +526,59 @@ export class TaskService {
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
+
+/**
+ * Merge client-submitted subtask edits with the stored subtasks, preserving
+ * the server's authoritative completedAt/completedBy stamps. Toggling
+ * `completed` false → true stamps both fields to `now` and `userId`;
+ * toggling true → false clears them. Title changes and new subtasks are
+ * accepted as-is (new subtasks default to uncompleted with null stamps).
+ *
+ * Client-supplied `completedAt`/`completedBy` values would be stripped by
+ * the route's Zod schema anyway (`SubTaskUpdate` shape), but we never read
+ * them here — they're computed solely from transition.
+ */
+function reconcileSubtaskStamps(
+  existing: SubTask[],
+  incoming: SubTaskUpdate[],
+  userId: string,
+  now: string,
+): SubTask[] {
+  const existingById = new Map(existing.map((s) => [s.id, s]));
+  return incoming.map((incomingSt) => {
+    const prior = existingById.get(incomingSt.id);
+    if (!prior) {
+      // New subtask introduced in this update. Stamp if it arrives checked.
+      return {
+        id: incomingSt.id,
+        title: incomingSt.title,
+        completed: incomingSt.completed,
+        completedAt: incomingSt.completed ? now : null,
+        completedBy: incomingSt.completed ? userId : null,
+      };
+    }
+    if (!prior.completed && incomingSt.completed) {
+      return {
+        ...prior,
+        title: incomingSt.title,
+        completed: true,
+        completedAt: now,
+        completedBy: userId,
+      };
+    }
+    if (prior.completed && !incomingSt.completed) {
+      return {
+        ...prior,
+        title: incomingSt.title,
+        completed: false,
+        completedAt: null,
+        completedBy: null,
+      };
+    }
+    // No completion change — preserve existing stamps, allow title edits.
+    return { ...prior, title: incomingSt.title };
+  });
+}
 
 /**
  * Find the transition entry that corresponds to the task's most recent
