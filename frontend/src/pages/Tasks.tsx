@@ -26,13 +26,15 @@ import {
   MultiSelect,
   CloseButton,
   TagsInput,
+  Switch,
+  ScrollArea,
 } from '@mantine/core';
 import { DatePickerInput } from '@mantine/dates';
 import { useForm } from '@mantine/form';
 import { useDisclosure } from '@mantine/hooks';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { notifications } from '@mantine/notifications';
-import { DragDropContext, type DropResult } from '@hello-pangea/dnd';
+import { DragDropContext, Droppable, type DropResult } from '@hello-pangea/dnd';
 import {
   IconPlus,
   IconChevronDown,
@@ -53,8 +55,11 @@ import { format, parseISO } from 'date-fns';
 import { api } from '../lib/api';
 import { useAuthStore } from '../stores/authStore';
 import { KanbanColumn } from '../components/tasks/KanbanColumn';
+import { TaskCard } from '../components/tasks/TaskCard';
+import { ChecklistView } from '../components/tasks/ChecklistView';
 import { userColor } from '../utils/userColor';
 import { UserColorDot } from '../components/common/UserColorDot';
+import { computeSortOrder } from '../../../shared/utils/taskSortOrder';
 import type {
   StoredTask,
   TaskStatus,
@@ -72,12 +77,135 @@ import type {
 // Constants
 // ---------------------------------------------------------------------------
 
-const COLUMNS: { status: TaskStatus; label: string; color: string }[] = [
+/** Rendered Kanban columns (v2.0: Cancelled column retired). */
+const BOARD_COLUMNS: { status: TaskStatus; label: string; color: string }[] = [
   { status: 'todo', label: 'Todo', color: 'blue' },
   { status: 'started', label: 'Started', color: 'yellow' },
   { status: 'done', label: 'Done', color: 'green' },
-  { status: 'cancelled', label: 'Cancelled', color: 'gray' },
 ];
+
+/** Droppable id for the synthetic Snoozed column (not a TaskStatus). */
+const SNOOZED_DROPPABLE_ID = '__snoozed__';
+
+/** Full status → {label, color} map for badges and history filter options. */
+const STATUS_META: Record<TaskStatus, { label: string; color: string }> = {
+  todo: { label: 'Todo', color: 'blue' },
+  started: { label: 'Started', color: 'yellow' },
+  done: { label: 'Done', color: 'green' },
+  cancelled: { label: 'Cancelled', color: 'gray' },
+};
+
+/** Legacy export for places that still want the array form. */
+const COLUMNS = (Object.keys(STATUS_META) as TaskStatus[]).map((status) => ({
+  status,
+  label: STATUS_META[status].label,
+  color: STATUS_META[status].color,
+}));
+
+// ---------------------------------------------------------------------------
+// Sorting helpers (v2.0)
+// ---------------------------------------------------------------------------
+
+/** A task is "currently snoozed" if snoozedUntil is set and in the future. */
+function isSnoozed(task: StoredTask): boolean {
+  if (!task.snoozedUntil) return false;
+  return new Date(task.snoozedUntil).getTime() > Date.now();
+}
+
+/** sortOrder ASC — for todo/started columns. Stable, handles undefined. */
+function bySortOrderAsc(a: StoredTask, b: StoredTask): number {
+  return (a.sortOrder ?? 0) - (b.sortOrder ?? 0);
+}
+
+/** completedAt DESC — for the Done column. */
+function byCompletedAtDesc(a: StoredTask, b: StoredTask): number {
+  const ab = a.completedAt ?? '';
+  const bb = b.completedAt ?? '';
+  return bb.localeCompare(ab);
+}
+
+/** snoozedUntil ASC — for the Snoozed column (nearest expiry first). */
+function bySnoozeAsc(a: StoredTask, b: StoredTask): number {
+  return (a.snoozedUntil ?? '').localeCompare(b.snoozedUntil ?? '');
+}
+
+/**
+ * Sort the full flat board array into render order:
+ *   status group (todo → started → done → cancelled), then per-column rule.
+ * Done once on server data receipt; subsequent local mutations splice rather
+ * than re-sort to avoid racing pangea-dnd's drop animation.
+ */
+const STATUS_GROUP_ORDER: Record<TaskStatus, number> = {
+  todo: 0,
+  started: 1,
+  done: 2,
+  cancelled: 3,
+};
+function sortBoardForRender(tasks: StoredTask[]): StoredTask[] {
+  const next = [...tasks];
+  next.sort((a, b) => {
+    if (a.status !== b.status) {
+      return STATUS_GROUP_ORDER[a.status] - STATUS_GROUP_ORDER[b.status];
+    }
+    if (a.status === 'done' || a.status === 'cancelled') {
+      return byCompletedAtDesc(a, b);
+    }
+    return bySortOrderAsc(a, b);
+  });
+  return next;
+}
+
+/**
+ * Splice a task into its new position in the flat board array, producing an
+ * array whose render order matches pangea-dnd's post-drop expectation.
+ *
+ * `destinationIndex` is the index within the destination column as rendered
+ * (snoozed items excluded, user filters NOT applied — see caller).
+ */
+function spliceBoardForDrop(
+  prev: StoredTask[],
+  taskId: string,
+  newStatus: TaskStatus,
+  newSortOrder: number,
+  destinationIndex: number,
+): StoredTask[] {
+  const without: StoredTask[] = [];
+  let removed: StoredTask | null = null;
+  for (const t of prev) {
+    if (t.id === taskId) removed = t;
+    else without.push(t);
+  }
+  if (!removed) return prev;
+
+  const updated: StoredTask = { ...removed, status: newStatus, sortOrder: newSortOrder };
+
+  // Walk `without`, counting items that render in the destination column,
+  // and find the insertion point matching `destinationIndex`.
+  let seenInColumn = 0;
+  let insertAt = without.length; // default: end of array
+  for (let i = 0; i < without.length; i++) {
+    const t = without[i];
+    if (t.status !== newStatus) continue;
+    if (isSnoozed(t)) continue;
+    if (seenInColumn === destinationIndex) {
+      insertAt = i;
+      break;
+    }
+    seenInColumn++;
+  }
+  // If we filled the column without hitting destinationIndex, insert after the
+  // last item of that column (preserves group contiguity).
+  if (insertAt === without.length && seenInColumn > 0 && seenInColumn <= destinationIndex) {
+    for (let i = without.length - 1; i >= 0; i--) {
+      if (without[i].status === newStatus && !isSnoozed(without[i])) {
+        insertAt = i + 1;
+        break;
+      }
+    }
+  }
+
+  return [...without.slice(0, insertAt), updated, ...without.slice(insertAt)];
+}
 
 // ---------------------------------------------------------------------------
 // Main Page
@@ -89,6 +217,17 @@ export function Tasks() {
 
   // View state
   const [view, setView] = useState<'board' | 'history'>('board');
+  // v2.0 — board presentation (kanban vs. flat checklist), persisted per user
+  const [boardMode, setBoardMode] = useState<'kanban' | 'checklist'>(() => {
+    try {
+      const stored = localStorage.getItem('tasks.view');
+      return stored === 'checklist' ? 'checklist' : 'kanban';
+    } catch { return 'kanban'; }
+  });
+  const setBoardModePersisted = (next: 'kanban' | 'checklist') => {
+    setBoardMode(next);
+    try { localStorage.setItem('tasks.view', next); } catch { /* ignore */ }
+  };
   const [filterAssignee, setFilterAssignee] = useState<string | null>(null);
   const [filterScope, setFilterScope] = useState<string>('all');
   const [filterTags, setFilterTags] = useState<string[]>([]);
@@ -105,6 +244,17 @@ export function Tasks() {
     catch { return true; }
   });
 
+  // v2.0 — Show-snoozed toggle (per-user, persisted)
+  const [showSnoozed, setShowSnoozed] = useState(() => {
+    try { return localStorage.getItem('tasks.kanban.showSnoozed') === 'true'; }
+    catch { return false; }
+  });
+  const toggleShowSnoozed = (next: boolean) => {
+    setShowSnoozed(next);
+    try { localStorage.setItem('tasks.kanban.showSnoozed', next ? 'true' : 'false'); }
+    catch { /* ignore */ }
+  };
+
   // ---------- Queries ----------
 
   const { data: familyData } = useQuery({
@@ -114,15 +264,20 @@ export function Tasks() {
   const members: FamilyMember[] = familyData?.family?.members ?? [];
 
   const { data: serverBoardTasks = [], isLoading: boardLoading, error: boardError } = useQuery({
-    queryKey: ['tasks', 'board'],
-    queryFn: () => api.getBoardTasks(),
+    queryKey: ['tasks', 'board', { includeSnoozed: showSnoozed }],
+    queryFn: () => api.getBoardTasks({ includeSnoozed: showSnoozed }),
   });
 
   // Local state for board data — drives rendering so drag updates are synchronous.
   // Synced from React Query whenever the server data changes.
+  //
+  // IMPORTANT: sort once on receipt, then preserve render order through local
+  // mutations (splice). If we re-sorted on every render, pangea-dnd's drop
+  // animation would race with the re-ordering and the dragged item would
+  // briefly snap back to its source position before React re-rendered it.
   const [boardTasks, setBoardTasks] = useState<StoredTask[]>([]);
   useEffect(() => {
-    setBoardTasks(serverBoardTasks);
+    setBoardTasks(sortBoardForRender(serverBoardTasks));
   }, [serverBoardTasks]);
 
   const { data: allTasks = [] } = useQuery({
@@ -169,6 +324,19 @@ export function Tasks() {
       api.updateTaskStatus(id, status),
   });
 
+  const reorderMutation = useMutation({
+    mutationFn: ({ id, status, sortOrder }: { id: string; status: TaskStatus; sortOrder: number }) =>
+      api.reorderTask(id, status, sortOrder),
+  });
+
+  const snoozeMutation = useMutation({
+    mutationFn: ({ id, snoozedUntil }: { id: string; snoozedUntil: string | null }) =>
+      api.snoozeTask(id, snoozedUntil),
+    onSuccess: () => {
+      invalidateTasks();
+    },
+  });
+
   const deleteMutation = useMutation({
     mutationFn: (id: string) => api.deleteTask(id),
     onSuccess: () => {
@@ -182,29 +350,58 @@ export function Tasks() {
 
   const onDragEnd = (result: DropResult) => {
     if (!result.destination) return;
-    const newStatus = result.destination.droppableId as TaskStatus;
+    const destinationId = result.destination.droppableId;
     const taskId = result.draggableId;
-    const task = boardTasks.find((t) => t.id === taskId);
-    if (!task || task.status === newStatus) return;
 
-    // Synchronous local state update — the card moves immediately
-    const previousBoard = boardTasks;
-    setBoardTasks((prev) =>
-      prev.map((t) => (t.id === taskId ? { ...t, status: newStatus } : t))
+    // Drops onto the synthetic Snoozed column are disallowed — snooze happens
+    // via the card kebab menu.
+    if (destinationId === SNOOZED_DROPPABLE_ID) return;
+
+    const newStatus = destinationId as TaskStatus;
+    const task = boardTasks.find((t) => t.id === taskId);
+    if (!task) return;
+
+    // Neighbors are taken from the destination column AS CURRENTLY RENDERED
+    // (boardTasks is already in render order; drop the dragged task from that
+    // slice). This guarantees the sortOrder math lines up with pangea's index.
+    const destinationIndex = result.destination.index;
+    const destinationColumn = boardTasks.filter(
+      (t) => t.id !== taskId && t.status === newStatus && !isSnoozed(t),
     );
 
-    statusMutation.mutate(
-      { id: taskId, status: newStatus },
+    const before = destinationColumn[destinationIndex - 1]?.sortOrder ?? null;
+    const after = destinationColumn[destinationIndex]?.sortOrder ?? null;
+    const newSortOrder = computeSortOrder(before, after);
+
+    // Optimistic: splice the task to its new position (not a re-sort). This is
+    // what pangea-dnd expects post-drop — re-sorting via sortForColumn would
+    // race the drop animation and make the card briefly bounce back.
+    const previousBoard = boardTasks;
+    setBoardTasks((prev) =>
+      spliceBoardForDrop(prev, taskId, newStatus, newSortOrder, destinationIndex),
+    );
+
+    reorderMutation.mutate(
+      { id: taskId, status: newStatus, sortOrder: newSortOrder },
       {
         onSuccess: (updatedTask) => {
-          // Replace optimistic placeholder with full server response
+          // Replace the optimistic record with the canonical server record —
+          // in-place, preserving array order.
           setBoardTasks((prev) =>
-            prev.map((t) => (t.id === updatedTask.id ? updatedTask : t))
+            prev.map((t) => (t.id === updatedTask.id ? updatedTask : t)),
           );
-          void queryClient.invalidateQueries({ queryKey: ['tasks', 'leaderboard'] });
+          if (task.status !== newStatus) {
+            void queryClient.invalidateQueries({ queryKey: ['tasks', 'leaderboard'] });
+            // Done column is canonically ordered by completedAt DESC — refetch
+            // so its render reflects the server-side rule.
+            if (newStatus === 'done') {
+              void queryClient.invalidateQueries({ queryKey: ['tasks', 'board'] });
+            }
+          }
         },
         onError: () => {
           setBoardTasks(previousBoard);
+          notifications.show({ message: 'Failed to move task', color: 'red' });
         },
       },
     );
@@ -238,9 +435,23 @@ export function Tasks() {
     return Array.from(tagSet).sort();
   }, [boardTasks]);
 
+  const snoozedTasks = useMemo(
+    () => filteredBoardTasks.filter((t) => isSnoozed(t)).sort(bySnoozeAsc),
+    [filteredBoardTasks],
+  );
+
+  // Partition filtered tasks by column, preserving their order in boardTasks.
+  // (boardTasks is already in render order — see the useEffect above.) No
+  // per-column re-sort here: doing so would race pangea-dnd's drop animation.
   const tasksByStatus = useMemo(() => {
-    const map: Record<TaskStatus, StoredTask[]> = { todo: [], started: [], done: [], cancelled: [] };
+    const map: Record<TaskStatus, StoredTask[]> = {
+      todo: [],
+      started: [],
+      done: [],
+      cancelled: [],
+    };
     for (const task of filteredBoardTasks) {
+      if (isSnoozed(task)) continue; // render in the snoozed column instead
       map[task.status].push(task);
     }
     return map;
@@ -309,6 +520,17 @@ export function Tasks() {
               { label: 'History', value: 'history' },
             ]}
           />
+          {view === 'board' && (
+            <SegmentedControl
+              size="xs"
+              value={boardMode}
+              onChange={(v) => setBoardModePersisted(v as 'kanban' | 'checklist')}
+              data={[
+                { label: 'Kanban', value: 'kanban' },
+                { label: 'Checklist', value: 'checklist' },
+              ]}
+            />
+          )}
         </Group>
       </Group>
 
@@ -332,7 +554,13 @@ export function Tasks() {
         </Paper>
       )}
 
-      {view === 'board' ? (
+      {view === 'board' && boardMode === 'checklist' ? (
+        <ChecklistView
+          tasks={filteredBoardTasks}
+          members={members}
+          onEdit={(t) => setEditingTask(t)}
+        />
+      ) : view === 'board' ? (
         <>
           {/* Filters + Create */}
           <Group gap="sm" mb="md" justify="space-between">
@@ -367,6 +595,12 @@ export function Tasks() {
                   w={200}
                 />
               )}
+              <Switch
+                size="xs"
+                label="Show snoozed"
+                checked={showSnoozed}
+                onChange={(e) => toggleShowSnoozed(e.currentTarget.checked)}
+              />
             </Group>
 
             {/* Split button: Create + template dropdown */}
@@ -404,7 +638,7 @@ export function Tasks() {
           {/* Kanban Board */}
           <DragDropContext onDragEnd={onDragEnd}>
             <Group align="flex-start" gap="md" wrap="nowrap" style={{ overflowX: 'auto' }}>
-              {COLUMNS.map((col) => (
+              {BOARD_COLUMNS.map((col) => (
                 <KanbanColumn
                   key={col.status}
                   status={col.status}
@@ -413,8 +647,25 @@ export function Tasks() {
                   tasks={tasksByStatus[col.status]}
                   members={members}
                   onTaskClick={setDetailTask}
+                  onSnooze={(taskId, snoozedUntil) =>
+                    snoozeMutation.mutate({ id: taskId, snoozedUntil })
+                  }
+                  onCancel={(taskId) => statusMutation.mutate(
+                    { id: taskId, status: 'cancelled' },
+                    { onSuccess: invalidateTasks }
+                  )}
+                  onEdit={(task) => setEditingTask(task)}
                 />
               ))}
+              {showSnoozed && (
+                <SnoozedColumn
+                  tasks={snoozedTasks}
+                  members={members}
+                  onTaskClick={setDetailTask}
+                  onUnsnooze={(taskId) => snoozeMutation.mutate({ id: taskId, snoozedUntil: null })}
+                  onEdit={(task) => setEditingTask(task)}
+                />
+              )}
             </Group>
           </DragDropContext>
         </>
@@ -501,6 +752,62 @@ export function Tasks() {
         members={members}
       />
     </Container>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Snoozed Column — read-only position, sorted by snoozedUntil ASC
+// ---------------------------------------------------------------------------
+
+interface SnoozedColumnProps {
+  tasks: StoredTask[];
+  members: FamilyMember[];
+  onTaskClick: (task: StoredTask) => void;
+  onUnsnooze: (taskId: string) => void;
+  onEdit?: (task: StoredTask) => void;
+}
+
+function SnoozedColumn({ tasks, members, onTaskClick, onUnsnooze, onEdit }: SnoozedColumnProps) {
+  return (
+    <div style={{ flex: 1, minWidth: 220 }}>
+      <Group gap="xs" mb="xs">
+        <Text fw={600} size="sm">Snoozed</Text>
+        <Badge size="sm" variant="light" color="indigo" circle>
+          {tasks.length}
+        </Badge>
+      </Group>
+      <Droppable droppableId={SNOOZED_DROPPABLE_ID} isDropDisabled>
+        {(provided) => (
+          <ScrollArea
+            h="calc(100vh - 280px)"
+            type="auto"
+            ref={provided.innerRef}
+            {...provided.droppableProps}
+            style={{
+              background: 'var(--mantine-color-dark-7)',
+              borderRadius: 'var(--mantine-radius-sm)',
+              padding: 'var(--mantine-spacing-xs)',
+              minHeight: 100,
+            }}
+          >
+            <Stack gap="xs">
+              {tasks.map((task) => (
+                <TaskCard
+                  key={task.id}
+                  task={task}
+                  members={members}
+                  onClick={() => onTaskClick(task)}
+                  onSnooze={(id, val) => { if (val === null) onUnsnooze(id); }}
+                  onEdit={onEdit}
+                  isSnoozedView
+                />
+              ))}
+              {provided.placeholder}
+            </Stack>
+          </ScrollArea>
+        )}
+      </Droppable>
+    </div>
   );
 }
 
@@ -772,6 +1079,7 @@ export interface TaskDetailModalProps {
 
 export function TaskDetailModal({ task, onClose, members, onStatusChange, onEdit, onDelete, onSubTaskToggle }: TaskDetailModalProps) {
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [confirmCancel, setConfirmCancel] = useState(false);
 
   if (!task) return null;
 
@@ -848,12 +1156,45 @@ export function TaskDetailModal({ task, onClose, members, onStatusChange, onEdit
               variant="light"
               color={action.color}
               leftSection={action.icon}
-              onClick={() => onStatusChange(action.status)}
+              onClick={() => {
+                if (action.status === 'cancelled') {
+                  setConfirmCancel(true);
+                  return;
+                }
+                onStatusChange(action.status);
+              }}
             >
               {action.label}
             </Button>
           ))}
         </Group>
+
+        {/* Cancel confirmation */}
+        <Modal
+          opened={confirmCancel}
+          onClose={() => setConfirmCancel(false)}
+          title="Cancel this task?"
+          size="sm"
+          withinPortal
+        >
+          <Stack gap="sm">
+            <Text size="sm">It will move to Task History.</Text>
+            <Group justify="flex-end">
+              <Button variant="subtle" onClick={() => setConfirmCancel(false)}>
+                Keep task
+              </Button>
+              <Button
+                color="red"
+                onClick={() => {
+                  onStatusChange('cancelled');
+                  setConfirmCancel(false);
+                }}
+              >
+                Cancel task
+              </Button>
+            </Group>
+          </Stack>
+        </Modal>
 
         {/* Transition timeline */}
         <Text fw={600} size="sm">History</Text>

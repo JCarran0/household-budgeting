@@ -253,7 +253,7 @@ describe('Task Service Integration Tests', () => {
   // Board archiving
   // -------------------------------------------------------------------------
 
-  describe('Board archiving (14-day cutoff)', () => {
+  describe('Board archiving (v2.0 rules)', () => {
     it('should exclude done tasks older than 14 days from board', async () => {
       // Create task and complete it
       const createRes = await request(app)
@@ -298,6 +298,416 @@ describe('Task Service Integration Tests', () => {
         .expect(200);
 
       expect(allRes.body).toHaveLength(1);
+    });
+
+    it('should keep done tasks within 14-day window on board', async () => {
+      const createRes = await request(app)
+        .post('/api/v1/tasks')
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({ title: 'Recent done' })
+        .expect(201);
+
+      await request(app)
+        .patch(`/api/v1/tasks/${createRes.body.id}/status`)
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({ status: 'done' })
+        .expect(200);
+
+      const boardRes = await request(app)
+        .get('/api/v1/tasks/board')
+        .set('Authorization', `Bearer ${authToken}`)
+        .expect(200);
+
+      expect(boardRes.body).toHaveLength(1);
+    });
+
+    it('should exclude cancelled tasks from board immediately (no 14-day window)', async () => {
+      const createRes = await request(app)
+        .post('/api/v1/tasks')
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({ title: 'Just cancelled' })
+        .expect(201);
+
+      await request(app)
+        .patch(`/api/v1/tasks/${createRes.body.id}/status`)
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({ status: 'cancelled' })
+        .expect(200);
+
+      const boardRes = await request(app)
+        .get('/api/v1/tasks/board')
+        .set('Authorization', `Bearer ${authToken}`)
+        .expect(200);
+
+      expect(boardRes.body).toHaveLength(0);
+
+      // History still has it
+      const allRes = await request(app)
+        .get('/api/v1/tasks')
+        .set('Authorization', `Bearer ${authToken}`)
+        .expect(200);
+
+      expect(allRes.body).toHaveLength(1);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // v2.0 — Snooze
+  // -------------------------------------------------------------------------
+
+  describe('POST /api/v1/tasks/:id/snooze', () => {
+    const futureISO = (msFromNow = 60 * 60 * 1000): string =>
+      new Date(Date.now() + msFromNow).toISOString();
+
+    it('should set snoozedUntil without touching status or sortOrder or logging a transition', async () => {
+      const create = await request(app)
+        .post('/api/v1/tasks')
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({ title: 'Snooze me' })
+        .expect(201);
+
+      const before = create.body;
+
+      const res = await request(app)
+        .post(`/api/v1/tasks/${before.id}/snooze`)
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({ snoozedUntil: futureISO() })
+        .expect(200);
+
+      expect(res.body.snoozedUntil).toBeTruthy();
+      expect(res.body.status).toBe(before.status);
+      expect(res.body.sortOrder).toBe(before.sortOrder);
+      expect(res.body.transitions).toHaveLength(before.transitions.length);
+    });
+
+    it('should clear snooze when snoozedUntil=null', async () => {
+      const create = await request(app)
+        .post('/api/v1/tasks')
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({ title: 'Snooze clear' })
+        .expect(201);
+
+      await request(app)
+        .post(`/api/v1/tasks/${create.body.id}/snooze`)
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({ snoozedUntil: futureISO() })
+        .expect(200);
+
+      const cleared = await request(app)
+        .post(`/api/v1/tasks/${create.body.id}/snooze`)
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({ snoozedUntil: null })
+        .expect(200);
+
+      expect(cleared.body.snoozedUntil).toBeNull();
+    });
+
+    it('should hide snoozed task from default board list, include with ?includeSnoozed=true', async () => {
+      const create = await request(app)
+        .post('/api/v1/tasks')
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({ title: 'Hidden when snoozed' })
+        .expect(201);
+
+      await request(app)
+        .post(`/api/v1/tasks/${create.body.id}/snooze`)
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({ snoozedUntil: futureISO() })
+        .expect(200);
+
+      const hidden = await request(app)
+        .get('/api/v1/tasks/board')
+        .set('Authorization', `Bearer ${authToken}`)
+        .expect(200);
+      expect(hidden.body).toHaveLength(0);
+
+      const shown = await request(app)
+        .get('/api/v1/tasks/board')
+        .query({ includeSnoozed: 'true' })
+        .set('Authorization', `Bearer ${authToken}`)
+        .expect(200);
+      expect(shown.body).toHaveLength(1);
+    });
+
+    it('should auto-unsnooze once snoozedUntil has passed', async () => {
+      await request(app)
+        .post('/api/v1/tasks')
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({ title: 'Expires' })
+        .expect(201);
+
+      // Manually backdate snoozedUntil via storage
+      const familyId = (await request(app)
+        .get('/api/v1/family')
+        .set('Authorization', `Bearer ${authToken}`)).body.family.id;
+      const tasks = await dataService.getData<any[]>(`tasks_${familyId}`);
+      if (tasks) {
+        const past = new Date(Date.now() - 60_000).toISOString();
+        tasks[0].snoozedUntil = past;
+        await dataService.saveData(`tasks_${familyId}`, tasks);
+      }
+
+      const res = await request(app)
+        .get('/api/v1/tasks/board')
+        .set('Authorization', `Bearer ${authToken}`)
+        .expect(200);
+      expect(res.body).toHaveLength(1);
+    });
+
+    it('should clear snoozedUntil when task transitions to done', async () => {
+      const create = await request(app)
+        .post('/api/v1/tasks')
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({ title: 'Snoozed then done' })
+        .expect(201);
+
+      await request(app)
+        .post(`/api/v1/tasks/${create.body.id}/snooze`)
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({ snoozedUntil: futureISO() })
+        .expect(200);
+
+      const res = await request(app)
+        .patch(`/api/v1/tasks/${create.body.id}/status`)
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({ status: 'done' })
+        .expect(200);
+
+      expect(res.body.snoozedUntil).toBeNull();
+    });
+
+    it('should clear snoozedUntil when task transitions to cancelled', async () => {
+      const create = await request(app)
+        .post('/api/v1/tasks')
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({ title: 'Snoozed then cancel' })
+        .expect(201);
+
+      await request(app)
+        .post(`/api/v1/tasks/${create.body.id}/snooze`)
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({ snoozedUntil: futureISO() })
+        .expect(200);
+
+      const res = await request(app)
+        .patch(`/api/v1/tasks/${create.body.id}/status`)
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({ status: 'cancelled' })
+        .expect(200);
+
+      expect(res.body.snoozedUntil).toBeNull();
+    });
+
+    it('should reject snooze on done task', async () => {
+      const create = await request(app)
+        .post('/api/v1/tasks')
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({ title: 'Done already' })
+        .expect(201);
+
+      await request(app)
+        .patch(`/api/v1/tasks/${create.body.id}/status`)
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({ status: 'done' })
+        .expect(200);
+
+      await request(app)
+        .post(`/api/v1/tasks/${create.body.id}/snooze`)
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({ snoozedUntil: futureISO() })
+        .expect(400);
+    });
+
+    it('should reject snoozedUntil in the past', async () => {
+      const create = await request(app)
+        .post('/api/v1/tasks')
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({ title: 'In the past' })
+        .expect(201);
+
+      await request(app)
+        .post(`/api/v1/tasks/${create.body.id}/snooze`)
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({ snoozedUntil: new Date(Date.now() - 60_000).toISOString() })
+        .expect(400);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // v2.0 — Reorder
+  // -------------------------------------------------------------------------
+
+  describe('POST /api/v1/tasks/:id/reorder', () => {
+    it('should update sortOrder within same status without logging a transition', async () => {
+      const a = await request(app)
+        .post('/api/v1/tasks')
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({ title: 'A' })
+        .expect(201);
+
+      const beforeTransitions = a.body.transitions.length;
+
+      const res = await request(app)
+        .post(`/api/v1/tasks/${a.body.id}/reorder`)
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({ status: 'todo', sortOrder: 123.5 })
+        .expect(200);
+
+      expect(res.body.sortOrder).toBe(123.5);
+      expect(res.body.status).toBe('todo');
+      expect(res.body.transitions).toHaveLength(beforeTransitions);
+    });
+
+    it('should combine status change + reorder in one call and log the transition', async () => {
+      const a = await request(app)
+        .post('/api/v1/tasks')
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({ title: 'To start' })
+        .expect(201);
+
+      const res = await request(app)
+        .post(`/api/v1/tasks/${a.body.id}/reorder`)
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({ status: 'started', sortOrder: 7.5 })
+        .expect(200);
+
+      expect(res.body.status).toBe('started');
+      expect(res.body.sortOrder).toBe(7.5);
+      expect(res.body.transitions.length).toBe(a.body.transitions.length + 1);
+      expect(res.body.startedAt).toBeTruthy();
+    });
+
+    it('should reject reorder into done', async () => {
+      const a = await request(app)
+        .post('/api/v1/tasks')
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({ title: 'No reorder to done' })
+        .expect(201);
+
+      await request(app)
+        .post(`/api/v1/tasks/${a.body.id}/reorder`)
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({ status: 'done', sortOrder: 1 })
+        .expect(400);
+    });
+
+    it('should reject reorder into cancelled', async () => {
+      const a = await request(app)
+        .post('/api/v1/tasks')
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({ title: 'No reorder to cancelled' })
+        .expect(201);
+
+      await request(app)
+        .post(`/api/v1/tasks/${a.body.id}/reorder`)
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({ status: 'cancelled', sortOrder: 1 })
+        .expect(400);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // v2.0 — Top-of-column on non-drag status change
+  // -------------------------------------------------------------------------
+
+  describe('Non-drag status change positions task at top of destination column', () => {
+    it('should place a transitioned task above existing siblings', async () => {
+      // Seed: two tasks in 'started'
+      const a = await request(app)
+        .post('/api/v1/tasks')
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({ title: 'A' })
+        .expect(201);
+      const b = await request(app)
+        .post('/api/v1/tasks')
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({ title: 'B' })
+        .expect(201);
+
+      await request(app)
+        .patch(`/api/v1/tasks/${a.body.id}/status`)
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({ status: 'started' })
+        .expect(200);
+      await request(app)
+        .patch(`/api/v1/tasks/${b.body.id}/status`)
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({ status: 'started' })
+        .expect(200);
+
+      // Now move a third task to started via status endpoint — it should be above both
+      const c = await request(app)
+        .post('/api/v1/tasks')
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({ title: 'C' })
+        .expect(201);
+
+      const transitioned = await request(app)
+        .patch(`/api/v1/tasks/${c.body.id}/status`)
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({ status: 'started' })
+        .expect(200);
+
+      // All three tasks now in started; c should have the smallest sortOrder
+      const sorted = [a.body, b.body, transitioned.body]
+        .map((t) => t.sortOrder as number)
+        .sort((x, y) => x - y);
+      expect(sorted[0]).toBe(transitioned.body.sortOrder);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // v2.0 — Leaderboard family-scope filter (D13)
+  // -------------------------------------------------------------------------
+
+  describe('Leaderboard family-scope (v2.0 behavior change)', () => {
+    it('should NOT count personal tasks toward any user, including the creator', async () => {
+      const create = await request(app)
+        .post('/api/v1/tasks')
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({ title: 'Personal task', scope: 'personal', assigneeId: userId })
+        .expect(201);
+
+      await request(app)
+        .patch(`/api/v1/tasks/${create.body.id}/status`)
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({ status: 'done' })
+        .expect(200);
+
+      const res = await request(app)
+        .get('/api/v1/tasks/leaderboard')
+        .query({ timezone: 'America/New_York' })
+        .set('Authorization', `Bearer ${authToken}`)
+        .expect(200);
+
+      const userEntry = res.body.entries.find((e: any) => e.userId === userId);
+      expect(userEntry).toBeDefined();
+      expect(userEntry.completedToday).toBe(0);
+      expect(userEntry.completedThisWeek).toBe(0);
+      expect(userEntry.completedThisMonth).toBe(0);
+    });
+
+    it('should count family tasks toward the completer', async () => {
+      const create = await request(app)
+        .post('/api/v1/tasks')
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({ title: 'Family task' })
+        .expect(201);
+
+      await request(app)
+        .patch(`/api/v1/tasks/${create.body.id}/status`)
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({ status: 'done' })
+        .expect(200);
+
+      const res = await request(app)
+        .get('/api/v1/tasks/leaderboard')
+        .query({ timezone: 'America/New_York' })
+        .set('Authorization', `Bearer ${authToken}`)
+        .expect(200);
+
+      const userEntry = res.body.entries.find((e: any) => e.userId === userId);
+      expect(userEntry.completedToday).toBe(1);
     });
   });
 

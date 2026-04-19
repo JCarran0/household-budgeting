@@ -1141,6 +1141,8 @@ export interface Task {
   transitions: TaskTransition[];  // append-only log
   tags: string[];                 // free-form labels for filtering
   subTasks: SubTask[];            // checklist items on the task
+  snoozedUntil: string | null;    // ISO datetime; null if not snoozed (v2.0)
+  sortOrder: number;              // fractional float for manual ordering (v2.0)
 }
 
 export interface StoredTask extends Task {
@@ -1170,6 +1172,26 @@ export interface UpdateTaskDto {
 
 export interface UpdateTaskStatusDto {
   status: TaskStatus;
+  /**
+   * Optional startedAt timestamp. Only honored by the service when the
+   * target status is 'done' AND the task's current startedAt is null —
+   * used by the Checklist view's synthetic start stamp (v2.0 D2).
+   */
+  startedAt?: string;
+}
+
+// v2.0 — Snooze
+export interface SnoozeTaskDto {
+  /** ISO datetime; null clears the snooze. Future-only when set. */
+  snoozedUntil: string | null;
+}
+
+// v2.0 — Manual reorder
+export interface ReorderTaskDto {
+  /** Destination column (validated against current + disallowed statuses). */
+  status: TaskStatus;
+  /** New sortOrder — computed client-side via shared/utils/taskSortOrder. */
+  sortOrder: number;
 }
 
 // Task Template types

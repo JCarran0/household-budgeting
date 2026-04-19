@@ -44,10 +44,34 @@ const updateTaskSchema = z.object({
 
 const updateStatusSchema = z.object({
   status: z.enum(['todo', 'started', 'done', 'cancelled']),
+  startedAt: z.string().datetime().optional(),
 });
 
 const leaderboardQuerySchema = z.object({
   timezone: z.string().min(1),
+});
+
+const snoozeSchema = z.object({
+  snoozedUntil: z
+    .string()
+    .datetime()
+    .nullable()
+    .refine(
+      (val) => val === null || new Date(val).getTime() > Date.now(),
+      'snoozedUntil must be in the future'
+    ),
+});
+
+const reorderSchema = z.object({
+  status: z.enum(['todo', 'started', 'done', 'cancelled']),
+  sortOrder: z.number().finite(),
+});
+
+const boardQuerySchema = z.object({
+  includeSnoozed: z
+    .enum(['true', 'false'])
+    .optional()
+    .transform((v) => v === 'true'),
 });
 
 // All routes require authentication
@@ -83,14 +107,19 @@ router.get('/', async (req: Request, res: Response, next: NextFunction): Promise
   }
 });
 
-// GET /api/v1/tasks/board - Get board tasks (excludes archived)
+// GET /api/v1/tasks/board - Get board tasks (excludes archived; hides snoozed by default)
 router.get('/board', async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const familyId = req.user?.familyId;
     if (!familyId) throw new AuthorizationError();
-    const tasks = await taskService.getBoardTasks(familyId);
+    const { includeSnoozed } = boardQuerySchema.parse(req.query);
+    const tasks = await taskService.getBoardTasks(familyId, { includeSnoozed });
     res.json(tasks);
   } catch (error) {
+    if (error instanceof z.ZodError) {
+      res.status(400).json({ error: 'Invalid query', details: error.format() });
+      return;
+    }
     next(error);
   }
 });
@@ -156,8 +185,14 @@ router.patch('/:id/status', async (req: Request, res: Response, next: NextFuncti
     const familyId = req.user?.familyId;
     const userId = req.user?.userId;
     if (!familyId || !userId) throw new AuthorizationError();
-    const { status } = updateStatusSchema.parse(req.body);
-    const task = await taskService.updateTaskStatus(req.params.id, status, userId, familyId);
+    const { status, startedAt } = updateStatusSchema.parse(req.body);
+    const task = await taskService.updateTaskStatus(
+      req.params.id,
+      status,
+      userId,
+      familyId,
+      startedAt ? { startedAt } : {}
+    );
     res.json(task);
   } catch (error) {
     if (error instanceof z.ZodError) {
@@ -167,6 +202,67 @@ router.patch('/:id/status', async (req: Request, res: Response, next: NextFuncti
     if (error instanceof Error && error.message === 'Task not found') {
       next(new NotFoundError('Task not found'));
       return;
+    }
+    next(error);
+  }
+});
+
+// POST /api/v1/tasks/:id/snooze - Set or clear snoozedUntil
+router.post('/:id/snooze', async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const familyId = req.user?.familyId;
+    if (!familyId) throw new AuthorizationError();
+    const { snoozedUntil } = snoozeSchema.parse(req.body);
+    const task = await taskService.snoozeTask(req.params.id, snoozedUntil, familyId);
+    res.json(task);
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      res.status(400).json({ error: 'Invalid request data', details: error.format() });
+      return;
+    }
+    if (error instanceof Error) {
+      if (error.message === 'Task not found') {
+        next(new NotFoundError('Task not found'));
+        return;
+      }
+      if (error.message === 'Cannot snooze a done or cancelled task') {
+        res.status(400).json({ error: error.message });
+        return;
+      }
+    }
+    next(error);
+  }
+});
+
+// POST /api/v1/tasks/:id/reorder - Update sortOrder (and optionally status)
+router.post('/:id/reorder', async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const familyId = req.user?.familyId;
+    const userId = req.user?.userId;
+    if (!familyId || !userId) throw new AuthorizationError();
+    const { status, sortOrder } = reorderSchema.parse(req.body);
+    const task = await taskService.reorderTask(
+      req.params.id,
+      status,
+      sortOrder,
+      userId,
+      familyId
+    );
+    res.json(task);
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      res.status(400).json({ error: 'Invalid request data', details: error.format() });
+      return;
+    }
+    if (error instanceof Error) {
+      if (error.message === 'Task not found') {
+        next(new NotFoundError('Task not found'));
+        return;
+      }
+      if (error.message === 'Reorder not allowed for done or cancelled tasks') {
+        res.status(400).json({ error: error.message });
+        return;
+      }
     }
     next(error);
   }

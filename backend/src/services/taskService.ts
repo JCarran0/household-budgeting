@@ -15,10 +15,11 @@ import {
   LeaderboardResponse,
   LeaderboardEntry,
 } from '../shared/types';
+import { topOfColumn } from '../shared/utils/taskSortOrder';
 import { DataService } from './dataService';
 import { FamilyService } from './familyService';
 
-/** Number of days after which done/cancelled tasks are archived from the board */
+/** Number of days after which done tasks are archived from the board */
 const ARCHIVE_AFTER_DAYS = 14;
 
 export class TaskService {
@@ -37,8 +38,28 @@ export class TaskService {
     for (const task of tasks) {
       if (!task.tags) task.tags = [];
       if (!task.subTasks) task.subTasks = [];
+      // v2.0 fields — lazy heal on read
+      if (task.snoozedUntil === undefined) task.snoozedUntil = null;
+      if (typeof task.sortOrder !== 'number') {
+        // Use createdAt-as-seconds so legacy tasks preserve creation order.
+        const created = Date.parse(task.createdAt);
+        task.sortOrder = Number.isFinite(created) ? created / 1000 : 0;
+      }
     }
     return tasks;
+  }
+
+  /**
+   * Current minimum sortOrder among active tasks in a status (used to land
+   * new/transitioned tasks at the top of the destination column).
+   */
+  private minSortOrder(tasks: StoredTask[], status: TaskStatus): number | null {
+    let min: number | null = null;
+    for (const t of tasks) {
+      if (t.status !== status) continue;
+      if (min === null || t.sortOrder < min) min = t.sortOrder;
+    }
+    return min;
   }
 
   private async saveTasks(tasks: StoredTask[], familyId: string): Promise<void> {
@@ -47,19 +68,22 @@ export class TaskService {
 
   /**
    * Check whether a task should be hidden from the active board.
-   * Tasks in done/cancelled for more than ARCHIVE_AFTER_DAYS are archived.
+   *
+   * v2.0 rules (BRD §3.3, plan D12):
+   *   - 'cancelled' → archived immediately (no 14-day window; no Cancelled column)
+   *   - 'done'      → archived after ARCHIVE_AFTER_DAYS days
+   *   - other       → never archived
    */
   private isArchived(task: StoredTask): boolean {
-    if (task.status !== 'done' && task.status !== 'cancelled') return false;
+    if (task.status === 'cancelled') return true;
+    if (task.status !== 'done') return false;
 
-    const terminalTimestamp = task.status === 'done' ? task.completedAt : task.cancelledAt;
-    if (!terminalTimestamp) return false;
-
-    const terminalDate = new Date(terminalTimestamp);
+    if (!task.completedAt) return false;
+    const completed = new Date(task.completedAt);
     const cutoff = new Date();
     cutoff.setDate(cutoff.getDate() - ARCHIVE_AFTER_DAYS);
 
-    return terminalDate < cutoff;
+    return completed < cutoff;
   }
 
   // ---------------------------------------------------------------------------
@@ -73,6 +97,10 @@ export class TaskService {
   ): Promise<StoredTask> {
     const now = new Date().toISOString();
     const initialStatus: TaskStatus = data.status === 'started' ? 'started' : 'todo';
+
+    const tasks = await this.loadTasks(familyId);
+    const sortOrder = topOfColumn(this.minSortOrder(tasks, initialStatus));
+
     const task: StoredTask = {
       id: uuidv4(),
       familyId,
@@ -102,9 +130,10 @@ export class TaskService {
         title: st.title,
         completed: false,
       })),
+      snoozedUntil: null,
+      sortOrder,
     };
 
-    const tasks = await this.loadTasks(familyId);
     tasks.push(task);
     await this.saveTasks(tasks, familyId);
 
@@ -175,7 +204,13 @@ export class TaskService {
     taskId: string,
     newStatus: TaskStatus,
     userId: string,
-    familyId: string
+    familyId: string,
+    options: {
+      /** Optional synthetic startedAt (Checklist done-checkbox path, v2.0 D2). */
+      startedAt?: string;
+      /** If true, caller (reorderTask) is providing its own sortOrder — don't override. */
+      preserveSortOrder?: boolean;
+    } = {}
   ): Promise<StoredTask> {
     const tasks = await this.loadTasks(familyId);
     const index = tasks.findIndex((t) => t.id === taskId);
@@ -195,7 +230,8 @@ export class TaskService {
     };
 
     // Update convenience timestamps based on new status
-    let { startedAt, completedAt, cancelledAt, assigneeId, assignedAt } = existing;
+    let { startedAt, completedAt, cancelledAt, assigneeId, assignedAt, snoozedUntil } =
+      existing;
 
     switch (newStatus) {
       case 'todo':
@@ -216,11 +252,33 @@ export class TaskService {
       case 'done':
         completedAt = now;
         cancelledAt = null;
+        // Synthetic start stamp: Checklist "done without started first" (D2).
+        // Only honored when startedAt was null.
+        if (!startedAt && options.startedAt) {
+          startedAt = options.startedAt;
+        }
+        // Terminal — clear snooze (D9)
+        snoozedUntil = null;
         break;
       case 'cancelled':
         cancelledAt = now;
         completedAt = null;
+        // Terminal — clear snooze (D9)
+        snoozedUntil = null;
         break;
+    }
+
+    // sortOrder: if status changed, land at top of destination column
+    // (plan 2.2, D15). Reorder callers bypass via preserveSortOrder.
+    let sortOrder = existing.sortOrder;
+    if (!options.preserveSortOrder && existing.status !== newStatus) {
+      // Build a provisional list reflecting the new status for min-calc
+      sortOrder = topOfColumn(
+        this.minSortOrder(
+          tasks.filter((t) => t.id !== taskId),
+          newStatus
+        )
+      );
     }
 
     const updated: StoredTask = {
@@ -231,6 +289,8 @@ export class TaskService {
       cancelledAt,
       assigneeId,
       assignedAt,
+      snoozedUntil,
+      sortOrder,
       transitions: [...existing.transitions, transition],
     };
 
@@ -241,12 +301,105 @@ export class TaskService {
   }
 
   // ---------------------------------------------------------------------------
-  // Board query (excludes archived tasks)
+  // v2.0 — Snooze
   // ---------------------------------------------------------------------------
 
-  async getBoardTasks(familyId: string): Promise<StoredTask[]> {
+  async snoozeTask(
+    taskId: string,
+    snoozedUntil: string | null,
+    familyId: string
+  ): Promise<StoredTask> {
     const tasks = await this.loadTasks(familyId);
-    return tasks.filter((t) => !this.isArchived(t));
+    const index = tasks.findIndex((t) => t.id === taskId);
+    if (index === -1) {
+      throw new Error('Task not found');
+    }
+
+    const existing = tasks[index];
+    if (existing.status === 'done' || existing.status === 'cancelled') {
+      throw new Error('Cannot snooze a done or cancelled task');
+    }
+
+    // Snooze is orthogonal — no status change, no transition log, no assignee change (D6/D10).
+    const updated: StoredTask = {
+      ...existing,
+      snoozedUntil,
+    };
+
+    tasks[index] = updated;
+    await this.saveTasks(tasks, familyId);
+
+    return updated;
+  }
+
+  // ---------------------------------------------------------------------------
+  // v2.0 — Manual reorder
+  // ---------------------------------------------------------------------------
+
+  async reorderTask(
+    taskId: string,
+    targetStatus: TaskStatus,
+    sortOrder: number,
+    userId: string,
+    familyId: string
+  ): Promise<StoredTask> {
+    if (targetStatus === 'done' || targetStatus === 'cancelled') {
+      throw new Error('Reorder not allowed for done or cancelled tasks');
+    }
+
+    const tasks = await this.loadTasks(familyId);
+    const index = tasks.findIndex((t) => t.id === taskId);
+    if (index === -1) {
+      throw new Error('Task not found');
+    }
+
+    const existing = tasks[index];
+
+    // If status is actually changing, delegate to updateTaskStatus so the
+    // transition log and auto-assign behavior run — then overwrite sortOrder
+    // with the caller's value (preserveSortOrder short-circuits the top-of-column logic).
+    if (existing.status !== targetStatus) {
+      const transitioned = await this.updateTaskStatus(
+        taskId,
+        targetStatus,
+        userId,
+        familyId,
+        { preserveSortOrder: true }
+      );
+      // Apply caller-provided sortOrder after the transition write
+      const tasksAfter = await this.loadTasks(familyId);
+      const i2 = tasksAfter.findIndex((t) => t.id === taskId);
+      if (i2 === -1) throw new Error('Task not found');
+      tasksAfter[i2] = { ...transitioned, sortOrder };
+      await this.saveTasks(tasksAfter, familyId);
+      return tasksAfter[i2];
+    }
+
+    // Pure sortOrder update — no transition, no other field touched.
+    const updated: StoredTask = { ...existing, sortOrder };
+    tasks[index] = updated;
+    await this.saveTasks(tasks, familyId);
+    return updated;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Board query (excludes archived tasks; hides snoozed by default)
+  // ---------------------------------------------------------------------------
+
+  async getBoardTasks(
+    familyId: string,
+    options: { includeSnoozed?: boolean } = {}
+  ): Promise<StoredTask[]> {
+    const tasks = await this.loadTasks(familyId);
+    const now = Date.now();
+    return tasks.filter((t) => {
+      if (this.isArchived(t)) return false;
+      if (!options.includeSnoozed && t.snoozedUntil) {
+        const until = new Date(t.snoozedUntil).getTime();
+        if (Number.isFinite(until) && until > now) return false;
+      }
+      return true;
+    });
   }
 
   // ---------------------------------------------------------------------------
@@ -273,10 +426,12 @@ export class TaskService {
     }
 
     // Scan tasks for completions.
-    // Per BRD: count based on most recent completedAt, attributed to the user
-    // who performed that transition.
+    // v2.0 (D13): count based on most recent completedAt, attributed to the
+    // user who performed that transition — but ONLY for family-scope tasks.
+    // Personal tasks contribute zero to any leaderboard total.
     for (const task of tasks) {
       if (!task.completedAt) continue;
+      if (task.scope !== 'family') continue;
 
       // Find the transition that corresponds to the most recent completedAt
       const completionTransition = findCompletionTransition(task);
@@ -284,9 +439,6 @@ export class TaskService {
 
       const completedTime = new Date(task.completedAt);
       const completedByUserId = completionTransition.userId;
-
-      // Personal tasks count only for the creator
-      if (task.scope === 'personal' && completedByUserId !== task.createdBy) continue;
 
       // Ensure the user has a counter (might be a former member)
       if (!counts.has(completedByUserId)) {

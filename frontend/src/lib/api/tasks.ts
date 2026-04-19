@@ -19,8 +19,9 @@ export function createTasksApi(client: AxiosInstance) {
       return data;
     },
 
-    async getBoardTasks(): Promise<StoredTask[]> {
-      const { data } = await client.get<StoredTask[]>('/tasks/board');
+    async getBoardTasks(options: { includeSnoozed?: boolean } = {}): Promise<StoredTask[]> {
+      const params = options.includeSnoozed ? { includeSnoozed: 'true' } : undefined;
+      const { data } = await client.get<StoredTask[]>('/tasks/board', { params });
       return data;
     },
 
@@ -34,8 +35,27 @@ export function createTasksApi(client: AxiosInstance) {
       return data;
     },
 
-    async updateTaskStatus(id: string, status: TaskStatus): Promise<StoredTask> {
-      const { data } = await client.patch<StoredTask>(`/tasks/${id}/status`, { status });
+    async updateTaskStatus(
+      id: string,
+      status: TaskStatus,
+      options: { startedAt?: string } = {}
+    ): Promise<StoredTask> {
+      const body: { status: TaskStatus; startedAt?: string } = { status };
+      if (options.startedAt) body.startedAt = options.startedAt;
+      const { data } = await client.patch<StoredTask>(`/tasks/${id}/status`, body);
+      return data;
+    },
+
+    async snoozeTask(id: string, snoozedUntil: string | null): Promise<StoredTask> {
+      const { data } = await client.post<StoredTask>(`/tasks/${id}/snooze`, { snoozedUntil });
+      return data;
+    },
+
+    async reorderTask(id: string, status: TaskStatus, sortOrder: number): Promise<StoredTask> {
+      const { data } = await client.post<StoredTask>(`/tasks/${id}/reorder`, {
+        status,
+        sortOrder,
+      });
       return data;
     },
 

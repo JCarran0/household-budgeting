@@ -10,6 +10,10 @@ interface KanbanColumnProps {
   tasks: StoredTask[];
   members: FamilyMember[];
   onTaskClick: (task: StoredTask) => void;
+  /** v2.0 — invoked from the card kebab menu. */
+  onSnooze?: (taskId: string, snoozedUntil: string | null) => void;
+  onCancel?: (taskId: string) => void;
+  onEdit?: (task: StoredTask) => void;
 }
 
 export function KanbanColumn({
@@ -19,7 +23,14 @@ export function KanbanColumn({
   tasks,
   members,
   onTaskClick,
+  onSnooze,
+  onCancel,
+  onEdit,
 }: KanbanColumnProps) {
+  // Done column is auto-sorted (completedAt DESC) on the server/parent; disable
+  // drag-reorder *within* Done by passing isDragDisabled on each draggable.
+  const reorderDisabled = status === 'done';
+
   return (
     <div style={{ flex: 1, minWidth: 220 }}>
       <Group gap="xs" mb="xs">
@@ -47,7 +58,12 @@ export function KanbanColumn({
           >
             <Stack gap="xs">
               {tasks.map((task, index) => (
-                <Draggable key={task.id} draggableId={task.id} index={index}>
+                <Draggable
+                  key={task.id}
+                  draggableId={task.id}
+                  index={index}
+                  isDragDisabled={reorderDisabled}
+                >
                   {(dragProvided) => (
                     <div
                       ref={dragProvided.innerRef}
@@ -58,6 +74,9 @@ export function KanbanColumn({
                         task={task}
                         members={members}
                         onClick={() => onTaskClick(task)}
+                        onSnooze={onSnooze}
+                        onCancel={onCancel}
+                        onEdit={onEdit}
                       />
                     </div>
                   )}

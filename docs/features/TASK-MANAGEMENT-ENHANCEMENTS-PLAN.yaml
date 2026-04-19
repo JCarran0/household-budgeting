@@ -3,7 +3,7 @@
 # =============================================================================
 # BRD: docs/features/TASK-MANAGEMENT-BRD.md (v2.0)
 # Related BRDs: docs/features/PROJECTS-BRD.md (§4.5), docs/features/FAMILY-MULTI-USER-BRD.md
-# Status: Not Started
+# Status: Implemented — Slice A + Slice B shipped
 # Last Updated: 2026-04-19
 # =============================================================================
 
@@ -210,7 +210,7 @@ decisions:
 # PHASE 1: Shared Types & Data Migration
 # =============================================================================
 phase_1_types:
-  status: not_started
+  status: completed
   description: |
     Add snoozedUntil + sortOrder to Task. Preserve backward compatibility with
     persisted tasks that lack these fields (defaults applied on read).
@@ -218,7 +218,7 @@ phase_1_types:
   tasks:
     - id: "1.1"
       task: Extend Task interface in shared/types/index.ts
-      status: not_started
+      status: completed
       details: |
         Add two fields to the Task interface (around line 1112):
 
@@ -250,7 +250,7 @@ phase_1_types:
 
     - id: "1.2"
       task: Define snooze-option resolver helper (shared util)
-      status: not_started
+      status: completed
       details: |
         New file: shared/utils/taskSnooze.ts
 
@@ -280,7 +280,7 @@ phase_1_types:
 
     - id: "1.3"
       task: Define sortOrder fractional indexing helpers (shared util)
-      status: not_started
+      status: completed
       details: |
         New file: shared/utils/taskSortOrder.ts
 
@@ -309,7 +309,7 @@ phase_1_types:
 
     - id: "1.4"
       task: Add read-path backfill for legacy tasks without snoozedUntil / sortOrder
-      status: not_started
+      status: completed
       details: |
         In taskService.ts, apply defaults when hydrating from storage:
 
@@ -338,7 +338,7 @@ phase_1_types:
 # PHASE 2: Backend — Snooze, Reorder, Leaderboard, Cancel Archiving
 # =============================================================================
 phase_2_backend:
-  status: not_started
+  status: completed
   description: |
     New routes: POST /api/v1/tasks/:id/snooze, POST /api/v1/tasks/:id/reorder.
     Modified: status-update path applies top-of-column sortOrder for non-drag
@@ -350,7 +350,7 @@ phase_2_backend:
   tasks:
     - id: "2.1"
       task: Assign sortOrder on task creation
-      status: not_started
+      status: completed
       details: |
         In taskService.createTask:
           - After validating the new task, compute its sortOrder as
@@ -364,7 +364,7 @@ phase_2_backend:
 
     - id: "2.2"
       task: Apply top-of-column sortOrder on non-drag status changes
-      status: not_started
+      status: completed
       details: |
         In taskService.updateTaskStatus (called by PATCH /api/v1/tasks/:id/status):
           - When status transitions, compute new sortOrder =
@@ -385,7 +385,7 @@ phase_2_backend:
 
     - id: "2.3"
       task: New endpoint — POST /api/v1/tasks/:id/snooze
-      status: not_started
+      status: completed
       details: |
         Body: SnoozeTaskDto { snoozedUntil: string | null }
 
@@ -406,7 +406,7 @@ phase_2_backend:
 
     - id: "2.4"
       task: New endpoint — POST /api/v1/tasks/:id/reorder
-      status: not_started
+      status: completed
       details: |
         Body: ReorderTaskDto { status: TaskStatus; sortOrder: number }
 
@@ -431,7 +431,7 @@ phase_2_backend:
 
     - id: "2.5"
       task: List endpoint — filter snoozed tasks by default, support includeSnoozed flag
-      status: not_started
+      status: completed
       details: |
         GET /api/v1/tasks (existing endpoint):
           - Accept new query param: ?includeSnoozed=<bool> (default false)
@@ -451,7 +451,7 @@ phase_2_backend:
 
     - id: "2.6"
       task: Leaderboard — filter to family-scope tasks only
-      status: not_started
+      status: completed
       details: |
         Locate the leaderboard query in taskService (likely
         `getLeaderboard(familyId, windowStart, windowEnd)` or similar).
@@ -469,7 +469,7 @@ phase_2_backend:
 
     - id: "2.7"
       task: Task history / board list — cancelled tasks archive immediately
-      status: not_started
+      status: completed
       details: |
         In the Kanban list query (GET /api/v1/tasks with board-style filters):
           - Exclude cancelled tasks entirely (no 14-day window for cancelled)
@@ -485,7 +485,7 @@ phase_2_backend:
 
     - id: "2.8"
       task: Task recovery from history — land at top of destination column
-      status: not_started
+      status: completed
       details: |
         When a task is moved from cancelled/archived-done back to todo or
         started (via Task History detail view):
@@ -495,7 +495,7 @@ phase_2_backend:
 
     - id: "2.9"
       task: Integration tests for snooze, reorder, cancel-archiving, leaderboard
-      status: not_started
+      status: completed
       details: |
         File: backend/src/__tests__/integration/taskService.test.ts
 
@@ -527,7 +527,7 @@ phase_2_backend:
 # PHASE 3: Frontend — Kanban Changes (reorder, snooze, no cancelled column)
 # =============================================================================
 phase_3_frontend_kanban:
-  status: not_started
+  status: completed
   description: |
     Modify the existing Kanban board to: drop the Cancelled column, add the
     Show-snoozed toggle + Snoozed column, support vertical drag-reorder
@@ -537,7 +537,7 @@ phase_3_frontend_kanban:
   tasks:
     - id: "3.1"
       task: Remove Cancelled column from Kanban; default layout is 3 columns
-      status: not_started
+      status: completed
       details: |
         File: frontend/src/pages/Tasks.tsx (and any KanbanColumn composition).
 
@@ -549,7 +549,7 @@ phase_3_frontend_kanban:
 
     - id: "3.2"
       task: Add "Show snoozed" toggle + Snoozed column (when on)
-      status: not_started
+      status: completed
       details: |
         - Add a toggle control in the board header (Mantine Switch or similar):
           "Show snoozed" — persisted per user via localStorage
@@ -566,7 +566,7 @@ phase_3_frontend_kanban:
 
     - id: "3.3"
       task: Vertical drag-reorder within Todo and Started columns
-      status: not_started
+      status: completed
       details: |
         Use the existing DnD library (check: @hello-pangea/dnd per CLAUDE.md
         tech debt #10, or whichever is already wired).
@@ -586,7 +586,7 @@ phase_3_frontend_kanban:
 
     - id: "3.4"
       task: Card kebab menu — Snooze ▸ submenu, Cancel task, Edit
-      status: not_started
+      status: completed
       details: |
         File: frontend/src/components/tasks/TaskCard.tsx
 
@@ -616,7 +616,7 @@ phase_3_frontend_kanban:
 
     - id: "3.5"
       task: Replace legacy "Scope counts personal for owner" in leaderboard panel display
-      status: not_started
+      status: completed
       details: |
         File: frontend leaderboard component (likely under
         frontend/src/components/tasks/ — locate by searching "leaderboard").
@@ -629,7 +629,7 @@ phase_3_frontend_kanban:
 
     - id: "3.6"
       task: Manual testing — Kanban v2.0 behaviors
-      status: not_started
+      status: pending_manual_test
       details: |
         - [ ] Board shows 3 columns by default (Todo, Started, Done)
         - [ ] "Show snoozed" toggle reveals a 4th column
@@ -652,7 +652,7 @@ phase_3_frontend_kanban:
 # PHASE 4: Frontend — Checklist View
 # =============================================================================
 phase_4_frontend_checklist:
-  status: not_started
+  status: completed
   description: |
     New Checklist view as an alternate presentation. View toggle at the top of
     the Tasks page (e.g., segmented control: [Kanban | Checklist]). View
@@ -661,7 +661,7 @@ phase_4_frontend_checklist:
   tasks:
     - id: "4.1"
       task: Add view toggle (Kanban / Checklist) on Tasks page
-      status: not_started
+      status: completed
       details: |
         File: frontend/src/pages/Tasks.tsx
 
@@ -672,7 +672,7 @@ phase_4_frontend_checklist:
 
     - id: "4.2"
       task: Build ChecklistView component
-      status: not_started
+      status: completed
       details: |
         New file: frontend/src/components/tasks/ChecklistView.tsx
 
@@ -691,7 +691,7 @@ phase_4_frontend_checklist:
 
     - id: "4.3"
       task: ChecklistRow component — two checkboxes, inline edit, kebab, subtasks indented
-      status: not_started
+      status: completed
       details: |
         New file: frontend/src/components/tasks/ChecklistRow.tsx
 
@@ -724,7 +724,7 @@ phase_4_frontend_checklist:
 
     - id: "4.4"
       task: Quick-entry input with Enter/Tab/Shift-Tab/Escape handling
-      status: not_started
+      status: completed
       details: |
         Sticky input rendered at the top of the active list.
 
@@ -754,7 +754,7 @@ phase_4_frontend_checklist:
 
     - id: "4.5"
       task: Drag-to-reorder top-level tasks + subtasks in Checklist
-      status: not_started
+      status: completed
       details: |
         Reuse @hello-pangea/dnd (same library as Kanban).
 
@@ -773,7 +773,7 @@ phase_4_frontend_checklist:
 
     - id: "4.6"
       task: Inline metadata chip edit (assignee, due date, project)
-      status: not_started
+      status: completed
       details: |
         Each metadata chip on the row is clickable:
           - Assignee chip → Mantine Popover with a small assignee picker
@@ -788,7 +788,7 @@ phase_4_frontend_checklist:
 
     - id: "4.7"
       task: Manual testing — Checklist view
-      status: not_started
+      status: pending_manual_test
       details: |
         - [ ] Toggle switches between Kanban and Checklist; selection persists
         - [ ] Active tasks list sorted by sortOrder
@@ -823,7 +823,7 @@ phase_4_frontend_checklist:
 # PHASE 5: Testing (beyond manual)
 # =============================================================================
 phase_5_testing:
-  status: not_started
+  status: completed
   description: |
     Risk-based additions. Unit tests for the two shared utils (snooze-date
     resolver, sortOrder helpers). Integration tests already covered in 2.9.
@@ -833,7 +833,7 @@ phase_5_testing:
   tasks:
     - id: "5.1"
       task: Unit tests for shared/utils/taskSnooze.ts
-      status: not_started
+      status: completed
       details: |
         Cover resolveSnoozeDate across:
           - Each option (tomorrow, next_week, next_month, custom)
@@ -845,7 +845,7 @@ phase_5_testing:
 
     - id: "5.2"
       task: Unit tests for shared/utils/taskSortOrder.ts
-      status: not_started
+      status: completed
       details: |
         Cover computeSortOrder:
           - Empty column (both null) → 1.0
@@ -857,7 +857,7 @@ phase_5_testing:
 
     - id: "5.3"
       task: Backfill script smoke test
-      status: not_started
+      status: completed
       details: |
         Run backfillTaskDefaults.ts against a test family store containing:
           - Legacy tasks without snoozedUntil (should set to null)
@@ -941,3 +941,43 @@ open_items:
       Several new localStorage keys: tasks.kanban.showSnoozed,
       tasks.view, tasks.checklist.completedExpanded. Check existing code for
       a naming convention and align.
+
+# =============================================================================
+# IMPLEMENTATION NOTES (2026-04-19)
+# =============================================================================
+implementation_notes:
+  summary: |
+    All code phases shipped in one pass:
+      • Phase 1 — shared/types additions (snoozedUntil, sortOrder, SnoozeTaskDto,
+        ReorderTaskDto) + shared/utils/taskSnooze.ts + shared/utils/taskSortOrder.ts.
+      • Phase 2 — taskService.snoozeTask / reorderTask; top-of-column sortOrder on
+        non-drag status changes; snooze-clear on terminal transitions; leaderboard
+        filtered to family scope only; cancelled tasks archive immediately.
+      • Phase 3 — Kanban: 3-column layout, Show-snoozed toggle + read-only Snoozed
+        column, drag-reorder in todo/started via /reorder endpoint, TaskCard kebab
+        menu with Snooze submenu + Cancel-with-confirm + Edit.
+      • Phase 4 — Kanban/Checklist view toggle, ChecklistView + ChecklistRow,
+        quick-entry (Enter/Tab/Shift-Tab/Escape), two-checkbox rows with synthetic
+        startedAt stamp, indented subtasks, drag-to-reorder, collapsed Completed
+        accordion, inline assignee + due-date popovers.
+      • Phase 5 — 36 unit tests for taskSnooze + taskSortOrder; added integration
+        tests for snooze/reorder/cancel-archiving/leaderboard (plan 2.9).
+
+  verification:
+    - Backend tsc --noEmit: clean
+    - Frontend tsc -b --noEmit: clean
+    - Frontend vite build: clean
+    - Critical suite: 186/186 passing
+    - New unit tests: 36/36 passing
+    - taskService integration tests all pass; unrelated 51 pre-existing test
+      failures exist on main for other services (not introduced by this work)
+
+  follow_ups:
+    - Manual browser testing of Kanban (3.6) and Checklist (4.7) checklists
+      remains. Run dev servers and walk through each bullet.
+    - Run backfillTaskDefaults.ts once against production after deploy to
+      opportunistically heal legacy records (optional — read-path also heals on load).
+    - Storage-key naming (O5) — current keys are dotted (tasks.view,
+      tasks.kanban.showSnoozed, tasks.checklist.completedExpanded); pre-existing
+      leaderboard key is hyphenated (tasks-leaderboard). Left alone for now;
+      consider normalizing in a follow-up pass.

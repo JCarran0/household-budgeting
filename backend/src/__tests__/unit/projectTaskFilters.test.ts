@@ -78,6 +78,8 @@ function makeTask(overrides: Partial<StoredTask>): StoredTask {
     transitions: [],
     tags: [],
     subTasks: [],
+    snoozedUntil: null,
+    sortOrder: 0,
     ...overrides,
   };
 }
