@@ -2,8 +2,8 @@
 # PWA & Mobile Experience — Implementation Plan (Phase 1)
 # =============================================================================
 # BRD: docs/features/PWA-MOBILE-BRD.md
-# Status: In Progress (Phases 1–5 Complete, Phase 6 Remaining)
-# Last Updated: 2026-04-17
+# Status: Shipped (all phases complete; Phase 6 manual device QA verified — offline tested via airplane mode, push + camera working in production)
+# Last Updated: 2026-04-19
 # =============================================================================
 
 overview:
