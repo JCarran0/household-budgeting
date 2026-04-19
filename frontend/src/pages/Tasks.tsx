@@ -134,6 +134,31 @@ function bySnoozeAsc(a: StoredTask, b: StoredTask): number {
 }
 
 /**
+ * Predicate for the Board view filter bar (assignee + scope + tags). Shared
+ * between the render-time filter and the post-create "hidden by filters"
+ * detection so they can't drift.
+ */
+function matchesBoardFilters(
+  t: StoredTask,
+  filterAssignee: string | null,
+  filterScope: string,
+  filterTags: string[],
+): boolean {
+  if (filterAssignee === '__unassigned__') {
+    if (t.assigneeId !== null) return false;
+  } else if (filterAssignee && t.assigneeId !== filterAssignee) {
+    return false;
+  }
+  if (filterScope === 'family' && t.scope !== 'family') return false;
+  if (filterScope === 'personal' && t.scope !== 'personal') return false;
+  if (filterTags.length > 0) {
+    const taskTags = t.tags ?? [];
+    if (!filterTags.every((tag) => taskTags.includes(tag))) return false;
+  }
+  return true;
+}
+
+/**
  * Sort the full flat board array into render order:
  *   status group (todo → started → done → cancelled), then per-column rule.
  * Done once on server data receipt; subsequent local mutations splice rather
@@ -315,10 +340,37 @@ export function Tasks() {
 
   const createMutation = useMutation({
     mutationFn: (data: CreateTaskDto) => api.createTask(data),
-    onSuccess: () => {
+    onSuccess: (createdTask) => {
       invalidateTasks();
       closeCreate();
-      notifications.show({ message: 'Task created', color: 'green' });
+      const visible = matchesBoardFilters(createdTask, filterAssignee, filterScope, filterTags);
+      if (visible) {
+        notifications.show({ message: 'Task created', color: 'green' });
+      } else {
+        const notifId = 'task-created-hidden';
+        notifications.show({
+          id: notifId,
+          color: 'green',
+          autoClose: 8000,
+          message: (
+            <Group justify="space-between" wrap="nowrap" gap="sm">
+              <Text size="sm">Task created — hidden by current filters</Text>
+              <Button
+                size="compact-xs"
+                variant="white"
+                onClick={() => {
+                  setFilterAssignee(null);
+                  setFilterScope('all');
+                  setFilterTags([]);
+                  notifications.hide(notifId);
+                }}
+              >
+                Clear filters
+              </Button>
+            </Group>
+          ),
+        });
+      }
     },
   });
 
@@ -453,20 +505,7 @@ export function Tasks() {
   // ---------- Filtering ----------
 
   const filteredBoardTasks = useMemo(() => {
-    return boardTasks.filter((t) => {
-      if (filterAssignee === '__unassigned__') {
-        if (t.assigneeId !== null) return false;
-      } else if (filterAssignee && t.assigneeId !== filterAssignee) {
-        return false;
-      }
-      if (filterScope === 'family' && t.scope !== 'family') return false;
-      if (filterScope === 'personal' && t.scope !== 'personal') return false;
-      if (filterTags.length > 0) {
-        const taskTags = t.tags ?? [];
-        if (!filterTags.every((tag) => taskTags.includes(tag))) return false;
-      }
-      return true;
-    });
+    return boardTasks.filter((t) => matchesBoardFilters(t, filterAssignee, filterScope, filterTags));
   }, [boardTasks, filterAssignee, filterScope, filterTags]);
 
   // Collect all unique tags across board tasks for the filter dropdown
@@ -554,6 +593,17 @@ export function Tasks() {
       <Group justify="space-between" mb="md">
         <Group>
           <Title order={2}>Tasks</Title>
+          {view === 'board' && (
+            <Select
+              placeholder="Assignee"
+              size="xs"
+              clearable
+              value={filterAssignee}
+              onChange={setFilterAssignee}
+              data={assigneeOptions}
+              w={150}
+            />
+          )}
           <SegmentedControl
             size="xs"
             value={view}
@@ -564,15 +614,33 @@ export function Tasks() {
             ]}
           />
           {view === 'board' && (
-            <SegmentedControl
-              size="xs"
-              value={boardMode}
-              onChange={(v) => setBoardModePersisted(v as 'kanban' | 'checklist')}
-              data={[
-                { label: 'Kanban', value: 'kanban' },
-                { label: 'Checklist', value: 'checklist' },
-              ]}
-            />
+            <>
+              <SegmentedControl
+                size="xs"
+                value={boardMode}
+                onChange={(v) => setBoardModePersisted(v as 'kanban' | 'checklist')}
+                data={[
+                  { label: 'Kanban', value: 'kanban' },
+                  { label: 'Checklist', value: 'checklist' },
+                ]}
+              />
+              <SegmentedControl
+                size="xs"
+                value={filterScope}
+                onChange={setFilterScope}
+                data={[
+                  { label: 'All', value: 'all' },
+                  { label: 'Family', value: 'family' },
+                  { label: 'Personal', value: 'personal' },
+                ]}
+              />
+              <Switch
+                size="xs"
+                label="Show snoozed"
+                checked={showSnoozed}
+                onChange={(e) => toggleShowSnoozed(e.currentTarget.checked)}
+              />
+            </>
           )}
         </Group>
       </Group>
@@ -602,31 +670,25 @@ export function Tasks() {
           tasks={filteredBoardTasks}
           members={members}
           onEdit={(t) => setEditingTask(t)}
+          quickCreateDefaults={{
+            assigneeId:
+              filterAssignee === '__unassigned__'
+                ? null
+                : (filterAssignee ?? currentUser?.id ?? null),
+            scope:
+              filterScope === 'family'
+                ? 'family'
+                : filterScope === 'personal'
+                ? 'personal'
+                : undefined,
+            tags: filterTags,
+          }}
         />
       ) : view === 'board' ? (
         <>
           {/* Filters + Create */}
           <Group gap="sm" mb="md" justify="space-between">
             <Group gap="sm">
-              <Select
-                placeholder="Assignee"
-                size="xs"
-                clearable
-                value={filterAssignee}
-                onChange={setFilterAssignee}
-                data={assigneeOptions}
-                w={150}
-              />
-              <SegmentedControl
-                size="xs"
-                value={filterScope}
-                onChange={setFilterScope}
-                data={[
-                  { label: 'All', value: 'all' },
-                  { label: 'Family', value: 'family' },
-                  { label: 'Personal', value: 'personal' },
-                ]}
-              />
               {allTags.length > 0 && (
                 <MultiSelect
                   placeholder="Tags"
@@ -638,12 +700,6 @@ export function Tasks() {
                   w={200}
                 />
               )}
-              <Switch
-                size="xs"
-                label="Show snoozed"
-                checked={showSnoozed}
-                onChange={(e) => toggleShowSnoozed(e.currentTarget.checked)}
-              />
             </Group>
 
             {/* Split button: Create + template dropdown */}
@@ -726,6 +782,19 @@ export function Tasks() {
         loading={createMutation.isPending}
         title="Create Task"
         currentUserId={currentUser?.id ?? null}
+        createDefaults={{
+          assigneeId:
+            filterAssignee === '__unassigned__'
+              ? null
+              : (filterAssignee ?? currentUser?.id ?? null),
+          scope:
+            filterScope === 'family'
+              ? 'family'
+              : filterScope === 'personal'
+              ? 'personal'
+              : undefined,
+          tags: filterTags,
+        }}
       />
 
       {/* Edit Task Modal */}
@@ -873,9 +942,21 @@ export interface TaskFormModalProps {
   /** Tags that are locked (pre-populated and non-removable). Used when
    *  creating a task from a project's Tasks tab. */
   lockedTags?: string[];
+  /**
+   * Optional pre-fills for create mode (ignored when editing). Used to inherit
+   * the Board filter values so a freshly created task doesn't immediately
+   * disappear from the filtered view. Each field is an override — omit to fall
+   * back to the existing defaults (assignee → currentUserId; scope → 'family';
+   * tags → []).
+   */
+  createDefaults?: {
+    assigneeId?: string | null;
+    scope?: TaskScope;
+    tags?: string[];
+  };
 }
 
-export function TaskFormModal({ opened, onClose, onSubmit, members, loading, title, initialValues, currentUserId, lockedTags }: TaskFormModalProps) {
+export function TaskFormModal({ opened, onClose, onSubmit, members, loading, title, initialValues, currentUserId, lockedTags, createDefaults }: TaskFormModalProps) {
   const [tags, setTags] = useState<string[]>(initialValues?.tags ?? []);
   const [subTaskTitles, setSubTaskTitles] = useState<string[]>(
     initialValues?.subTasks?.map((s) => s.title) ?? []
@@ -893,12 +974,19 @@ export function TaskFormModal({ opened, onClose, onSubmit, members, loading, tit
     initialValues: {
       title: initialValues?.title ?? '',
       description: initialValues?.description ?? '',
-      assigneeId: initialValues?.assigneeId ?? '',
+      // On create, prefer createDefaults.assigneeId (including `null` for
+      // Unassigned) when provided; else fall back to currentUserId. On edit,
+      // preserve the stored assignee.
+      assigneeId: initialValues
+        ? (initialValues.assigneeId ?? '')
+        : (createDefaults && 'assigneeId' in createDefaults
+            ? (createDefaults.assigneeId ?? '')
+            : (currentUserId ?? '')),
       // Store YYYY-MM-DD directly — Mantine v8 DatePickerInput works natively
       // with date strings, avoiding the UTC-shift off-by-one that a Date
       // round-trip introduces.
       dueDate: initialValues?.dueDate ?? null,
-      scope: (initialValues?.scope ?? 'family') as TaskScope,
+      scope: (initialValues?.scope ?? createDefaults?.scope ?? 'family') as TaskScope,
     },
   });
 
@@ -909,14 +997,19 @@ export function TaskFormModal({ opened, onClose, onSubmit, members, loading, tit
       form.setValues({
         title: initialValues?.title ?? '',
         description: initialValues?.description ?? '',
-        assigneeId: initialValues?.assigneeId ?? '',
+        assigneeId: initialValues
+          ? (initialValues.assigneeId ?? '')
+          : (createDefaults && 'assigneeId' in createDefaults
+              ? (createDefaults.assigneeId ?? '')
+              : (currentUserId ?? '')),
         dueDate: initialValues?.dueDate ?? null,
-        scope: (initialValues?.scope ?? 'family') as TaskScope,
+        scope: (initialValues?.scope ?? createDefaults?.scope ?? 'family') as TaskScope,
       });
-      // Start with locked tags plus any existing tags (deduped)
+      // Tags: lockedTags + existing (edit) or createDefaults.tags (create), deduped
       const locked = lockedTags ?? [];
       const existing = initialValues?.tags ?? [];
-      const merged = Array.from(new Set([...locked, ...existing]));
+      const defaults = initialValues ? [] : (createDefaults?.tags ?? []);
+      const merged = Array.from(new Set([...locked, ...existing, ...defaults]));
       setTags(merged);
       setSubTaskTitles(initialValues?.subTasks?.map((s) => s.title) ?? []);
       setNewSubTask('');

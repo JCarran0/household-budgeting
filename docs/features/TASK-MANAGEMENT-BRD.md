@@ -257,8 +257,21 @@ The board supports filtering by:
 |--------|----------|
 | Assignee | Show only tasks assigned to a specific family member (or unassigned) |
 | Scope | Show only family tasks, only personal tasks, or all |
+| Tags | Show only tasks that include all selected tags |
 
-Default view: all tasks (family + personal, all assignees). The "Show snoozed" control is a toggle, not a filter — it adds the Snoozed column rather than restricting other columns.
+The filter bar lives in the **page header row** (next to the Board/History and Kanban/Checklist toggles) and applies uniformly to both Kanban and Checklist views.
+
+Default view: all tasks (family + personal, all assignees). The "Show snoozed" control is a toggle, not a filter — in Kanban it adds the Snoozed column; Checklist surfaces snoozed tasks via its own collapsible accordion and is unaffected.
+
+**Filter-inherited creation defaults.** To avoid the "where did my task go?" surprise when a freshly created task is hidden by the current filters, tasks created on the board inherit the filter values as defaults:
+
+- **Assignee** — the filter's assignee when set (including the Unassigned filter); otherwise defaults to the **current user**.
+- **Scope** — the filter's scope when narrowed to Family or Personal; otherwise the entity default (`family`).
+- **Tags** — the currently filtered tags are pre-applied.
+
+Users may override these in the full creation form. Checklist quick entry has no form surface, so the inherited defaults are applied silently.
+
+**Hidden-by-filters fallback.** When the user overrides a pre-filled default and the resulting task would be hidden by the current filters (full creation form path only), a toast is shown: *"Task created — hidden by current filters"* with a one-click **Clear filters** action that resets Assignee, Scope, and Tags.
 
 ### 3.2 Checklist View
 
@@ -334,7 +347,7 @@ There is **no separate "+ Add task" input**. Entry happens inline, driven from t
 
 **Scope note:** Tab and Shift-Tab affect **empty new-row lines only**. Using Tab/Shift-Tab to promote or demote an **existing non-empty task** is out of scope for this iteration — users who want to reparent a task do so by deleting and re-typing, or by using drag-to-reorder. (Decision D21 below.)
 
-Tasks created via quick entry are saved in `todo` status with the current user as `createdBy`, no assignee, no due date, and default scope. Blurring or clicking elsewhere saves whatever is typed (if non-empty); empty rows are discarded.
+Tasks created via quick entry are saved in `todo` status with the current user as `createdBy` and no due date. **Assignee, scope, and tags are inherited from the board filter bar** (see §3.1.6 "Filter-inherited creation defaults") — with assignee falling back to the current user when no filter is set. Blurring or clicking elsewhere saves whatever is typed (if non-empty); empty rows are discarded.
 
 **Mobile accommodation:** On mobile browsers where Tab may not be exposed on the on-screen keyboard, a small **indent/outdent button pair** is rendered next to the focused line, providing equivalent functionality.
 
@@ -360,7 +373,7 @@ Tasks can be reordered by drag — each row exposes a drag handle on hover (desk
 
 ### 4.1 Full Creation Form
 
-The full task creation form collects all task properties (title, assignee, due date, scope, description). Status defaults to `todo` and is not selectable during creation.
+The full task creation form collects all task properties (title, assignee, due date, scope, description). Status defaults to `todo` and is not selectable during creation. On open, the form pre-fills the assignee, scope, and tags from the current board filter bar (see §3.1.6) — with assignee falling back to the current user when no assignee filter is set. All pre-fills are editable. If the user overrides the pre-fills and the submitted task does not match current filters, a *"hidden by filters"* toast with a **Clear filters** action is shown.
 
 ### 4.2 Split Button — Create Task
 
@@ -514,7 +527,9 @@ A cancelled or archived done task can be moved back to `todo` or `started` from 
 |---|-------------|
 | REQ-018 | Split button with dropdown for task templates (one-click creation from template) |
 | REQ-019 | Task template management (create, edit, delete, reorder templates) |
-| REQ-020 | Board filtering by assignee and scope |
+| REQ-020 | Board filtering by assignee, scope, and tags. The filter bar lives in the page header row and applies uniformly to both Kanban and Checklist views |
+| REQ-020a | Tasks created on the board (quick entry or full creation form) inherit the current filter values as defaults — assignee → filter value when set, else current user; scope → filter value when narrowed to Family/Personal; tags → currently filtered tags. The full creation form exposes these as editable pre-fills; Checklist quick entry applies them silently |
+| REQ-020b | When a task created via the full creation form does not match current filters (user overrode the pre-fills), a toast *"Task created — hidden by current filters"* is shown with a one-click **Clear filters** action that resets Assignee, Scope, and Tags |
 | REQ-021 | Task History filtering by status, assignee, scope, and date range |
 | REQ-022 | Overdue indicator on task cards when due date has passed |
 | REQ-023 | Leaderboard is collapsible |

@@ -29,6 +29,7 @@ import type {
   StoredTask,
   FamilyMember,
   TaskStatus,
+  TaskScope,
   UpdateTaskDto,
   CreateTaskDto,
   SubTask,
@@ -50,6 +51,17 @@ export interface ChecklistViewProps {
   tasks: StoredTask[];
   members: FamilyMember[];
   onEdit: (task: StoredTask) => void;
+  /**
+   * Defaults applied to tasks created via quick-entry. Resolved from the
+   * board's filter bar so new tasks inherit the current filters — avoids the
+   * "where did my task go?" surprise when filters would hide a fresh task.
+   * Subtask creation is not affected; subtasks inherit from their parent.
+   */
+  quickCreateDefaults: {
+    assigneeId: string | null;
+    scope?: TaskScope;
+    tags: string[];
+  };
 }
 
 // =============================================================================
@@ -64,7 +76,7 @@ type Draft =
   | { kind: 'top'; afterTaskId: string | null }
   | { kind: 'subtask'; parentTaskId: string };
 
-export function ChecklistView({ tasks, members, onEdit }: ChecklistViewProps) {
+export function ChecklistView({ tasks, members, onEdit, quickCreateDefaults }: ChecklistViewProps) {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const isMobile = useMediaQuery('(max-width: 768px)');
@@ -303,7 +315,15 @@ export function ChecklistView({ tasks, members, onEdit }: ChecklistViewProps) {
       // lands in the right place after remount.
       setDraft({ kind: 'top', afterTaskId: tempId });
       bumpDraft();
-      createMutation.mutate({ dto: { title: trimmed, status: 'todo', sortOrder }, tempId });
+      const dto: CreateTaskDto = {
+        title: trimmed,
+        status: 'todo',
+        sortOrder,
+        assigneeId: quickCreateDefaults.assigneeId,
+        ...(quickCreateDefaults.scope ? { scope: quickCreateDefaults.scope } : {}),
+        ...(quickCreateDefaults.tags.length > 0 ? { tags: quickCreateDefaults.tags } : {}),
+      };
+      createMutation.mutate({ dto, tempId });
     } else {
       const parent = tasks.find((t) => t.id === draft.parentTaskId);
       if (!parent) return;
