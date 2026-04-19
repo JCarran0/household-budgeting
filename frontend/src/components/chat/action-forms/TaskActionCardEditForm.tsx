@@ -26,7 +26,6 @@ import {
 import { DatePickerInput } from '@mantine/dates';
 import { useForm } from '@mantine/form';
 import { IconArrowUp, IconArrowDown } from '@tabler/icons-react';
-import { format } from 'date-fns';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../../../lib/api';
 import type { FamilyMember, TaskScope } from '../../../../../shared/types';
@@ -74,18 +73,27 @@ export function TaskActionCardEditForm({
   });
   const members: FamilyMember[] = familyData?.family?.members ?? [];
 
-  const parsedDueDate = (() => {
+  // Extract YYYY-MM-DD directly — avoid Date roundtrip so a UTC-shift off-by-one
+  // doesn't creep in when the chatbot proposal comes through a parse.
+  const initialDueDate = (() => {
     if (!initialValues.dueDate || typeof initialValues.dueDate !== 'string') return null;
-    const d = new Date(initialValues.dueDate);
-    return isNaN(d.getTime()) ? null : d;
+    return /^\d{4}-\d{2}-\d{2}/.test(initialValues.dueDate)
+      ? initialValues.dueDate.slice(0, 10)
+      : null;
   })();
 
-  const form = useForm({
+  const form = useForm<{
+    title: string;
+    description: string;
+    assigneeId: string;
+    dueDate: string | null;
+    scope: TaskScope;
+  }>({
     initialValues: {
       title: typeof initialValues.title === 'string' ? initialValues.title : '',
       description: typeof initialValues.description === 'string' ? initialValues.description : '',
       assigneeId: typeof initialValues.assigneeId === 'string' ? initialValues.assigneeId : '',
-      dueDate: parsedDueDate as Date | null,
+      dueDate: initialDueDate,
       scope: (typeof initialValues.scope === 'string'
         ? initialValues.scope
         : 'family') as TaskScope,
@@ -101,7 +109,7 @@ export function TaskActionCardEditForm({
       title: typeof initialValues.title === 'string' ? initialValues.title : '',
       description: typeof initialValues.description === 'string' ? initialValues.description : '',
       assigneeId: typeof initialValues.assigneeId === 'string' ? initialValues.assigneeId : '',
-      dueDate: parsedDueDate,
+      dueDate: initialDueDate,
       scope: (typeof initialValues.scope === 'string'
         ? initialValues.scope
         : 'family') as TaskScope,
@@ -115,7 +123,7 @@ export function TaskActionCardEditForm({
       title: values.title,
       description: values.description || undefined,
       assigneeId: values.assigneeId || null,
-      dueDate: values.dueDate ? format(values.dueDate, 'yyyy-MM-dd') : null,
+      dueDate: values.dueDate ?? null,
       scope: values.scope,
       tags: tags.length > 0 ? tags : undefined,
       subTasks: subTaskTitles.length > 0

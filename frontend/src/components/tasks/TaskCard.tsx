@@ -25,7 +25,8 @@ import {
   IconEdit,
   IconBellOff,
 } from '@tabler/icons-react';
-import { format, isPast, parseISO, formatDistanceToNowStrict } from 'date-fns';
+import { format, isPast, formatDistanceToNowStrict } from 'date-fns';
+import { parseDateString } from '../../utils/formatters';
 import { useNavigate } from 'react-router-dom';
 import type { StoredTask, FamilyMember } from '../../../../shared/types';
 import { isProjectTag } from '../../../../shared/utils/projectHelpers';
@@ -83,7 +84,7 @@ export function TaskCard({ task, members, onClick, onSnooze, onCancel, onEdit, i
 
   const assignee = members.find((m) => m.userId === task.assigneeId);
   const isOverdue = task.dueDate && task.status !== 'done' && task.status !== 'cancelled'
-    && isPast(parseISO(task.dueDate));
+    && isPast(parseDateString(task.dueDate));
   const isPersonal = task.scope === 'personal';
   const isDone = task.status === 'done';
 
@@ -229,7 +230,7 @@ export function TaskCard({ task, members, onClick, onSnooze, onCancel, onEdit, i
               color={isOverdue ? 'red' : 'gray'}
               leftSection={<IconCalendar size={10} />}
             >
-              {format(parseISO(task.dueDate), 'MMM d')}
+              {format(parseDateString(task.dueDate), 'MMM d')}
             </Badge>
           )}
 

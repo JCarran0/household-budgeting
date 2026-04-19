@@ -47,7 +47,8 @@ import {
   IconRefresh,
   IconPlus,
 } from '@tabler/icons-react';
-import { format, parseISO, formatDistanceToNowStrict, isPast } from 'date-fns';
+import { format, formatDistanceToNowStrict, isPast } from 'date-fns';
+import { parseDateString } from '../../utils/formatters';
 import type { StoredTask, FamilyMember, SubTask } from '../../../../shared/types';
 import { resolveSnoozeDate } from '../../../../shared/utils/taskSnooze';
 import { isProjectTag } from '../../../../shared/utils/projectHelpers';
@@ -498,7 +499,7 @@ function TaskMetadataChips({ task, members, onProjectClick }: TaskMetadataChipsP
     !!task.dueDate &&
     task.status !== 'done' &&
     task.status !== 'cancelled' &&
-    isPast(parseISO(task.dueDate));
+    isPast(parseDateString(task.dueDate));
 
   const projectTag = (task.tags ?? []).find(isProjectTag);
   const projectMeta = projectTag ? projectTagLookup.get(projectTag) : undefined;
@@ -520,7 +521,7 @@ function TaskMetadataChips({ task, members, onProjectClick }: TaskMetadataChipsP
           color={isOverdue ? 'red' : 'gray'}
           leftSection={<IconCalendar size={10} />}
         >
-          {format(parseISO(task.dueDate), 'MMM d')}
+          {format(parseDateString(task.dueDate), 'MMM d')}
         </Badge>
       )}
       {snoozed && task.snoozedUntil && (
@@ -624,7 +625,7 @@ function TaskKebabMenu({ task, members, callbacks }: TaskKebabMenuProps) {
 
           {/* Due date */}
           <Menu.Item leftSection={<IconCalendar size={14} />} onClick={() => setDueDateOpen(true)}>
-            {task.dueDate ? `Due ${format(parseISO(task.dueDate), 'MMM d, yyyy')}` : 'Due date…'}
+            {task.dueDate ? `Due ${format(parseDateString(task.dueDate), 'MMM d, yyyy')}` : 'Due date…'}
           </Menu.Item>
 
           {/* Snooze */}
@@ -707,10 +708,11 @@ function TaskKebabMenu({ task, members, callbacks }: TaskKebabMenuProps) {
         <Stack gap="sm">
           <DatePickerInput
             label="Due date"
-            value={task.dueDate ? new Date(task.dueDate) : null}
+            value={task.dueDate}
             onChange={(val) => {
-              const iso = val ? format(new Date(val), 'yyyy-MM-dd') : null;
-              callbacks.onDueDateChange(task, iso);
+              // Mantine v8 emits YYYY-MM-DD strings; pass through without
+              // any Date round-trip to avoid UTC-shift off-by-one bugs.
+              callbacks.onDueDateChange(task, val ?? null);
             }}
             clearable
             highlightToday

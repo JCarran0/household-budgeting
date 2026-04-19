@@ -46,6 +46,17 @@ export function parseMonthString(monthStr: string): Date {
   return new Date(year, month - 1, 1); // Month is 0-indexed in JavaScript
 }
 
+/**
+ * Parses a calendar-date string in "yyyy-MM-dd" format to a Date at local
+ * midnight. Same rationale as `parseMonthString` — `new Date("2026-04-19")`
+ * or `date-fns parseISO("2026-04-19")` interpret the string as UTC midnight
+ * and render as the previous day in negative UTC offsets.
+ */
+export function parseDateString(dateStr: string): Date {
+  const [year, month, day] = dateStr.split('-').map(Number);
+  return new Date(year, month - 1, day);
+}
+
 export function formatAccountOwner(
   accountOwner: string,
   mappings?: Array<{ cardIdentifier: string; displayName: string }>,
