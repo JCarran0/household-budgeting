@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+### [5.37.2](https://github.com/JCarran0/household-budgeting/compare/v5.37.1...v5.37.2) (2026-04-19)
+
+
+### Bug Fixes
+
+* **reports:** exclude current partial month from YTD and Last N Mo KPIs ([49cb19a](https://github.com/JCarran0/household-budgeting/commit/49cb19a74c33ca9e38f4fb8312d76450e0e4a121))
+
 ### [5.37.1](https://github.com/JCarran0/household-budgeting/compare/v5.37.0...v5.37.1) (2026-04-19)
 
 
