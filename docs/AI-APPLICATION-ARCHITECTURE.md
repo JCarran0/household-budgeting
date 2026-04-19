@@ -161,6 +161,17 @@ household-budgeting/
 - **Transit classification**: a transit renders as a full-width connector between Stay chapters when it crosses a seam (`isTransitBaseChange` returns true); otherwise it renders inline within a day as a day-trip.
 - **Location verification** goes through `frontend/src/hooks/useGooglePlaces.ts` (D7). Gated on `VITE_GOOGLE_PLACES_API_KEY`; without a key, Stay creation shows a clear unconfigured state while Eat / Play / Transit still accept free-text.
 
+### Trip Enhancements V2 — Map tab + photo album link
+
+- **Map tab lives at `frontend/src/components/trips/map/TripMap.tsx`** and renders inside `TripDetail.tsx` as a peer tab to Itinerary / Spending / Notes. Its visibility is keyed on `stops.some(hasVerifiedCoords)` — trips with zero geocoded stops hide the tab entirely (D10), and a `?tab=map` deep-link silently falls back to Itinerary when the trip has no coords.
+- **Composition**: `TripMap` = `APIProvider` (from `@vis.gl/react-google-maps`) → `TripMapLoadGuard` (fallback card on load failure) → `TripMapContent` (day filter bar + Map + pin layer + transit layer + popup + unpinned-count footer).
+- **Shared helpers with the Itinerary tab**: `computeAgendaDayRange`, `enumerateDateRange`, `hasVerifiedCoords`, `isTransitBaseChange` — the same utilities drive both surfaces so day indexing and base-change classification stay consistent across tabs.
+- **Pins** (`StopPin.tsx`): Stays always pinned (V1 REQ-009 guarantees verified coords); Eat/Play pinned only when `location.kind === 'verified'`. Transits are never pinned — their spatial presence is the connector line. Day affinity via color + numeric badge sourced from `mapPalette.ts`.
+- **Transit lines** (`TransitLine.tsx`): Base-change transits only (`isTransitBaseChange`, REQ-016/017). Flights render as geodesic arcs (`google.maps.Polyline` with `geodesic: true`) + dashed stroke; ground modes render as straight polylines with solid strokes. Mode icon at midpoint (geodesic uses `geometry.spherical.interpolate(a, b, 0.5)`; straight uses linear midpoint). Direction indicated by `SymbolPath.FORWARD_CLOSED_ARROW`. The `transitFilter` prop is forward-compatible for enabling day-trip transits later without refactor (D5).
+- **Interactions**: Pin click → `StopPopup` (InfoWindow) with "View in itinerary" button that appends `?stop=<id>` to the URL and switches to Itinerary. Agenda reads the param, expands the target's day, `scrollIntoView({ block: 'center' })`, pulses a 2 s highlight via Web Animations API, then strips the param. `DayFilterBar` (chips: `All / Day 1 / Day 2 / …`) filters pins and transit segments; base-change transits span two days and render on both (REQ-025). Live trips auto-select today's chip on mount (REQ-026).
+- **Lazy loading (REQ-029)**: `TripMap` is only mounted when the Map tab is active (`keepMounted={false}` on `Tabs`), so the Google Maps JS bundle is fetched only when the user opens the tab. No dynamic import is needed because tab visibility already guards the mount.
+- **Backend surface**: single additive field `Trip.photoAlbumUrl: string | null`. Zod schema allows http(s) URLs; empty strings coerce to `null` (so we never persist `""`). Legacy trips persisted before V2 default to `null` on read in `TripService.loadTrips`. No map-specific endpoints — the map renders entirely from `getTripSummary` payload.
+
 ### Shared Utilities (`shared/utils/`)
 
 #### Transaction Calculations (`shared/utils/transactionCalculations.ts`)

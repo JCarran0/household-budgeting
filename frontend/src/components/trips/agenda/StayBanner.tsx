@@ -21,6 +21,7 @@ export function StayBanner({ stay, totalNights, onEdit }: StayBannerProps) {
       radius="md"
       p="sm"
       withBorder
+      data-stop-id={stay.id}
       style={{
         background: 'var(--mantine-color-blue-light)',
         borderColor: 'var(--mantine-color-blue-outline)',

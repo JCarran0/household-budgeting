@@ -14,10 +14,12 @@ import {
   groupStopsByDay,
   findActiveStay,
   isTransitBaseChange,
+  hasVerifiedCoords,
 } from '../../shared/utils/tripHelpers';
 import type {
   StayStop,
   EatStop,
+  PlayStop,
   TransitStop,
   VerifiedLocation,
 } from '../../shared/types';
@@ -239,5 +241,57 @@ describe('isTransitBaseChange', () => {
   it('inline when neither side is covered by a stay', () => {
     const transit = makeTransit({ date: '2026-05-10' });
     expect(isTransitBaseChange(transit, [])).toBe(false);
+  });
+});
+
+function makePlay(overrides: Partial<PlayStop>): PlayStop {
+  return {
+    id: "play-" + Math.random(),
+    type: "play",
+    date: "2026-05-02",
+    time: null,
+    name: "Play",
+    location: null,
+    durationMinutes: null,
+    notes: "",
+    sortOrder: 0,
+    createdAt: "2026-04-01T00:00:00Z",
+    updatedAt: "2026-04-01T00:00:00Z",
+    ...overrides,
+  } as PlayStop;
+}
+
+describe("hasVerifiedCoords", () => {
+  it("stays always qualify", () => {
+    expect(hasVerifiedCoords(makeStay({}))).toBe(true);
+  });
+
+  it("eat qualifies when verified", () => {
+    const eat = makeEat({ location: LOC });
+    expect(hasVerifiedCoords(eat)).toBe(true);
+  });
+
+  it("eat does not qualify when free-text", () => {
+    const eat = makeEat({ location: { kind: "freeText", label: "Grandmas house" } });
+    expect(hasVerifiedCoords(eat)).toBe(false);
+  });
+
+  it("eat does not qualify when location is null", () => {
+    const eat = makeEat({ location: null });
+    expect(hasVerifiedCoords(eat)).toBe(false);
+  });
+
+  it("play qualifies when verified", () => {
+    const play = makePlay({ location: LOC });
+    expect(hasVerifiedCoords(play)).toBe(true);
+  });
+
+  it("play does not qualify when free-text", () => {
+    const play = makePlay({ location: { kind: "freeText", label: "hike" } });
+    expect(hasVerifiedCoords(play)).toBe(false);
+  });
+
+  it("transit never qualifies", () => {
+    expect(hasVerifiedCoords(makeTransit({}))).toBe(false);
   });
 });

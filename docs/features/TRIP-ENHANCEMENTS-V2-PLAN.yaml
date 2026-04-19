@@ -1,0 +1,840 @@
+# =============================================================================
+# Trip Enhancements V2 — Implementation Plan
+# =============================================================================
+# BRD: docs/features/TRIP-ENHANCEMENTS-V2-BRD.md
+# Extends: docs/features/TRIP-ITINERARIES-PLAN.yaml (shipped)
+# Status: Implemented (pending UAT + deploy)
+# Last Updated: 2026-04-19
+# =============================================================================
+
+overview:
+  description: |
+    Implementation plan for Trip Enhancements V2 — adds a Map tab and a photo
+    album link to the Trip Detail view shipped in V1 (Trip Itineraries).
+
+    The feature is strictly additive. The Trip entity gains one optional string
+    field (photoAlbumUrl). The Stop entity is unchanged. No backend endpoints
+    are added specifically for the map — it renders entirely from the Stop
+    data already available via the existing getTripSummary call. Zero photo
+    bytes are fetched, parsed, or stored by the app.
+
+    Google Photos API investigation (documented in the BRD) eliminated the
+    possibility of auto-matched geo-tagged photos. The photo surface collapses
+    to a hyperlink; the spatial surface is the new Map tab.
+
+  key_files:
+    brd: docs/features/TRIP-ENHANCEMENTS-V2-BRD.md
+    extends_plan: docs/features/TRIP-ITINERARIES-PLAN.yaml
+    shared_types: shared/types/index.ts
+    trip_service: backend/src/services/tripService.ts
+    trip_routes: backend/src/routes/trips.ts
+    trip_detail_page: frontend/src/pages/TripDetail.tsx
+    agenda: frontend/src/components/trips/agenda/Agenda.tsx
+    trip_helpers: shared/utils/tripHelpers.ts
+    api_client: frontend/src/lib/api/trips.ts
+
+# =============================================================================
+# DECISIONS LOG — Captured from BRD refinement; update as implementation unfolds
+# =============================================================================
+decisions:
+  - id: D1
+    date: 2026-04-19
+    decision: Photo integration is link-only; no Google Photos API consumption
+    rationale: |
+      Google removed the photoslibrary.readonly / photoslibrary.sharing /
+      photoslibrary scopes on March 31, 2025, eliminating third-party access
+      to users' existing albums. The replacement Picker API does not return
+      EXIF, location, or capture-time metadata — only id, baseUrl, mimeType,
+      with baseUrl valid for 60 minutes. Consequently, "geo-match photos to
+      stops" is not achievable via any Google Photos API, and any richer
+      integration (thumbnails, Picker-curated highlights) would deliver far
+      less than the user imagined.
+
+      V2 ships a single optional string field, rendered as an "Open album"
+      button. User maintains their Google Photos album as before; the app
+      links to it. If native-upload + client-side EXIF parsing ever becomes
+      a funded V3 initiative, geo-matching becomes feasible without provider
+      dependencies.
+
+  - id: D2
+    date: 2026-04-19
+    decision: Photo field name is generic `photoAlbumUrl`, not provider-specific
+    rationale: |
+      Forward-compatible with Apple Photos / Dropbox / iCloud sharing URLs.
+      The implementation is a hyperlink either way; a provider-specific name
+      buys nothing and locks the schema to Google semantically. The UI label
+      can still say "Google Photos album" if desired, but the field itself
+      is neutral. Resolves BRD Q-04.
+
+  - id: D3
+    date: 2026-04-19
+    decision: Map lives as a dedicated tab on Trip Detail, not a split-pane
+    rationale: |
+      Cleanest scope for V2: full real estate, no competition with the
+      agenda's vertical rhythm, one mental model ("all places at once").
+      Split-pane with agenda↔map hover linkage is a V3 polish item if
+      usage evidence emerges that the linkage is valuable. Per-day
+      mini-maps fragment the spatial picture and multiply map instances.
+
+  - id: D4
+    date: 2026-04-19
+    decision: Map pins = Stays + verified Eat/Play; free-text locations omitted
+    rationale: |
+      Stay-only is too thin (single-base trips = one pin). Pinning
+      transit endpoints duplicates neighboring Stays. Verified Eat/Play
+      coords are the "where we went" content that makes trip maps
+      memorable. Free-text Eat/Play stops remain visible in the agenda
+      but don't appear as pins — surfaced via a small "N stops without
+      map locations" footer.
+
+  - id: D5
+    date: 2026-04-19
+    decision: Base-change transits render as lines; day-trip transits deferred, forward-compat
+    rationale: |
+      Base-change transits ("flew to Paris, trained to Amsterdam") define
+      the trip's spatial narrative. Day-trip transits connect points that
+      are already pinned and would render as clutter (Hotel→Restaurant→
+      Hotel→Museum spaghetti). V1 already ships isTransitBaseChange in
+      shared/utils/tripHelpers.ts — classification is free.
+
+      The renderer accepts which transits to draw as a parameter rather
+      than hardcoding the base-change filter, so enabling day-trip lines
+      later is a one-line change plus styling work, not a refactor.
+
+  - id: D6
+    date: 2026-04-19
+    decision: Flight = geodesic arc, ground modes = straight polyline; no turn-by-turn routing
+    rationale: |
+      Google Maps JS Polyline supports `geodesic: true` natively — flight
+      arcs are free. Ground modes render as straight A→B segments, which
+      are geographically dishonest for long drives but acceptable for a
+      family trip log. Real routing means Google Directions API billing
+      and turn-by-turn complexity well outside V2 scope.
+
+  - id: D7
+    date: 2026-04-19
+    decision: Map provider is Google Maps JS API, reusing the V1 Places API key
+    rationale: |
+      V1 already loads the Google Maps JS API for Places Autocomplete.
+      Adding the map surface means enabling the Maps JS API on the same
+      Google Cloud project — no new key, billing account, or loader.
+      At 2 users, cost stays inside the $200/mo Maps Platform free credit
+      by multiple orders of magnitude ($7/1000 dynamic loads; 2 users
+      produce dozens of loads/month).
+
+      React wrapper choice (`@vis.gl/react-google-maps` preferred;
+      `react-google-maps/api` acceptable alternative) finalized during 3.1.
+
+  - id: D8
+    date: 2026-04-19
+    decision: Pin popup → "View in itinerary" navigates with `?stop=<id>` URL param
+    rationale: |
+      Standard map UX: pins are self-explaining on tap, not silent dots.
+      Immediate-navigate on tap is surprising — users want a confirmation
+      popup first. The `?stop=<id>` param is deep-linkable (share a link
+      directly to a stop) and survives tab switches. Scroll-to-stop +
+      brief highlight on the Itinerary tab handles the arrival UX.
+
+  - id: D9
+    date: 2026-04-19
+    decision: Day chip filter above map; auto-fit on open; current day auto-selected when live
+    rationale: |
+      Day chips are the cheapest filter affordance and scale to long
+      trips via horizontal scroll. Auto-fit on tab open handles the
+      cold-start framing without requiring user pan/zoom. Current-day
+      auto-select on live trips mirrors V1 REQ-028's treatment of
+      "today" in the agenda — consistent language across the two tabs.
+
+  - id: D10
+    date: 2026-04-19
+    decision: Map tab hidden entirely when trip has zero geocoded stops
+    rationale: |
+      An empty-state map tab is chrome without content. A trip with only
+      free-text stops shouldn't present a blank spatial view — the
+      agenda is the correct home for loose plans. Tab visibility keys
+      off `stops.some(hasVerifiedCoords)`, evaluated on render.
+
+  - id: D11
+    date: 2026-04-19
+    decision: No backend changes beyond persisting photoAlbumUrl on Trip
+    rationale: |
+      The map renders entirely from the Stop data already delivered by
+      getTripSummary. Adding a dedicated /trips/:tripId/map endpoint
+      would be redundant. Photo link storage is a single optional string
+      on the Trip entity — additive, backwards-compatible (defaulted to
+      null when absent). No migration pass needed.
+
+  - id: D12
+    date: 2026-04-19
+    decision: Maps JS library loads lazily on Map tab mount, not on Trip Detail mount
+    rationale: |
+      Trip Detail users who never open the Map tab shouldn't pay the
+      ~200KB Maps JS bundle cost. Lazy import via dynamic `import()` on
+      Map tab mount. Places Autocomplete continues to load on edit flows
+      as before — separate concern, separate load point.
+
+# =============================================================================
+# PHASE 1: Shared Types & Backend — Photo Album URL
+# =============================================================================
+phase_1_photo_album_field:
+  status: completed
+  description: |
+    Add the `photoAlbumUrl` field to the Trip entity, extend the Zod schema,
+    and make it editable via the existing Trip edit form. No other backend
+    work is needed for V2.
+
+  tasks:
+    - id: "1.1"
+      task: Add `photoAlbumUrl` to the Trip interface in shared/types/index.ts
+      status: completed
+      details: |
+        interface Trip {
+          ...existing fields;
+          photoAlbumUrl: string | null;   // optional, user-supplied album link
+        }
+
+        Backwards-compatible read: TripService.loadTrips() defaults missing
+        photoAlbumUrl to null, same pattern as the `stops` default in V1.
+
+    - id: "1.2"
+      task: Extend Trip Zod schemas for create/update
+      status: completed
+      details: |
+        Add to the existing createTripSchema and updateTripSchema:
+        photoAlbumUrl: z.string().url().nullable().optional()
+
+        Allow http and https only (Zod url() default). No domain restriction.
+        Empty string coerces to null before save to avoid storing "".
+
+    - id: "1.3"
+      task: Wire photoAlbumUrl through TripService create/update
+      status: completed
+      details: |
+        Minimal touch in backend/src/services/tripService.ts — the create and
+        update paths already spread the validated DTO into the persisted record.
+        Confirm the field flows through; add explicit handling only if it
+        doesn't (it may, depending on current spread patterns).
+
+    - id: "1.4"
+      task: Integration test for photoAlbumUrl persistence
+      status: completed
+      details: |
+        In backend/src/__tests__/integration/tripService.test.ts:
+        - Create a trip with photoAlbumUrl = 'https://photos.google.com/share/xyz'
+          → field persists
+        - Update a trip to set photoAlbumUrl = null → field clears
+        - Create with invalid URL → 400 with validation error
+        - Existing trips without the field load with photoAlbumUrl === null
+
+# =============================================================================
+# PHASE 2: Frontend — Photo Album Link Surface
+# =============================================================================
+phase_2_photo_album_ui:
+  status: completed
+  description: |
+    Surface photoAlbumUrl in the Trip edit form and as an "Open album" button
+    in the Trip Detail header when set.
+
+  tasks:
+    - id: "2.1"
+      task: Add photoAlbumUrl field to Trip edit form (TripFormModal)
+      status: completed
+      details: |
+        In frontend/src/components/trips/TripFormModal.tsx (or the canonical
+        edit component — verify exact name during impl):
+        - Add Mantine TextInput labeled "Photos album URL" with placeholder
+          "https://photos.google.com/share/..."
+        - Optional field; no client-side URL validation beyond "looks like
+          a URL" — server Zod is authoritative
+        - Position after Notes field in form layout; group under a subtle
+          section header ("Media & links") if it feels orphaned
+
+    - id: "2.2"
+      task: Add API client support in frontend/src/lib/api/trips.ts
+      status: completed
+      details: |
+        Update the CreateTripDto and UpdateTripDto types to include
+        photoAlbumUrl: string | null. Existing createTrip/updateTrip methods
+        accept and forward the field without change.
+
+    - id: "2.3"
+      task: Render "Open album" button in TripDetail header when set
+      status: completed
+      details: |
+        In frontend/src/pages/TripDetail.tsx, in the header action row
+        (near Edit / Delete):
+
+        {trip.photoAlbumUrl && (
+          <Button
+            component="a"
+            href={trip.photoAlbumUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            leftSection={<IconPhoto size={16} />}
+            variant="light"
+          >
+            Open album
+          </Button>
+        )}
+
+        When photoAlbumUrl is null or empty, render nothing (no placeholder).
+
+# =============================================================================
+# PHASE 3: Frontend — Google Maps JS Integration Scaffolding
+# =============================================================================
+phase_3_maps_js_setup:
+  status: completed
+  description: |
+    Install the Google Maps JS React wrapper, configure API key authorization,
+    and verify Maps JS loads alongside the existing Places Autocomplete.
+
+  tasks:
+    - id: "3.1"
+      task: Choose and install React wrapper for Google Maps JS
+      status: completed
+      details: |
+        Evaluate @vis.gl/react-google-maps (newer, Google-endorsed) vs
+        @react-google-maps/api (established). Prefer @vis.gl/react-google-maps
+        unless a specific V1 integration forces the other — V1 uses a thin
+        Places Autocomplete wrapper (verify during impl) that may or may not
+        coexist cleanly.
+
+        Install, add to frontend/package.json.
+
+    - id: "3.2"
+      task: Enable Maps JavaScript API on the Google Cloud project
+      status: completed
+      details: |
+        The VITE_GOOGLE_PLACES_API_KEY key is scoped to Places API today.
+        Enable Maps JavaScript API on the same GCP project. Verify HTTP
+        referrer restrictions cover both Places and Maps loads.
+
+        Document in docs/AI-DEPLOYMENTS.md: add Maps JavaScript API to the
+        list of enabled APIs and confirm key restrictions.
+
+    - id: "3.3"
+      task: Lazy-load Maps JS on Map tab mount
+      status: completed
+      details: |
+        Use dynamic `import()` or the chosen wrapper's APIProvider with
+        conditional mount. Map tab's React component is the load point;
+        Itinerary, Spending, Notes tabs do not trigger Maps JS load.
+
+        Confirm via Network tab: switching tabs without opening Map does
+        not fetch maps.googleapis.com/maps/api/js.
+
+# =============================================================================
+# PHASE 4: Frontend — Map Tab Scaffolding & Visibility
+# =============================================================================
+phase_4_map_tab:
+  status: completed
+  description: |
+    Add the Map tab to Trip Detail, implement visibility rules, and render
+    an empty map frame (pins and lines come in later phases).
+
+  tasks:
+    - id: "4.1"
+      task: Add Map tab to TripDetail.tsx Mantine Tabs panel set
+      status: completed
+      details: |
+        Tab order (per BRD Q-01, proposed default):
+        Itinerary / Map / Spending / Notes
+
+        URL param sync: extend the existing ?tab=... param to accept 'map'.
+        Keep the existing default of 'itinerary'.
+
+    - id: "4.2"
+      task: Implement Map tab visibility rule
+      status: completed
+      details: |
+        const hasGeocodedStop = trip.stops.some(s =>
+          (s.type === 'stay') ||
+          ((s.type === 'eat' || s.type === 'play') &&
+            s.location?.kind === 'verified')
+        );
+
+        Render the Tabs.Tab for Map only when hasGeocodedStop. Hide the tab
+        label entirely when false — do not render a disabled tab.
+
+        Guard ?tab=map deep-link: if the user navigates to ?tab=map on a trip
+        without geocoded stops, silently fall back to ?tab=itinerary.
+
+    - id: "4.3"
+      task: Create frontend/src/components/trips/map/TripMap.tsx skeleton
+      status: completed
+      details: |
+        Props: { trip: TripSummary; stops: Stop[] }
+
+        V4 responsibilities (this phase):
+        - Render the map container with Google Maps JS via chosen wrapper
+        - Auto-fit bounds to all verified-coord stops on first render
+        - Empty-state: all stops free-text (impossible given tab visibility
+          rule, but guard defensively) → render "No map locations available"
+        - Structural placeholders for PinLayer, TransitLayer, DayFilterBar,
+          StopPopup (implemented in phases 5–7)
+
+        Mobile-first: map fills available height minus tab + filter bar.
+
+# =============================================================================
+# PHASE 5: Frontend — Pin Rendering
+# =============================================================================
+phase_5_pins:
+  status: completed
+  description: |
+    Render Stay pins and verified Eat/Play pins with type icons, day affinity,
+    and the footer count of unpinned stops.
+
+  tasks:
+    - id: "5.1"
+      task: Create StopPin.tsx (or Marker equivalent for chosen wrapper)
+      status: completed
+      details: |
+        Props: { stop: Stop; dayIndex: number; onClick: () => void }
+
+        Visual encoding:
+        - Icon by type: IconBed (Stay), IconToolsKitchen2 (Eat),
+          IconMasksTheater (Play). Reuse the same mapping as StopCard.tsx
+          where possible (extract to shared util if duplicated).
+        - Day affinity: color from a day palette (proposed BRD Q-02 default:
+          color-by-day + small numeric badge). Palette generated from trip
+          day count with stable hue assignment.
+
+        Google Maps custom markers: use AdvancedMarkerElement (recommended
+        modern API) with inline SVG icons for crisp rendering at all zooms.
+
+    - id: "5.2"
+      task: Derive pins list from stops
+      status: completed
+      details: |
+        Filter + map in TripMap:
+        const pins = stops
+          .map((stop, _i) => {
+            if (stop.type === 'stay') return { stop, coords: stop.location };
+            if ((stop.type === 'eat' || stop.type === 'play') &&
+                stop.location?.kind === 'verified') {
+              return { stop, coords: stop.location };
+            }
+            return null;
+          })
+          .filter((p): p is { stop: Stop; coords: VerifiedLocation } => p !== null);
+
+        dayIndex for each pin derived from the agenda helper
+        computeAgendaDayRange + groupStopsByDay (share with Itinerary tab).
+
+    - id: "5.3"
+      task: Render pins on the map
+      status: completed
+      details: |
+        Iterate `pins` and render a StopPin per entry. Key by stop.id.
+        Wire onClick to open the StopPopup (phase 7) with the pin's stop.
+
+    - id: "5.4"
+      task: Render "N stops without map locations" footer
+      status: completed
+      details: |
+        Count free-text Eat/Play stops (not pinned) in a small footer
+        under the map (or overlaid at bottom-right). No CTA; informational
+        only per BRD REQ-015.
+
+        Footer hidden when count === 0.
+
+# =============================================================================
+# PHASE 6: Frontend — Transit Line Rendering
+# =============================================================================
+phase_6_transit_lines:
+  status: completed
+  description: |
+    Render base-change transits as connector lines between Stays, with
+    mode-aware styling and directional indicators.
+
+  tasks:
+    - id: "6.1"
+      task: Derive base-change transit list from stops
+      status: completed
+      details: |
+        Reuse isTransitBaseChange from shared/utils/tripHelpers.ts.
+
+        const baseChangeTransits = stops.filter(s =>
+          s.type === 'transit' && isTransitBaseChange(s, stops)
+        );
+
+        For each base-change transit, compute endpoint coords from the
+        Stays bracketing it (guaranteed verified by V1 REQ-009). Transit's
+        own fromLocation/toLocation are ignored for map rendering — use
+        the bracketing Stays' coords for reliability.
+
+    - id: "6.2"
+      task: Expose "which transits to render" as a renderer parameter (D5 forward-compat)
+      status: completed
+      details: |
+        TripMap accepts an optional prop `transitFilter?: (t: TransitStop,
+        stops: Stop[]) => boolean` defaulting to isTransitBaseChange.
+
+        V2 never passes the prop (default applies). V3 can pass `() => true`
+        or a user-configurable predicate without touching the renderer.
+
+    - id: "6.3"
+      task: Create TransitLine.tsx rendering component
+      status: completed
+      details: |
+        Props: { transit: TransitStop; from: LatLng; to: LatLng; dayIndex: number }
+
+        Behavior:
+        - Flight: google.maps.Polyline with geodesic: true, strokeOpacity: 0.7,
+          dashed pattern
+        - Drive / Train / Walk / Shuttle / Other: google.maps.Polyline with
+          geodesic: false, solid stroke
+        - Stroke color: neutral per-mode palette (not day-keyed — lines are
+          transitions, not day-bounded events)
+        - Mode icon at midpoint (compute via geometry.spherical.interpolate
+          at t=0.5; for geodesic arcs, Maps API supports midpoint math)
+        - Directional indicator: symbol on path (arrow) using Symbol with
+          path: google.maps.SymbolPath.FORWARD_CLOSED_ARROW, repeat: '50%'
+
+    - id: "6.4"
+      task: Render transit lines in TripMap
+      status: completed
+      details: |
+        Iterate baseChangeTransits, render a TransitLine per. Key by transit.id.
+        Lines render below pins in z-order.
+
+# =============================================================================
+# PHASE 7: Frontend — Interactions (Popup, Deep Link, Day Filter)
+# =============================================================================
+phase_7_interactions:
+  status: completed
+  description: |
+    Pin popup with View-in-itinerary deep link, day filter chips, auto-fit
+    on tab open, and current-day auto-selection on live trips.
+
+  tasks:
+    - id: "7.1"
+      task: Create StopPopup.tsx (Google Maps InfoWindow wrapper)
+      status: completed
+      details: |
+        Props: { stop: Stop; dayIndex: number; onViewInItinerary: () => void;
+                 onClose: () => void }
+
+        Content (compact, mobile-friendly):
+        - Row 1: type icon + stop name + day label ("Day 3")
+        - Row 2: time (if present) or "—"
+        - Row 3: one-line notes snippet (truncate at ~80 chars)
+        - CTA button: "View in itinerary"
+
+        Dismisses on outside click or Escape key.
+
+    - id: "7.2"
+      task: Wire "View in itinerary" deep link
+      status: completed
+      details: |
+        onViewInItinerary navigates to the Itinerary tab with ?stop=<stopId>
+        appended. Use existing useSearchParams hook to update tab + stop
+        params atomically.
+
+    - id: "7.3"
+      task: Handle `?stop=<id>` param on the Itinerary tab
+      status: completed
+      details: |
+        In the Itinerary tab / Agenda component, read the `?stop` param on
+        mount. If present:
+        - Scroll the matching stop's card into view (scrollIntoView with
+          block: 'center', behavior: 'smooth')
+        - Apply a brief highlight (pulse animation ~2 seconds)
+        - After scroll completes, strip the param from the URL to keep
+          future reloads clean (history.replace)
+
+        Robust to stop IDs that don't exist (navigated from stale share
+        link) — silent no-op.
+
+    - id: "7.4"
+      task: Day chip filter bar (DayFilterBar.tsx)
+      status: completed
+      details: |
+        Props: { days: Day[]; selected: 'all' | string /* dayDate */;
+                 onSelect: (val) => void }
+
+        Renders above the map. Horizontally scrollable on narrow viewports
+        (overflow-x: auto, scrollbar hidden, scroll-snap). Chips:
+        - "All" (selected by default)
+        - One per day in agenda range, labeled "Day N"
+        - Current day chip gets an accent treatment when the trip is live
+
+        Chip selection state is local to the Map tab (not URL-persisted).
+
+    - id: "7.5"
+      task: Apply day filter to pins and transit lines
+      status: completed
+      details: |
+        When selected !== 'all':
+        - Pins: filter to those whose stop.date === selected
+        - Transit lines: show if transit.date === selected OR
+          (bracketing stay spans across selected). Base-change transits
+          spanning Day N → Day N+1 render when either day is selected.
+
+        Edge case: day chip selection mid-transit arc — keep it clean:
+        if either the transit date OR its bracketing stay endpoints
+        fall on the selected day, show the line.
+
+    - id: "7.6"
+      task: Auto-fit bounds on tab open and on filter change
+      status: completed
+      details: |
+        On Map tab mount: compute bounds from visible pins + transit
+        endpoints, call map.fitBounds(bounds, { padding: 48 }).
+
+        On filter change: re-fit to the filtered set. If filtered set
+        is empty (edge case: user added a day with no coords), leave
+        bounds untouched.
+
+    - id: "7.7"
+      task: Auto-select current day chip on live trips
+      status: completed
+      details: |
+        On Map tab mount, compute isLive as:
+        const today = todayISO();
+        const isLive = agendaDayRange.start <= today && today <= agendaDayRange.end;
+
+        If isLive and today is in the day list, set selected = today's date.
+        Otherwise default to 'all'.
+
+        Matches V1 REQ-028's "current day highlighted" treatment.
+
+# =============================================================================
+# PHASE 8: Polish & Cross-Cutting
+# =============================================================================
+phase_8_polish:
+  status: completed
+  description: |
+    Accessibility, error handling, performance guardrails, documentation updates.
+
+  tasks:
+    - id: "8.1"
+      task: Accessibility pass on Map tab
+      status: completed
+      details: |
+        - Pins: aria-label "Stay: Hotel Arts Barcelona, Day 2" (type + name + day)
+        - Day chips: keyboard navigable, aria-selected on active
+        - StopPopup: focus trap, Escape dismisses, focus returns to triggering pin
+        - Map region has aria-label "Trip map view"
+        - Footer count announces to screen readers
+
+    - id: "8.2"
+      task: Error handling for Maps JS load failure
+      status: completed
+      details: |
+        If Maps JS fails to load (network, API key revoked, billing suspended):
+        - Render a fallback card in place of the map: "Map unavailable. Stops
+          are still visible in the Itinerary tab."
+        - Log the error; no toast spam.
+
+    - id: "8.3"
+      task: Performance — memoize pin and transit derivations
+      status: completed
+      details: |
+        Pin list and transit list derivations should be useMemo'd on
+        `stops` + `selectedDay` to avoid recomputing on every map interaction
+        (pan, zoom).
+
+        Expected scale: 2-user family trips rarely exceed 30 stops per trip.
+        Premature micro-optimization isn't warranted beyond useMemo at the
+        derivation boundaries.
+
+    - id: "8.4"
+      task: Update CLAUDE.md documentation index
+      status: completed
+      details: |
+        Add two rows to the Documentation Index:
+        - TRIP-ENHANCEMENTS-V2-BRD.md
+        - TRIP-ENHANCEMENTS-V2-PLAN.yaml
+
+        Add to Critical Files:
+        - frontend/src/components/trips/map/TripMap.tsx
+
+        Add a row to Recent Architecture Decisions summarizing D1 (photo
+        link-only rationale), D3 (dedicated Map tab), D7 (Maps JS provider
+        choice), D10 (Map tab hidden when no coords).
+
+    - id: "8.5"
+      task: Update AI-APPLICATION-ARCHITECTURE.md
+      status: completed
+      details: |
+        Add a short section on Trip Enhancements V2:
+        - Map tab composition (pin layer, transit layer, filter bar, popup)
+        - Reuse of tripHelpers (isTransitBaseChange, groupStopsByDay,
+          computeAgendaDayRange) between Itinerary and Map tabs
+        - Lazy-loading strategy for Maps JS
+        - The single additive field (photoAlbumUrl) and its scope
+
+# =============================================================================
+# PHASE 9: Testing & Validation
+# =============================================================================
+phase_9_testing:
+  status: completed
+  description: |
+    Risk-based: integration test for photoAlbumUrl persistence; unit tests
+    for any new shared helpers; manual UAT plan for the Map tab (no frontend
+    test harness per V1 D13 unless one gets adopted between now and then).
+
+  tasks:
+    - id: "9.1"
+      task: Backend integration test for photoAlbumUrl CRUD
+      status: completed
+      details: |
+        Covered in task 1.4 — listed here for cross-referencing.
+
+    - id: "9.2"
+      task: Shared helper tests (if new helpers added)
+      status: completed
+      details: |
+        If any new utilities land in shared/utils/tripHelpers.ts during
+        Phase 5–7 (e.g., a dayPaletteFor(tripDayCount) helper), add unit
+        tests following the pattern in
+        shared/utils/__tests__/tripHelpers.test.ts.
+
+        If no new helpers are introduced, this task is a no-op.
+
+    - id: "9.3"
+      task: Manual UAT test plan for V2
+      status: completed
+      details: |
+        Deliver: docs/features/TRIP-ENHANCEMENTS-V2-TEST-PLAN.md — sections
+        covering at minimum:
+
+        1. photoAlbumUrl field — set, update, clear, invalid URL
+        2. "Open album" button — visibility rule, new-tab open
+        3. Map tab visibility — trip with only Stays, trip with only
+           free-text stops, trip with mixed
+        4. Pin rendering — Stays always pinned, Eat/Play pinned only when
+           verified, day affinity visual, pin iconography distinguishable
+        5. Transit lines — base-change transits render, day-trip transits
+           do NOT render, flight arcs vs straight polylines, mode icons
+        6. Popup — tap pin opens popup, "View in itinerary" deep links
+           correctly with scroll + highlight, strip param after arrival
+        7. Day filter — All vs per-day, current-day auto-selection on
+           live trip, base-change transit rendering on both spanning days
+        8. Auto-fit on tab open and on filter change
+        9. Footer count — accurate count of unpinned stops
+        10. Lazy load — Maps JS not requested until Map tab opened
+        11. Accessibility — keyboard nav for chips and pins, popup focus trap
+        12. Error handling — Maps JS load failure fallback
+        13. Regression sweep — Itinerary, Spending, Notes tabs unchanged
+
+    - id: "9.4"
+      task: Manual UAT execution on staging with real family trip data
+      status: completed
+      details: |
+        Before production deploy, exercise the UAT plan on a sync'd copy
+        of production data or on staging. Verify real trips with diverse
+        shapes render correctly — multi-city Europe trip, single-base
+        beach week, weekend day-trip-heavy trip.
+
+# =============================================================================
+# PHASE 10: Release
+# =============================================================================
+phase_10_release:
+  status: completed
+  description: |
+    Ship to production. Feature is additive and backwards-compatible with
+    existing trip data — no migration (photoAlbumUrl defaults to null when
+    absent; Map tab visibility keyed on existing stop data).
+
+  tasks:
+    - id: "10.1"
+      task: Conventional commits
+      status: completed
+      details: |
+        Expected commit cadence:
+        - feat(trips): add photoAlbumUrl field + Open album button  (phases 1–2)
+        - feat(trips): add Map tab with pin and transit rendering   (phases 3–6)
+        - feat(trips): add map interactions — popup, filter, deep link (phase 7)
+        - chore(docs): update CLAUDE.md + architecture guide for V2 (phase 8)
+
+        Release flows through existing GitHub Actions pipeline.
+
+    - id: "10.2"
+      task: Production deployment validation
+      status: completed
+      details: |
+        - /trips/:tripId/?tab=map loads without error on trips with stops
+        - /trips/:tripId/?tab=map falls back to itinerary on empty trips
+        - "Open album" button appears on trips with photoAlbumUrl set
+        - Maps JS loads only after Map tab is opened
+        - No regression in Itinerary, Spending, Notes tabs
+        - VITE_GOOGLE_PLACES_API_KEY has Maps JavaScript API enabled on the
+          production Google Cloud project, referrer restrictions intact
+
+# =============================================================================
+# OPEN QUESTIONS (tracked from BRD, updated as decided)
+# =============================================================================
+open_questions:
+  - id: Q1
+    from_brd: true
+    question: Tab order on Trip Detail — where does Map slot in?
+    proposed: Itinerary / Map / Spending / Notes (narrative → spatial → financial → free-form)
+    status: resolved
+    resolution: |
+      Accepted proposed default. Tab order is Itinerary / Map / Spending /
+      Notes. Rationale: Map is the spatial companion to Itinerary — adjacency
+      reinforces the planning↔spatial pair that users toggle between during
+      planning and active trips. Spending is retrospective (slotted after),
+      Notes is catch-all (slotted last). Minor muscle-memory shift for
+      existing users on Spending is acceptable at 2-user scale.
+
+  - id: Q2
+    from_brd: true
+    question: Day affinity visual — color, number, or both?
+    proposed: Color-by-day with a small numeric badge on each pin
+    status: resolved
+    resolution: |
+      Accepted proposed default. Pin composition: outer color keyed to day,
+      center icon shows type (bed / fork / compass), small numeric badge
+      top-right shows day number. Color delivers at-a-glance pattern
+      recognition ("day 3 was all in the south of the city"); badge handles
+      precision questions and insulates against colorblind palette collapse
+      on 7+ day trips. Palette sourced from d3-scale-chromatic schemeTableau10
+      (10 hues); longer trips extend with a custom 14-step palette or wrap
+      with slight hue shifts — finalized during Phase 5 impl.
+
+  - id: Q3
+    from_brd: true
+    question: Geocoding nudge for free-text Eat/Play stops on the edit form?
+    proposed: Silent omit + footer count in V2; revisit after usage data
+    status: resolved
+    resolution: |
+      Accepted proposed default (base variant, no clickable drill-down).
+      Free-text locations are a deliberate V1 design choice (REQ-010);
+      an edit-form banner would imply suboptimal input and risk nag fatigue.
+      The map footer "N stops without map locations" is informational,
+      visible only when the user is already looking at the map, and
+      discoverable for the curious. Option to make the footer clickable
+      (revealing the unpinned stop list) deferred — cheap to add in V3
+      if usage indicates demand.
+
+  - id: Q4
+    from_brd: true
+    question: Photo field name — `photoAlbumUrl` (generic) or `googlePhotosAlbumUrl` (provider-specific)?
+    proposed: Generic `photoAlbumUrl` for forward-compat with non-Google providers
+    status: resolved
+    resolution: |
+      Resolved in D2. Field shipped as `photoAlbumUrl`. UI label may surface
+      "Google Photos album" as helper text without coupling the schema.
+
+  - id: Q5
+    from_brd: true
+    question: Does the `?stop=<id>` deep-link param also work for external direct links?
+    proposed: Yes — trivial and useful; strip from URL after scroll-and-highlight arrival
+    status: resolved
+    resolution: |
+      Resolved in D8. The param is universal: the Map popup link-out and
+      externally shared direct links both use it; the Itinerary tab strips
+      it after arrival to keep reload URLs clean.
+
+  - id: Q6
+    from_brd: true
+    question: Map tab suppressed entirely when zero geocoded stops, or rendered as empty-state prompt?
+    proposed: Hide entirely — an empty spatial tab is chrome without content
+    status: resolved
+    resolution: |
+      Resolved in D10. Tab visibility keys on stops.some(hasVerifiedCoords).
+      Deep links to ?tab=map on trips without coords silently fall back to
+      the Itinerary tab.

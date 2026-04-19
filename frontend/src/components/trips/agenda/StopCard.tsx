@@ -71,7 +71,7 @@ export function StopCard({
   };
 
   return (
-    <Paper withBorder radius="md" style={cardStyle}>
+    <Paper withBorder radius="md" style={cardStyle} data-stop-id={stop.id}>
       <Group gap="sm" wrap="nowrap" align="flex-start">
         {showDragHandle && (
           <div

@@ -1,4 +1,5 @@
 import { useState, useMemo, useCallback, useEffect, type ReactNode } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Button, Group, Paper, Stack, Text } from '@mantine/core';
 import { DragDropContext, type DropResult } from '@hello-pangea/dnd';
 import { IconMoonStars, IconPlus } from '@tabler/icons-react';
@@ -68,6 +69,7 @@ function uncoveredRanges(days: string[], stops: Stop[]): Array<{ start: string; 
 export function Agenda({ trip, onAddStop, onEditStop, onDeleteStop }: AgendaProps) {
   const queryClient = useQueryClient();
   const stops = trip.stops;
+  const [searchParams, setSearchParams] = useSearchParams();
 
   const reorderMutation = useMutation({
     mutationFn: (updates: { id: string; sortOrder: number }[]) =>
@@ -127,6 +129,50 @@ export function Agenda({ trip, onAddStop, onEditStop, onDeleteStop }: AgendaProp
   const toggleDay = useCallback((date: string) => {
     setCollapsedDays((prev) => ({ ...prev, [date]: !prev[date] }));
   }, []);
+
+  // Deep-link target: scroll the matching stop into view, pulse-highlight it,
+  // then strip the ?stop param from the URL so reloads stay clean.
+  const stopParam = searchParams.get('stop');
+  useEffect(() => {
+    if (!stopParam) return;
+    const target = stops.find((s) => s.id === stopParam);
+    if (!target) {
+      // Stale share link — silent no-op, but strip the bad param.
+      const next = new URLSearchParams(searchParams);
+      next.delete('stop');
+      setSearchParams(next, { replace: true });
+      return;
+    }
+    // If the target's day is collapsed, expand it so the scroll lands on a real node.
+    setCollapsedDays((prev) => (prev[target.date] ? { ...prev, [target.date]: false } : prev));
+
+    // Wait for next frame so expanded day has rendered, then locate + scroll + pulse.
+    let cancelled = false;
+    const timer = window.setTimeout(() => {
+      if (cancelled) return;
+      const el = document.querySelector<HTMLElement>(`[data-stop-id="${stopParam}"]`);
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        // Pulse highlight via Web Animations API — no global CSS needed.
+        el.animate(
+          [
+            { boxShadow: '0 0 0 3px var(--mantine-color-blue-filled)', backgroundColor: 'var(--mantine-color-blue-light)' },
+            { boxShadow: '0 0 0 0 transparent', backgroundColor: 'transparent' },
+          ],
+          { duration: 2000, easing: 'ease-out' },
+        );
+      }
+      const next = new URLSearchParams(searchParams);
+      next.delete('stop');
+      setSearchParams(next, { replace: true });
+    }, 50);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stopParam]);
 
   // Drag-to-reorder: limited to untimed stops within the same day.
   const handleDragEnd = useCallback(

@@ -318,6 +318,8 @@ export interface Trip {
   rating: number | null;
   notes: string;
   stops: Stop[];
+  /** Optional link to an externally-hosted photo album (Google Photos, etc). */
+  photoAlbumUrl: string | null;
 }
 
 export interface TripCategoryBudget {
@@ -525,6 +527,7 @@ export interface CreateTripDto {
   categoryBudgets?: TripCategoryBudget[];
   rating?: number | null;
   notes?: string;
+  photoAlbumUrl?: string | null;
 }
 
 export interface UpdateTripDto {
@@ -535,6 +538,7 @@ export interface UpdateTripDto {
   categoryBudgets?: TripCategoryBudget[];
   rating?: number | null;
   notes?: string;
+  photoAlbumUrl?: string | null;
 }
 
 // Project types

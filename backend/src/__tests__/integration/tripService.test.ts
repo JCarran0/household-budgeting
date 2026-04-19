@@ -72,6 +72,7 @@ async function getStoredTransaction(
 describe('Trip Service Integration Tests', () => {
   let authToken: string;
   let userId: string;
+  let familyId: string;
 
   beforeEach(async () => {
     if ('clear' in dataService) {
@@ -84,6 +85,7 @@ describe('Trip Service Integration Tests', () => {
     const user = await registerUser(username, 'test-password-for-trip-tests');
     authToken = user.token;
     userId = user.userId;
+    familyId = user.familyId;
   });
 
   // -------------------------------------------------------------------------
@@ -966,6 +968,128 @@ describe('Trip Service Integration Tests', () => {
           .send({ startDate: '2026-05-10', endDate: '2026-05-01' })
           .expect(400);
       });
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // photoAlbumUrl (V2)
+  // -------------------------------------------------------------------------
+
+  describe('photoAlbumUrl (V2) — persistence & validation', () => {
+    it('creates a trip with a photoAlbumUrl and returns it', async () => {
+      const response = await request(app)
+        .post('/api/v1/trips')
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({
+          name: 'Photo Album Create',
+          startDate: '2026-06-01',
+          endDate: '2026-06-10',
+          photoAlbumUrl: 'https://photos.google.com/share/xyz',
+        })
+        .expect(201);
+
+      expect(response.body.photoAlbumUrl).toBe('https://photos.google.com/share/xyz');
+    });
+
+    it('defaults photoAlbumUrl to null when not provided on create', async () => {
+      const response = await request(app)
+        .post('/api/v1/trips')
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({
+          name: 'No Album Trip',
+          startDate: '2026-06-01',
+          endDate: '2026-06-10',
+        })
+        .expect(201);
+
+      expect(response.body.photoAlbumUrl).toBeNull();
+    });
+
+    it('updates photoAlbumUrl and clears it with null', async () => {
+      const create = await request(app)
+        .post('/api/v1/trips')
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({
+          name: 'Photo Album Update',
+          startDate: '2026-06-01',
+          endDate: '2026-06-10',
+          photoAlbumUrl: 'https://photos.google.com/share/abc',
+        })
+        .expect(201);
+
+      const tripId = create.body.id as string;
+
+      const updated = await request(app)
+        .put(`/api/v1/trips/${tripId}`)
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({ photoAlbumUrl: 'https://photos.google.com/share/def' })
+        .expect(200);
+
+      expect(updated.body.photoAlbumUrl).toBe('https://photos.google.com/share/def');
+
+      const cleared = await request(app)
+        .put(`/api/v1/trips/${tripId}`)
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({ photoAlbumUrl: null })
+        .expect(200);
+
+      expect(cleared.body.photoAlbumUrl).toBeNull();
+    });
+
+    it('coerces empty string to null on create', async () => {
+      const response = await request(app)
+        .post('/api/v1/trips')
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({
+          name: 'Empty String Album',
+          startDate: '2026-06-01',
+          endDate: '2026-06-10',
+          photoAlbumUrl: '',
+        })
+        .expect(201);
+
+      expect(response.body.photoAlbumUrl).toBeNull();
+    });
+
+    it('rejects an invalid URL with 400', async () => {
+      await request(app)
+        .post('/api/v1/trips')
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({
+          name: 'Bad Album URL',
+          startDate: '2026-06-01',
+          endDate: '2026-06-10',
+          photoAlbumUrl: 'not a url',
+        })
+        .expect(400);
+    });
+
+    it('loads legacy trips (persisted before V2) with photoAlbumUrl === null', async () => {
+      // Seed a legacy trip directly into the store without photoAlbumUrl.
+      await dataService.saveData(`trips_${familyId}`, [
+        {
+          id: 'legacy-trip-1',
+          userId: familyId,
+          name: 'Legacy Trip',
+          tag: 'trip:legacy-trip:2025',
+          startDate: '2025-01-01',
+          endDate: '2025-01-07',
+          totalBudget: null,
+          categoryBudgets: [],
+          rating: null,
+          notes: '',
+          stops: [],
+          createdAt: '2025-01-01T00:00:00.000Z',
+          updatedAt: '2025-01-01T00:00:00.000Z',
+        },
+      ]);
+
+      const response = await request(app)
+        .get('/api/v1/trips/legacy-trip-1')
+        .set('Authorization', `Bearer ${authToken}`)
+        .expect(200);
+
+      expect(response.body.photoAlbumUrl).toBeNull();
     });
   });
 

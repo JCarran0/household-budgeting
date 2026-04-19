@@ -37,6 +37,7 @@ import {
   IconCopy,
   IconEdit,
   IconMapPin,
+  IconPhoto,
   IconTrash,
 } from '@tabler/icons-react';
 import { format } from 'date-fns';
@@ -48,14 +49,16 @@ import { Agenda } from '../components/trips/agenda/Agenda';
 import { AddStopSheet } from '../components/trips/agenda/AddStopSheet';
 import { ItineraryEmptyState } from '../components/trips/agenda/ItineraryEmptyState';
 import { TripTemplateModal } from '../components/trips/agenda/TripTemplateModal';
+import { TripMap } from '../components/trips/map/TripMap';
+import { hasVerifiedCoords } from '../../../shared/utils/tripHelpers';
 import type {
   TripDrillDownTarget,
 } from '../components/trips/TripSpendingBreakdown';
 import type { Stop, TransitMode, TripSummary } from '../../../shared/types';
 import { formatCurrency } from '../utils/formatters';
 
-type TabKey = 'itinerary' | 'spending' | 'notes';
-const VALID_TABS: TabKey[] = ['itinerary', 'spending', 'notes'];
+type TabKey = 'itinerary' | 'map' | 'spending' | 'notes';
+const VALID_TABS: TabKey[] = ['itinerary', 'map', 'spending', 'notes'];
 
 const STATUS_BADGE_COLOR: Record<TripSummary['status'], string> = {
   upcoming: 'blue',
@@ -88,8 +91,10 @@ export function TripDetail() {
   const clipboard = useClipboard({ timeout: 1500 });
 
   // Parse tab from URL; default to itinerary.
+  // Note: the Map tab visibility guard below can force the tab back to
+  // itinerary for trips without geocoded stops even if ?tab=map is requested.
   const rawTab = searchParams.get('tab');
-  const activeTab: TabKey = VALID_TABS.includes(rawTab as TabKey)
+  const requestedTab: TabKey = VALID_TABS.includes(rawTab as TabKey)
     ? (rawTab as TabKey)
     : 'itinerary';
 
@@ -185,6 +190,17 @@ export function TripDetail() {
     if (!trip || trip.totalBudget === null) return false;
     return trip.totalSpent > trip.totalBudget;
   }, [trip]);
+
+  // Map tab is visible only when at least one stop has verified coords.
+  const hasGeocodedStop = useMemo(() => {
+    if (!trip) return false;
+    return trip.stops.some(hasVerifiedCoords);
+  }, [trip]);
+
+  // If the URL requested the map tab but the trip has no geocoded stops,
+  // silently fall back to itinerary.
+  const activeTab: TabKey =
+    requestedTab === 'map' && !hasGeocodedStop ? 'itinerary' : requestedTab;
 
   if (isLoading) {
     return (
@@ -286,6 +302,21 @@ export function TripDetail() {
                   </Group>
                 </Code>
               </Tooltip>
+              {trip.photoAlbumUrl && (
+                <Tooltip label="Open photo album">
+                  <Button
+                    component="a"
+                    href={trip.photoAlbumUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    leftSection={<IconPhoto size={14} />}
+                    variant="light"
+                    size="xs"
+                  >
+                    Open album
+                  </Button>
+                </Tooltip>
+              )}
               <Tooltip label="Edit trip">
                 <ActionIcon
                   variant="subtle"
@@ -316,6 +347,7 @@ export function TripDetail() {
         <Tabs value={activeTab} onChange={handleTabChange} keepMounted={false}>
           <Tabs.List>
             <Tabs.Tab value="itinerary">Itinerary</Tabs.Tab>
+            {hasGeocodedStop && <Tabs.Tab value="map">Map</Tabs.Tab>}
             <Tabs.Tab value="spending">Spending</Tabs.Tab>
             <Tabs.Tab value="notes">Notes</Tabs.Tab>
           </Tabs.List>
@@ -351,6 +383,12 @@ export function TripDetail() {
               />
             )}
           </Tabs.Panel>
+
+          {hasGeocodedStop && (
+            <Tabs.Panel value="map" pt="md">
+              <TripMap trip={trip} stops={trip.stops} />
+            </Tabs.Panel>
+          )}
 
           <Tabs.Panel value="spending" pt="md">
             <TripSpendingBreakdown

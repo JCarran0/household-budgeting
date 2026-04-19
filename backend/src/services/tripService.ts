@@ -55,9 +55,13 @@ export class TripService {
 
   private async loadTrips(familyId: string): Promise<StoredTrip[]> {
     const trips = (await this.dataService.getData<StoredTrip[]>(`trips_${familyId}`)) ?? [];
-    // Backwards-compat: older trips persisted before itineraries have no `stops`.
-    // Default to [] on read so downstream consumers can treat `stops` as required.
-    return trips.map((t) => (t.stops ? t : { ...t, stops: [] }));
+    // Backwards-compat: older trips persisted before itineraries have no `stops`
+    // and trips persisted before V2 have no `photoAlbumUrl`. Default both on read.
+    return trips.map((t) => ({
+      ...t,
+      stops: t.stops ?? [],
+      photoAlbumUrl: t.photoAlbumUrl ?? null,
+    }));
   }
 
   private async saveTrips(trips: StoredTrip[], familyId: string): Promise<void> {
@@ -145,6 +149,7 @@ export class TripService {
       rating: data.rating ?? null,
       notes: data.notes ?? '',
       stops: [],
+      photoAlbumUrl: data.photoAlbumUrl ?? null,
       createdAt: now,
       updatedAt: now,
       lastModifiedBy: userId,
@@ -226,6 +231,8 @@ export class TripService {
       categoryBudgets: data.categoryBudgets ?? existing.categoryBudgets,
       rating: data.rating !== undefined ? data.rating : existing.rating,
       notes: data.notes !== undefined ? data.notes : existing.notes,
+      photoAlbumUrl:
+        data.photoAlbumUrl !== undefined ? data.photoAlbumUrl : existing.photoAlbumUrl,
       tag: tagWillChange ? candidateTag : oldTag,
       updatedAt: now,
       lastModifiedBy: userId ?? existing.lastModifiedBy,

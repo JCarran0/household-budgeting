@@ -78,6 +78,7 @@ interface TripFormValues {
   rating: number;
   notes: string;
   categoryBudgets: TripCategoryBudget[];
+  photoAlbumUrl: string;
 }
 
 type DrillDownState = TripDrillDownTarget;
@@ -109,6 +110,7 @@ export function TripFormModal({ opened, onClose, trip }: TripFormModalProps) {
       rating: 0,
       notes: '',
       categoryBudgets: [],
+      photoAlbumUrl: '',
     },
     validate: {
       name: (value) => (value.trim().length === 0 ? 'Name is required' : null),
@@ -135,6 +137,19 @@ export function TripFormModal({ opened, onClose, trip }: TripFormModalProps) {
         }
         return null;
       },
+      photoAlbumUrl: (value) => {
+        const trimmed = value.trim();
+        if (trimmed.length === 0) return null;
+        try {
+          const parsed = new URL(trimmed);
+          if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+            return 'Must be an http(s) URL';
+          }
+          return null;
+        } catch {
+          return 'Enter a valid URL';
+        }
+      },
     },
   });
 
@@ -152,6 +167,7 @@ export function TripFormModal({ opened, onClose, trip }: TripFormModalProps) {
         rating: trip.rating ?? 0,
         notes: trip.notes ?? '',
         categoryBudgets: trip.categoryBudgets ?? [],
+        photoAlbumUrl: trip.photoAlbumUrl ?? '',
       });
     } else {
       form.reset();
@@ -228,6 +244,7 @@ export function TripFormModal({ opened, onClose, trip }: TripFormModalProps) {
     const categoryBudgets = values.categoryBudgets.filter(
       (cb) => cb.categoryId !== '' && cb.amount > 0,
     );
+    const photoAlbumUrl = values.photoAlbumUrl.trim() === '' ? null : values.photoAlbumUrl.trim();
 
     if (isEdit && trip) {
       updateMutation.mutate({
@@ -240,6 +257,7 @@ export function TripFormModal({ opened, onClose, trip }: TripFormModalProps) {
           rating,
           notes: values.notes.trim(),
           categoryBudgets,
+          photoAlbumUrl,
         },
       });
     } else {
@@ -251,6 +269,7 @@ export function TripFormModal({ opened, onClose, trip }: TripFormModalProps) {
         rating,
         notes: values.notes.trim(),
         categoryBudgets,
+        photoAlbumUrl,
       });
     }
   };
@@ -406,6 +425,14 @@ export function TripFormModal({ opened, onClose, trip }: TripFormModalProps) {
             minRows={2}
             maxRows={6}
             {...form.getInputProps('notes')}
+          />
+
+          {/* Photo album URL */}
+          <TextInput
+            label="Photos album URL"
+            placeholder="https://photos.google.com/share/..."
+            description="Optional link to a Google Photos album or other provider"
+            {...form.getInputProps('photoAlbumUrl')}
           />
 
           {/* Actions */}

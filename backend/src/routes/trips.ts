@@ -14,6 +14,12 @@ const router = Router();
 
 // Validation schemas
 
+// Empty strings from the UI collapse to null so we don't persist "".
+const photoAlbumUrlSchema = z
+  .union([z.string().url(), z.literal(''), z.null()])
+  .optional()
+  .transform((v) => (v === '' || v === undefined ? null : v));
+
 const createTripSchema = z
   .object({
     name: z.string().min(1).max(100),
@@ -29,7 +35,8 @@ const createTripSchema = z
       )
       .optional(),
     rating: z.number().int().min(1).max(5).nullable().optional(),
-    notes: z.string().max(2000).optional()
+    notes: z.string().max(2000).optional(),
+    photoAlbumUrl: photoAlbumUrlSchema,
   })
   .refine((data) => data.endDate >= data.startDate, {
     message: 'endDate must be on or after startDate',
@@ -60,7 +67,8 @@ const updateTripSchema = z
       )
       .optional(),
     rating: z.number().int().min(1).max(5).nullable().optional(),
-    notes: z.string().max(2000).optional()
+    notes: z.string().max(2000).optional(),
+    photoAlbumUrl: photoAlbumUrlSchema,
   })
   .refine(
     (data) => {

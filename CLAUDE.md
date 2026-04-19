@@ -23,6 +23,7 @@ Family-scale app for 2 users: personal budgeting (with Plaid), shared tasks, tri
 | AI Chat Actions | [AI-CHAT-ACTIONS-BRD.md](docs/features/AI-CHAT-ACTIONS-BRD.md) | [AI-CHAT-ACTIONS-PLAN.yaml](docs/features/AI-CHAT-ACTIONS-PLAN.yaml) |
 | Category Hierarchy | [CATEGORY-HIERARCHY-BUDGETING-BRD.md](docs/features/CATEGORY-HIERARCHY-BUDGETING-BRD.md) | [CATEGORY-HIERARCHY-BUDGETING-PLAN.yaml](docs/features/CATEGORY-HIERARCHY-BUDGETING-PLAN.yaml) |
 | Trip Itineraries | [TRIP-ITINERARIES-BRD.md](docs/features/TRIP-ITINERARIES-BRD.md) | [TRIP-ITINERARIES-PLAN.yaml](docs/features/TRIP-ITINERARIES-PLAN.yaml) |
+| Trip Enhancements V2 (Map + Photos) | [TRIP-ENHANCEMENTS-V2-BRD.md](docs/features/TRIP-ENHANCEMENTS-V2-BRD.md) | [TRIP-ENHANCEMENTS-V2-PLAN.yaml](docs/features/TRIP-ENHANCEMENTS-V2-PLAN.yaml) |
 | Projects | [PROJECTS-BRD.md](docs/features/PROJECTS-BRD.md) | [PROJECTS-ENHANCEMENTS-PLAN.yaml](docs/features/PROJECTS-ENHANCEMENTS-PLAN.yaml) |
 | Task Management v2.0 | [TASK-MANAGEMENT-BRD.md](docs/features/TASK-MANAGEMENT-BRD.md) | [TASK-MANAGEMENT-ENHANCEMENTS-PLAN.yaml](docs/features/TASK-MANAGEMENT-ENHANCEMENTS-PLAN.yaml) |
 
@@ -57,8 +58,9 @@ Family-scale app for 2 users: personal budgeting (with Plaid), shared tasks, tri
 **Trips:**
 - `frontend/src/pages/TripDetail.tsx` — `/trips/:tripId` (Itinerary / Spending / Notes)
 - `frontend/src/components/trips/agenda/Agenda.tsx`, `AddStopSheet.tsx`
+- `frontend/src/components/trips/map/TripMap.tsx` — Map tab (pins, transit lines, day filter, popup deep-link)
 - `backend/src/services/tripService.ts` — nested stop CRUD + `StayOverlapError`
-- `shared/utils/tripHelpers.ts` — `validateNoStayOverlap`, `computeAgendaDayRange`, `groupStopsByDay`, `findActiveStay`, `isTransitBaseChange`
+- `shared/utils/tripHelpers.ts` — `validateNoStayOverlap`, `computeAgendaDayRange`, `groupStopsByDay`, `findActiveStay`, `isTransitBaseChange`, `hasVerifiedCoords`
 
 ## File Layout
 ```
@@ -204,6 +206,7 @@ df -h /home/appuser
 |------|----------|-----|
 | 2026-04 | Task Management v2.0 — Checklist view, Snooze, manual reorder, Cancelled column retired, family-only leaderboard | Five concurrent enhancements. Snooze is `snoozedUntil: string \| null` (a visibility modifier, NOT a status). Manual reorder via `sortOrder` fractional float, family-wide, per-status. Leaderboard family-scope only (behavior change from v1.0). See [TASK-MANAGEMENT-BRD.md](docs/features/TASK-MANAGEMENT-BRD.md). |
 | 2026-04 | Trip Itineraries — day-by-day agenda | Reverses original "not a travel planner" exclusion. `Stop` entity (Stay/Eat/Play/Transit) embedded in Trip. Stay dates are **night-based** (endDate = last night). System enforces no-overlap. Agenda derived, not stored. See [TRIP-ITINERARIES-BRD.md](docs/features/TRIP-ITINERARIES-BRD.md). |
+| 2026-04 | Trip Enhancements V2 — Map tab + photo album link | Additive Map tab renders Stays + verified Eat/Play as pins and base-change transits as lines (flights = geodesic arcs). Provider = Google Maps JS via `@vis.gl/react-google-maps`, reusing V1 Places API key (lazy-loaded on tab mount). Photo integration collapsed to a `photoAlbumUrl` hyperlink after Google removed the `photoslibrary.*` scopes in March 2025; Picker API returns no EXIF/geo metadata. Map tab hidden when trip has zero geocoded stops. Pin popup deep-links to Itinerary via `?stop=<id>`. See [TRIP-ENHANCEMENTS-V2-BRD.md](docs/features/TRIP-ENHANCEMENTS-V2-BRD.md). |
 | 2026-04 | Canonical parent rollup utilities + Reports widget refactor | Effective parent budget = `max(parent, sum(children))` for income AND expense; effective actual = additive. New Spending Composition widget for leaf-level intent. Behavior change: `BudgetComparison.tsx` switched from additive to max. See [CATEGORY-HIERARCHY-BUDGETING-BRD.md](docs/features/CATEGORY-HIERARCHY-BUDGETING-BRD.md). |
 | 2026-04 | Chat action cards with registry-based allowlist | Extends chatbot from read-only to narrow write via user-confirmed cards. V1 actions: `create_task`, `submit_github_issue` (the latter migrated from bespoke intercept per AI-CHAT-ACTIONS-BRD D-15). Nonce-based single-use, server-side Zod re-validation, audit log with `source=chatbot_action_card`. See [AI-CHAT-ACTIONS-BRD.md](docs/features/AI-CHAT-ACTIONS-BRD.md). |
 | 2026-04 | `isSavings` flag on top-level categories | Separate savings contributions (401k, IRA, brokerage) from consumption spending. All spending/net surfaces exclude savings by default. Cash Flow shows 3-line layout Income / Spending / Savings. See [SAVINGS-CATEGORY-BRD.md](docs/features/SAVINGS-CATEGORY-BRD.md). |

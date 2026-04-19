@@ -198,6 +198,20 @@ export function findActiveStay(stops: Stop[], date: string): StayStop | null {
 }
 
 /**
+ * True if the stop has verified lat/lng coordinates and is a candidate for
+ * pinning on the map. Stays always qualify (V1 REQ-009 guarantees verified
+ * location); Eat/Play qualify only when their location.kind === 'verified';
+ * Transit stops are never pinned (their spatial presence is the connector line).
+ */
+export function hasVerifiedCoords(stop: Stop): boolean {
+  if (stop.type === 'stay') return true;
+  if (stop.type === 'eat' || stop.type === 'play') {
+    return stop.location?.kind === 'verified';
+  }
+  return false;
+}
+
+/**
  * A transit is a "base change" (renders as a full-width connector between chapters,
  * per REQ-026) when the transit date sits at the seam between two different stays
  * OR is the last day of one stay with no next stay OR the first day of a stay with

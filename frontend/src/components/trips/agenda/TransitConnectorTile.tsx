@@ -53,6 +53,7 @@ export function TransitConnectorTile({ transit, onEdit, onDelete }: TransitConne
       withBorder
       radius="md"
       p="sm"
+      data-stop-id={transit.id}
       style={{
         borderStyle: 'dashed',
         background: 'var(--mantine-color-dark-7)',
