@@ -1,0 +1,1108 @@
+# =============================================================================
+# Task Leaderboard (streaks + badges) — Implementation Plan
+# =============================================================================
+# BRD: docs/features/TASK-LEADERBOARD-BRD.md (v1.0 — 2026-04-19)
+# Extends: docs/features/TASK-MANAGEMENT-BRD.md §5 (shipped leaderboard)
+# Status: Implementation Complete — All 5 phases shipped, manual UAT pending
+# Last Updated: 2026-04-19
+# =============================================================================
+
+overview:
+  description: |
+    Two motivational layers added on top of the shipped leaderboard panel on
+    the Tasks page:
+
+    1. Streaks — Two new columns (Current, Best) measuring consecutive calendar
+       days on which a family member was credited with ≥1 family-task
+       completion. "Today-is-grace" semantics: a user whose last completion was
+       yesterday sees their streak hold steady all day today; it only breaks
+       at local midnight when today closes with zero completions.
+
+    2. Badges — A flat catalog of 13 earned-for-life achievements across 4
+       categories (Volume 5/10/20, Consistency 4/5/7, Streak 7/30/100, Lifetime
+       10/50/100/500/1000). Unearned badges render as ghost ???? placeholders
+       with no tooltip; category is visible so users see direction without
+       the threshold. Clicking a member row opens a detail modal showing the
+       full 13-badge grid grouped by category.
+
+    All computation is stateless — derived from existing `Task.completedAt` +
+    `SubTask.completedAt` on every `/api/v1/tasks/leaderboard` request. No
+    new persistence, no schema change, no migration script. First leaderboard
+    load after deploy retroactively surfaces historical badges; a
+    `lastSeenBadgeEarnedAt` marker seeded to `now` on first post-deploy load
+    suppresses the cascade of celebration toasts.
+
+    Celebration on a newly earned badge: distinct higher-fanfare audio cue
+    (separate from the task-done chime from commit 39c2245), short confetti
+    animation, and a Mantine toast naming the badge.
+
+  key_files:
+    brd: docs/features/TASK-LEADERBOARD-BRD.md
+    shared_types: shared/types/index.ts
+    shared_streaks_util: shared/utils/leaderboardStreaks.ts   # new
+    shared_badges_util: shared/utils/leaderboardBadges.ts     # new
+    task_service: backend/src/services/taskService.ts
+    task_routes: backend/src/routes/tasks.ts
+    task_service_test: backend/src/__tests__/integration/taskService.test.ts
+    frontend_tasks_page: frontend/src/pages/Tasks.tsx
+    frontend_leaderboard_panel: frontend/src/pages/Tasks.tsx   # LeaderboardPanel lives here
+    frontend_completion_sound: frontend/src/utils/completionSound.ts  # add playBadgeFanfare
+    frontend_badge_slot: frontend/src/components/tasks/BadgeSlotArea.tsx     # new
+    frontend_badge_modal: frontend/src/components/tasks/BadgeDetailModal.tsx # new
+    frontend_badge_catalog: frontend/src/components/tasks/badgeCatalog.ts    # new (copy/labels/icons)
+
+# =============================================================================
+# DECISIONS LOG — settled during BRD drafting + plan drafting
+# =============================================================================
+decisions:
+  - id: D1
+    date: 2026-04-19
+    decision: Badges computed server-side in `getLeaderboard`, returned in the response
+    rationale: |
+      Stateless does not mean client-computed. Server is the single source of
+      truth for attribution (family scope, assignee-else-completer, subtask
+      credit). Client computes nothing; it just renders what the server says
+      is earned and compares `earnedAt` timestamps against a `lastSeenBadgeEarnedAt`
+      marker for celebration detection. Avoids two implementations drifting.
+
+  - id: D2
+    date: 2026-04-19
+    decision: Badge catalog hardcoded in `shared/types/index.ts` (typed constant)
+    rationale: |
+      13 badges across 4 categories is small and stable. A BADGE_CATALOG
+      constant with `{ id, category, threshold, order }` per badge lets the
+      frontend render category headings, tooltips, and grid order without
+      round-tripping. Shared types mean backend and frontend cannot disagree
+      on badge identity. Artwork labels/icons live on the frontend only
+      (badgeCatalog.ts) since they're UI-only.
+
+  - id: D3
+    date: 2026-04-19
+    decision: Streak math lives in a pure shared util (`shared/utils/leaderboardStreaks.ts`)
+    rationale: |
+      Follows the established shared-utils pattern (transactionCalculations,
+      budgetCalculations, taskSnooze, taskSortOrder). Pure function taking a
+      list of credit events (userId, timestampMs) + timezone + `now` and
+      returning `{ currentStreak, bestStreak, bestStreakAchievedAt }` per
+      user. Unit-testable in isolation; callable from the backend.
+
+  - id: D4
+    date: 2026-04-19
+    decision: "Today-is-grace anchor algorithm — anchor = today if has ≥1 credit else yesterday; current = consecutive days back from anchor"
+    rationale: |
+      Matches Duolingo / Apple Fitness. Implementation: bucket credit events
+      by local calendar day → set of ISO YYYY-MM-DD strings. If today ∈ set,
+      anchor = today; else anchor = today - 1. Walk back one day at a time
+      while the day is in the set; count = number of consecutive days. Best
+      streak = longest run across all days (unrelated to anchor).
+
+  - id: D5
+    date: 2026-04-19
+    decision: "Badge `earnedAt` = `completedAt` of the credit event that first tipped the threshold"
+    rationale: |
+      For Volume/Lifetime/Consistency, the tipping event is the earliest
+      `completedAt` in the qualifying window. For streak badges, it is the
+      `completedAt` of the first day whose running streak reached the
+      threshold. All computable in a single sort-and-sweep over credit
+      events, no backtracking. Closes BRD Open Q §9 #3.
+
+  - id: D6
+    date: 2026-04-19
+    decision: Consistency badges earn the moment the threshold tips during a live ISO week (not end-of-week)
+    rationale: |
+      Closes BRD Open Q §9 #4. A Wednesday-earning-consistency_4 is fine —
+      once 4 distinct days in the Mon-Sun week have credits, the badge
+      earns. The `earnedAt` is the `completedAt` of the credit on the 4th
+      distinct day. This matches the feel-good tone: award on accomplishment,
+      not on week close.
+
+  - id: D7
+    date: 2026-04-19
+    decision: Row slot selection — highest tier per category, up to 3, drop Consistency first on overflow, tie-break by recency
+    rationale: |
+      Direct from BRD §5.1. Implementation is a deterministic pure function:
+      groupBy category → take max-tier per category → if length > 3, drop
+      Consistency → sort by `earnedAt` DESC → take first 3. Fill remaining
+      slots with ghost ???? placeholders in category order (Volume, Streak,
+      Lifetime, Consistency) for categories where the user has 0 earned.
+
+  - id: D8
+    date: 2026-04-19
+    decision: "Celebration detection uses `localStorage['tasks.leaderboard.lastSeenBadgeEarnedAt']` keyed to the viewing user"
+    rationale: |
+      Dot-prefixed key follows the newer convention (tasks.view,
+      tasks.kanban.showSnoozed). The existing `tasks-leaderboard` key (used
+      for panel open/closed) is the outlier — we do not change it in this
+      plan. First-load seed: if key is absent, set to `now` ISO string
+      BEFORE diffing earnedAt values, so historical badges appear silently.
+      Celebrations fire only for the viewing user's own badges
+      (`entry.userId === currentUser.userId`), per BRD Open Q #6.
+
+  - id: D9
+    date: 2026-04-19
+    decision: "`playBadgeFanfare()` added to existing `frontend/src/utils/completionSound.ts` — Web Audio, no assets"
+    rationale: |
+      Reuse the in-house synth pattern — zero asset pipeline, zero bundle
+      bloat. Fanfare is distinct from the task-done chime via:
+        • longer duration (~900ms vs ~380ms)
+        • wider interval (major triad ascending + octave leap + sustained
+          major 6th top note) vs the chime's simple C arpeggio
+        • heavier harmonic content (brass-ish saw partials layered over sine)
+      Decision heuristic: chime = soft chirp, fanfare = "you did a thing."
+      Settles BRD Open Q §9 #1.
+
+  - id: D10
+    date: 2026-04-19
+    decision: Confetti via `canvas-confetti` (new dev-dep), configured with source point = badge slot position
+    rationale: |
+      Search confirmed no existing confetti library. `canvas-confetti` is
+      tiny (~6KB gzipped), has no runtime deps, supports `origin: {x, y}`
+      in viewport coords — perfect for emitting from the badge slot. One
+      palette for all badges v1 (closes BRD Open Q §9 #2 — per-category
+      palettes deferred). Install as runtime dep (not devDep) since it's
+      called from production code.
+
+  - id: D11
+    date: 2026-04-19
+    decision: Badge detail modal = Mantine `Modal` with 4-section grid (Volume / Consistency / Streak / Lifetime)
+    rationale: |
+      Reuses existing Mantine Modal wiring already present in TaskDetailModal.
+      Grid layout with 4 horizontal rows (one per category), tiers in
+      ascending threshold order within each row. Earned = full artwork +
+      tooltip with `earnedAt` date; unearned = ???? with category chip but
+      no tooltip. Header shows member avatar, name, and "N of 13 earned."
+
+  - id: D12
+    date: 2026-04-19
+    decision: No badge artwork ships in v1 — unearned is literal `????`, earned is an emoji glyph per badge
+    rationale: |
+      Keeps the ship small. Emoji glyphs map naturally: 🔥 for streak,
+      📅 for consistency, ⚡ for volume, 🏆 for lifetime, with tier indicated
+      by count badge or number suffix. Mantine `<ThemeIcon>` frame gives a
+      consistent circular presentation. Real custom artwork is a Nice-to-Have
+      follow-up with zero code change — swap the glyph map.
+
+  - id: D13
+    date: 2026-04-19
+    decision: Streak values + badges are included in the existing `GET /api/v1/tasks/leaderboard` response (no new endpoint)
+    rationale: |
+      Same computation source (scan of family tasks), same cache invalidation
+      triggers (any task mutation). Splitting into a second endpoint would
+      double the task scan. Adding fields is contract-additive — existing
+      clients ignore unknown fields. No bump of the path or version.
+
+  - id: D14
+    date: 2026-04-19
+    decision: Streak cells have no hover preview (unlike Today/Week/Month cells)
+    rationale: |
+      Direct from BRD REQ-L-006 / §3.4. There is nothing analogous to
+      enumerate for a summary stat. The `LeaderboardCountCell` component is
+      NOT reused for streak columns — streak cells use a simpler
+      non-interactive `<Text>` with the flame glyph.
+
+  - id: D15
+    date: 2026-04-19
+    decision: "Badges are data-driven, not earned-for-life — a change to the underlying task completion affects badge awarding"
+    rationale: |
+      BRD draft originally said "never revoked even if the user drops below
+      threshold." Updated 2026-04-19 after plan review: badges mirror the
+      current dataset on every leaderboard load. If the sole qualifier for
+      a threshold is reverted, the badge disappears. Reasons:
+        • Keeps computation fully stateless (REQ-L-010) — no new collection,
+          no backfill override.
+        • Matches the shipped leaderboard's existing principle that current
+          task state drives current numbers.
+        • Consistent with the mental model users already have for the
+          Today/Week/Month counts (uncompleting a task removes it from
+          those counts too).
+        • The "revoke a badge by uncompleting" case is vanishingly rare in
+          practice — the reverted completion has to be the user's only
+          qualifier across the entire history. For any user with a
+          meaningful completion count, the badge survives.
+      BRD §1.2, §4.2, §10, and REQ-L-008 rewritten in the same pass to
+      match this decision.
+
+# =============================================================================
+# PHASE 1: Shared Types & Utilities
+# =============================================================================
+phase_1_shared:
+  status: complete
+  description: |
+    Define the badge catalog, streak computation, and badge computation as
+    pure shared utilities. Unit-testable in isolation; imported by the
+    backend's `getLeaderboard` and returned in the response.
+
+  tasks:
+    - id: "1.1"
+      task: Extend `LeaderboardEntry` + `LeaderboardResponse` types
+      status: complete
+      details: |
+        File: shared/types/index.ts (around the existing LeaderboardEntry at
+        line 1261).
+
+        Add to LeaderboardEntry:
+          currentStreak: number;          // today-is-grace
+          bestStreak: number;
+          earnedBadges: EarnedBadge[];    // earned-for-life list, not all 13
+
+        New types:
+          export type BadgeCategory =
+            | 'volume'
+            | 'consistency'
+            | 'streak'
+            | 'lifetime';
+
+          export type BadgeId =
+            | 'volume_3' | 'volume_5' | 'volume_10'
+            | 'consistency_4' | 'consistency_5' | 'consistency_7'
+            | 'streak_7' | 'streak_30' | 'streak_100'
+            | 'lifetime_10' | 'lifetime_50' | 'lifetime_100'
+            | 'lifetime_500' | 'lifetime_1000';
+
+          export interface BadgeDefinition {
+            id: BadgeId;
+            category: BadgeCategory;
+            threshold: number;        // e.g. 3 for volume_3, 7 for streak_7
+            order: number;             // display order within category
+            label: string;             // e.g. "3 in a day"
+            description: string;       // tooltip copy
+          }
+
+          export interface EarnedBadge {
+            id: BadgeId;
+            earnedAt: string;          // ISO datetime
+          }
+
+          export const BADGE_CATALOG: readonly BadgeDefinition[] = [
+            // Volume
+            { id: 'volume_3',      category: 'volume',      threshold: 3,   order: 1, label: '3 in a day',  description: '3 tasks completed in a single day' },
+            { id: 'volume_5',      category: 'volume',      threshold: 5,   order: 2, label: '5 in a day',  description: '5 tasks completed in a single day' },
+            { id: 'volume_10',     category: 'volume',      threshold: 10,  order: 3, label: '10 in a day', description: '10 tasks completed in a single day' },
+            // Consistency
+            { id: 'consistency_4', category: 'consistency', threshold: 4,   order: 1, label: '4 days/week', description: 'At least 1 task on 4 days in a single week' },
+            { id: 'consistency_5', category: 'consistency', threshold: 5,   order: 2, label: '5 days/week', description: 'At least 1 task on 5 days in a single week' },
+            { id: 'consistency_7', category: 'consistency', threshold: 7,   order: 3, label: 'Perfect week',description: 'At least 1 task on all 7 days in a single week' },
+            // Streak
+            { id: 'streak_7',      category: 'streak',      threshold: 7,   order: 1, label: '7-day streak' ,   description: '7 consecutive days with at least 1 completion' },
+            { id: 'streak_30',    category: 'streak',       threshold: 30,  order: 2, label: '30-day streak',   description: '30 consecutive days with at least 1 completion' },
+            { id: 'streak_100',    category: 'streak',      threshold: 100, order: 3, label: '100-day streak',  description: '100 consecutive days with at least 1 completion' },
+            // Lifetime
+            { id: 'lifetime_10',   category: 'lifetime',    threshold: 10,    order: 1, label: '10 delivered',    description: '10 total family-task completions' },
+            { id: 'lifetime_50',   category: 'lifetime',    threshold: 50,    order: 2, label: '50 delivered',    description: '50 total family-task completions' },
+            { id: 'lifetime_100',  category: 'lifetime',    threshold: 100,   order: 3, label: '100 delivered',   description: '100 total family-task completions' },
+            { id: 'lifetime_500',  category: 'lifetime',    threshold: 500,   order: 4, label: '500 delivered',   description: '500 total family-task completions' },
+            { id: 'lifetime_1000', category: 'lifetime',    threshold: 1000,  order: 5, label: '1000 delivered',  description: '1000 total family-task completions' },
+          ] as const;
+
+        Verify nothing imports `LeaderboardEntry` expecting a closed shape —
+        the additions are contract-additive.
+
+    - id: "1.2"
+      task: Create `shared/utils/leaderboardStreaks.ts` — pure streak math
+      status: complete
+      details: |
+        New file: shared/utils/leaderboardStreaks.ts
+
+        Export:
+          export interface CreditEvent {
+            userId: string;
+            completedAt: string;        // ISO datetime from task or subtask
+          }
+
+          export interface StreakSummary {
+            currentStreak: number;
+            bestStreak: number;
+            bestStreakAchievedAt: string | null;  // completedAt of 1st credit on the day that tipped best streak
+            streakMilestones: Partial<Record<7 | 30 | 100, string>>;
+            // ^ earnedAt timestamps for each streak-badge threshold the user has ever hit;
+            //   absent keys mean the threshold was never reached
+          }
+
+          export function computeStreaksForUser(
+            events: CreditEvent[],       // events for ONE user
+            timezone: string,            // IANA
+            now: Date,
+          ): StreakSummary
+
+        Algorithm:
+          1. Bucket `events` by local calendar day using
+             `new Date(completedAt).toLocaleDateString('en-CA', { timeZone })`
+             → keyed set of YYYY-MM-DD strings, plus a map of
+             `day -> earliest completedAt ISO` for the `earnedAt` lookup.
+          2. Sort days ascending.
+          3. Walk the sorted days, maintaining a `runLength` counter that
+             resets when the gap between consecutive days > 1. At each step:
+               - Update `bestStreak = max(best, runLength)` and stamp
+                 `bestStreakAchievedAt` = earliest completedAt on that day
+                 when best is newly advanced.
+               - If runLength first reaches 7/30/100 on this day, record
+                 that day's earliest completedAt into `streakMilestones`.
+          4. Current streak: compute anchor = today (local) if todaySet
+             contains it, else yesterday (local). If anchor not in day set
+             → currentStreak = 0. Else walk back consecutive days.
+
+        Edge cases:
+          - Empty events → {current: 0, best: 0, achievedAt: null, milestones: {}}
+          - All events on the same day → current = 1 (if today or yesterday);
+            best = 1; no streak milestones.
+          - DST transitions: rely on `toLocaleDateString('en-CA', …)` which
+            is DST-aware at the IANA TZ level. Spot-check in tests.
+
+        Do NOT import from shared/types to avoid cycles; keep this module
+        self-contained.
+
+    - id: "1.3"
+      task: Create `shared/utils/leaderboardBadges.ts` — pure badge derivation
+      status: complete
+      details: |
+        New file: shared/utils/leaderboardBadges.ts
+
+        Export:
+          export function computeEarnedBadges(
+            events: CreditEvent[],         // events for ONE user
+            streakMilestones: Partial<Record<7 | 30 | 100, string>>,
+            timezone: string,
+            now: Date,
+          ): EarnedBadge[]
+
+        Algorithm (single pass over sorted events):
+          VOLUME (single-day bursts):
+            Group events by local calendar day. For each day, find the Nth
+            credit (N = 3, 5, 10). The `earnedAt` is that Nth credit's
+            `completedAt`. Use the EARLIEST day on which threshold is first
+            reached (monotonic first-tip semantics — D5). If never reached,
+            omit.
+
+          CONSISTENCY (weekly rhythm):
+            Group events by ISO week (Mon-Sun) in local TZ. For each week,
+            count distinct days with ≥1 credit. The `earnedAt` for
+            consistency_4/5/7 is the completedAt of the event that first
+            pushed the distinct-day count to 4/5/7 within some week. Use
+            the earliest qualifying week globally (first-tip).
+
+          STREAK (all-time best):
+            Already provided via `streakMilestones` param. Map
+            `{7: ISO, 30: ISO, 100: ISO}` → earned badges streak_7/30/100.
+
+          LIFETIME (cumulative):
+            Sort events ascending by `completedAt`. The 10th event's
+            completedAt = `earnedAt` for `lifetime_10`; likewise for 50, 100,
+            500, 1000. If total < N, omit.
+
+        Return only earned badges. Unearned = absent. Sort by `earnedAt` ASC
+        for stability.
+
+        Pure function; no I/O.
+
+    - id: "1.4"
+      task: Unit tests for streak math
+      status: complete
+      details: |
+        File: shared/utils/__tests__/leaderboardStreaks.test.ts
+
+        Coverage:
+          - Empty events → 0/0
+          - Single event today → current 1, best 1
+          - Single event yesterday → current 1 (grace), best 1
+          - Single event 2 days ago → current 0, best 1
+          - 3 consecutive days ending today → current 3, best 3
+          - 3 consecutive days ending yesterday + none today → current 3 (grace),
+            best 3, achievedAt = earliest completedAt on day 3
+          - 5 consecutive ending yesterday, gap, 2 consecutive ending today →
+            current 2, best 5
+          - 7-day streak → streakMilestones[7] set
+          - 30-day streak → both [7] and [30] set; [7].earnedAt < [30].earnedAt
+          - DST boundary week (America/New_York spring forward) — no off-by-one
+          - Timezone shift (UTC vs America/Los_Angeles) — events at 23:30 UTC
+            on day X count as day X-1 in LA on the right side of midnight
+          - Multiple events on the same day all count as ONE streak day (don't
+            double-advance)
+
+    - id: "1.5"
+      task: Unit tests for badge derivation
+      status: complete
+      details: |
+        File: shared/utils/__tests__/leaderboardBadges.test.ts
+
+        Coverage per category:
+          VOLUME
+          - 2 in a day → no badges
+          - 3 in a day → volume_3 earned; earnedAt = 3rd event's completedAt
+          - 10 in a day → volume_3, volume_5, volume_10 all earned, each
+            with earnedAt = 3rd/5th/10th event's completedAt of that day
+          - 10 in a day spread across multiple days such that no single day
+            reaches 5 → only volume_3
+          - First-tip semantics: if user has a 3-in-a-day on Mon AND a
+            10-in-a-day on Tue, volume_3.earnedAt is Mon's 3rd completedAt,
+            volume_5 is Tue's 5th, volume_10 is Tue's 10th
+
+          CONSISTENCY
+          - Credits on Mon, Wed, Fri → 3 distinct days → no badges
+          - Credits on Mon, Tue, Wed, Thu → consistency_4 earnedAt = Thu's
+            first completedAt
+          - Credits on all 7 days of a week → all three earned
+          - Week boundary: credits on Sun + next Mon are in different ISO
+            weeks
+
+          STREAK (inputs come from streakMilestones param — test the mapping)
+          - {7: '2026-01-10T...'} → streak_7 earned with that earnedAt
+          - {7, 30, 100} → all three earned
+
+          LIFETIME
+          - 9 events total → no badges
+          - 10 events → lifetime_10 earnedAt = 10th event's completedAt
+          - 1001 events → all five tiers earned
+          - Events sorted ascending regardless of input order
+
+        Parameterize tests to hit each category without lots of boilerplate.
+
+# =============================================================================
+# PHASE 2: Backend — extend getLeaderboard
+# =============================================================================
+phase_2_backend:
+  status: complete
+  description: |
+    Extend `taskService.getLeaderboard` to produce a per-user credit-event
+    stream once, then feed it through the streak + badge utilities. Return
+    the extended response shape. No new endpoint.
+
+  tasks:
+    - id: "2.1"
+      task: Refactor `getLeaderboard` to build per-user credit-event streams
+      status: complete
+      details: |
+        File: backend/src/services/taskService.ts (getLeaderboard at line 432).
+
+        The existing loop at lines 473-494 scans tasks, attributes credit,
+        and bumps today/week/month counters. Refactor to ALSO collect a
+        per-user array of CreditEvent records in the same pass:
+
+          const eventsByUser = new Map<string, CreditEvent[]>();
+          const pushEvent = (userId: string, completedAt: string) => {
+            if (!eventsByUser.has(userId)) eventsByUser.set(userId, []);
+            eventsByUser.get(userId)!.push({ userId, completedAt });
+          };
+
+          // Inside the existing task/subtask loop, after the creditCount
+          // call, also pushEvent(creditedUserId, task.completedAt)
+          // (or st.completedAt for subtasks).
+
+        Keep the existing today/week/month `creditCount` call — the BRD is
+        explicit that those columns are unchanged.
+
+        After the loop, for each member:
+          const streaks = computeStreaksForUser(events, timezone, now);
+          const earnedBadges = computeEarnedBadges(
+            events,
+            streaks.streakMilestones,
+            timezone,
+            now,
+          );
+
+          entries.push({
+            ...existing,
+            currentStreak: streaks.currentStreak,
+            bestStreak: streaks.bestStreak,
+            earnedBadges,
+          });
+
+        Members with zero events still get an entry with 0/0/[] — don't skip.
+
+    - id: "2.2"
+      task: Keep sort order by monthly completions DESC (unchanged)
+      status: complete
+      details: |
+        Line 513 — `entries.sort((a, b) => b.completedThisMonth - a.completedThisMonth)`
+        stays as-is. The BRD does not change leaderboard sort.
+
+    - id: "2.3"
+      task: Integration tests — extended leaderboard response
+      status: complete
+      details: |
+        File: backend/src/__tests__/integration/taskService.test.ts
+
+        Add to the "GET /api/v1/tasks/leaderboard" suite (around line 718):
+
+        New cases:
+          - Response includes currentStreak, bestStreak, earnedBadges per entry
+          - User with 0 completions: currentStreak=0, bestStreak=0, earnedBadges=[]
+          - User with 1 completion today: currentStreak=1, bestStreak=1
+          - User with 1 completion yesterday (no today): currentStreak=1 (grace),
+            bestStreak=1
+          - User with 3 completions today: volume_3 present in earnedBadges
+          - User with 10 completions today: volume_3, volume_5, volume_10 all
+            present (cumulative-across-tiers rule)
+          - User with 10 lifetime: lifetime_10 present
+          - User with 1 personal task completed today: does NOT appear in
+            earnedBadges (family-scope only — regression guard)
+          - Uncompleted-then-recompleted task (done→started→done): counts once,
+            earnedAt reflects MOST RECENT completedAt (D5)
+          - Data-driven revoke semantics (D15): if a user has exactly one
+            family-task completion and it qualified them for volume_3
+            (e.g., 3 subtask credits on that one task), then the task is
+            reverted from done → started → subtask completions cleared →
+            volume_3 drops from `earnedBadges` on the next leaderboard load
+          - Common-case invariant: a user with many qualifying completions
+            who reverts one of them keeps their badge (the remaining
+            completions still qualify)
+
+        Timezone handling: use the existing pattern of setting `timezone=America/New_York`
+        in the query and asserting the same IANA TZ is applied.
+
+    - id: "2.4"
+      task: Verify data-driven revoke behavior via a dedicated test
+      status: complete
+      details: |
+        Per D15 (settled), badges mirror the current dataset — if the
+        sole-qualifier completion is reverted, the badge disappears on the
+        next load. The computation requires no special handling; the pure
+        `computeEarnedBadges` function naturally produces the correct
+        output from whatever credit events currently exist.
+
+        The only work here is a regression-guard integration test (also
+        listed in 2.3's case list):
+          - Seed a user with exactly enough completions to qualify for
+            `volume_3` on a single day (3 subtask credits on one family
+            task).
+          - Assert `volume_3` is present in `earnedBadges`.
+          - Revert the parent task (done → started), which clears the
+            subtask `completedAt` stamps via the existing reconcile logic.
+          - Assert `volume_3` is ABSENT from the next leaderboard response.
+
+        No service-layer code change required.
+
+# =============================================================================
+# PHASE 3: Frontend — Leaderboard columns + badge slots + detail modal
+# =============================================================================
+phase_3_frontend_display:
+  status: complete
+  description: |
+    Extend LeaderboardPanel with Current / Best streak columns and a badge
+    slot area per row. Clicking a row opens BadgeDetailModal. No
+    celebration UX in this phase — that lands in Phase 4.
+
+  tasks:
+    - id: "3.1"
+      task: Add `playBadgeFanfare` to `completionSound.ts`
+      status: complete
+      details: |
+        File: frontend/src/utils/completionSound.ts (existing chime at line 77).
+
+        Add a new export `playBadgeFanfare()` alongside `playCompletionChime()`.
+        Reuse `getAudioContext`, `playNote`. Characteristics:
+          - Longer total duration (~900ms — ~2.5× the chime)
+          - Ascending C major triad + octave leap to C6, sustained major 6th
+            (A5) at the top for ~450ms as the "hero note"
+          - Heavier harmonics (add 4× and 5× partials with small gain) for a
+            brass/horn character vs the chime's kalimba
+          - Louder fundamental (0.14 vs 0.10) — bigger moment
+          - Optional: final chord stack of C5+E5+G5+C6 ringing for the tail
+
+        Stub note sequence for the implementer:
+          notes = [
+            { freq: 523.25,  offset: 0.00, dur: 0.30 },  // C5
+            { freq: 659.25,  offset: 0.12, dur: 0.30 },  // E5
+            { freq: 783.99,  offset: 0.24, dur: 0.30 },  // G5
+            { freq: 1046.50, offset: 0.36, dur: 0.55 },  // C6 — hero
+            { freq: 880.00,  offset: 0.48, dur: 0.45 },  // A5 — major 6th overlay
+          ]
+
+        Silent-fail safe exactly like the chime.
+
+    - id: "3.2"
+      task: Install `canvas-confetti`
+      status: complete
+      details: |
+        npm install canvas-confetti @types/canvas-confetti
+
+        Package goes in `dependencies` (runtime), not devDependencies,
+        since it is called from production code. The types package goes in
+        devDependencies.
+
+        Verify bundle impact via `vite build`; expected ~6KB gzipped.
+
+    - id: "3.3"
+      task: Create `frontend/src/components/tasks/badgeCatalog.ts` — display metadata
+      status: complete
+      details: |
+        New file. Imports `BADGE_CATALOG`, `BadgeId`, `BadgeCategory` from
+        shared/types and decorates each badge with a UI glyph + color:
+
+          export const BADGE_DISPLAY: Record<BadgeId, { glyph: string; color: string }> = {
+            volume_3:      { glyph: '⚡',  color: 'yellow' },
+            volume_5:      { glyph: '⚡⚡', color: 'yellow' },
+            volume_10:     { glyph: '⚡⚡⚡', color: 'orange' },
+            consistency_4: { glyph: '📅',  color: 'blue' },
+            consistency_5: { glyph: '📅✨', color: 'blue' },
+            consistency_7: { glyph: '🌟',  color: 'indigo' },
+            streak_7:      { glyph: '🔥',  color: 'orange' },
+            streak_30:     { glyph: '🔥🔥', color: 'red' },
+            streak_100:    { glyph: '💯',  color: 'red' },
+            lifetime_10:   { glyph: '🏅',  color: 'teal' },
+            lifetime_50:   { glyph: '🥉',  color: 'teal' },
+            lifetime_100:  { glyph: '🥈',  color: 'cyan' },
+            lifetime_500:  { glyph: '🥇',  color: 'cyan' },
+            lifetime_1000: { glyph: '🏆',  color: 'grape' },
+          };
+
+          export const CATEGORY_LABELS: Record<BadgeCategory, string> = {
+            volume: 'Volume',
+            consistency: 'Consistency',
+            streak: 'Streak',
+            lifetime: 'Lifetime',
+          };
+
+        These are display-only; server never sees them. Real artwork is a
+        zero-code-change follow-up.
+
+    - id: "3.4"
+      task: Add Current + Best streak columns to `LeaderboardPanel`
+      status: complete
+      details: |
+        File: frontend/src/pages/Tasks.tsx (LeaderboardPanel around line 1448).
+
+        Column insertion (after Table.Th for "This Month" at line 1531):
+          <Table.Th ta="center">
+            <Group gap={4} justify="center" wrap="nowrap">
+              <Text span size="sm" fw={500}>Current</Text>
+              <Text span>🔥</Text>
+            </Group>
+          </Table.Th>
+          <Table.Th ta="center">Best</Table.Th>
+
+        On narrow viewports (<600px), use a media query to render just 🔥
+        and "Best" (BRD REQ-L-017). Numeric cells are never abbreviated.
+
+        Cell rendering (after the Month cell at line 1565):
+          <Table.Td ta="center">
+            <StreakCell value={entry.currentStreak} showFlame />
+          </Table.Td>
+          <Table.Td ta="center">
+            <StreakCell value={entry.bestStreak} />
+          </Table.Td>
+
+        StreakCell component (define in the same file):
+          - value === 0: render muted "0" or "—", no flame
+          - value > 0 && showFlame: render "🔥 N"
+          - value > 0 && !showFlame: render "N"
+          - NO hover preview (D14 / REQ-L-006)
+
+        Max-value highlighting extends to both new columns using the same
+        pattern as Today/Week/Month (compute maxCurrentStreak, maxBestStreak
+        from entries; pass a boolean highlight prop).
+
+    - id: "3.5"
+      task: Create `BadgeSlotArea` component
+      status: complete
+      details: |
+        New file: frontend/src/components/tasks/BadgeSlotArea.tsx
+
+        Props:
+          interface BadgeSlotAreaProps {
+            earnedBadges: EarnedBadge[];
+            onClick: () => void;
+          }
+
+        Rendering rule (D7 / BRD §5.1):
+          1. For each BadgeCategory in [volume, consistency, streak, lifetime]:
+             find the user's highest-tier earned badge (largest threshold).
+          2. Collect those into an array of `{ category, badge }` entries.
+          3. If 4 categories are represented, drop 'consistency' first.
+          4. If fewer than 3 earned-category slots exist, fill remaining
+             slots (up to 3 total) with ghost placeholders in category
+             order: volume, streak, lifetime, consistency (categories with
+             zero earned badges, in that priority order).
+          5. Tie-breaking within overflow handling: after dropping consistency,
+             sort remaining earned slots by earnedAt DESC and take first 3.
+
+        Render:
+          <Group gap={4} onClick={onClick} style={{ cursor: 'pointer' }}>
+            {slots.map((slot) =>
+              slot.kind === 'earned'
+                ? <BadgeIcon badge={slot.badge} />
+                : <GhostBadgeIcon category={slot.category} />
+            )}
+          </Group>
+
+        Earned BadgeIcon: Mantine ThemeIcon with glyph from BADGE_DISPLAY + tooltip.
+        GhostBadgeIcon: Mantine ThemeIcon with "????" text, muted color, NO tooltip
+                       (REQ-L-012). Category is implicit via ordering.
+
+    - id: "3.6"
+      task: Create `BadgeDetailModal` component
+      status: complete
+      details: |
+        New file: frontend/src/components/tasks/BadgeDetailModal.tsx
+
+        Props:
+          interface BadgeDetailModalProps {
+            opened: boolean;
+            onClose: () => void;
+            entry: LeaderboardEntry;
+          }
+
+        Layout (BRD §5.2):
+          Mantine Modal, size="lg" or "md".
+          Header:
+            <Group>
+              <Avatar size="md" color={userColor(entry)}>
+                {entry.displayName.charAt(0).toUpperCase()}
+              </Avatar>
+              <Stack gap={0}>
+                <Text fw={600}>{entry.displayName}</Text>
+                <Text size="xs" c="dimmed">
+                  {entry.earnedBadges.length} of {BADGE_CATALOG.length} earned
+                </Text>
+              </Stack>
+            </Group>
+
+          Body — one <Stack> section per category in order [volume, consistency,
+          streak, lifetime]:
+            <Text fw={500} size="sm" tt="uppercase" c="dimmed">{CATEGORY_LABELS[cat]}</Text>
+            <Group>
+              {badgesInCategory.map((def) => {
+                const earned = entry.earnedBadges.find(b => b.id === def.id);
+                return earned
+                  ? <BadgeIconLarge badge={def} earnedAt={earned.earnedAt} />
+                  : <GhostBadgeIconLarge category={def.category} />;
+              })}
+            </Group>
+
+        Earned icon tooltip:
+          `${def.description} — Earned ${format(parseISO(earnedAt), 'MMM d, yyyy')}`
+
+        Ghost icon: NO tooltip (REQ-L-012).
+
+    - id: "3.7"
+      task: Wire the modal — clicking member name or badge slot opens it
+      status: complete
+      details: |
+        In LeaderboardPanel (Tasks.tsx around line 1541):
+
+          const [modalEntry, setModalEntry] = useState<LeaderboardEntry | null>(null);
+
+          <Table.Tr
+            key={entry.userId}
+            onClick={() => setModalEntry(entry)}
+            style={{ cursor: 'pointer' }}
+          >
+            ...
+            <Table.Td>
+              <BadgeSlotArea
+                earnedBadges={entry.earnedBadges}
+                onClick={() => setModalEntry(entry)}
+              />
+            </Table.Td>
+          </Table.Tr>
+
+          {modalEntry && (
+            <BadgeDetailModal
+              opened={!!modalEntry}
+              onClose={() => setModalEntry(null)}
+              entry={modalEntry}
+            />
+          )}
+
+        Guard: stopPropagation on the Today/Week/Month HoverCard targets so
+        clicking those does not open the modal unexpectedly.
+
+    - id: "3.8"
+      task: Manual testing — Phase 3 display changes
+      status: pending_manual_test
+      details: |
+        - [ ] Leaderboard panel renders 6 columns: Member, Today, This Week,
+              This Month, Current 🔥, Best
+        - [ ] Current streak: user with a completion today shows correct count;
+              muted 0 when no history
+        - [ ] Grace check: complete a family task yesterday (or mock via the
+              dev data sync), reload next morning — streak shown as 1 without
+              completing anything today
+        - [ ] Best streak is ≥ current streak in all cases
+        - [ ] Max-value highlighting applies to Current and Best columns
+        - [ ] Badge slot area renders up to 3 earned badges per row
+        - [ ] When user has earned in all 4 categories, consistency is dropped
+              first from the row display
+        - [ ] User with zero badges shows 3 ghost ???? placeholders in category
+              order (volume, streak, lifetime)
+        - [ ] Clicking a row opens the detail modal
+        - [ ] Modal shows the full 13-badge grid grouped by category
+        - [ ] Earned badges show glyph + tooltip ("3 tasks completed in a
+              single day — Earned Apr 15, 2026")
+        - [ ] Unearned badges show ???? with NO tooltip on hover
+        - [ ] Modal header count reads "N of 13 earned"
+        - [ ] No regressions on Today/Week/Month columns or their HoverCards
+        - [ ] Narrow viewport — column headers abbreviate, numbers never do
+
+# =============================================================================
+# PHASE 4: Frontend — celebration UX (fanfare + confetti + toast)
+# =============================================================================
+phase_4_frontend_celebration:
+  status: complete
+  description: |
+    Detect newly-earned badges for the viewing user, fire celebration assets,
+    and advance the `lastSeenBadgeEarnedAt` marker. First-load-after-deploy
+    is suppressed via the `now`-seed trick.
+
+  tasks:
+    - id: "4.1"
+      task: Create `useNewBadgeCelebrations` hook
+      status: complete
+      details: |
+        New file: frontend/src/hooks/useNewBadgeCelebrations.ts
+
+        Signature:
+          export function useNewBadgeCelebrations(
+            leaderboard: LeaderboardResponse | undefined,
+            currentUserId: string | undefined,
+          ): void;
+
+        Behavior:
+          1. On every change to leaderboard?.entries, find the entry where
+             `entry.userId === currentUserId`.
+          2. Read `localStorage['tasks.leaderboard.lastSeenBadgeEarnedAt']`:
+               - If absent (first load post-deploy): set it to `new Date().toISOString()`
+                 IMMEDIATELY, return (no celebration). REQ-L-016.
+               - If present: parse as ISO, use as `lastSeen` cutoff.
+          3. Filter `entry.earnedBadges` to badges with `earnedAt > lastSeen`.
+          4. For each new badge (in chronological order):
+               - Fire celebration (see 4.2).
+          5. After all celebrations fire, set the marker to the
+             maxEarnedAt = the newest `earnedAt` in the batch — NOT to `now`.
+             This prevents re-celebration on refresh if the user reloads
+             before the marker would have advanced to `now`.
+
+        Dependencies:
+          - `currentUserId` from useAuth() or wherever session user is exposed
+          - React useEffect on [leaderboard, currentUserId]
+
+        Edge cases:
+          - No currentUserId (not logged in / race) → no-op
+          - leaderboard undefined (still loading) → no-op
+          - Other members earning badges → never fires (entry.userId filter)
+          - Rapid successive earns in one response → fire sequentially with
+            ~900ms stagger between confetti+fanfare (one fanfare at a time,
+            but toasts can stack via Mantine)
+
+    - id: "4.2"
+      task: Create `celebrateBadgeUnlock` helper
+      status: complete
+      details: |
+        New file: frontend/src/utils/celebrateBadgeUnlock.ts
+
+        Signature:
+          export function celebrateBadgeUnlock(
+            badge: BadgeDefinition,
+            earnedBadge: EarnedBadge,
+            origin?: { x: number; y: number } // optional viewport coords for confetti
+          ): void;
+
+        Body:
+          import confetti from 'canvas-confetti';
+          import { playBadgeFanfare } from './completionSound';
+          import { notifications } from '@mantine/notifications';
+          import { BADGE_DISPLAY } from '../components/tasks/badgeCatalog';
+
+          // 1. Fanfare
+          playBadgeFanfare();
+
+          // 2. Confetti — emit from badge slot position if provided, else center
+          confetti({
+            particleCount: 80,
+            spread: 60,
+            startVelocity: 35,
+            origin: origin ?? { x: 0.5, y: 0.35 },
+            // one palette v1 (D10)
+          });
+
+          // 3. Toast
+          notifications.show({
+            title: `${BADGE_DISPLAY[badge.id].glyph} ${badge.label} unlocked!`,
+            message: badge.description,
+            color: BADGE_DISPLAY[badge.id].color,
+            autoClose: 6000,
+          });
+
+        Origin coordinate capture (optional enhancement):
+          In `BadgeSlotArea`, when earnedBadges list changes, compute the
+          DOMRect of the newly-earned badge icon and pass its center to
+          celebrateBadgeUnlock via a callback. If too much wiring, default
+          center-top works fine for v1.
+
+    - id: "4.3"
+      task: Wire `useNewBadgeCelebrations` into the Tasks page
+      status: complete
+      details: |
+        File: frontend/src/pages/Tasks.tsx
+
+        At the top-level Tasks component, after fetching the leaderboard
+        (already there via useQuery(['tasks','leaderboard'])) and auth user:
+
+          useNewBadgeCelebrations(leaderboardData, authUser?.userId);
+
+        No other wiring required — the hook is self-contained.
+
+    - id: "4.4"
+      task: Manual testing — celebration behavior
+      status: pending_manual_test
+      details: |
+        Requires two scenarios: a "fresh install" (post-deploy first load) and
+        a "new unlock" (earning a badge after the marker is set).
+
+        Fresh-install scenarios (BRD REQ-L-016):
+          - [ ] Clear localStorage key `tasks.leaderboard.lastSeenBadgeEarnedAt`
+          - [ ] Load Tasks page as a user with ≥1 earned historical badge
+          - [ ] Verify NO fanfare, NO confetti, NO toast fires on this load
+          - [ ] Verify localStorage key now exists, value is close to `now`
+          - [ ] Reload page → still no celebration
+
+        New-unlock scenarios:
+          - [ ] With a warmed marker, complete a 3rd family task today on a
+                user who has never earned volume_3 → fanfare + confetti +
+                toast fires once
+          - [ ] After refresh, no re-celebration for the same badge
+          - [ ] Earn 2 badges in rapid succession (e.g., go from 2 to 5
+                completions in a day → earn volume_3 then volume_5) →
+                BOTH celebrations fire, staggered
+          - [ ] Toasts are color-matched to BADGE_DISPLAY[id].color
+
+        Other-member scenarios:
+          - [ ] Partner earns a badge in the same family → viewing user
+                sees their badge list update but NO celebration
+
+        Cross-device:
+          - [ ] Earn on phone → open on laptop → badge appears in detail
+                modal but NO celebration (acceptable per BRD §4.5)
+
+# =============================================================================
+# PHASE 5: Testing beyond manual
+# =============================================================================
+phase_5_testing:
+  status: complete
+  description: |
+    Unit tests land in Phase 1 (streak + badge derivation). Integration
+    tests land in Phase 2 (extended leaderboard response). This phase
+    consolidates remaining test work.
+
+  tasks:
+    - id: "5.1"
+      task: Frontend smoke test — BadgeSlotArea category priority
+      status: complete
+      details: |
+        File: frontend/src/components/tasks/__tests__/BadgeSlotArea.test.tsx
+               (new file — mirror existing component test patterns)
+
+        Coverage:
+          - 0 earned → 3 ghost placeholders in [volume, streak, lifetime] order
+          - 1 earned (consistency_4) → 1 earned icon + 2 ghosts (volume, streak)
+          - 4 categories earned → 3 slots, consistency dropped
+          - Tie-break on earnedAt DESC when 4+ earned (verify most-recent wins)
+
+        Skip testing the modal or hook — low leverage for this amount of UI;
+        manual tests in 3.8 / 4.4 are the primary verification.
+
+    - id: "5.2"
+      task: Risk regression check on existing leaderboard integration tests
+      status: complete
+      details: |
+        Run the full leaderboard suite in taskService.test.ts after Phase 2
+        lands. Every existing case must still pass unchanged — the only
+        response-shape change is additive fields. If any existing test
+        breaks, the contract change is broader than intended.
+
+    - id: "5.3"
+      task: Bundle-size check post canvas-confetti install
+      status: complete
+      details: |
+        Before merging, run `npm run build` in frontend/ and compare
+        `dist/assets/index-*.js` size to current `main`. Expected delta
+        ~6KB gzipped. If > 20KB, investigate tree-shaking or defer-loading
+        canvas-confetti via dynamic import() behind the celebration hook.
+
+# =============================================================================
+# IMPLEMENTATION ORDER
+# =============================================================================
+implementation_order:
+  description: |
+    Ship in two slices that minimize blast radius:
+
+    SLICE A — Streaks + badges visible, NO celebration UX (phases 1, 2, 3).
+      Gets us streak columns, badge slot area, and detail modal live. Users
+      see their achievements and the retroactive backfill just works. No
+      fanfare yet, so the "first-load cascade" concern is moot — there is
+      nothing to celebrate silently. Ship this first and soak for a few days.
+
+    SLICE B — Celebration UX (phase 4).
+      Layer fanfare + confetti + toast on top. At this point, every user
+      loading the app already has the server returning correct `earnedBadges`
+      with historical `earnedAt`s. The first Phase-4 load seeds the
+      `lastSeenBadgeEarnedAt` marker to `now`, suppressing the historical
+      cascade per REQ-L-016. From that load forward, new unlocks celebrate.
+
+    Phase 5 tests land alongside the phase they cover (5.1 with Phase 3; 5.2
+    with Phase 2; 5.3 before Phase 4 merge).
+
+  sequence:
+    - slice: A
+      phases:
+        - phase: 1 — Shared types + pure utilities (streaks, badges)
+          reason: Types + helpers are dependency roots; unit tests prove correctness before the server calls them
+        - phase: 2 — Backend getLeaderboard extension
+          reason: Returns the fields the frontend needs; integration tests guard response shape
+        - phase: 3 — Frontend columns + slot area + detail modal
+          reason: First user-visible slice; no celebration sharp edges yet
+    - slice: B
+      phases:
+        - phase: 4 — Celebration UX (fanfare, confetti, toast, localStorage marker)
+          reason: Additive; cannot fire false positives because the marker seeds to `now` on first load
+        - phase: 5 — Remaining tests + bundle check
+          reason: Regression guard + bundle-size discipline at slice boundary
+
+# =============================================================================
+# OPEN ITEMS (resolve before/during implementation)
+# =============================================================================
+open_items:
+  - id: O2
+    item: Decide whether to compute confetti `origin` from the DOMRect of the earned badge
+    blocks: Phase 4.2 polish
+    note: |
+      Nice-to-have per BRD §4.5 ("confetti emitted from the newly-earned
+      badge's position"). V1 can default to { x: 0.5, y: 0.35 } and still
+      meet the requirement's spirit. Do the DOMRect capture only if the
+      default feels off in manual testing.
+
+  - id: O3
+    item: Real badge artwork vs. emoji glyphs (D12 placeholder)
+    blocks: None (visual polish only)
+    note: |
+      Emoji glyphs ship v1. Real artwork is a zero-code-change follow-up —
+      swap the `glyph` field in BADGE_DISPLAY for an SVG import. No hurry
+      unless user feedback flags the emojis as looking unfinished.
+
+  - id: O4
+    item: Cross-device celebration sync
+    blocks: None (BRD accepts localStorage-per-browser trade-off)
+    note: |
+      If the 2-user constraint expands or users complain about missed
+      celebrations, add server-side `lastSeenBadgeEarnedAt` keyed by userId
+      to the user record. Not on the v1 roadmap.
+
+  - id: O5
+    item: Confirm `tasks.leaderboard.lastSeenBadgeEarnedAt` key naming aligns with team style
+    blocks: Phase 4.1
+    note: |
+      CLAUDE.md ADR and existing keys show mixed conventions
+      (dot-prefixed `tasks.view`, dashed `tasks-leaderboard`). New plan
+      uses dot-prefixed. A follow-up key-naming normalization pass is a
+      TASK-MANAGEMENT-ENHANCEMENTS-PLAN.yaml open item (`follow_ups`)
+      that is still unresolved.
+
+  - id: O6
+    item: Mantine notification stacking behavior with rapid multi-unlock
+    blocks: Phase 4.4 testing
+    note: |
+      If 3 badges earn at once, Mantine's default may queue or replace.
+      Test and set `autoClose` / position to ensure all 3 stack briefly.
+
+# =============================================================================
+# END OF PLAN
+# =============================================================================

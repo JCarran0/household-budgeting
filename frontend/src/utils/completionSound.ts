@@ -103,3 +103,58 @@ export function playCompletionChime(): void {
     });
   }
 }
+
+/**
+ * Plays a longer, brass-ish fanfare for badge unlocks. ~900ms total.
+ * Distinct from the task-done chime via: wider interval (major triad +
+ * octave + sustained A5 major-6th hero note), heavier harmonic content
+ * (4× and 5× partials layered over a stronger fundamental), and a longer
+ * final sustain. Silent-fail safe exactly like `playCompletionChime`.
+ */
+export function playBadgeFanfare(): void {
+  const ctx = getAudioContext();
+  if (!ctx) return;
+
+  if (ctx.state === 'suspended') {
+    ctx.resume().catch(() => {});
+  }
+
+  const start = ctx.currentTime;
+  const fundamentalGain = 0.14;
+
+  // Brass-ish partial mix: bright attack (4× / 5×) layered on the fundamental.
+  const partials: { multiplier: number; gain: number; releaseScale: number }[] = [
+    { multiplier: 1, gain: fundamentalGain, releaseScale: 1.0 },
+    { multiplier: 2, gain: fundamentalGain * 0.38, releaseScale: 0.75 },
+    { multiplier: 3, gain: fundamentalGain * 0.22, releaseScale: 0.55 },
+    { multiplier: 4, gain: fundamentalGain * 0.14, releaseScale: 0.4 },
+    { multiplier: 5, gain: fundamentalGain * 0.08, releaseScale: 0.3 },
+  ];
+
+  const notes = [
+    { frequency: 523.25, offset: 0.00, duration: 0.30 },  // C5
+    { frequency: 659.25, offset: 0.12, duration: 0.30 },  // E5
+    { frequency: 783.99, offset: 0.24, duration: 0.30 },  // G5
+    { frequency: 1046.50, offset: 0.36, duration: 0.55 }, // C6 — hero
+    { frequency: 880.00, offset: 0.48, duration: 0.45 },  // A5 — major 6th overlay
+  ];
+
+  for (const note of notes) {
+    const noteStart = start + note.offset;
+    for (const p of partials) {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.value = note.frequency * p.multiplier;
+
+      const partialEnd = noteStart + note.duration * p.releaseScale;
+      gain.gain.setValueAtTime(0, noteStart);
+      gain.gain.linearRampToValueAtTime(p.gain, noteStart + 0.010);
+      gain.gain.exponentialRampToValueAtTime(0.0001, partialEnd);
+
+      osc.connect(gain).connect(ctx.destination);
+      osc.start(noteStart);
+      osc.stop(partialEnd + 0.02);
+    }
+  }
+}
