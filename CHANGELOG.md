@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.28.0](https://github.com/JCarran0/household-budgeting/compare/v5.27.1...v5.28.0) (2026-04-19)
+
+
+### Features
+
+* **tasks:** v2.0 — checklist view, snooze, manual reorder, family-scope leaderboard ([f2391f2](https://github.com/JCarran0/household-budgeting/commit/f2391f29ac996d0a184ee2184c0bbfd04a9580c8))
+
+
+### Code Refactoring
+
+* **chatbot:** migrate submit_github_issue onto action-card registry (D-15) ([b3ab071](https://github.com/JCarran0/household-budgeting/commit/b3ab07136bffe15c3ca93009460f3b4a775a7cc1))
+
+
+### Documentation
+
+* **pwa:** mark plan shipped — Phase 6 device QA complete ([a0e3d7c](https://github.com/JCarran0/household-budgeting/commit/a0e3d7cb8db3d4aad63b7bb2d43ff719727dcb72))
+* reconcile stale plan statuses with shipped code ([859bdc1](https://github.com/JCarran0/household-budgeting/commit/859bdc17c1599ad398373080c2e2968b6e78e6e3))
+* reflect D-15 migration in BRD and CLAUDE.md ([be3d267](https://github.com/JCarran0/household-budgeting/commit/be3d2675b349ccbb078acfb63a9788c5afac8099))
+
 ### [5.27.1](https://github.com/JCarran0/household-budgeting/compare/v5.27.0...v5.27.1) (2026-04-19)
 
 
