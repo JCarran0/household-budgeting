@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.32.0](https://github.com/JCarran0/household-budgeting/compare/v5.31.0...v5.32.0) (2026-04-19)
+
+
+### Features
+
+* **tasks:** hover-preview tasks making up each leaderboard count ([79a4043](https://github.com/JCarran0/household-budgeting/commit/79a40434336fdd5328dd9ade468f59da252d355b))
+
 ## [5.31.0](https://github.com/JCarran0/household-budgeting/compare/v5.30.0...v5.31.0) (2026-04-19)
 
 
