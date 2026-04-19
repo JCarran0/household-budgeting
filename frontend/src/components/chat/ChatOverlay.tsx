@@ -37,7 +37,6 @@ import { ChatMessageBubble } from './ChatMessageBubble';
 import type {
   ChatMessage,
   ChatModel,
-  GitHubIssueDraft,
   ChatResponse,
   ActionProposal,
 } from '../../../../shared/types';
@@ -55,11 +54,6 @@ const ALLOWED_CLIENT_MIMES = new Set([
 ]);
 
 const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024; // 10 MB
-
-interface PendingIssue {
-  messageId: string;
-  draft: GitHubIssueDraft;
-}
 
 /**
  * Maps message ID → action error message (for failed confirm attempts).
@@ -90,8 +84,6 @@ export function ChatOverlay({ opened, onClose }: ChatOverlayProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [costDisplay, setCostDisplay] = useState<string | null>(null);
   const [costColor, setCostColor] = useState<string>('green');
-  const [pendingIssue, setPendingIssue] = useState<PendingIssue | null>(null);
-  const [issueSubmitting, setIssueSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // ---- Attachment state (Phase 6) ----
@@ -276,10 +268,6 @@ export function ChatOverlay({ opened, onClose }: ChatOverlayProps) {
       }
       updateCostDisplay(response.usage.monthlySpend, response.usage.monthlyLimit);
 
-      if (response.type === 'issue_confirmation' && response.issueDraft) {
-        setPendingIssue({ messageId: response.message.id, draft: response.issueDraft });
-      }
-
       if (response.usage.capExceeded) {
         setError('Monthly AI budget reached. The chatbot will be available next month.');
       }
@@ -395,41 +383,6 @@ export function ChatOverlay({ opened, onClose }: ChatOverlayProps) {
     handleResponse,
   ]);
 
-  // ---- GitHub issue handlers (unchanged) ----
-  const handleConfirmIssue = useCallback(async (draft: GitHubIssueDraft) => {
-    setIssueSubmitting(true);
-    try {
-      const result = await api.confirmGitHubIssue(draft);
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: `sys_${Date.now()}`,
-          role: 'assistant',
-          content: `Issue created! [View on GitHub](${result.issueUrl})`,
-          timestamp: new Date().toISOString(),
-        },
-      ]);
-      setPendingIssue(null);
-    } catch {
-      setError('Failed to create GitHub issue. Try again.');
-    } finally {
-      setIssueSubmitting(false);
-    }
-  }, []);
-
-  const handleCancelIssue = useCallback(() => {
-    setPendingIssue(null);
-    setMessages((prev) => [
-      ...prev,
-      {
-        id: `sys_${Date.now()}`,
-        role: 'user',
-        content: "Never mind, don't submit that issue.",
-        timestamp: new Date().toISOString(),
-      },
-    ]);
-  }, []);
-
   // ---- Action card confirm handler (Phase 8.4, 9.1) ----
   const handleConfirmAction = useCallback(
     async (messageId: string, params: Record<string, unknown>) => {
@@ -488,7 +441,6 @@ export function ChatOverlay({ opened, onClose }: ChatOverlayProps) {
   // ---- New conversation ----
   const handleNewConversation = useCallback(() => {
     setMessages([]);
-    setPendingIssue(null);
     setError(null);
     setAttachment(null);
     setActiveProposalMessageId(null);
@@ -612,14 +564,6 @@ export function ChatOverlay({ opened, onClose }: ChatOverlayProps) {
               <ChatMessageBubble
                 key={msg.id}
                 message={msg}
-                issueDraft={
-                  pendingIssue?.messageId === msg.id
-                    ? pendingIssue.draft
-                    : undefined
-                }
-                onConfirmIssue={handleConfirmIssue}
-                onCancelIssue={handleCancelIssue}
-                issueSubmitting={issueSubmitting}
                 onConfirmAction={handleConfirmAction}
                 onDismissAction={handleDismissAction}
                 actionErrorMessage={actionErrors[msg.id]}

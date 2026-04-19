@@ -9,6 +9,7 @@
 import type { FC } from 'react';
 import type { ChatActionId } from '../../../../../shared/types';
 import { TaskActionCardEditForm } from './TaskActionCardEditForm';
+import { GithubIssueActionCardEditForm } from './GithubIssueActionCardEditForm';
 
 export interface ActionFormProps {
   /** Pre-filled values from the LLM proposal */
@@ -27,6 +28,14 @@ export interface ActionFormProps {
 const FORM_REGISTRY: Record<ChatActionId, FC<ActionFormProps>> = {
   create_task: ((props: ActionFormProps) => (
     <TaskActionCardEditForm
+      initialValues={props.initialValues}
+      onSubmit={(v) => props.onSubmit(v as unknown as Record<string, unknown>)}
+      onCancel={props.onCancel}
+      loading={props.loading}
+    />
+  )) as FC<ActionFormProps>,
+  submit_github_issue: ((props: ActionFormProps) => (
+    <GithubIssueActionCardEditForm
       initialValues={props.initialValues}
       onSubmit={(v) => props.onSubmit(v as unknown as Record<string, unknown>)}
       onCancel={props.onCancel}

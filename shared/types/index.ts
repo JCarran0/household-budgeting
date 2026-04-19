@@ -638,7 +638,7 @@ export interface TokenUsage {
 // =============================================================================
 
 /** V1 allowlist — extensible string union */
-export type ChatActionId = 'create_task';
+export type ChatActionId = 'create_task' | 'submit_github_issue';
 
 /** Drives card field rendering */
 export type DisplayFieldType = 'text' | 'textarea' | 'date' | 'select' | 'tags';
@@ -679,9 +679,9 @@ export interface ActionConfirmRequest {
 }
 
 export interface ActionResource {
-  type: 'task';                 // V1 only
+  type: 'task' | 'github_issue';
   id: string;
-  url?: string;                 // Frontend-resolvable deep link
+  url?: string;                 // Frontend-resolvable deep link (or external for github_issue)
   label: string;                // Human-readable name of the resource
 }
 
@@ -748,12 +748,6 @@ export type ChatResponse =
       usage: ChatUsage;
     }
   | {
-      type: 'issue_confirmation';
-      message: ChatMessage;
-      issueDraft: GitHubIssueDraft;
-      usage: ChatUsage;
-    }
-  | {
       /** Backend intercepted a propose_action tool call; proposal is ready for user */
       type: 'action_proposal';
       message: ChatMessage;
@@ -763,16 +757,11 @@ export type ChatResponse =
 
 export const MAX_CONVERSATION_HISTORY = 50;
 
-// GitHub issue types
+// GitHub issue payload — params shape for the submit_github_issue chat action.
 export interface GitHubIssueDraft {
   title: string;
   body: string;
-  labels: string[];
-}
-
-export interface GitHubIssueConfirmation {
-  draft: GitHubIssueDraft;
-  conversationContext: string;
+  labels: ('bug' | 'enhancement')[];
 }
 
 // =============================================================================

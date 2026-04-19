@@ -66,8 +66,16 @@ interface ActionCardProps {
 function getActionLabel(actionId: string): string {
   const labels: Record<string, string> = {
     create_task: 'Create a task',
+    submit_github_issue: 'Report an issue',
   };
   return labels[actionId] ?? actionId;
+}
+
+function getConfirmedPrefix(resourceType: ActionResource['type']): string {
+  switch (resourceType) {
+    case 'task':          return 'Created task:';
+    case 'github_issue':  return 'Filed issue:';
+  }
 }
 
 export function ActionCard({
@@ -154,6 +162,7 @@ export function ActionCard({
   }
 
   if (status === 'confirmed' && resource) {
+    const isExternal = resource.type === 'github_issue';
     return (
       <Paper
         p="sm"
@@ -165,11 +174,16 @@ export function ActionCard({
         <Group gap="xs">
           <IconCheck size={16} color="var(--mantine-color-green-6)" />
           <Text size="sm" c="green">
-            Created task:{' '}
+            {getConfirmedPrefix(resource.type)}{' '}
             <Text span fw={600}>{resource.label}</Text>
           </Text>
           {resource.url && (
-            <Anchor href={resource.url} size="sm" target="_self">
+            <Anchor
+              href={resource.url}
+              size="sm"
+              target={isExternal ? '_blank' : '_self'}
+              rel={isExternal ? 'noopener noreferrer' : undefined}
+            >
               <Group gap={2}>
                 <IconExternalLink size={12} />
                 <span>View</span>

@@ -9,6 +9,7 @@
  */
 
 import './createTaskAction'; // registers via side-effect
+import './submitGithubIssueAction'; // registers via side-effect
 
 export * from './registry';
 export * from './proposalStore';

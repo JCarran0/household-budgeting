@@ -3,7 +3,6 @@ import type {
   ChatMessage,
   ChatModel,
   ChatResponse,
-  GitHubIssueDraft,
   ClassifyTransactionsResponse,
   SuggestRulesResponse,
   ActionConfirmResponse,
@@ -86,14 +85,6 @@ export function createChatbotApi(client: AxiosInstance) {
         monthlyLimit: number;
         remainingBudget: number;
       }>('/chatbot/usage');
-      return data;
-    },
-
-    async confirmGitHubIssue(draft: GitHubIssueDraft): Promise<{ issueUrl: string }> {
-      const { data } = await client.post<{ success: boolean; issueUrl: string }>(
-        '/chatbot/confirm-issue',
-        { draft }
-      );
       return data;
     },
 

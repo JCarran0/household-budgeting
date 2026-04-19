@@ -90,7 +90,6 @@ const chatbotCostTracker = new ChatbotCostTracker(
 export const chatbotService = new ChatbotService(
   chatbotDataService,
   chatbotCostTracker,
-  config.ai.githubIssuesPat,
   config.ai.anthropicApiKey,
 );
 export const categorizationService = new CategorizationService(

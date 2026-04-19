@@ -36,14 +36,6 @@ export const chatRequestSchema = z.object({
   userDisplayName: z.string().optional(),
 });
 
-export const confirmIssueSchema = z.object({
-  draft: z.object({
-    title: z.string().min(1).max(256),
-    body: z.string().min(1).max(65536),
-    labels: z.array(z.enum(['bug', 'enhancement'])),
-  }),
-});
-
 export const classifyTransactionsSchema = z.object({
   transactionIds: z.array(z.string()).optional(),
 });

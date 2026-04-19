@@ -3,10 +3,11 @@
  *
  * POST /message                — Send a chat message (text-only JSON or multipart with attachment)
  * GET  /usage                  — Get current monthly cost usage
- * POST /confirm-issue          — Execute a GitHub issue after user confirmation (D13)
  * POST /classify-transactions  — AI bulk categorization
  * POST /suggest-rules          — Suggest auto-categorization rules
- * POST /actions/confirm        — Confirm a pending chat action card (NEW)
+ * POST /actions/confirm        — Confirm a pending chat action card
+ *                                (GitHub-issue submission now flows through this
+ *                                 path via the submit_github_issue action; D-15)
  *
  * SECURITY: This endpoint accepts multipart uploads for attachments.
  * Auth MUST come from the Authorization header (JWT), not cookies.
@@ -27,8 +28,8 @@ import {
 } from '../middleware/chatAttachmentUpload';
 import { getChatAction, consumeProposal } from '../services/chatActions';
 import { logAuditSuccess, logAuditRejection } from '../services/chatActions/auditLog';
-import { chatRequestSchema, confirmIssueSchema, classifyTransactionsSchema, suggestRulesSchema } from '../validators/chatbotValidators';
-import type { ChatRequest, GitHubIssueDraft } from '../shared/types';
+import { chatRequestSchema, classifyTransactionsSchema, suggestRulesSchema } from '../validators/chatbotValidators';
+import type { ChatRequest } from '../shared/types';
 import type { ChatAttachmentMimeType } from '../middleware/chatAttachmentUpload';
 
 const router = Router();
@@ -210,27 +211,6 @@ router.get(
     try {
       const usage = await chatbotService.getUsage();
       res.json({ success: true, ...usage });
-    } catch (error) {
-      next(error);
-    }
-  },
-);
-
-// =============================================================================
-// POST /confirm-issue — Execute GitHub issue after user confirmation (D13)
-// This is the ONLY path to the GitHub API. The LLM cannot reach this.
-// =============================================================================
-router.post(
-  '/confirm-issue',
-  authenticate,
-  validateBody(confirmIssueSchema),
-  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-    try {
-      const { draft } = req.body as { draft: GitHubIssueDraft };
-
-      const result = await chatbotService.submitGitHubIssue(draft);
-
-      res.status(201).json({ success: true, issueUrl: result.issueUrl });
     } catch (error) {
       next(error);
     }

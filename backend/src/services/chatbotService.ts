@@ -1,16 +1,17 @@
 /**
  * ChatbotService — Chat Orchestration Layer
  *
- * Manages Claude API conversations, tool execution, cost tracking,
- * and GitHub issue submission. This is the "brain" that ties the chatbot together.
+ * Manages Claude API conversations, tool execution, and cost tracking. This
+ * is the "brain" that ties the chatbot together. Write actions (including
+ * the GitHub-issue flow) flow through the chat-action registry and the
+ * shared propose_action intercept — see services/chatActions/ (D-15).
  *
  * Key safety features:
  * - Tool call loop capped at 10 iterations (D11, SEC-014)
  * - Per-request timeout of 60 seconds (SEC-015)
  * - max_tokens: 4096 per Claude call (D16, SEC-013)
  * - Conversation history truncated to 50 messages (D14, REQ-028)
- * - GitHub issue interception — never executed by LLM (D13, REQ-024)
- * - propose_action interception — action cards never executed by LLM (SEC-A001)
+ * - propose_action interception — actions never executed by LLM (SEC-A001)
  * - Cost tracking with mutex (D12, SEC-017)
  * - Structured logging (REQ-029)
  * - Attachment content passed as SDK content blocks, never string-interpolated (SEC-A009)
@@ -26,7 +27,6 @@ import type {
   ChatResponse,
   ChatMessage,
   ChatModel,
-  GitHubIssueDraft,
   QueryTransactionsInput,
   GetBudgetsInput,
   GetBudgetSummaryInput,
@@ -64,7 +64,6 @@ export interface ChatAttachment {
 /** Internal toolLoop result shape — discriminated union for type safety */
 type ToolLoopResult =
   | { type: 'message'; content: string; totalInputTokens: number; totalOutputTokens: number }
-  | { type: 'issue_confirmation'; content: string; issueDraft: GitHubIssueDraft; totalInputTokens: number; totalOutputTokens: number }
   | { type: 'action_proposal'; content: string; proposal: ReturnType<typeof issueProposal>; totalInputTokens: number; totalOutputTokens: number };
 
 export class ChatbotService {
@@ -73,7 +72,6 @@ export class ChatbotService {
   constructor(
     private readonly chatbotDataService: ChatbotDataService,
     private readonly costTracker: ChatbotCostTracker,
-    private readonly githubPat: string,
     anthropicApiKey: string,
   ) {
     this.client = new Anthropic({ apiKey: anthropicApiKey });
@@ -138,26 +136,6 @@ export class ChatbotService {
       this.logRequest(familyId, request.model, totalInputTokens, totalOutputTokens, costResult.estimatedCost, toolCallLogs, Date.now() - startTime);
 
       // 6. Build response by result type
-      if (result.type === 'issue_confirmation') {
-        return {
-          type: 'issue_confirmation',
-          message: {
-            id: this.generateId(),
-            role: 'assistant',
-            content: result.content,
-            timestamp: new Date().toISOString(),
-            model: request.model,
-            tokenUsage: {
-              inputTokens: totalInputTokens,
-              outputTokens: totalOutputTokens,
-              estimatedCost: costResult.estimatedCost,
-            },
-          },
-          issueDraft: result.issueDraft,
-          usage,
-        };
-      }
-
       if (result.type === 'action_proposal') {
         return {
           type: 'action_proposal',
@@ -215,37 +193,6 @@ export class ChatbotService {
 
       return this.errorResponse('Claude is temporarily unavailable. Try again in a moment.', budget);
     }
-  }
-
-  /**
-   * Execute a confirmed GitHub issue submission.
-   * This is the ONLY path to the GitHub API — the LLM cannot reach this directly.
-   */
-  async submitGitHubIssue(draft: GitHubIssueDraft): Promise<{ issueUrl: string }> {
-    const response = await fetch(
-      'https://api.github.com/repos/JCarran0/household-budgeting/issues',
-      {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${this.githubPat}`,
-          Accept: 'application/vnd.github.v3+json',
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          title: draft.title,
-          body: draft.body,
-          labels: draft.labels,
-        }),
-      },
-    );
-
-    if (!response.ok) {
-      const text = await response.text();
-      throw new Error(`GitHub API error ${response.status}: ${text}`);
-    }
-
-    const data = await response.json() as { html_url: string };
-    return { issueUrl: data.html_url };
   }
 
   /**
@@ -307,24 +254,8 @@ export class ChatbotService {
         const toolResults: Anthropic.ToolResultBlockParam[] = [];
 
         for (const toolUse of toolUseBlocks) {
-          // INTERCEPT: GitHub issue submission — do NOT execute (D13, REQ-024)
-          if (toolUse.name === 'submit_github_issue') {
-            const input = toolUse.input as { title: string; body: string; labels: string[] };
-            const textBlock = response.content.find((b): b is Anthropic.TextBlock => b.type === 'text');
-            return {
-              type: 'issue_confirmation',
-              content: textBlock?.text || 'I\'ve drafted a GitHub issue for you. Please review and confirm.',
-              issueDraft: {
-                title: input.title,
-                body: input.body,
-                labels: input.labels,
-              },
-              totalInputTokens,
-              totalOutputTokens,
-            };
-          }
-
           // INTERCEPT: Action proposal — do NOT execute (SEC-A001, D-8)
+          // Includes submit_github_issue (migrated from bespoke intercept per D-15)
           if (toolUse.name === 'propose_action') {
             const input = toolUse.input as ActionProposalInput;
 
