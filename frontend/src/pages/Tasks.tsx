@@ -59,6 +59,7 @@ import { KanbanColumn } from '../components/tasks/KanbanColumn';
 import { TaskCard } from '../components/tasks/TaskCard';
 import { ChecklistView } from '../components/tasks/ChecklistView';
 import { LeaderboardPanel } from '../components/tasks/LeaderboardPanel';
+import { DailyQuoteStrip } from '../components/DailyQuoteStrip';
 import { BadgeHeroModal } from '../components/tasks/BadgeHeroModal';
 import { useNewBadgeCelebrations } from '../hooks/useNewBadgeCelebrations';
 import { userColor } from '../utils/userColor';
@@ -648,6 +649,9 @@ export function Tasks() {
           )}
         </Group>
       </Group>
+
+      {/* Daily quote strip */}
+      <DailyQuoteStrip />
 
       {/* Leaderboard */}
       {leaderboard && (
