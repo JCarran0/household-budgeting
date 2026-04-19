@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.35.0](https://github.com/JCarran0/household-budgeting/compare/v5.34.0...v5.35.0) (2026-04-19)
+
+
+### Features
+
+* **tasks:** inherit board filters as defaults on task create ([11505c8](https://github.com/JCarran0/household-budgeting/commit/11505c85bf75248e1fcb27be0acb12f940438cd1))
+* **ui:** daily inspiration modal with rotating pilot-themed quotes ([2f08bc4](https://github.com/JCarran0/household-budgeting/commit/2f08bc42a7b31fab1a47e0034629b881d5c78e72))
+
 ## [5.34.0](https://github.com/JCarran0/household-budgeting/compare/v5.33.1...v5.34.0) (2026-04-19)
 
 
