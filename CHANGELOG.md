@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.36.0](https://github.com/JCarran0/household-budgeting/compare/v5.35.0...v5.36.0) (2026-04-19)
+
+
+### Features
+
+* **tasks:** leaderboard streaks + badges + escalating chime ([#5](https://github.com/JCarran0/household-budgeting/issues/5)) ([7bf9f6a](https://github.com/JCarran0/household-budgeting/commit/7bf9f6a708ff2210964d52a2375be58379333e06))
+
 ## [5.35.0](https://github.com/JCarran0/household-budgeting/compare/v5.34.0...v5.35.0) (2026-04-19)
 
 
