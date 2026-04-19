@@ -10,8 +10,11 @@ import {
   StoredProject,
   ProjectSummary,
   ProjectCategorySpending,
+  ProjectCategoryBudget,
+  ProjectCategoryBudgetInput,
   CreateProjectDto,
   UpdateProjectDto,
+  StoredTask,
 } from '../shared/types';
 import { DataService } from './dataService';
 import { TransactionService, StoredTransaction } from './transactionService';
@@ -87,6 +90,82 @@ export class ProjectService {
     }
   }
 
+  /**
+   * Strip a tag from all of a family's tasks.
+   * Mirrors removeTagFromTransactions — operates on tasks_{familyId} store.
+   */
+  private async removeTagFromTasks(tag: string, familyId: string): Promise<void> {
+    const tasks =
+      (await this.dataService.getData<StoredTask[]>(`tasks_${familyId}`)) ?? [];
+
+    let changed = false;
+    const updated = tasks.map((task) => {
+      const taskTags = task.tags ?? [];
+      if (!taskTags.includes(tag)) return task;
+      changed = true;
+      return {
+        ...task,
+        tags: taskTags.filter((t) => t !== tag),
+      };
+    });
+
+    if (changed) {
+      await this.dataService.saveData(`tasks_${familyId}`, updated);
+    }
+  }
+
+  /**
+   * Replace all occurrences of oldTag with newTag in a family's tasks.
+   * Mirrors renameTagOnTransactions — operates on tasks_{familyId} store.
+   */
+  private async renameTagOnTasks(
+    oldTag: string,
+    newTag: string,
+    familyId: string
+  ): Promise<void> {
+    const tasks =
+      (await this.dataService.getData<StoredTask[]>(`tasks_${familyId}`)) ?? [];
+
+    let changed = false;
+    const updated = tasks.map((task) => {
+      const taskTags = task.tags ?? [];
+      if (!taskTags.includes(oldTag)) return task;
+      changed = true;
+      return {
+        ...task,
+        tags: taskTags.map((t) => (t === oldTag ? newTag : t)),
+      };
+    });
+
+    if (changed) {
+      await this.dataService.saveData(`tasks_${familyId}`, updated);
+    }
+  }
+
+  /**
+   * Ensure every line item in the category budgets has a stable UUID.
+   * New items (no id) get a freshly generated UUID.
+   * Existing items keep their id.
+   * Converts ProjectCategoryBudgetInput[] → ProjectCategoryBudget[].
+   */
+  private normalizeCategoryBudgetLineItems(
+    categoryBudgets: ProjectCategoryBudgetInput[]
+  ): ProjectCategoryBudget[] {
+    return categoryBudgets.map((cb) => {
+      if (!cb.lineItems || cb.lineItems.length === 0) {
+        return { categoryId: cb.categoryId, amount: cb.amount };
+      }
+      return {
+        categoryId: cb.categoryId,
+        amount: cb.amount,
+        lineItems: cb.lineItems.map((item) => ({
+          ...item,
+          id: item.id ?? uuidv4(),
+        })),
+      };
+    });
+  }
+
   // ---------------------------------------------------------------------------
   // Public API
   // ---------------------------------------------------------------------------
@@ -112,7 +191,7 @@ export class ProjectService {
       startDate: data.startDate,
       endDate: data.endDate,
       totalBudget: data.totalBudget ?? null,
-      categoryBudgets: data.categoryBudgets ?? [],
+      categoryBudgets: this.normalizeCategoryBudgetLineItems(data.categoryBudgets ?? []),
       notes: data.notes ?? '',
       createdAt: now,
       updatedAt: now,
@@ -181,9 +260,16 @@ export class ProjectService {
         throw new Error('A project with this tag already exists');
       }
 
-      // Rename tag on transactions BEFORE updating the entity (D7)
+      // Rename tag on transactions BEFORE updating the entity (D10 order)
       await this.renameTagOnTransactions(oldTag, candidateTag, familyId);
+      // Rename tag on tasks AFTER transactions, BEFORE entity update (D10)
+      await this.renameTagOnTasks(oldTag, candidateTag, familyId);
     }
+
+    // Normalize line item UUIDs in the incoming category budgets (if provided)
+    const incomingCategoryBudgets = data.categoryBudgets !== undefined
+      ? this.normalizeCategoryBudgetLineItems(data.categoryBudgets)
+      : existing.categoryBudgets;
 
     const now = new Date().toISOString();
     const updatedProject: StoredProject = {
@@ -192,7 +278,7 @@ export class ProjectService {
       startDate: newStartDate,
       endDate: data.endDate ?? existing.endDate,
       totalBudget: data.totalBudget !== undefined ? data.totalBudget : existing.totalBudget,
-      categoryBudgets: data.categoryBudgets ?? existing.categoryBudgets,
+      categoryBudgets: incomingCategoryBudgets,
       notes: data.notes !== undefined ? data.notes : existing.notes,
       tag: tagWillChange ? candidateTag : oldTag,
       updatedAt: now,
@@ -217,8 +303,9 @@ export class ProjectService {
       throw new Error('Project not found');
     }
 
-    // Remove tag from transactions first (D7)
+    // Remove tag from transactions first, then tasks, then entity (D10 order)
     await this.removeTagFromTransactions(project.tag, familyId);
+    await this.removeTagFromTasks(project.tag, familyId);
 
     const remaining = projects.filter((p) => p.id !== projectId);
     await this.saveProjects(remaining, familyId);

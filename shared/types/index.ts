@@ -538,6 +538,29 @@ export interface UpdateTripDto {
 }
 
 // Project types
+
+export interface ProjectLineItem {
+  id: string;            // UUID, generated server-side on create; required on stored/returned objects
+  name: string;          // required, max 200 chars
+  estimatedCost: number; // required, >= 0
+  notes?: string;        // optional, max 1000 chars
+}
+
+/** Incoming line item payload — id is optional for new items (server assigns UUID) */
+export interface ProjectLineItemInput {
+  id?: string;
+  name: string;
+  estimatedCost: number;
+  notes?: string;
+}
+
+/** Incoming category budget (create/update payloads) */
+export interface ProjectCategoryBudgetInput {
+  categoryId: string;
+  amount: number;
+  lineItems?: ProjectLineItemInput[];
+}
+
 export interface Project {
   id: string;
   name: string;
@@ -552,6 +575,7 @@ export interface Project {
 export interface ProjectCategoryBudget {
   categoryId: string;
   amount: number;
+  lineItems?: ProjectLineItem[]; // optional — treat undefined and [] as equivalent
 }
 
 export interface StoredProject extends Project {
@@ -579,7 +603,7 @@ export interface CreateProjectDto {
   startDate: string;
   endDate: string;
   totalBudget?: number | null;
-  categoryBudgets?: ProjectCategoryBudget[];
+  categoryBudgets?: ProjectCategoryBudgetInput[];
   notes?: string;
 }
 
@@ -588,7 +612,7 @@ export interface UpdateProjectDto {
   startDate?: string;
   endDate?: string;
   totalBudget?: number | null;
-  categoryBudgets?: ProjectCategoryBudget[];
+  categoryBudgets?: ProjectCategoryBudgetInput[];
   notes?: string;
 }
 

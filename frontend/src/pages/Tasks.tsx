@@ -508,9 +508,9 @@ export function Tasks() {
 // Task Form Modal (create/edit)
 // ---------------------------------------------------------------------------
 
-type TaskFormSubmitData = CreateTaskDto | UpdateTaskDto;
+export type TaskFormSubmitData = CreateTaskDto | UpdateTaskDto;
 
-interface TaskFormModalProps {
+export interface TaskFormModalProps {
   opened: boolean;
   onClose: () => void;
   onSubmit: (data: TaskFormSubmitData) => void;
@@ -519,9 +519,12 @@ interface TaskFormModalProps {
   title: string;
   initialValues?: StoredTask;
   currentUserId?: string | null;
+  /** Tags that are locked (pre-populated and non-removable). Used when
+   *  creating a task from a project's Tasks tab. */
+  lockedTags?: string[];
 }
 
-function TaskFormModal({ opened, onClose, onSubmit, members, loading, title, initialValues, currentUserId }: TaskFormModalProps) {
+export function TaskFormModal({ opened, onClose, onSubmit, members, loading, title, initialValues, currentUserId, lockedTags }: TaskFormModalProps) {
   const [tags, setTags] = useState<string[]>(initialValues?.tags ?? []);
   const [subTaskTitles, setSubTaskTitles] = useState<string[]>(
     initialValues?.subTasks?.map((s) => s.title) ?? []
@@ -550,12 +553,16 @@ function TaskFormModal({ opened, onClose, onSubmit, members, loading, title, ini
         dueDate: initialValues?.dueDate ? new Date(initialValues.dueDate) : null,
         scope: (initialValues?.scope ?? 'family') as TaskScope,
       });
-      setTags(initialValues?.tags ?? []);
+      // Start with locked tags plus any existing tags (deduped)
+      const locked = lockedTags ?? [];
+      const existing = initialValues?.tags ?? [];
+      const merged = Array.from(new Set([...locked, ...existing]));
+      setTags(merged);
       setSubTaskTitles(initialValues?.subTasks?.map((s) => s.title) ?? []);
       setNewSubTask('');
       submitModeRef.current = 'create';
     }
-  }, [opened, initialValues]);
+  }, [opened, initialValues, lockedTags]);
 
   const handleSubmit = form.onSubmit((values) => {
     const isEdit = !!initialValues;
@@ -650,7 +657,12 @@ function TaskFormModal({ opened, onClose, onSubmit, members, loading, title, ini
           <TagsInput
             label="Tags"
             value={tags}
-            onChange={setTags}
+            onChange={(newTags) => {
+              // Prevent removal of locked tags
+              const locked = lockedTags ?? [];
+              const withLocked = Array.from(new Set([...locked, ...newTags]));
+              setTags(withLocked);
+            }}
             placeholder="Type and press Enter to add"
           />
 
@@ -748,7 +760,7 @@ function TaskFormModal({ opened, onClose, onSubmit, members, loading, title, ini
 // Task Detail Modal
 // ---------------------------------------------------------------------------
 
-interface TaskDetailModalProps {
+export interface TaskDetailModalProps {
   task: StoredTask | null;
   onClose: () => void;
   members: FamilyMember[];
@@ -758,7 +770,7 @@ interface TaskDetailModalProps {
   onSubTaskToggle: (taskId: string, subTaskId: string, completed: boolean) => void;
 }
 
-function TaskDetailModal({ task, onClose, members, onStatusChange, onEdit, onDelete, onSubTaskToggle }: TaskDetailModalProps) {
+export function TaskDetailModal({ task, onClose, members, onStatusChange, onEdit, onDelete, onSubTaskToggle }: TaskDetailModalProps) {
   const [confirmDelete, setConfirmDelete] = useState(false);
 
   if (!task) return null;

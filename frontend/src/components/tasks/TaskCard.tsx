@@ -1,8 +1,11 @@
 import { Card, Text, Group, Badge, Avatar, Tooltip, ThemeIcon, Box } from '@mantine/core';
-import { IconCalendar, IconCircleCheck } from '@tabler/icons-react';
+import { IconCalendar, IconCircleCheck, IconHammer } from '@tabler/icons-react';
 import { format, isPast, parseISO } from 'date-fns';
+import { useNavigate } from 'react-router-dom';
 import type { StoredTask, FamilyMember } from '../../../../shared/types';
+import { isProjectTag } from '../../../../shared/utils/projectHelpers';
 import { userColor } from '../../utils/userColor';
+import { useProjectTagLookup } from '../../hooks/useProjectTagLookup';
 
 interface TaskCardProps {
   task: StoredTask;
@@ -39,11 +42,20 @@ function SubTaskProgress({ subTasks }: { subTasks: StoredTask['subTasks'] }) {
 }
 
 export function TaskCard({ task, members, onClick }: TaskCardProps) {
+  const navigate = useNavigate();
+  const projectTagLookup = useProjectTagLookup();
+
   const assignee = members.find((m) => m.userId === task.assigneeId);
   const isOverdue = task.dueDate && task.status !== 'done' && task.status !== 'cancelled'
     && isPast(parseISO(task.dueDate));
   const isPersonal = task.scope === 'personal';
   const isDone = task.status === 'done';
+
+  // Find the first project tag on this task (at most one per D6 UI policy)
+  const projectTag = (task.tags ?? []).find(isProjectTag);
+  const projectMeta = projectTag ? projectTagLookup.get(projectTag) : undefined;
+  // Fallback: show raw tag if project was deleted but tag wasn't swept (shouldn't happen post-D9)
+  const projectChipLabel = projectMeta?.name ?? projectTag;
 
   return (
     <Card
@@ -101,11 +113,34 @@ export function TaskCard({ task, members, onClick }: TaskCardProps) {
           </Badge>
         )}
 
-        {task.tags && task.tags.length > 0 && task.tags.map((tag) => (
-          <Badge key={tag} size="xs" variant="light" color="teal">
-            {tag}
-          </Badge>
-        ))}
+        {task.tags && task.tags.length > 0 && task.tags
+          .filter((tag) => !isProjectTag(tag))
+          .map((tag) => (
+            <Badge key={tag} size="xs" variant="light" color="teal">
+              {tag}
+            </Badge>
+          ))}
+
+        {projectChipLabel && (
+          <Tooltip label="Go to project">
+            <Badge
+              size="xs"
+              variant="filled"
+              color="orange"
+              leftSection={<IconHammer size={9} />}
+              style={{ cursor: 'pointer' }}
+              onClick={(e) => {
+                e.stopPropagation();
+                const destination = projectMeta
+                  ? `/projects?expand=${projectMeta.id}`
+                  : '/projects';
+                navigate(destination);
+              }}
+            >
+              {projectChipLabel}
+            </Badge>
+          </Tooltip>
+        )}
       </Group>
     </Card>
   );

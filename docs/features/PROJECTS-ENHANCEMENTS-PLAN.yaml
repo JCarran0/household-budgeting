@@ -1,0 +1,524 @@
+# =============================================================================
+# Projects Enhancements — Implementation Plan
+# =============================================================================
+# BRD: docs/features/PROJECTS-BRD.md (§4.5 Project Tasks, §5.5 Line Item Estimates)
+# Related BRD: docs/features/TASK-MANAGEMENT-BRD.md (§1.4, REQ-017a/b)
+# Status: Not Started
+# Last Updated: 2026-04-18
+# =============================================================================
+
+overview:
+  description: |
+    Two additive enhancements to the existing Projects feature:
+
+    1. Line Item Estimates — Each ProjectCategoryBudget gains an optional
+       lineItems[] array (name, estimatedCost, notes). Line items are an
+       estimating aid only — they are NOT reconciled against actual
+       transactions and do not affect any spending total, variance, or report.
+       The category's `amount` field remains authoritative. UI surfaces an
+       "unallocated" / "over-allocated" hint when sum(lineItems) differs from
+       amount.
+
+    2. Project Tasks Tab — The project detail view gains a Tasks tab listing
+       tasks whose `tags` array contains the project's tag. Tab header shows
+       "{completed} of {total} complete". "+ Add Task" creates a task
+       pre-tagged with the project's tag. Tasks display an inverse project
+       chip that navigates back to the project. Project rename/delete sweep
+       tasks the same way they already sweep transactions.
+
+    Both enhancements are additive to shipped Projects code — no breaking
+    changes to existing data. Line items are an optional field; tasks without
+    a project tag are unaffected.
+  key_files:
+    brd: docs/features/PROJECTS-BRD.md
+    task_brd: docs/features/TASK-MANAGEMENT-BRD.md
+    shared_types: shared/types/index.ts
+    project_service: backend/src/services/projectService.ts
+    task_service: backend/src/services/taskService.ts
+    project_routes: backend/src/routes/projects.ts
+    task_routes: backend/src/routes/tasks.ts
+    project_helpers: shared/utils/projectHelpers.ts
+    frontend_projects_page: frontend/src/pages/Projects.tsx
+    frontend_tasks_page: frontend/src/pages/Tasks.tsx
+    frontend_task_card: frontend/src/components/tasks/TaskCard.tsx
+    api_client: frontend/src/lib/api.ts
+
+# =============================================================================
+# DECISIONS LOG — Settled during BRD drafting; captured here for implementers
+# =============================================================================
+decisions:
+  - id: D1
+    date: 2026-04-18
+    decision: Line items are estimate-only; no reconciliation against transactions
+    rationale: |
+      User confirmed. Drops out: link-to-transaction UX, "purchased" checkbox,
+      status tracking on line items, and any effect on actual spending totals.
+      Category-level actuals continue to come from tagged transactions only.
+
+  - id: D2
+    date: 2026-04-18
+    decision: Category budget `amount` stays authoritative; line items do not auto-sum
+    rationale: |
+      Users may set a category budget with no line items, or add line items whose
+      sum differs from the budget. Both are valid. UI hints "Unallocated: $X" or
+      "Over-allocated by $X" but does not block save.
+
+  - id: D3
+    date: 2026-04-18
+    decision: No type field on line items (no material / tool / service enum)
+    rationale: |
+      With reconciliation off the table, type has no downstream consumer.
+      Users who want the distinction can include it in the name or notes.
+      Can be promoted to an enum later if a real use case emerges.
+
+  - id: D4
+    date: 2026-04-18
+    decision: Line items always displayed under the category (not behind a toggle)
+    rationale: |
+      Estimates are write-once-refer-often. Keeping them visible supports the
+      "refer back as work progresses" use case.
+
+  - id: D5
+    date: 2026-04-18
+    decision: No cross-project reuse / autocomplete of line items
+    rationale: |
+      Premature. Would require indexing across projects, UX for suggestions,
+      and adds noise when most line items are project-specific ("demo Dumpster",
+      "bathroom tile"). Revisit if patterns emerge.
+
+  - id: D6
+    date: 2026-04-18
+    decision: Link mechanism for tasks ↔ projects is the existing project tag
+    rationale: |
+      User chose tag-based linking (not a new projectId field). Mirrors the
+      transaction model exactly and avoids a Task schema change. The UI
+      applies at most one project tag per task via a picker, not free-text.
+
+  - id: D7
+    date: 2026-04-18
+    decision: Project Tasks tab completion summary counts only `done` status
+    rationale: |
+      "{completed} of {total} complete" — completed = count of tasks with
+      status 'done'; total = count of all tasks carrying the project tag
+      regardless of status. Cancelled tasks count toward total but not
+      completed.
+
+  - id: D8
+    date: 2026-04-18
+    decision: Tasks tab respects TASK-MANAGEMENT-BRD §3.4 archive rule
+    rationale: |
+      Tasks that have been `done` or `cancelled` for more than 14 days do
+      not appear in the project's Tasks tab. They remain accessible via
+      Task History. This mirrors board behavior and prevents completed
+      projects from accumulating a wall of old tasks.
+
+  - id: D9
+    date: 2026-04-18
+    decision: Project rename/delete sweeps tasks the same way it sweeps transactions
+    rationale: |
+      Tags must stay in sync. Reuse the existing batch-rewrite pattern in
+      projectService — add parallel helpers `removeTagFromTasks` and
+      `renameTagOnTasks` operating on the `tasks_{familyId}` store.
+
+  - id: D10
+    date: 2026-04-18
+    decision: Tag propagation order — update tasks and transactions FIRST, then project entity
+    rationale: |
+      Same D7 rule from the original Projects plan. Orphaned tags are harder
+      to recover from than a stale entity reference. Order within the sweep:
+      transactions first (existing behavior), then tasks, then entity.
+
+# =============================================================================
+# PHASE 1: Shared Types
+# =============================================================================
+phase_1_types:
+  status: not_started
+  description: |
+    Extend ProjectCategoryBudget with optional lineItems. No new types needed
+    for the tasks tab — it reuses existing Task and Project types.
+
+  tasks:
+    - id: "1.1"
+      task: Extend ProjectCategoryBudget in shared/types/index.ts
+      status: not_started
+      details: |
+        Add optional lineItems field and a new ProjectLineItem interface:
+
+        export interface ProjectLineItem {
+          id: string;                 // UUID, generated on create
+          name: string;               // required, trimmed, max 200 chars
+          estimatedCost: number;      // required, >= 0
+          notes?: string;             // optional, max 1000 chars
+        }
+
+        export interface ProjectCategoryBudget {
+          categoryId: string;
+          amount: number;
+          lineItems?: ProjectLineItem[];   // NEW — optional, default []
+        }
+
+        Treat undefined and [] as equivalent in consumers. The field is
+        optional so existing persisted projects without lineItems continue
+        to parse and round-trip unchanged.
+
+    - id: "1.2"
+      task: Update CreateProjectDto / UpdateProjectDto Zod schemas
+      status: not_started
+      details: |
+        In backend/src/routes/projects.ts the Zod schemas for categoryBudgets
+        accept lineItems arrays with the fields above. Validate:
+          - name: non-empty, <= 200 chars
+          - estimatedCost: number, >= 0
+          - notes: optional, <= 1000 chars
+        The schema generates `id` server-side on create if absent (for new
+        line items) and preserves existing ids on update.
+
+# =============================================================================
+# PHASE 2: Backend — Line Items & Task Tag Sweeps
+# =============================================================================
+phase_2_backend:
+  status: not_started
+  description: |
+    Two narrow changes in ProjectService:
+      - Ensure line items persist correctly (mostly a pass-through; confirm
+        round-trip with Zod schema)
+      - Add removeTagFromTasks and renameTagOnTasks helpers; call them from
+        the existing update/delete flows alongside the transaction sweeps
+
+    No new project routes. Tasks tab data is served by existing task list
+    endpoint filtered by tag on the frontend.
+
+  tasks:
+    - id: "2.1"
+      task: Persist line item ids in ProjectService.createProject / updateProject
+      status: not_started
+      details: |
+        When saving a project:
+          - For each categoryBudget.lineItems entry without an id, assign uuidv4()
+          - For each entry with an id, preserve it
+        This ensures stable ids for React keys and future referencing.
+        Apply in both createProject and updateProject paths.
+
+    - id: "2.2"
+      task: Add removeTagFromTasks helper in ProjectService
+      status: not_started
+      details: |
+        Mirror the existing removeTagFromTransactions private helper. Operates
+        on the `tasks_{familyId}` store directly for batch efficiency.
+
+        Signature:
+          private async removeTagFromTasks(tag: string, familyId: string): Promise<void>
+
+        Behavior:
+          - Load tasks_{familyId}
+          - For each task, if task.tags includes `tag`, filter it out and
+            mark as changed
+          - Save only if changed (same pattern as transactions helper)
+
+    - id: "2.3"
+      task: Add renameTagOnTasks helper in ProjectService
+      status: not_started
+      details: |
+        Mirror renameTagOnTransactions. Replace all occurrences of oldTag
+        with newTag in each task's tags array. Save only if changed.
+
+    - id: "2.4"
+      task: Call task sweep helpers from deleteProject and updateProject
+      status: not_started
+      details: |
+        In deleteProject: call removeTagFromTasks AFTER removeTagFromTransactions
+        and BEFORE removing the entity (D10 order — data stores first, entity last).
+
+        In updateProject, when a rename changes the tag:
+          - renameTagOnTransactions (existing)
+          - renameTagOnTasks (NEW)
+          - then save the updated project
+
+        Do not short-circuit if one sweep fails — log and continue. Orphaned
+        tags are cheaper to clean up than failed deletions.
+
+    - id: "2.5"
+      task: Verify project route validation accepts line item payloads
+      status: not_started
+      details: |
+        Integration-test the POST /api/v1/projects and PUT /api/v1/projects/:id
+        endpoints with categoryBudgets containing lineItems. Confirm:
+          - Valid payloads round-trip correctly
+          - Server-generated ids for new items
+          - Invalid payloads (negative estimatedCost, empty name, oversized
+            notes) are rejected with 400
+
+# =============================================================================
+# PHASE 3: Frontend — Line Item Estimates UI
+# =============================================================================
+phase_3_frontend_line_items:
+  status: not_started
+  description: |
+    Add line item editing to the project create/edit form, and line item
+    display to the project detail view.
+
+  tasks:
+    - id: "3.1"
+      task: Extend project create/edit modal to support line items
+      status: not_started
+      details: |
+        File: the existing project form modal (created in PROJECTS-PLAN phase 4.5).
+
+        For each category budget row, add an expandable "Line items" section:
+          - List of line items with inputs for name, estimatedCost, notes
+          - "+ Add line item" button appends a new blank row
+          - Trash icon removes a row
+          - Drag handle (optional, P2) for reordering — defer unless trivial
+
+        Soft-hint display below the line item list (live-updating as user types):
+          - "Unallocated: ${amount - sum}" when sum < amount
+          - "Over-allocated by ${sum - amount}" when sum > amount
+          - No hint when sum equals amount or list is empty
+
+        On submit, line items are passed through in the CreateProjectDto /
+        UpdateProjectDto payload. New items have no id; existing items
+        preserve their id.
+
+        Edge case: when the user deletes a line item, remove it from the
+        array — the backend sees the shorter list on next save.
+
+    - id: "3.2"
+      task: Display line items in project detail view (always shown)
+      status: not_started
+      details: |
+        File: the accordion expansion in Projects.tsx (built in PROJECTS-PLAN phase 4.4).
+
+        For each category in the breakdown, if lineItems is present and
+        non-empty, render a compact list below the category row:
+
+          • Sheetrock .................. $180
+          • Joint compound ............. $45
+          • Drill ...................... $120
+
+        Tooltip on a line item shows its notes (if present).
+
+        Above the list, show the soft hint:
+          - "Unallocated: $X" (neutral color)
+          - "Over-allocated by $X" (warning color)
+          - Omit hint when sum equals amount or list is empty
+
+        Read-only in the detail view — editing happens via "Edit Project".
+
+    - id: "3.3"
+      task: Manual testing — line items
+      status: not_started
+      details: |
+        - [ ] Create a new project with line items under one category
+        - [ ] Verify line items persist after page reload
+        - [ ] Edit a project, add/remove/rename line items, verify save
+        - [ ] Sum < amount shows "Unallocated"
+        - [ ] Sum > amount shows "Over-allocated"
+        - [ ] Sum == amount shows no hint
+        - [ ] Empty line items list shows no hint
+        - [ ] Negative estimatedCost is rejected by form validation
+        - [ ] Existing projects without lineItems continue to load/save fine
+
+# =============================================================================
+# PHASE 4: Frontend — Project Tasks Tab
+# =============================================================================
+phase_4_frontend_tasks_tab:
+  status: not_started
+  description: |
+    New Tasks tab inside the project detail accordion. Pulls tasks from the
+    existing task list endpoint, filters by project tag on the frontend.
+    Adds "+ Add Task" create flow and an inverse project chip on task cards.
+
+  tasks:
+    - id: "4.1"
+      task: Add "Tasks" tab to project detail accordion
+      status: not_started
+      details: |
+        File: Projects.tsx project detail section.
+
+        Wrap the existing category breakdown in a Mantine Tabs component:
+          - Tab 1: "Spending" (existing category breakdown, unchanged)
+          - Tab 2: "Tasks" (new)
+
+        Tabs.Tab label for Tasks includes the completion summary:
+          "Tasks (3 of 8 complete)"
+
+        Summary derivation (client-side):
+          - Fetch all tasks for the family via existing useTasks hook
+          - Filter by: task.tags.includes(project.tag)
+          - Filter out archived: tasks where (status === 'done' && completedAt < now - 14d)
+            or (status === 'cancelled' && cancelledAt < now - 14d)
+          - total = filtered count
+          - completed = filtered count with status === 'done'
+
+        Consider a shared helper `filterTasksForProject(tasks, projectTag, now)`
+        in a new file `frontend/src/lib/projectTaskFilters.ts` — keeps the
+        archive cutoff logic in one place for reuse in the chip component.
+
+    - id: "4.2"
+      task: Render the project tasks list inside the Tasks tab
+      status: not_started
+      details: |
+        Use the same TaskCard component as the Kanban board
+        (frontend/src/components/tasks/TaskCard.tsx), rendered as a vertical
+        list (not a Kanban column).
+
+        Order: by status (todo → started → done), then by dueDate ascending
+        (nulls last), then by createdAt descending. Keep it simple — no
+        drag-and-drop in this view.
+
+        Clicking a task opens the existing task detail/edit modal
+        (same as Kanban board).
+
+        Empty state: "No tasks yet for this project. Click + Add Task to
+        create one."
+
+    - id: "4.3"
+      task: Add "+ Add Task" button that pre-tags with the project's tag
+      status: not_started
+      details: |
+        Button sits at the top of the Tasks tab. Clicking opens the existing
+        full task creation form with the project tag pre-populated in the
+        `tags` field.
+
+        Implementation:
+          - Existing task create form already accepts initial tags via props
+            (if not, extend the prop surface)
+          - Pass `initialTags={[project.tag]}`
+          - The project tag is displayed as a locked/non-removable chip in
+            the form so users don't accidentally un-tag the task
+
+        On submit, the task is created via the existing POST /api/v1/tasks
+        endpoint. No backend changes needed.
+
+        React Query: invalidate ['tasks'] on success so the Tasks tab and
+        tab header count refresh.
+
+    - id: "4.4"
+      task: Add inverse project chip to TaskCard and task detail
+      status: not_started
+      details: |
+        File: frontend/src/components/tasks/TaskCard.tsx and the task detail modal.
+
+        When a task's tags include a `project:*:*` pattern tag:
+          - Parse the tag to resolve the project display name
+          - Render a small Mantine Badge with the project name
+          - Clicking the chip navigates to /projects?expand={projectId}
+            (or equivalent URL param that opens that project's accordion)
+
+        Project name resolution:
+          - Fetch projects (useQuery ['projects', 'summaries']) and build
+            a tag → {id, name} map
+          - If a task carries a tag that doesn't match any known project
+            (e.g., project was deleted but tag wasn't swept — shouldn't
+            happen post-D9 but defensive), render the raw tag as fallback
+
+        Consider a small hook `useProjectTagLookup()` in
+        frontend/src/hooks/ that returns the tag → project map — reused by
+        TaskCard, task detail, and anywhere else that needs the inverse.
+
+    - id: "4.5"
+      task: Wire project accordion deep-link via URL param
+      status: not_started
+      details: |
+        The chip navigates to /projects?expand={projectId}. Projects.tsx
+        must read this param on mount and auto-expand the matching project
+        card's accordion.
+
+        Keep it as a query param so the page still shows the filter/sort
+        state cleanly. Clear the param after expansion to avoid reopening
+        on every re-render.
+
+    - id: "4.6"
+      task: Manual testing — tasks tab
+      status: not_started
+      details: |
+        - [ ] Create a project; Tasks tab shows "0 of 0 complete" and empty state
+        - [ ] Click + Add Task from the project; form has the project tag locked
+        - [ ] Save task; it appears in the Tasks tab and counter updates to "0 of 1"
+        - [ ] Move task to done on Kanban; Tasks tab shows "1 of 1 complete"
+        - [ ] Cancel a task; counter reflects total including cancelled but
+              completed only counts done
+        - [ ] Task card on Kanban shows project chip
+        - [ ] Clicking project chip navigates to Projects and expands that project
+        - [ ] Rename the project; chip updates to new name on refresh
+        - [ ] Rename project; task's tag updates from old tag to new tag
+        - [ ] Delete project; task loses the project tag (chip disappears);
+              task itself remains
+        - [ ] Tasks done/cancelled > 14 days ago do not appear in the Tasks tab
+              (verify with a task whose completedAt is 15 days back)
+        - [ ] Task with no project tag shows no chip — existing behavior preserved
+
+# =============================================================================
+# PHASE 5: Testing
+# =============================================================================
+phase_5_testing:
+  status: not_started
+  description: |
+    Risk-based. Focus on the tag-sweep paths (rename / delete) and line item
+    persistence round-trips. The Tasks tab is mostly read-only UI composition
+    and is best covered by manual testing.
+
+  tasks:
+    - id: "5.1"
+      task: Extend ProjectService integration tests for task tag sweeps
+      status: not_started
+      details: |
+        File: backend/src/__tests__/integration/projectService.test.ts
+        (or create if not yet present).
+
+        New test cases:
+          - Deleting a project strips its tag from all family tasks
+          - Deleting a project does NOT delete the tasks themselves
+          - Renaming a project (in a way that changes its tag) updates the
+            tag on all associated tasks
+          - Tasks with tags from OTHER projects are unaffected by the sweep
+          - A project with no associated tasks deletes cleanly (no error,
+            no changed tasks write)
+
+    - id: "5.2"
+      task: Round-trip test for line items on create/update
+      status: not_started
+      details: |
+        - Create a project with categoryBudgets containing lineItems; verify
+          server generates ids and persists all fields
+        - Update the project adding/removing/editing line items; verify
+          existing ids are preserved, new items get ids, removed items are gone
+        - Confirm a persisted project without lineItems still parses and
+          updates correctly (backward compatibility with existing data)
+
+    - id: "5.3"
+      task: Unit test the filterTasksForProject helper
+      status: not_started
+      details: |
+        File: frontend/src/lib/__tests__/projectTaskFilters.test.ts
+
+        Cases:
+          - Tasks without project tag excluded
+          - Tasks with matching project tag included
+          - Done task completed < 14 days ago included
+          - Done task completed > 14 days ago excluded
+          - Cancelled task cancelled > 14 days ago excluded
+          - Todo / Started tasks always included regardless of age
+          - Mixed set returns expected subset
+
+# =============================================================================
+# IMPLEMENTATION ORDER
+# =============================================================================
+implementation_order:
+  description: |
+    Tasks-tab first (smaller, mostly UI, derisks the project-tag-on-task
+    pattern and the sweep helpers). Line items second (data model change
+    with more form surface area).
+
+    Phases can overlap — Phase 1 types are tiny and land first either way.
+  sequence:
+    - phase: 1 — Shared Types
+      reason: Tiny type addition; everything else depends on it
+    - phase: 2 — Backend task tag sweeps + line item persistence
+      reason: Required before frontend edits can be saved correctly
+    - phase: 4 — Frontend Tasks Tab
+      reason: Smaller risk surface; validates sweep helpers end-to-end
+    - phase: 3 — Frontend Line Items UI
+      reason: Larger form work; lands after the simpler tab is stable
+    - phase: 5 — Testing
+      reason: Integration tests alongside phases 2 & 4; round-trip tests after phase 3

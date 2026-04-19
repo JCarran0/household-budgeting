@@ -9,403 +9,43 @@ import {
   TextInput,
   Accordion,
   Text,
-  Badge,
   Loader,
   Center,
   Alert,
   ThemeIcon,
-  ActionIcon,
-  Tooltip,
   Modal,
-  NumberInput,
-  Textarea,
-  Table,
-  Paper,
-  Code,
-  Divider,
 } from '@mantine/core';
-import { DatePickerInput } from '@mantine/dates';
-import { useForm } from '@mantine/form';
-import { useDisclosure, useClipboard } from '@mantine/hooks';
+import { useDisclosure } from '@mantine/hooks';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { notifications } from '@mantine/notifications';
+import { useSearchParams } from 'react-router-dom';
 import {
   IconPlus,
   IconSearch,
   IconAlertCircle,
-  IconEdit,
-  IconTrash,
   IconCheck,
   IconX,
   IconHammer,
-  IconCalendar,
-  IconCopy,
 } from '@tabler/icons-react';
-import { format } from 'date-fns';
 import { api } from '../lib/api';
-import { useCategoryOptions } from '../hooks/useCategoryOptions';
-import { formatCurrency } from '../utils/formatters';
+import { useAuthStore } from '../stores/authStore';
 import { TransactionPreviewModal } from '../components/transactions/TransactionPreviewModal';
-import type { ProjectSummary, ProjectCategoryBudget, CreateProjectDto, UpdateProjectDto } from '../../../shared/types';
-import { generateProjectTag } from '../../../shared/utils/projectHelpers';
-
-// ---------------------------------------------------------------------------
-// Constants
-// ---------------------------------------------------------------------------
+import { TaskFormModal, TaskDetailModal } from './Tasks';
+import { ProjectFormModal } from '../components/projects/ProjectFormModal';
+import { ProjectCard, type DrillDownState } from '../components/projects/ProjectCard';
+import type {
+  ProjectSummary,
+  StoredTask,
+  FamilyMember,
+  TaskStatus,
+  UpdateTaskDto,
+  SubTask,
+} from '../../../shared/types';
 
 /** Wide date range used when drilling into project transactions — the project
- * tag is the primary filter; dates are intentionally unbounded so we don't miss
- * any transactions tagged to this project outside the nominal project dates. */
+ *  tag is the primary filter; dates are intentionally unbounded so we don't miss
+ *  any transactions tagged to this project outside the nominal project dates. */
 const WIDE_DATE_RANGE = { startDate: '2020-01-01', endDate: '2030-12-31' };
-
-const STATUS_BADGE_COLOR: Record<ProjectSummary['status'], string> = {
-  planning: 'blue',
-  active: 'green',
-  completed: 'gray',
-};
-
-// ---------------------------------------------------------------------------
-// Internal types
-// ---------------------------------------------------------------------------
-
-interface ProjectFormValues {
-  name: string;
-  startDate: Date | null;
-  endDate: Date | null;
-  totalBudget: number | string;
-  notes: string;
-  categoryBudgets: ProjectCategoryBudget[];
-}
-
-interface DrillDownState {
-  categoryId: string | null;
-  categoryName: string;
-  projectTag: string;
-}
-
-// ---------------------------------------------------------------------------
-// ProjectFormModal — create or edit a project
-// ---------------------------------------------------------------------------
-
-interface ProjectFormModalProps {
-  opened: boolean;
-  onClose: () => void;
-  project: ProjectSummary | null; // null = create mode
-}
-
-function ProjectFormModal({ opened, onClose, project }: ProjectFormModalProps) {
-  const queryClient = useQueryClient();
-  const isEdit = project !== null;
-
-  const { options: categoryOptions, isLoading: categoriesLoading } = useCategoryOptions({
-    enabled: opened,
-  });
-
-  const form = useForm<ProjectFormValues>({
-    initialValues: {
-      name: '',
-      startDate: null,
-      endDate: null,
-      totalBudget: '',
-      notes: '',
-      categoryBudgets: [],
-    },
-    validate: {
-      name: (value) => (value.trim().length === 0 ? 'Name is required' : null),
-      startDate: (value) => (value === null ? 'Start date is required' : null),
-      endDate: (value, values) => {
-        if (value === null) return 'End date is required';
-        if (values.startDate && value < values.startDate) {
-          return 'End date must be on or after start date';
-        }
-        return null;
-      },
-      totalBudget: (value, values) => {
-        const categorySum = values.categoryBudgets
-          .filter((cb) => cb.categoryId !== '' && cb.amount > 0)
-          .reduce((sum, cb) => sum + cb.amount, 0);
-        if (categorySum === 0) return null;
-        if (value === '' || value === null) {
-          return `Total budget is required when category budgets are set (${formatCurrency(categorySum)})`;
-        }
-        const total = Number(value);
-        if (isNaN(total)) return null;
-        if (categorySum > total) {
-          return `Total budget must be at least ${formatCurrency(categorySum)} (sum of category budgets)`;
-        }
-        return null;
-      },
-    },
-  });
-
-  // Reset/populate form when modal opens
-  useEffect(() => {
-    if (!opened) return;
-    if (isEdit && project) {
-      const [startYear, startMonth, startDay] = project.startDate.split('-').map(Number);
-      const [endYear, endMonth, endDay] = project.endDate.split('-').map(Number);
-      form.setValues({
-        name: project.name,
-        startDate: new Date(startYear, startMonth - 1, startDay),
-        endDate: new Date(endYear, endMonth - 1, endDay),
-        totalBudget: project.totalBudget ?? '',
-        notes: project.notes ?? '',
-        categoryBudgets: project.categoryBudgets ?? [],
-      });
-    } else {
-      form.reset();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [opened, project]);
-
-  // Derived tag preview
-  const tagPreview = useMemo(() => {
-    const { name, startDate } = form.values;
-    if (!name.trim() || !startDate) return null;
-    return generateProjectTag(name.trim(), format(startDate, 'yyyy-MM-dd'));
-  }, [form.values]);
-
-  // Create mutation
-  const createMutation = useMutation({
-    mutationFn: (data: CreateProjectDto) => api.createProject(data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['projects'] });
-      notifications.show({
-        title: 'Project created',
-        message: 'Your project has been saved.',
-        color: 'green',
-        icon: <IconCheck size={16} />,
-      });
-      onClose();
-    },
-    onError: () => {
-      notifications.show({
-        title: 'Failed to create project',
-        message: 'An error occurred. Please try again.',
-        color: 'red',
-        icon: <IconX size={16} />,
-      });
-    },
-  });
-
-  // Update mutation
-  const updateMutation = useMutation({
-    mutationFn: ({ id, data }: { id: string; data: UpdateProjectDto }) =>
-      api.updateProject(id, data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['projects'] });
-      notifications.show({
-        title: 'Project updated',
-        message: 'Your changes have been saved.',
-        color: 'green',
-        icon: <IconCheck size={16} />,
-      });
-      onClose();
-    },
-    onError: () => {
-      notifications.show({
-        title: 'Failed to update project',
-        message: 'An error occurred. Please try again.',
-        color: 'red',
-        icon: <IconX size={16} />,
-      });
-    },
-  });
-
-  const isPending = createMutation.isPending || updateMutation.isPending;
-
-  const handleSubmit = (values: ProjectFormValues) => {
-    if (!values.startDate || !values.endDate) return;
-
-    const startDateStr = format(values.startDate, 'yyyy-MM-dd');
-    const endDateStr = format(values.endDate, 'yyyy-MM-dd');
-    const totalBudget =
-      values.totalBudget === '' || values.totalBudget === null
-        ? null
-        : Number(values.totalBudget);
-    const categoryBudgets = values.categoryBudgets.filter(
-      (cb) => cb.categoryId !== '' && cb.amount > 0,
-    );
-
-    if (isEdit && project) {
-      updateMutation.mutate({
-        id: project.id,
-        data: {
-          name: values.name.trim(),
-          startDate: startDateStr,
-          endDate: endDateStr,
-          totalBudget,
-          notes: values.notes.trim(),
-          categoryBudgets,
-        },
-      });
-    } else {
-      createMutation.mutate({
-        name: values.name.trim(),
-        startDate: startDateStr,
-        endDate: endDateStr,
-        totalBudget,
-        notes: values.notes.trim(),
-        categoryBudgets,
-      });
-    }
-  };
-
-  const addCategoryBudget = () => {
-    form.setFieldValue('categoryBudgets', [
-      ...form.values.categoryBudgets,
-      { categoryId: '', amount: 0 },
-    ]);
-  };
-
-  const removeCategoryBudget = (index: number) => {
-    form.setFieldValue(
-      'categoryBudgets',
-      form.values.categoryBudgets.filter((_, i) => i !== index),
-    );
-  };
-
-  const updateCategoryBudget = (
-    index: number,
-    field: keyof ProjectCategoryBudget,
-    value: string | number,
-  ) => {
-    const updated = form.values.categoryBudgets.map((cb, i) =>
-      i === index ? { ...cb, [field]: value } : cb,
-    );
-    form.setFieldValue('categoryBudgets', updated);
-  };
-
-  return (
-    <Modal
-      opened={opened}
-      onClose={onClose}
-      title={isEdit ? 'Edit Project' : 'Create Project'}
-      size="lg"
-    >
-      <form onSubmit={form.onSubmit(handleSubmit)}>
-        <Stack gap="sm">
-          {/* Name */}
-          <TextInput
-            label="Project Name"
-            placeholder="Kitchen Renovation 2026"
-            required
-            {...form.getInputProps('name')}
-          />
-
-          {/* Tag preview */}
-          {tagPreview && (
-            <Text size="sm" c="dimmed">
-              Tag: <Code>{tagPreview}</Code>
-            </Text>
-          )}
-
-          {/* Dates */}
-          <Group grow>
-            <DatePickerInput
-              label="Start Date"
-              placeholder="Pick start date"
-              required
-              valueFormat="MMM D, YYYY"
-              {...form.getInputProps('startDate')}
-            />
-            <DatePickerInput
-              label="End Date"
-              placeholder="Pick end date"
-              required
-              valueFormat="MMM D, YYYY"
-              minDate={form.values.startDate ?? undefined}
-              {...form.getInputProps('endDate')}
-            />
-          </Group>
-
-          {/* Total budget */}
-          <NumberInput
-            label="Total Budget"
-            placeholder="Optional"
-            min={0}
-            decimalScale={2}
-            prefix="$"
-            {...form.getInputProps('totalBudget')}
-          />
-
-          {/* Category budgets */}
-          <Stack gap="xs">
-            <Group justify="space-between">
-              <Text size="sm" fw={500}>
-                Category Budgets
-              </Text>
-              <Button
-                size="xs"
-                variant="subtle"
-                leftSection={<IconPlus size={12} />}
-                onClick={addCategoryBudget}
-                disabled={categoriesLoading}
-              >
-                Add Category
-              </Button>
-            </Group>
-
-            {form.values.categoryBudgets.map((cb, index) => (
-              <Group key={index} gap="xs">
-                <Select
-                  style={{ flex: 2 }}
-                  placeholder="Select category"
-                  data={categoryOptions}
-                  value={cb.categoryId || null}
-                  onChange={(val) =>
-                    updateCategoryBudget(index, 'categoryId', val ?? '')
-                  }
-                  searchable
-                  clearable
-                />
-                <NumberInput
-                  style={{ flex: 1 }}
-                  placeholder="Amount"
-                  min={0}
-                  decimalScale={2}
-                  prefix="$"
-                  value={cb.amount}
-                  onChange={(val) =>
-                    updateCategoryBudget(index, 'amount', Number(val) || 0)
-                  }
-                />
-                <ActionIcon
-                  color="red"
-                  variant="subtle"
-                  onClick={() => removeCategoryBudget(index)}
-                  aria-label="Remove category budget"
-                >
-                  <IconX size={16} />
-                </ActionIcon>
-              </Group>
-            ))}
-          </Stack>
-
-          {/* Notes */}
-          <Textarea
-            label="Notes"
-            placeholder="Project notes, contractor details, materials..."
-            autosize
-            minRows={2}
-            maxRows={6}
-            {...form.getInputProps('notes')}
-          />
-
-          {/* Actions */}
-          <Group justify="flex-end" mt="sm">
-            <Button variant="subtle" onClick={onClose} disabled={isPending}>
-              Cancel
-            </Button>
-            <Button type="submit" loading={isPending}>
-              {isEdit ? 'Save Changes' : 'Create Project'}
-            </Button>
-          </Group>
-        </Stack>
-      </form>
-    </Modal>
-  );
-}
 
 // ---------------------------------------------------------------------------
 // DeleteProjectModal — confirmation dialog
@@ -455,11 +95,7 @@ function DeleteProjectModal({ opened, onClose, project }: DeleteProjectModalProp
           ? This will remove the project tag from all associated transactions. Transactions will not be deleted.
         </Text>
         <Group justify="flex-end">
-          <Button
-            variant="subtle"
-            onClick={onClose}
-            disabled={deleteMutation.isPending}
-          >
+          <Button variant="subtle" onClick={onClose} disabled={deleteMutation.isPending}>
             Cancel
           </Button>
           <Button
@@ -476,238 +112,39 @@ function DeleteProjectModal({ opened, onClose, project }: DeleteProjectModalProp
 }
 
 // ---------------------------------------------------------------------------
-// ProjectCard — single accordion item
-// ---------------------------------------------------------------------------
-
-interface ProjectCardProps {
-  project: ProjectSummary;
-  onEdit: (project: ProjectSummary) => void;
-  onDelete: (project: ProjectSummary) => void;
-  onCategoryClick: (state: DrillDownState) => void;
-}
-
-function ProjectCard({ project, onEdit, onDelete, onCategoryClick }: ProjectCardProps) {
-  const formatDateRange = (start: string, end: string): string => {
-    try {
-      const [sy, sm, sd] = start.split('-').map(Number);
-      const [ey, em, ed] = end.split('-').map(Number);
-      const startDate = new Date(sy, sm - 1, sd);
-      const endDate = new Date(ey, em - 1, ed);
-
-      if (sy === ey) {
-        if (sm === em) {
-          return `${format(startDate, 'MMM d')} – ${format(endDate, 'MMM d, yyyy')}`;
-        }
-        return `${format(startDate, 'MMM d')} – ${format(endDate, 'MMM d, yyyy')}`;
-      }
-      return `${format(startDate, 'MMM d, yyyy')} – ${format(endDate, 'MMM d, yyyy')}`;
-    } catch {
-      return `${start} – ${end}`;
-    }
-  };
-
-  const clipboard = useClipboard({ timeout: 1500 });
-
-  const budgetLabel = project.totalBudget !== null
-    ? `${formatCurrency(project.totalSpent)} / ${formatCurrency(project.totalBudget)}`
-    : formatCurrency(project.totalSpent);
-
-  const overBudget =
-    project.totalBudget !== null && project.totalSpent > project.totalBudget;
-
-  return (
-    <Accordion.Item key={project.id} value={project.id}>
-      {/* ---- Control (collapsed header) ---- */}
-      <Accordion.Control>
-        <Group justify="space-between" wrap="nowrap">
-          <Group gap="sm" wrap="nowrap" style={{ flex: 1, minWidth: 0 }}>
-            <ThemeIcon variant="light" size="md" color="orange">
-              <IconHammer size={16} />
-            </ThemeIcon>
-            <Stack gap={0} style={{ minWidth: 0 }}>
-              <Group gap="xs" wrap="nowrap">
-                <Text fw={600} truncate>
-                  {project.name}
-                </Text>
-                <Badge
-                  size="xs"
-                  color={STATUS_BADGE_COLOR[project.status]}
-                  variant="light"
-                >
-                  {project.status}
-                </Badge>
-              </Group>
-              <Group gap="xs" c="dimmed">
-                <IconCalendar size={12} />
-                <Text size="xs">
-                  {formatDateRange(project.startDate, project.endDate)}
-                </Text>
-              </Group>
-            </Stack>
-          </Group>
-
-          <Group gap="sm" wrap="nowrap">
-            <Stack gap={0} align="flex-end">
-              <Text
-                size="sm"
-                fw={600}
-                c={overBudget ? 'red' : undefined}
-              >
-                {budgetLabel}
-              </Text>
-            </Stack>
-          </Group>
-        </Group>
-      </Accordion.Control>
-
-      {/* ---- Panel (expanded detail) ---- */}
-      <Accordion.Panel>
-        <Stack gap="md">
-          {/* Notes */}
-          {project.notes && (
-            <Text size="sm" c="dimmed" style={{ fontStyle: 'italic' }}>
-              {project.notes}
-            </Text>
-          )}
-
-          {/* Category breakdown */}
-          {project.categorySpending.length > 0 ? (
-            <Paper withBorder p="xs">
-              <Table striped highlightOnHover>
-                <Table.Thead>
-                  <Table.Tr>
-                    <Table.Th>Category</Table.Th>
-                    <Table.Th ta="right">Spent</Table.Th>
-                    <Table.Th ta="right">Budget</Table.Th>
-                    <Table.Th ta="right">Variance</Table.Th>
-                  </Table.Tr>
-                </Table.Thead>
-                <Table.Tbody>
-                  {project.categorySpending.map((row) => {
-                    const variance =
-                      row.budgeted !== null
-                        ? row.budgeted - row.spent
-                        : null;
-                    return (
-                      <Table.Tr
-                        key={row.categoryId}
-                        style={{ cursor: 'pointer' }}
-                        onClick={() =>
-                          onCategoryClick({
-                            categoryId: row.categoryId === '__uncategorized__' ? null : row.categoryId,
-                            categoryName: row.categoryName,
-                            projectTag: project.tag,
-                          })
-                        }
-                      >
-                        <Table.Td>
-                          <Text size="sm">{row.categoryName}</Text>
-                        </Table.Td>
-                        <Table.Td ta="right">
-                          <Text size="sm">{formatCurrency(row.spent, true)}</Text>
-                        </Table.Td>
-                        <Table.Td ta="right">
-                          <Text size="sm" c="dimmed">
-                            {row.budgeted !== null
-                              ? formatCurrency(row.budgeted, true)
-                              : '—'}
-                          </Text>
-                        </Table.Td>
-                        <Table.Td ta="right">
-                          {variance !== null ? (
-                            <Text
-                              size="sm"
-                              c={variance < 0 ? 'red' : 'green'}
-                            >
-                              {variance < 0 ? '-' : '+'}
-                              {formatCurrency(Math.abs(variance), true)}
-                            </Text>
-                          ) : (
-                            <Text size="sm" c="dimmed">
-                              —
-                            </Text>
-                          )}
-                        </Table.Td>
-                      </Table.Tr>
-                    );
-                  })}
-                </Table.Tbody>
-              </Table>
-            </Paper>
-          ) : (
-            <Text size="sm" c="dimmed">
-              No categorized spending found for this project.
-            </Text>
-          )}
-
-          <Divider />
-
-          {/* Tag + Edit / Delete actions */}
-          <Group gap="xs" justify="flex-end">
-            <Tooltip label={clipboard.copied ? 'Copied!' : 'Click to copy tag'}>
-              <Code
-                style={{ cursor: 'pointer', userSelect: 'none', marginRight: 'auto' }}
-                onClick={() => clipboard.copy(project.tag)}
-              >
-                <Group gap={4} wrap="nowrap">
-                  <IconCopy size={10} />
-                  <Text size="xs" span>{project.tag}</Text>
-                </Group>
-              </Code>
-            </Tooltip>
-            <Tooltip label="Edit project">
-              <ActionIcon
-                variant="subtle"
-                color="blue"
-                onClick={() => onEdit(project)}
-                aria-label="Edit project"
-              >
-                <IconEdit size={16} />
-              </ActionIcon>
-            </Tooltip>
-            <Tooltip label="Delete project">
-              <ActionIcon
-                variant="subtle"
-                color="red"
-                onClick={() => onDelete(project)}
-                aria-label="Delete project"
-              >
-                <IconTrash size={16} />
-              </ActionIcon>
-            </Tooltip>
-          </Group>
-        </Stack>
-      </Accordion.Panel>
-    </Accordion.Item>
-  );
-}
-
-// ---------------------------------------------------------------------------
 // Projects — main page component
 // ---------------------------------------------------------------------------
 
 export function Projects() {
   const [selectedYear, setSelectedYear] = useState<string | null>(null);
   const [search, setSearch] = useState<string>('');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const currentUser = useAuthStore((s) => s.user);
 
-  // Modal state — create/edit
+  const [expandedProjectId, setExpandedProjectId] = useState<string | null>(null);
+
   const [formModalOpened, { open: openFormModal, close: closeFormModal }] =
     useDisclosure(false);
   const [editingProject, setEditingProject] = useState<ProjectSummary | null>(null);
 
-  // Modal state — delete confirmation
   const [deleteModalOpened, { open: openDeleteModal, close: closeDeleteModal }] =
     useDisclosure(false);
   const [deletingProject, setDeletingProject] = useState<ProjectSummary | null>(null);
 
-  // Modal state — transaction drill-down
   const [
     previewModalOpened,
     { open: openPreviewModal, close: closePreviewModal },
   ] = useDisclosure(false);
   const [drillDown, setDrillDown] = useState<DrillDownState | null>(null);
 
-  // Fetch all project summaries (unfiltered by year; we filter client-side)
+  const [addTaskProject, setAddTaskProject] = useState<ProjectSummary | null>(null);
+  const [addTaskOpened, { open: openAddTask, close: closeAddTask }] = useDisclosure(false);
+
+  const [detailTask, setDetailTask] = useState<StoredTask | null>(null);
+  const [editingTask, setEditingTask] = useState<StoredTask | null>(null);
+
+  const queryClient = useQueryClient();
+
   const {
     data: projects,
     isLoading,
@@ -718,7 +155,18 @@ export function Projects() {
     staleTime: 1000 * 60 * 5,
   });
 
-  // Derive unique years from projects for the year filter
+  const { data: allTasks = [] } = useQuery({
+    queryKey: ['tasks', 'all'],
+    queryFn: () => api.getTasks(),
+    staleTime: 1000 * 60 * 2,
+  });
+
+  const { data: familyData } = useQuery({
+    queryKey: ['family'],
+    queryFn: () => api.getFamily(),
+  });
+  const members: FamilyMember[] = familyData?.family?.members ?? [];
+
   const yearOptions = useMemo(() => {
     if (!projects || projects.length === 0) return [];
     const years = Array.from(
@@ -727,14 +175,11 @@ export function Projects() {
     return years.map((y) => ({ value: String(y), label: String(y) }));
   }, [projects]);
 
-  // Client-side filtering: year + search
   const filteredProjects = useMemo(() => {
     if (!projects) return [];
 
-    // Sort by most recent startDate first
     const sorted = [...projects].sort(
-      (a, b) =>
-        new Date(b.startDate).getTime() - new Date(a.startDate).getTime(),
+      (a, b) => new Date(b.startDate).getTime() - new Date(a.startDate).getTime(),
     );
 
     return sorted.filter((project) => {
@@ -750,7 +195,69 @@ export function Projects() {
     });
   }, [projects, selectedYear, search]);
 
-  // Handlers for actions
+  useEffect(() => {
+    const expandId = searchParams.get('expand');
+    if (expandId && projects) {
+      const found = projects.find((p) => p.id === expandId);
+      if (found) {
+        setExpandedProjectId(expandId);
+        setSearchParams((prev) => {
+          const next = new URLSearchParams(prev);
+          next.delete('expand');
+          return next;
+        }, { replace: true });
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projects]);
+
+  const createTaskMutation = useMutation({
+    mutationFn: (data: {
+      title: string;
+      description?: string;
+      scope?: 'family' | 'personal';
+      assigneeId?: string | null;
+      dueDate?: string | null;
+      tags?: string[];
+    }) => api.createTask(data),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['tasks'] });
+      closeAddTask();
+      notifications.show({ message: 'Task created', color: 'green' });
+    },
+    onError: () => {
+      notifications.show({ message: 'Failed to create task', color: 'red' });
+    },
+  });
+
+  const updateTaskMutation = useMutation({
+    mutationFn: ({ id, data }: { id: string; data: UpdateTaskDto }) => api.updateTask(id, data),
+    onSuccess: (updatedTask) => {
+      void queryClient.invalidateQueries({ queryKey: ['tasks'] });
+      setDetailTask(updatedTask);
+      setEditingTask(null);
+      notifications.show({ message: 'Task updated', color: 'green' });
+    },
+  });
+
+  const statusMutation = useMutation({
+    mutationFn: ({ id, status }: { id: string; status: TaskStatus }) =>
+      api.updateTaskStatus(id, status),
+    onSuccess: (updatedTask) => {
+      void queryClient.invalidateQueries({ queryKey: ['tasks'] });
+      setDetailTask(updatedTask);
+    },
+  });
+
+  const deleteTaskMutation = useMutation({
+    mutationFn: (id: string) => api.deleteTask(id),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['tasks'] });
+      setDetailTask(null);
+      notifications.show({ message: 'Task deleted', color: 'red' });
+    },
+  });
+
   const handleOpenCreate = () => {
     setEditingProject(null);
     openFormModal();
@@ -773,7 +280,6 @@ export function Projects() {
 
   const handleFormClose = () => {
     closeFormModal();
-    // Delay clearing editingProject so the modal closing animation doesn't flash
     setTimeout(() => setEditingProject(null), 300);
   };
 
@@ -782,10 +288,28 @@ export function Projects() {
     setTimeout(() => setDeletingProject(null), 300);
   };
 
+  const handleAddTask = (project: ProjectSummary) => {
+    setAddTaskProject(project);
+    openAddTask();
+  };
+
+  const handleAddTaskClose = () => {
+    closeAddTask();
+    setTimeout(() => setAddTaskProject(null), 300);
+  };
+
+  const handleSubTaskToggle = (taskId: string, subTaskId: string, completed: boolean) => {
+    if (!detailTask) return;
+    const updatedSubTasks: SubTask[] = (detailTask.subTasks ?? []).map((st) =>
+      st.id === subTaskId ? { ...st, completed } : st,
+    );
+    setDetailTask({ ...detailTask, subTasks: updatedSubTasks });
+    updateTaskMutation.mutate({ id: taskId, data: { subTasks: updatedSubTasks } });
+  };
+
   return (
     <Container size="lg" py="xl">
       <Stack gap="md">
-        {/* Page header */}
         <Group justify="space-between">
           <Group gap="sm">
             <ThemeIcon variant="light" size="lg" color="orange">
@@ -793,15 +317,11 @@ export function Projects() {
             </ThemeIcon>
             <Title order={2}>Projects</Title>
           </Group>
-          <Button
-            leftSection={<IconPlus size={16} />}
-            onClick={handleOpenCreate}
-          >
+          <Button leftSection={<IconPlus size={16} />} onClick={handleOpenCreate}>
             Create Project
           </Button>
         </Group>
 
-        {/* Filter bar */}
         <Group gap="sm">
           <Select
             label="Year"
@@ -822,14 +342,12 @@ export function Projects() {
           />
         </Group>
 
-        {/* Loading state */}
         {isLoading && (
           <Center py="xl">
             <Loader />
           </Center>
         )}
 
-        {/* Error state */}
         {error && !isLoading && (
           <Alert
             icon={<IconAlertCircle size="1rem" />}
@@ -840,7 +358,6 @@ export function Projects() {
           </Alert>
         )}
 
-        {/* Empty state */}
         {!isLoading && !error && filteredProjects.length === 0 && (
           <Center py="xl">
             <Stack align="center" gap="sm">
@@ -873,9 +390,13 @@ export function Projects() {
           </Center>
         )}
 
-        {/* Project cards */}
         {!isLoading && !error && filteredProjects.length > 0 && (
-          <Accordion variant="separated" radius="md">
+          <Accordion
+            variant="separated"
+            radius="md"
+            value={expandedProjectId}
+            onChange={setExpandedProjectId}
+          >
             {filteredProjects.map((project) => (
               <ProjectCard
                 key={project.id}
@@ -883,27 +404,28 @@ export function Projects() {
                 onEdit={handleOpenEdit}
                 onDelete={handleOpenDelete}
                 onCategoryClick={handleCategoryClick}
+                tasks={allTasks}
+                members={members}
+                onAddTask={handleAddTask}
+                onTaskClick={setDetailTask}
               />
             ))}
           </Accordion>
         )}
       </Stack>
 
-      {/* Create / Edit modal */}
       <ProjectFormModal
         opened={formModalOpened}
         onClose={handleFormClose}
         project={editingProject}
       />
 
-      {/* Delete confirmation modal */}
       <DeleteProjectModal
         opened={deleteModalOpened}
         onClose={handleDeleteClose}
         project={deletingProject}
       />
 
-      {/* Transaction drill-down modal */}
       {drillDown && (
         <TransactionPreviewModal
           opened={previewModalOpened}
@@ -914,6 +436,52 @@ export function Projects() {
           tags={[drillDown.projectTag]}
         />
       )}
+
+      {addTaskProject && (
+        <TaskFormModal
+          opened={addTaskOpened}
+          onClose={handleAddTaskClose}
+          onSubmit={(data) => createTaskMutation.mutate(data as Parameters<typeof createTaskMutation.mutate>[0])}
+          members={members}
+          loading={createTaskMutation.isPending}
+          title={`Add Task — ${addTaskProject.name}`}
+          currentUserId={currentUser?.id ?? null}
+          lockedTags={[addTaskProject.tag]}
+        />
+      )}
+
+      <TaskDetailModal
+        task={detailTask}
+        onClose={() => setDetailTask(null)}
+        members={members}
+        onStatusChange={(status) => {
+          if (!detailTask) return;
+          statusMutation.mutate({ id: detailTask.id, status });
+        }}
+        onEdit={() => {
+          if (detailTask) {
+            setEditingTask(detailTask);
+            setDetailTask(null);
+          }
+        }}
+        onDelete={() => {
+          if (detailTask) deleteTaskMutation.mutate(detailTask.id);
+        }}
+        onSubTaskToggle={handleSubTaskToggle}
+      />
+
+      <TaskFormModal
+        opened={!!editingTask}
+        onClose={() => setEditingTask(null)}
+        onSubmit={(data) => {
+          if (!editingTask) return;
+          updateTaskMutation.mutate({ id: editingTask.id, data: data as UpdateTaskDto });
+        }}
+        members={members}
+        loading={updateTaskMutation.isPending}
+        title="Edit Task"
+        initialValues={editingTask ?? undefined}
+      />
     </Container>
   );
 }

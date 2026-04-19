@@ -8,20 +8,27 @@ const router = Router();
 
 // Validation schemas
 
+const lineItemSchema = z.object({
+  id: z.string().uuid().optional(), // omitted for new items; server assigns UUID
+  name: z.string().min(1, 'Line item name is required').max(200),
+  estimatedCost: z.number().min(0, 'Estimated cost must be >= 0'),
+  notes: z.string().max(1000).optional(),
+});
+
+const categoryBudgetSchema = z.object({
+  categoryId: z.string().min(1),
+  // amount may be 0 when the user is estimating purely via line items
+  amount: z.number().nonnegative(),
+  lineItems: z.array(lineItemSchema).optional(),
+});
+
 const createProjectSchema = z
   .object({
     name: z.string().min(1).max(100),
     startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Invalid date format. Use YYYY-MM-DD'),
     endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Invalid date format. Use YYYY-MM-DD'),
     totalBudget: z.number().positive().nullable().optional(),
-    categoryBudgets: z
-      .array(
-        z.object({
-          categoryId: z.string().min(1),
-          amount: z.number().positive()
-        })
-      )
-      .optional(),
+    categoryBudgets: z.array(categoryBudgetSchema).optional(),
     notes: z.string().max(2000).optional()
   })
   .refine((data) => data.endDate >= data.startDate, {
@@ -44,14 +51,7 @@ const updateProjectSchema = z
     startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Invalid date format. Use YYYY-MM-DD').optional(),
     endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Invalid date format. Use YYYY-MM-DD').optional(),
     totalBudget: z.number().positive().nullable().optional(),
-    categoryBudgets: z
-      .array(
-        z.object({
-          categoryId: z.string().min(1),
-          amount: z.number().positive()
-        })
-      )
-      .optional(),
+    categoryBudgets: z.array(categoryBudgetSchema).optional(),
     notes: z.string().max(2000).optional()
   })
   .refine(
