@@ -1,0 +1,943 @@
+# =============================================================================
+# Task Management Enhancements (v2.0) — Implementation Plan
+# =============================================================================
+# BRD: docs/features/TASK-MANAGEMENT-BRD.md (v2.0)
+# Related BRDs: docs/features/PROJECTS-BRD.md (§4.5), docs/features/FAMILY-MULTI-USER-BRD.md
+# Status: Not Started
+# Last Updated: 2026-04-19
+# =============================================================================
+
+overview:
+  description: |
+    Five enhancements to the shipped Task Management feature (v1.0 → v2.0):
+
+    1. Checklist View — New flat-list presentation alongside Kanban. Two-checkbox
+       rows (started, done), inline title edit, quick keyboard entry (Enter saves
+       and creates next; Tab/Shift-Tab demote/promote), indented subtasks,
+       drag-to-reorder, collapsed "Completed (N)" accordion below active list.
+       Optimized for mobile-first rapid entry.
+
+    2. Snooze — New `snoozedUntil` field on Task (visibility modifier, NOT a
+       status). Four options: Tomorrow / Next week (next Monday) / Next month
+       (1st of following month) / Custom date. All resolve to 06:00 local on
+       the target date. Snoozed tasks hide from defaults and re-emerge on view
+       load once expired. Kanban "Show snoozed" toggle adds a Snoozed column.
+
+    3. Manual vertical reorder in Kanban columns — New `sortOrder` float field
+       (fractional indexing), family-wide, scoped per status. Todo and Started
+       support manual drag-reorder. Done auto-sorts by completedAt DESC.
+       Snoozed auto-sorts by snoozedUntil ASC. The same sortOrder field powers
+       Checklist view's active-list order.
+
+    4. Cancelled column retired — Kanban drops from 4 columns to 3 (Todo /
+       Started / Done). Cancel is now via card kebab menu or detail view
+       with a confirm dialog. Cancelled tasks archive to Task History
+       immediately (no 14-day window).
+
+    5. Leaderboard scope change — Only `scope === 'family'` tasks count.
+       Personal tasks no longer contribute to any leaderboard totals.
+
+    All changes are extensions to shipped code. Data model additions
+    (`snoozedUntil`, `sortOrder`) are backward-compatible — defaults safely
+    populate for existing records. No destructive migration required.
+
+  key_files:
+    brd: docs/features/TASK-MANAGEMENT-BRD.md
+    shared_types: shared/types/index.ts
+    task_service: backend/src/services/taskService.ts
+    task_routes: backend/src/routes/tasks.ts
+    task_service_test: backend/src/__tests__/integration/taskService.test.ts
+    api_client: frontend/src/lib/api/tasks.ts
+    frontend_tasks_page: frontend/src/pages/Tasks.tsx
+    frontend_task_card: frontend/src/components/tasks/TaskCard.tsx
+    frontend_kanban_column: frontend/src/components/tasks/KanbanColumn.tsx
+
+# =============================================================================
+# DECISIONS LOG — Settled during BRD drafting (15 Qs); captured for implementers
+# =============================================================================
+decisions:
+  - id: D1
+    date: 2026-04-19
+    decision: Checklist quick entry — Enter saves + creates next; Tab/Shift-Tab demote/promote; Escape exits
+    rationale: |
+      Matches Apple Notes / Things / Notion / Todoist muscle memory. Hierarchy
+      via Tab is universal. On mobile where Tab isn't always accessible on the
+      on-screen keyboard, render indent/outdent buttons next to the focused line.
+      See BRD §3.2.3.
+
+  - id: D2
+    date: 2026-04-19
+    decision: Checking done without started first auto-stamps startedAt = completedAt
+    rationale: |
+      Matches physical-checklist intuition. Requiring started-first violates the
+      "fewer clicks" goal. The synthetic startedAt is a minor fib that simplifies
+      downstream queries (no null-coalescing for done tasks). No synthetic
+      started transition in the log — only the real fromStatus→done entry.
+      Started checkbox is locked while done is checked.
+
+  - id: D3
+    date: 2026-04-19
+    decision: Checklist layout — active tasks up top, collapsed "Completed (N)" accordion below; cancelled hidden
+    rationale: |
+      Count in the accordion header is visible at all times; expanding reveals
+      done tasks sorted by completedAt DESC, subject to the 14-day archive
+      window. Cancelled tasks never surface in Checklist; Task History is their
+      sole home. Accordion state persisted per user.
+
+  - id: D4
+    date: 2026-04-19
+    decision: Reorder is family-wide (not per-user)
+    rationale: |
+      The board is a shared household artifact. Per-user ordering would require
+      a separate (userId, taskId) order collection for no clear benefit at 2
+      users. Last-write-wins is acceptable for simultaneous reorders. sortOrder
+      uses fractional-float indexing to avoid sibling renumbering on insert.
+
+  - id: D5
+    date: 2026-04-19
+    decision: One sortOrder field, scoped per status, shared between Kanban and Checklist
+    rationale: |
+      Two orderings would be surprising — users would reorder in checklist,
+      switch to Kanban, and see their work ignored. One mental model, one
+      field. Scoping per status means Todo order and Started order don't
+      collide. Done is exempt (auto-sorted by completedAt DESC in both views).
+
+  - id: D6
+    date: 2026-04-19
+    decision: Snooze is a field (snoozedUntil), NOT a new status
+    rationale: |
+      Preserves underlying status (todo/started) across snooze/unsnooze. No
+      preSnoozeStatus field needed. Leaderboard, history, filters keep working
+      unmodified since `status` isn't touched. The Snoozed Kanban column and
+      any filters are view-layer concerns reading one field. Un-snoozing is
+      free — just clear snoozedUntil.
+
+  - id: D7
+    date: 2026-04-19
+    decision: "Next week" always = the following Monday (+7 if today is Monday); "Next month" always = 1st of next month (+1 month if today is the 1st)
+    rationale: |
+      "Next week" colloquially means "not this week." Same-day-is-zero-days
+      would be confusing — the task re-emerges immediately. Users who want
+      sooner use Tomorrow or Custom.
+
+  - id: D8
+    date: 2026-04-19
+    decision: Snooze expiry is fixed at 06:00 local time; Custom picker is date-only
+    rationale: |
+      Matches household morning rhythm. Midnight is worse — task pops back up
+      "Monday night-ish" for a Tuesday snooze. 06:00 is consistent with when
+      humans start their day. No per-task time picker — overhead for ~1% gain.
+
+  - id: D9
+    date: 2026-04-19
+    decision: Snooze allowed on todo + started; disallowed on done + cancelled
+    rationale: |
+      Started-task snooze is a real use case ("started yesterday, pick up
+      Saturday"). Done/cancelled are terminal — snoozing them is nonsensical.
+      Completing or cancelling a snoozed task auto-clears snoozedUntil.
+
+  - id: D10
+    date: 2026-04-19
+    decision: Snooze preserves assignee (and all other fields)
+    rationale: |
+      Snooze is orthogonal to workflow state. If it doesn't touch status, it
+      shouldn't touch assignment either. Clearing would silently drop
+      accountability. User who wants unassign-on-snooze does it explicitly.
+
+  - id: D11
+    date: 2026-04-19
+    decision: Cancel is via card kebab menu + detail view button, both with confirm dialog; no drag-to-cancel
+    rationale: |
+      Cancel is semantically distinct ("I'm abandoning this") and deserves
+      deliberate friction. Kebab menu is the standard pattern for per-card
+      actions (also hosts Snooze submenu and Edit). Confirm dialog is cheap
+      insurance; cancel is recoverable via Task History.
+
+  - id: D12
+    date: 2026-04-19
+    decision: Cancelled tasks archive immediately (no 14-day board window); Done retains 14-day rule
+    rationale: |
+      The 14-day rule's job-#1 (see what you finished) doesn't apply to cancelled
+      work. Job-#2 (prevent terminal columns from growing) is moot since there's
+      no Cancelled column. Cancelled → Task History directly.
+
+  - id: D13
+    date: 2026-04-19
+    decision: Leaderboard counts ONLY family tasks — personal tasks contribute zero to everyone including their owner
+    rationale: |
+      Behavior change from v1.0 (which counted personal toward owner).
+      Restores the leaderboard's purpose: recognizing contribution to shared
+      household work. Removes a gameable behavior (padding totals via personal
+      chores). Users can reclassify tasks as family scope if they want them
+      counted — healthy forcing function.
+
+  - id: D14
+    date: 2026-04-19
+    decision: Kanban column sort — Todo/Started manual (sortOrder); Done auto (completedAt DESC); Snoozed auto (snoozedUntil ASC); no sort toggles
+    rationale: |
+      Manual drag is the single prioritization signal. A "sort by due date"
+      toggle would replace hand-crafted family order the moment someone
+      clicked it. Due date visibility on cards + overdue indicator surfaces
+      urgency without reshuffling. Can add toggles later if real need emerges.
+
+  - id: D15
+    date: 2026-04-19
+    decision: Non-drag status changes land task at TOP of destination column; auto-unsnooze restores ORIGINAL sortOrder (not top)
+    rationale: |
+      Top-on-move matches Trello/Linear/GitHub Projects and user intent ("I
+      just moved this, I want to see it"). Snooze-expiry is the exception —
+      long-snoozed tasks shouldn't leapfrog newer priorities. Since snooze
+      preserves sortOrder on the record, restore is trivial.
+
+  - id: D16
+    date: 2026-04-19
+    decision: Subtasks (shipped in v1.0 code but out-of-scope in v1.0 BRD) are now documented as first-class
+    rationale: |
+      The shared/types/index.ts Task already has subTasks[]. BRD §9 "Subtasks
+      are out of scope" was stale. V2.0 removes that exclusion and adds §2.6
+      "Subtasks" documenting behavior: ordered, binary, indented in Checklist,
+      counter on Kanban cards, no auto-complete of parent.
+
+  - id: D17
+    date: 2026-04-19
+    decision: Snooze expiry evaluated on view load (no server-side scheduler)
+    rationale: |
+      A task snoozed until 06:00 today simply appears on the next view load
+      after 06:00. Saves a cron/scheduler. Trade-off: if the app isn't open
+      at 06:00 exactly, re-emergence is delayed until next load — acceptable.
+
+# =============================================================================
+# PHASE 1: Shared Types & Data Migration
+# =============================================================================
+phase_1_types:
+  status: not_started
+  description: |
+    Add snoozedUntil + sortOrder to Task. Preserve backward compatibility with
+    persisted tasks that lack these fields (defaults applied on read).
+
+  tasks:
+    - id: "1.1"
+      task: Extend Task interface in shared/types/index.ts
+      status: not_started
+      details: |
+        Add two fields to the Task interface (around line 1112):
+
+          export interface Task {
+            // ... existing fields ...
+            snoozedUntil: string | null;  // ISO datetime; null if not snoozed
+            sortOrder: number;            // fractional float; drives manual order
+          }
+
+        Update CreateTaskDto:
+          - Do NOT expose snoozedUntil on create (always null on fresh tasks)
+          - Do NOT expose sortOrder (server assigns on create)
+
+        Update UpdateTaskDto:
+          - Do NOT expose snoozedUntil on general update (dedicated snooze
+            endpoint — see 2.3)
+          - Do NOT expose sortOrder on general update (dedicated reorder
+            endpoint — see 2.4)
+
+        Add a new DTO:
+          export interface SnoozeTaskDto {
+            snoozedUntil: string | null;  // ISO; null clears the snooze
+          }
+
+          export interface ReorderTaskDto {
+            status: TaskStatus;        // which column (for validation)
+            sortOrder: number;         // new sortOrder value
+          }
+
+    - id: "1.2"
+      task: Define snooze-option resolver helper (shared util)
+      status: not_started
+      details: |
+        New file: shared/utils/taskSnooze.ts
+
+        Export:
+          export type SnoozeOption = 'tomorrow' | 'next_week' | 'next_month' | 'custom';
+
+          export function resolveSnoozeDate(
+            option: SnoozeOption,
+            now: Date,
+            tzOffsetMinutes: number,
+            customDate?: string // required when option === 'custom', YYYY-MM-DD
+          ): string // ISO datetime at 06:00 local
+
+        Rules (per BRD §2.7 + D7/D8):
+          - 'tomorrow' → now + 1 day at 06:00 local
+          - 'next_week' → next Monday at 06:00 local. If now is Monday, +7 days.
+          - 'next_month' → 1st of following month at 06:00 local. If now is
+            the 1st, +1 month.
+          - 'custom' → customDate at 06:00 local
+
+        Unit tests co-located at shared/utils/__tests__/taskSnooze.test.ts.
+        Cover each option across day-of-week / day-of-month edge cases
+        (Sunday, Monday, 1st, 28th-31st, leap-year Feb 29).
+
+        Reuse on both frontend (for the Snooze submenu UI) and backend
+        (for server-side validation of snoozedUntil).
+
+    - id: "1.3"
+      task: Define sortOrder fractional indexing helpers (shared util)
+      status: not_started
+      details: |
+        New file: shared/utils/taskSortOrder.ts
+
+        Export:
+          // Compute sortOrder for a new/moved task based on neighbors
+          export function computeSortOrder(
+            before: number | null,  // sortOrder of the task above (null if top)
+            after: number | null    // sortOrder of the task below (null if bottom)
+          ): number
+
+        Rules:
+          - Both null (empty column)      → 1.0
+          - before null, after N          → N - 1.0   (top of column)
+          - before N, after null          → N + 1.0   (bottom of column)
+          - before A, after B             → (A + B) / 2.0
+
+        Export helpers for common cases:
+          export function topOfColumn(min: number | null): number       // min - 1 or 1.0
+          export function bottomOfColumn(max: number | null): number    // max + 1 or 1.0
+          export function betweenSiblings(a: number, b: number): number // (a+b)/2
+
+        Unit tests at shared/utils/__tests__/taskSortOrder.test.ts.
+
+        Precision exhaustion (float midpoint collapses to one neighbor) is not
+        an MVP concern — see BRD Assumption 7.
+
+    - id: "1.4"
+      task: Add read-path backfill for legacy tasks without snoozedUntil / sortOrder
+      status: not_started
+      details: |
+        In taskService.ts, apply defaults when hydrating from storage:
+
+          function hydrateTask(raw: unknown): Task {
+            const task = raw as Partial<Task>;
+            return {
+              ...defaults,
+              ...task,
+              snoozedUntil: task.snoozedUntil ?? null,
+              sortOrder: task.sortOrder ?? Date.parse(task.createdAt) / 1000,
+              // ^ legacy backfill: use createdAt-as-seconds so older tasks
+              // preserve creation-order as initial sortOrder
+            };
+          }
+
+        First write of a legacy task after v2.0 persists the backfilled
+        sortOrder. No explicit migration script needed — reads are idempotent
+        and writes heal.
+
+        Add a one-time idempotent backfill script in backend/scripts/
+        `backfillTaskDefaults.ts` that loads every family's tasks and writes
+        them back with defaults applied. Running this is optional but tidy —
+        avoids the lazy-heal pattern leaving half-migrated data forever.
+
+# =============================================================================
+# PHASE 2: Backend — Snooze, Reorder, Leaderboard, Cancel Archiving
+# =============================================================================
+phase_2_backend:
+  status: not_started
+  description: |
+    New routes: POST /api/v1/tasks/:id/snooze, POST /api/v1/tasks/:id/reorder.
+    Modified: status-update path applies top-of-column sortOrder for non-drag
+    changes; auto-clears snoozedUntil on transitions to done/cancelled.
+    Modified: leaderboard query filters to family scope only.
+    Modified: list query applies snooze-hide filter by default; ?includeSnoozed=true
+    bypass for Kanban Snoozed column.
+
+  tasks:
+    - id: "2.1"
+      task: Assign sortOrder on task creation
+      status: not_started
+      details: |
+        In taskService.createTask:
+          - After validating the new task, compute its sortOrder as
+            topOfColumn(currentMinForStatus(familyId, 'todo' | 'started'))
+          - New tasks land at the TOP of their starting status column
+            (default 'todo', but CreateTaskDto may set 'started')
+          - Quick-entry from Checklist is the common path — top-of-column
+            matches user intent ("I just typed this, I want to see it")
+
+        Include sortOrder in the persisted record.
+
+    - id: "2.2"
+      task: Apply top-of-column sortOrder on non-drag status changes
+      status: not_started
+      details: |
+        In taskService.updateTaskStatus (called by PATCH /api/v1/tasks/:id/status):
+          - When status transitions, compute new sortOrder =
+            topOfColumn(currentMinForStatus(familyId, targetStatus))
+          - Write it alongside the status change
+
+        Exceptions:
+          - If target status is 'done': sortOrder is irrelevant (column
+            auto-sorts by completedAt DESC). Still OK to compute; it's ignored.
+          - If target status is 'cancelled': task is archived immediately
+            (never appears on board). sortOrder is irrelevant.
+          - If the call originates from a drag-reorder endpoint (see 2.4),
+            do NOT override sortOrder — honor the caller's position.
+
+        Also: when transitioning to 'done' or 'cancelled', auto-clear
+        snoozedUntil (set to null). Re-validates cannot leave a terminal
+        task in a snoozed state (D9).
+
+    - id: "2.3"
+      task: New endpoint — POST /api/v1/tasks/:id/snooze
+      status: not_started
+      details: |
+        Body: SnoozeTaskDto { snoozedUntil: string | null }
+
+        Route handler (backend/src/routes/tasks.ts):
+          - Require auth + family membership
+          - Zod-validate body: snoozedUntil is null OR an ISO datetime in the
+            future (not-in-past; >= now)
+          - Load task; 404 if not found / not in this family
+          - Reject with 400 if task.status is 'done' or 'cancelled' (D9)
+          - Call taskService.snoozeTask(taskId, snoozedUntil)
+
+        Service behavior (taskService.snoozeTask):
+          - Write snoozedUntil only — do NOT touch status, sortOrder, assignee
+          - Do NOT append a transition log entry (D6)
+          - Return the updated task
+
+        Clearing snooze manually uses the same endpoint with snoozedUntil: null.
+
+    - id: "2.4"
+      task: New endpoint — POST /api/v1/tasks/:id/reorder
+      status: not_started
+      details: |
+        Body: ReorderTaskDto { status: TaskStatus; sortOrder: number }
+
+        Route handler:
+          - Require auth + family membership
+          - Zod-validate body
+          - Reject if status is 'done' or 'cancelled' (manual reorder disabled
+            per BRD §3.1.5 — Done auto-sorts, Cancelled has no column)
+          - Reject if status is 'snoozed' (no snoozed column reorder)
+          - Load task; 404 if not found / not in family
+
+        Service behavior (taskService.reorderTask):
+          - If the task's current status !== provided status, treat this as a
+            combined status change + reorder. Update status AND sortOrder in
+            one write.
+          - If status matches current status, just update sortOrder.
+          - No transition log entry for pure reorder (sortOrder-only change).
+            Transition log entry only if status is actually changing.
+
+        Frontend computes sortOrder client-side using the shared
+        computeSortOrder helper before calling this endpoint.
+
+    - id: "2.5"
+      task: List endpoint — filter snoozed tasks by default, support includeSnoozed flag
+      status: not_started
+      details: |
+        GET /api/v1/tasks (existing endpoint):
+          - Accept new query param: ?includeSnoozed=<bool> (default false)
+          - When false: exclude tasks where snoozedUntil > now
+          - When true: include all tasks regardless of snoozedUntil
+
+        Frontend usage:
+          - Kanban default view → includeSnoozed=false
+          - Kanban "Show snoozed" toggle → includeSnoozed=true (separate
+            column rendered from tasks where snoozedUntil > now)
+          - Checklist view → includeSnoozed=false (checklist never surfaces
+            snoozed tasks)
+          - Task History → includeSnoozed=true (history is complete)
+
+        Auto-unsnooze happens naturally: a task with snoozedUntil <= now
+        passes the filter and re-appears. No writes required.
+
+    - id: "2.6"
+      task: Leaderboard — filter to family-scope tasks only
+      status: not_started
+      details: |
+        Locate the leaderboard query in taskService (likely
+        `getLeaderboard(familyId, windowStart, windowEnd)` or similar).
+
+        Modify the WHERE clause to add: AND scope === 'family'
+
+        Attribution unchanged: count keyed by the userId that performed the
+        most recent done-transition (read from transitions[] or completedBy
+        if tracked directly).
+
+        **This is a behavior change from v1.0.** Any integration tests that
+        assert personal-task counting toward the owner need updating.
+        Replace those cases with the inverse: personal tasks do NOT count,
+        for anyone.
+
+    - id: "2.7"
+      task: Task history / board list — cancelled tasks archive immediately
+      status: not_started
+      details: |
+        In the Kanban list query (GET /api/v1/tasks with board-style filters):
+          - Exclude cancelled tasks entirely (no 14-day window for cancelled)
+          - Keep the 14-day window for done
+
+        Logic:
+          - status === 'cancelled' → exclude from board queries (always)
+          - status === 'done' AND completedAt < now - 14d → exclude
+          - Otherwise include
+
+        Task History (GET /api/v1/tasks?history=true or equivalent) includes
+        all statuses regardless of age — unchanged.
+
+    - id: "2.8"
+      task: Task recovery from history — land at top of destination column
+      status: not_started
+      details: |
+        When a task is moved from cancelled/archived-done back to todo or
+        started (via Task History detail view):
+          - This goes through the existing updateTaskStatus path
+          - The non-drag top-of-column rule (2.2) applies automatically
+          - No new endpoint needed; existing behavior composes
+
+    - id: "2.9"
+      task: Integration tests for snooze, reorder, cancel-archiving, leaderboard
+      status: not_started
+      details: |
+        File: backend/src/__tests__/integration/taskService.test.ts
+
+        New cases:
+          - Snooze sets snoozedUntil without touching status or sortOrder
+          - Snooze produces no transition log entry
+          - Un-snooze (snoozedUntil: null) restores visibility
+          - Auto-unsnooze: task with expired snoozedUntil appears in default
+            list query
+          - Completing a snoozed task clears snoozedUntil
+          - Cancelling a snoozed task clears snoozedUntil
+          - Snooze rejected on done/cancelled tasks (400)
+          - Snoozed task with future snoozedUntil excluded from default list
+          - includeSnoozed=true returns snoozed tasks
+          - Reorder within same status updates sortOrder only, no transition
+          - Reorder with status change updates both, logs transition
+          - Reorder rejected for done/cancelled
+          - Non-drag status change lands task at top of destination column
+          - Drag-reorder preserves caller-provided sortOrder
+          - Cancelled task excluded from board list immediately (not 14-day)
+          - Done task within 14-day window still on board
+          - Done task older than 14 days excluded from board
+          - Leaderboard: family task counts for completer
+          - Leaderboard: personal task does NOT count for owner (BEHAVIOR CHANGE)
+          - Leaderboard: personal task does NOT count for completer
+          - Done→started→done counts once based on latest completedAt
+
+# =============================================================================
+# PHASE 3: Frontend — Kanban Changes (reorder, snooze, no cancelled column)
+# =============================================================================
+phase_3_frontend_kanban:
+  status: not_started
+  description: |
+    Modify the existing Kanban board to: drop the Cancelled column, add the
+    Show-snoozed toggle + Snoozed column, support vertical drag-reorder
+    within Todo/Started, and add the card kebab menu (Snooze submenu + Cancel
+    with confirm + Edit).
+
+  tasks:
+    - id: "3.1"
+      task: Remove Cancelled column from Kanban; default layout is 3 columns
+      status: not_started
+      details: |
+        File: frontend/src/pages/Tasks.tsx (and any KanbanColumn composition).
+
+        - Delete the Cancelled column from the rendered column list
+        - Default column order: Todo | Started | Done
+        - Remove drag-drop-onto-Cancelled handling from the DnD wiring
+        - Cancelled-status tasks are never rendered on the board (they go to
+          Task History — reachable from elsewhere in the UI)
+
+    - id: "3.2"
+      task: Add "Show snoozed" toggle + Snoozed column (when on)
+      status: not_started
+      details: |
+        - Add a toggle control in the board header (Mantine Switch or similar):
+          "Show snoozed" — persisted per user via localStorage
+            (key: `tasks.kanban.showSnoozed`)
+        - When on:
+          - Append a 4th column "Snoozed"
+          - Populate from tasks where snoozedUntil > now
+          - Sort by snoozedUntil ASC (nearest expiry first)
+          - Manual reorder DISABLED (read-only position)
+          - Fetch with ?includeSnoozed=true when toggle is on
+        - Each Snoozed-column card shows a "Returns in X" chip
+          (e.g., "Returns in 2 days" or "Returns tomorrow")
+        - Drop-onto-Snoozed is not supported — snooze happens via card menu
+
+    - id: "3.3"
+      task: Vertical drag-reorder within Todo and Started columns
+      status: not_started
+      details: |
+        Use the existing DnD library (check: @hello-pangea/dnd per CLAUDE.md
+        tech debt #10, or whichever is already wired).
+
+        - Enable vertical reorder within Todo and Started column lists
+        - On drop:
+          - Determine neighbors (task above + task below in the new position)
+          - Compute newSortOrder = computeSortOrder(aboveSortOrder, belowSortOrder)
+          - Call POST /api/v1/tasks/:id/reorder with { status, sortOrder }
+        - Cross-column drag (change status) also computes sortOrder based on
+          destination column neighbors and hits /reorder (which handles
+          combined status + sortOrder update)
+        - Done column: drops allowed (changes status), but position is
+          determined by completedAt DESC — ignore drop index
+        - Disable drop indicator inside Done column for rearrangement
+          within Done (visual feedback that reorder doesn't apply here)
+
+    - id: "3.4"
+      task: Card kebab menu — Snooze ▸ submenu, Cancel task, Edit
+      status: not_started
+      details: |
+        File: frontend/src/components/tasks/TaskCard.tsx
+
+        Add a kebab icon (three-dot) in the top-right of the card. On click,
+        open a Mantine Menu with:
+          - Snooze ▸ (submenu)
+              - Tomorrow
+              - Next week
+              - Next month
+              - Custom... (opens a date picker in a small modal)
+          - Cancel task (red text; opens confirm dialog)
+          - Edit (opens existing task detail modal)
+
+        Snooze handlers:
+          - Call resolveSnoozeDate(option, now, tzOffset, customDate?)
+          - POST /api/v1/tasks/:id/snooze with { snoozedUntil }
+          - Invalidate ['tasks'] React Query cache on success
+
+        Cancel handler:
+          - Open Mantine Modal: "Cancel this task? It will move to Task
+            History." with buttons [Keep task] [Cancel task]
+          - On confirm, PATCH /api/v1/tasks/:id/status with status='cancelled'
+          - Task disappears from board immediately on success
+
+        Snooze menu items are hidden when task.status is 'done' or 'cancelled'
+        (though cancelled doesn't appear on the board anyway).
+
+    - id: "3.5"
+      task: Replace legacy "Scope counts personal for owner" in leaderboard panel display
+      status: not_started
+      details: |
+        File: frontend leaderboard component (likely under
+        frontend/src/components/tasks/ — locate by searching "leaderboard").
+
+        No display logic change expected — the backend returns family-only
+        counts now. But verify:
+          - Any frontend-side filtering or aggregation is removed/simplified
+          - Tooltip / help text reflects "Family tasks only"
+          - Any copy that says "your tasks" or similar is updated
+
+    - id: "3.6"
+      task: Manual testing — Kanban v2.0 behaviors
+      status: not_started
+      details: |
+        - [ ] Board shows 3 columns by default (Todo, Started, Done)
+        - [ ] "Show snoozed" toggle reveals a 4th column
+        - [ ] Toggle state persists across page reloads
+        - [ ] Drag task vertically in Todo — position saved and reload-stable
+        - [ ] Drag task vertically in Started — position saved and reload-stable
+        - [ ] Drag in Done — no-op for position (auto-sorted)
+        - [ ] Drag from Todo to Started lands at top of Started
+        - [ ] Drag unassigned task to Started — assignee auto-set to dragger
+        - [ ] Kebab menu → Cancel → Confirm → task disappears from board
+        - [ ] Cancelled task appears in Task History, not on board
+        - [ ] Kebab menu → Snooze → Tomorrow — task disappears
+        - [ ] Toggle Show snoozed on — snoozed task appears with "Returns..." chip
+        - [ ] Custom snooze picker works
+        - [ ] Snooze submenu hidden/disabled on done/cancelled tasks
+        - [ ] Leaderboard counts only family tasks (create a personal task,
+              complete it, verify it does NOT increment)
+
+# =============================================================================
+# PHASE 4: Frontend — Checklist View
+# =============================================================================
+phase_4_frontend_checklist:
+  status: not_started
+  description: |
+    New Checklist view as an alternate presentation. View toggle at the top of
+    the Tasks page (e.g., segmented control: [Kanban | Checklist]). View
+    preference persisted per user.
+
+  tasks:
+    - id: "4.1"
+      task: Add view toggle (Kanban / Checklist) on Tasks page
+      status: not_started
+      details: |
+        File: frontend/src/pages/Tasks.tsx
+
+        - Segmented control in the page header with two options
+        - Persist selection in localStorage: `tasks.view` = 'kanban' | 'checklist'
+        - Render different subtree based on selection
+        - Default: 'kanban' for existing users; 'checklist' optional
+
+    - id: "4.2"
+      task: Build ChecklistView component
+      status: not_started
+      details: |
+        New file: frontend/src/components/tasks/ChecklistView.tsx
+
+        Layout:
+          - Sticky "+ Add task" input at top (see 4.3)
+          - Active tasks list (status todo + started), ordered by sortOrder ASC
+          - Collapsed accordion below: "Completed (N)"
+            - When expanded: done tasks sorted by completedAt DESC
+            - Subject to 14-day archive window (reuse existing filter logic)
+            - Accordion state persisted: `tasks.checklist.completedExpanded`
+          - Cancelled tasks NOT surfaced
+          - Snoozed tasks NOT surfaced
+
+        Data source: existing useQuery(['tasks']) — same data as Kanban.
+        Client-side filters split active / completed.
+
+    - id: "4.3"
+      task: ChecklistRow component — two checkboxes, inline edit, kebab, subtasks indented
+      status: not_started
+      details: |
+        New file: frontend/src/components/tasks/ChecklistRow.tsx
+
+        Row layout (left to right):
+          1. Started checkbox
+             - Checked when status ∈ {'started', 'done'}
+             - Disabled/locked when status === 'done'
+             - On toggle: PATCH status between todo ↔ started
+          2. Done checkbox
+             - Checked when status === 'done'
+             - On check:
+                if task.startedAt == null, include startedAt = now in the
+                PATCH body (synthetic start stamp — see D2); backend honors
+                this via a new optional startedAt field on UpdateTaskStatusDto
+             - On uncheck: PATCH status to 'started'
+          3. Title — click/tap to edit inline; on blur or Enter, PATCH title
+          4. Metadata chips: assignee avatar, due date, project chip (if tagged)
+          5. Kebab menu: Snooze ▸, Cancel, Edit (same as TaskCard kebab)
+
+        Subtasks:
+          - Render indented beneath parent, 1.5rem left padding
+          - Each has a single done checkbox + title + drag handle
+          - Subtask reorder updates parent.subTasks[] order
+
+        Synthetic startedAt stamp (backend contract):
+          Extend UpdateTaskStatusDto to accept an optional startedAt string.
+          When provided alongside status='done', the service writes both
+          startedAt and completedAt if startedAt was previously null.
+          (Only used by the Checklist done-checkbox path.)
+
+    - id: "4.4"
+      task: Quick-entry input with Enter/Tab/Shift-Tab/Escape handling
+      status: not_started
+      details: |
+        Sticky input rendered at the top of the active list.
+
+        Keyboard handling:
+          - Enter on top-level input with non-empty value:
+              POST /api/v1/tasks { title, status: 'todo' }
+              Clear input; keep focus; cursor in new top-level input below
+          - Enter on subtask input with non-empty value:
+              PATCH parent task, appending subtask to subTasks[]
+              Clear input; keep focus; cursor in new subtask input under same parent
+          - Tab on empty new-task line:
+              Convert to subtask-creation mode under the task above
+          - Shift-Tab on empty subtask line:
+              Convert back to top-level input
+          - Escape on empty line:
+              Exit quick-entry mode (blur)
+
+        Mobile fallback (no Tab on soft keyboard):
+          - Render indent/outdent buttons next to the focused input
+          - `useMediaQuery('(max-width: 768px)')` or touch-device detection
+
+        Debounce: if the user mashes Enter repeatedly on an empty line, no-op.
+
+        New tasks go to top-of-column via the backend's create path (phase 2.1).
+        After save, React Query cache is updated optimistically so the new
+        row renders without waiting for refetch.
+
+    - id: "4.5"
+      task: Drag-to-reorder top-level tasks + subtasks in Checklist
+      status: not_started
+      details: |
+        Reuse @hello-pangea/dnd (same library as Kanban).
+
+        Top-level reorder:
+          - Drag handle on row hover (desktop) or long-press (mobile)
+          - On drop, compute newSortOrder from neighbors
+          - POST /api/v1/tasks/:id/reorder (same endpoint as Kanban)
+
+        Subtask reorder:
+          - Drag handle on subtask row
+          - On drop, update parent.subTasks[] array order
+          - PATCH /api/v1/tasks/:id with full subTasks array
+
+        Reorder disabled in:
+          - The "Completed" accordion (auto-sorted by completedAt DESC)
+
+    - id: "4.6"
+      task: Inline metadata chip edit (assignee, due date, project)
+      status: not_started
+      details: |
+        Each metadata chip on the row is clickable:
+          - Assignee chip → Mantine Popover with a small assignee picker
+          - Due date chip → DatePicker popover
+          - Project chip → project picker popover (reuse from Kanban task form)
+
+        On change: PATCH /api/v1/tasks/:id with the changed field.
+        Autosave; no explicit save button.
+
+        Empty slots (no assignee, no due date, no project): show a small
+        "+" placeholder chip that opens the same picker.
+
+    - id: "4.7"
+      task: Manual testing — Checklist view
+      status: not_started
+      details: |
+        - [ ] Toggle switches between Kanban and Checklist; selection persists
+        - [ ] Active tasks list sorted by sortOrder
+        - [ ] Completed accordion collapsed by default; count visible
+        - [ ] Expanding accordion shows done tasks sorted by completedAt DESC
+        - [ ] Accordion state persists across reloads
+        - [ ] Cancelled tasks never appear
+        - [ ] Snoozed tasks never appear (verify by snoozing a task and
+              switching to Checklist — it's gone)
+        - [ ] Check started checkbox → task moves to started status
+        - [ ] Check done checkbox on todo task → status → done, startedAt
+              stamped, started checkbox appears checked and locked
+        - [ ] Uncheck done on same task → moves to started (preserves stamped
+              startedAt)
+        - [ ] Uncheck started checkbox on started task → back to todo
+        - [ ] Click title → edit inline; Enter or blur saves
+        - [ ] Quick entry: type "Task A" + Enter → saved + new input below
+              focused
+        - [ ] Tab on empty new-task line → becomes subtask of task above
+        - [ ] Shift-Tab on empty subtask → back to top-level
+        - [ ] Escape → exits entry mode
+        - [ ] Subtasks render indented under parent
+        - [ ] Subtask done checkbox toggles completed state
+        - [ ] Drag to reorder top-level tasks — order persists
+        - [ ] Drag to reorder subtasks within parent — order persists
+        - [ ] Kanban view reflects same order (shared sortOrder)
+        - [ ] Kebab menu Snooze / Cancel / Edit works on a checklist row
+        - [ ] Mobile: indent/outdent buttons render next to focused input
+        - [ ] Mobile long-press initiates drag
+
+# =============================================================================
+# PHASE 5: Testing (beyond manual)
+# =============================================================================
+phase_5_testing:
+  status: not_started
+  description: |
+    Risk-based additions. Unit tests for the two shared utils (snooze-date
+    resolver, sortOrder helpers). Integration tests already covered in 2.9.
+    Frontend component tests are low-leverage for this amount of UI — rely on
+    manual testing checklists in phases 3.6 and 4.7.
+
+  tasks:
+    - id: "5.1"
+      task: Unit tests for shared/utils/taskSnooze.ts
+      status: not_started
+      details: |
+        Cover resolveSnoozeDate across:
+          - Each option (tomorrow, next_week, next_month, custom)
+          - Day-of-week matrix for next_week (Sun-Sat; Monday → +7)
+          - Day-of-month matrix for next_month (1st → +1 month; 28th → Feb; leap Feb 29)
+          - Time-of-day always 06:00 local
+          - Custom date parses and clamps to 06:00
+          - Timezone offsets (EST, PST, UTC, boundary crossings)
+
+    - id: "5.2"
+      task: Unit tests for shared/utils/taskSortOrder.ts
+      status: not_started
+      details: |
+        Cover computeSortOrder:
+          - Empty column (both null) → 1.0
+          - Top of column (before=null) → after - 1
+          - Bottom (after=null) → before + 1
+          - Between → midpoint
+          - Negative values OK
+          - Very close neighbors → still halves correctly
+
+    - id: "5.3"
+      task: Backfill script smoke test
+      status: not_started
+      details: |
+        Run backfillTaskDefaults.ts against a test family store containing:
+          - Legacy tasks without snoozedUntil (should set to null)
+          - Legacy tasks without sortOrder (should set to createdAt-based)
+          - Mixed set with some v2.0 tasks already present (idempotent — no
+            change)
+        Confirm round-trip through loadTasks/saveTasks.
+
+# =============================================================================
+# IMPLEMENTATION ORDER
+# =============================================================================
+implementation_order:
+  description: |
+    Ship in two slices that minimize blast radius:
+
+    SLICE A — Data model + Kanban changes (phases 1, 2, 3).
+      Gets us: family-only leaderboard, cancelled-column removal, snooze, and
+      Kanban reorder. All user-visible wins without the larger Checklist UI.
+      Ship this first and use it for a week before starting Slice B.
+
+    SLICE B — Checklist view (phase 4).
+      Builds on the data model + endpoints from Slice A. New UI surface only,
+      no backend changes. Can be developed in parallel with the post-ship
+      soak of Slice A.
+
+    Phase 5 tests land alongside the phase they cover.
+
+  sequence:
+    - slice: A
+      phases:
+        - phase: 1 — Shared Types & migration helper
+          reason: Types, DTOs, shared utils land first — all downstream depends on them
+        - phase: 2 — Backend endpoints + leaderboard scope + cancel archiving
+          reason: Required before frontend can save reorders or snoozes
+        - phase: 3 — Frontend Kanban updates
+          reason: First user-visible slice; tight feedback loop before Checklist
+    - slice: B
+      phases:
+        - phase: 4 — Frontend Checklist view
+          reason: All backend capabilities already present; pure UI build
+        - phase: 5 — Remaining unit tests + backfill smoke test
+          reason: Alongside the phase they cover; consolidated listing here
+
+# =============================================================================
+# OPEN ITEMS (resolve before/during implementation)
+# =============================================================================
+open_items:
+  - id: O1
+    item: Confirm which DnD library is current (@hello-pangea/dnd per CLAUDE.md tech debt #10?)
+    blocks: Phase 3.3, 4.5
+    note: If it's been swapped, update the reorder tasks to match.
+
+  - id: O2
+    item: Confirm leaderboard query location and shape
+    blocks: Phase 2.6
+    note: |
+      Backend currently computes from transitions[] or a denormalized field?
+      Locate and document before modifying. The scope-filter addition is
+      straightforward but the exact location matters for test updates.
+
+  - id: O3
+    item: Decide on backfill script run timing
+    blocks: None (script is optional)
+    note: |
+      Can be run lazily via read-path healing OR explicitly once post-deploy.
+      Both work. If run explicitly, schedule during a low-traffic window.
+
+  - id: O4
+    item: Mobile gesture conflict check — long-press-to-drag vs. tap-to-select
+    blocks: Phase 4.5
+    note: |
+      Long-press for drag initiation may conflict with browser default context
+      menu or iOS text selection. Confirm behavior on target devices during
+      manual testing; consider an explicit drag handle icon if long-press is
+      flaky.
+
+  - id: O5
+    item: Confirm "persisted per user" storage key conventions
+    blocks: Phases 3.2, 4.1, 4.2
+    note: |
+      Several new localStorage keys: tasks.kanban.showSnoozed,
+      tasks.view, tasks.checklist.completedExpanded. Check existing code for
+      a naming convention and align.
