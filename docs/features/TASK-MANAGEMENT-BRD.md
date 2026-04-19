@@ -401,6 +401,8 @@ See §3.2.3. Checklist quick entry is the fastest creation path for simple tasks
 
 ## 5. Leaderboard
 
+> **Motivational extensions — streaks & badges — are specified in a dedicated document: [TASK-LEADERBOARD-BRD.md](TASK-LEADERBOARD-BRD.md).** That BRD inherits the baseline behavior documented below (scope filter, attribution, subtask credit, timezone handling) and adds current/best streak columns plus a 13-badge achievement system. The baseline spec here remains authoritative for the shipped Today / This Week / This Month columns.
+
 ### 5.1 Location
 
 The leaderboard is a **collapsible panel** on the Tasks page. It is visible by default but can be collapsed to maximize board space.

@@ -21,15 +21,12 @@ import {
   Collapse,
   Paper,
   Table,
-  Avatar,
   Checkbox,
   MultiSelect,
   CloseButton,
   TagsInput,
   Switch,
   ScrollArea,
-  HoverCard,
-  Box,
 } from '@mantine/core';
 import { DatePickerInput } from '@mantine/dates';
 import { useForm } from '@mantine/form';
@@ -61,6 +58,9 @@ import { useAuthStore } from '../stores/authStore';
 import { KanbanColumn } from '../components/tasks/KanbanColumn';
 import { TaskCard } from '../components/tasks/TaskCard';
 import { ChecklistView } from '../components/tasks/ChecklistView';
+import { LeaderboardPanel } from '../components/tasks/LeaderboardPanel';
+import { BadgeHeroModal } from '../components/tasks/BadgeHeroModal';
+import { useNewBadgeCelebrations } from '../hooks/useNewBadgeCelebrations';
 import { userColor } from '../utils/userColor';
 import { UserColorDot } from '../components/common/UserColorDot';
 import { computeSortOrder } from '../../../shared/utils/taskSortOrder';
@@ -73,7 +73,6 @@ import type {
   UpdateTaskDto,
   StoredTaskTemplate,
   CreateTaskTemplateDto,
-  LeaderboardResponse,
   SubTask,
 } from '../../../shared/types';
 
@@ -331,6 +330,11 @@ export function Tasks() {
     queryKey: ['tasks', 'leaderboard'],
     queryFn: () => api.getLeaderboard(Intl.DateTimeFormat().resolvedOptions().timeZone),
   });
+
+  const { pendingHero, dismissHero } = useNewBadgeCelebrations(
+    leaderboard,
+    currentUser?.id,
+  );
 
   // ---------- Mutations ----------
 
@@ -863,6 +867,14 @@ export function Tasks() {
         onClose={closeTemplates}
         templates={templates}
         members={members}
+      />
+
+      {/* Final-tier badge unlock — manual dismiss, no auto-close */}
+      <BadgeHeroModal
+        opened={pendingHero !== null}
+        onClose={dismissHero}
+        badge={pendingHero}
+        displayName={currentUser?.displayName ?? ''}
       />
     </Container>
   );
@@ -1406,226 +1418,6 @@ export function TaskDetailModal({ task, onClose, members, onStatusChange, onEdit
   );
 }
 
-// ---------------------------------------------------------------------------
-// Leaderboard Panel
-// ---------------------------------------------------------------------------
-
-interface LeaderboardPanelProps {
-  leaderboard: LeaderboardResponse;
-  tasks: StoredTask[];
-}
-
-/**
- * Find the transition that corresponds to the task's most recent completedAt.
- * Mirrors the backend helper in taskService.ts so hover-preview attribution
- * matches the displayed count.
- */
-function findCompletionTransition(
-  task: StoredTask,
-): { userId: string; timestamp: string } | null {
-  if (!task.completedAt) return null;
-  for (let i = task.transitions.length - 1; i >= 0; i--) {
-    const t = task.transitions[i];
-    if (t.toStatus === 'done' && t.timestamp === task.completedAt) return t;
-  }
-  for (let i = task.transitions.length - 1; i >= 0; i--) {
-    if (task.transitions[i].toStatus === 'done') return task.transitions[i];
-  }
-  return null;
-}
-
-type BucketKey = 'today' | 'week' | 'month';
-
-interface LeaderboardBucketItem {
-  /** Stable key for React reconciliation: task.id, or `${task.id}:${subtask.id}`. */
-  key: string;
-  /** Display label — task title, or "Parent — Subtask" for subtask contributions. */
-  label: string;
-  /** ISO completion timestamp used for sort + display. */
-  completedAt: string;
-}
-
-function LeaderboardPanel({ leaderboard, tasks }: LeaderboardPanelProps) {
-  const { entries, boundaries: rawBoundaries } = leaderboard;
-
-  const boundaries = useMemo(
-    () => ({
-      today: new Date(rawBoundaries.todayStart).getTime(),
-      week: new Date(rawBoundaries.weekStart).getTime(),
-      month: new Date(rawBoundaries.monthStart).getTime(),
-    }),
-    [rawBoundaries.todayStart, rawBoundaries.weekStart, rawBoundaries.monthStart],
-  );
-
-  // Build per-user, per-bucket contribution lists matching the backend's
-  // attribution rule: family-scope only; parent tasks credit assignee else
-  // completer; subtasks credit parent's assignee else whoever checked them.
-  const itemsByUserBucket = useMemo(() => {
-    const buckets = new Map<string, Record<BucketKey, LeaderboardBucketItem[]>>();
-    for (const entry of entries) {
-      buckets.set(entry.userId, { today: [], week: [], month: [] });
-    }
-
-    const push = (userId: string, completedMs: number, item: LeaderboardBucketItem) => {
-      const bucket = buckets.get(userId);
-      if (!bucket) return;
-      if (completedMs >= boundaries.month) bucket.month.push(item);
-      if (completedMs >= boundaries.week) bucket.week.push(item);
-      if (completedMs >= boundaries.today) bucket.today.push(item);
-    };
-
-    for (const task of tasks) {
-      if (task.scope !== 'family') continue;
-
-      // Parent task credit
-      if (task.completedAt) {
-        const transition = findCompletionTransition(task);
-        if (transition) {
-          const creditedUserId = task.assigneeId ?? transition.userId;
-          push(creditedUserId, new Date(task.completedAt).getTime(), {
-            key: task.id,
-            label: task.title,
-            completedAt: task.completedAt,
-          });
-        }
-      }
-
-      // Subtask credit
-      for (const st of task.subTasks ?? []) {
-        if (!st.completed || !st.completedAt) continue;
-        const creditedUserId = task.assigneeId ?? st.completedBy;
-        if (!creditedUserId) continue;
-        push(creditedUserId, new Date(st.completedAt).getTime(), {
-          key: `${task.id}:${st.id}`,
-          label: `${task.title} — ${st.title}`,
-          completedAt: st.completedAt,
-        });
-      }
-    }
-
-    const byCompletedDesc = (a: LeaderboardBucketItem, b: LeaderboardBucketItem) =>
-      new Date(b.completedAt).getTime() - new Date(a.completedAt).getTime();
-    for (const bucket of buckets.values()) {
-      bucket.today.sort(byCompletedDesc);
-      bucket.week.sort(byCompletedDesc);
-      bucket.month.sort(byCompletedDesc);
-    }
-    return buckets;
-  }, [entries, tasks, boundaries]);
-
-  if (entries.length === 0) {
-    return <Text size="sm" c="dimmed" mt="xs">No data yet</Text>;
-  }
-
-  const maxToday = Math.max(...entries.map((e) => e.completedToday));
-  const maxWeek = Math.max(...entries.map((e) => e.completedThisWeek));
-  const maxMonth = Math.max(...entries.map((e) => e.completedThisMonth));
-
-  return (
-    <Table mt="xs" horizontalSpacing="sm" verticalSpacing={4}>
-      <Table.Thead>
-        <Table.Tr>
-          <Table.Th>Member</Table.Th>
-          <Table.Th ta="center">Today</Table.Th>
-          <Table.Th ta="center">This Week</Table.Th>
-          <Table.Th ta="center">This Month</Table.Th>
-        </Table.Tr>
-      </Table.Thead>
-      <Table.Tbody>
-        {entries.map((entry) => {
-          const bucket = itemsByUserBucket.get(entry.userId) ?? {
-            today: [],
-            week: [],
-            month: [],
-          };
-          return (
-            <Table.Tr key={entry.userId}>
-              <Table.Td>
-                <Group gap="xs">
-                  <Avatar size="xs" radius="xl" color={userColor(entry)}>
-                    {entry.displayName.charAt(0).toUpperCase()}
-                  </Avatar>
-                  <Text size="sm">{entry.displayName}</Text>
-                </Group>
-              </Table.Td>
-              <Table.Td ta="center">
-                <LeaderboardCountCell
-                  count={entry.completedToday}
-                  highlight={entry.completedToday === maxToday && maxToday > 0}
-                  items={bucket.today}
-                />
-              </Table.Td>
-              <Table.Td ta="center">
-                <LeaderboardCountCell
-                  count={entry.completedThisWeek}
-                  highlight={entry.completedThisWeek === maxWeek && maxWeek > 0}
-                  items={bucket.week}
-                />
-              </Table.Td>
-              <Table.Td ta="center">
-                <LeaderboardCountCell
-                  count={entry.completedThisMonth}
-                  highlight={entry.completedThisMonth === maxMonth && maxMonth > 0}
-                  items={bucket.month}
-                />
-              </Table.Td>
-            </Table.Tr>
-          );
-        })}
-      </Table.Tbody>
-    </Table>
-  );
-}
-
-interface LeaderboardCountCellProps {
-  count: number;
-  highlight: boolean;
-  items: LeaderboardBucketItem[];
-}
-
-function LeaderboardCountCell({ count, highlight, items }: LeaderboardCountCellProps) {
-  const label = (
-    <Text
-      size="sm"
-      fw={highlight ? 700 : 400}
-      c={highlight ? 'yellow' : undefined}
-    >
-      {count}
-    </Text>
-  );
-
-  if (count === 0) return label;
-
-  return (
-    <HoverCard withArrow shadow="md" position="top" openDelay={100} closeDelay={80}>
-      <HoverCard.Target>
-        <Box
-          component="span"
-          tabIndex={0}
-          style={{ cursor: 'help', display: 'inline-block' }}
-        >
-          {label}
-        </Box>
-      </HoverCard.Target>
-      <HoverCard.Dropdown p="xs">
-        <ScrollArea.Autosize mah={240} type="hover">
-          <Stack gap={4} miw={220} maw={340}>
-            {items.map((item) => (
-              <Group key={item.key} gap="sm" wrap="nowrap" justify="space-between">
-                <Text size="xs" style={{ flex: 1 }} lineClamp={2}>
-                  {item.label}
-                </Text>
-                <Text size="xs" c="dimmed" style={{ whiteSpace: 'nowrap' }}>
-                  {format(parseISO(item.completedAt), 'MMM d, h:mm a')}
-                </Text>
-              </Group>
-            ))}
-          </Stack>
-        </ScrollArea.Autosize>
-      </HoverCard.Dropdown>
-    </HoverCard>
-  );
-}
 
 // ---------------------------------------------------------------------------
 // Task History View

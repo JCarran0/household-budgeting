@@ -1258,12 +1258,64 @@ export interface UpdateTaskTemplateDto {
 
 // Leaderboard types
 
+export type BadgeCategory = 'volume' | 'consistency' | 'streak' | 'lifetime';
+
+export type BadgeId =
+  | 'volume_5'
+  | 'volume_10'
+  | 'volume_20'
+  | 'consistency_4'
+  | 'consistency_5'
+  | 'consistency_7'
+  | 'streak_7'
+  | 'streak_30'
+  | 'streak_100'
+  | 'lifetime_10'
+  | 'lifetime_50'
+  | 'lifetime_100'
+  | 'lifetime_500'
+  | 'lifetime_1000';
+
+export interface BadgeDefinition {
+  id: BadgeId;
+  category: BadgeCategory;
+  threshold: number;
+  order: number;
+  label: string;
+  description: string;
+}
+
+export interface EarnedBadge {
+  id: BadgeId;
+  earnedAt: string;
+}
+
+export const BADGE_CATALOG: readonly BadgeDefinition[] = [
+  { id: 'volume_5',      category: 'volume',      threshold: 5,    order: 1, label: '5 in a day',     description: '5 tasks completed in a single day' },
+  { id: 'volume_10',     category: 'volume',      threshold: 10,   order: 2, label: '10 in a day',    description: '10 tasks completed in a single day' },
+  { id: 'volume_20',     category: 'volume',      threshold: 20,   order: 3, label: 'Whirlwind',      description: '20 tasks completed in a single day' },
+  { id: 'consistency_4', category: 'consistency', threshold: 4,    order: 1, label: '4 days/week',    description: 'At least 1 task on 4 days in a single week' },
+  { id: 'consistency_5', category: 'consistency', threshold: 5,    order: 2, label: '5 days/week',    description: 'At least 1 task on 5 days in a single week' },
+  { id: 'consistency_7', category: 'consistency', threshold: 7,    order: 3, label: 'Perfect Week',   description: 'At least 1 task on all 7 days in a single week' },
+  { id: 'streak_7',      category: 'streak',      threshold: 7,    order: 1, label: '7-day streak',   description: '7 consecutive days with at least 1 completion' },
+  { id: 'streak_30',     category: 'streak',      threshold: 30,   order: 2, label: '30-day streak',  description: '30 consecutive days with at least 1 completion' },
+  { id: 'streak_100',    category: 'streak',      threshold: 100,  order: 3, label: 'Centurion',      description: '100 consecutive days with at least 1 completion' },
+  { id: 'lifetime_10',   category: 'lifetime',    threshold: 10,   order: 1, label: '10 delivered',   description: '10 total family-task completions' },
+  { id: 'lifetime_50',   category: 'lifetime',    threshold: 50,   order: 2, label: '50 delivered',   description: '50 total family-task completions' },
+  { id: 'lifetime_100',  category: 'lifetime',    threshold: 100,  order: 3, label: '100 delivered',  description: '100 total family-task completions' },
+  { id: 'lifetime_500',  category: 'lifetime',    threshold: 500,  order: 4, label: '500 delivered',  description: '500 total family-task completions' },
+  { id: 'lifetime_1000', category: 'lifetime',    threshold: 1000, order: 5, label: 'Legend',         description: '1000 total family-task completions' },
+] as const;
+
 export interface LeaderboardEntry {
   userId: string;
   displayName: string;
   completedToday: number;
   completedThisWeek: number;
   completedThisMonth: number;
+  currentStreak: number;
+  bestStreak: number;
+  earnedBadges: EarnedBadge[];
   color?: UserColor;
 }
 

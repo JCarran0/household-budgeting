@@ -18,6 +18,11 @@ import {
   LeaderboardEntry,
 } from '../shared/types';
 import { topOfColumn } from '../shared/utils/taskSortOrder';
+import {
+  computeStreaksForUser,
+  type CreditEvent,
+} from '../shared/utils/leaderboardStreaks';
+import { computeEarnedBadges } from '../shared/utils/leaderboardBadges';
 import { DataService } from './dataService';
 import { FamilyService } from './familyService';
 
@@ -442,10 +447,14 @@ export class TaskService {
     const weekStart = getStartOfWeek(now, timezone);
     const monthStart = getStartOfMonth(now, timezone);
 
-    // Initialize counts per member
+    // Initialize counts + credit-event streams per member.
+    // The same loop produces today/week/month counters AND a per-user list of
+    // CreditEvent records consumed by the streak + badge utilities.
     const counts = new Map<string, { today: number; week: number; month: number }>();
+    const eventsByUser = new Map<string, CreditEvent[]>();
     for (const member of members) {
       counts.set(member.userId, { today: 0, week: 0, month: 0 });
+      eventsByUser.set(member.userId, []);
     }
 
     // Scan tasks for completions.
@@ -460,14 +469,17 @@ export class TaskService {
     // contributes one additional point, independent of the parent's
     // completion. Attribution follows the same rule: parent's assigneeId
     // when set, else the user who checked the subtask (`completedBy`).
-    const creditCount = (userIdToCredit: string, completedAtMs: number) => {
+    const creditCount = (userIdToCredit: string, completedAt: string) => {
       if (!counts.has(userIdToCredit)) {
         counts.set(userIdToCredit, { today: 0, week: 0, month: 0 });
+        eventsByUser.set(userIdToCredit, []);
       }
+      const ms = new Date(completedAt).getTime();
       const c = counts.get(userIdToCredit)!;
-      if (completedAtMs >= monthStart.getTime()) c.month++;
-      if (completedAtMs >= weekStart.getTime()) c.week++;
-      if (completedAtMs >= todayStart.getTime()) c.today++;
+      if (ms >= monthStart.getTime()) c.month++;
+      if (ms >= weekStart.getTime()) c.week++;
+      if (ms >= todayStart.getTime()) c.today++;
+      eventsByUser.get(userIdToCredit)!.push({ userId: userIdToCredit, completedAt });
     };
 
     for (const task of tasks) {
@@ -478,7 +490,7 @@ export class TaskService {
         const completionTransition = findCompletionTransition(task);
         if (completionTransition) {
           const creditedUserId = task.assigneeId ?? completionTransition.userId;
-          creditCount(creditedUserId, new Date(task.completedAt).getTime());
+          creditCount(creditedUserId, task.completedAt);
         }
       }
 
@@ -489,7 +501,7 @@ export class TaskService {
         // Prefer parent assignee; fall back to whoever checked the subtask.
         const creditedUserId = task.assigneeId ?? st.completedBy;
         if (!creditedUserId) continue;
-        creditCount(creditedUserId, new Date(st.completedAt).getTime());
+        creditCount(creditedUserId, st.completedAt);
       }
     }
 
@@ -499,12 +511,22 @@ export class TaskService {
 
     for (const [userId, c] of counts) {
       const member = memberMap.get(userId);
+      const events = eventsByUser.get(userId) ?? [];
+      const streaks = computeStreaksForUser(events, timezone, now);
+      const earnedBadges = computeEarnedBadges(
+        events,
+        streaks.streakMilestones,
+        timezone
+      );
       entries.push({
         userId,
         displayName: member?.displayName ?? 'Unknown',
         completedToday: c.today,
         completedThisWeek: c.week,
         completedThisMonth: c.month,
+        currentStreak: streaks.currentStreak,
+        bestStreak: streaks.bestStreak,
+        earnedBadges,
         ...(member?.color !== undefined ? { color: member.color } : {}),
       });
     }

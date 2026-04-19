@@ -2,6 +2,8 @@ import request from 'supertest';
 import app from '../../app';
 import { dataService, authService } from '../../services';
 import { registerUser } from '../helpers/apiHelper';
+import { seedTasks, getLeaderboardEntry, type TaskSeed } from '../helpers/seedTasks';
+import type { StoredTask } from '../../shared/types';
 
 describe('Task Service Integration Tests', () => {
   let authToken: string;
@@ -932,6 +934,186 @@ describe('Task Service Integration Tests', () => {
         .expect(200);
       const entry = res.body.entries.find((e: any) => e.userId === userId);
       expect(entry.completedToday).toBe(1);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // Leaderboard — streaks & badges (v2.2)
+  // -------------------------------------------------------------------------
+
+  describe('GET /api/v1/tasks/leaderboard — streaks & badges', () => {
+    /** Repeated `{ completedAt: todayIso }` factory for batch volume tests. */
+    const completedTodayN = (n: number, completedAt: string): TaskSeed[] =>
+      Array.from({ length: n }, () => ({ completedAt }));
+
+    it('response includes currentStreak, bestStreak, earnedBadges per entry', async () => {
+      const entry = await getLeaderboardEntry(authToken, userId);
+      expect(entry.currentStreak).toBe(0);
+      expect(entry.bestStreak).toBe(0);
+      expect(entry.earnedBadges).toEqual([]);
+    });
+
+    it('user with 1 completion today: currentStreak=1, bestStreak=1', async () => {
+      const createRes = await request(app)
+        .post('/api/v1/tasks')
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({ title: 'One today' })
+        .expect(201);
+      await request(app)
+        .patch(`/api/v1/tasks/${createRes.body.id}/status`)
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({ status: 'done' })
+        .expect(200);
+
+      const entry = await getLeaderboardEntry(authToken, userId);
+      expect(entry.currentStreak).toBe(1);
+      expect(entry.bestStreak).toBe(1);
+    });
+
+    it('user with 1 completion yesterday (no today): grace → currentStreak=1', async () => {
+      const createRes = await request(app)
+        .post('/api/v1/tasks')
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({ title: 'Yesterday' })
+        .expect(201);
+      await request(app)
+        .patch(`/api/v1/tasks/${createRes.body.id}/status`)
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({ status: 'done' })
+        .expect(200);
+
+      // Backdate the stored completedAt to ~24h ago.
+      const familyId = (
+        await request(app)
+          .get('/api/v1/family')
+          .set('Authorization', `Bearer ${authToken}`)
+          .expect(200)
+      ).body.family.id as string;
+      const tasks = (await dataService.getData<StoredTask[]>(`tasks_${familyId}`))!;
+      const yesterday = new Date();
+      yesterday.setDate(yesterday.getDate() - 1);
+      tasks[0].completedAt = yesterday.toISOString();
+      await dataService.saveData(`tasks_${familyId}`, tasks);
+
+      const entry = await getLeaderboardEntry(authToken, userId);
+      expect(entry.currentStreak).toBe(1);
+      expect(entry.bestStreak).toBe(1);
+    });
+
+    it('5 completions today → volume_5 present in earnedBadges', async () => {
+      const todayIso = new Date().toISOString();
+      await seedTasks({ authToken, ownerUserId: userId, tasks: completedTodayN(5, todayIso) });
+
+      const entry = await getLeaderboardEntry(authToken, userId);
+      const ids = entry.earnedBadges.map((b) => b.id);
+      expect(ids).toContain('volume_5');
+      expect(ids).not.toContain('volume_10');
+      expect(ids).not.toContain('volume_20');
+    });
+
+    it('20 completions today → volume_5, volume_10, volume_20 all present (cumulative)', async () => {
+      const todayIso = new Date().toISOString();
+      await seedTasks({ authToken, ownerUserId: userId, tasks: completedTodayN(20, todayIso) });
+
+      const entry = await getLeaderboardEntry(authToken, userId);
+      const ids = entry.earnedBadges.map((b) => b.id);
+      expect(ids).toContain('volume_5');
+      expect(ids).toContain('volume_10');
+      expect(ids).toContain('volume_20');
+      expect(ids).toContain('lifetime_10');
+    });
+
+    it('personal tasks never contribute to streaks or badges (regression guard)', async () => {
+      const todayIso = new Date().toISOString();
+      await seedTasks({
+        authToken,
+        ownerUserId: userId,
+        tasks: [
+          { scope: 'personal', completedAt: todayIso },
+          { scope: 'personal', completedAt: todayIso },
+          { scope: 'personal', completedAt: todayIso },
+        ],
+      });
+
+      const entry = await getLeaderboardEntry(authToken, userId);
+      expect(entry.currentStreak).toBe(0);
+      expect(entry.earnedBadges).toEqual([]);
+    });
+
+    it('data-driven revoke: reverting a sole-qualifier task drops the badge', async () => {
+      // Single task with 4 completed subtasks today → 1 parent + 4 subtask
+      // credits = 5 → earns volume_5.
+      const now = new Date().toISOString();
+      const taskId = 'revoke-test-task';
+      const familyId = await seedTasks({
+        authToken,
+        ownerUserId: userId,
+        tasks: [
+          {
+            id: taskId,
+            title: 'Revoke test',
+            completedAt: now,
+            subTasks: [
+              { id: 'a', title: 'A', completed: true, completedAt: now, completedBy: userId },
+              { id: 'b', title: 'B', completed: true, completedAt: now, completedBy: userId },
+              { id: 'c', title: 'C', completed: true, completedAt: now, completedBy: userId },
+              { id: 'd', title: 'D', completed: true, completedAt: now, completedBy: userId },
+            ],
+          },
+        ],
+      });
+
+      const before = await getLeaderboardEntry(authToken, userId);
+      expect(before.earnedBadges.map((b) => b.id)).toContain('volume_5');
+
+      // Revert: move done → started (clears completedAt) and uncheck subtasks.
+      await request(app)
+        .patch(`/api/v1/tasks/${taskId}/status`)
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({ status: 'started' })
+        .expect(200);
+      const current = (await dataService.getData<StoredTask[]>(`tasks_${familyId}`))!;
+      current[0].subTasks = current[0].subTasks.map((st) => ({
+        ...st,
+        completed: false,
+        completedAt: null,
+        completedBy: null,
+      }));
+      await dataService.saveData(`tasks_${familyId}`, current);
+
+      const after = await getLeaderboardEntry(authToken, userId);
+      expect(after.earnedBadges.map((b) => b.id)).not.toContain('volume_5');
+    });
+
+    it('common-case invariant: reverting one of many qualifying completions keeps the badge', async () => {
+      const todayIso = new Date().toISOString();
+      // 7 completions today — well past the volume_5 tip.
+      const familyId = await seedTasks({
+        authToken,
+        ownerUserId: userId,
+        tasks: completedTodayN(7, todayIso),
+      });
+
+      const tasks = (await dataService.getData<StoredTask[]>(`tasks_${familyId}`))!;
+      tasks[0].completedAt = null;
+      tasks[0].status = 'started';
+      await dataService.saveData(`tasks_${familyId}`, tasks);
+
+      const entry = await getLeaderboardEntry(authToken, userId);
+      expect(entry.earnedBadges.map((b) => b.id)).toContain('volume_5');
+    });
+
+    it('lifetime_10 earns when cumulative count reaches 10', async () => {
+      // Spread across 10 distinct days so no volume badges confuse the assertion.
+      const events: TaskSeed[] = Array.from({ length: 10 }, (_, i) => {
+        const d = new Date();
+        d.setDate(d.getDate() - i);
+        return { completedAt: d.toISOString() };
+      });
+      await seedTasks({ authToken, ownerUserId: userId, tasks: events });
+
+      const entry = await getLeaderboardEntry(authToken, userId);
+      expect(entry.earnedBadges.map((b) => b.id)).toContain('lifetime_10');
     });
   });
 
