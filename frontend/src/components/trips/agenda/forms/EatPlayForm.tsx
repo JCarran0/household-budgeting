@@ -94,7 +94,7 @@ export function EatPlayForm({
 
     if (variant === 'eat') {
       const payload = existing
-        ? (commonBase satisfies UpdateEatStopDto)
+        ? ({ type: 'eat', ...commonBase } satisfies UpdateEatStopDto)
         : ({ type: 'eat', ...commonBase } satisfies CreateEatStopDto);
       onSubmit(payload);
     } else {
@@ -103,7 +103,7 @@ export function EatPlayForm({
         durationMinutes: values.durationMinutes,
       };
       const payload = existing
-        ? (playBase satisfies UpdatePlayStopDto)
+        ? ({ type: 'play', ...playBase } satisfies UpdatePlayStopDto)
         : ({ type: 'play', ...playBase } satisfies CreatePlayStopDto);
       onSubmit(payload);
     }
@@ -137,6 +137,7 @@ export function EatPlayForm({
             label="Date"
             required
             valueFormat="MMM D, YYYY"
+            highlightToday
             {...form.getInputProps('date')}
           />
           <TimeInput

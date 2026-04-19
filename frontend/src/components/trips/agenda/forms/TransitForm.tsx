@@ -101,7 +101,7 @@ export function TransitForm({
     };
 
     if (existing) {
-      onSubmit(base satisfies UpdateTransitStopDto);
+      onSubmit({ type: 'transit', ...base } satisfies UpdateTransitStopDto);
     } else {
       onSubmit({ type: 'transit', ...base } satisfies CreateTransitStopDto);
     }
@@ -125,6 +125,7 @@ export function TransitForm({
             label="Date"
             required
             valueFormat="MMM D, YYYY"
+            highlightToday
             {...form.getInputProps('date')}
           />
           <TimeInput

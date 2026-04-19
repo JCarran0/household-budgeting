@@ -109,7 +109,7 @@ export function StayForm({
     };
 
     if (existing) {
-      onSubmit(base satisfies UpdateStayStopDto);
+      onSubmit({ type: 'stay', ...base } satisfies UpdateStayStopDto);
     } else {
       onSubmit({ type: 'stay', ...base } satisfies CreateStayStopDto);
     }
@@ -152,6 +152,7 @@ export function StayForm({
             label="Start date (first night)"
             required
             valueFormat="MMM D, YYYY"
+            highlightToday
             {...form.getInputProps('startDate')}
           />
           <TimeInput

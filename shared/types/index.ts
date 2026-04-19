@@ -448,8 +448,11 @@ export type CreateStopDto =
   | CreatePlayStopDto
   | CreateTransitStopDto;
 
-// Update DTOs — every field optional; type cannot change after creation.
+// Update DTOs — every field optional except `type`, which is required as a
+// discriminator so the backend can select the right variant and verify the
+// type has not changed.
 export interface UpdateStayStopDto {
+  type: 'stay';
   date?: string;
   time?: string | null;
   notes?: string;
@@ -460,6 +463,7 @@ export interface UpdateStayStopDto {
 }
 
 export interface UpdateEatStopDto {
+  type: 'eat';
   date?: string;
   time?: string | null;
   notes?: string;
@@ -469,6 +473,7 @@ export interface UpdateEatStopDto {
 }
 
 export interface UpdatePlayStopDto {
+  type: 'play';
   date?: string;
   time?: string | null;
   notes?: string;
@@ -479,6 +484,7 @@ export interface UpdatePlayStopDto {
 }
 
 export interface UpdateTransitStopDto {
+  type: 'transit';
   date?: string;
   time?: string | null;
   notes?: string;

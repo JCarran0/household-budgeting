@@ -8,7 +8,7 @@ import {
   Button,
   Select,
   TextInput,
-  Accordion,
+  Paper,
   Text,
   Badge,
   Loader,
@@ -22,11 +22,10 @@ import {
   Textarea,
   Rating,
   Code,
-  Divider,
 } from '@mantine/core';
 import { DatePickerInput } from '@mantine/dates';
 import { useForm } from '@mantine/form';
-import { useDisclosure, useClipboard } from '@mantine/hooks';
+import { useDisclosure } from '@mantine/hooks';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { notifications } from '@mantine/notifications';
 import {
@@ -39,26 +38,17 @@ import {
   IconX,
   IconMapPin,
   IconCalendar,
-  IconCopy,
-  IconArrowRight,
 } from '@tabler/icons-react';
 import { format } from 'date-fns';
 import { api } from '../lib/api';
 import { useCategoryOptions } from '../hooks/useCategoryOptions';
 import { formatCurrency } from '../utils/formatters';
-import { TransactionPreviewModal } from '../components/transactions/TransactionPreviewModal';
-import { TripSpendingBreakdown, type TripDrillDownTarget } from '../components/trips/TripSpendingBreakdown';
 import type { TripSummary, TripCategoryBudget, CreateTripDto, UpdateTripDto } from '../../../shared/types';
 import { generateTripTag } from '../../../shared/utils/tripHelpers';
 
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
-
-/** Wide date range used when drilling into trip transactions — the trip tag
- * is the primary filter; dates are intentionally unbounded so we don't miss
- * any transactions tagged to this trip outside the nominal trip dates. */
-const WIDE_DATE_RANGE = { startDate: '2020-01-01', endDate: '2030-12-31' };
 
 const STATUS_BADGE_COLOR: Record<TripSummary['status'], string> = {
   upcoming: 'blue',
@@ -80,8 +70,6 @@ interface TripFormValues {
   categoryBudgets: TripCategoryBudget[];
   photoAlbumUrl: string;
 }
-
-type DrillDownState = TripDrillDownTarget;
 
 // ---------------------------------------------------------------------------
 // TripFormModal — create or edit a trip
@@ -330,6 +318,7 @@ export function TripFormModal({ opened, onClose, trip }: TripFormModalProps) {
               placeholder="Pick start date"
               required
               valueFormat="MMM D, YYYY"
+              highlightToday
               {...form.getInputProps('startDate')}
             />
             <DatePickerInput
@@ -337,6 +326,7 @@ export function TripFormModal({ opened, onClose, trip }: TripFormModalProps) {
               placeholder="Pick end date"
               required
               valueFormat="MMM D, YYYY"
+              highlightToday
               minDate={form.values.startDate ?? undefined}
               {...form.getInputProps('endDate')}
             />
@@ -522,40 +512,32 @@ export function DeleteTripModal({ opened, onClose, trip, onDeleted }: DeleteTrip
 }
 
 // ---------------------------------------------------------------------------
-// TripCard — single accordion item
+// TripCard — list row that links to the detail page
 // ---------------------------------------------------------------------------
 
 interface TripCardProps {
   trip: TripSummary;
   onEdit: (trip: TripSummary) => void;
   onDelete: (trip: TripSummary) => void;
-  onCategoryClick: (state: DrillDownState) => void;
 }
 
-function TripCard({ trip, onEdit, onDelete, onCategoryClick }: TripCardProps) {
-  const formatDateRange = (start: string, end: string): string => {
-    try {
-      const [sy, sm, sd] = start.split('-').map(Number);
-      const [ey, em, ed] = end.split('-').map(Number);
-      const startDate = new Date(sy, sm - 1, sd);
-      const endDate = new Date(ey, em - 1, ed);
+function formatTripDateRange(start: string, end: string): string {
+  try {
+    const [sy, sm, sd] = start.split('-').map(Number);
+    const [ey, em, ed] = end.split('-').map(Number);
+    const startDate = new Date(sy, sm - 1, sd);
+    const endDate = new Date(ey, em - 1, ed);
 
-      if (sy === ey) {
-        // Same year — omit year on start side
-        if (sm === em) {
-          // Same month
-          return `${format(startDate, 'MMM d')} – ${format(endDate, 'MMM d, yyyy')}`;
-        }
-        return `${format(startDate, 'MMM d')} – ${format(endDate, 'MMM d, yyyy')}`;
-      }
-      return `${format(startDate, 'MMM d, yyyy')} – ${format(endDate, 'MMM d, yyyy')}`;
-    } catch {
-      return `${start} – ${end}`;
+    if (sy === ey) {
+      return `${format(startDate, 'MMM d')} – ${format(endDate, 'MMM d, yyyy')}`;
     }
-  };
+    return `${format(startDate, 'MMM d, yyyy')} – ${format(endDate, 'MMM d, yyyy')}`;
+  } catch {
+    return `${start} – ${end}`;
+  }
+}
 
-  const clipboard = useClipboard({ timeout: 1500 });
-
+function TripCard({ trip, onEdit, onDelete }: TripCardProps) {
   const budgetLabel = trip.totalBudget !== null
     ? `${formatCurrency(trip.totalSpent)} / ${formatCurrency(trip.totalBudget)}`
     : formatCurrency(trip.totalSpent);
@@ -563,120 +545,90 @@ function TripCard({ trip, onEdit, onDelete, onCategoryClick }: TripCardProps) {
   const overBudget =
     trip.totalBudget !== null && trip.totalSpent > trip.totalBudget;
 
+  const stopNav = (fn: () => void) => (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    fn();
+  };
+
   return (
-    <Accordion.Item key={trip.id} value={trip.id}>
-      {/* ---- Control (collapsed header) ---- */}
-      <Accordion.Control>
-        <Group justify="space-between" wrap="nowrap">
-          <Group gap="sm" wrap="nowrap" style={{ flex: 1, minWidth: 0 }}>
-            <ThemeIcon variant="light" size="md" color="blue">
-              <IconMapPin size={16} />
-            </ThemeIcon>
-            <Stack gap={0} style={{ minWidth: 0 }}>
-              <Group gap="xs" wrap="nowrap">
-                <Text fw={600} truncate>
-                  {trip.name}
-                </Text>
-                <Badge
-                  size="xs"
-                  color={STATUS_BADGE_COLOR[trip.status]}
-                  variant="light"
-                >
-                  {trip.status}
-                </Badge>
-              </Group>
-              <Group gap="xs" c="dimmed">
-                <IconCalendar size={12} />
-                <Text size="xs">
-                  {formatDateRange(trip.startDate, trip.endDate)}
-                </Text>
-              </Group>
-            </Stack>
-          </Group>
-
-          <Group gap="sm" wrap="nowrap">
-            <Stack gap={0} align="flex-end">
-              <Text
-                size="sm"
-                fw={600}
-                c={overBudget ? 'red' : undefined}
-              >
-                {budgetLabel}
+    <Paper
+      component={Link}
+      to={`/trips/${trip.id}`}
+      withBorder
+      radius="md"
+      p="md"
+      style={{ display: 'block', textDecoration: 'none', color: 'inherit' }}
+    >
+      <Group justify="space-between" wrap="nowrap">
+        <Group gap="sm" wrap="nowrap" style={{ flex: 1, minWidth: 0 }}>
+          <ThemeIcon variant="light" size="md" color="blue">
+            <IconMapPin size={16} />
+          </ThemeIcon>
+          <Stack gap={0} style={{ minWidth: 0 }}>
+            <Group gap="xs" wrap="nowrap">
+              <Text fw={600} truncate>
+                {trip.name}
               </Text>
-              {trip.rating !== null && (
-                <Rating
-                  value={trip.rating}
-                  readOnly
-                  size="xs"
-                  fractions={1}
-                />
-              )}
-            </Stack>
-          </Group>
+              <Badge
+                size="xs"
+                color={STATUS_BADGE_COLOR[trip.status]}
+                variant="light"
+              >
+                {trip.status}
+              </Badge>
+            </Group>
+            <Group gap="xs" c="dimmed">
+              <IconCalendar size={12} />
+              <Text size="xs">
+                {formatTripDateRange(trip.startDate, trip.endDate)}
+              </Text>
+            </Group>
+          </Stack>
         </Group>
-      </Accordion.Control>
 
-      {/* ---- Panel (expanded detail) ---- */}
-      <Accordion.Panel>
-        <Stack gap="md">
-          {/* Notes */}
-          {trip.notes && (
-            <Text size="sm" c="dimmed" style={{ fontStyle: 'italic' }}>
-              {trip.notes}
-            </Text>
-          )}
-
-          {/* Category breakdown */}
-          <TripSpendingBreakdown trip={trip} onCategoryClick={onCategoryClick} />
-
-          <Divider />
-
-          {/* Tag + View Details + Edit / Delete actions */}
-          <Group gap="xs" justify="flex-end">
-            <Tooltip label={clipboard.copied ? 'Copied!' : 'Click to copy tag'}>
-              <Code
-                style={{ cursor: 'pointer', userSelect: 'none', marginRight: 'auto' }}
-                onClick={() => clipboard.copy(trip.tag)}
-              >
-                <Group gap={4} wrap="nowrap">
-                  <IconCopy size={10} />
-                  <Text size="xs" span>{trip.tag}</Text>
-                </Group>
-              </Code>
-            </Tooltip>
-            <Button
-              component={Link}
-              to={`/trips/${trip.id}`}
-              variant="light"
-              size="xs"
-              rightSection={<IconArrowRight size={14} />}
+        <Group gap="sm" wrap="nowrap">
+          <Stack gap={0} align="flex-end">
+            <Text
+              size="sm"
+              fw={600}
+              c={overBudget ? 'red' : undefined}
             >
-              View Details
-            </Button>
-            <Tooltip label="Edit trip">
-              <ActionIcon
-                variant="subtle"
-                color="blue"
-                onClick={() => onEdit(trip)}
-                aria-label="Edit trip"
-              >
-                <IconEdit size={16} />
-              </ActionIcon>
-            </Tooltip>
-            <Tooltip label="Delete trip">
-              <ActionIcon
-                variant="subtle"
-                color="red"
-                onClick={() => onDelete(trip)}
-                aria-label="Delete trip"
-              >
-                <IconTrash size={16} />
-              </ActionIcon>
-            </Tooltip>
-          </Group>
-        </Stack>
-      </Accordion.Panel>
-    </Accordion.Item>
+              {budgetLabel}
+            </Text>
+            {trip.rating !== null && (
+              <Rating
+                value={trip.rating}
+                readOnly
+                size="xs"
+                fractions={1}
+              />
+            )}
+          </Stack>
+
+          <Tooltip label="Edit trip">
+            <ActionIcon
+              variant="subtle"
+              color="blue"
+              onClick={stopNav(() => onEdit(trip))}
+              aria-label="Edit trip"
+            >
+              <IconEdit size={16} />
+            </ActionIcon>
+          </Tooltip>
+          <Tooltip label="Delete trip">
+            <ActionIcon
+              variant="subtle"
+              color="red"
+              onClick={stopNav(() => onDelete(trip))}
+              aria-label="Delete trip"
+            >
+              <IconTrash size={16} />
+            </ActionIcon>
+          </Tooltip>
+        </Group>
+      </Group>
+    </Paper>
   );
 }
 
@@ -697,13 +649,6 @@ export function Trips() {
   const [deleteModalOpened, { open: openDeleteModal, close: closeDeleteModal }] =
     useDisclosure(false);
   const [deletingTrip, setDeletingTrip] = useState<TripSummary | null>(null);
-
-  // Modal state — transaction drill-down
-  const [
-    previewModalOpened,
-    { open: openPreviewModal, close: closePreviewModal },
-  ] = useDisclosure(false);
-  const [drillDown, setDrillDown] = useState<DrillDownState | null>(null);
 
   // Fetch all trip summaries (unfiltered by year; we filter client-side)
   const {
@@ -762,11 +707,6 @@ export function Trips() {
   const handleOpenDelete = (trip: TripSummary) => {
     setDeletingTrip(trip);
     openDeleteModal();
-  };
-
-  const handleCategoryClick = (state: DrillDownState) => {
-    setDrillDown(state);
-    openPreviewModal();
   };
 
   const handleFormClose = () => {
@@ -873,17 +813,16 @@ export function Trips() {
 
         {/* Trip cards */}
         {!isLoading && !error && filteredTrips.length > 0 && (
-          <Accordion variant="separated" radius="md">
+          <Stack gap="sm">
             {filteredTrips.map((trip) => (
               <TripCard
                 key={trip.id}
                 trip={trip}
                 onEdit={handleOpenEdit}
                 onDelete={handleOpenDelete}
-                onCategoryClick={handleCategoryClick}
               />
             ))}
-          </Accordion>
+          </Stack>
         )}
       </Stack>
 
@@ -900,18 +839,6 @@ export function Trips() {
         onClose={handleDeleteClose}
         trip={deletingTrip}
       />
-
-      {/* Transaction drill-down modal */}
-      {drillDown && (
-        <TransactionPreviewModal
-          opened={previewModalOpened}
-          onClose={closePreviewModal}
-          categoryId={drillDown.categoryId}
-          categoryName={drillDown.categoryName}
-          dateRange={WIDE_DATE_RANGE}
-          tags={[drillDown.tripTag]}
-        />
-      )}
     </Container>
   );
 }
