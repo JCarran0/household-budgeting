@@ -17,7 +17,7 @@ export function createTransactionsApi(client: AxiosInstance) {
       minAmount?: number;
       maxAmount?: number;
       transactionType?: 'all' | 'income' | 'expense' | 'transfer';
-    }): Promise<{ transactions: Transaction[]; total: number }> {
+    }): Promise<{ transactions: Transaction[]; total: number; totalCount?: number }> {
       const { data } = await client.get('/transactions', { params });
       return data;
     },

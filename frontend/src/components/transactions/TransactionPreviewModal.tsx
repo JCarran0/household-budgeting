@@ -94,8 +94,11 @@ export function TransactionPreviewModal({
     [transactionData]
   );
   
-  const totalCount = useMemo(() => 
-    transactionData?.total || 0, 
+  // Use category-filtered totalCount — `total` on the response is unfilteredTotal
+  // (count after date/account filters but BEFORE category filter), which would
+  // display a misleading denominator like "Showing 34 of 554" in the preview.
+  const totalCount = useMemo(() =>
+    transactionData?.totalCount ?? transactionData?.transactions?.length ?? 0,
     [transactionData]
   );
 
@@ -112,13 +115,15 @@ export function TransactionPreviewModal({
     } else if (categoryId === null) {
       params.set('onlyUncategorized', 'true');
     }
+    // When we have an explicit dateRange, force dateFilter=custom with the exact
+    // dates the modal queried. Reports time ranges (e.g., yearToDate excludes the
+    // current month) don't always match the transactions page's same-labeled
+    // option — passing the exact dates keeps the counts consistent.
     if (dateRange) {
+      params.set('dateFilter', 'custom');
       params.set('startDate', dateRange.startDate);
       params.set('endDate', dateRange.endDate);
-    }
-    
-    // Include the time range filter from reports page if provided, otherwise default to all time
-    if (timeRangeFilter) {
+    } else if (timeRangeFilter) {
       params.set('timeRangeFilter', timeRangeFilter);
     } else {
       params.set('dateFilter', 'all');

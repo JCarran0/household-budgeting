@@ -482,6 +482,14 @@ export function CategoryBreakdownSection({
     setHiddenCategories({});
   };
 
+  // For parent-category rows, roll up child category IDs so the preview modal
+  // queries parent + all children (transactions are usually assigned to leaves).
+  const getAdditionalCategoryIds = (entry: PieChartEntry): string[] | undefined => {
+    if (!entry.hasChildren || !entry.id || entry.isOther) return undefined;
+    const children = processedCategoryData.childData.get(entry.id) || [];
+    return children.length > 0 ? children.map((c) => c.id) : undefined;
+  };
+
   return (
     <Stack gap="md">
       {/* Income/Expense Toggle */}
@@ -702,6 +710,7 @@ export function CategoryBreakdownSection({
                     key={category.id || category.name}
                     categoryId={category.id || null}
                     categoryName={category.name}
+                    additionalCategoryIds={getAdditionalCategoryIds(category)}
                     dateRange={{ startDate, endDate }}
                     tooltipText="Click to preview transactions"
                     timeRangeFilter={timeRange}
@@ -728,6 +737,7 @@ export function CategoryBreakdownSection({
                     key={category.id || category.name}
                     categoryId={category.id || null}
                     categoryName={category.name}
+                    additionalCategoryIds={getAdditionalCategoryIds(category)}
                     dateRange={{ startDate, endDate }}
                     tooltipText="Click to preview transactions"
                     timeRangeFilter={timeRange}
