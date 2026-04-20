@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+### [5.43.2](https://github.com/JCarran0/household-budgeting/compare/v5.43.1...v5.43.2) (2026-04-20)
+
+
+### Code Refactoring
+
+* **routes:** migrate remaining catch blocks to next(error) (TD-10) ([959f05d](https://github.com/JCarran0/household-budgeting/commit/959f05dbe5936eb131e963d1fb8e0d2b5a297449)), closes [#10](https://github.com/JCarran0/household-budgeting/issues/10)
+
 ### [5.43.1](https://github.com/JCarran0/household-budgeting/compare/v5.43.0...v5.43.1) (2026-04-20)
 
 
