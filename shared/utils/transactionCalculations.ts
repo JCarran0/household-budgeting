@@ -107,19 +107,6 @@ export function calculateNetCashFlow(transactions: TransactionForCalculation[]):
 }
 
 /**
- * Calculate savings rate as percentage of income
- * @param transactions Array of transactions to calculate from
- * @returns Savings rate as percentage (0-100), or 0 if no income
- */
-export function calculateSavingsRate(transactions: TransactionForCalculation[]): number {
-  const income = calculateIncome(transactions);
-  if (income === 0) return 0;
-  
-  const netFlow = calculateNetCashFlow(transactions);
-  return (netFlow / income) * 100;
-}
-
-/**
  * Separate transactions into income, expenses, and transfers
  * @param transactions Array of transactions to categorize
  * @returns Object with separated transaction arrays
@@ -128,11 +115,11 @@ export function categorizeTransactions(transactions: TransactionForCalculation[]
   const income: TransactionForCalculation[] = [];
   const expenses: TransactionForCalculation[] = [];
   const transfers: TransactionForCalculation[] = [];
-  
+
   for (const txn of transactions) {
     // Skip hidden and pending
     if (txn.isHidden || txn.pending) continue;
-    
+
     // Check if transfer
     if (txn.categoryId && isTransferCategory(txn.categoryId)) {
       transfers.push(txn);
@@ -142,24 +129,6 @@ export function categorizeTransactions(transactions: TransactionForCalculation[]
       expenses.push(txn);
     }
   }
-  
-  return { income, expenses, transfers };
-}
 
-/**
- * Calculate totals for income, expenses, and transfers
- * @param transactions Array of transactions to calculate from
- * @returns Object with calculated totals
- */
-export function calculateTransactionTotals(transactions: TransactionForCalculation[]) {
-  const { income, expenses, transfers } = categorizeTransactions(transactions);
-  
-  return {
-    totalIncome: income.reduce((sum, t) => sum + Math.abs(t.amount), 0),
-    totalExpenses: expenses.reduce((sum, t) => sum + t.amount, 0),
-    totalTransfersIn: transfers.filter(t => t.amount < 0).reduce((sum, t) => sum + Math.abs(t.amount), 0),
-    totalTransfersOut: transfers.filter(t => t.amount >= 0).reduce((sum, t) => sum + t.amount, 0),
-    netCashFlow: calculateNetCashFlow(transactions),
-    savingsRate: calculateSavingsRate(transactions)
-  };
+  return { income, expenses, transfers };
 }

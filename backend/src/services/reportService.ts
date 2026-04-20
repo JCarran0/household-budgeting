@@ -9,7 +9,7 @@ import { ActualsOverrideService } from './actualsOverrideService';
 import { StoredTransaction } from './transactionService';
 import { MonthlyBudget } from '../shared/types';
 import { format, startOfMonth, endOfMonth, subMonths, addMonths } from 'date-fns';
-import { calculateIncome, calculateSavingsRate, calculateSavings, calculateSpending } from '../shared/utils/transactionCalculations';
+import { calculateIncome, calculateSavings, calculateSpending } from '../shared/utils/transactionCalculations';
 import { calculateBudgetTotals } from '../shared/utils/budgetCalculations';
 import { Repository } from './repository';
 import { getMonthRange, calculateStdDev, getEffectivelyHiddenCategoryIds, getSavingsCategoryIds } from './reportHelpers';
@@ -38,8 +38,7 @@ export interface CashFlowSummary {
   income: number;
   expenses: number;   // spending only (excludes savings)
   savings: number;    // savings category transactions
-  netFlow: number;    // income - expenses (spending only)
-  savingsRate: number;
+  netFlow: number;    // income - expenses - savings
 }
 
 export interface CashFlowProjection {
@@ -558,8 +557,6 @@ export class ReportService {
         let income: number;
         let expenses: number;
         let savings: number;
-        let netFlow: number;
-        let savingsRate: number;
 
         if (this.actualsOverrideService) {
           const monthlyActuals = await this.actualsOverrideService.getMonthlyActuals(familyId, month);
@@ -569,8 +566,6 @@ export class ReportService {
             income = monthlyActuals.totalIncome;
             expenses = monthlyActuals.totalExpenses;
             savings = 0;
-            netFlow = income - expenses;
-            savingsRate = income > 0 ? ((income - expenses) / income) * 100 : 0;
           } else {
             // Calculate from transactions
             const [year, monthNum] = month.split('-').map(Number);
@@ -589,8 +584,6 @@ export class ReportService {
             income = calculateIncome(monthTransactions);
             savings = calculateSavings(monthTransactions, savingsCategoryIds);
             expenses = calculateSpending(monthTransactions, savingsCategoryIds);
-            netFlow = income - expenses;
-            savingsRate = calculateSavingsRate(monthTransactions);
           }
         } else {
           // Fallback: calculate from transactions (no override service available)
@@ -610,8 +603,6 @@ export class ReportService {
           income = calculateIncome(monthTransactions);
           savings = calculateSavings(monthTransactions, savingsCategoryIds);
           expenses = calculateSpending(monthTransactions, savingsCategoryIds);
-          netFlow = income - expenses;
-          savingsRate = calculateSavingsRate(monthTransactions);
         }
 
         summary.push({
@@ -619,8 +610,7 @@ export class ReportService {
           income,
           expenses,
           savings,
-          netFlow,
-          savingsRate
+          netFlow: income - expenses - savings,
         });
       }
 

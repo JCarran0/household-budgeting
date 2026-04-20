@@ -31,18 +31,21 @@ This function identifies both parent transfer categories and their subcategories
 Use the shared utilities from `shared/utils/transactionCalculations.ts`:
 
 ```typescript
-import { 
+import {
   calculateIncome,
-  calculateExpenses, 
-  calculateNetCashFlow,
-  calculateSavingsRate
+  calculateSpending,
+  calculateSavings,
 } from '../shared/utils/transactionCalculations';
+import { getSavingsCategoryIds } from '../shared/utils/budgetCalculations';
 
-// Calculate totals excluding transfers
+// Calculate totals excluding transfers, splitting savings out from spending
+const savingsCategoryIds = getSavingsCategoryIds(categories);
 const income = calculateIncome(transactions);
-const expenses = calculateExpenses(transactions);
-const netFlow = calculateNetCashFlow(transactions);
-const savingsRate = calculateSavingsRate(transactions);
+const spending = calculateSpending(transactions, savingsCategoryIds);
+const savings = calculateSavings(transactions, savingsCategoryIds);
+const netFlow = income - spending - savings;                        // truly free cash
+const savingsRate = income > 0 ? (income - spending) / income : 0;  // industry-standard
+const contributionRate = income > 0 ? savings / income : 0;          // explicit savings
 ```
 
 ### 3. Transaction Filtering

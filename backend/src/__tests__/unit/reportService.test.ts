@@ -428,7 +428,7 @@ describe('ReportService', () => {
       expect(result.summary!.map(s => s.month)).toEqual(['2025-01', '2025-02', '2025-03']);
     });
 
-    test('calculates income, expenses, and netFlow per month', async () => {
+    test('calculates income, expenses, savings, and netFlow per month', async () => {
       const result = await reportService.getCashFlowSummary(USER_ID, '2025-02', '2025-02');
 
       expect(result.summary).toBeDefined();
@@ -436,11 +436,10 @@ describe('ReportService', () => {
 
       // Feb income: 5000 (salary, negative amount → abs value)
       expect(feb.income).toBeCloseTo(5000);
-      // Feb expenses: groceries 150 + restaurants 65 + gas 55 + savings 500 = 770
-      // (savings NOT excluded from cash-flow expenses — only getCategoryBreakdown excludes them)
+      // Spending excludes savings/transfer categories
       expect(feb.expenses).toBeGreaterThan(0);
-      // netFlow = income - expenses
-      expect(feb.netFlow).toBeCloseTo(feb.income - feb.expenses);
+      // netFlow always = income − spending − savings (truly free cash after consumption AND savings commitments)
+      expect(feb.netFlow).toBeCloseTo(feb.income - feb.expenses - feb.savings);
     });
 
     test('excludes hidden transactions from all calculations', async () => {

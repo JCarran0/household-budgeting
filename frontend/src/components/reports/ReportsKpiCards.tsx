@@ -22,6 +22,7 @@ interface KpiSummary {
   averageMonthlyIncome: number;
   averageMonthlyExpenses: number;
   savingsRate: number;
+  contributionRate: number;
 }
 
 interface ReportsKpiCardsProps {
@@ -31,7 +32,7 @@ interface ReportsKpiCardsProps {
 
 export function ReportsKpiCards({ kpiSummary, timeRangeLabel }: ReportsKpiCardsProps) {
   return (
-    <SimpleGrid cols={{ base: 1, sm: 2, md: 5 }} spacing="md">
+    <SimpleGrid cols={{ base: 1, sm: 2, md: 3, lg: 6 }} spacing="md">
       <Card withBorder>
         <Group justify="space-between">
           <div>
@@ -123,7 +124,7 @@ export function ReportsKpiCards({ kpiSummary, timeRangeLabel }: ReportsKpiCardsP
               {kpiSummary?.savingsRate.toFixed(1) || 0}%
             </Text>
             <Text size="xs" c="dimmed" mt={7}>
-              Of income saved
+              Of income not spent
             </Text>
           </div>
           <RingProgress
@@ -131,7 +132,31 @@ export function ReportsKpiCards({ kpiSummary, timeRangeLabel }: ReportsKpiCardsP
             thickness={6}
             roundCaps
             sections={[
-              { value: kpiSummary?.savingsRate || 0, color: 'teal' }
+              { value: Math.max(0, Math.min(100, kpiSummary?.savingsRate || 0)), color: 'teal' }
+            ]}
+          />
+        </Group>
+      </Card>
+
+      <Card withBorder>
+        <Group justify="space-between">
+          <div>
+            <Text c="dimmed" size="xs" tt="uppercase" fw={700}>
+              Contribution Rate
+            </Text>
+            <Text fw={700} size="xl">
+              {kpiSummary?.contributionRate.toFixed(1) || 0}%
+            </Text>
+            <Text size="xs" c="dimmed" mt={7}>
+              Of income to savings accts
+            </Text>
+          </div>
+          <RingProgress
+            size={60}
+            thickness={6}
+            roundCaps
+            sections={[
+              { value: Math.max(0, Math.min(100, kpiSummary?.contributionRate || 0)), color: 'teal' }
             ]}
           />
         </Group>

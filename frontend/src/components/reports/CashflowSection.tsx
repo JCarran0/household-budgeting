@@ -4,7 +4,6 @@ import {
   Text,
   Center,
   Group,
-  Switch,
   Stack,
   Divider,
   Badge,
@@ -27,7 +26,6 @@ interface CashFlowChartEntry {
   income: number;
   expenses: number;
   savings: number;
-  netFlow: number;
 }
 
 interface BudgetVsActualEntry {
@@ -43,15 +41,13 @@ interface BudgetVsActualEntry {
 interface CashflowSectionProps {
   cashFlowChartData: CashFlowChartEntry[];
   budgetVsActualData: BudgetVsActualEntry[] | null;
-  includeSavingsInNet: boolean;
-  onToggleSavingsInNet: () => void;
   totalIncome: number;
   totalExpenses: number;
   totalSavings: number;
   netIncome: number;
 }
 
-export function CashflowSection({ cashFlowChartData, budgetVsActualData, includeSavingsInNet, onToggleSavingsInNet, totalIncome, totalExpenses, totalSavings, netIncome }: CashflowSectionProps) {
+export function CashflowSection({ cashFlowChartData, budgetVsActualData, totalIncome, totalExpenses, totalSavings, netIncome }: CashflowSectionProps) {
   const incomeExpenseTracker = useChartMouseTracker();
   const cashFlowTracker = useChartMouseTracker();
 
@@ -72,17 +68,7 @@ export function CashflowSection({ cashFlowChartData, budgetVsActualData, include
     <Grid>
       <Grid.Col span={12}>
         <Paper withBorder p="md">
-          <Group justify="space-between" mb="md">
-            <Text size="lg" fw={600}>Cash Flow Summary</Text>
-            <Group gap="xs">
-              <Text size="sm" c="dimmed">Include savings in net:</Text>
-              <Switch
-                checked={includeSavingsInNet}
-                onChange={onToggleSavingsInNet}
-                size="sm"
-              />
-            </Group>
-          </Group>
+          <Text size="lg" fw={600} mb="md">Cash Flow Summary</Text>
 
           {/* Three-line summary: Income / Spending / Savings / Net */}
           <Stack gap={4} mb="md">

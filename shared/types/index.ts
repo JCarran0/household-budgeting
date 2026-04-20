@@ -875,13 +875,13 @@ export interface CashFlowSummary {
   totalIncome: number;
   totalExpenses: number;  // spending only (excludes savings)
   totalSavings: number;   // savings category transactions
-  netCashFlow: number;
+  netCashFlow: number;    // income - expenses - savings
   monthlyBreakdown: {
     month: string;
     income: number;
     expenses: number;
     savings: number;
-    net: number;
+    net: number;          // income - expenses - savings
   }[];
 }
 

@@ -178,9 +178,10 @@ household-budgeting/
 - **Purpose**: Consistent financial calculations that exclude transfer transactions
 - **Key Functions**:
   - `calculateIncome(transactions)`: Sum negative amounts excluding transfers
-  - `calculateExpenses(transactions)`: Sum positive amounts excluding transfers
-  - `calculateNetCashFlow(transactions)`: Net income - expenses excluding transfers
-  - `calculateSavingsRate(transactions)`: Savings rate as percentage
+  - `calculateExpenses(transactions)`: Sum positive amounts excluding transfers (includes savings; prefer `calculateSpending` for consumption-only)
+  - `calculateSpending(transactions, savingsCategoryIds)`: Sum positive amounts excluding transfers AND savings categories
+  - `calculateSavings(transactions, savingsCategoryIds)`: Sum positive amounts in savings categories only
+  - `calculateNetCashFlow(transactions)`: Income − Expenses (excluding transfers). NOTE: treats savings as a spending bucket; when savings are split out, compute `income − spending − savings` directly.
   - `categorizeTransactions(transactions)`: Separate into income, expenses, transfers
 - **Transfer Exclusion**: All calculations automatically exclude `TRANSFER_IN` and `TRANSFER_OUT` categories and their subcategories
 - **Usage Pattern**: Always use these utilities instead of manual `filter + reduce` to ensure consistency

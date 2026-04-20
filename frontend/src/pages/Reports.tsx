@@ -1,4 +1,4 @@
-import { useMemo, useEffect, useCallback, useState } from 'react';
+import { useMemo, useEffect, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { useReportsFilters } from '../hooks/usePersistedFilters';
@@ -101,9 +101,6 @@ export function Reports() {
     }, { replace: true });
     resetStoredFilters();
   }, [setSearchParams, resetStoredFilters]);
-
-  // Toggle for whether savings count against net cash flow
-  const [includeSavingsInNet, setIncludeSavingsInNet] = useState(false);
 
   // Calculate date ranges based on selected option
   const { startDate, endDate, startMonth, endMonth } = getDateRange(timeRange);
@@ -281,7 +278,7 @@ export function Reports() {
 
     const dataMap = new Map();
     cashFlowData?.summary?.forEach(item => {
-      dataMap.set(item.month, { income: item.income, expenses: item.expenses, savings: item.savings || 0, netFlow: item.netFlow });
+      dataMap.set(item.month, { income: item.income, expenses: item.expenses, savings: item.savings || 0 });
     });
 
     return expectedMonths.map(month => {
@@ -291,7 +288,6 @@ export function Reports() {
         income: dataMap.get(month)?.income || 0,
         expenses: dataMap.get(month)?.expenses || 0,
         savings: dataMap.get(month)?.savings || 0,
-        netFlow: dataMap.get(month)?.netFlow || 0,
       };
     });
   }, [cashFlowData, startMonth, endMonth]);
@@ -303,18 +299,19 @@ export function Reports() {
     const totalIncome = months.reduce((sum, m) => sum + m.income, 0);
     const totalExpenses = months.reduce((sum, m) => sum + m.expenses, 0);
     const totalSavings = months.reduce((sum, m) => sum + (m.savings || 0), 0);
-    const netIncome = includeSavingsInNet
-      ? totalIncome - totalExpenses - totalSavings
-      : totalIncome - totalExpenses;
+    const netIncome = totalIncome - totalExpenses - totalSavings;
     const now = new Date();
     const currentMonth = format(now, 'yyyy-MM');
     const completeMonths = months.filter(m => m.month < currentMonth && (m.income > 0 || m.expenses > 0));
     const monthCount = completeMonths.length || 1;
     const averageMonthlyIncome = completeMonths.reduce((sum, m) => sum + m.income, 0) / monthCount;
     const averageMonthlyExpenses = completeMonths.reduce((sum, m) => sum + m.expenses, 0) / monthCount;
-    const savingsRate = totalIncome > 0 ? (netIncome / totalIncome) * 100 : 0;
-    return { totalIncome, totalExpenses, totalSavings, netIncome, averageMonthlyIncome, averageMonthlyExpenses, savingsRate };
-  }, [cashFlowData, includeSavingsInNet]);
+    // Industry-standard: share of income not consumed (leftover + explicit savings both count as "saved").
+    const savingsRate = totalIncome > 0 ? ((totalIncome - totalExpenses) / totalIncome) * 100 : 0;
+    // Share of income explicitly sent to retirement / emergency-fund / savings buckets.
+    const contributionRate = totalIncome > 0 ? (totalSavings / totalIncome) * 100 : 0;
+    return { totalIncome, totalExpenses, totalSavings, netIncome, averageMonthlyIncome, averageMonthlyExpenses, savingsRate, contributionRate };
+  }, [cashFlowData]);
 
   // Dynamic label for KPI cards based on time range
   const timeRangeLabel = useMemo(() => {
@@ -390,8 +387,6 @@ export function Reports() {
             <CashflowSection
               cashFlowChartData={cashFlowChartData}
               budgetVsActualData={budgetVsActualData}
-              includeSavingsInNet={includeSavingsInNet}
-              onToggleSavingsInNet={() => setIncludeSavingsInNet(v => !v)}
               totalIncome={kpiSummary?.totalIncome ?? 0}
               totalExpenses={kpiSummary?.totalExpenses ?? 0}
               totalSavings={kpiSummary?.totalSavings ?? 0}

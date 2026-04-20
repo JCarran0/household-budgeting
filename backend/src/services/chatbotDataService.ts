@@ -421,7 +421,7 @@ export class ChatbotDataService {
     const totalIncome = calculateIncome(calcTransactions);
     const totalSavings = calculateSavings(calcTransactions, savingsIds);
     const totalExpenses = calculateSpending(calcTransactions, savingsIds);
-    const netCashFlow = totalIncome - totalExpenses;
+    const netCashFlow = totalIncome - totalExpenses - totalSavings;
 
     // Build monthly breakdown
     const monthlyMap = new Map<string, typeof transactions>();
@@ -434,12 +434,15 @@ export class ChatbotDataService {
     const monthlyBreakdown = Array.from(monthlyMap.entries())
       .map(([month, txns]) => {
         const monthCalc = txns as unknown as import('../shared/utils/transactionCalculations').TransactionForCalculation[];
+        const mIncome = calculateIncome(monthCalc);
+        const mSpending = calculateSpending(monthCalc, savingsIds);
+        const mSavings = calculateSavings(monthCalc, savingsIds);
         return {
           month,
-          income: calculateIncome(monthCalc),
-          expenses: calculateSpending(monthCalc, savingsIds),
-          savings: calculateSavings(monthCalc, savingsIds),
-          net: calculateIncome(monthCalc) - calculateSpending(monthCalc, savingsIds),
+          income: mIncome,
+          expenses: mSpending,
+          savings: mSavings,
+          net: mIncome - mSpending - mSavings,
         };
       })
       .sort((a, b) => a.month.localeCompare(b.month));
