@@ -7,6 +7,30 @@ import {
 import type { CSSProperties, HTMLAttributes } from 'react';
 import type { Stop, StopLocation, TransitMode } from '../../../../../shared/types';
 import { stopIcon } from './stopIcons';
+import { PlacePhotoThumb } from './PlacePhotoThumb';
+
+interface StopPhotoInfo {
+  photoName: string;
+  photoAttribution?: string;
+  alt: string;
+}
+
+/**
+ * Return the photo metadata for a stop whose location has one, or null.
+ * Transit stops never render a photo — endpoints belong to the bracketing
+ * stays, not the transit card. Stay stops fall back to the icon too: the
+ * Stay banner (StayBanner.tsx) is where the stay's thumbnail renders.
+ */
+function stopPhotoInfo(stop: Stop): StopPhotoInfo | null {
+  if (stop.type === 'transit' || stop.type === 'stay') return null;
+  const loc = stop.location;
+  if (!loc || loc.kind !== 'verified' || !loc.photoName) return null;
+  return {
+    photoName: loc.photoName,
+    ...(loc.photoAttribution ? { photoAttribution: loc.photoAttribution } : {}),
+    alt: stop.name,
+  };
+}
 
 const MODE_LABEL: Record<TransitMode, string> = {
   drive: 'Drive',
@@ -62,6 +86,7 @@ export function StopCard({
   showDragHandle,
 }: StopCardProps) {
   const Icon = stopIcon(stop);
+  const photo = stopPhotoInfo(stop);
   const time = stop.time;
   const secondary = secondaryText(stop);
 
@@ -88,10 +113,21 @@ export function StopCard({
           </div>
         )}
 
-        <Icon
-          size={18}
-          style={{ color: 'var(--mantine-color-blue-5)', marginTop: 2, flexShrink: 0 }}
-        />
+        {photo ? (
+          <div style={{ flexShrink: 0 }}>
+            <PlacePhotoThumb
+              photoName={photo.photoName}
+              attribution={photo.photoAttribution ?? null}
+              size={32}
+              alt={photo.alt}
+            />
+          </div>
+        ) : (
+          <Icon
+            size={18}
+            style={{ color: 'var(--mantine-color-blue-5)', marginTop: 2, flexShrink: 0 }}
+          />
+        )}
 
         <div style={{ width: 56, flexShrink: 0 }}>
           <Text size="sm" c={time ? undefined : 'dimmed'} fw={time ? 500 : 400}>

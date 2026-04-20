@@ -5,7 +5,10 @@ import { useDisclosure } from '@mantine/hooks';
 interface PlacePhotoThumbProps {
   photoName: string;
   attribution: string | null;
+  /** Width in px. Also sets the height if `height` is not provided (square). */
   size: number;
+  /** Optional non-square height in px. Defaults to `size`. */
+  height?: number;
   alt: string;
   radius?: MantineRadius;
 }
@@ -21,6 +24,7 @@ export function PlacePhotoThumb({
   photoName,
   attribution,
   size,
+  height,
   alt,
   radius = 'sm',
 }: PlacePhotoThumbProps) {
@@ -28,7 +32,11 @@ export function PlacePhotoThumb({
   const [opened, { open, close }] = useDisclosure(false);
   if (!key) return null;
 
-  // maxWidthPx is doubled for retina; Google redirects to a CDN image.
+  const tileHeight = height ?? size;
+  // maxWidthPx is doubled for retina; Google redirects to a CDN image. Using
+  // width (not height) as the fetch dimension matches Google's Place Photos
+  // API contract — the service returns a photo constrained to maxWidthPx and
+  // lets the caller crop via CSS fit=cover.
   const thumbSrc = `https://places.googleapis.com/v1/${photoName}/media?maxWidthPx=${size * 2}&key=${key}`;
   const heroSrc = `https://places.googleapis.com/v1/${photoName}/media?maxWidthPx=${HERO_MAX_WIDTH_PX}&key=${key}`;
   const attributionText = attribution ? `Photo: ${attribution}` : 'Photo via Google';
@@ -41,7 +49,7 @@ export function PlacePhotoThumb({
           aria-label={`View ${alt} photo full size`}
           style={{ display: 'inline-block', borderRadius: 'var(--mantine-radius-sm)' }}
         >
-          <Image src={thumbSrc} alt={alt} w={size} h={size} radius={radius} fit="cover" />
+          <Image src={thumbSrc} alt={alt} w={size} h={tileHeight} radius={radius} fit="cover" />
         </UnstyledButton>
       </Tooltip>
       <Modal opened={opened} onClose={close} size="xl" centered title={alt}>

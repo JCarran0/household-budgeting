@@ -158,6 +158,31 @@ decisions:
       popup photos are improvements or clutter. Capture in PR 1 means
       PR 2 has no dependency beyond render-layer changes.
 
+  - id: D12
+    date: 2026-04-20
+    decision: Ship PR 2 immediately, skipping D8's 2-week real-usage gate
+    rationale: |
+      D8 gated PR 2 on "~2 weeks of real usage on PR 1" to data-inform
+      whether Eat/Play avatars and Map popup photos would be improvements
+      or clutter.
+
+      The risk the gate was meant to mitigate is "Google photo quality is
+      uneven and might look bad on small cards." Mitigating factors that
+      made the gate feel optional after PR 1 landed:
+
+      - The candidate picker (D11) lets users manually fix bad default
+        photos before save. A user who sees "parking lot shot" on an
+        Eat card has a fix that didn't exist in PR 1's original scope.
+      - All PR 2 surfaces fall back to the existing icon/emoji when no
+        photoName is present — zero regression for free-text stops or
+        any stop where fetchFields didn't return photos.
+      - Family scale (2 users): the "~2 weeks" data sample would have
+        been a handful of stops, not statistically interesting.
+
+      If real usage reveals quality issues, thumbnail sizes and surfaces
+      are tunable in a follow-up without schema or billing changes
+      (PR2.3 stays on the table).
+
   - id: D11
     date: 2026-04-20
     decision: Stay form shows a candidate-photo picker strip, replacing the single preview
@@ -728,40 +753,56 @@ phase_6_release:
           expected range (<$1/mo at current usage).
 
 # =============================================================================
-# PR 2 (DEFERRED) — Map Popup + Stop Card Avatars
+# PR 2 — Map Popup + Stop Card Avatars
 # =============================================================================
-pr_2_deferred:
-  status: deferred
-  gate: PR 1 visual quality in production, ~2 weeks of real usage
+# Gate from D8 waived; see D12 for rationale.
+pr_2:
+  status: completed
   description: |
-    PR 2 has no data dependency on PR 1 beyond schema — PR 1 captures
-    photoName/photoAttribution for all verified locations. PR 2 is pure
-    render-layer work.
+    Render-layer-only additions that light up the photo data PR 1 was
+    already capturing. No schema, no backend, no new API calls.
 
   tasks:
+    - id: "PR2.0"
+      task: Extend PlacePhotoThumb with optional `height` prop
+      status: completed
+      actual: |
+        Added optional `height?: number` that defaults to `size`. Keeps
+        all existing callers (Stay banner 48, Stay form preview 96,
+        hero modal) unchanged. Map popup uses size=200 height=100.
+
     - id: "PR2.1"
       task: Stop card avatar (Eat/Play)
-      details: |
-        In frontend/src/components/trips/agenda/StopCard.tsx:91, when
-        stop.location?.kind === 'verified' && stop.location.photoName,
-        render PlacePhotoThumb size={32} in place of the colored Icon.
-        Transit stops never render a photo (no location identity).
+      status: completed
+      actual: |
+        Added a stopPhotoInfo() helper in StopCard that returns a photo
+        descriptor only for Eat/Play stops with a verified location and
+        photoName — Transit (no identity) and Stay (banner handles it)
+        fall through to the icon. 32px avatar replaces the leading 18px
+        colored icon; hero modal works via PlacePhotoThumb's built-in
+        click behavior.
 
     - id: "PR2.2"
       task: Map popup photo header
-      details: |
-        In frontend/src/components/trips/map/StopPopup.tsx:42, when the
-        stop's location is verified and carries a photoName, render
-        PlacePhotoThumb size={200} height={100} (wide aspect) above the
-        title row. Fall back to emoji-only header when absent.
+      status: completed
+      actual: |
+        Added a popupPhoto() helper in StopPopup that extracts photo
+        metadata from Stay/Eat/Play stops (Transit excluded — no single
+        location). Header renders 200x100 above the title row; falls
+        back to emoji-only header when no photo.
 
     - id: "PR2.3"
       task: Re-evaluate thumbnail sizes after real data
+      status: pending_user_qa
       details: |
-        Revisit PR 1's 48px Stay banner size and PR 2's sizes based on
-        actual photo quality distribution. If Google photo quality is
-        uniformly high, larger sizes warrant a second look; if uneven,
-        smaller sizes reduce variance in perceived polish.
+        After PR 2 has been in use for ~1-2 weeks on real trips:
+        - Stay banner 48px — bump to 56/64 if photos uniformly look good?
+        - StopCard avatar 32px — too small if photos are great; too big
+          if photos are frequently bad (visual noise).
+        - Map popup 200x100 — wide aspect may crop badly on portrait-
+          oriented photos; revisit the ratio if that happens.
+
+        Pure render-layer tuning, no schema or billing impact.
 
 # =============================================================================
 # OPEN QUESTIONS (tracked from BRD, updated as decided)
