@@ -18,6 +18,8 @@ const verifiedLocationSchema = z.object({
   lat: z.number().min(-90).max(90),
   lng: z.number().min(-180).max(180),
   placeId: z.string().min(1).max(500),
+  photoName: z.string().min(1).max(500).optional(),
+  photoAttribution: z.string().min(1).max(300).optional(),
 });
 
 const freeTextLocationSchema = z.object({

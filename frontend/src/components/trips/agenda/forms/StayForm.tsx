@@ -10,6 +10,7 @@ import type {
   VerifiedLocation,
 } from '../../../../../../shared/types';
 import { LocationInput } from '../LocationInput';
+import { PlacePhotoThumb } from '../PlacePhotoThumb';
 import { useGooglePlaces } from '../../../../hooks/useGooglePlaces';
 import { addDaysIso, dateToIso, isoToDate } from './formHelpers';
 
@@ -147,6 +148,19 @@ export function StayForm({
           onChange={(v) => form.setFieldValue('location', v?.kind === 'verified' ? v : null)}
           error={form.errors.location as string | undefined}
         />
+        {form.values.location?.kind === 'verified' && form.values.location.photoName && (
+          <Group gap="xs" mt={-4}>
+            <PlacePhotoThumb
+              photoName={form.values.location.photoName}
+              attribution={form.values.location.photoAttribution ?? null}
+              size={96}
+              alt="Selected place photo"
+            />
+            <Text size="xs" c="dimmed">
+              This photo will appear on the stay banner.
+            </Text>
+          </Group>
+        )}
         <Group grow>
           <DatePickerInput
             label="Start date (first night)"

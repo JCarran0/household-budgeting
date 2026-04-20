@@ -348,6 +348,8 @@ export interface VerifiedLocation {
   lat: number;
   lng: number;
   placeId: string;   // Provider-specific (Google Places), for dedup/update
+  photoName?: string;        // Places v1 photo resource name (e.g. places/.../photos/...)
+  photoAttribution?: string; // First author's display name
 }
 
 export interface FreeTextLocation {

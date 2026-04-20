@@ -70,92 +70,115 @@ export function LocationInput({
   }, [value]);
 
   // --- Predictions state ---
-  const [predictions, setPredictions] = useState<google.maps.places.AutocompletePrediction[]>([]);
+  // Post-2025-03-01 API: AutocompleteSuggestion replaces AutocompleteService
+  // (D9). Hold the raw suggestions so the select path can call toPlace() on
+  // the exact PlacePrediction it came from, which keeps the session-token
+  // link to fetchFields.
+  const [suggestions, setSuggestions] = useState<google.maps.places.AutocompleteSuggestion[]>([]);
   const [loadingPredictions, setLoadingPredictions] = useState(false);
 
   // Session token keeps billing grouped for Places Autocomplete sessions.
   const sessionTokenRef = useRef<google.maps.places.AutocompleteSessionToken | null>(null);
-  const autocompleteServiceRef = useRef<google.maps.places.AutocompleteService | null>(null);
-  const placesServiceRef = useRef<google.maps.places.PlacesService | null>(null);
 
   useEffect(() => {
     if (places.status !== 'ready') return;
     const g = places.google;
-    autocompleteServiceRef.current = new g.maps.places.AutocompleteService();
-    // PlacesService requires an HTMLDivElement as an anchor — a detached div is fine.
-    placesServiceRef.current = new g.maps.places.PlacesService(document.createElement('div'));
     sessionTokenRef.current = new g.maps.places.AutocompleteSessionToken();
   }, [places]);
 
   // Fetch predictions when the debounced query changes.
   useEffect(() => {
     if (places.status !== 'ready') return;
-    const service = autocompleteServiceRef.current;
-    if (!service) return;
     if (!debouncedQuery.trim()) {
-      setPredictions([]);
+      setSuggestions([]);
       return;
     }
     // Skip if the query matches the already-verified label (avoids flicker on reopen).
     if (value?.kind === 'verified' && value.label === debouncedQuery) {
-      setPredictions([]);
+      setSuggestions([]);
       return;
     }
+    let cancelled = false;
     setLoadingPredictions(true);
-    service.getPlacePredictions(
-      {
-        input: debouncedQuery,
-        sessionToken: sessionTokenRef.current ?? undefined,
-      },
-      (results) => {
-        setPredictions(results ?? []);
+    places.google.maps.places.AutocompleteSuggestion.fetchAutocompleteSuggestions({
+      input: debouncedQuery,
+      sessionToken: sessionTokenRef.current ?? undefined,
+    })
+      .then(({ suggestions: next }) => {
+        if (cancelled) return;
+        setSuggestions(next);
         setLoadingPredictions(false);
-      },
-    );
+      })
+      .catch((err: Error) => {
+        if (cancelled) return;
+        console.warn('fetchAutocompleteSuggestions failed', err);
+        setSuggestions([]);
+        setLoadingPredictions(false);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [debouncedQuery, places, value]);
 
   const autocompleteData = useMemo(
     () =>
-      predictions.map((p) => ({
-        value: p.place_id, // stable id used as the Autocomplete value
-        label: p.description,
-      })),
-    [predictions],
+      suggestions
+        .map((s) => s.placePrediction)
+        .filter((p): p is google.maps.places.PlacePrediction => p !== null)
+        .map((p) => ({
+          value: p.placeId,
+          label: p.text.text,
+        })),
+    [suggestions],
   );
 
-  const handlePredictionSelect = (placeId: string) => {
-    const service = placesServiceRef.current;
-    if (!service) return;
-    service.getDetails(
-      {
-        placeId,
-        fields: ['name', 'formatted_address', 'geometry'],
-        sessionToken: sessionTokenRef.current ?? undefined,
-      },
-      (details, status) => {
-        if (
-          status !== google.maps.places.PlacesServiceStatus.OK ||
-          !details ||
-          !details.geometry?.location
-        ) {
-          return;
-        }
-        const verified: VerifiedLocation = {
-          kind: 'verified',
-          label: details.name ?? details.formatted_address ?? '',
-          address: details.formatted_address ?? '',
-          lat: details.geometry.location.lat(),
-          lng: details.geometry.location.lng(),
-          placeId,
-        };
-        onChange(verified);
-        setQuery(verified.label);
-        // Rotate the session token — billing session ends on details fetch.
-        if (places.status === 'ready') {
-          sessionTokenRef.current = new places.google.maps.places.AutocompleteSessionToken();
-        }
-      },
-    );
+  const handlePredictionSelect = async (placeId: string) => {
+    if (places.status !== 'ready') return;
+    const prediction = suggestions
+      .map((s) => s.placePrediction)
+      .find((p): p is google.maps.places.PlacePrediction => p?.placeId === placeId);
+    if (!prediction) return;
+    // toPlace() carries the session token from the suggestion request, so the
+    // first fetchFields call on this Place is billed as part of the same
+    // autocomplete session.
+    const place = prediction.toPlace();
+    try {
+      await place.fetchFields({
+        fields: ['displayName', 'formattedAddress', 'location', 'photos'],
+      });
+    } catch (err) {
+      // Non-fatal (REQ-002): fall back silently and let the user retry.
+      console.warn('Place.fetchFields failed', err);
+      return;
+    }
+    if (!place.location) return;
+
+    const photo = place.photos?.[0];
+    // @types/google.maps 3.64 does not yet expose `Photo.name`; the v=weekly
+    // runtime does. Read it defensively without using `any`.
+    const photoNameRaw = photo
+      ? (photo as unknown as { name?: unknown }).name
+      : undefined;
+    const photoName =
+      typeof photoNameRaw === 'string' && photoNameRaw.length > 0
+        ? photoNameRaw
+        : undefined;
+    const photoAttribution = photo?.authorAttributions?.[0]?.displayName || undefined;
+
+    const verified: VerifiedLocation = {
+      kind: 'verified',
+      label: place.displayName ?? place.formattedAddress ?? '',
+      address: place.formattedAddress ?? '',
+      lat: place.location.lat(),
+      lng: place.location.lng(),
+      placeId,
+      ...(photoName ? { photoName } : {}),
+      ...(photoAttribution ? { photoAttribution } : {}),
+    };
+    onChange(verified);
+    setQuery(verified.label);
+    // Rotate the session token — the autocomplete billing session ends here.
+    sessionTokenRef.current = new places.google.maps.places.AutocompleteSessionToken();
   };
 
   const applyFreeText = () => {
@@ -251,7 +274,7 @@ export function LocationInput({
           error={error ?? undefined}
           filter={({ options }) => options} // show all server-provided predictions verbatim
         />
-        {mode === 'verifiedOrFreeText' && query.trim().length > 0 && predictions.length === 0 && !loadingPredictions && (
+        {mode === 'verifiedOrFreeText' && query.trim().length > 0 && suggestions.length === 0 && !loadingPredictions && (
           <Button variant="subtle" size="compact-xs" onClick={applyFreeText}>
             Use "{query.trim()}" as typed
           </Button>

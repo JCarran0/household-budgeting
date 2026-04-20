@@ -1,0 +1,675 @@
+# =============================================================================
+# Trip Place Photos — Implementation Plan
+# =============================================================================
+# BRD: docs/features/TRIP-PLACE-PHOTOS-BRD.md
+# Extends: docs/features/TRIP-ITINERARIES-PLAN.yaml (shipped)
+# Status: Draft
+# Last Updated: 2026-04-20
+# =============================================================================
+
+overview:
+  description: |
+    Implementation plan for Trip Place Photos — small thumbnail images of
+    places (sourced from Google Places API) alongside verified stops in Trip
+    Itineraries.
+
+    The feature is strictly additive. `VerifiedLocation` in shared/types
+    gains two optional string fields (photoName, photoAttribution). No
+    backend, no service, no route, no Zod schema change. The single
+    capture-side change is swapping one legacy `PlacesService.getDetails`
+    call for the newer `google.maps.places.Place.fetchFields` — same data,
+    just now includes the stable `photos[].name` strings the legacy API
+    doesn't expose.
+
+    The feature ships in two PRs:
+      PR 1 — schema + capture (all verified locations) + Stay banner
+             thumbnail + Stay form preview.
+      PR 2 — Map popup photo header + Eat/Play stop card avatar (pending
+             PR 1 quality outcome in real usage).
+
+  key_files:
+    brd: docs/features/TRIP-PLACE-PHOTOS-BRD.md
+    extends_plan: docs/features/TRIP-ITINERARIES-PLAN.yaml
+    shared_types: shared/types/index.ts
+    location_input: frontend/src/components/trips/agenda/LocationInput.tsx
+    stay_banner: frontend/src/components/trips/agenda/StayBanner.tsx
+    stay_form: frontend/src/components/trips/agenda/forms/StayForm.tsx
+    add_stop_sheet: frontend/src/components/trips/agenda/AddStopSheet.tsx
+    places_hook: frontend/src/hooks/useGooglePlaces.ts
+    # PR 2 only:
+    stop_card: frontend/src/components/trips/agenda/StopCard.tsx
+    stop_popup: frontend/src/components/trips/map/StopPopup.tsx
+
+# =============================================================================
+# DECISIONS LOG — Captured from BRD refinement; update as implementation unfolds
+# =============================================================================
+decisions:
+  - id: D1
+    date: 2026-04-20
+    decision: Photos come from Google Places API (not Google Photos, not user uploads)
+    rationale: |
+      Google Places API is already integrated in V1 for autocomplete and
+      address verification, loaded via the same Maps JS bundle. The `photos`
+      field on the Place resource is the lowest-friction path to
+      place-identifying imagery: one existing billing relationship, one
+      existing API key, one existing loader, one existing session-token flow.
+
+      User uploads or Google Photos integration would dwarf this release's
+      scope and chase a different product idea (trip memories, not place
+      identity). Those remain viable as future features; they don't compete.
+
+  - id: D2
+    date: 2026-04-20
+    decision: Persist photoName + photoAttribution on VerifiedLocation; never cache binaries
+    rationale: |
+      Google ToS prohibits caching photo binaries beyond session scope but
+      explicitly allows persisting photo resource names and attribution text.
+      Storing the name on VerifiedLocation means capture happens once (at
+      place selection) and every future render is a direct CDN image fetch —
+      no repeated API calls, no quota risk, no backend cache to invalidate.
+
+      VerifiedLocation is the correct owner (not Stop): the location is the
+      "what is this place" concept; the photo represents the place, not the
+      event. The same location shape is reused across Stay, Eat, Play, and
+      Transit endpoints — one schema change enables all downstream renders.
+
+  - id: D3
+    date: 2026-04-20
+    decision: Migrate the single getDetails call in LocationInput to the new Place.fetchFields API
+    rationale: |
+      The legacy PlacesService.getDetails returns photos as PlacePhoto
+      instances with an opaque getUrl() method — no persistable string.
+      The newer google.maps.places.Place class (same Maps JS loader, same
+      API key, same Places library) exposes photos[].name as a stable
+      resource name that survives persistence and reconstruction.
+
+      The migration is isolated to handlePredictionSelect in one file. The
+      autocomplete prediction flow (AutocompleteService) is untouched —
+      autocomplete and details are independent SDK surfaces. Risk surface:
+      one callback's shape changes from callback-style to Promise-style;
+      tests and manual QA cover.
+
+  - id: D4
+    date: 2026-04-20
+    decision: Capture photos for all verified locations in PR 1; render only on Stay banner
+    rationale: |
+      Capture happens in a single code path (handlePredictionSelect). Gating
+      capture by stop type adds conditional logic at the wrong layer — the
+      LocationInput doesn't know (and shouldn't know) whether the location
+      will end up on a Stay, Eat, Play, or Transit. Rendering is the natural
+      decision point: PR 1 renders only on Stay banners and the form preview;
+      PR 2 lights up the map popup and stop card avatars without re-touching
+      saved records or re-fetching photos.
+
+      Cost: one extra Places "photos" SKU per stop create regardless of
+      whether PR 1 renders it (~$0.007 per stop, ~$1/year at family scale).
+      Negligible tradeoff against the alternative complexity.
+
+  - id: D5
+    date: 2026-04-20
+    decision: Thumbnail URL constructed client-side; no backend proxy
+    rationale: |
+      The API key is already referrer-restricted in GCP to
+      budget.jaredcarrano.com and localhost:5183 — a scraper can't drain it.
+      The bundled key is standard for client-side Places integrations. A
+      backend proxy would add a route, a rate-limit surface, and server-side
+      GCP billing indirection for no net security improvement under the
+      referrer restriction.
+
+      Revisit only if a GCP audit flags abuse or if the referrer restriction
+      is lifted for some future reason.
+
+  - id: D6
+    date: 2026-04-20
+    decision: Attribution rendered as tooltip on hover, not always-visible caption
+    rationale: |
+      Google's attribution policy accepts in-app attribution proximate to
+      the photo; tooltip-on-hover meets this bar. An always-visible caption
+      competes with the stop name for visual weight on a 48px thumbnail and
+      clutters the banner. If Google policy tightens, we convert the
+      tooltip to a caption without a schema change — render decision only.
+
+  - id: D7
+    date: 2026-04-20
+    decision: No backfill for stops created before this feature ships
+    rationale: |
+      Backfill would require iterating every stop in every trip for every
+      user, issuing a fetchFields call per verified location — moderate
+      billing cost and no user-initiated trigger. Release notes document
+      the re-select pathway ("edit the stay's address and re-confirm to
+      capture a photo") which is discoverable and zero-cost.
+
+      At 2-user scale, the historical stop count is small; if backfill
+      turns out to be wanted, a one-shot admin script is trivial to write
+      and easier to reason about than a background job.
+
+  - id: D8
+    date: 2026-04-20
+    decision: Two-PR rollout gated on PR 1 visual quality
+    rationale: |
+      Photo quality from Google Places is uneven — a famous hotel returns
+      great shots, a small restaurant returns the sidewalk, some addresses
+      return nothing. PR 1 on the Stay banner is the highest-leverage,
+      lowest-risk surface: Stays skew toward well-photographed venues,
+      banner real estate accommodates imperfect photos.
+
+      After PR 1 has been in use for ~2 weeks on real trips, PR 2 makes
+      a data-informed decision about whether Eat/Play avatars and map
+      popup photos are improvements or clutter. Capture in PR 1 means
+      PR 2 has no dependency beyond render-layer changes.
+
+  - id: D9
+    date: 2026-04-20
+    decision: Bundle AutocompleteService → AutocompleteSuggestion migration into PR 1
+    rationale: |
+      Google deprecated AutocompleteService for new customers on 2025-03-01.
+      The console warning surfaced during Phase 2 manual testing of the
+      fetchFields migration:
+
+        "As of March 1st, 2025, google.maps.places.AutocompleteService is not
+         available to new customers. Please use AutocompleteSuggestion instead."
+
+      Bundling is strictly additive — the two APIs share one file
+      (LocationInput.tsx) and one SDK surface, so one test pass covers both.
+      There is also a billing win: when a session token is passed to
+      AutocompleteSuggestion.fetchAutocompleteSuggestions and the selected
+      Place is produced via PlacePrediction.toPlace(), the token automatically
+      rides the first fetchFields call, collapsing what Phase 2 left as two
+      billing sessions per stop into one.
+
+      Tradeoff: larger diff than "pure photo capture." Mitigation: all changes
+      remain in LocationInput.tsx; the outward contract (StopLocation produced,
+      callers unchanged) is unchanged.
+
+# =============================================================================
+# PHASE 1: Shared Types
+# =============================================================================
+phase_1_schema:
+  status: not_started
+  description: |
+    Add two optional string fields to VerifiedLocation in shared/types/index.ts.
+    No backend work, no Zod change, no migration.
+
+  tasks:
+    - id: "1.1"
+      task: Extend VerifiedLocation with photoName and photoAttribution
+      status: not_started
+      details: |
+        In shared/types/index.ts:344:
+
+        export interface VerifiedLocation {
+          kind: 'verified';
+          label: string;
+          address: string;
+          lat: number;
+          lng: number;
+          placeId: string;
+          photoName?: string;        // Places v1 photo resource name
+          photoAttribution?: string; // First author's display name
+        }
+
+        Both optional. Existing stops deserialize with undefined for these
+        fields — downstream code treats undefined as "no photo" and falls
+        back to icons.
+
+    - id: "1.2"
+      task: Verify no Zod schema regression
+      status: not_started
+      details: |
+        Grep shared/ and backend/src/ for any schema that validates
+        VerifiedLocation shape with .strict() or an explicit object shape
+        — loosen if needed so the two new fields pass through. Likely a
+        no-op (backend treats stop location as opaque JSON) but confirm.
+
+# =============================================================================
+# PHASE 2: Capture — LocationInput Migration to Place.fetchFields
+# =============================================================================
+phase_2_capture:
+  status: not_started
+  description: |
+    Replace the single legacy PlacesService.getDetails call in LocationInput
+    with google.maps.places.Place.fetchFields. Preserves the autocomplete
+    flow unchanged; only the details-fetch code path migrates.
+
+  tasks:
+    - id: "2.1"
+      task: Migrate handlePredictionSelect to Place.fetchFields
+      status: not_started
+      details: |
+        In frontend/src/components/trips/agenda/LocationInput.tsx:126,
+        replace the PlacesService.getDetails callback shape with:
+
+        const handlePredictionSelect = async (placeId: string) => {
+          if (places.status !== 'ready') return;
+          const place = new places.google.maps.places.Place({ id: placeId });
+          try {
+            await place.fetchFields({
+              fields: ['displayName', 'formattedAddress', 'location', 'photos'],
+            });
+          } catch (err) {
+            console.warn('Place.fetchFields failed', err);
+            return;
+          }
+          if (!place.location) return;
+
+          const photo = place.photos?.[0];
+          const attribution = photo?.authorAttributions?.[0]?.displayName ?? undefined;
+
+          const verified: VerifiedLocation = {
+            kind: 'verified',
+            label: place.displayName ?? place.formattedAddress ?? '',
+            address: place.formattedAddress ?? '',
+            lat: place.location.lat(),
+            lng: place.location.lng(),
+            placeId,
+            photoName: photo?.name,
+            photoAttribution: attribution,
+          };
+          onChange(verified);
+          setQuery(verified.label);
+          sessionTokenRef.current =
+            new places.google.maps.places.AutocompleteSessionToken();
+        };
+
+        The placesServiceRef (legacy PlacesService) becomes unused in this
+        file — delete its ref, init, and type import.
+
+        Autocomplete flow (AutocompleteService) is unchanged.
+
+    - id: "2.2"
+      task: Verify SDK type coverage for google.maps.places.Place
+      status: not_started
+      details: |
+        The new Place class and fetchFields method require a recent
+        @types/google.maps version. Check current devDependency in
+        frontend/package.json — bump if `Place` or `fetchFields` is missing.
+        If @googlemaps/js-api-loader pins to an old schema, bump together.
+
+    - id: "2.3"
+      task: Manual verification — photo name captured end-to-end
+      status: not_started
+      details: |
+        Local dev, with real Places API key:
+        - Open "Add Stay", search "Hotel Arts Barcelona", select
+        - Confirm the saved Stay's location.photoName looks like
+          `places/ChIJ.../photos/ATJ...`
+        - Confirm location.photoAttribution is populated (hotel-class
+          venues have attributions; residential addresses may not)
+        - Search "1600 Pennsylvania Ave, Washington, DC" — verify photoName
+          present (high-profile public building)
+        - Search a random residential address — verify photoName absent
+          without errors
+
+# =============================================================================
+# PHASE 3: Render — PlacePhotoThumb Helper Component
+# =============================================================================
+phase_3_thumb_component:
+  status: not_started
+  description: |
+    A shared, size-agnostic photo thumbnail component used by Stay banner,
+    Stay form preview, and (in PR 2) Map popup and Stop card avatar.
+
+  tasks:
+    - id: "3.1"
+      task: Create PlacePhotoThumb.tsx
+      status: not_started
+      details: |
+        New file: frontend/src/components/trips/agenda/PlacePhotoThumb.tsx
+
+        interface Props {
+          photoName: string;
+          attribution: string | null;
+          size: number;         // px, square
+          alt: string;
+          radius?: MantineRadius;  // default 'sm'
+        }
+
+        export function PlacePhotoThumb({
+          photoName, attribution, size, alt, radius = 'sm'
+        }: Props) {
+          const key = import.meta.env.VITE_GOOGLE_PLACES_API_KEY as string | undefined;
+          if (!key) return null;
+          const src = `https://places.googleapis.com/v1/${photoName}/media?maxWidthPx=${size * 2}&key=${key}`;
+          const tooltip = attribution ? `Photo: ${attribution}` : 'Photo via Google';
+          return (
+            <Tooltip label={tooltip} withArrow>
+              <Image
+                src={src}
+                alt={alt}
+                w={size}
+                h={size}
+                radius={radius}
+                fit="cover"
+              />
+            </Tooltip>
+          );
+        }
+
+        - maxWidthPx = size * 2 for retina.
+        - Tooltip satisfies Google's attribution display requirement.
+        - Returns null when key is absent — caller falls back to icon.
+
+    - id: "3.2"
+      task: Unit test for PlacePhotoThumb
+      status: not_started
+      details: |
+        New file: frontend/src/components/trips/agenda/__tests__/PlacePhotoThumb.test.tsx
+
+        Assertions:
+        - URL construction: photoName "places/abc/photos/xyz", size 48
+          produces src matching /maxWidthPx=96.*&key=.+/
+        - Null attribution renders tooltip text "Photo via Google"
+        - Non-null attribution renders tooltip text "Photo: Hotel Arts Barcelona"
+        - Undefined key (mock import.meta.env) returns null from render
+
+        Use vitest + @testing-library/react — matches existing frontend test
+        infrastructure if any; otherwise skip this test and cover via PR 1
+        manual QA (per project's risk-based testing philosophy; thumbnail
+        render is not a money/auth path).
+
+# =============================================================================
+# PHASE 4: Render — Stay Banner Integration
+# =============================================================================
+phase_4_stay_banner:
+  status: not_started
+  description: |
+    Swap the IconBed for a PlacePhotoThumb on StayBanner when the stay's
+    location carries a photoName. Preserve all existing banner behavior.
+
+  tasks:
+    - id: "4.1"
+      task: Update StayBanner to render PlacePhotoThumb when available
+      status: not_started
+      details: |
+        In frontend/src/components/trips/agenda/StayBanner.tsx:32, replace:
+
+          <IconBed size={20} color="var(--mantine-color-blue-filled)" />
+
+        with:
+
+          {stay.location.photoName ? (
+            <PlacePhotoThumb
+              photoName={stay.location.photoName}
+              attribution={stay.location.photoAttribution ?? null}
+              size={48}
+              alt={stay.name}
+            />
+          ) : (
+            <IconBed size={20} color="var(--mantine-color-blue-filled)" />
+          )}
+
+        Verify the Group alignment still looks right with a 48px thumbnail
+        at the start; adjust wrap/gap if needed. The stay name + address +
+        nightsLabel Stack already handles truncation, so a larger leading
+        element shouldn't cascade.
+
+    - id: "4.2"
+      task: Visual QA across Stay shapes
+      status: not_started
+      details: |
+        Manual verification on local dev:
+        - New stay with photo → thumbnail visible, hover shows attribution
+        - Existing stay (pre-feature) → IconBed visible unchanged
+        - Stay with location that has no photos → IconBed visible
+        - Hover tooltip positions correctly on narrow viewport
+        - Image load fails (simulate via DevTools network block) → banner
+          doesn't crash; Mantine Image falls back to empty state
+
+# =============================================================================
+# PHASE 5: Render — Stay Form Preview
+# =============================================================================
+phase_5_stay_form_preview:
+  status: not_started
+  description: |
+    Show a 96px preview below the LocationInput in StayForm when a verified
+    location with a photoName is currently selected. Reassures the user
+    before save.
+
+  tasks:
+    - id: "5.1"
+      task: Add PlacePhotoThumb preview to StayForm
+      status: not_started
+      details: |
+        In frontend/src/components/trips/agenda/forms/StayForm.tsx,
+        directly below the LocationInput for the stay's location:
+
+          {location?.kind === 'verified' && location.photoName && (
+            <Group gap="xs" mt="xs">
+              <PlacePhotoThumb
+                photoName={location.photoName}
+                attribution={location.photoAttribution ?? null}
+                size={96}
+                alt="Selected place photo"
+              />
+              <Text size="xs" c="dimmed">
+                This photo will appear on the stay banner.
+              </Text>
+            </Group>
+          )}
+
+        The dimmed caption explains the preview's purpose and reduces
+        "what is this?" confusion the first time a user sees it.
+
+    - id: "5.2"
+      task: Manual QA of form preview flow
+      status: not_started
+      details: |
+        - Open Add Stay, select a well-photographed hotel → preview appears
+          below address
+        - Clear the location → preview disappears
+        - Re-select a different hotel → preview updates to new photo
+        - Select an address with no photo → no preview, no error
+        - Submit the form → stay's banner renders with the same photo
+
+# =============================================================================
+# PHASE 7: AutocompleteService → AutocompleteSuggestion Migration
+# =============================================================================
+# Added 2026-04-20 after the Phase 2 fetchFields migration surfaced the
+# AutocompleteService deprecation warning in the console. See D9.
+phase_7_autocomplete_migration:
+  status: not_started
+  description: |
+    Replace the remaining legacy autocomplete call in LocationInput with the
+    post-2025-03-01 API. No contract change visible to callers: StopLocation
+    is still emitted from the same onChange path; only the typeahead's
+    internal prediction fetch and the Place construction change.
+
+  tasks:
+    - id: "7.1"
+      task: Swap AutocompleteService.getPlacePredictions for AutocompleteSuggestion.fetchAutocompleteSuggestions
+      status: not_started
+      details: |
+        In frontend/src/components/trips/agenda/LocationInput.tsx:
+
+        - Remove autocompleteServiceRef and its init effect; the new API
+          is a static class method, so there's no service instance to hold.
+        - Replace the `predictions` state (AutocompletePrediction[]) with a
+          `suggestions` state (AutocompleteSuggestion[]). The prediction
+          fetch effect becomes:
+
+            const { suggestions: next } =
+              await places.google.maps.places.AutocompleteSuggestion
+                .fetchAutocompleteSuggestions({
+                  input: debouncedQuery,
+                  sessionToken: sessionTokenRef.current ?? undefined,
+                });
+            setSuggestions(next);
+
+        - `autocompleteData` maps each suggestion's placePrediction:
+            value: placePrediction.placeId
+            label: placePrediction.text.text   // FormattableText -> string
+
+        - handlePredictionSelect receives a placeId from the Autocomplete's
+          onOptionSubmit. Look up the matching suggestion in state, then:
+
+            const place = suggestion.placePrediction.toPlace();
+            await place.fetchFields({ fields: [...] });
+
+          This preserves the session-token auto-link (AutocompleteRequest doc):
+          "When a session token is provided... the same token will
+          automatically be included in the first call to fetchFields on a
+          Place returned by calling toPlace on one of the resulting
+          AutocompleteSuggestions."
+
+          Net: one billing session per stop instead of two.
+
+        - Rotate sessionTokenRef after the select path (session is consumed
+          on the first fetchFields call).
+
+    - id: "7.2"
+      task: Manual verification — no more deprecation warning
+      status: not_started
+      details: |
+        - DevTools console on /trips/:tripId with LocationInput open: no
+          "AutocompleteService is not available to new customers" warning
+        - Typing a query still shows dropdown options with correct labels
+        - Selecting an option still captures displayName, formattedAddress,
+          lat/lng, and photoName (when available)
+        - Rapid consecutive selections each produce a new session token
+          (manually observable by logging sessionTokenRef.current)
+phase_6_release:
+  status: not_started
+  description: |
+    Update architecture doc index, CLAUDE.md decision log, and ship PR 1.
+
+  tasks:
+    - id: "6.1"
+      task: Update CLAUDE.md documentation index and decisions
+      status: not_started
+      details: |
+        - Add "Trip Place Photos" row to Feature BRDs & Plans table:
+          BRD: docs/features/TRIP-PLACE-PHOTOS-BRD.md
+          Plan: docs/features/TRIP-PLACE-PHOTOS-PLAN.yaml
+        - Add a Recent Architecture Decisions row for 2026-04:
+          "Place photos on verified stops — thumbnails on Stay banner (PR 1),
+          Eat/Play cards and Map popup (PR 2). photoName + photoAttribution
+          added to VerifiedLocation; no backend change. See
+          TRIP-PLACE-PHOTOS-BRD.md."
+
+    - id: "6.2"
+      task: Conventional commit + release note
+      status: not_started
+      details: |
+        Expected commit cadence (PR 1):
+        - feat(trips): add place photos to verified locations + Stay banner
+
+        Release note (short): "Stay addresses now show a photo thumbnail on
+        the Trip Itinerary banner. Existing stays will show a photo once
+        you edit the address and re-confirm it."
+
+    - id: "6.0"
+      task: Enable "Places API (New)" in GCP before merge
+      status: not_started
+      details: |
+        Pre-requisite discovered during Phase 7 local verification: the
+        new endpoints (fetchAutocompleteSuggestions, fetchFields, photo
+        v1/media) all live under a separate GCP product from the legacy
+        Places API the app currently uses. Without it, typeahead and
+        photo capture return 403.
+
+        Steps (per-environment — dev project first, then prod project):
+        - Open https://console.developers.google.com/apis/api/places.googleapis.com/overview?project={projectId}
+        - Click Enable, wait ~30–60 seconds
+        - Reload dev app; confirm Stay form address typeahead returns
+          results and a Stay save succeeds with photoName populated
+
+        Billing and referrer restrictions from A-01 continue to apply;
+        no new API key is needed on the same project.
+
+    - id: "6.3"
+      task: Production deploy validation
+      status: not_started
+      details: |
+        - Create a new trip on production with a well-known hotel stay →
+          thumbnail appears on banner
+        - Existing trips with pre-feature stays → IconBed appears as before
+        - Monitor GCP billing dashboard for 1 week post-deploy — confirm
+          Places API "photos" SKU stays within expected range (<$1/mo at
+          current usage)
+        - Referrer restriction verified on GCP console before deploy
+
+# =============================================================================
+# PR 2 (DEFERRED) — Map Popup + Stop Card Avatars
+# =============================================================================
+pr_2_deferred:
+  status: deferred
+  gate: PR 1 visual quality in production, ~2 weeks of real usage
+  description: |
+    PR 2 has no data dependency on PR 1 beyond schema — PR 1 captures
+    photoName/photoAttribution for all verified locations. PR 2 is pure
+    render-layer work.
+
+  tasks:
+    - id: "PR2.1"
+      task: Stop card avatar (Eat/Play)
+      details: |
+        In frontend/src/components/trips/agenda/StopCard.tsx:91, when
+        stop.location?.kind === 'verified' && stop.location.photoName,
+        render PlacePhotoThumb size={32} in place of the colored Icon.
+        Transit stops never render a photo (no location identity).
+
+    - id: "PR2.2"
+      task: Map popup photo header
+      details: |
+        In frontend/src/components/trips/map/StopPopup.tsx:42, when the
+        stop's location is verified and carries a photoName, render
+        PlacePhotoThumb size={200} height={100} (wide aspect) above the
+        title row. Fall back to emoji-only header when absent.
+
+    - id: "PR2.3"
+      task: Re-evaluate thumbnail sizes after real data
+      details: |
+        Revisit PR 1's 48px Stay banner size and PR 2's sizes based on
+        actual photo quality distribution. If Google photo quality is
+        uniformly high, larger sizes warrant a second look; if uneven,
+        smaller sizes reduce variance in perceived polish.
+
+# =============================================================================
+# OPEN QUESTIONS (tracked from BRD, updated as decided)
+# =============================================================================
+open_questions:
+  - id: Q1
+    from_brd: true
+    question: Capture photos for all verified locations in PR 1, or only Stays?
+    proposed: Capture everywhere; render only Stay banner in PR 1
+    status: resolved
+    resolution: |
+      Resolved in D4. Single code path (handlePredictionSelect); gating
+      capture by downstream stop type adds complexity at the wrong layer.
+      PR 2 gets ready data without re-touching saved records.
+
+  - id: Q2
+    from_brd: true
+    question: Stay banner thumbnail size — 48px, 56px, or 64px?
+    proposed: 48px (matches banner vertical rhythm)
+    status: pending
+    resolution: |
+      Finalize during Phase 4 manual QA. Adjustable without schema or
+      capture changes — render-layer decision only.
+
+  - id: Q3
+    from_brd: true
+    question: Null-attribution handling — store null (fallback to "Photo via Google") or literal "Google"?
+    proposed: Store null; render helper picks the fallback label
+    status: resolved
+    resolution: |
+      Accepted proposed default (D6 kinship). Separates data from
+      presentation; evolves without a schema change if policy shifts.
+
+  - id: Q4
+    from_brd: true
+    question: Backend photo proxy to keep API key server-side?
+    proposed: No — referrer restriction is sufficient at current scale
+    status: resolved
+    resolution: |
+      Resolved in D5. Referrer restriction on VITE_GOOGLE_PLACES_API_KEY
+      (confirmed 2026-04-20) limits use to budget.jaredcarrano.com and
+      localhost:5183. A proxy adds surface without net security gain.
+
+  - id: Q5
+    from_brd: true
+    question: Release note — document re-select pathway for backfill?
+    proposed: Yes, one sentence
+    status: resolved
+    resolution: |
+      Accepted. See task 6.2 release note copy.

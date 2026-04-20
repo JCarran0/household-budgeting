@@ -1,6 +1,7 @@
 import { ActionIcon, Group, Paper, Stack, Text, Tooltip } from '@mantine/core';
 import { IconBed, IconEdit } from '@tabler/icons-react';
 import type { StayStop } from '../../../../../shared/types';
+import { PlacePhotoThumb } from './PlacePhotoThumb';
 
 interface StayBannerProps {
   stay: StayStop;
@@ -29,7 +30,16 @@ export function StayBanner({ stay, totalNights, onEdit }: StayBannerProps) {
     >
       <Group justify="space-between" wrap="nowrap">
         <Group gap="sm" wrap="nowrap" style={{ minWidth: 0 }}>
-          <IconBed size={20} color="var(--mantine-color-blue-filled)" />
+          {stay.location.photoName ? (
+            <PlacePhotoThumb
+              photoName={stay.location.photoName}
+              attribution={stay.location.photoAttribution ?? null}
+              size={48}
+              alt={stay.name}
+            />
+          ) : (
+            <IconBed size={20} color="var(--mantine-color-blue-filled)" />
+          )}
           <Stack gap={0} style={{ minWidth: 0 }}>
             <Text fw={600} truncate>
               {stay.name}
