@@ -24,6 +24,17 @@ import type {
 
 type Mode = 'verifiedOnly' | 'verifiedOrFreeText';
 
+/**
+ * Ephemeral client-side record of a candidate place photo. `Place.fetchFields`
+ * returns up to 10 of these per selection; we surface them to callers that
+ * want to render a picker (StayForm) and default to index 0 on the persisted
+ * VerifiedLocation. Never persisted.
+ */
+export interface PlacePhotoCandidate {
+  photoName: string;
+  photoAttribution?: string;
+}
+
 interface LocationInputProps {
   label?: string;
   description?: string;
@@ -31,6 +42,12 @@ interface LocationInputProps {
   mode: Mode;
   value: StopLocation | null;
   onChange: (value: StopLocation | null) => void;
+  /**
+   * Optional hook for callers that want to render a picker of all available
+   * place photos (not just index 0). Fires alongside onChange on selection,
+   * and with an empty array when the user clears the location.
+   */
+  onPhotoCandidates?: (candidates: PlacePhotoCandidate[]) => void;
   placeholder?: string;
   disabled?: boolean;
   error?: string | null;
@@ -56,6 +73,7 @@ export function LocationInput({
   mode,
   value,
   onChange,
+  onPhotoCandidates,
   placeholder,
   disabled,
   error,
@@ -153,18 +171,18 @@ export function LocationInput({
     }
     if (!place.location) return;
 
-    const photo = place.photos?.[0];
     // @types/google.maps 3.64 does not yet expose `Photo.name`; the v=weekly
     // runtime does. Read it defensively without using `any`.
-    const photoNameRaw = photo
-      ? (photo as unknown as { name?: unknown }).name
-      : undefined;
-    const photoName =
-      typeof photoNameRaw === 'string' && photoNameRaw.length > 0
-        ? photoNameRaw
-        : undefined;
-    const photoAttribution = photo?.authorAttributions?.[0]?.displayName || undefined;
+    const candidates: PlacePhotoCandidate[] = (place.photos ?? [])
+      .map((photo): PlacePhotoCandidate | null => {
+        const nameRaw = (photo as unknown as { name?: unknown }).name;
+        if (typeof nameRaw !== 'string' || nameRaw.length === 0) return null;
+        const att = photo.authorAttributions?.[0]?.displayName || undefined;
+        return att ? { photoName: nameRaw, photoAttribution: att } : { photoName: nameRaw };
+      })
+      .filter((c): c is PlacePhotoCandidate => c !== null);
 
+    const firstCandidate = candidates[0];
     const verified: VerifiedLocation = {
       kind: 'verified',
       label: place.displayName ?? place.formattedAddress ?? '',
@@ -172,10 +190,11 @@ export function LocationInput({
       lat: place.location.lat(),
       lng: place.location.lng(),
       placeId,
-      ...(photoName ? { photoName } : {}),
-      ...(photoAttribution ? { photoAttribution } : {}),
+      ...(firstCandidate?.photoName ? { photoName: firstCandidate.photoName } : {}),
+      ...(firstCandidate?.photoAttribution ? { photoAttribution: firstCandidate.photoAttribution } : {}),
     };
     onChange(verified);
+    onPhotoCandidates?.(candidates);
     setQuery(verified.label);
     // Rotate the session token — the autocomplete billing session ends here.
     sessionTokenRef.current = new places.google.maps.places.AutocompleteSessionToken();
@@ -244,6 +263,7 @@ export function LocationInput({
               leftSection={<IconEdit size={12} />}
               onClick={() => {
                 onChange(null);
+                onPhotoCandidates?.([]);
                 setQuery('');
               }}
             >

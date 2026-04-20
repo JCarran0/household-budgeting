@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Alert, Button, Group, NumberInput, SegmentedControl, Stack, TextInput, Textarea, Text } from '@mantine/core';
 import { DatePickerInput, TimeInput } from '@mantine/dates';
 import { useForm } from '@mantine/form';
@@ -10,6 +10,8 @@ import type {
   VerifiedLocation,
 } from '../../../../../../shared/types';
 import { LocationInput } from '../LocationInput';
+import type { PlacePhotoCandidate } from '../LocationInput';
+import { PhotoCandidateStrip } from '../PhotoCandidateStrip';
 import { PlacePhotoThumb } from '../PlacePhotoThumb';
 import { useGooglePlaces } from '../../../../hooks/useGooglePlaces';
 import { addDaysIso, dateToIso, isoToDate } from './formHelpers';
@@ -56,6 +58,10 @@ export function StayForm({
 }: StayFormProps) {
   const places = useGooglePlaces();
   const placesUnconfigured = places.status === 'unconfigured';
+
+  // Transient candidate list from the most recent LocationInput selection.
+  // Not persisted — only used to render the picker strip (REQ-020).
+  const [photoCandidates, setPhotoCandidates] = useState<PlacePhotoCandidate[]>([]);
 
   const form = useForm<StayFormValues>({
     initialValues: {
@@ -146,20 +152,40 @@ export function StayForm({
           mode="verifiedOnly"
           value={form.values.location}
           onChange={(v) => form.setFieldValue('location', v?.kind === 'verified' ? v : null)}
+          onPhotoCandidates={setPhotoCandidates}
           error={form.errors.location as string | undefined}
         />
-        {form.values.location?.kind === 'verified' && form.values.location.photoName && (
-          <Group gap="xs" mt={-4}>
-            <PlacePhotoThumb
-              photoName={form.values.location.photoName}
-              attribution={form.values.location.photoAttribution ?? null}
-              size={96}
-              alt="Selected place photo"
-            />
-            <Text size="xs" c="dimmed">
-              This photo will appear on the stay banner.
-            </Text>
-          </Group>
+        {photoCandidates.length > 0 ? (
+          <PhotoCandidateStrip
+            candidates={photoCandidates}
+            selectedPhotoName={form.values.location?.photoName ?? null}
+            onSelect={(c) => {
+              const current = form.values.location;
+              if (!current) return;
+              form.setFieldValue('location', {
+                ...current,
+                photoName: c.photoName,
+                ...(c.photoAttribution
+                  ? { photoAttribution: c.photoAttribution }
+                  : { photoAttribution: undefined }),
+              });
+            }}
+          />
+        ) : (
+          form.values.location?.kind === 'verified' &&
+          form.values.location.photoName && (
+            <Group gap="xs" mt={-4}>
+              <PlacePhotoThumb
+                photoName={form.values.location.photoName}
+                attribution={form.values.location.photoAttribution ?? null}
+                size={96}
+                alt="Selected place photo"
+              />
+              <Text size="xs" c="dimmed">
+                This photo will appear on the stay banner. Use Change to pick a different one.
+              </Text>
+            </Group>
+          )
         )}
         <Group grow>
           <DatePickerInput

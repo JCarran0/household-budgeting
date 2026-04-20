@@ -158,6 +158,35 @@ decisions:
       popup photos are improvements or clutter. Capture in PR 1 means
       PR 2 has no dependency beyond render-layer changes.
 
+  - id: D11
+    date: 2026-04-20
+    decision: Stay form shows a candidate-photo picker strip, replacing the single preview
+    rationale: |
+      Place.fetchFields already returns up to 10 photos in one billing event
+      — today we discard nine of them. Google's index-0 photo is usually
+      good but occasionally bad (sidewalk shot, bad angle, blurry). A
+      picker lets users fix bad defaults without a second fetch.
+
+      Design:
+      - Replaces the single 96px preview with a 72px horizontal strip of
+        candidate tiles in the Stay form.
+      - Selected tile has a visible ring; click swaps form-local
+        photoName/photoAttribution.
+      - Candidates live in form state only (never persisted).
+      - Edit-an-existing-stay falls back to the 96px preview when no
+        candidates are in memory; user re-selects via "Change" to repopulate.
+
+      Cost: zero. fetchFields already pays for all returned photos.
+      Storage: zero new persisted fields — we still persist only the chosen
+      photoName + photoAttribution on VerifiedLocation.
+
+      Tradeoff: form gets busier vertically when the strip is visible.
+      Bounded by Google's 10-photo cap; 10 × 72px + gaps fits in the Stay
+      form width with horizontal scroll as a safety net.
+
+      Candidate tiles do NOT open the hero modal — click is reserved for
+      select. The hero modal stays available on the Stay banner after save.
+
   - id: D10
     date: 2026-04-20
     decision: Hero modal always-on, built into PlacePhotoThumb (not per-caller opt-in)
@@ -479,52 +508,87 @@ phase_4_stay_banner:
         - Keyboard: tab to thumbnail, Enter opens modal
 
 # =============================================================================
-# PHASE 5: Render — Stay Form Preview
+# PHASE 5: Render — Stay Form Candidate Picker
 # =============================================================================
-phase_5_stay_form_preview:
+phase_5_stay_form_picker:
   status: not_started
   description: |
-    Show a 96px preview below the LocationInput in StayForm when a verified
-    location with a photoName is currently selected. Reassures the user
-    before save.
+    Replace the Stay form's single 96px preview with a horizontal strip of
+    candidate photo tiles (D11). Capture all candidates at selection time,
+    hold them in form-local state, and persist only the user-chosen one.
+
+    Edit-an-existing-stay falls back to a single 96px preview when no
+    candidates are in memory; re-selecting via "Change" repopulates.
 
   tasks:
     - id: "5.1"
-      task: Add PlacePhotoThumb preview to StayForm
+      task: Surface candidates from LocationInput
       status: not_started
       details: |
-        In frontend/src/components/trips/agenda/forms/StayForm.tsx,
-        directly below the LocationInput for the stay's location:
+        In frontend/src/components/trips/agenda/LocationInput.tsx:
 
-          {location?.kind === 'verified' && location.photoName && (
-            <Group gap="xs" mt="xs">
-              <PlacePhotoThumb
-                photoName={location.photoName}
-                attribution={location.photoAttribution ?? null}
-                size={96}
-                alt="Selected place photo"
-              />
-              <Text size="xs" c="dimmed">
-                This photo will appear on the stay banner.
-              </Text>
-            </Group>
-          )}
+        - Export a small frontend-only type:
 
-        The dimmed caption explains the preview's purpose and reduces
-        "what is this?" confusion the first time a user sees it.
+            export interface PlacePhotoCandidate {
+              photoName: string;
+              photoAttribution?: string;
+            }
+
+        - Add an optional prop onPhotoCandidates?: (candidates: PlacePhotoCandidate[]) => void.
+          Non-Stay callers ignore it; Stay form wires it up (5.2).
+
+        - In handlePredictionSelect, extract ALL photos (not just index 0)
+          into a PlacePhotoCandidate[]. Call onPhotoCandidates with the
+          list. Default the persisted photoName/photoAttribution on the
+          VerifiedLocation to candidates[0] as today.
+
+        - In the "Change" button onClick, also call onPhotoCandidates?.([])
+          to clear the picker state.
 
     - id: "5.2"
-      task: Manual QA of form preview flow
+      task: Render candidate strip + fallback in StayForm
       status: not_started
       details: |
-        - Open Add Stay, select a well-photographed hotel → preview appears
-          below address
-        - Clear the location → preview disappears
-        - Re-select a different hotel → preview updates to new photo
-        - Select an address with no photo → no preview, no error
-        - Submit the form → stay's banner renders with the same photo
-        - Click the 96px form preview → hero modal opens with larger
-          image (the form itself stays open behind the modal)
+        In frontend/src/components/trips/agenda/forms/StayForm.tsx:
+
+        - Add local state: candidates: PlacePhotoCandidate[].
+        - Wire onPhotoCandidates={setCandidates} onto LocationInput.
+        - Replace the existing preview block with:
+
+            candidates.length > 0
+              ? <PhotoCandidateStrip
+                  candidates={candidates}
+                  selectedPhotoName={location?.photoName ?? null}
+                  onSelect={(c) => form.setFieldValue('location', {
+                    ...location, photoName: c.photoName,
+                    photoAttribution: c.photoAttribution,
+                  })}
+                />
+              : (location?.kind === 'verified' && location.photoName)
+                ? <PlacePhotoThumb size={96} ... />   // legacy edit-view
+                : null
+
+        - PhotoCandidateStrip renders a horizontal flex row of 72px tiles.
+          Each tile: UnstyledButton -> Image with 2px border when selected
+          (blue.5), hover tooltip with attribution, aria-label for a11y.
+          overflow-x: auto as a safety net at >10 candidates.
+
+        - Tiles do NOT open the hero modal (D11); click = select only.
+
+    - id: "5.3"
+      task: Manual QA of picker flow
+      status: not_started
+      details: |
+        - Open Add Stay, select a well-photographed hotel →
+          strip of 2–10 tiles visible; first tile highlighted
+        - Click a non-first tile → border moves; saved stay's banner
+          renders the chosen photo
+        - Click "Change" → strip disappears (candidates cleared)
+        - Select an address with no photos → no strip, no error
+        - Edit an existing stay (pre-picker) → single 96px preview
+          renders as before; clicking "Change" and re-picking brings
+          the strip back
+        - Keyboard: tab through tiles, Enter selects, ring moves
 
 # =============================================================================
 # PHASE 7: AutocompleteService → AutocompleteSuggestion Migration

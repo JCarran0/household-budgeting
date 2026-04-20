@@ -41,7 +41,7 @@ These constraints shape the design: persist pointers, render via direct Google U
 
 **REQ-005:** Photo fields live on `VerifiedLocation` — not on the `Stop` itself — because a location is the natural owner of its representative image, and the same location shape is reused across Stay, Eat, Play, and Transit endpoints.
 
-**REQ-006:** The fetched photo is the first entry in the Places API `photos[]` response (index 0). No photo selection UI is provided.
+**REQ-006:** `Place.fetchFields` returns up to 10 photos in a single billing event. The app captures **all** of them as candidates (kept in form-local state only, never persisted) so the Stay form can expose them as a picker. The persisted default is the index-0 photo; the user can swap to any candidate before save (REQ-020).
 
 ### Schema
 
@@ -61,11 +61,17 @@ Both fields are optional to preserve backwards compatibility with existing stops
 
 **REQ-011:** The thumbnail image URL is constructed client-side as `https://places.googleapis.com/v1/{photoName}/media?maxWidthPx={size * 2}&key={VITE_GOOGLE_PLACES_API_KEY}`. The API key is already referrer-restricted to `budget.jaredcarrano.com` and `localhost:5183`.
 
-### Render — AddStopSheet Preview
+### Render — AddStopSheet Preview / Candidate Picker
 
-**REQ-012:** The Stay form (and only the Stay form in this release — see Out of Scope for Eat/Play) shows a 96px square preview below the LocationInput when the currently-selected location has a `photoName`. The preview provides "this is what will appear on the banner" confirmation before save. No separate API call; the preview uses the photo name already captured at selection time.
+**REQ-012:** The Stay form (and only the Stay form in this release — see Out of Scope for Eat/Play) shows a horizontal **candidate strip** below the LocationInput when a place has just been selected and `Place.fetchFields` returned at least one photo. Each tile is a 72px square thumbnail of a candidate photo.
 
-**REQ-013:** The preview is hidden when the location is cleared, unverified, or carries no photo.
+**REQ-013:** The strip is hidden when the location is cleared, unverified, or carries no candidates in memory (e.g., editing an existing stay where the picker was never shown). In the edit-an-existing-stay case with a persisted `photoName` but no candidates, the form falls back to a single 96px preview of the currently-selected photo.
+
+**REQ-020:** Clicking a candidate tile swaps the form's in-flight `photoName` and `photoAttribution` to the clicked candidate's values. The selected tile shows a visible ring/border. This is a pure client-side state change — no new fetch, no schema change — since all candidates were already captured in the single `fetchFields` call.
+
+**REQ-021:** Candidate tiles do **not** open the hero modal. Click = select (REQ-020). The hero modal remains available on the Stay banner after save, and on any other `PlacePhotoThumb` surface.
+
+**REQ-022:** To swap the photo on a previously-saved stay, the user clicks "Change" in LocationInput and re-selects the address. This repopulates the candidate list from a fresh `fetchFields` call. (Editing a photo without re-selecting the address is out of scope — candidates are transient by design to avoid persisting photo metadata we don't need.)
 
 ### Render — Full-size Modal ("Hero")
 
@@ -135,8 +141,8 @@ Both fields are optional to preserve backwards compatibility with existing stops
 | **Eat/Play stop card thumbnails on the Itinerary tab** | PR 2 after we've seen real photo quality on Stays. If thumbnails on 1-line Eat/Play cards feel cluttered, PR 2 may ship only the map popup treatment. |
 | **Map popup place photo** | Deferred to PR 2 pending PR 1 validation. Data captured in PR 1 makes PR 2 a pure render change. |
 | **Transit endpoint photos** | Transit stops represent motion, not destinations. The bracketing Stays already carry photos; duplicating on transit cards clutters without adding signal. |
-| **Photo carousel / swiping to alternate photos** | Google Places returns up to 10 photos per place; exposing a selector is a richer UI than this release justifies. Always-first-photo is a deliberate simplification. |
-| **"Regenerate photo" / "choose a different photo" action** | Same. Users bothered by a specific photo can re-select the location to re-capture, which sometimes yields a different index-0 photo after Google refreshes its corpus. |
+| **Photo carousel in-product after save (swipe on Stay banner)** | No. Post-save UI is a single thumbnail + hero modal. In-form picker (REQ-020) is the sole swapping surface. |
+| **Editing photo on a saved stay without re-selecting the address** | Candidates are transient (in-memory only) by design — we persist just the chosen name and attribution, not the full candidate list. Re-selecting via LocationInput "Change" is the path (REQ-022). |
 | **Backfilling photos for existing stops** | Explicit non-goal. Would require a background job iterating all stops with verified locations and issuing fetchFields calls — moderate cost and no user-initiated trigger. Re-selection (REQ-015) is the sufficient pathway. |
 | **User-uploaded photos overriding Google's photo** | Cross-cuts with storage, moderation, and photo-rights concerns that dwarf this release's scope. |
 | **Attribution as always-visible caption** | Tooltip-on-hover satisfies current Google policy (A-06). Always-visible caption adds visual weight to every thumbnail and would compete with the stop's name. Reconsider if policy changes. |
