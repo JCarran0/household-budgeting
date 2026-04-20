@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.42.0](https://github.com/JCarran0/household-budgeting/compare/v5.41.2...v5.42.0) (2026-04-20)
+
+
+### Features
+
+* **trips:** place photos on Eat/Play cards and Map popups ([b082a4d](https://github.com/JCarran0/household-budgeting/commit/b082a4d5796aa98bb1b5cff020db11e96b7bdc37))
+
 ### [5.41.2](https://github.com/JCarran0/household-budgeting/compare/v5.41.1...v5.41.2) (2026-04-20)
 
 
