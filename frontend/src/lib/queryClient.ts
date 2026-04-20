@@ -53,7 +53,6 @@ if (import.meta.env.DEV && typeof window !== 'undefined') {
   window.addEventListener('focus', () => {
     const stale = queryClient.getQueryCache().findAll({ stale: true });
     if (stale.length > 0) {
-      // eslint-disable-next-line no-console
       console.debug(
         `[react-query] focus refetch: ${stale.length} stale ${stale.length === 1 ? 'query' : 'queries'}`,
         stale.map((q) => q.queryKey),
