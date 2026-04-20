@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.38.0](https://github.com/JCarran0/household-budgeting/compare/v5.37.2...v5.38.0) (2026-04-20)
+
+
+### Features
+
+* **reports:** unify net cash flow, split savings rate into standard + contribution ([7995f15](https://github.com/JCarran0/household-budgeting/commit/7995f1574f57e87083312d0fce3f68366a397aab))
+
 ### [5.37.2](https://github.com/JCarran0/household-budgeting/compare/v5.37.1...v5.37.2) (2026-04-19)
 
 
