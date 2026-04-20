@@ -1,5 +1,5 @@
-import { useEffect } from 'react';
-import { Button, Group, NumberInput, Stack, TextInput, Textarea } from '@mantine/core';
+import { useEffect, useState } from 'react';
+import { Button, Group, NumberInput, Stack, TextInput, Textarea, Text } from '@mantine/core';
 import { DatePickerInput, TimeInput } from '@mantine/dates';
 import { useForm } from '@mantine/form';
 import type {
@@ -12,6 +12,9 @@ import type {
   UpdatePlayStopDto,
 } from '../../../../../../shared/types';
 import { LocationInput } from '../LocationInput';
+import type { PlacePhotoCandidate } from '../LocationInput';
+import { PhotoCandidateStrip } from '../PhotoCandidateStrip';
+import { PlacePhotoThumb } from '../PlacePhotoThumb';
 import { dateToIso, isoToDate } from './formHelpers';
 
 type Variant = 'eat' | 'play';
@@ -50,6 +53,10 @@ export function EatPlayForm({
   onBack,
   isSubmitting,
 }: EatPlayFormProps) {
+  // Transient candidate list — populated on a fresh verified selection,
+  // cleared when the user hits "Change" on LocationInput.
+  const [photoCandidates, setPhotoCandidates] = useState<PlacePhotoCandidate[]>([]);
+
   const form = useForm<FormValues>({
     initialValues: {
       name: '',
@@ -131,7 +138,44 @@ export function EatPlayForm({
           mode="verifiedOrFreeText"
           value={form.values.location}
           onChange={(v) => form.setFieldValue('location', v)}
+          onPhotoCandidates={setPhotoCandidates}
         />
+        {photoCandidates.length > 0 ? (
+          <PhotoCandidateStrip
+            candidates={photoCandidates}
+            selectedPhotoName={
+              form.values.location?.kind === 'verified'
+                ? form.values.location.photoName ?? null
+                : null
+            }
+            onSelect={(c) => {
+              const current = form.values.location;
+              if (!current || current.kind !== 'verified') return;
+              form.setFieldValue('location', {
+                ...current,
+                photoName: c.photoName,
+                ...(c.photoAttribution
+                  ? { photoAttribution: c.photoAttribution }
+                  : { photoAttribution: undefined }),
+              });
+            }}
+          />
+        ) : (
+          form.values.location?.kind === 'verified' &&
+          form.values.location.photoName && (
+            <Group gap="xs" mt={-4}>
+              <PlacePhotoThumb
+                photoName={form.values.location.photoName}
+                attribution={form.values.location.photoAttribution ?? null}
+                size={96}
+                alt="Selected place photo"
+              />
+              <Text size="xs" c="dimmed">
+                This photo will appear on the stop card. Use Change to pick a different one.
+              </Text>
+            </Group>
+          )
+        )}
         <Group grow>
           <DatePickerInput
             label="Date"

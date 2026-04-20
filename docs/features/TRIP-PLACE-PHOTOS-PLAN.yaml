@@ -791,6 +791,22 @@ pr_2:
         location). Header renders 200x100 above the title row; falls
         back to emoji-only header when no photo.
 
+    - id: "PR2.4"
+      task: Extend picker parity to EatPlayForm
+      status: completed
+      actual: |
+        Discovered during PR 2 dogfood: adding an Eat stop for a
+        real restaurant showed the card avatar (index-0 photo) but
+        the form itself had no picker to swap it. REQ-012 originally
+        scoped the picker to Stay form only — that made sense when
+        Eat/Play didn't render photos, but once PR 2 landed, parity
+        became expected.
+
+        Mirrored the StayForm wiring into EatPlayForm: local
+        candidates state + onPhotoCandidates prop + the strip /
+        single-preview fallback block. Guarded on verified-only
+        since EatPlayForm also allows free-text locations.
+
     - id: "PR2.3"
       task: Re-evaluate thumbnail sizes after real data
       status: pending_user_qa

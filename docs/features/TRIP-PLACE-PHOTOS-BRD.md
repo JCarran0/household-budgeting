@@ -63,7 +63,7 @@ Both fields are optional to preserve backwards compatibility with existing stops
 
 ### Render — AddStopSheet Preview / Candidate Picker
 
-**REQ-012:** The Stay form (and only the Stay form in this release — see Out of Scope for Eat/Play) shows a horizontal **candidate strip** below the LocationInput when a place has just been selected and `Place.fetchFields` returned at least one photo. Each tile is a 72px square thumbnail of a candidate photo.
+**REQ-012:** The Stay form and the Eat/Play form both show a horizontal **candidate strip** below the LocationInput when a verified place has just been selected and `Place.fetchFields` returned at least one photo. Each tile is a 72px square thumbnail of a candidate photo. (The Eat/Play form's location is optional and allows free-text entries; the strip only appears when the current value is a verified place.)
 
 **REQ-013:** The strip is hidden when the location is cleared, unverified, or carries no candidates in memory (e.g., editing an existing stay where the picker was never shown). In the edit-an-existing-stay case with a persisted `photoName` but no candidates, the form falls back to a single 96px preview of the currently-selected photo.
 
