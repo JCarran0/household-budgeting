@@ -242,9 +242,6 @@ df -h /home/appuser
 
 ## 🚨 Known Issues
 
-| Issue | Impact | Workaround |
-|-------|--------|------------|
-| Frontend has residual `any` types in some components | Type safety | Fix opportunistically while touching nearby code |
-| Reports page makes excessive parallel API requests | Load time | Mitigated via nginx rate-limit increase; longer-term fix needed |
+No open issues currently tracked here. See [AI-TECHNICAL-DEBT.md](docs/completed/AI-TECHNICAL-DEBT.md) for the full debt tracker.
 
 Full technical debt: [AI-TECHNICAL-DEBT.md](docs/completed/AI-TECHNICAL-DEBT.md).
