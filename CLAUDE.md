@@ -28,6 +28,7 @@ Family-scale app for 2 users: personal budgeting (with Plaid), shared tasks, tri
 | Projects | [PROJECTS-BRD.md](docs/features/PROJECTS-BRD.md) | [PROJECTS-ENHANCEMENTS-PLAN.yaml](docs/features/PROJECTS-ENHANCEMENTS-PLAN.yaml) |
 | Task Management v2.0 | [TASK-MANAGEMENT-BRD.md](docs/features/TASK-MANAGEMENT-BRD.md) | [TASK-MANAGEMENT-ENHANCEMENTS-PLAN.yaml](docs/features/TASK-MANAGEMENT-ENHANCEMENTS-PLAN.yaml) |
 | Task Leaderboard (streaks + badges) | [TASK-LEADERBOARD-BRD.md](docs/features/TASK-LEADERBOARD-BRD.md) | — |
+| Stale Data Mitigation | [STALE-DATA-MITIGATION-BRD.md](docs/features/STALE-DATA-MITIGATION-BRD.md) | [STALE-DATA-MITIGATION-PLAN.yaml](docs/features/STALE-DATA-MITIGATION-PLAN.yaml) |
 
 ## 🤖 Critical Rules — Never Violate
 
@@ -234,7 +235,7 @@ df -h /home/appuser
 | Change | Notes |
 |--------|-------|
 | Subdomain migration | `budget.jaredcarrano.com` → `family.jaredcarrano.com`. Code + DNS/TLS. See PROJECT_PLAN.md Phase 14.5. |
-| Transaction caching | React Query or similar. Reduce API calls. |
+| Stale-data mitigation | Two-phase: enable React Query focus-refetch, then add `/api/changes` polling. No websockets. See [STALE-DATA-MITIGATION-BRD.md](docs/features/STALE-DATA-MITIGATION-BRD.md). |
 | Webhook support | Plaid webhooks for real-time sync. |
 | Data export | CSV/JSON export for portability. |
 | Mobile app | React Native, future. |

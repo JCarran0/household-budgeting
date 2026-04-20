@@ -1,0 +1,124 @@
+feature: Stale Data Mitigation
+brd: docs/features/STALE-DATA-MITIGATION-BRD.md
+status: in_progress
+created: 2026-04-20
+last_updated: 2026-04-20
+
+overview: |
+  Two-phase, stepwise improvement to mitigate cross-device and cross-user
+  data staleness without introducing websockets. Phase 1 enables React Query
+  focus-refetch (already-installed library, currently disabled by global
+  default). Phase 2 adds a lightweight /api/changes polling endpoint that
+  active tabs hit once a minute to selectively invalidate stale queries.
+  Phase 2 is gated on Phase 1 being insufficient.
+
+phases:
+
+  - phase: 1
+    name: Window-Focus Refetch
+    status: shipped_pending_smoke_test
+    goals:
+      - Catch the dominant staleness pattern (idle tab, partner made changes hours ago)
+      - Zero idle backend load
+      - No new infrastructure
+    tasks:
+      - DONE - Flip refetchOnWindowFocus to true in frontend/src/lib/queryClient.ts
+      - DONE - Add refetchOnReconnect true to the global default
+      - DONE - Drop default staleTime to 30s (hot baseline) so focus-refetch actually fires
+      - DONE - Tune per-query staleTime overrides:
+          - Hot 30s - useTransactionData (was 5m + refetchOnWindowFocus:false), TransactionPreviewModal (was 5m), Projects allTasks (was 2m)
+          - Warm 2m - Trips list (was 5m), TripDetail (was 5m), Projects summaries (was 5m)
+          - Cold 5m+ - left as-is (ThemeProvider Infinity, useCategoryOptions, ChangelogModal, TransactionEditModal owner+family, useProjectTagLookup)
+      - DONE - Confirmed no conflict with existing refetchInterval consumers (Admin.tsx 5s polls)
+      - DONE - Added dev-only console.debug on window focus listing stale query keys
+      - PENDING - Manual smoke test:
+          - Open transactions tab, tab away for 5 min, return - verify refetch in network tab
+          - Verify no requests during 10 min unfocused window
+          - Verify no regression in mutation invalidation flows
+      - PENDING - Live with Phase 1 for ~2 weeks before deciding on Phase 2
+
+  - phase: 2
+    name: Changes Endpoint Polling
+    status: pending
+    goals:
+      - Catch in-session staleness (partner makes change while I'm actively using the app)
+      - Sub-90s end-to-end latency without websockets
+      - Trivial backend load (2 active tabs * 1 req/min)
+    blocked_by: Phase 1 lived-with for ~2 weeks; only proceed if focus-refetch alone is insufficient
+    tasks:
+      - Backend - add ChangeLogService (in-memory Map<string, number> resource -> last-mutated-ms)
+      - Backend - add GET /api/changes?since=<ms> route returning {serverTime, changes[]}
+      - Backend - hook ChangeLogService.recordChange() into all mutation paths:
+          - TransactionService (create, update, bulk update, delete, recategorize)
+          - TaskService (create, update, complete, delete, snooze, reorder)
+          - BudgetService (create, update, delete)
+          - TripService (create, update stops, delete stops, delete trip)
+          - ProjectService (create, update, delete)
+          - CategoryService (create, update, delete)
+          - AccountService (sync, delete, re-auth complete)
+          - Chat action card execution (registry.ts)
+      - Backend - decision check - in-memory vs persisted change log; default in-memory for V1
+      - Backend - integration test - mutation X bumps the timestamp returned by /api/changes
+      - Backend - log line for /api/changes request rate (verify trivial cost)
+      - Frontend - useChangesPoller hook:
+          - 60s interval driven by document.visibilityState (not just focus)
+          - Pause when hidden, resume on visibility change
+          - Maintain lastSeen as server-authoritative timestamp from response
+          - Skip when no JWT or on 401
+          - Map change keys -> React Query key prefixes -> queryClient.invalidateQueries
+      - Frontend - mount useChangesPoller once at app root (App.tsx, after auth gate)
+      - Frontend - resource-key -> query-key mapping table (single source of truth)
+      - Manual smoke test:
+          - Two browser tabs, one user - mutate in tab A, verify tab B refetches within 90s
+          - Two devices, two users - same test
+          - Backgrounded tab does not poll (verify in network tab)
+          - Hidden -> visible transition triggers immediate poll
+      - Update CLAUDE.md architecture decisions table with the design
+
+  - phase: 3
+    name: Observability and Tuning
+    status: pending
+    blocked_by: Phase 2 shipped
+    goals:
+      - Confirm cost stays trivial
+      - Tune intervals based on real usage
+    tasks:
+      - Verify /api/changes p99 latency stays under 50ms
+      - Verify backend log volume from change-log writes is acceptable
+      - Adjust poll interval if 60s is too slow or too fast based on observed need
+      - Consider scoped change keys (e.g. trips/abc123 instead of trips) if invalidation is too coarse
+
+decisions_log:
+  - date: 2026-04-20
+    decision: Two-phase stepwise approach (focus-refetch then poll), no websockets
+    rationale: |
+      2-user app, days-long sessions, mobile+web. Focus-refetch alone likely
+      catches 90% of the pain at zero ongoing cost. Polling endpoint as the
+      next rung is cheap and doesn't require connection state. Websockets
+      are over-engineering for this scale.
+
+  - date: 2026-04-20
+    decision: Phase 2 is gated on Phase 1 being insufficient, not auto-followed
+    rationale: |
+      Avoid building infrastructure we may not need. Two weeks of real usage
+      after Phase 1 will tell us whether in-session staleness is actually
+      annoying or whether focus-refetch covers it.
+
+  - date: 2026-04-20
+    decision: Change log is per-resource-type, not per-user
+    rationale: |
+      Family app - both users see all changes by design. Per-user scoping
+      adds complexity for no value at this scale.
+
+  - date: 2026-04-20
+    decision: Change log is in-memory for V1, regenerable on cold start
+    rationale: |
+      Single backend instance. Loss-on-restart is acceptable - clients
+      receive a serverTime newer than their lastSeen and refetch once.
+      If multi-instance ever happens, move to S3 or SQLite.
+
+  - date: 2026-04-20
+    decision: Use document.visibilityState, not window focus, to gate polling
+    rationale: |
+      A visible-but-unfocused tab (split-screen, side-by-side) should still
+      poll. Only hidden (backgrounded, minimized) tabs should pause.
