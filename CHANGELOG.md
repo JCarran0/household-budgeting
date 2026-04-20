@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.41.0](https://github.com/JCarran0/household-budgeting/compare/v5.40.0...v5.41.0) (2026-04-20)
+
+
+### Features
+
+* **trips:** pick from candidate photos in the Stay form ([af1ae24](https://github.com/JCarran0/household-budgeting/commit/af1ae247511e010809210a009f6883527c49cf05))
+
 ## [5.40.0](https://github.com/JCarran0/household-budgeting/compare/v5.39.0...v5.40.0) (2026-04-20)
 
 
