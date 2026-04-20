@@ -141,8 +141,7 @@ export function useTransactionData(filters: TransactionFilters) {
   const { data: transactionData, isFetching, refetch, status } = useQuery({
     queryKey: ['transactions', queryParams],
     queryFn: () => api.getTransactions(queryParams),
-    refetchOnWindowFocus: false,
-    staleTime: 5 * 60 * 1000,
+    staleTime: 30 * 1000, // hot — partner edits show up on focus
     gcTime: 10 * 60 * 1000,
     retry: 1,
   });

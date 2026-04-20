@@ -86,7 +86,7 @@ export function TransactionPreviewModal({
       tags,
     }),
     enabled: opened && categoryId !== undefined, // Only fetch when modal is open and categoryId is defined
-    staleTime: 1000 * 60 * 5, // 5 minutes
+    staleTime: 30 * 1000, // hot — transactions
   });
 
   const transactions = useMemo(() => 

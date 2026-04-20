@@ -667,7 +667,7 @@ export function Trips() {
   } = useQuery({
     queryKey: ['trips', 'summaries', null],
     queryFn: () => api.getTripsSummaries(),
-    staleTime: 1000 * 60 * 5,
+    staleTime: 1000 * 60 * 2, // warm — list view
   });
 
   // Derive unique years from trips for the year filter

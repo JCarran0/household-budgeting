@@ -153,13 +153,13 @@ export function Projects() {
   } = useQuery({
     queryKey: ['projects', 'summaries', null],
     queryFn: () => api.getProjectsSummaries(),
-    staleTime: 1000 * 60 * 5,
+    staleTime: 1000 * 60 * 2, // warm — list view
   });
 
   const { data: allTasks = [] } = useQuery({
     queryKey: ['tasks', 'all'],
     queryFn: () => api.getTasks(),
-    staleTime: 1000 * 60 * 2,
+    staleTime: 30 * 1000, // hot — partner may have completed a task
   });
 
   const { data: familyData } = useQuery({
