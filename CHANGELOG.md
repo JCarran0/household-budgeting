@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.40.0](https://github.com/JCarran0/household-budgeting/compare/v5.39.0...v5.40.0) (2026-04-20)
+
+
+### Features
+
+* **trips:** click place photo to open hero modal with larger image ([b08dff6](https://github.com/JCarran0/household-budgeting/commit/b08dff6bef0d098c67d0364937ca704c0c75c555))
+
 ## [5.39.0](https://github.com/JCarran0/household-budgeting/compare/v5.38.0...v5.39.0) (2026-04-20)
 
 
