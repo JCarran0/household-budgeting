@@ -236,7 +236,7 @@ decisions:
 # PHASE 1: Shared Types
 # =============================================================================
 phase_1_schema:
-  status: not_started
+  status: completed
   description: |
     Add two optional string fields to VerifiedLocation in shared/types/index.ts.
     No backend work, no Zod change, no migration.
@@ -244,39 +244,26 @@ phase_1_schema:
   tasks:
     - id: "1.1"
       task: Extend VerifiedLocation with photoName and photoAttribution
-      status: not_started
-      details: |
-        In shared/types/index.ts:344:
-
-        export interface VerifiedLocation {
-          kind: 'verified';
-          label: string;
-          address: string;
-          lat: number;
-          lng: number;
-          placeId: string;
-          photoName?: string;        // Places v1 photo resource name
-          photoAttribution?: string; // First author's display name
-        }
-
-        Both optional. Existing stops deserialize with undefined for these
-        fields — downstream code treats undefined as "no photo" and falls
-        back to icons.
+      status: completed
 
     - id: "1.2"
       task: Verify no Zod schema regression
-      status: not_started
-      details: |
-        Grep shared/ and backend/src/ for any schema that validates
-        VerifiedLocation shape with .strict() or an explicit object shape
-        — loosen if needed so the two new fields pass through. Likely a
-        no-op (backend treats stop location as opaque JSON) but confirm.
+      status: completed
+      actual: |
+        The backend DOES carry a strict Zod discriminated-union for stop
+        locations (backend/src/validators/stopValidators.ts). By default
+        Zod strips unknown keys on `z.object()` — so photoName and
+        photoAttribution would have been silently dropped by the
+        create/update endpoints without a schema extension. Added both
+        as optional fields (photoName 500 char cap, photoAttribution 300
+        char cap) to the verifiedLocationSchema. Integration tests
+        (tripStops.test.ts) continue to pass.
 
 # =============================================================================
 # PHASE 2: Capture — LocationInput Migration to Place.fetchFields
 # =============================================================================
 phase_2_capture:
-  status: not_started
+  status: completed
   description: |
     Replace the single legacy PlacesService.getDetails call in LocationInput
     with google.maps.places.Place.fetchFields. Preserves the autocomplete
@@ -285,7 +272,7 @@ phase_2_capture:
   tasks:
     - id: "2.1"
       task: Migrate handlePredictionSelect to Place.fetchFields
-      status: not_started
+      status: completed
       details: |
         In frontend/src/components/trips/agenda/LocationInput.tsx:126,
         replace the PlacesService.getDetails callback shape with:
@@ -329,16 +316,17 @@ phase_2_capture:
 
     - id: "2.2"
       task: Verify SDK type coverage for google.maps.places.Place
-      status: not_started
-      details: |
-        The new Place class and fetchFields method require a recent
-        @types/google.maps version. Check current devDependency in
-        frontend/package.json — bump if `Place` or `fetchFields` is missing.
-        If @googlemaps/js-api-loader pins to an old schema, bump together.
+      status: completed
+      actual: |
+        @types/google.maps 3.64.0 (current latest) covers Place and
+        fetchFields. It does NOT expose Photo.name — that resource-name
+        string is present at runtime on v=weekly but absent from the types.
+        Worked around with a narrow `unknown` cast + string guard; no
+        `any`, and a comment explains the gap. No dependency bump needed.
 
     - id: "2.3"
       task: Manual verification — photo name captured end-to-end
-      status: not_started
+      status: pending_user_qa
       details: |
         Local dev, with real Places API key:
         - Open "Add Stay", search "Hotel Arts Barcelona", select
@@ -355,7 +343,7 @@ phase_2_capture:
 # PHASE 3: Render — PlacePhotoThumb Helper Component
 # =============================================================================
 phase_3_thumb_component:
-  status: not_started
+  status: completed
   description: |
     A shared, size-agnostic photo thumbnail component used by Stay banner,
     Stay form preview, and (in PR 2) Map popup and Stop card avatar.
@@ -363,7 +351,7 @@ phase_3_thumb_component:
   tasks:
     - id: "3.1"
       task: Create PlacePhotoThumb.tsx
-      status: not_started
+      status: completed
       details: |
         New file: frontend/src/components/trips/agenda/PlacePhotoThumb.tsx
 
@@ -402,7 +390,12 @@ phase_3_thumb_component:
 
     - id: "3.2"
       task: Unit test for PlacePhotoThumb
-      status: not_started
+      status: deferred
+      actual: |
+        Frontend has no vitest / testing-library setup today; the plan
+        explicitly allowed "skip this test and cover via PR 1 manual QA
+        (thumbnail render is not a money/auth path)". Taking that path.
+        Revisit if frontend test infrastructure lands.
       details: |
         New file: frontend/src/components/trips/agenda/__tests__/PlacePhotoThumb.test.tsx
 
@@ -420,7 +413,7 @@ phase_3_thumb_component:
 
     - id: "3.3"
       task: Add hero modal (REQ-016/017/018/019, D10)
-      status: not_started
+      status: completed
       details: |
         Wrap the thumbnail Image in an UnstyledButton so it's keyboard- and
         mouse-clickable. On click, open a Mantine Modal that renders the
@@ -459,7 +452,7 @@ phase_3_thumb_component:
 # PHASE 4: Render — Stay Banner Integration
 # =============================================================================
 phase_4_stay_banner:
-  status: not_started
+  status: completed
   description: |
     Swap the IconBed for a PlacePhotoThumb on StayBanner when the stay's
     location carries a photoName. Preserve all existing banner behavior.
@@ -467,7 +460,7 @@ phase_4_stay_banner:
   tasks:
     - id: "4.1"
       task: Update StayBanner to render PlacePhotoThumb when available
-      status: not_started
+      status: completed
       details: |
         In frontend/src/components/trips/agenda/StayBanner.tsx:32, replace:
 
@@ -493,7 +486,7 @@ phase_4_stay_banner:
 
     - id: "4.2"
       task: Visual QA across Stay shapes
-      status: not_started
+      status: pending_user_qa
       details: |
         Manual verification on local dev:
         - New stay with photo → thumbnail visible, hover shows attribution
@@ -511,7 +504,7 @@ phase_4_stay_banner:
 # PHASE 5: Render — Stay Form Candidate Picker
 # =============================================================================
 phase_5_stay_form_picker:
-  status: not_started
+  status: completed
   description: |
     Replace the Stay form's single 96px preview with a horizontal strip of
     candidate photo tiles (D11). Capture all candidates at selection time,
@@ -523,7 +516,7 @@ phase_5_stay_form_picker:
   tasks:
     - id: "5.1"
       task: Surface candidates from LocationInput
-      status: not_started
+      status: completed
       details: |
         In frontend/src/components/trips/agenda/LocationInput.tsx:
 
@@ -547,7 +540,12 @@ phase_5_stay_form_picker:
 
     - id: "5.2"
       task: Render candidate strip + fallback in StayForm
-      status: not_started
+      status: completed
+      actual: |
+        Extracted into a separate component:
+        frontend/src/components/trips/agenda/PhotoCandidateStrip.tsx.
+        Keeps StayForm readable and makes the strip reusable if PR 2
+        decides to expose a picker on Eat/Play forms.
       details: |
         In frontend/src/components/trips/agenda/forms/StayForm.tsx:
 
@@ -577,7 +575,7 @@ phase_5_stay_form_picker:
 
     - id: "5.3"
       task: Manual QA of picker flow
-      status: not_started
+      status: pending_user_qa
       details: |
         - Open Add Stay, select a well-photographed hotel →
           strip of 2–10 tiles visible; first tile highlighted
@@ -596,7 +594,7 @@ phase_5_stay_form_picker:
 # Added 2026-04-20 after the Phase 2 fetchFields migration surfaced the
 # AutocompleteService deprecation warning in the console. See D9.
 phase_7_autocomplete_migration:
-  status: not_started
+  status: completed
   description: |
     Replace the remaining legacy autocomplete call in LocationInput with the
     post-2025-03-01 API. No contract change visible to callers: StopLocation
@@ -606,7 +604,7 @@ phase_7_autocomplete_migration:
   tasks:
     - id: "7.1"
       task: Swap AutocompleteService.getPlacePredictions for AutocompleteSuggestion.fetchAutocompleteSuggestions
-      status: not_started
+      status: completed
       details: |
         In frontend/src/components/trips/agenda/LocationInput.tsx:
 
@@ -647,7 +645,7 @@ phase_7_autocomplete_migration:
 
     - id: "7.2"
       task: Manual verification — no more deprecation warning
-      status: not_started
+      status: pending_user_qa
       details: |
         - DevTools console on /trips/:tripId with LocationInput open: no
           "AutocompleteService is not available to new customers" warning
@@ -657,14 +655,14 @@ phase_7_autocomplete_migration:
         - Rapid consecutive selections each produce a new session token
           (manually observable by logging sessionTokenRef.current)
 phase_6_release:
-  status: not_started
+  status: in_progress
   description: |
     Update architecture doc index, CLAUDE.md decision log, and ship PR 1.
 
   tasks:
     - id: "6.1"
       task: Update CLAUDE.md documentation index and decisions
-      status: not_started
+      status: completed
       details: |
         - Add "Trip Place Photos" row to Feature BRDs & Plans table:
           BRD: docs/features/TRIP-PLACE-PHOTOS-BRD.md
@@ -677,18 +675,23 @@ phase_6_release:
 
     - id: "6.2"
       task: Conventional commit + release note
-      status: not_started
-      details: |
-        Expected commit cadence (PR 1):
-        - feat(trips): add place photos to verified locations + Stay banner
-
-        Release note (short): "Stay addresses now show a photo thumbnail on
-        the Trip Itinerary banner. Existing stays will show a photo once
-        you edit the address and re-confirm it."
+      status: completed
+      actual: |
+        Shipped as three commits on main (no feature branch — 2-user
+        family scale, main-direct workflow):
+          d9cdfdb feat(trips): add place photos to verified locations + Stay banner
+          b08dff6 feat(trips): click place photo to open hero modal with larger image
+          af1ae24 feat(trips): pick from candidate photos in the Stay form
+        standard-version will bundle these into one semver bump on next release.
 
     - id: "6.0"
       task: Enable "Places API (New)" in GCP before merge
-      status: not_started
+      status: completed
+      actual: |
+        Dev project enabled 2026-04-20 after the typeahead returned 403
+        on first test. Production project still needs verification
+        pre-deploy (reuse the same URL pattern with the prod projectId);
+        folded into 6.3's preflight checklist.
       details: |
         Pre-requisite discovered during Phase 7 local verification: the
         new endpoints (fetchAutocompleteSuggestions, fetchFields, photo
@@ -707,15 +710,22 @@ phase_6_release:
 
     - id: "6.3"
       task: Production deploy validation
-      status: not_started
+      status: pending_post_deploy
       details: |
+        Preflight (before first post-merge prod release):
+        - Enable "Places API (New)" on the prod GCP project (see 6.0).
+        - Confirm VITE_GOOGLE_PLACES_API_KEY referrer allowlist includes
+          budget.jaredcarrano.com.
+
+        Post-deploy:
         - Create a new trip on production with a well-known hotel stay →
-          thumbnail appears on banner
+          strip of candidate tiles visible, click another to swap
+        - Save and reload → banner renders with chosen photo
+        - Click banner thumbnail → hero modal opens at maxWidthPx=1600
         - Existing trips with pre-feature stays → IconBed appears as before
         - Monitor GCP billing dashboard for 1 week post-deploy — confirm
-          Places API "photos" SKU stays within expected range (<$1/mo at
-          current usage)
-        - Referrer restriction verified on GCP console before deploy
+          Places API (New) "Place Details" + "Photos" SKUs stay within
+          expected range (<$1/mo at current usage).
 
 # =============================================================================
 # PR 2 (DEFERRED) — Map Popup + Stop Card Avatars
