@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.43.0](https://github.com/JCarran0/household-budgeting/compare/v5.42.0...v5.43.0) (2026-04-20)
+
+
+### Features
+
+* **trips:** picker parity — Eat/Play form gets the candidate strip ([6c487b4](https://github.com/JCarran0/household-budgeting/commit/6c487b4ae8ef312f03e84b73637a3f8d6ad80d32))
+
 ## [5.42.0](https://github.com/JCarran0/household-budgeting/compare/v5.41.2...v5.42.0) (2026-04-20)
 
 
