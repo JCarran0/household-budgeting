@@ -194,34 +194,13 @@ Frequently accessed transaction data is fetched repeatedly.
 ---
 
 ### 10. Align "Reorder Items in a List" UX Across Features
-**Status**: Planned
+**Status**: Won't Do (2026-04-20 — wrapper not worth the abstraction)
 **Created**: 2026-04-18
 **Impact**: Low - UX consistency
 **Effort**: Low-Medium
 
-**Problem**:
-The app has (or will soon have) three places where a user reorders items in a list, and each uses a different interaction pattern:
-
-1. **Task Kanban** (`frontend/src/components/tasks/KanbanColumn.tsx`) — drag-and-drop via `@hello-pangea/dnd`. Cross-column moves plus intra-column reorder.
-2. **Task Edit modal — subtasks** — up/down arrow buttons on each subtask row. No drag.
-3. **Trip Itineraries — untimed stops within a day** (planned; see `docs/features/TRIP-ITINERARIES-PLAN.yaml` task 4.6) — will use `@hello-pangea/dnd` drag-reorder.
-
-The underlying UX need is the same in all three ("let me put these in the order I want"), but the affordance differs. This is confusing across the app and makes it harder for users to build a single mental model for reordering.
-
-**Solution**:
-Pick one canonical pattern and apply it everywhere reorder is supported. Recommended approach:
-
-- **Default to drag** for all reorder surfaces (consistent with the kanban, and `@hello-pangea/dnd` is already a dep).
-- **Provide keyboard-accessible fallback** (up/down arrows on focused items) so drag isn't the only path — accessibility + power-user affordance.
-- Extract a shared `<SortableList>` component that wraps `@hello-pangea/dnd` + keyboard handling, used by kanban, task modal, and itinerary.
-
-Alternative: standardize on arrows-only. Simpler, more accessible by default, but loses the fluid drag experience users expect in a kanban.
-
-**Files to Modify**:
-- Create: `frontend/src/components/common/SortableList.tsx` (or similar)
-- Update: `frontend/src/components/tasks/KanbanColumn.tsx` — adopt SortableList
-- Update: task edit modal subtask list — swap arrow buttons for SortableList
-- Update: trip itinerary agenda (once shipped) — use SortableList instead of raw `@hello-pangea/dnd`
+**Resolution**:
+Audit on 2026-04-20 found three of four reorder surfaces (Kanban, Checklist view, Trip Agenda) already use `@hello-pangea/dnd` directly. They diverge because drag isn't pure reorder in most places — it also performs cross-group moves (column/status, day), so a shared `<SortableList>` abstraction would either lose that domain logic or leak it through callbacks. The only arrow-only surface is a 4-item template subtask list inside an edit modal, where drag would be overkill. Closing as "not worth the wrapper"; if a fourth drag surface ever appears without cross-group semantics, revisit then.
 
 **References**:
 - Task kanban implementation: `frontend/src/components/tasks/KanbanColumn.tsx`
