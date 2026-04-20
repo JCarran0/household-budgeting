@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+### [5.44.1](https://github.com/JCarran0/household-budgeting/compare/v5.44.0...v5.44.1) (2026-04-20)
+
+
+### Chores
+
+* **ci:** bump checkout and setup-node to v5 for Node 24 runtime ([fd0fef2](https://github.com/JCarran0/household-budgeting/commit/fd0fef25174581ba26d6535c123edd6d8dbe6a1a))
+
 ## [5.44.0](https://github.com/JCarran0/household-budgeting/compare/v5.43.5...v5.44.0) (2026-04-20)
 
 
