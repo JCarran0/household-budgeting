@@ -13,7 +13,31 @@ export const inspirationQuotes: readonly string[] = [
   "Your co-pilot is watching. You've got this.",
 ];
 
-export function pickDailyQuote(seed: string = new Date().toISOString().slice(0, 10)): string {
+// Day key anchored at 5 AM America/New_York (DST-aware).
+// Before 5 AM ET, returns yesterday's ET date; otherwise today's ET date.
+export function getInspirationDayKey(now: Date = new Date()): string {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/New_York',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    hourCycle: 'h23',
+  }).formatToParts(now);
+  const get = (type: string) => parts.find((p) => p.type === type)?.value ?? '';
+  const year = Number(get('year'));
+  const month = Number(get('month'));
+  const day = Number(get('day'));
+  const hour = Number(get('hour'));
+
+  const anchor = new Date(Date.UTC(year, month - 1, day));
+  if (hour < 5) {
+    anchor.setUTCDate(anchor.getUTCDate() - 1);
+  }
+  return anchor.toISOString().slice(0, 10);
+}
+
+export function pickDailyQuote(seed: string = getInspirationDayKey()): string {
   let hash = 0;
   for (let i = 0; i < seed.length; i++) {
     hash = (hash * 31 + seed.charCodeAt(i)) >>> 0;

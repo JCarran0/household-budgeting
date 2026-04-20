@@ -1,17 +1,14 @@
 import { useEffect, useState } from 'react';
+import { getInspirationDayKey } from '../lib/inspirationQuotes';
 
 const STORAGE_KEY = 'inspiration:lastShown';
-
-function todayKey(): string {
-  return new Date().toISOString().slice(0, 10);
-}
 
 export function useDailyInspiration() {
   const [opened, setOpened] = useState(false);
 
   useEffect(() => {
     try {
-      const today = todayKey();
+      const today = getInspirationDayKey();
       const lastShown = localStorage.getItem(STORAGE_KEY);
       if (lastShown !== today) {
         setOpened(true);
