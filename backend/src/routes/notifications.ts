@@ -8,7 +8,7 @@
  * GET    /vapid-public-key — Get VAPID public key (no auth — needed before login)
  */
 
-import { Router, Request, Response } from 'express';
+import { Router, Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
 import { authMiddleware } from '../middleware/authMiddleware';
 import { pushNotificationService, dataService } from '../services';
@@ -80,7 +80,7 @@ router.get('/vapid-public-key', (_req: Request, res: Response): void => {
 // POST /subscribe — Register a device subscription
 // ---------------------------------------------------------------------------
 
-router.post('/subscribe', authMiddleware, (req: Request, res: Response): void => {
+router.post('/subscribe', authMiddleware, (req: Request, res: Response, next: NextFunction): void => {
   void (async () => {
     const parsed = subscribeBodySchema.safeParse(req.body);
     if (!parsed.success) {
@@ -98,8 +98,7 @@ router.post('/subscribe', authMiddleware, (req: Request, res: Response): void =>
       await pushNotificationService.registerSubscription(userId, parsed.data);
       res.status(201).json({ success: true });
     } catch (error) {
-      console.error('[notifications] Failed to register subscription:', error);
-      res.status(500).json({ success: false, error: 'Failed to register subscription.' });
+      next(error);
     }
   })();
 });
@@ -108,7 +107,7 @@ router.post('/subscribe', authMiddleware, (req: Request, res: Response): void =>
 // DELETE /subscribe — Remove a device subscription
 // ---------------------------------------------------------------------------
 
-router.delete('/subscribe', authMiddleware, (req: Request, res: Response): void => {
+router.delete('/subscribe', authMiddleware, (req: Request, res: Response, next: NextFunction): void => {
   void (async () => {
     const parsed = unsubscribeBodySchema.safeParse(req.body);
     if (!parsed.success) {
@@ -126,8 +125,7 @@ router.delete('/subscribe', authMiddleware, (req: Request, res: Response): void 
       await pushNotificationService.removeSubscription(userId, parsed.data.endpoint);
       res.json({ success: true });
     } catch (error) {
-      console.error('[notifications] Failed to remove subscription:', error);
-      res.status(500).json({ success: false, error: 'Failed to remove subscription.' });
+      next(error);
     }
   })();
 });
@@ -136,7 +134,7 @@ router.delete('/subscribe', authMiddleware, (req: Request, res: Response): void 
 // GET /preferences — Get notification preferences
 // ---------------------------------------------------------------------------
 
-router.get('/preferences', authMiddleware, (req: Request, res: Response): void => {
+router.get('/preferences', authMiddleware, (req: Request, res: Response, next: NextFunction): void => {
   void (async () => {
     const { userId } = (req as AuthRequest).user;
 
@@ -149,8 +147,7 @@ router.get('/preferences', authMiddleware, (req: Request, res: Response): void =
       const preferences: NotificationPreferences = { ...DEFAULT_PREFERENCES, ...stored };
       res.json({ success: true, preferences });
     } catch (error) {
-      console.error('[notifications] Failed to get preferences:', error);
-      res.status(500).json({ success: false, error: 'Failed to get notification preferences.' });
+      next(error);
     }
   })();
 });
@@ -159,7 +156,7 @@ router.get('/preferences', authMiddleware, (req: Request, res: Response): void =
 // PUT /preferences — Update notification preferences
 // ---------------------------------------------------------------------------
 
-router.put('/preferences', authMiddleware, (req: Request, res: Response): void => {
+router.put('/preferences', authMiddleware, (req: Request, res: Response, next: NextFunction): void => {
   void (async () => {
     const parsed = preferencesBodySchema.safeParse(req.body);
     if (!parsed.success) {
@@ -177,8 +174,7 @@ router.put('/preferences', authMiddleware, (req: Request, res: Response): void =
       await dataService.saveData(`${PREFERENCES_KEY_PREFIX}${userId}`, parsed.data);
       res.json({ success: true, preferences: parsed.data });
     } catch (error) {
-      console.error('[notifications] Failed to update preferences:', error);
-      res.status(500).json({ success: false, error: 'Failed to update notification preferences.' });
+      next(error);
     }
   })();
 });

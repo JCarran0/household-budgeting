@@ -67,29 +67,15 @@ Nginx rate limits increased to 30r/s with burst allowance of 30 requests.
 ## Medium Priority
 
 ### 10. Remaining Route Error Pattern Migration
-**Status**: Resolved (commit `8d9243e`)
+**Status**: Resolved (2026-04-20)
 **Created**: 2026-04-08
 **Impact**: Medium - Inconsistent error handling across routes
 **Effort**: Medium
 
-**Problem**:
-10 of 15 route files still use the old `try/catch → res.status(500)` error handling pattern. Budgets, trips, transactions, and reports routes have been migrated to typed error classes + `next(error)` middleware. The remaining routes are inconsistent with the new pattern and do not benefit from centralised error formatting.
+**Resolution**:
+Audit on 2026-04-20 found the 11-file list was stale — catch blocks across those files had already been migrated to `next(error)`. Two holdouts remained: a single catch in `authRoutes.ts` (the file previously listed as `auth.ts`) and four catches in `notifications.ts` (not previously tracked). All five were migrated; every `catch (error)` block in `backend/src/routes/` now delegates to the centralised error middleware.
 
-**Remaining files to migrate**:
-- `backend/src/routes/accounts.ts`
-- `backend/src/routes/categories.ts`
-- `backend/src/routes/auth.ts`
-- `backend/src/routes/plaid.ts`
-- `backend/src/routes/admin.ts`
-- `backend/src/routes/feedback.ts`
-- `backend/src/routes/chatbot.ts`
-- `backend/src/routes/autoCategorize.ts`
-- `backend/src/routes/actualsOverrides.ts`
-- `backend/src/routes/manualAccounts.ts`
-- `backend/src/routes/themes.ts`
-
-**Solution**:
-Replace `res.status(500).json({ error: '...' })` patterns with typed error classes and `next(error)` calls following the pattern established in the migrated routes.
+Residual `res.status(4xx).json(...)` calls remaining across routes are intentional inline validation responses, matching the pattern used by already-migrated files like `budgets.ts`. Further tightening (e.g., replacing inline 400s with `ValidationError`) is a separate, lower-priority cleanup.
 
 **References**:
 - `backend/src/errors/index.ts` - Typed error classes

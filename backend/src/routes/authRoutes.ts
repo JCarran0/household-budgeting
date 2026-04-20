@@ -290,10 +290,10 @@ router.post(
  */
 router.get(
   '/verify',
-  (req: Request, res: Response): void => {
+  (req: Request, res: Response, next: NextFunction): void => {
     try {
       const authHeader = req.headers.authorization;
-      
+
       if (!authHeader || !authHeader.startsWith('Bearer ')) {
         res.status(401).json({
           success: false,
@@ -304,7 +304,7 @@ router.get(
 
       const token = authHeader.substring(7);
       const validation = authService.validateToken(token);
-      
+
       if (validation.valid && validation.decoded) {
         res.json({
           success: true,
@@ -323,10 +323,7 @@ router.get(
         });
       }
     } catch (error) {
-      res.status(500).json({
-        success: false,
-        error: 'Token verification failed',
-      });
+      next(error);
     }
   }
 );
