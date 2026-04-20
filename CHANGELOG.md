@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+### [5.43.4](https://github.com/JCarran0/household-budgeting/compare/v5.43.3...v5.43.4) (2026-04-20)
+
+
+### Documentation
+
+* mark Transfer Linking as won't do ([fc12147](https://github.com/JCarran0/household-budgeting/commit/fc12147eb03acab607ae90554e9410eff110f567))
+
 ### [5.43.3](https://github.com/JCarran0/household-budgeting/compare/v5.43.2...v5.43.3) (2026-04-20)
 
 
