@@ -158,6 +158,28 @@ decisions:
       popup photos are improvements or clutter. Capture in PR 1 means
       PR 2 has no dependency beyond render-layer changes.
 
+  - id: D10
+    date: 2026-04-20
+    decision: Hero modal always-on, built into PlacePhotoThumb (not per-caller opt-in)
+    rationale: |
+      Every surface where we render a place photo has the same payoff for a
+      click-to-enlarge interaction — a user who sees a hotel shot on a Stay
+      banner and wants a better look shouldn't have to care whether the
+      surface happens to support it.
+
+      Building the modal into PlacePhotoThumb means:
+      - One place to wire it (no prop drilling or per-caller opt-in).
+      - PR 2's Eat/Play card avatars and Map popup photos get it for free.
+      - Uniform behavior (same keyboard shortcuts, same attribution layout,
+        same image quality) across every photo surface in the app.
+
+      Tradeoff: slightly larger PlacePhotoThumb component. Mitigated by the
+      modal being a small self-contained block (<40 lines) using Mantine's
+      Modal + useDisclosure primitives already used elsewhere in the app.
+
+      Cost: one extra v1/.../media fetch per modal open (~$0.007). At family
+      scale, negligible (A-09).
+
   - id: D9
     date: 2026-04-20
     decision: Bundle AutocompleteService → AutocompleteSuggestion migration into PR 1
@@ -367,6 +389,43 @@ phase_3_thumb_component:
         manual QA (per project's risk-based testing philosophy; thumbnail
         render is not a money/auth path).
 
+    - id: "3.3"
+      task: Add hero modal (REQ-016/017/018/019, D10)
+      status: not_started
+      details: |
+        Wrap the thumbnail Image in an UnstyledButton so it's keyboard- and
+        mouse-clickable. On click, open a Mantine Modal that renders the
+        same photo at maxWidthPx=1600.
+
+        State: useDisclosure() from @mantine/hooks (already used elsewhere
+        in the app — see BadgeDetailModal.tsx, ProjectFormModal.tsx).
+
+        Modal structure:
+          <Modal opened={opened} onClose={close} size="xl" centered title={alt}>
+            <Stack>
+              <Image
+                src={largeSrc}
+                alt={alt}
+                fit="contain"
+                style={{ maxHeight: '80vh' }}
+              />
+              <Text size="xs" c="dimmed" ta="right">
+                {captionText}
+              </Text>
+            </Stack>
+          </Modal>
+
+        - largeSrc reuses the same photoName; only maxWidthPx differs.
+        - Modal title = alt gives context ("Hotel Arts Barcelona").
+        - Attribution caption is always visible below the image (REQ-018)
+          — stricter than the tooltip-only bar on thumbnails, preemptively
+          compliant with any Google policy tightening.
+        - No new schema, no backend, no additional persistent state.
+
+        Accessibility: UnstyledButton gives the role=button + keyboard
+        affordance. aria-label="View {alt} photo full size". Modal gets
+        ESC + click-outside + close button for dismissal (Mantine defaults).
+
 # =============================================================================
 # PHASE 4: Render — Stay Banner Integration
 # =============================================================================
@@ -414,6 +473,10 @@ phase_4_stay_banner:
         - Hover tooltip positions correctly on narrow viewport
         - Image load fails (simulate via DevTools network block) → banner
           doesn't crash; Mantine Image falls back to empty state
+        - Click thumbnail → modal opens with larger image + visible
+          attribution caption; title shows stay name
+        - ESC and click-outside both dismiss the modal
+        - Keyboard: tab to thumbnail, Enter opens modal
 
 # =============================================================================
 # PHASE 5: Render — Stay Form Preview
@@ -460,6 +523,8 @@ phase_5_stay_form_preview:
         - Re-select a different hotel → preview updates to new photo
         - Select an address with no photo → no preview, no error
         - Submit the form → stay's banner renders with the same photo
+        - Click the 96px form preview → hero modal opens with larger
+          image (the form itself stays open behind the modal)
 
 # =============================================================================
 # PHASE 7: AutocompleteService → AutocompleteSuggestion Migration

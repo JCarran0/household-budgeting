@@ -67,6 +67,16 @@ Both fields are optional to preserve backwards compatibility with existing stops
 
 **REQ-013:** The preview is hidden when the location is cleared, unverified, or carries no photo.
 
+### Render — Full-size Modal ("Hero")
+
+**REQ-016:** The thumbnail (both the Stay banner thumbnail and the Stay form preview — and, in PR 2, any other `PlacePhotoThumb` surface) is clickable. A click opens a Mantine `Modal` rendering the same photo at a larger size. This is an ambient affordance — the hover tooltip hints at interactivity, and the click payoff is "see this photo bigger."
+
+**REQ-017:** The modal image is fetched from the same `places.googleapis.com/v1/{photoName}/media` endpoint with `maxWidthPx=1600`. This produces a crisp image on laptop/desktop viewports without over-fetching on mobile. No separate schema, no pre-fetch; the request fires on modal open.
+
+**REQ-018:** Attribution renders as an always-visible caption inside the modal — positioned below (or bottom-right overlay on) the image. Modal real estate is generous, and always-visible attribution inside the modal is the strictest interpretation of Google's display policy, preemptively satisfying any policy tightening. The hover tooltip on the thumbnail itself is retained (REQ-010).
+
+**REQ-019:** The modal dismisses via ESC, click-outside, or close button (Mantine defaults). Modal size is `xl` with a `contain`-fit image capped at `80vh`, so the photo scales with the viewport.
+
 ### Backwards compatibility
 
 **REQ-014:** Stops created before this feature ships continue to render with icon-only visuals. No backfill is performed.
@@ -94,6 +104,8 @@ Both fields are optional to preserve backwards compatibility with existing stops
   - **PR 2** — render on map `StopPopup`, render as avatar on `StopCard` for Eat/Play. Both gated on PR 1's quality outcome in real usage.
 
 - **A-08:** **"Places API (New)" must be enabled in the GCP project** (in addition to the legacy Places API the app already uses for V1 autocomplete/geocoding). The new API backs `AutocompleteSuggestion.fetchAutocompleteSuggestions`, `Place.fetchFields`, and the `places.googleapis.com/v1/{photoName}/media` photo endpoint. Without it, both the typeahead and photo capture return HTTP 403 and the Stay form cannot be submitted. Enable at `https://console.developers.google.com/apis/api/places.googleapis.com/overview?project={projectId}`. No separate key is needed — the existing referrer-restricted key (A-01) carries permission once the API is enabled on the same project.
+
+- **A-09:** **Hero modal opens cost one extra Places Photos fetch each.** Each click triggers a `maxWidthPx=1600` fetch (~$0.007 per photo, same SKU as the thumbnail). Browser HTTP caching reduces repeat-fetch cost within a tab session, but a fresh tab or session re-fetches. At family scale (2 users, occasional opens), monthly incremental cost is negligible (estimated <$0.25/year).
 
 ---
 
