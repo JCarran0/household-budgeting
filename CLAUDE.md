@@ -233,7 +233,6 @@ df -h /home/appuser
 
 | Change | Notes |
 |--------|-------|
-| Transfer Linking | Pair two transfer transactions via shared `transferGroupId`; not yet started. See [TRANSFER-LINKING-BRD.md](docs/features/TRANSFER-LINKING-BRD.md). |
 | Subdomain migration | `budget.jaredcarrano.com` → `family.jaredcarrano.com`. Code + DNS/TLS. See PROJECT_PLAN.md Phase 14.5. |
 | Transaction caching | React Query or similar. Reduce API calls. |
 | Webhook support | Plaid webhooks for real-time sync. |

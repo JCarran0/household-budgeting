@@ -1,6 +1,6 @@
 # Transfer Linking — Business Requirements Document
 
-**Status:** Shelved
+**Status:** Won't Do (2026-04-20 — value not sufficient to justify build)
 **Author:** Jared Carrano
 **Date:** 2026-04-06
 **Version:** 1.0

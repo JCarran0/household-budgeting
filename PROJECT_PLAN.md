@@ -616,7 +616,7 @@ Open questions to work through before scheduling:
 6. ~~Category options consolidation refactor (Phase 11)~~ ✅ COMPLETE
 7. ~~Multi-user family collaboration (Phase 7)~~ ✅ COMPLETE
 8. **Task Management v2.0 enhancements** (Checklist view, Snooze, Reorder — in flight; see [TASK-MANAGEMENT-ENHANCEMENTS-PLAN.yaml](docs/features/TASK-MANAGEMENT-ENHANCEMENTS-PLAN.yaml))
-9. **Transfer Linking** (not started; see [TRANSFER-LINKING-PLAN.yaml](docs/features/TRANSFER-LINKING-PLAN.yaml))
+9. ~~**Transfer Linking**~~ — won't do (value not sufficient, 2026-04-20; see [TRANSFER-LINKING-BRD.md](docs/features/TRANSFER-LINKING-BRD.md))
 10. **PWA Phase 6** — service worker offline persistence (see [PWA-MOBILE-PLAN.yaml](docs/features/PWA-MOBILE-PLAN.yaml))
 11. **Subdomain migration** — family.jaredcarrano.com (Phase 14.5 above)
 12. **Chat Action D-15** — migrate `submit_github_issue` onto action-card registry (see [AI-CHAT-ACTIONS-BRD.md](docs/features/AI-CHAT-ACTIONS-BRD.md) D-15)
