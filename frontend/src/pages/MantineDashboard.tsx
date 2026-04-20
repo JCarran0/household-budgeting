@@ -1,5 +1,4 @@
 import {
-  Grid,
   Card,
   Text,
   Title,
@@ -9,7 +8,6 @@ import {
   Badge,
   Progress,
   SimpleGrid,
-  Paper,
   ThemeIcon,
   Center,
   Loader,
@@ -22,7 +20,6 @@ import {
   IconWallet,
   IconTrendingDown,
   IconTrendingUp,
-  IconCreditCard,
   IconPlus,
   IconArrowUpRight,
   IconArrowDownRight,
@@ -363,7 +360,14 @@ export function MantineDashboard() {
 
       {/* Budget Status - Show actual budget vs spending when budget exists */}
       {hasBudget ? (
-        <Card padding="lg" radius="md" withBorder>
+        <Card
+          component={Link}
+          to="/budgets?view=comparison"
+          padding="lg"
+          radius="md"
+          withBorder
+          style={{ display: 'block', textDecoration: 'none', color: 'inherit', cursor: 'pointer' }}
+        >
           <Text size="sm" fw={500} mb="md">Monthly Budget Status</Text>
           <Progress.Root size="xl" mb="md">
             <Progress.Section value={budgetProgress} color={budgetProgress > 100 ? 'red' : budgetProgress > 80 ? 'orange' : 'green'}>
@@ -406,141 +410,71 @@ export function MantineDashboard() {
         </Card>
       ) : null}
 
-      <Grid gutter="lg">
-        {/* Accounts Section */}
-        <Grid.Col span={{ base: 12, md: 6 }}>
-          <Card padding="lg" radius="md" h="100%" withBorder>
-            <Group justify="space-between" mb="md">
-              <Text size="lg" fw={600}>Connected Accounts</Text>
-              <Button
-                component={Link}
-                to="/accounts"
-                variant="subtle"
-                size="xs"
-              >
-                View all
-              </Button>
-            </Group>
+      {/* Recent Transactions */}
+      <Card padding="lg" radius="md" withBorder>
+        <Group justify="space-between" mb="md">
+          <Text size="lg" fw={600}>Recent Activity</Text>
+          <Button
+            component={Link}
+            to="/transactions"
+            variant="subtle"
+            size="xs"
+          >
+            View all
+          </Button>
+        </Group>
 
-            {accounts && accounts.length > 0 ? (
-              <Stack gap="sm">
-                {accounts.slice(0, 3).map((account) => (
-                  <Paper key={account.id} p="md" radius="md" withBorder>
-                    <Group justify="space-between">
-                      <Group>
-                        <ThemeIcon color="blue" variant="light" size="lg" radius="md">
-                          <IconCreditCard size={18} />
-                        </ThemeIcon>
-                        <div>
-                          <Text size="sm" fw={500}>{account.officialName || account.accountName}</Text>
-                          <Text size="xs" c="dimmed">
-                            {account.institutionName} • ••{account.mask}
-                          </Text>
-                        </div>
-                      </Group>
-                      <div style={{ textAlign: 'right' }}>
-                        <Tooltip label={formatCurrency(account.currentBalance || 0, true)} openDelay={500}>
-                          <Text size="sm" fw={600} style={{ cursor: 'help' }}>
-                            {formatCurrency(account.currentBalance || 0)}
-                          </Text>
-                        </Tooltip>
-                        <Badge size="xs" variant="dot">
-                          {account.type}
-                        </Badge>
-                      </div>
-                    </Group>
-                  </Paper>
-                ))}
-              </Stack>
-            ) : (
-              <Center h={200}>
-                <Stack align="center" gap="xs">
-                  <ThemeIcon color="gray" variant="light" size={60} radius="xl">
-                    <IconCreditCard size={30} />
-                  </ThemeIcon>
-                  <Text c="dimmed" size="sm">No accounts connected</Text>
-                  <Button
-                    component={Link}
-                    to="/accounts"
+        {recentTransactions.length > 0 ? (
+          <Stack gap="xs">
+            {recentTransactions.slice(0, 5).map((transaction) => (
+              <Group key={transaction.id} justify="space-between" py="xs">
+                <Group gap="sm">
+                  <ThemeIcon
+                    color={transaction.amount < 0 ? 'red' : 'green'}
                     variant="light"
-                    size="xs"
+                    size="sm"
+                    radius="xl"
                   >
-                    Connect Account
-                  </Button>
-                </Stack>
-              </Center>
-            )}
-          </Card>
-        </Grid.Col>
-
-        {/* Recent Transactions */}
-        <Grid.Col span={{ base: 12, md: 6 }}>
-          <Card padding="lg" radius="md" h="100%" withBorder>
-            <Group justify="space-between" mb="md">
-              <Text size="lg" fw={600}>Recent Activity</Text>
-              <Button
-                component={Link}
-                to="/transactions"
-                variant="subtle"
-                size="xs"
-              >
-                View all
-              </Button>
-            </Group>
-
-            {recentTransactions.length > 0 ? (
-              <Stack gap="xs">
-                {recentTransactions.slice(0, 5).map((transaction) => (
-                  <Group key={transaction.id} justify="space-between" py="xs">
-                    <Group gap="sm">
-                      <ThemeIcon
-                        color={transaction.amount < 0 ? 'red' : 'green'}
-                        variant="light"
-                        size="sm"
-                        radius="xl"
-                      >
-                        {transaction.amount < 0 ? (
-                          <IconArrowUpRight size={14} />
-                        ) : (
-                          <IconArrowDownRight size={14} />
-                        )}
-                      </ThemeIcon>
-                      <div>
-                        <Text size="sm" lineClamp={1}>
-                          {transaction.merchantName || transaction.name}
-                        </Text>
-                        <Text size="xs" c="dimmed">
-                          {formatDistanceToNow(new Date(transaction.date), { addSuffix: true })}
-                        </Text>
-                      </div>
-                    </Group>
-                    <Tooltip label={formatCurrency(Math.abs(transaction.amount), true)} openDelay={500}>
-                      <Text
-                        size="sm"
-                        fw={600}
-                        c={transaction.amount < 0 ? 'red' : 'green'}
-                        style={{ cursor: 'help' }}
-                      >
-                        {transaction.amount < 0 ? '-' : '+'}
-                        {formatCurrency(Math.abs(transaction.amount)).replace('$', '')}
-                      </Text>
-                    </Tooltip>
-                  </Group>
-                ))}
-              </Stack>
-            ) : (
-              <Center h={200}>
-                <Stack align="center" gap="xs">
-                  <ThemeIcon color="gray" variant="light" size={60} radius="xl">
-                    <IconCash size={30} />
+                    {transaction.amount < 0 ? (
+                      <IconArrowUpRight size={14} />
+                    ) : (
+                      <IconArrowDownRight size={14} />
+                    )}
                   </ThemeIcon>
-                  <Text c="dimmed" size="sm">No transactions yet</Text>
-                </Stack>
-              </Center>
-            )}
-          </Card>
-        </Grid.Col>
-      </Grid>
+                  <div>
+                    <Text size="sm" lineClamp={1}>
+                      {transaction.merchantName || transaction.name}
+                    </Text>
+                    <Text size="xs" c="dimmed">
+                      {formatDistanceToNow(new Date(transaction.date), { addSuffix: true })}
+                    </Text>
+                  </div>
+                </Group>
+                <Tooltip label={formatCurrency(Math.abs(transaction.amount), true)} openDelay={500}>
+                  <Text
+                    size="sm"
+                    fw={600}
+                    c={transaction.amount < 0 ? 'red' : 'green'}
+                    style={{ cursor: 'help' }}
+                  >
+                    {transaction.amount < 0 ? '-' : '+'}
+                    {formatCurrency(Math.abs(transaction.amount)).replace('$', '')}
+                  </Text>
+                </Tooltip>
+              </Group>
+            ))}
+          </Stack>
+        ) : (
+          <Center h={200}>
+            <Stack align="center" gap="xs">
+              <ThemeIcon color="gray" variant="light" size={60} radius="xl">
+                <IconCash size={30} />
+              </ThemeIcon>
+              <Text c="dimmed" size="sm">No transactions yet</Text>
+            </Stack>
+          </Center>
+        )}
+      </Card>
     </Stack>
   );
 }
