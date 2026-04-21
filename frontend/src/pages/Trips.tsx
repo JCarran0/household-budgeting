@@ -325,8 +325,12 @@ export function TripFormModal({ opened, onClose, trip }: TripFormModalProps) {
   const updateMutation = useMutation({
     mutationFn: ({ id, data }: { id: string; data: UpdateTripDto }) =>
       api.updateTrip(id, data),
-    onSuccess: () => {
+    onSuccess: (_data, variables) => {
+      // Invalidate both the list query and the specific trip detail query —
+      // TripDetail observes ['trip', tripId] and without this its cached trip
+      // object stays stale after an edit (e.g. cover photo swap).
       queryClient.invalidateQueries({ queryKey: ['trips'] });
+      queryClient.invalidateQueries({ queryKey: ['trip', variables.id] });
       notifications.show({
         title: 'Trip updated',
         message: 'Your changes have been saved.',
