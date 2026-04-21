@@ -4,7 +4,20 @@ status: draft
 created: 2026-04-21
 last_updated: 2026-04-21
 last_updated_note: |
-  2026-04-21 — Phase 2 shipped: new shared/utils/bvaIIDataComposition.ts
+  2026-04-21 — Phase 3 shipped: three-section Income → Spending → Savings
+  accordion layout, per-section Table with Category / Actual / Budgeted /
+  Variance / Actions columns. Parent row click or chevron toggles
+  session-only expand; expanded children render as indented sub-rows with
+  the same columns (REQ-006). Variance sign is always actual − budgeted;
+  color + trending-up/down/minus icon pair carries goodness for a11y
+  (REQ-051). Summary strip sums filter-visible rows and neutrally colors
+  mixed-type aggregates. Helpers live in new shared/utils/bvaIIDisplay.ts
+  (getSectionType, getVarianceTone, SECTION_ORDER/LABEL). Dismiss
+  plumbing uses the Phase-1 hook; Phase 5 adds the show-dismissed
+  control-row toggle. Edit/dismiss icons render but edit modal is Phase
+  6. Filters are Phase 4.
+
+  Phase 2 shipped: new shared/utils/bvaIIDataComposition.ts
   orchestrates per-category/per-month budget + actual grids, feeds
   buildEffectiveBudgetsMap (when rollover is on), then routes through
   buildCategoryTreeAggregation with the Phase-1 budgetsOverride option.
@@ -187,7 +200,7 @@ phases:
 
   - phase: 3
     name: Accordion Render + Column Layout + Summary Strip
-    status: pending
+    status: shipped
     depends_on: [2]
     goals:
       - Render the three-section accordion (Income → Spending → Savings)
