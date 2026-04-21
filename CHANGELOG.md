@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.48.0](https://github.com/JCarran0/household-budgeting/compare/v5.47.0...v5.48.0) (2026-04-21)
+
+
+### Features
+
+* **trips:** flush-left photo tile on eat/play stop cards ([4b48dc3](https://github.com/JCarran0/household-budgeting/commit/4b48dc3224c1d4f39cdff77e3f48bb74a7092de7))
+
 ## [5.47.0](https://github.com/JCarran0/household-budgeting/compare/v5.46.0...v5.47.0) (2026-04-21)
 
 
