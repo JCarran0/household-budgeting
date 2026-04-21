@@ -1,0 +1,503 @@
+feature: Budget vs. Actuals II
+brd: docs/features/BUDGET-VS-ACTUALS-II-BRD.md
+status: draft
+created: 2026-04-21
+last_updated: 2026-04-21
+last_updated_note: |
+  2026-04-21 — Rollover conflict fallback paths removed from Phase 2 and
+  Phase 3. Pre-existing conflicts reconciled manually in Categories UI
+  before this plan ships; Rollover Plan Phase 2 prevents regression.
+depends_on:
+  - docs/features/ROLLOVER-BUDGETS-PLAN.yaml (Phase 1 blocks this plan's Phase 2)
+
+overview: |
+  New tab on /budgets alongside the existing Budget vs. Actual tab. Accordion-
+  first layout grouped Income → Spending → Savings (Cash Flow three-line
+  convention). One row per parent with actual/budgeted/variance columns;
+  expanding reveals children with the same columns. Rollover-aware via a
+  "Use Rollover" toggle that feeds effective budgets through the existing
+  max(parent, Σ children) rollup.
+
+  Filters: category-type multi-select chips (Spending/Income/Savings), variance
+  single-select (All / Under / Over / Seriously over at a locked 200%
+  threshold), and a per-user Dismiss / Show-dismissed mechanism backed by
+  localStorage — explicitly NOT the family-wide Category.isHidden flag.
+  Variance matches at child level; matching parents auto-expand; non-matching
+  siblings stay visible but visually de-emphasized.
+
+  Inline edit modal on every row with two mutually-exclusive save paths:
+  single-month OR all future-months-of-year. Confirmation modal shows a
+  full before/after table and flags overwrites. Rollover-flagged categories
+  get an extra "this will recompute prior-month balance" callout.
+
+  URL-persisted state: month, view=bva-ii, rollover, types, variance.
+  Ephemeral: accordion expand state, show-dismissed toggle. LocalStorage:
+  dismissed parent IDs. The existing BvA tab is untouched; no behavior
+  change propagates outside this new tab.
+
+open_questions:
+  - id: OQ-P1
+    question: |
+      Batch-fetch monthly budgets. getYearlyBudgets(year) returns all
+      budgets for the year in a single call — proposed data source.
+    status: resolved
+    resolution: |
+      Reuse getYearlyBudgets(year). Returns a flat MonthlyBudget[]; group
+      client-side into Map<categoryId, Map<YYYY-MM, number>>. React Query
+      key is shared with the Yearly tab, so switching tabs is free after
+      first load. Slight overfetch in early-year months is negligible at
+      2-user scale. No new backend endpoint needed.
+
+  - id: OQ-P2
+    question: |
+      Summary strip (BRD §9 nice-to-have). Totals for the currently-visible
+      row set.
+    status: resolved
+    resolution: |
+      Include in v1. Sums the filter-visible parent rows only (NOT the
+      de-emphasized non-matching siblings when variance filter is active,
+      per REQ-021 intent). Added as a task in Phase 3 alongside the
+      accordion layout — same data source, one render component.
+
+phases:
+
+  - phase: 1
+    name: Tab Scaffold + URL/LocalStorage State
+    status: pending
+    goals:
+      - Add the new tab and empty component to /budgets without affecting
+        the existing tabs
+      - Wire URL state and localStorage dismissed set infrastructure
+        before any rendering logic lands
+    tasks:
+      - |
+        In frontend/src/pages/Budgets.tsx, add a fourth Tabs.Tab with
+        value="bva-ii" and label "Budget vs. Actuals II". Register under
+        the existing useSearchParams view param handling so ?view=bva-ii
+        activates it. Existing tabs' behavior unchanged.
+      - |
+        New component frontend/src/components/budgets/BudgetVsActualsII/
+        BudgetVsActualsII.tsx — for now just renders a heading. Lazy-load
+        via React.lazy so the tab panel's fetch/compute work only runs
+        when active (consistent with the existing comparison/yearly tab
+        pattern — enabled: activeTab === 'bva-ii' on queries).
+      - |
+        Hook useBvaIIUrlState() in the same directory:
+          - Read/write searchParams for: month (YYYY-MM), rollover (0|1),
+            types (csv subset of spending,income,savings; omit when all),
+            variance (under|over|serious; omit when 'all').
+          - Invalid values silently fall back to defaults (REQ-047).
+          - Omit params when at default to keep URLs clean.
+          - Returns a state object + setters matching the BRD §6.1 table.
+      - |
+        Hook useDismissedParentIds():
+          - Backing store: localStorage key 'bva2.dismissedParentCategoryIds'
+            as JSON array. Corrupt payloads → empty set.
+          - API: dismissedIds (Set<string>), dismiss(parentId), restore(parentId),
+            showDismissed (boolean toggle, session-only).
+          - Docblock at top of the hook MUST include:
+              "This is per-user page-local UI preference. It is NOT
+               Category.isHidden. Do not ever set Category.isHidden from
+               this hook, and do not read Category.isHidden to populate
+               this set."
+            Per BRD success criterion — "Dismissal is never confused with
+            Category.isHidden in code review."
+      - |
+        Empty shell visibly renders under the new tab at
+        /budgets?view=bva-ii. Month selector already works (shared Budgets
+        page state). No data yet — just confirms routing and URL params.
+
+  - phase: 2
+    name: Data Layer — Fetch + Effective Budgets
+    status: pending
+    depends_on_external: [ROLLOVER-BUDGETS-PLAN Phase 1]
+    goals:
+      - Fetch budgets and transactions for Jan..currentMonth of the active
+        year without a new backend endpoint
+      - Compute per-category effective budgets via the Rollover shared
+        utility and feed them into buildCategoryTreeAggregation
+    tasks:
+      - |
+        Data fetching with React Query, enabled only when tab is active:
+          - api.getYearlyBudgets(selectedYear) — returns all MonthlyBudget
+            records for the year. Group client-side by categoryId and
+            month.
+          - api.getTransactions({
+              startDate: `${selectedYear}-01-01`,
+              endDate: endOfMonth(selectedDate),
+            }) — full year-to-date transactions.
+          - api.getCategories() — likely already cached by other tabs.
+          - Query keys: ['bva-ii', 'budgets', year], ['bva-ii', 'transactions',
+            year, selectedMonth]. Reuse existing transactions cache if
+            key overlaps.
+      - |
+        Build actualsByCategoryByMonth on the frontend:
+          - Filter transactions via the same predicate the backend's
+            transactionReader.excludeRemoved uses (status !== 'removed').
+            Add a shared helper in shared/utils/transactionCalculations.ts
+            if not already exposed, so frontend and backend use identical
+            predicates. (This is a preconditon restated in ROLLOVER-BUDGETS-
+            PLAN Phase 1 JSDoc.)
+          - Transfers excluded via isBudgetableCategory before summing.
+          - Savings categories stay included; savings actuals are not
+            excluded from their own category rows (only global spending
+            totals do that, and those aren't displayed here).
+      - |
+        Compose the tree aggregation:
+          - Call buildEffectiveBudgetsMap(categories, selectedMonth,
+            budgetsByCategoryByMonth, actualsByCategoryByMonth).
+          - Pass the returned Map as budgetsOverride to
+            buildCategoryTreeAggregation(categories, rawBudgetsForMonth,
+            actualsForMonth, { excludeTransfers: true, excludeHidden: true }).
+          - When the Use Rollover toggle is OFF, skip
+            buildEffectiveBudgetsMap and pass raw budgets directly. The
+            output type of buildCategoryTreeAggregation is the same;
+            consumers don't branch on the toggle after this point.
+      - |
+        Unit test for the data-composition layer only (no React), using
+        backend/src/__tests__/unit fixtures patterns:
+          - Jan display: effective = raw (REQ-005)
+          - April display with Jan+Feb+Mar data: effective reflects YTD
+            carry
+          - Rollover toggle OFF: effective === raw for every category
+            even those with isRollover=true
+          - Parent rollup: effective_parent_row =
+            max(parent_effective, Σ children_effective) (REQ-022)
+
+  - phase: 3
+    name: Accordion Render + Column Layout + Summary Strip
+    status: pending
+    depends_on: [2]
+    goals:
+      - Render the three-section accordion (Income → Spending → Savings)
+        with the column layout from BRD §2.2
+      - Preserve variance sign and color conventions per BRD §4
+      - Include the BRD §9 summary strip showing filter-visible totals
+    tasks:
+      - |
+        Section rendering in order Income → Spending → Savings (REQ-008).
+        Derive each category's section from isIncome (top-level or
+        inherited) and isSavings (top-level only). Transfers excluded
+        upstream by buildCategoryTreeAggregation options.
+      - |
+        Parent rows — columns in order:
+          - Category name with section badge/icon (match existing app
+            conventions; no new iconography in v1)
+          - Actual (raw, never affected by rollover toggle; REQ-009)
+          - Budgeted (max-rollup; effective when rollover ON per REQ-010)
+          - Variance (actual − budgeted, sign preserved; color carries
+            goodness per §4.2)
+          - Row action icons: Edit, Dismiss
+        Parent row click (not on action icons) toggles expand/collapse.
+        Accordion state is session-only, not URL-persisted (REQ-007).
+      - |
+        Child rows rendered under expanded parent, indented, same
+        columns. Parent totals do NOT change on expand (REQ-006).
+      - |
+        Color convention (REQ-031) via a shared helper
+        getVarianceTone(type, actual, budgeted) → 'favorable' | 'unfavorable'
+        | 'neutral'. Apply Mantine color tokens consistent with existing
+        BudgetComparison.tsx usage. The numeric display is ALWAYS signed
+        actual − budgeted — never type-flipped (REQ-032). Reinforce with
+        a docblock on getVarianceTone.
+      - |
+        Accessibility — pair color with a non-color indicator (icon or
+        "+"/"−" prefix in the variance cell) so colorblind users can
+        read direction (REQ-051).
+      - |
+        Summary strip above the control row (BRD §9). Single row showing
+        Total Actual / Total Budgeted / Total Variance for the filter-
+        visible rows only. When variance filter is active and non-matching
+        siblings are de-emphasized (REQ-021), the summary sums ONLY the
+        matching rows, not the de-emphasized ones — otherwise the totals
+        contradict the filter intent. Derived from the same composed tree
+        used for rendering; no separate data fetch. Color the variance
+        value by aggregate goodness (mixed-type set → neutral, since
+        goodness flips per type).
+
+  - phase: 4
+    name: Filters (Types, Variance) + Rollover Toggle
+    status: pending
+    depends_on: [3]
+    goals:
+      - Wire filters to the URL state from Phase 1 and the tree from Phase 2
+      - Child-level variance matching with parent auto-expand and
+        sibling de-emphasis
+    tasks:
+      - |
+        Type filter — Mantine Chip.Group with three chips (Spending,
+        Income, Savings), multi-select, all on by default. Filter the
+        rendered tree by stripping entire parent subtrees whose type
+        isn't selected. All-off state renders the empty-state message
+        (REQ-017).
+      - |
+        Use Rollover toggle — Mantine Switch. Default off. Updates
+        rollover URL param (1 when on, omitted when off). When toggled,
+        the data-layer pipeline from Phase 2 re-composes with effective
+        or raw budgets. Subtext under the toggle when month is YYYY-01:
+        "January is the start of the rollover year — no carry applies
+        yet." (REQ-014)
+      - |
+        Variance filter — Mantine Select with options All / Under /
+        Over / Seriously over. URL-persisted (REQ-020). Matching logic
+        runs against each child row:
+          - getVarianceTone(type, actual, budgeted) must match the
+            selected option's goodness direction (REQ-033).
+          - Seriously over: per-type formula from REQ-019. budgeted===0
+            excluded from serious classification (REQ-019 last line).
+        When any child of a parent matches:
+          - Parent is shown AND auto-expanded.
+          - Non-matching siblings remain visible but de-emphasized
+            (opacity 0.5 or equivalent) so the user has context
+            (REQ-021).
+        When no children match but the parent's own numbers match
+        (REQ-022), the parent is shown without auto-expand.
+      - |
+        Auto-expand is applied at render time, not persisted to
+        accordion state. Re-expanding/collapsing via user action
+        overrides the filter's suggestion for that parent until filter
+        re-runs. Simple implementation: the parent's effective-expanded
+        flag = (user.expanded ?? filter.autoExpand ?? false).
+      - |
+        Unit tests for filter composition (pure functions, no React):
+          - No filter active → all rows render, all collapsed
+          - Types filter strips Savings subtree entirely
+          - Variance "Over" on Spending matches rows where
+            actual > budgeted; on Income matches rows where
+            actual < budgeted
+          - Variance "Serious" on a category with budgeted=0 never
+            matches
+          - Child match auto-expands parent; non-matching sibling
+            remains with de-emphasis flag set
+
+  - phase: 5
+    name: Dismiss / Show Dismissed
+    status: pending
+    depends_on: [4]
+    goals:
+      - Per-user parent-level dismiss that is surgically separate from
+        Category.isHidden
+    tasks:
+      - |
+        Dismiss action icon on parent rows only (REQ-026). Click adds
+        parentId to useDismissedParentIds.dismiss. Immediate removal
+        from view; no modal, no confirmation.
+      - |
+        Show-dismissed toggle in the control row (default off; REQ-024).
+        When on, dismissed parents re-render with muted styling
+        (strikethrough name or reduced opacity) and their row action
+        becomes Restore (REQ-025).
+      - |
+        Dismissed set never filters children-of-non-dismissed-parents.
+        Dismiss is parent-subtree only (REQ-026).
+      - |
+        Dismissed set is NOT a substitute for isHidden. Category.isHidden
+        categories remain excluded upstream in Phase 2's
+        buildCategoryTreeAggregation options (excludeHidden: true) and
+        cannot be revealed via Show dismissed (REQ-029). Add an assert
+        in useDismissedParentIds tests that restoring a previously-
+        dismissed id for an isHidden category still doesn't render it.
+      - |
+        Unit tests:
+          - dismiss(id) adds to set; restore(id) removes
+          - Corrupt localStorage JSON → starts empty, doesn't throw
+          - Set persists across page reload (integration or mocked
+            localStorage)
+          - Show-dismissed state does NOT persist to URL or localStorage
+            (REQ-048)
+      - |
+        Code review reminder — when the PR lands, reviewers should
+        specifically check every touchpoint where "dismissed" could be
+        mistaken for "hidden." The docblock on useDismissedParentIds
+        is the enforcement point.
+
+  - phase: 6
+    name: Row-Level Edit Modal
+    status: pending
+    depends_on: [5]
+    goals:
+      - Edit current-month OR all-future-months-of-year budgets from the
+        row, with a mandatory before/after confirmation
+    tasks:
+      - |
+        Modal component BudgetEditModal in
+        frontend/src/components/budgets/BudgetVsActualsII/BudgetEditModal.tsx:
+          - Props: category, initialMonth, onClose
+          - Body fields per REQ-036: month picker (pre-filled), amount
+            NumberInput, context display (category name, parent if
+            child, type indicator), current budget display for selected
+            month (read-only subtext).
+          - If category.isRollover AND global rollover toggle is on,
+            show a read-only effective-budget display plus note:
+            "Changing this budget will recompute rollover balance for
+            all prior months of the current calendar year." (REQ-036
+            last bullet)
+      - |
+        Two primary action buttons per REQ-037:
+          - "Update [MonthName] Budget" — label follows the month picker
+            live.
+          - "Update all future [Year] budgets" — label's Year is the
+            calendar year of the selected month. Disabled when selected
+            month is December with tooltip "No future months remaining
+            in [Year]."
+        Mutually exclusive per click (REQ-039). No combined path.
+      - |
+        Confirmation modal BudgetEditConfirmModal:
+          - Renders before any persist (REQ-038).
+          - Summary line: "You are about to update [N] budget(s) for
+            [Category Name]."
+          - Per-month before/after table per REQ-040 formatted exactly
+            as the BRD example. Rows where an existing non-default
+            value will be overwritten flagged visually (← badge or
+            pill).
+          - For isRollover categories, extra callout per REQ-042:
+            "This category uses rollover. Changing budgets will
+            recompute rollover balance for all affected months."
+          - Confirm and Cancel buttons.
+      - |
+        Save wiring:
+          - Single-month path → api.createOrUpdateBudget({categoryId,
+            month, amount}).
+          - Multi-month path → api.batchUpdateBudgets(updates[]) —
+            reuse the existing endpoint used by YearlyBudgetGrid. Build
+            the updates array for every month YYYY-MM where MM >
+            selected month and year === selected year. Always overwrite;
+            no skip logic (REQ-041). The confirmation modal is the
+            safety net.
+          - On success: invalidate query keys for
+            ['bva-ii', 'budgets', year], ['budgets', 'month', ...],
+            ['budgets', 'year', ...], ['bva-ii', 'transactions', ...]
+            so the existing BvA tab and YearlyBudgetGrid also reflect
+            the change next time they're opened.
+          - On error: toast + keep modal open for retry.
+      - |
+        Edit icon hidden for !isBudgetableCategory(id) rows (REQ-045).
+        In practice such rows shouldn't appear since
+        buildCategoryTreeAggregation excludes transfers, but defensive.
+      - |
+        Parent vs. child edits (REQ-043, REQ-044) — the existing
+        max(parent, Σ children) rollup handles display recomputation
+        automatically after the mutation invalidates caches. No
+        cascading writes.
+      - |
+        Integration test with React Testing Library:
+          - Open edit modal from a child row
+          - Change amount, confirm single-month path, verify
+            createOrUpdateBudget called with correct args
+          - Open again from April, choose "Update all future 2026",
+            confirm, verify batchUpdateBudgets called with May..Dec
+            rows, all amounts equal to new value
+          - December → "Update all future" disabled
+          - isRollover category → rollover callout renders in both
+            modals
+
+  - phase: 7
+    name: Accessibility + Tablet Layout
+    status: pending
+    depends_on: [6]
+    goals:
+      - Meet REQ-050 / REQ-051 / REQ-052
+    tasks:
+      - |
+        Keyboard operability audit:
+          - Tab order through chips, toggles, row edit/dismiss icons
+          - Enter/Space on parent row toggles expand/collapse
+          - Visible focus ring on every interactive element
+          - Modal focus trap + ESC close (Mantine default, verify)
+      - |
+        Color + text pairing — verify the +/− prefix on variance
+        numbers and the icon on "seriously over" rows both render
+        independently of color. Run through a simulated grayscale
+        screenshot.
+      - |
+        Tablet (≥768px) layout — verify all columns fit without
+        horizontal scroll. If the Actual column must stack under the
+        category name below a narrow breakpoint, implement per REQ-052
+        priority order: Variance > Budgeted > Actual.
+      - |
+        Mobile (<768px) — no explicit optimization. Page remains
+        usable, may horizontal-scroll. Document as v1 scope boundary.
+
+  - phase: 8
+    name: End-to-End Tests + Docs
+    status: pending
+    depends_on: [7]
+    goals:
+      - Lock the BRD success criteria behind integration tests
+      - Document BvA II in project docs
+    tasks:
+      - |
+        Integration tests (if frontend test harness exists; otherwise
+        back these with Storybook stories or a manual test plan):
+          - /budgets?view=bva-ii&month=2026-04 renders the three
+            sections with expected parents (fixture categories).
+          - Toggling rollover changes Budgeted + Variance; Actual
+            unchanged.
+          - Filter by variance=over expands matching parents and
+            de-emphasizes non-matching siblings.
+          - Dismiss → row gone; Show dismissed → row back with
+            Restore action.
+          - Edit modal single-month + multi-month paths persist.
+          - Existing BVA tab remains unchanged (snapshot or regression
+            test of a couple of rows).
+      - |
+        Manual test plan for the edit modal's "overwrite" warning —
+        visually verify before/after table flags existing values
+        correctly for a category with partial budget coverage
+        (some months set, some unset). Edge case: month with value 0
+        vs. unset — both exist in the data model. Decide which is
+        "default" for the ← badge (recommend: only flag months with
+        a MonthlyBudget record).
+      - |
+        Add CLAUDE.md entry under Critical Files pointing at
+        frontend/src/components/budgets/BudgetVsActualsII/ with the
+        note "rollover-aware, single consumer of Rollover utility in
+        v1." The ADR table already has the 2026-04 entry; no change
+        needed unless implementation deviates.
+      - |
+        Optional summary strip (OQ-P2): if accepted, add above the
+        control row showing Total Actual / Total Budgeted / Total
+        Variance for the visible rows. Trivially cheap from the
+        composed tree.
+
+risks:
+  - |
+    The "variance matches at child level but parent auto-expands"
+    behavior (REQ-021) interacts awkwardly with user-toggled
+    accordion state. Mitigation: implement expansion as
+    effective = user-override ?? filter-suggestion ?? false, and
+    reset user overrides when filter changes. Document in Phase 4.
+  - |
+    Dismiss vs. isHidden confusion is the single highest-risk review
+    item (BRD success criterion). The docblock on useDismissedParentIds
+    plus code-review attention is the mitigation; there's no
+    automated check.
+  - |
+    "Update all future — always overwrite" is deliberately aggressive.
+    If a user has meaningful month-by-month variation in budget (e.g.,
+    seasonal), they could destroy it with one click. The confirmation
+    modal's before/after table is the safety net, and it explicitly
+    flags overwrites. Reviewers should verify the flag is impossible
+    to miss visually.
+  - |
+    React Query key hygiene: the edit modal must invalidate not just
+    bva-ii keys but also the existing BvA tab's and YearlyBudgetGrid's
+    keys so other tabs reflect the change. Phase 6 task enumerates
+    these explicitly.
+
+success_criteria:
+  - /budgets?view=bva-ii&month=2026-04 renders three-section accordion
+    with Actual, Budgeted, Variance columns (REQ-001..009).
+  - Use Rollover toggle updates Budgeted + Variance only; Actual
+    unchanged (REQ-010..012).
+  - Variance filter correctly interprets per-type goodness
+    (REQ-033). Serious threshold locked at 200% (REQ-019).
+  - Dismiss is per-user localStorage-only, does NOT touch
+    Category.isHidden, and does NOT affect other pages or the other
+    household member's view (REQ-023..029). Docblock at code site
+    reinforces this.
+  - Edit modal offers single-month or future-months-of-year paths
+    with before/after confirmation, both visible and overwrite-flagged
+    (REQ-035..044).
+  - Existing BudgetComparison.tsx tab behavior unchanged.
+  - URL state matches BRD §6.1 table; ephemeral state matches §6.2.

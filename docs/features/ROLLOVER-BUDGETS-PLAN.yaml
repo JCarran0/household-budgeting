@@ -1,0 +1,315 @@
+feature: Rollover Budgets
+brd: docs/features/ROLLOVER-BUDGETS-BRD.md
+status: draft
+created: 2026-04-21
+last_updated: 2026-04-21
+last_updated_note: |
+  2026-04-21 — Pre-existing no-op-era subtree conflicts reconciled manually
+  in the Categories UI against prod-synced data. 7 parents unflagged (Cash,
+  Clothing and Personal Care, Discretionary, Financial, Food Dining
+  Entertainment, Gifts and Special Occasions, House Stuff). Post-cleanup
+  state: 51 categories flagged, 0 conflicts. Phase 4 (in-app data-integrity
+  prompt) dropped as no longer needed. OQ-P1 resolved N/A.
+
+overview: |
+  Give the existing Category.isRollover boolean real derive-on-read semantics.
+  Within a calendar year, surpluses and deficits carry month-to-month:
+  effectiveBudget(cat, month) = budgeted(cat, month) + Σ(budget_i − actual_i)
+  for i = Jan(Y) .. month − 1. January resets to zero. Math is type-agnostic
+  (spending/income/savings identical formula); display color flips per type
+  goodness and lives in the consuming surface, not this utility.
+
+  No new persistence, no migrations, no stored balances. Rollover math lives
+  in shared/utils/budgetCalculations.ts alongside buildCategoryTreeAggregation
+  and routes actuals through canonical transactionReader / transactionCalculations
+  helpers. Subtree exclusivity (parent OR child flagged, not both) is enforced
+  frontend AND backend, with a one-time data-integrity prompt for pre-existing
+  violations left by the no-op era of the flag.
+
+  v1 scope for rollover-awareness is Budget vs. Actuals II only (see sibling
+  BRD). All other surfaces (existing BvA, YearlyBudgetGrid, Reports, Cash Flow,
+  Dashboard, chatbot) continue to ignore isRollover. This contains blast radius.
+
+  Pre-existing subtree conflicts from the no-op era of the flag were
+  reconciled manually in the Categories UI before this plan ships (see
+  last_updated_note). BRD REQ-020's in-app prompt is therefore not needed;
+  Phase 2's backend validation prevents any future conflicts from forming.
+
+  The only external dependency on this plan is Phase 1 (shared utility), which
+  blocks BvA II Phase 2. Backend validation and Categories-page UX (Phases 2–4)
+  can ship in parallel with BvA II.
+
+open_questions:
+  - id: OQ-P1
+    question: |
+      Data-integrity tiebreaker between first load and user resolution.
+      REQ-020 says "no automatic resolution — user must choose." But
+      rollover-aware surfaces still need to render *something* for conflicted
+      trees before the user resolves.
+    status: resolved
+    resolution: |
+      N/A — reconciled manually in the Categories UI before shipping.
+      2026-04-21 scan of prod-synced data found 58 flagged categories with
+      30 parent+child conflicts across 12 subtrees. User unflagged 7 parents
+      per the "children win where there's a conflict" rule. Post-cleanup:
+      51 flagged, 0 conflicts. No in-app fallback or warning-icon path
+      required. Phase 2 backend validation prevents regression.
+
+  - id: OQ-P2
+    question: |
+      Endpoint shape for "flag rollover, auto-unflag conflicting peers."
+      Options — (a) extend PUT /api/categories/:id with an optional
+      resolveRolloverConflicts: true body field; (b) add a dedicated
+      POST /api/categories/:id/rollover endpoint.
+    status: resolved
+    resolution: |
+      Option (a) — extend PUT /api/categories/:id. Matches existing
+      partial-field update pattern. Single atomic writeCategories call.
+      Flow: first request rejects with 400 + conflictingCategoryIds,
+      frontend shows confirmation modal, user confirms, second request
+      with resolveRolloverConflicts: true succeeds. Phase 2 tasks already
+      reflect this shape.
+
+phases:
+
+  - phase: 1
+    name: Shared Rollover Utility + Tests
+    status: pending
+    blocks: [BUDGET-VS-ACTUALS-II Phase 2]
+    goals:
+      - Land the rollover math as a single-source-of-truth utility in shared/utils
+      - Make it composable with the existing buildCategoryTreeAggregation so
+        parent rollup (max(parent, Σ children)) naturally uses effective values
+        when rollover is on (REQ-022)
+      - Preserve type-agnostic math; goodness interpretation lives in consumers
+    tasks:
+      - |
+        Add to shared/utils/budgetCalculations.ts:
+          - computeRolloverBalance(
+              category: Category,
+              targetMonth: string /* YYYY-MM */,
+              budgetsByMonth: Map<string /* YYYY-MM */, number>,
+              actualsByMonth: Map<string /* YYYY-MM */, number>
+            ): number
+            Returns Σ (budgeted_i − actual_i) for i = Jan(Y) .. month − 1 in
+            the calendar year of targetMonth (REQ-004). Returns 0 when
+            targetMonth is YYYY-01 (REQ-005). Returns 0 when
+            category.isRollover is false. Signs preserved (REQ-009).
+          - computeEffectiveBudget(
+              category: Category,
+              rawBudget: number,
+              rolloverBalance: number
+            ): number
+            Returns rawBudget + rolloverBalance when category.isRollover; else
+            rawBudget. Can go negative (REQ-008).
+          - buildEffectiveBudgetsMap(
+              categories: Category[],
+              targetMonth: string,
+              budgetsByCategoryByMonth: Map<categoryId, Map<YYYY-MM, number>>,
+              actualsByCategoryByMonth: Map<categoryId, Map<YYYY-MM, number>>
+            ): Map<categoryId, number>
+            Returns per-category effective budget for the target month.
+            Non-rollover categories pass through raw. Guards
+            !isBudgetableCategory(id) → return raw (REQ-002).
+      - |
+        Extend buildCategoryTreeAggregation with an optional budgetsOverride
+        parameter (Map<categoryId, number>). When present, it replaces the
+        category's raw budget before max(parent, Σ children) rollup.
+        Consumers call buildEffectiveBudgetsMap first, then pass the result
+        as budgetsOverride. This keeps max-rule rollup identical and avoids
+        forking the aggregation logic (REQ-022, consuming BRD §10 assumption).
+      - |
+        Worked-example unit tests derived from BRD §2.4 table, one per row:
+        spending surplus/deficit, income surplus/deficit, savings surplus/deficit.
+        Each test fixture constructs 2–3 months of budgets + transactions,
+        asserts computeRolloverBalance and computeEffectiveBudget match the
+        table. Place in backend/src/__tests__/unit/budgetCalculations.test.ts
+        next to the existing buildCategoryTreeAggregation tests.
+      - |
+        Boundary tests:
+          - January of any year returns 0 for all categories (REQ-005)
+          - category.isRollover = false always returns rawBudget (REQ-001)
+          - Transfer category passed to buildEffectiveBudgetsMap returns raw;
+            confirm isRollover on transfers is rejected separately by Phase 2
+            (REQ-002)
+          - Negative effective budget preserved, e.g., Feb actual $500 over
+            on $100 budget → March effective = $100 − $400 = −$300 (REQ-008)
+          - Mid-year activation includes all prior months of year Y (REQ-014)
+          - Year boundary: Dec→Jan resets (REQ-012) — test Jan 2027 balance
+            is 0 regardless of Dec 2026 carry
+      - |
+        Canonical data source tests:
+          - Removed transactions (status === 'removed') excluded from actuals.
+            Utility must route through the same filter predicate as
+            transactionReader.excludeRemoved. Since shared/ cannot import
+            backend/, the utility takes pre-filtered transactions. Consumers
+            are responsible for using transactionReader on the backend or
+            filtering the identical predicate on the frontend (document
+            expectation in JSDoc).
+          - Transfer transactions excluded from actuals (REQ-002 of consuming
+            paths) via transactionCalculations.isBudgetableCategory check.
+      - |
+        Drift-prevention test: when rollover=true on both a parent and a
+        child in the same fixture, buildEffectiveBudgetsMap output is still
+        defined (each node independently), but assert a separate
+        findRolloverSubtreeConflicts(categories) helper flags the pair.
+        This helper is used by Phase 3 Categories UX and Phase 4 data-
+        integrity prompt.
+      - |
+        JSDoc on all new exports must state:
+          - "Math is type-agnostic. Goodness coloring is the consumer's job."
+          - "Calendar-year period only. December 31 residual evaporates."
+          - "Derived on every read. No caching — 2-user scale is trivially
+            cheap. Do not add memoization without a perf regression."
+
+  - phase: 2
+    name: Backend Subtree-Exclusivity Validation
+    status: pending
+    depends_on: [1]
+    goals:
+      - Reject isRollover=true updates that would violate subtree exclusivity
+      - Provide structured error payload so the frontend can render a
+        confirmation modal listing conflicts (REQ-018)
+      - Support atomic "unflag conflicts and retry" in a single request
+    tasks:
+      - |
+        In backend/src/services/categoryService.ts updateCategory (around
+        line 171, after the isIncome recomputation block):
+          - When updates.isRollover === true:
+              - Load the full category list for the family.
+              - If the target category has a parent with isRollover=true,
+                collect { type: 'ancestor', categoryId: parentId }.
+              - Collect all children of the target with isRollover=true as
+                { type: 'descendant', categoryId: childId }.
+              - If any conflicts AND updates.resolveRolloverConflicts !== true,
+                throw a ValidationError with code
+                'ROLLOVER_SUBTREE_CONFLICT' and payload
+                { conflictingCategoryIds: string[], relation: 'ancestor'|'descendant'|'mixed' }.
+              - If updates.resolveRolloverConflicts === true, atomically:
+                update all conflicting categories to isRollover=false and
+                update the target to isRollover=true, in a single
+                writeCategories transaction.
+          - When updates.isRollover === true on a !isBudgetableCategory
+            target (transfers), throw ValidationError code
+            'ROLLOVER_NOT_BUDGETABLE' (REQ-002).
+      - |
+        Extend UpdateCategoryDto in shared/types to include
+        resolveRolloverConflicts?: boolean. Add Zod schema entry in the
+        categories route validator.
+      - |
+        Route error mapping in backend/src/routes/categories.ts: return
+        400 for both error codes with the structured payload so the
+        frontend can branch on error.code.
+      - |
+        Integration tests in backend/src/services/__tests__/categoryService.test.ts:
+          - Flag parent when child is flagged → 400 with descendant conflict
+          - Flag child when parent is flagged → 400 with ancestor conflict
+          - Flag sibling when sibling is flagged → 200 (no conflict)
+          - Self re-update (already flagged) → 200 no-op
+          - Flag transfer category → 400 with ROLLOVER_NOT_BUDGETABLE
+          - Flag parent with resolveRolloverConflicts=true and children
+            flagged → 200, children unflagged atomically, verify via reload
+          - Atomic failure: simulate write failure during resolve path;
+            assert neither the target nor the peers were updated (transaction
+            rollback). If storage layer doesn't support transactions, wrap
+            in a single writeCategories call that takes the full updated
+            list so the write is atomic at the file/S3 object level.
+
+  - phase: 3
+    name: Categories Page — Toggle UX
+    status: pending
+    depends_on: [2]
+    goals:
+      - Replace the no-op isRollover checkbox with a semantically meaningful
+        toggle that enforces subtree exclusivity via the Phase 2 backend
+      - Surface transfers as ineligible (REQ-026)
+    tasks:
+      - |
+        In frontend/src/components/categories/CategoryForm.tsx:
+          - Update the isRollover Checkbox label to "Rollover budget" and add
+            description: "Surpluses and deficits carry month-to-month within
+            the calendar year. Resets January 1."
+          - Hide or disable the checkbox when !isBudgetableCategory(id)
+            (transfers). Show tooltip: "Transfers cannot use rollover."
+      - |
+        Error handling on save:
+          - Wrap the updateCategory mutation's onError. When err.code ===
+            'ROLLOVER_SUBTREE_CONFLICT', open a confirmation modal showing:
+              - Target category name
+              - The conflicting categories (fetched by id from the category
+                query cache; show their names and parent path)
+              - Message: "Flagging [target] will unflag [N] related
+                categor[y|ies]: [list]. Only one category per parent/child
+                chain can use rollover."
+              - Confirm button → re-submit the update with
+                resolveRolloverConflicts: true; on success, invalidate the
+                categories query cache.
+              - Cancel button → revert form state (uncheck the checkbox).
+          - When err.code === 'ROLLOVER_NOT_BUDGETABLE', show an inline
+            error; shouldn't happen if checkbox is properly disabled, but
+            defensive.
+      - |
+        Frontend pre-flight check (optional UX speed-up): before submitting,
+        run findRolloverSubtreeConflicts(categories) from Phase 1. If
+        conflicts exist, show the confirmation modal directly without the
+        round-trip. The backend validation still runs on submit — frontend
+        check is purely latency convenience (REQ-019: frontend is
+        convenience, backend is correctness).
+      - |
+        No changes to CategoryTree icons in this phase. The existing
+        rollover icon (if any) continues to render based on isRollover value.
+        If no icon exists today, adding one is optional polish — document
+        as deferred.
+
+  - phase: 4
+    name: Documentation
+    status: pending
+    depends_on: [3]
+    goals:
+      - Capture rollover as a first-class concept in project docs
+    tasks:
+      - |
+        Update CLAUDE.md Critical Files section: add note under
+        "Financial calculations" that shared/utils/budgetCalculations.ts now
+        exports computeRolloverBalance / computeEffectiveBudget /
+        buildEffectiveBudgetsMap / findRolloverSubtreeConflicts, and that
+        v1 only BvA II consumes rollover.
+      - |
+        Update docs/AI-APPLICATION-ARCHITECTURE.md (if it has a
+        "shared utilities" section) with the same utility list and the
+        type-agnostic / goodness-lives-in-consumer invariant.
+      - |
+        The ADR table entry for Rollover Budgets is already in CLAUDE.md
+        (2026-04). No changes needed there unless implementation deviates
+        from the BRD.
+
+risks:
+  - |
+    Performance cliff if any rollover-aware consumer calls the utility
+    inside a render loop over N categories × M months. Phase 1 JSDoc
+    warns against memoization, but the real guard is: consumers call
+    buildEffectiveBudgetsMap once per render pass, not per-row.
+  - |
+    Month-boundary correctness in timezones. Per recent commit
+    "fix(dates): anchor user-visible date boundaries to US Eastern Time,"
+    month strings are ET-anchored. The rollover utility accepts pre-computed
+    YYYY-MM strings and does not re-derive from Date; this is the correct
+    design, but every consumer passing timestamps must already be
+    ET-anchored. Document this in JSDoc.
+  - |
+    Backend validation lands before any UI enforces it. If a user PATCHes
+    a category directly via API while Phase 3 is in flight, they'll get
+    a 400 with a new error code the UI doesn't know about. Phase 2 and
+    Phase 3 should ship in the same release, or Phase 3's generic error
+    handler should display the backend's error.message as a toast.
+
+success_criteria:
+  - Users can flag a budgetable category as rollover and see it affect
+    BvA II only.
+  - Attempting to flag both a parent and a child (via UI or API) is
+    rejected with a clear error; UI offers an atomic resolution.
+  - Pre-existing no-op conflicts in user data are surfaced once and
+    resolved by explicit user choice — no automatic resolution.
+  - No existing surface's numbers change as a side effect of this plan
+    landing. BvA II is the only rollover-aware consumer in v1.
+  - No new persistence, migrations, or cron jobs shipped.
