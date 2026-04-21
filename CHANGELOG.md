@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+### [5.51.1](https://github.com/JCarran0/household-budgeting/compare/v5.51.0...v5.51.1) (2026-04-21)
+
+
+### Bug Fixes
+
+* **mobile:** force ResponsiveModal media query to evaluate on first render ([b68a4ce](https://github.com/JCarran0/household-budgeting/commit/b68a4ce190d1a1ade6445d5b699ac53451702fc2))
+
 ## [5.51.0](https://github.com/JCarran0/household-budgeting/compare/v5.50.1...v5.51.0) (2026-04-21)
 
 
