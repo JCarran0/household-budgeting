@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.47.0](https://github.com/JCarran0/household-budgeting/compare/v5.46.0...v5.47.0) (2026-04-21)
+
+
+### Features
+
+* **ui:** make all modals full-screen on mobile via ResponsiveModal wrapper ([#6](https://github.com/JCarran0/household-budgeting/issues/6)) ([8c6d6a9](https://github.com/JCarran0/household-budgeting/commit/8c6d6a96c2da1e989c1c22572b85b4280e66e342))
+
 ## [5.46.0](https://github.com/JCarran0/household-budgeting/compare/v5.45.0...v5.46.0) (2026-04-21)
 
 
