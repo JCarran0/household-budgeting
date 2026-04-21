@@ -26,7 +26,8 @@ import {
   IconInfoCircle,
 } from '@tabler/icons-react';
 import { useQuery } from '@tanstack/react-query';
-import { endOfMonth, format, parse } from 'date-fns';
+import { endOfMonth, format, parse, startOfMonth } from 'date-fns';
+import { TransactionPreviewTrigger } from '../../transactions/TransactionPreviewTrigger';
 import { api } from '../../../lib/api';
 import type { Category } from '../../../../../shared/types';
 import {
@@ -141,6 +142,13 @@ export function BudgetVsActualsII({ selectedMonth, active }: BudgetVsActualsIIPr
     [selectedMonth],
   );
   const ytdEnd = useMemo(() => format(endOfMonth(selectedDate), 'yyyy-MM-dd'), [selectedDate]);
+  const monthDateRange = useMemo(
+    () => ({
+      startDate: format(startOfMonth(selectedDate), 'yyyy-MM-dd'),
+      endDate: format(endOfMonth(selectedDate), 'yyyy-MM-dd'),
+    }),
+    [selectedDate],
+  );
 
   const { data: categories } = useQuery({
     queryKey: ['categories'],
@@ -393,7 +401,19 @@ export function BudgetVsActualsII({ selectedMonth, active }: BudgetVsActualsIIPr
                           </Text>
                         </Group>
                       </Table.Td>
-                      <Table.Td style={{ textAlign: 'right' }}>{formatCurrency(parent.actual)}</Table.Td>
+                      <Table.Td style={{ textAlign: 'right' }}>
+                        <TransactionPreviewTrigger
+                          categoryId={parent.parentId}
+                          categoryName={parent.parentName}
+                          dateRange={monthDateRange}
+                          additionalCategoryIds={parent.children.map(c => c.categoryId)}
+                          tooltipText="Click to preview transactions in this subtree"
+                        >
+                          <Text style={{ cursor: 'pointer', textAlign: 'right' }}>
+                            {formatCurrency(parent.actual)}
+                          </Text>
+                        </TransactionPreviewTrigger>
+                      </Table.Td>
                       <Table.Td style={{ textAlign: 'right' }}>{formatCurrency(parent.budgeted)}</Table.Td>
                       <Table.Td style={{ textAlign: 'right' }}>{renderRolloverCell(parent.rollover, parentDim)}</Table.Td>
                       <Table.Td style={{ textAlign: 'right' }}>{renderAvailableCell(parent.available, parentDim)}</Table.Td>
@@ -445,7 +465,18 @@ export function BudgetVsActualsII({ selectedMonth, active }: BudgetVsActualsIIPr
                             <Table.Td pl="xl">
                               <Text size="sm" pl="lg">↳ {child.categoryName}</Text>
                             </Table.Td>
-                            <Table.Td style={{ textAlign: 'right' }}>{formatCurrency(child.actual)}</Table.Td>
+                            <Table.Td style={{ textAlign: 'right' }}>
+                              <TransactionPreviewTrigger
+                                categoryId={child.categoryId}
+                                categoryName={child.categoryName}
+                                dateRange={monthDateRange}
+                                tooltipText="Click to preview transactions"
+                              >
+                                <Text size="sm" style={{ cursor: 'pointer', textAlign: 'right' }}>
+                                  {formatCurrency(child.actual)}
+                                </Text>
+                              </TransactionPreviewTrigger>
+                            </Table.Td>
                             <Table.Td style={{ textAlign: 'right' }}>{formatCurrency(child.budgeted)}</Table.Td>
                             <Table.Td style={{ textAlign: 'right' }}>{renderRolloverCell(child.rollover, dim)}</Table.Td>
                             <Table.Td style={{ textAlign: 'right' }}>{renderAvailableCell(child.available, dim)}</Table.Td>
