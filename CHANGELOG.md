@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.45.0](https://github.com/JCarran0/household-budgeting/compare/v5.44.1...v5.45.0) (2026-04-21)
+
+
+### Features
+
+* **query:** enable React Query focus refetch and tune staleTime by data heat ([381e030](https://github.com/JCarran0/household-budgeting/commit/381e0300f85b7c7825c5537c4b7421a701500c23))
+
+
+### Documentation
+
+* add stale data mitigation BRD and phased plan ([ba847bf](https://github.com/JCarran0/household-budgeting/commit/ba847bf85a31bfc3fdbfb6de227a906a43dbcf50))
+
+
+### Chores
+
+* **query:** remove unused eslint-disable directive ([b7ccb57](https://github.com/JCarran0/household-budgeting/commit/b7ccb578c87eb84572c1b6dcaa917708bf3b3fe4))
+
 ### [5.44.1](https://github.com/JCarran0/household-budgeting/compare/v5.44.0...v5.44.1) (2026-04-20)
 
 
