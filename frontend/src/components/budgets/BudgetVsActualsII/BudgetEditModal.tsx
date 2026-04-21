@@ -42,8 +42,6 @@ interface ConfirmContext {
   scope: 'single' | 'multi';
   targetMonths: string[]; // months that will be written
   amount: number;
-  /** null when the rollover flag isn't changing; object otherwise. */
-  rolloverChange: { newValue: boolean; conflictingIds: string[] } | null;
 }
 
 function monthLabel(month: string): string {
@@ -58,11 +56,9 @@ function shortMonthLabel(month: string): string {
 
 /**
  * Target-specific rollover subtree-conflict check — mirrors the backend
- * categoryService logic and the equivalent helper in CategoryForm. Given the
- * target's id and the full category list, returns the ids of ancestor or
- * descendant categories that would conflict if `targetId` is flagged
- * isRollover=true. Frontend is convenience (REQ-019); the server validates on
- * submit regardless.
+ * categoryService logic. Given the target's id and the full category list,
+ * returns the ids of ancestor or descendant categories that would conflict
+ * if `targetId` is flagged isRollover=true.
  */
 function findConflictsForTarget(targetId: string, categories: Category[]): string[] {
   const target = categories.find(c => c.id === targetId);
@@ -93,21 +89,21 @@ function getErrorMessage(err: unknown): string | undefined {
 /**
  * Row-level inline budget editor for BvA II (BRD §5).
  *
- * Two mutually-exclusive save paths:
+ * Two mutually-exclusive budget save paths:
  *   - Update the selected month only (createOrUpdateBudget).
  *   - Update every strictly-later month of the same calendar year
  *     (batchUpdateBudgets). Always overwrites — the confirmation modal's
  *     before/after table is the safety net (REQ-041).
  *
- * Also lets the user flip the category's `isRollover` flag inline (no need
- * to bounce to the Categories page). Subtree-conflict pre-flight uses the
- * local category cache; the confirmation step surfaces the conflict list
- * and the save path sends `resolveRolloverConflicts: true` when the user
- * confirms. Backend still validates on submit.
+ * The Rollover toggle is **independent of the budget save path** — flipping
+ * it auto-saves via api.updateCategory immediately, without requiring the
+ * user to update any budgets. Pre-flight conflict detection opens a nested
+ * confirmation dialog when turning rollover ON would violate subtree
+ * exclusivity; the save then includes resolveRolloverConflicts: true.
  *
- * Invalidates the shared budget cache keys so BvA II, the existing BvA tab,
- * and YearlyBudgetGrid all reflect the change next render. Also invalidates
- * ['categories'] when the rollover flag changes.
+ * Invalidates the shared budget cache keys (+ ['categories'] for rollover
+ * changes) so BvA II, the existing BvA tab, YearlyBudgetGrid, and the
+ * Categories page all reflect the changes next render.
  */
 export function BudgetEditModal({
   opened,
@@ -120,25 +116,33 @@ export function BudgetEditModal({
   const queryClient = useQueryClient();
   const [selectedMonth, setSelectedMonth] = useState<string>(initialMonth);
   const [amount, setAmount] = useState<number | ''>(() => existingBudgetsByMonth.get(initialMonth) ?? '');
-  const [isRolloverForm, setIsRolloverForm] = useState<boolean>(category.isRollover);
   const [confirm, setConfirm] = useState<ConfirmContext | null>(null);
+  // Pending rollover-ON confirmation (conflict case); null = no pending ask.
+  const [pendingRolloverConflict, setPendingRolloverConflict] = useState<{
+    conflictingIds: string[];
+  } | null>(null);
 
-  // Need the full category list so we can pre-flight subtree conflicts.
-  // Cache key matches the BvA II component's query so this is usually a hit.
+  // Full category list for conflict pre-flight and to read the live
+  // isRollover (server-authoritative) for the switch.
   const { data: allCategories } = useQuery({
     queryKey: ['categories'],
     queryFn: () => api.getCategories(),
     enabled: opened,
   });
 
+  const liveCategory: Category = useMemo(
+    () => allCategories?.find(c => c.id === category.id) ?? category,
+    [allCategories, category],
+  );
+
   useEffect(() => {
     if (opened) {
       setSelectedMonth(initialMonth);
       setAmount(existingBudgetsByMonth.get(initialMonth) ?? '');
-      setIsRolloverForm(category.isRollover);
       setConfirm(null);
+      setPendingRolloverConflict(null);
     }
-  }, [opened, initialMonth, existingBudgetsByMonth, category.isRollover]);
+  }, [opened, initialMonth, existingBudgetsByMonth]);
 
   const handleMonthChange = (next: string) => {
     setSelectedMonth(next);
@@ -158,25 +162,12 @@ export function BudgetEditModal({
   }, [selectedMonthIdx, selectedYear]);
 
   const currentMonthBudget = existingBudgetsByMonth.get(selectedMonth);
-
-  const rolloverChangedInForm = isRolloverForm !== category.isRollover;
   const rolloverToggleDisabled = !isBudgetableCategory(category.id, allCategories ?? []);
 
   const startConfirm = (scope: 'single' | 'multi') => {
     const value = amount === '' ? 0 : amount;
     const targetMonths = scope === 'single' ? [selectedMonth] : futureMonthsOfYear;
-
-    let rolloverChange: ConfirmContext['rolloverChange'] = null;
-    if (rolloverChangedInForm) {
-      let conflictingIds: string[] = [];
-      if (isRolloverForm && allCategories) {
-        // Only turning rollover ON can conflict (subtree exclusivity).
-        conflictingIds = findConflictsForTarget(category.id, allCategories);
-      }
-      rolloverChange = { newValue: isRolloverForm, conflictingIds };
-    }
-
-    setConfirm({ scope, amount: value, targetMonths, rolloverChange });
+    setConfirm({ scope, amount: value, targetMonths });
   };
 
   const singleMutation = useMutation({
@@ -189,34 +180,69 @@ export function BudgetEditModal({
     mutationFn: (updates: UpdateCategoryDto) => api.updateCategory(category.id, updates),
   });
 
-  const saving = singleMutation.isPending || multiMutation.isPending || categoryMutation.isPending;
+  const budgetSaving = singleMutation.isPending || multiMutation.isPending;
+  const rolloverSaving = categoryMutation.isPending;
 
-  const invalidateRelatedQueries = async (rolloverAlsoChanged: boolean) => {
-    // BvA II + existing BvA + YearlyBudgetGrid all care about these.
-    const invalidations = [
+  const invalidateBudgetQueries = async () => {
+    await Promise.all([
       queryClient.invalidateQueries({ queryKey: ['budgets'] }),
       queryClient.invalidateQueries({ queryKey: ['bva-ii'] }),
-    ];
-    if (rolloverAlsoChanged) {
-      invalidations.push(queryClient.invalidateQueries({ queryKey: ['categories'] }));
+    ]);
+  };
+
+  const saveRollover = async (newValue: boolean, resolveConflicts: boolean) => {
+    try {
+      const updates: UpdateCategoryDto = { isRollover: newValue };
+      if (resolveConflicts) updates.resolveRolloverConflicts = true;
+      await categoryMutation.mutateAsync(updates);
+      // Rollover changes affect the Rollover column math + the Categories
+      // page, and the bva-ii transactions/composition cache depends on the
+      // flag too.
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['categories'] }),
+        queryClient.invalidateQueries({ queryKey: ['bva-ii'] }),
+      ]);
+      notifications.show({
+        title: 'Category updated',
+        message: `Rollover ${newValue ? 'enabled' : 'disabled'} for ${category.name}.`,
+        color: 'green',
+      });
+    } catch (err) {
+      const message = getErrorMessage(err) ?? 'Failed to update rollover';
+      notifications.show({ title: 'Error', message, color: 'red' });
     }
-    await Promise.all(invalidations);
+  };
+
+  const handleRolloverToggle = async (nextChecked: boolean) => {
+    if (!nextChecked) {
+      // Turning off is always safe — never a subtree conflict.
+      await saveRollover(false, false);
+      return;
+    }
+    // Turning on — pre-flight subtree-conflict check. Matches the backend's
+    // categoryService logic; server re-validates on submit.
+    if (!allCategories) return;
+    const conflicts = findConflictsForTarget(category.id, allCategories);
+    if (conflicts.length > 0) {
+      setPendingRolloverConflict({ conflictingIds: conflicts });
+      return;
+    }
+    await saveRollover(true, false);
+  };
+
+  const handleConfirmRolloverResolve = async () => {
+    if (!pendingRolloverConflict) return;
+    await saveRollover(true, true);
+    setPendingRolloverConflict(null);
+  };
+
+  const handleCancelRolloverResolve = () => {
+    setPendingRolloverConflict(null);
   };
 
   const handleConfirm = async () => {
     if (!confirm) return;
     try {
-      // 1. Rollover flag update (if changed) — must precede budget save so
-      //    rollover math is correct by the time caches invalidate.
-      if (confirm.rolloverChange) {
-        const updates: UpdateCategoryDto = { isRollover: confirm.rolloverChange.newValue };
-        if (confirm.rolloverChange.conflictingIds.length > 0) {
-          updates.resolveRolloverConflicts = true;
-        }
-        await categoryMutation.mutateAsync(updates);
-      }
-
-      // 2. Budget save
       if (confirm.scope === 'single') {
         await singleMutation.mutateAsync({
           categoryId: category.id,
@@ -231,11 +257,10 @@ export function BudgetEditModal({
         }));
         await multiMutation.mutateAsync(updates);
       }
-
-      await invalidateRelatedQueries(confirm.rolloverChange !== null);
+      await invalidateBudgetQueries();
       notifications.show({
         title: 'Budget updated',
-        message: `${category.name} — ${confirm.targetMonths.length} month${confirm.targetMonths.length === 1 ? '' : 's'} saved${confirm.rolloverChange ? `, rollover ${confirm.rolloverChange.newValue ? 'enabled' : 'disabled'}` : ''}.`,
+        message: `${category.name} — ${confirm.targetMonths.length} month${confirm.targetMonths.length === 1 ? '' : 's'} saved.`,
         color: 'green',
       });
       onClose();
@@ -253,14 +278,12 @@ export function BudgetEditModal({
     [selectedMonth],
   );
 
-  // Look up conflicting category display info so the confirmation modal can
-  // show names + parent path instead of raw ids.
   const conflictingCategories = useMemo<Category[]>(() => {
-    if (!confirm?.rolloverChange || !allCategories) return [];
-    return confirm.rolloverChange.conflictingIds
+    if (!pendingRolloverConflict || !allCategories) return [];
+    return pendingRolloverConflict.conflictingIds
       .map(id => allCategories.find(c => c.id === id))
       .filter((c): c is Category => Boolean(c));
-  }, [confirm, allCategories]);
+  }, [pendingRolloverConflict, allCategories]);
 
   const formatCategoryLabel = (c: Category): string => {
     if (!c.parentId) return c.name;
@@ -269,17 +292,18 @@ export function BudgetEditModal({
   };
 
   return (
+    <>
     <Modal
       opened={opened}
       onClose={onClose}
-      title={confirm ? 'Confirm changes' : `Edit ${category.name} budget`}
+      title={confirm ? 'Confirm budget change' : `Edit ${category.name} budget`}
       size="lg"
     >
       {confirm === null ? (
         <Stack>
           <Group gap="xs">
             <Badge variant="light">{category.isIncome ? 'Income' : category.isSavings ? 'Savings' : 'Spending'}</Badge>
-            {isRolloverForm && <Badge variant="light" color="grape">Rollover</Badge>}
+            {liveCategory.isRollover && <Badge variant="light" color="grape">Rollover</Badge>}
           </Group>
           {category.parentId && (
             <Text size="sm" c="dimmed">Child of: {category.parentId}</Text>
@@ -317,33 +341,36 @@ export function BudgetEditModal({
             Current budget for {monthLabel(selectedMonth)}: {currentMonthBudget !== undefined ? formatCurrency(currentMonthBudget) : '(unset)'}
           </Text>
 
+          {/* Rollover toggle auto-saves on change (independent of the budget
+              save buttons). Conflict confirmation opens in a nested modal
+              when turning ON would violate subtree exclusivity. */}
           <Switch
             label="Rollover budget"
-            description="Surpluses and deficits carry month-to-month within the calendar year. Resets January 1."
-            checked={isRolloverForm}
-            onChange={(e) => setIsRolloverForm(e.currentTarget.checked)}
-            disabled={rolloverToggleDisabled}
+            description="Surpluses and deficits carry month-to-month within the calendar year. Resets January 1. Toggling auto-saves."
+            checked={liveCategory.isRollover}
+            onChange={(e) => handleRolloverToggle(e.currentTarget.checked)}
+            disabled={rolloverToggleDisabled || rolloverSaving}
           />
 
-          {(category.isRollover || isRolloverForm) && useRolloverToggleOn && (
+          {liveCategory.isRollover && useRolloverToggleOn && (
             <Alert icon={<IconInfoCircle size={16} />} color="grape" variant="light">
               FYI: This change will trigger a recalculation of rollover amounts.
             </Alert>
           )}
 
           <Group justify="space-between" mt="md">
-            <Button variant="default" onClick={onClose} disabled={saving}>Cancel</Button>
+            <Button variant="default" onClick={onClose} disabled={budgetSaving}>Cancel</Button>
             <Group>
               <Button
                 variant="light"
                 onClick={() => startConfirm('single')}
-                disabled={amount === '' && !rolloverChangedInForm}
+                disabled={amount === ''}
               >
                 {singleLabel}
               </Button>
               <Button
                 onClick={() => startConfirm('multi')}
-                disabled={(amount === '' && !rolloverChangedInForm) || isDecember}
+                disabled={amount === '' || isDecember}
                 title={isDecember ? `No future months remaining in ${selectedYear}` : undefined}
               >
                 {multiLabel}
@@ -358,35 +385,7 @@ export function BudgetEditModal({
             <b>{category.name}</b>.
           </Text>
 
-          {confirm.rolloverChange && (
-            <Alert
-              icon={<IconAlertCircle size={16} />}
-              color={confirm.rolloverChange.conflictingIds.length > 0 ? 'orange' : 'grape'}
-              variant="light"
-            >
-              <Stack gap={4}>
-                <Text size="sm">
-                  <b>Rollover will be turned {confirm.rolloverChange.newValue ? 'ON' : 'OFF'}</b> for this category.
-                </Text>
-                {confirm.rolloverChange.conflictingIds.length > 0 && (
-                  <>
-                    <Text size="sm">
-                      This will also unflag{' '}
-                      {conflictingCategories.length === 1 ? '1 related category' : `${conflictingCategories.length} related categories`}{' '}
-                      (only one per parent/child chain can use rollover):
-                    </Text>
-                    <List size="sm" withPadding>
-                      {conflictingCategories.map(c => (
-                        <List.Item key={c.id}>{formatCategoryLabel(c)}</List.Item>
-                      ))}
-                    </List>
-                  </>
-                )}
-              </Stack>
-            </Alert>
-          )}
-
-          {(category.isRollover || confirm.rolloverChange?.newValue) && (
+          {liveCategory.isRollover && (
             <Alert icon={<IconAlertCircle size={16} />} color="grape" variant="light">
               FYI: This change will trigger a recalculation of rollover amounts.
             </Alert>
@@ -438,15 +437,48 @@ export function BudgetEditModal({
           </Box>
 
           <Group justify="space-between" mt="md">
-            <Button variant="default" onClick={() => setConfirm(null)} disabled={saving}>
+            <Button variant="default" onClick={() => setConfirm(null)} disabled={budgetSaving}>
               Back
             </Button>
-            <Button onClick={handleConfirm} loading={saving}>
+            <Button onClick={handleConfirm} loading={budgetSaving}>
               Confirm
             </Button>
           </Group>
         </Stack>
       )}
     </Modal>
+
+    <Modal
+      opened={pendingRolloverConflict !== null}
+      onClose={handleCancelRolloverResolve}
+      title="Resolve rollover conflict"
+      size="md"
+    >
+      {pendingRolloverConflict && (
+        <Stack>
+          <Text>
+            Flagging <b>{category.name}</b> as a rollover budget will unflag{' '}
+            {conflictingCategories.length === 1 ? '1 related category' : `${conflictingCategories.length} related categories`}:
+          </Text>
+          <List>
+            {conflictingCategories.map(c => (
+              <List.Item key={c.id}>{formatCategoryLabel(c)}</List.Item>
+            ))}
+          </List>
+          <Text size="sm" c="dimmed">
+            Only one category per parent/child chain can use rollover.
+          </Text>
+          <Group justify="flex-end" mt="md">
+            <Button variant="default" onClick={handleCancelRolloverResolve} disabled={rolloverSaving}>
+              Cancel
+            </Button>
+            <Button color="red" onClick={handleConfirmRolloverResolve} loading={rolloverSaving}>
+              Unflag and continue
+            </Button>
+          </Group>
+        </Stack>
+      )}
+    </Modal>
+    </>
   );
 }
