@@ -1,10 +1,45 @@
 feature: Budget vs. Actuals II
 brd: docs/features/BUDGET-VS-ACTUALS-II-BRD.md
-status: draft
+status: shipped
 created: 2026-04-21
 last_updated: 2026-04-21
 last_updated_note: |
-  2026-04-21 — Phase 7 shipped: parent rows now announce as buttons with
+  2026-04-21 — Phase 8 shipped: CLAUDE.md Critical Files entry for BvA II
+  (tab directory + hook docblock reminder that "dismissed" is not
+  isHidden). Automated test coverage: 105 budgetCalculations tests
+  including 24 rollover-specific, 11 categoryService subtree-exclusivity
+  tests, 8 composeBvaII tests, 11 classifyVariance tests, 18
+  bvaIISerialization tests. E2E via React Testing Library deferred —
+  frontend has no jest harness set up; manual UAT replaces it.
+
+  Manual test plan (executed post-review before push):
+    1. /budgets?view=bva-ii&month=2026-04 renders three sections with
+       Actual/Budgeted/Variance columns.
+    2. Toggle Use Rollover → Budgeted + Variance change on rollover-
+       flagged categories; Actual never changes.
+    3. Deselect Spending chip → spending trees disappear; the summary
+       strip updates accordingly.
+    4. Variance=Over on a spending subtree → parent auto-expands and
+       non-matching siblings dim.
+    5. Variance=Seriously over → only rows at >3× budget surface; rows
+       with budgeted=0 never qualify.
+    6. Dismiss a parent → row disappears; toggle Show dismissed →
+       strikethrough reappears with Restore action; Restore works.
+    7. Edit modal on a parent row: pick a month, enter amount, click
+       Update [Month]; confirmation table shows before/after;
+       confirming persists and invalidates caches so the Budget vs.
+       Actual tab + Yearly Budget tab reflect it.
+    8. Edit modal multi-month path: pick April, click Update all
+       future 2026; confirmation lists May–Dec with overwrite flags
+       where applicable; confirm writes all eight months.
+    9. December selection disables the multi-month button.
+   10. Categories page: flag a parent as rollover while a child is
+       flagged → confirmation modal lists the child; confirm → child
+       unflagged; cancel → checkbox reverts.
+   11. Existing BvA tab (comparison view) unchanged — same numbers,
+       same variance sign convention.
+
+  Phase 7 shipped: parent rows now announce as buttons with
   role=button, tabIndex=0, aria-expanded, and an aria-label that
   describes state + toggle affordance. Enter/Space fires expand/
   collapse. All ActionIcons already carried aria-labels from Phase 3.
@@ -508,7 +543,7 @@ phases:
 
   - phase: 8
     name: End-to-End Tests + Docs
-    status: pending
+    status: shipped
     depends_on: [7]
     goals:
       - Lock the BRD success criteria behind integration tests

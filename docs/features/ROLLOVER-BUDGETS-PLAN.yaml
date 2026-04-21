@@ -1,10 +1,17 @@
 feature: Rollover Budgets
 brd: docs/features/ROLLOVER-BUDGETS-BRD.md
-status: draft
+status: shipped
 created: 2026-04-21
 last_updated: 2026-04-21
 last_updated_note: |
-  2026-04-21 — Phase 3 shipped: CategoryForm.tsx now shows the rollover
+  2026-04-21 — Phase 4 shipped: CLAUDE.md Critical Files section now
+  lists computeRolloverBalance / computeEffectiveBudget /
+  buildEffectiveBudgetsMap / findRolloverSubtreeConflicts and notes
+  that BvA II is the sole v1 consumer of rollover math. ADR table
+  entry (2026-04) already in place from the initial docs commit and
+  requires no change — implementation matched the BRD.
+
+  Phase 3 shipped: CategoryForm.tsx now shows the rollover
   checkbox with the semantic label ("Rollover budget" + description) and
   disables it with a tooltip for transfer categories. updateCategory
   mutation branches on error.code: ROLLOVER_SUBTREE_CONFLICT opens a
@@ -294,7 +301,7 @@ phases:
 
   - phase: 4
     name: Documentation
-    status: pending
+    status: shipped
     depends_on: [3]
     goals:
       - Capture rollover as a first-class concept in project docs

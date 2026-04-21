@@ -50,7 +50,8 @@ Family-scale app for 2 users: personal budgeting (with Plaid), shared tasks, tri
 
 **Financial calculations (always use shared utils, never duplicate):**
 - `shared/utils/transactionCalculations.ts` — transfer exclusion
-- `shared/utils/budgetCalculations.ts` — budget rollup (`buildCategoryTreeAggregation`, `classifyTreeBudgetState`, `isTreeUnused`, `isTreeOverBudget`)
+- `shared/utils/budgetCalculations.ts` — budget rollup (`buildCategoryTreeAggregation`, `classifyTreeBudgetState`, `isTreeUnused`, `isTreeOverBudget`) + rollover math (`computeRolloverBalance`, `computeEffectiveBudget`, `buildEffectiveBudgetsMap`, `findRolloverSubtreeConflicts`). Math is type-agnostic — goodness coloring lives in the consumer.
+- `shared/utils/bvaIIDataComposition.ts` + `bvaIIDisplay.ts` + `bvaIIFilters.ts` + `bvaIISerialization.ts` — Budget vs. Actuals II composition, tone/section classification, variance filters, URL/localStorage (de)serializers. BvA II is the v1 sole consumer of rollover math.
 - `backend/src/services/transactionReader.ts` — canonical removed-transaction filter; all read paths must use this
 
 **AI:**
@@ -59,6 +60,13 @@ Family-scale app for 2 users: personal budgeting (with Plaid), shared tasks, tri
 - `backend/src/services/categorizationService.ts` — bulk AI categorization
 - `backend/src/services/amazonReceiptService.ts` + `amazonReceiptPrompt.ts`
 - `frontend/src/components/chat/ChatOverlay.tsx` + `ActionCard.tsx`
+
+**Budget vs. Actuals II (v1 sole rollover consumer):**
+- `frontend/src/components/budgets/BudgetVsActualsII/` — accordion-first rollover-aware view
+  - `BudgetVsActualsII.tsx` — tab entry, data + render orchestration
+  - `BudgetEditModal.tsx` — single-month OR all-future-months edit with before/after confirmation
+  - `useBvaIIUrlState.ts` — rollover/types/variance URL sync
+  - `useDismissedParentIds.ts` — per-user localStorage set; **NOT `Category.isHidden`** (enforcement docblock at the hook; code review must guard every touchpoint)
 
 **Trips:**
 - `frontend/src/pages/TripDetail.tsx` — `/trips/:tripId` (Itinerary / Spending / Notes)
