@@ -8,8 +8,9 @@ import { DataService } from './dataService';
 import { ActualsOverrideService } from './actualsOverrideService';
 import { StoredTransaction } from './transactionService';
 import { MonthlyBudget } from '../shared/types';
-import { format, startOfMonth, endOfMonth, subMonths, addMonths } from 'date-fns';
+import { format, subMonths, addMonths } from 'date-fns';
 import { calculateIncome, calculateSavings, calculateSpending } from '../shared/utils/transactionCalculations';
+import { etDateString, etMonthString, firstDayOfMonth, lastDayOfMonth } from '../shared/utils/easternTime';
 import { calculateBudgetTotals } from '../shared/utils/budgetCalculations';
 import { Repository } from './repository';
 import { getMonthRange, calculateStdDev, getEffectivelyHiddenCategoryIds, getSavingsCategoryIds } from './reportHelpers';
@@ -152,8 +153,8 @@ export class ReportService {
       for (const month of months) {
         // Parse month properly
         const [year, monthNum] = month.split('-').map(Number);
-        const monthStart = startOfMonth(new Date(year, monthNum - 1, 1)).toISOString().split('T')[0];
-        const monthEnd = endOfMonth(new Date(year, monthNum - 1, 1)).toISOString().split('T')[0];
+        const monthStart = firstDayOfMonth(year, monthNum - 1);
+        const monthEnd = lastDayOfMonth(year, monthNum - 1);
 
         // Filter transactions for this month (excluding hidden categories)
         const monthTransactions = transactions.filter(t => 
@@ -569,8 +570,8 @@ export class ReportService {
           } else {
             // Calculate from transactions
             const [year, monthNum] = month.split('-').map(Number);
-            const monthStart = startOfMonth(new Date(year, monthNum - 1, 1)).toISOString().split('T')[0];
-            const monthEnd = endOfMonth(new Date(year, monthNum - 1, 1)).toISOString().split('T')[0];
+            const monthStart = firstDayOfMonth(year, monthNum - 1);
+            const monthEnd = lastDayOfMonth(year, monthNum - 1);
 
             const monthTransactions = transactions.filter(t =>
               t.date >= monthStart &&
@@ -588,8 +589,8 @@ export class ReportService {
         } else {
           // Fallback: calculate from transactions (no override service available)
           const [year, monthNum] = month.split('-').map(Number);
-          const monthStart = startOfMonth(new Date(year, monthNum - 1, 1)).toISOString().split('T')[0];
-          const monthEnd = endOfMonth(new Date(year, monthNum - 1, 1)).toISOString().split('T')[0];
+          const monthStart = firstDayOfMonth(year, monthNum - 1);
+          const monthEnd = lastDayOfMonth(year, monthNum - 1);
 
           const monthTransactions = transactions.filter(t =>
             t.date >= monthStart &&
@@ -792,10 +793,9 @@ export class ReportService {
    */
   async getYearToDateSummary(familyId: string): Promise<YTDResult> {
     try {
-      const currentYear = new Date().getFullYear();
+      const currentMonth = etMonthString();
+      const currentYear = Number(currentMonth.slice(0, 4));
       const startMonth = `${currentYear}-01`;
-      const currentDate = new Date();
-      const currentMonth = format(currentDate, 'yyyy-MM');
 
       // Use getCashFlowSummary which already handles overrides
       const cashFlowResult = await this.getCashFlowSummary(familyId, startMonth, currentMonth);
@@ -843,7 +843,7 @@ export class ReportService {
       // Get top spending categories (still need raw transaction data for this)
       // Note: This part doesn't use overrides because overrides are totals, not category breakdowns
       const startDate = `${currentYear}-01-01`;
-      const endDate = new Date().toISOString().split('T')[0];
+      const endDate = etDateString();
 
       const transactions = await this.getActiveTransactions(familyId);
 

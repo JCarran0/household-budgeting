@@ -4,6 +4,7 @@
  */
 
 import type { Stop, StayStop, TransitStop, Trip } from '../types';
+import { etDateString } from './easternTime';
 
 /**
  * Generate a trip tag from a trip name and start date.
@@ -41,20 +42,15 @@ export function isTripTag(tag: string): boolean {
 }
 
 /**
- * Derive trip status from dates relative to today.
+ * Derive trip status from dates relative to today in US Eastern Time.
+ * startDate/endDate are YYYY-MM-DD strings — compare as strings since that's
+ * lexically equivalent to a date comparison and avoids any Date-parsing
+ * timezone surprises.
  */
 export function getTripStatus(startDate: string, endDate: string): 'upcoming' | 'active' | 'completed' {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-
-  const start = new Date(startDate);
-  start.setHours(0, 0, 0, 0);
-
-  const end = new Date(endDate);
-  end.setHours(0, 0, 0, 0);
-
-  if (start > today) return 'upcoming';
-  if (end < today) return 'completed';
+  const today = etDateString();
+  if (startDate > today) return 'upcoming';
+  if (endDate < today) return 'completed';
   return 'active';
 }
 

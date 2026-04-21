@@ -12,6 +12,12 @@ import { StoredAccount } from './accountService';
 import { encryptionService } from '../utils/encryption';
 import { filterTransactions } from './transactionFilterEngine';
 import { calculateIncome, calculateExpenses, calculateNetCashFlow } from '../shared/utils/transactionCalculations';
+import {
+  etDateString,
+  etMonthString,
+  etStartOfCurrentMonth,
+  etEndOfCurrentMonth,
+} from '../shared/utils/easternTime';
 
 // Transaction status
 export type TransactionStatus = 'posted' | 'pending' | 'removed';
@@ -126,7 +132,7 @@ export class TransactionService {
     startDate: string = '2025-01-01'
   ): Promise<SyncResult> {
     try {
-      const endDate = new Date().toISOString().split('T')[0]; // Today
+      const endDate = etDateString(); // Today in US Eastern Time
       let totalAdded = 0;
       let totalModified = 0;
       let totalRemoved = 0;
@@ -943,9 +949,8 @@ export class TransactionService {
     netIncome: number;
     transactionCount: number;
   }> {
-    const now = new Date();
-    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
-    const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split('T')[0];
+    const startOfMonth = etStartOfCurrentMonth();
+    const endOfMonth = etEndOfCurrentMonth();
 
     const result = await this.getTransactions(familyId, {
       startDate: startOfMonth,
@@ -958,7 +963,7 @@ export class TransactionService {
     }
 
     return {
-      month: `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`,
+      month: etMonthString(),
       totalIncome: calculateIncome(result.transactions),
       totalExpenses: calculateExpenses(result.transactions),
       netIncome: calculateNetCashFlow(result.transactions),

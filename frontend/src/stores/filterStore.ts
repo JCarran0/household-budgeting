@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
+import { etDateString } from '../../../shared/utils/easternTime';
 
 type DateFilterOption = 'this-month' | 'last-month' | 'ytd' | 'last3' | 'last6' | 'last12' | 'all' | 'custom' | string;
 
@@ -73,7 +74,9 @@ const defaultTransactionFilters: TransactionFilters = {
 };
 
 const defaultBudgetFilters: BudgetFilters = {
-  selectedDate: new Date().toISOString(), // Will be parsed as start of month in the hook
+  // YYYY-MM-DD in US Eastern Time — parseDateFromStorage reconstructs this
+  // as a Date at local midnight on the same calendar day.
+  selectedDate: etDateString(),
   activeTab: 'budget',
 };
 

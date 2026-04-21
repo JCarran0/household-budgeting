@@ -37,7 +37,7 @@ import { useFilterStore } from '../stores/filterStore';
 import { formatCurrency } from '../utils/formatters';
 import { calculateActualTotals, getSavingsCategoryIds } from '../../../shared/utils/budgetCalculations';
 import { calculateSavings } from '../../../shared/utils/transactionCalculations';
-import { format, startOfMonth, addMonths } from 'date-fns';
+import { etDateString, etMonthString, parseMonthKey, firstDayOfMonth, lastDayOfMonth } from '../../../shared/utils/easternTime';
 
 export function MantineDashboard() {
   const navigate = useNavigate();
@@ -59,14 +59,19 @@ export function MantineDashboard() {
     queryFn: () => api.getTransactions({ limit: 10 }),
   });
 
-  // Memoize currentDate so it doesn't cause unstable deps on every render
-  const currentDate = useMemo(() => new Date(), []);
-  const currentMonth = startOfMonth(currentDate);
+  // Anchor all "today" reads to ET so users see consistent buckets regardless
+  // of where they open the app from.
+  const todayEt = useMemo(() => etDateString(), []);
+  const currentMonthKey = useMemo(() => etMonthString(), []);
+  const { year: currentYear, monthIndex: currentMonthIndex } = useMemo(
+    () => parseMonthKey(currentMonthKey),
+    [currentMonthKey],
+  );
   const { data: monthlyTransactionData } = useQuery({
-    queryKey: ['transactions', format(currentMonth, 'yyyy-MM')],
+    queryKey: ['transactions', currentMonthKey],
     queryFn: () => api.getTransactions({
-      startDate: format(currentMonth, 'yyyy-MM-01'),
-      endDate: format(addMonths(currentMonth, 1).getTime() - 1, 'yyyy-MM-dd'),
+      startDate: firstDayOfMonth(currentYear, currentMonthIndex),
+      endDate: lastDayOfMonth(currentYear, currentMonthIndex),
     }),
   });
 
@@ -82,9 +87,8 @@ export function MantineDashboard() {
   });
 
   // Fetch YTD transactions for projected net income calculation
-  const currentYear = currentDate.getFullYear();
   const ytdStartDate = `${currentYear}-01-01`;
-  const ytdEndDate = format(currentDate, 'yyyy-MM-dd');
+  const ytdEndDate = todayEt;
   const { data: ytdTransactionData } = useQuery({
     queryKey: ['transactions', 'ytd', currentYear],
     queryFn: () => api.getTransactions({
@@ -95,10 +99,9 @@ export function MantineDashboard() {
   });
 
   // Fetch current month's budgets to show actual budget vs spending
-  const currentMonthStr = new Date().toISOString().slice(0, 7); // YYYY-MM format
   const { data: budgetData } = useQuery({
-    queryKey: ['budgets', 'month', currentMonthStr],
-    queryFn: () => api.getMonthlyBudgets(currentMonthStr),
+    queryKey: ['budgets', 'month', currentMonthKey],
+    queryFn: () => api.getMonthlyBudgets(currentMonthKey),
   });
 
   const isLoading = accountsLoading || transactionsLoading;
@@ -162,7 +165,6 @@ export function MantineDashboard() {
     const ytdActualNet = ytdTotals.income - ytdTotals.expense;
 
     // Remaining full months after current month (current month uses actuals)
-    const currentMonthIndex = currentDate.getMonth(); // 0-based
     const remainingMonths = 11 - currentMonthIndex; // months after current
 
     // Use budget totals for projection
@@ -179,7 +181,7 @@ export function MantineDashboard() {
       remainingMonths,
       hasBudget: budgetedIncome > 0 || budgetedExpense > 0,
     };
-  }, [ytdTransactionData, categories, budgetData, currentDate]);
+  }, [ytdTransactionData, categories, budgetData, currentMonthIndex]);
 
   // Calculate budget progress - compare spending against actual expense budget only
   const totalBudget = budgetData?.totals?.expense || 0;

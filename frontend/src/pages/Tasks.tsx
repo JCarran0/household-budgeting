@@ -65,6 +65,7 @@ import { useNewBadgeCelebrations } from '../hooks/useNewBadgeCelebrations';
 import { userColor } from '../utils/userColor';
 import { UserColorDot } from '../components/common/UserColorDot';
 import { computeSortOrder } from '../../../shared/utils/taskSortOrder';
+import { EASTERN_TIME_ZONE } from '../../../shared/utils/easternTime';
 import type {
   StoredTask,
   TaskStatus,
@@ -329,7 +330,9 @@ export function Tasks() {
 
   const { data: leaderboard } = useQuery({
     queryKey: ['tasks', 'leaderboard'],
-    queryFn: () => api.getLeaderboard(Intl.DateTimeFormat().resolvedOptions().timeZone),
+    // Always bucket in ET so users see consistent streaks/badges regardless
+    // of the browser's resolved timezone (e.g. when traveling).
+    queryFn: () => api.getLeaderboard(EASTERN_TIME_ZONE),
   });
 
   const { pendingHero, dismissHero } = useNewBadgeCelebrations(
