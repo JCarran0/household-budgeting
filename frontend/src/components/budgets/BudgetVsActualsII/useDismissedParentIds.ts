@@ -1,4 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
+import {
+  DISMISSED_STORAGE_KEY,
+  parseDismissedIds,
+  serializeDismissedIds,
+} from '../../../../../shared/utils/bvaIISerialization';
 
 /**
  * Per-user dismissed-parent set for the Budget vs. Actuals II tab.
@@ -23,13 +28,11 @@ import { useCallback, useEffect, useState } from 'react';
  * └──────────────────────────────────────────────────────────────────────────┘
  *
  * Storage: localStorage key `bva2.dismissedParentCategoryIds` as JSON array.
- * Corrupt payloads fall back to an empty set without throwing.
+ * Pure parse/serialize helpers live in shared/utils/bvaIISerialization.ts.
  *
  * `showDismissed` is ephemeral session state (BRD REQ-048) — neither URL-
  * persisted nor stored in localStorage. Resets to false on page reload.
  */
-
-const STORAGE_KEY = 'bva2.dismissedParentCategoryIds';
 
 export interface DismissedParentsState {
   dismissedIds: Set<string>;
@@ -42,17 +45,8 @@ export interface DismissedParentsState {
 function readStoredIds(): Set<string> {
   if (typeof window === 'undefined') return new Set();
   try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    if (!raw) return new Set();
-    const parsed: unknown = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return new Set();
-    const next = new Set<string>();
-    for (const v of parsed) {
-      if (typeof v === 'string') next.add(v);
-    }
-    return next;
+    return parseDismissedIds(window.localStorage.getItem(DISMISSED_STORAGE_KEY));
   } catch {
-    // Corrupt payload — start empty rather than throw.
     return new Set();
   }
 }
@@ -60,7 +54,7 @@ function readStoredIds(): Set<string> {
 function writeStoredIds(ids: Set<string>): void {
   if (typeof window === 'undefined') return;
   try {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(Array.from(ids)));
+    window.localStorage.setItem(DISMISSED_STORAGE_KEY, serializeDismissedIds(ids));
   } catch {
     // Quota or access failures are non-fatal — the feature is a UI nicety.
   }

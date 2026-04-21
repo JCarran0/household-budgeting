@@ -4,7 +4,20 @@ status: draft
 created: 2026-04-21
 last_updated: 2026-04-21
 last_updated_note: |
-  2026-04-21 — Phase 4 shipped: control-row now carries type chips
+  2026-04-21 — Phase 5 shipped: Show dismissed switch wired into the
+  control row (disabled when no rows dismissed, subtext shows the
+  count). Parent-row dismiss icon was already live from Phase 3; it
+  flips to a Restore icon when the row is dismissed and the toggle is
+  on. Hook parsing/serialization extracted to new
+  shared/utils/bvaIISerialization.ts so backend jest can cover it
+  (18 new tests: typesEqualAll, "none" sentinel round-trip, corrupt
+  JSON tolerance, all-unknown-token fallback, non-string array entries
+  silently dropped, variance roundtrip). The localStorage dismissed set
+  is structurally separate from Category.isHidden — hook docblock plus
+  isHidden filter running upstream in buildCategoryTreeAggregation means
+  a formerly-hidden category can never leak back via "Show dismissed."
+
+  Phase 4 shipped: control-row now carries type chips
   (multi-select, URL-persisted via types= param; empty-set sentinel
   'types=none' honors the REQ-017 empty state), Use Rollover switch with
   January subtext (REQ-014), and variance Select with locked 200%
@@ -319,7 +332,7 @@ phases:
 
   - phase: 5
     name: Dismiss / Show Dismissed
-    status: pending
+    status: shipped
     depends_on: [4]
     goals:
       - Per-user parent-level dismiss that is surgically separate from

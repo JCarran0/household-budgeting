@@ -462,6 +462,18 @@ export function BudgetVsActualsII({ selectedMonth, active }: BudgetVsActualsIIPr
               allowDeselect={false}
               w={200}
             />
+
+            <Switch
+              label="Show dismissed"
+              checked={dismissed.showDismissed}
+              onChange={(e) => dismissed.setShowDismissed(e.currentTarget.checked)}
+              disabled={dismissed.dismissedIds.size === 0}
+              description={
+                dismissed.dismissedIds.size > 0
+                  ? `${dismissed.dismissedIds.size} dismissed`
+                  : undefined
+              }
+            />
           </Group>
 
           {urlState.variance === 'serious' && (
