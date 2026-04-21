@@ -4,6 +4,26 @@ status: shipped  # Phase 9 (Available + Rollover redesign) shipped 2026-04-21
 created: 2026-04-21
 last_updated: 2026-04-21
 last_updated_note: |
+  2026-04-21 — Post-Phase-9 polish from UAT:
+    - Edit modal: NumberInput onChange now coerces number | string |
+      '' (Mantine can deliver any of them mid-edit). The "Update
+      [Month]" / "Update all future [Year]" buttons were staying
+      disabled after typing an amount because string values from the
+      input landed as '' under the old strict-number-only handler.
+    - Rollover callout copy simplified to
+      "FYI: This change will trigger a recalculation of rollover
+      amounts." Applied to both the editor alert and the
+      confirmation-modal alert; BRD REQ-036 and REQ-042 updated
+      to match. Earlier drafts were directionally-wrong ("prior
+      months") or verbose ("Available column in later months of the
+      same calendar year"); the FYI line is punchier and enough.
+    - Table overflow: each section's Table now sits inside
+      Table.ScrollContainer(minWidth=720) with per-column minWidth
+      hints, and Available / Rollover cells carry explicit
+      whiteSpace:nowrap so signed values never split across lines
+      (the bug showed "−" and "$1,994" on separate rows at narrow
+      widths). Tablet priority per REQ-052 preserved.
+
   2026-04-21 — BRD Revision 2 + Phase 9 added: Available + Rollover
   column redesign. Original Variance column retired for BvA II only
   (existing BvA tab keeps raw `actual − budgeted`). Budgeted returns
