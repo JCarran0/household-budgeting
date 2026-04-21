@@ -223,7 +223,7 @@ export function BudgetEditModal({
 
           {category.isRollover && useRolloverToggleOn && (
             <Alert icon={<IconInfoCircle size={16} />} color="grape" variant="light">
-              Because this category uses rollover, changing this budget also updates the Available column in later months of the same calendar year.
+              FYI: This change will trigger a recalculation of rollover amounts.
             </Alert>
           )}
 
@@ -256,7 +256,7 @@ export function BudgetEditModal({
 
           {category.isRollover && (
             <Alert icon={<IconAlertCircle size={16} />} color="grape" variant="light">
-              Because this category uses rollover, these changes will also update the Available column in later months of the same calendar year.
+              FYI: This change will trigger a recalculation of rollover amounts.
             </Alert>
           )}
 
