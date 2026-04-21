@@ -48,6 +48,7 @@ import {
 } from '@tabler/icons-react';
 import { format } from 'date-fns';
 import { api } from '../lib/api';
+import { TripCoverBanner } from '../components/trips/TripCoverBanner';
 import { useCategoryOptions } from '../hooks/useCategoryOptions';
 import { formatCurrency } from '../utils/formatters';
 import type { Stop, TripSummary, TripCategoryBudget, CreateTripDto, UpdateTripDto } from '../../../shared/types';
@@ -720,6 +721,65 @@ function TripCard({ trip, onEdit, onDelete }: TripCardProps) {
     e.stopPropagation();
     fn();
   };
+
+  const coverStop = resolveCoverStop(trip);
+  const coverPhoto = coverStop ? getStopPhoto(coverStop) : null;
+
+  if (coverPhoto) {
+    return (
+      <Paper
+        component={Link}
+        to={`/trips/${trip.id}`}
+        withBorder
+        radius="md"
+        p={0}
+        style={{
+          display: 'block',
+          textDecoration: 'none',
+          color: 'inherit',
+          overflow: 'hidden',
+        }}
+      >
+        <TripCoverBanner
+          photoName={coverPhoto.photoName}
+          attribution={coverPhoto.attribution}
+          title={trip.name}
+          dateRange={formatTripDateRange(trip.startDate, trip.endDate)}
+          statusLabel={trip.status}
+          statusColor={STATUS_BADGE_COLOR[trip.status]}
+          compact
+          actions={
+            <Group gap={2} wrap="nowrap">
+              <ActionIcon
+                variant="transparent"
+                c="white"
+                onClick={stopNav(() => onEdit(trip))}
+                aria-label="Edit trip"
+              >
+                <IconEdit size={16} />
+              </ActionIcon>
+              <ActionIcon
+                variant="transparent"
+                c="white"
+                onClick={stopNav(() => onDelete(trip))}
+                aria-label="Delete trip"
+              >
+                <IconTrash size={16} />
+              </ActionIcon>
+            </Group>
+          }
+        />
+        <Group justify="space-between" wrap="nowrap" px="md" py="xs">
+          <Text size="sm" fw={600} c={overBudget ? 'red' : undefined}>
+            {budgetLabel}
+          </Text>
+          {trip.rating !== null && (
+            <Rating value={trip.rating} readOnly size="xs" fractions={1} />
+          )}
+        </Group>
+      </Paper>
+    );
+  }
 
   return (
     <Paper

@@ -12,6 +12,11 @@ interface TripCoverBannerProps {
   statusColor: string;
   /** Edit / delete icon buttons, rendered inside a semi-transparent pill top-right. */
   actions?: ReactNode;
+  /**
+   * Use a shorter card-sized banner (~130px) with smaller title/badge. Intended
+   * for list-card usage where the banner is nested inside a clipping Paper.
+   */
+  compact?: boolean;
 }
 
 const GRADIENT =
@@ -25,10 +30,16 @@ export function TripCoverBanner({
   statusLabel,
   statusColor,
   actions,
+  compact = false,
 }: TripCoverBannerProps) {
   const key = import.meta.env.VITE_GOOGLE_PLACES_API_KEY as string | undefined;
   const isMobile = useMediaQuery('(max-width: 48em)');
-  const height = isMobile ? 200 : 280;
+  const height = compact ? 130 : isMobile ? 200 : 280;
+  const titleOrder: 2 | 3 | 4 = compact ? 4 : isMobile ? 3 : 2;
+  const badgeSize = compact ? 'xs' : isMobile ? 'sm' : 'md';
+  const dateSize = compact ? 'xs' : 'sm';
+  const padX = compact ? 14 : isMobile ? 16 : 24;
+  const padBottom = compact ? 12 : isMobile ? 28 : 36;
 
   if (!key) return null;
 
@@ -43,7 +54,8 @@ export function TripCoverBanner({
         position: 'relative',
         width: '100%',
         height,
-        borderRadius: 'var(--mantine-radius-md)',
+        // Caller clips corners in compact mode; detail view rounds its own.
+        borderRadius: compact ? 0 : 'var(--mantine-radius-md)',
         overflow: 'hidden',
         backgroundImage: `url(${bgSrc})`,
         backgroundSize: 'cover',
@@ -78,18 +90,18 @@ export function TripCoverBanner({
       )}
 
       <Stack
-        gap={6}
+        gap={compact ? 2 : 6}
         style={{
           position: 'absolute',
-          left: isMobile ? 16 : 24,
-          right: isMobile ? 16 : 24,
-          bottom: isMobile ? 28 : 36,
+          left: padX,
+          right: padX,
+          bottom: padBottom,
           color: 'white',
         }}
       >
-        <Group gap="sm" wrap="wrap">
+        <Group gap={compact ? 'xs' : 'sm'} wrap="wrap">
           <Title
-            order={isMobile ? 3 : 2}
+            order={titleOrder}
             style={{
               margin: 0,
               color: 'white',
@@ -98,12 +110,12 @@ export function TripCoverBanner({
           >
             {title}
           </Title>
-          <Badge color={statusColor} variant="filled" size={isMobile ? 'sm' : 'md'}>
+          <Badge color={statusColor} variant="filled" size={badgeSize}>
             {statusLabel}
           </Badge>
         </Group>
         <Text
-          size="sm"
+          size={dateSize}
           style={{
             color: 'white',
             opacity: 0.95,
