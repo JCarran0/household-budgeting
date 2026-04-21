@@ -51,7 +51,11 @@ function buildDescription(path: string, pageName: string, params: Record<string,
 
   if (path === '/budgets') {
     if (params.month) parts.push(`viewing ${formatMonth(params.month)}`);
-    if (params.view && params.view !== 'budget') parts.push(`${params.view} view`);
+    // Default tab is now 'bva-ii' — suppress the ambient mention and any
+    // lingering references to the retired-in-UI 'budget' tab.
+    if (params.view && params.view !== 'bva-ii' && params.view !== 'budget') {
+      parts.push(`${params.view} view`);
+    }
   } else if (path === '/reports') {
     if (params.type) parts.push(`showing ${params.type}`);
     if (params.timeRange) {

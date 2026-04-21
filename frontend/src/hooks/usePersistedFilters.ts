@@ -180,7 +180,9 @@ export function useBudgetFilters(): BudgetFilterState & BudgetFilterActions {
     return stored || startOfMonth(new Date());
   }, [budgetFilters?.selectedDate]);
   
-  const activeTab = budgetFilters?.activeTab || 'budget';
+  // Default to the new BvA tab (the old 'budget' and 'comparison' tabs are
+  // staged for retirement — see PROJECT_PLAN "Budget Tab Retirement").
+  const activeTab = budgetFilters?.activeTab || 'bva-ii';
   
   const setSelectedDate = useCallback((date: Date) => {
     const dateString = formatDateForStorage(date);

@@ -364,7 +364,7 @@ export function MantineDashboard() {
       {hasBudget ? (
         <Card
           component={Link}
-          to="/budgets?view=comparison"
+          to="/budgets?view=bva-ii"
           padding="lg"
           radius="md"
           withBorder

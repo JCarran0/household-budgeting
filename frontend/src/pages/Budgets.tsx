@@ -411,7 +411,7 @@ export function Budgets() {
                   onClick={() => {
                     const currentMonth = startOfMonth(new Date());
                     handleDateChange(currentMonth);
-                    setActiveTab('budget');
+                    setActiveTab('bva-ii');
                     resetStoredFilters();
                     notifications.show({
                       title: 'View Reset',
@@ -435,19 +435,20 @@ export function Budgets() {
             actualSpending={actualSpending}
           />
 
-          <Tabs value={activeTab} onChange={(value) => setActiveTab(value || 'budget')}>
+          <Tabs value={activeTab} onChange={(value) => setActiveTab(value || 'bva-ii')}>
             <Tabs.List>
-              <Tabs.Tab value="budget" leftSection={<IconCurrencyDollar size={16} />}>
-                Budget Setup
-              </Tabs.Tab>
-              <Tabs.Tab value="comparison" leftSection={<IconChartBar size={16} />}>
-                Budget vs Actual
+              {/*
+                "Budget Setup" (value=budget) and "Budget vs Actual" (value=
+                comparison) are hidden during the new-tab bake period — see
+                PROJECT_PLAN "Budget Tab Retirement." The Panels below still
+                render so bookmarks and ?view= deeplinks continue to resolve
+                until we formally retire the code paths.
+              */}
+              <Tabs.Tab value="bva-ii" leftSection={<IconChartBar size={16} />}>
+                Budget vs. Actuals
               </Tabs.Tab>
               <Tabs.Tab value="yearly" leftSection={<IconCalendar size={16} />}>
                 Yearly View
-              </Tabs.Tab>
-              <Tabs.Tab value="bva-ii" leftSection={<IconChartBar size={16} />}>
-                Budget vs. Actuals II
               </Tabs.Tab>
             </Tabs.List>
 

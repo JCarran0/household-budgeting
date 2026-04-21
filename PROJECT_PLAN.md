@@ -497,6 +497,89 @@ Keep the old subdomain alive as a 301 redirect to the new one.
 
 ---
 
+## Budget Tab Retirement ⏳ BAKE PERIOD
+
+**Status:** Staged for retirement; baking. 2026-04-21.
+
+The new **Budget vs. Actuals** tab (formerly "Budget vs. Actuals II" — BRD at
+`docs/features/BUDGET-VS-ACTUALS-II-BRD.md`) supersedes the two original
+Budget page tabs:
+
+- **Budget Setup** (`?view=budget`) — flat grid + quick-add form. Covered by
+  the new tab's inline edit modal (single-month OR all-future-months).
+- **Budget vs Actual** (`?view=comparison`) — per-category actual-vs-budgeted
+  comparison. Covered by the new tab's five-column accordion (Actual,
+  Budgeted, Rollover, Available) with filters, rollover support, and dismiss.
+
+**Current state (soft hide):**
+- Tab buttons for `budget` and `comparison` are hidden from the `Tabs.List`.
+- `Tabs.Panel` entries still render so existing bookmarks and
+  `?view=budget` / `?view=comparison` deep-links continue to resolve.
+- Default `activeTab` flipped to `bva-ii` in `usePersistedFilters` and
+  `filterStore` defaults.
+- Dashboard "Monthly Budget Status" card now links to `?view=bva-ii`.
+- `usePageContext` treats `bva-ii` as the ambient default (chatbot won't
+  announce "bva-ii view" as unusual).
+- **Yearly View** stays visible — different use case (planning across all
+  months at once) not subsumed by the new tab.
+
+**Retirement tasks (after bake period, TBD):**
+
+- [ ] Delete the two `Tabs.Panel` entries from `frontend/src/pages/Budgets.tsx`
+      (values `budget` and `comparison`).
+- [ ] Delete the following components now unreferenced:
+  - `frontend/src/components/budgets/BudgetGrid.tsx`
+  - `frontend/src/components/budgets/BudgetComparison.tsx`
+  - `frontend/src/components/budgets/BudgetSummaryCards.tsx` (if only the
+    retired tabs used it — verify)
+  - `frontend/src/components/budgets/BudgetForm.tsx` (the old "quick add"
+    form — NOT the new `BudgetEditModal`)
+  - `frontend/src/components/budgets/BudgetDebugger.tsx` (dev-only helper
+    paired with `BudgetComparison`)
+- [ ] Audit Budgets.tsx for now-unused imports, state, and queries:
+  - `comparisonData` / `comparisonLoading` React Query
+  - `copyMutation` + `handleCopyFromMonth` (the "Copy from Previous Month"
+    affordance from the old setup tab)
+  - `availableMonths` / `monthsLoading` (only used by Copy menu)
+  - `budgetedIncome` / `actualIncome` / `budgetedSpending` / `actualSpending`
+    (were passed into `BudgetComparison`)
+  - `hasBudgets`, `setIsFormOpen`, `editingBudget`, and the BudgetForm
+    mount
+- [ ] Audit `frontend/src/lib/api/budgets.ts` for now-unused endpoints:
+  - `getBudgetComparison` (only BudgetComparison consumed it)
+  - `applyRollover` (was never consumed by the retired tabs either — older
+    deprecated path; verify)
+  - `copyBudgets` (only the old setup tab's copy flow used it)
+- [ ] Backend cleanup (if the corresponding API is no longer called):
+  - `POST /api/budgets/comparison/:month` → `backend/src/services/budgetService.ts`
+    `getBudgetComparison` method
+  - `POST /api/budgets/copy` → `copyBudgets` method
+  - `POST /api/budgets/rollover` → `applyRollover` method
+- [ ] Remove the `getBudgetableActualsForCategory` / similar helpers if they
+      only fed the retired comparison path.
+- [ ] Update `CLAUDE.md` Critical Files section to drop pointers to any
+      deleted files; remove the "Budget vs. Actuals II" prefix references
+      and keep just "Budget vs. Actuals."
+- [ ] Rename the URL sentinel from `bva-ii` to `bva` (or similar) only once
+      we're ready to break old bookmarks. This is cosmetic and can happen
+      anytime after the bake; until then the internal value stays `bva-ii`.
+- [ ] Search for other `?view=budget` / `?view=comparison` links
+      (docs, READMEs, test fixtures) and retarget or remove.
+- [ ] Drop the "hidden tabs" comments from `Budgets.tsx` once the Panels
+      actually come out.
+
+**Bake exit criteria (what we're watching for before retiring):**
+- No production errors from the new tab over ~2 weeks of daily use.
+- No "where did my budget setup tab go" requests from the other household
+  user.
+- Filters, edit modal, rollover column, and dismiss behavior all feel
+  correct across months, including January edge case and December's
+  disabled multi-month save.
+- Both users confirm the new layout replaces their mental model of the
+  old tabs (no lingering need to cross-check with `?view=comparison`).
+
+---
+
 ## Ideas to Flesh Out Further (Not Yet Planned)
 
 ### Chatbot — `read_brd` Tool for Design Context
