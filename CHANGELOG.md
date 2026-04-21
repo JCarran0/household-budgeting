@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.46.0](https://github.com/JCarran0/household-budgeting/compare/v5.45.0...v5.46.0) (2026-04-21)
+
+
+### Features
+
+* **trips:** add cover photo banner to trip detail header ([5370522](https://github.com/JCarran0/household-budgeting/commit/537052298e20a68819bfae06785a7db30fc1f831))
+* **trips:** extend cover banner to list cards ([7794afe](https://github.com/JCarran0/household-budgeting/commit/7794afe6262643d2f269bb7b8af9f969986ad5ab))
+
+
+### Documentation
+
+* add app cost visibility BRD ([352a6d6](https://github.com/JCarran0/household-budgeting/commit/352a6d64ace9c34caf14e47fc297f136bf7df49f))
+
 ## [5.45.0](https://github.com/JCarran0/household-budgeting/compare/v5.44.1...v5.45.0) (2026-04-21)
 
 
