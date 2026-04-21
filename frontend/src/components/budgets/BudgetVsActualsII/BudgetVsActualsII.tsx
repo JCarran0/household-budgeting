@@ -1,7 +1,6 @@
 import { Fragment, useMemo, useState, type KeyboardEvent } from 'react';
 import {
   ActionIcon,
-  Badge,
   Box,
   Center,
   Chip,
@@ -264,12 +263,7 @@ export function BudgetVsActualsII({ selectedMonth, active }: BudgetVsActualsIIPr
     return (
       <Paper key={section} withBorder p="sm">
         <Stack gap="xs">
-          <Group justify="space-between">
-            <Title order={5}>{SECTION_LABEL[section]}</Title>
-            <Badge variant="light" color={section === 'income' ? 'green' : section === 'savings' ? 'blue' : 'gray'}>
-              {visible.length} {visible.length === 1 ? 'row' : 'rows'}
-            </Badge>
-          </Group>
+          <Title order={5}>{SECTION_LABEL[section]}</Title>
           <Table striped highlightOnHover>
             <Table.Thead>
               <Table.Tr>
