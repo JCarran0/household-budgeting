@@ -1,10 +1,11 @@
 import { ActionIcon, Group, Paper, Stack, Text, Tooltip } from '@mantine/core';
+import { useHover, useMediaQuery } from '@mantine/hooks';
 import {
   IconEdit,
   IconTrash,
   IconGripVertical,
 } from '@tabler/icons-react';
-import type { CSSProperties, HTMLAttributes } from 'react';
+import type { HTMLAttributes } from 'react';
 import type { Stop, StopLocation, TransitMode } from '../../../../../shared/types';
 import { stopIcon } from './stopIcons';
 import { PlacePhotoThumb } from './PlacePhotoThumb';
@@ -40,6 +41,9 @@ const MODE_LABEL: Record<TransitMode, string> = {
   shuttle: 'Shuttle',
   other: 'Transit',
 };
+
+const TILE_WIDTH = 96;
+const TILE_HEIGHT = 72;
 
 interface StopCardProps {
   stop: Stop;
@@ -89,95 +93,145 @@ export function StopCard({
   const photo = stopPhotoInfo(stop);
   const time = stop.time;
   const secondary = secondaryText(stop);
-
-  const cardStyle: CSSProperties = {
-    paddingInline: 'var(--mantine-spacing-sm)',
-    paddingBlock: 'var(--mantine-spacing-xs)',
-  };
+  const { hovered, ref } = useHover<HTMLDivElement>();
+  // Touch devices can't hover — keep the drag handle visible always so the
+  // reorder affordance stays reachable. On pointer devices, reveal on hover.
+  const isTouch = useMediaQuery('(hover: none)');
+  const handleVisible = Boolean(showDragHandle) && (isTouch || hovered);
 
   return (
-    <Paper withBorder radius="md" style={cardStyle} data-stop-id={stop.id}>
-      <Group gap="sm" wrap="nowrap" align="flex-start">
-        {showDragHandle && (
-          <div
-            {...(dragHandleProps ?? {})}
-            aria-label="Reorder stop"
-            style={{
-              cursor: 'grab',
-              color: 'var(--mantine-color-dimmed)',
-              paddingTop: 2,
-              touchAction: 'none',
-            }}
-          >
-            <IconGripVertical size={14} />
-          </div>
-        )}
-
-        {photo ? (
-          <div style={{ flexShrink: 0 }}>
+    <Paper
+      ref={ref}
+      withBorder
+      radius="md"
+      p={0}
+      data-stop-id={stop.id}
+      style={{ overflow: 'hidden' }}
+    >
+      <Group gap={0} wrap="nowrap" align="stretch">
+        {/* Flush-left photo / icon tile, clipped by the Paper's rounded corners. */}
+        <div
+          style={{
+            position: 'relative',
+            flexShrink: 0,
+            width: TILE_WIDTH,
+            height: TILE_HEIGHT,
+            backgroundColor: photo ? 'transparent' : 'var(--mantine-color-blue-light)',
+          }}
+        >
+          {photo ? (
             <PlacePhotoThumb
               photoName={photo.photoName}
               attribution={photo.photoAttribution ?? null}
-              size={32}
+              size={TILE_WIDTH}
+              height={TILE_HEIGHT}
               alt={photo.alt}
+              radius={0}
             />
-          </div>
-        ) : (
-          <Icon
-            size={18}
-            style={{ color: 'var(--mantine-color-blue-5)', marginTop: 2, flexShrink: 0 }}
-          />
-        )}
+          ) : (
+            <div
+              style={{
+                width: '100%',
+                height: '100%',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: 'var(--mantine-color-blue-filled)',
+              }}
+            >
+              <Icon size={24} />
+            </div>
+          )}
 
-        <div style={{ width: 56, flexShrink: 0 }}>
-          <Text size="sm" c={time ? undefined : 'dimmed'} fw={time ? 500 : 400}>
-            {time ?? '—'}
-          </Text>
+          {showDragHandle && (
+            <div
+              {...(dragHandleProps ?? {})}
+              aria-label="Reorder stop"
+              style={{
+                position: 'absolute',
+                top: 4,
+                left: 4,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                padding: '2px 3px',
+                borderRadius: 4,
+                background: 'rgba(0, 0, 0, 0.5)',
+                color: 'white',
+                cursor: 'grab',
+                touchAction: 'none',
+                opacity: handleVisible ? 1 : 0,
+                pointerEvents: handleVisible ? 'auto' : 'none',
+                transition: 'opacity 120ms ease',
+                zIndex: 2,
+              }}
+            >
+              <IconGripVertical size={14} />
+            </div>
+          )}
         </div>
 
-        <Stack gap={2} style={{ flex: 1, minWidth: 0 }}>
-          <Text size="sm" fw={500} truncate>
-            {primaryText(stop)}
-          </Text>
-          {secondary && (
-            <Text size="xs" c="dimmed" truncate>
-              {secondary}
+        {/* Content */}
+        <Group
+          gap="sm"
+          wrap="nowrap"
+          align="flex-start"
+          style={{
+            flex: 1,
+            minWidth: 0,
+            padding: 'var(--mantine-spacing-xs) var(--mantine-spacing-sm)',
+          }}
+        >
+          <div style={{ width: 56, flexShrink: 0, paddingTop: 2 }}>
+            <Text size="sm" c={time ? undefined : 'dimmed'} fw={time ? 500 : 400}>
+              {time ?? '—'}
             </Text>
-          )}
-          {stop.notes && (
-            <Text size="xs" c="dimmed" lineClamp={2} style={{ fontStyle: 'italic' }}>
-              {stop.notes}
-            </Text>
-          )}
-        </Stack>
+          </div>
 
-        <Group gap={4} wrap="nowrap" style={{ alignSelf: 'center' }}>
-          {onEdit && (
-            <Tooltip label="Edit stop">
-              <ActionIcon
-                size="sm"
-                variant="subtle"
-                color="blue"
-                onClick={() => onEdit(stop)}
-                aria-label="Edit stop"
-              >
-                <IconEdit size={14} />
-              </ActionIcon>
-            </Tooltip>
-          )}
-          {onDelete && (
-            <Tooltip label="Delete stop">
-              <ActionIcon
-                size="sm"
-                variant="subtle"
-                color="red"
-                onClick={() => onDelete(stop)}
-                aria-label="Delete stop"
-              >
-                <IconTrash size={14} />
-              </ActionIcon>
-            </Tooltip>
-          )}
+          <Stack gap={2} style={{ flex: 1, minWidth: 0 }}>
+            <Text size="sm" fw={500} truncate>
+              {primaryText(stop)}
+            </Text>
+            {secondary && (
+              <Text size="xs" c="dimmed" truncate>
+                {secondary}
+              </Text>
+            )}
+            {stop.notes && (
+              <Text size="xs" c="dimmed" lineClamp={2} style={{ fontStyle: 'italic' }}>
+                {stop.notes}
+              </Text>
+            )}
+          </Stack>
+
+          <Group gap={4} wrap="nowrap" style={{ alignSelf: 'center' }}>
+            {onEdit && (
+              <Tooltip label="Edit stop">
+                <ActionIcon
+                  size="sm"
+                  variant="subtle"
+                  color="blue"
+                  onClick={() => onEdit(stop)}
+                  aria-label="Edit stop"
+                >
+                  <IconEdit size={14} />
+                </ActionIcon>
+              </Tooltip>
+            )}
+            {onDelete && (
+              <Tooltip label="Delete stop">
+                <ActionIcon
+                  size="sm"
+                  variant="subtle"
+                  color="red"
+                  onClick={() => onDelete(stop)}
+                  aria-label="Delete stop"
+                >
+                  <IconTrash size={14} />
+                </ActionIcon>
+              </Tooltip>
+            )}
+          </Group>
         </Group>
       </Group>
     </Paper>
