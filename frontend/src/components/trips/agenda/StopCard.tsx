@@ -1,12 +1,13 @@
-import { ActionIcon, Group, Paper, Stack, Text, Tooltip } from '@mantine/core';
-import { useHover, useMediaQuery } from '@mantine/hooks';
+import { ActionIcon, Group, Image, Paper, Stack, Text, Tooltip } from '@mantine/core';
+import { useDisclosure, useHover, useMediaQuery } from '@mantine/hooks';
 import {
   IconEdit,
   IconTrash,
   IconGripVertical,
 } from '@tabler/icons-react';
-import type { HTMLAttributes } from 'react';
+import type { HTMLAttributes, KeyboardEvent, MouseEvent } from 'react';
 import type { Stop, StopLocation, TransitMode } from '../../../../../shared/types';
+import { ResponsiveModal } from '../../ResponsiveModal';
 import { stopIcon } from './stopIcons';
 
 interface StopPhotoInfo {
@@ -43,6 +44,7 @@ const MODE_LABEL: Record<TransitMode, string> = {
 
 const TILE_WIDTH = 96;
 const TILE_HEIGHT = 72;
+const HERO_MAX_WIDTH_PX = 1600;
 
 interface StopCardProps {
   stop: Stop;
@@ -97,12 +99,37 @@ export function StopCard({
   // reorder affordance stays reachable. On pointer devices, reveal on hover.
   const isTouch = useMediaQuery('(hover: none)');
   const handleVisible = Boolean(showDragHandle) && (isTouch || hovered);
+  const [heroOpened, { open: openHero, close: closeHero }] = useDisclosure(false);
 
   const apiKey = import.meta.env.VITE_GOOGLE_PLACES_API_KEY as string | undefined;
   const photoSrc =
     photo && apiKey
       ? `https://places.googleapis.com/v1/${photo.photoName}/media?maxWidthPx=${TILE_WIDTH * 2}&key=${apiKey}`
       : null;
+  const heroSrc =
+    photo && apiKey
+      ? `https://places.googleapis.com/v1/${photo.photoName}/media?maxWidthPx=${HERO_MAX_WIDTH_PX}&key=${apiKey}`
+      : null;
+  const attributionText = photo?.photoAttribution
+    ? `Photo: ${photo.photoAttribution}`
+    : 'Photo via Google';
+
+  const handleTileClick = () => {
+    if (photoSrc) openHero();
+  };
+  const handleTileKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
+    if (!photoSrc) return;
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      openHero();
+    }
+  };
+  // Keep a tap on the drag grip from also opening the hero modal. Drag
+  // gestures (pointerdown) won't fire click, but a non-drag tap on the grip
+  // would bubble to the tile without this stop.
+  const handleGripClick = (e: MouseEvent<HTMLDivElement>) => {
+    e.stopPropagation();
+  };
 
   return (
     <Paper
@@ -115,31 +142,44 @@ export function StopCard({
     >
       {/* Flush-left photo / icon tile, absolutely positioned so its size is
           completely decoupled from the content column — flex min-width/height
-          quirks can't make it grow to match long notes. Photo tile is hard-
-          pinned to 96×72; no-photo tile stretches to the full card height so
-          the blue-light bg fills the gutter. */}
+          quirks can't make it grow to match long notes. Tile width stays 96px;
+          height stretches to the full card so the gutter is always filled —
+          photos use object-fit: cover to crop cleanly when notes push the card
+          taller than TILE_HEIGHT. */}
       <div
+        {...(photoSrc
+          ? {
+              role: 'button',
+              tabIndex: 0,
+              'aria-label': `View ${photo?.alt ?? 'stop'} photo full size`,
+              onClick: handleTileClick,
+              onKeyDown: handleTileKeyDown,
+            }
+          : {})}
         style={{
           position: 'absolute',
           top: 0,
           left: 0,
           width: TILE_WIDTH,
-          height: photo ? TILE_HEIGHT : '100%',
+          height: '100%',
           overflow: 'hidden',
           backgroundColor: photo ? 'transparent' : 'var(--mantine-color-blue-light)',
+          cursor: photoSrc ? 'pointer' : 'default',
         }}
       >
         {photoSrc ? (
-          <img
-            src={photoSrc}
-            alt={photo?.alt ?? ''}
-            style={{
-              display: 'block',
-              width: TILE_WIDTH,
-              height: TILE_HEIGHT,
-              objectFit: 'cover',
-            }}
-          />
+          <Tooltip label={attributionText} withArrow>
+            <img
+              src={photoSrc}
+              alt={photo?.alt ?? ''}
+              style={{
+                display: 'block',
+                width: TILE_WIDTH,
+                height: '100%',
+                objectFit: 'cover',
+              }}
+            />
+          </Tooltip>
         ) : (
           <div
             style={{
@@ -158,6 +198,7 @@ export function StopCard({
         {showDragHandle && (
           <div
             {...(dragHandleProps ?? {})}
+            onClick={handleGripClick}
             aria-label="Reorder stop"
             style={{
               position: 'absolute',
@@ -248,6 +289,28 @@ export function StopCard({
           )}
         </Group>
       </Group>
+
+      {heroSrc && (
+        <ResponsiveModal
+          opened={heroOpened}
+          onClose={closeHero}
+          size="xl"
+          centered
+          title={photo?.alt ?? ''}
+        >
+          <Stack gap="xs">
+            <Image
+              src={heroSrc}
+              alt={photo?.alt ?? ''}
+              fit="contain"
+              style={{ maxHeight: '80vh', width: '100%' }}
+            />
+            <Text size="xs" c="dimmed" ta="right">
+              {attributionText}
+            </Text>
+          </Stack>
+        </ResponsiveModal>
+      )}
     </Paper>
   );
 }
