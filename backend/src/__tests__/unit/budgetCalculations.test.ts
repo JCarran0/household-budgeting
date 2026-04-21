@@ -19,6 +19,10 @@ import {
   classifyTreeBudgetState,
   isTreeUnused,
   isTreeOverBudget,
+  computeRolloverBalance,
+  computeEffectiveBudget,
+  buildEffectiveBudgetsMap,
+  findRolloverSubtreeConflicts,
   type BudgetTotals
 } from '../../shared/utils/budgetCalculations';
 import { Category, MonthlyBudget, Transaction } from '../../shared/types';
@@ -1111,6 +1115,364 @@ describe('Budget Calculation Utilities', () => {
         [{ id: 'b1', categoryId: 'TRAVEL', month: '2026-04', amount: 5000 }],
         new Map([['TRAVEL_FLIGHTS', 4000]]));
       expect(isTreeOverBudget(trees.get('TRAVEL')!)).toBe(false);
+    });
+  });
+
+  // =============================================================================
+  // Rollover Budget Utilities — ROLLOVER-BUDGETS-BRD.md
+  // =============================================================================
+
+  describe('computeRolloverBalance / computeEffectiveBudget', () => {
+    const makeCat = (overrides: Partial<Category> & { id: string }): Category => ({
+      name: overrides.id,
+      parentId: null,
+      isCustom: false,
+      isHidden: false,
+      isRollover: true,
+      isIncome: false,
+      isSavings: false,
+      ...overrides,
+    });
+
+    const spending = makeCat({ id: 'CUSTOM_GAS', isRollover: true });
+    const income = makeCat({ id: 'INCOME_BONUS', isRollover: true, isIncome: true });
+    const savings = makeCat({ id: 'CUSTOM_IRA', isRollover: true, isSavings: true });
+
+    // Worked-example tests from BRD §2.4 table — one per row.
+    // Target month is always February of the same year; January carries into it.
+
+    test('BRD §2.4: spending surplus — prior 100/80 carries +20, next effective 120', () => {
+      const budgets = new Map([['2026-01', 100], ['2026-02', 100]]);
+      const actuals = new Map([['2026-01', 80]]);
+      const balance = computeRolloverBalance(spending, '2026-02', budgets, actuals);
+      expect(balance).toBe(20);
+      expect(computeEffectiveBudget(spending, 100, balance)).toBe(120);
+    });
+
+    test('BRD §2.4: spending deficit — prior 100/120 carries −20, next effective 80', () => {
+      const budgets = new Map([['2026-01', 100], ['2026-02', 100]]);
+      const actuals = new Map([['2026-01', 120]]);
+      const balance = computeRolloverBalance(spending, '2026-02', budgets, actuals);
+      expect(balance).toBe(-20);
+      expect(computeEffectiveBudget(spending, 100, balance)).toBe(80);
+    });
+
+    test('BRD §2.4: income ahead of pace — prior 500/700 carries −200, next effective 300', () => {
+      const budgets = new Map([['2026-01', 500], ['2026-02', 500]]);
+      const actuals = new Map([['2026-01', 700]]);
+      const balance = computeRolloverBalance(income, '2026-02', budgets, actuals);
+      expect(balance).toBe(-200);
+      expect(computeEffectiveBudget(income, 500, balance)).toBe(300);
+    });
+
+    test('BRD §2.4: income behind pace — prior 500/0 carries +500, next effective 1000', () => {
+      const budgets = new Map([['2026-01', 500], ['2026-02', 500]]);
+      const actuals = new Map([['2026-01', 0]]);
+      const balance = computeRolloverBalance(income, '2026-02', budgets, actuals);
+      expect(balance).toBe(500);
+      expect(computeEffectiveBudget(income, 500, balance)).toBe(1000);
+    });
+
+    test('BRD §2.4: savings behind target — prior 500/300 carries +200, next effective 700', () => {
+      const budgets = new Map([['2026-01', 500], ['2026-02', 500]]);
+      const actuals = new Map([['2026-01', 300]]);
+      const balance = computeRolloverBalance(savings, '2026-02', budgets, actuals);
+      expect(balance).toBe(200);
+      expect(computeEffectiveBudget(savings, 500, balance)).toBe(700);
+    });
+
+    test('BRD §2.4: savings ahead of target — prior 500/800 carries −300, next effective 200', () => {
+      const budgets = new Map([['2026-01', 500], ['2026-02', 500]]);
+      const actuals = new Map([['2026-01', 800]]);
+      const balance = computeRolloverBalance(savings, '2026-02', budgets, actuals);
+      expect(balance).toBe(-300);
+      expect(computeEffectiveBudget(savings, 500, balance)).toBe(200);
+    });
+
+    test('REQ-001: isRollover=false returns 0 regardless of data', () => {
+      const notFlagged = makeCat({ id: 'CUSTOM_GROCERIES', isRollover: false });
+      const budgets = new Map([['2026-01', 100]]);
+      const actuals = new Map([['2026-01', 250]]);
+      expect(computeRolloverBalance(notFlagged, '2026-02', budgets, actuals)).toBe(0);
+      expect(computeEffectiveBudget(notFlagged, 100, 9999)).toBe(100);
+    });
+
+    test('REQ-005: January unconditionally returns 0 — no prior months in year', () => {
+      const budgets = new Map([['2025-12', 100]]); // prior year data irrelevant
+      const actuals = new Map([['2025-12', 0]]);
+      expect(computeRolloverBalance(spending, '2026-01', budgets, actuals)).toBe(0);
+    });
+
+    test('REQ-005: January of any year returns 0 for all category types', () => {
+      const budgets = new Map<string, number>();
+      const actuals = new Map<string, number>();
+      expect(computeRolloverBalance(spending, '2000-01', budgets, actuals)).toBe(0);
+      expect(computeRolloverBalance(income, '2030-01', budgets, actuals)).toBe(0);
+      expect(computeRolloverBalance(savings, '2099-01', budgets, actuals)).toBe(0);
+    });
+
+    test('REQ-002 defense: transfer categories always return 0', () => {
+      const transfer: Category = makeCat({ id: 'TRANSFER_OUT_SAVINGS', isRollover: true });
+      const budgets = new Map([['2026-01', 100]]);
+      const actuals = new Map([['2026-01', 50]]);
+      expect(computeRolloverBalance(transfer, '2026-02', budgets, actuals)).toBe(0);
+    });
+
+    test('REQ-008: negative effective budget is preserved', () => {
+      // Feb target with Jan overspend: $100 budget, $500 actual → Jan carries −$400.
+      // March effective = $100 + (−$400) = −$300.
+      const budgets = new Map([['2026-01', 100], ['2026-02', 100]]);
+      const actuals = new Map([['2026-01', 500]]);
+      const balance = computeRolloverBalance(spending, '2026-02', budgets, actuals);
+      expect(balance).toBe(-400);
+      expect(computeEffectiveBudget(spending, 100, balance)).toBe(-300);
+    });
+
+    test('REQ-014: mid-year activation sums all prior months of current year', () => {
+      // April target: sum of Jan + Feb + Mar (budgeted − actual).
+      const budgets = new Map([
+        ['2026-01', 100],
+        ['2026-02', 100],
+        ['2026-03', 100],
+        ['2026-04', 100],
+      ]);
+      const actuals = new Map([
+        ['2026-01', 80],   // +20
+        ['2026-02', 90],   // +10
+        ['2026-03', 110],  // -10
+      ]);
+      const balance = computeRolloverBalance(spending, '2026-04', budgets, actuals);
+      expect(balance).toBe(20); // 20 + 10 − 10
+      expect(computeEffectiveBudget(spending, 100, balance)).toBe(120);
+    });
+
+    test('REQ-012: year boundary resets — Jan 2027 carries 0 regardless of Dec 2026 data', () => {
+      const budgets = new Map([
+        ['2026-12', 500],
+        ['2027-01', 100],
+      ]);
+      const actuals = new Map([['2026-12', 0]]); // would carry +500 if not for reset
+      expect(computeRolloverBalance(spending, '2027-01', budgets, actuals)).toBe(0);
+    });
+
+    test('missing budget/actual entries default to 0 — no ReferenceError', () => {
+      // Sparse data — only February has entries; prior months default to 0.
+      const budgets = new Map([['2026-03', 100]]);
+      const actuals = new Map([['2026-02', 50]]);
+      // Jan: 0 budget − 0 actual = 0; Feb: 0 budget − 50 actual = −50.
+      expect(computeRolloverBalance(spending, '2026-03', budgets, actuals)).toBe(-50);
+    });
+
+    test('malformed targetMonth returns 0', () => {
+      const budgets = new Map([['2026-01', 100]]);
+      const actuals = new Map([['2026-01', 50]]);
+      expect(computeRolloverBalance(spending, 'bogus', budgets, actuals)).toBe(0);
+      expect(computeRolloverBalance(spending, '2026-13', budgets, actuals)).toBe(0);
+      expect(computeRolloverBalance(spending, '26-04', budgets, actuals)).toBe(0);
+    });
+  });
+
+  describe('buildEffectiveBudgetsMap', () => {
+    const cats: Category[] = [
+      { id: 'FOOD_AND_DRINK', name: 'Food & Drink', parentId: null, isCustom: false, isHidden: false, isRollover: true, isIncome: false, isSavings: false },
+      { id: 'CUSTOM_GAS', name: 'Gas', parentId: null, isCustom: true, isHidden: false, isRollover: true, isIncome: false, isSavings: false },
+      { id: 'CUSTOM_GROCERIES', name: 'Groceries', parentId: 'FOOD_AND_DRINK', isCustom: true, isHidden: false, isRollover: false, isIncome: false, isSavings: false },
+      { id: 'TRANSFER_OUT_SAVINGS', name: 'Transfer', parentId: null, isCustom: false, isHidden: false, isRollover: false, isIncome: false, isSavings: false },
+    ];
+
+    test('rollover category accrues balance into target-month effective', () => {
+      const budgets = new Map<string, Map<string, number>>([
+        ['CUSTOM_GAS', new Map([['2026-01', 100], ['2026-02', 100], ['2026-03', 100]])],
+      ]);
+      const actuals = new Map<string, Map<string, number>>([
+        ['CUSTOM_GAS', new Map([['2026-01', 40], ['2026-02', 50]])],
+      ]);
+      const map = buildEffectiveBudgetsMap(cats, '2026-03', budgets, actuals);
+      // Carry = (100−40) + (100−50) = 110. Effective = 100 + 110 = 210.
+      expect(map.get('CUSTOM_GAS')).toBe(210);
+    });
+
+    test('non-rollover category passes raw budget through unchanged', () => {
+      const budgets = new Map<string, Map<string, number>>([
+        ['CUSTOM_GROCERIES', new Map([['2026-01', 400], ['2026-03', 400]])],
+      ]);
+      const actuals = new Map<string, Map<string, number>>([
+        ['CUSTOM_GROCERIES', new Map([['2026-01', 999]])],
+      ]);
+      const map = buildEffectiveBudgetsMap(cats, '2026-03', budgets, actuals);
+      expect(map.get('CUSTOM_GROCERIES')).toBe(400);
+    });
+
+    test('transfer category passes raw through — no rollover applied even if flagged', () => {
+      const budgets = new Map<string, Map<string, number>>([
+        ['TRANSFER_OUT_SAVINGS', new Map([['2026-01', 200], ['2026-03', 200]])],
+      ]);
+      const actuals = new Map<string, Map<string, number>>([
+        ['TRANSFER_OUT_SAVINGS', new Map([['2026-01', 0]])],
+      ]);
+      const map = buildEffectiveBudgetsMap(cats, '2026-03', budgets, actuals);
+      expect(map.get('TRANSFER_OUT_SAVINGS')).toBe(200);
+    });
+
+    test('categories with no raw budget and zero rollover contribution are omitted', () => {
+      const budgets = new Map<string, Map<string, number>>();
+      const actuals = new Map<string, Map<string, number>>();
+      const map = buildEffectiveBudgetsMap(cats, '2026-03', budgets, actuals);
+      expect(map.size).toBe(0);
+    });
+
+    test('January target — rollover categories get raw passthrough (REQ-005)', () => {
+      const budgets = new Map<string, Map<string, number>>([
+        ['CUSTOM_GAS', new Map([['2026-01', 100]])],
+      ]);
+      const actuals = new Map<string, Map<string, number>>();
+      const map = buildEffectiveBudgetsMap(cats, '2026-01', budgets, actuals);
+      expect(map.get('CUSTOM_GAS')).toBe(100);
+    });
+
+    test('feeds buildCategoryTreeAggregation via budgetsOverride — max rule uses effective values', () => {
+      // Parent FOOD_AND_DRINK is rollover; child CUSTOM_GROCERIES is not.
+      // Build effective budgets for March, then rollup. Parent's effective should
+      // include Jan+Feb carry; children pass through raw.
+      const budgets = new Map<string, Map<string, number>>([
+        ['FOOD_AND_DRINK', new Map([['2026-01', 800], ['2026-02', 800], ['2026-03', 800]])],
+        ['CUSTOM_GROCERIES', new Map([['2026-03', 300]])],
+      ]);
+      const actuals = new Map<string, Map<string, number>>([
+        ['FOOD_AND_DRINK', new Map([['2026-01', 500], ['2026-02', 600]])], // carry +300 + +200 = +500
+      ]);
+      const effective = buildEffectiveBudgetsMap(cats, '2026-03', budgets, actuals);
+      expect(effective.get('FOOD_AND_DRINK')).toBe(1300); // 800 + 500
+
+      const trees = buildCategoryTreeAggregation(
+        cats,
+        [], // ignored when budgetsOverride present
+        new Map(),
+        { budgetsOverride: effective },
+      );
+      const food = trees.get('FOOD_AND_DRINK')!;
+      expect(food.directBudget).toBe(1300);
+      expect(food.childBudgetSum).toBe(300);
+      expect(food.effectiveBudget).toBe(1300); // max(1300, 300)
+    });
+  });
+
+  describe('buildCategoryTreeAggregation with budgetsOverride', () => {
+    const cats: Category[] = [
+      { id: 'TRAVEL', name: 'Travel', parentId: null, isCustom: false, isHidden: false, isRollover: false, isIncome: false, isSavings: false },
+      { id: 'TRAVEL_FLIGHTS', name: 'Flights', parentId: 'TRAVEL', isCustom: false, isHidden: false, isRollover: false, isIncome: false, isSavings: false },
+      { id: 'TRAVEL_LODGING', name: 'Lodging', parentId: 'TRAVEL', isCustom: false, isHidden: false, isRollover: false, isIncome: false, isSavings: false },
+      { id: 'TRANSFER_IN', name: 'Transfer In', parentId: null, isCustom: false, isHidden: false, isRollover: false, isIncome: false, isSavings: false },
+    ];
+
+    test('override replaces budgets array entirely — raw budgets ignored', () => {
+      const rawBudgets: MonthlyBudget[] = [
+        { id: 'b1', categoryId: 'TRAVEL', month: '2026-04', amount: 5000 },
+      ];
+      const override = new Map([
+        ['TRAVEL', 1200],
+        ['TRAVEL_FLIGHTS', 800],
+      ]);
+      const trees = buildCategoryTreeAggregation(cats, rawBudgets, new Map(), {
+        budgetsOverride: override,
+      });
+      const travel = trees.get('TRAVEL')!;
+      expect(travel.directBudget).toBe(1200);
+      expect(travel.childBudgetSum).toBe(800);
+      expect(travel.effectiveBudget).toBe(1200); // max(1200, 800)
+    });
+
+    test('override values may be negative (rollover overspend) — directBudget carries sign', () => {
+      const override = new Map([['TRAVEL', -300]]);
+      const trees = buildCategoryTreeAggregation(cats, [], new Map(), {
+        budgetsOverride: override,
+      });
+      const travel = trees.get('TRAVEL')!;
+      expect(travel.directBudget).toBe(-300);
+      // Note: existing Math.max rule folds in Σ children = 0 → effective = 0.
+      // This is the literal BRD REQ-022 behavior; negative parent budgets with
+      // zero-budgeted children display as 0 at the rolled-up parent level.
+      expect(travel.effectiveBudget).toBe(0);
+    });
+
+    test('override respects excludeTransfers — transfer override entry does not produce a tree', () => {
+      const override = new Map([
+        ['TRAVEL', 1000],
+        ['TRANSFER_IN', 500],
+      ]);
+      const trees = buildCategoryTreeAggregation(cats, [], new Map(), {
+        budgetsOverride: override,
+      });
+      expect(trees.has('TRAVEL')).toBe(true);
+      expect(trees.has('TRANSFER_IN')).toBe(false);
+    });
+
+    test('actuals still sourced from the actuals argument regardless of override', () => {
+      const override = new Map([['TRAVEL', 1000]]);
+      const actuals = new Map([['TRAVEL_FLIGHTS', 750]]);
+      const trees = buildCategoryTreeAggregation(cats, [], actuals, {
+        budgetsOverride: override,
+      });
+      const travel = trees.get('TRAVEL')!;
+      expect(travel.effectiveActual).toBe(750);
+      expect(travel.directBudget).toBe(1000);
+    });
+  });
+
+  describe('findRolloverSubtreeConflicts', () => {
+    test('no conflicts when only parents OR only children are flagged', () => {
+      const cats: Category[] = [
+        { id: 'TRAVEL', name: 'Travel', parentId: null, isCustom: false, isHidden: false, isRollover: true, isIncome: false, isSavings: false },
+        { id: 'TRAVEL_FLIGHTS', name: 'Flights', parentId: 'TRAVEL', isCustom: false, isHidden: false, isRollover: false, isIncome: false, isSavings: false },
+        { id: 'FOOD_AND_DRINK', name: 'Food', parentId: null, isCustom: false, isHidden: false, isRollover: false, isIncome: false, isSavings: false },
+        { id: 'CUSTOM_GROCERIES', name: 'Groceries', parentId: 'FOOD_AND_DRINK', isCustom: true, isHidden: false, isRollover: true, isIncome: false, isSavings: false },
+      ];
+      expect(findRolloverSubtreeConflicts(cats)).toEqual([]);
+    });
+
+    test('parent + single flagged child surfaces a conflict', () => {
+      const cats: Category[] = [
+        { id: 'TRAVEL', name: 'Travel', parentId: null, isCustom: false, isHidden: false, isRollover: true, isIncome: false, isSavings: false },
+        { id: 'TRAVEL_FLIGHTS', name: 'Flights', parentId: 'TRAVEL', isCustom: false, isHidden: false, isRollover: true, isIncome: false, isSavings: false },
+        { id: 'TRAVEL_LODGING', name: 'Lodging', parentId: 'TRAVEL', isCustom: false, isHidden: false, isRollover: false, isIncome: false, isSavings: false },
+      ];
+      expect(findRolloverSubtreeConflicts(cats)).toEqual([
+        { parentId: 'TRAVEL', childIds: ['TRAVEL_FLIGHTS'] },
+      ]);
+    });
+
+    test('parent + multiple flagged children lists all children', () => {
+      const cats: Category[] = [
+        { id: 'TRAVEL', name: 'Travel', parentId: null, isCustom: false, isHidden: false, isRollover: true, isIncome: false, isSavings: false },
+        { id: 'TRAVEL_FLIGHTS', name: 'Flights', parentId: 'TRAVEL', isCustom: false, isHidden: false, isRollover: true, isIncome: false, isSavings: false },
+        { id: 'TRAVEL_LODGING', name: 'Lodging', parentId: 'TRAVEL', isCustom: false, isHidden: false, isRollover: true, isIncome: false, isSavings: false },
+      ];
+      expect(findRolloverSubtreeConflicts(cats)).toEqual([
+        { parentId: 'TRAVEL', childIds: ['TRAVEL_FLIGHTS', 'TRAVEL_LODGING'] },
+      ]);
+    });
+
+    test('multiple conflicted subtrees each surface independently', () => {
+      const cats: Category[] = [
+        { id: 'TRAVEL', name: 'Travel', parentId: null, isCustom: false, isHidden: false, isRollover: true, isIncome: false, isSavings: false },
+        { id: 'TRAVEL_FLIGHTS', name: 'Flights', parentId: 'TRAVEL', isCustom: false, isHidden: false, isRollover: true, isIncome: false, isSavings: false },
+        { id: 'FOOD_AND_DRINK', name: 'Food', parentId: null, isCustom: false, isHidden: false, isRollover: true, isIncome: false, isSavings: false },
+        { id: 'CUSTOM_GROCERIES', name: 'Groceries', parentId: 'FOOD_AND_DRINK', isCustom: true, isHidden: false, isRollover: true, isIncome: false, isSavings: false },
+      ];
+      const conflicts = findRolloverSubtreeConflicts(cats);
+      expect(conflicts).toHaveLength(2);
+      expect(conflicts).toContainEqual({ parentId: 'TRAVEL', childIds: ['TRAVEL_FLIGHTS'] });
+      expect(conflicts).toContainEqual({ parentId: 'FOOD_AND_DRINK', childIds: ['CUSTOM_GROCERIES'] });
+    });
+
+    test('child flagged without parent flagged is never a conflict', () => {
+      const cats: Category[] = [
+        { id: 'FOOD_AND_DRINK', name: 'Food', parentId: null, isCustom: false, isHidden: false, isRollover: false, isIncome: false, isSavings: false },
+        { id: 'CUSTOM_GROCERIES', name: 'Groceries', parentId: 'FOOD_AND_DRINK', isCustom: true, isHidden: false, isRollover: true, isIncome: false, isSavings: false },
+        { id: 'CUSTOM_RESTAURANTS', name: 'Restaurants', parentId: 'FOOD_AND_DRINK', isCustom: true, isHidden: false, isRollover: true, isIncome: false, isSavings: false },
+      ];
+      // Multiple siblings flagged is fine — only parent+child chain is a conflict.
+      expect(findRolloverSubtreeConflicts(cats)).toEqual([]);
     });
   });
 });

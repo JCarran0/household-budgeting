@@ -8,7 +8,7 @@
 import type { Category, MonthlyBudget, Transaction } from '../types';
 import {
   isIncomeCategoryWithCategories,
-  isTransferCategory
+  isTransferCategory,
 } from './categoryHelpers';
 
 /**
@@ -550,6 +550,16 @@ export interface BuildTreeAggregationOptions {
   excludeTransfers?: boolean;
   /** Exclude hidden categories (and children of hidden parents). Defaults to true. */
   excludeHidden?: boolean;
+  /**
+   * When provided, replaces the `budgets` argument as the source of per-category
+   * budget amounts for this rollup. Consumers that need rollover-aware effective
+   * values (per ROLLOVER-BUDGETS-BRD REQ-022) call buildEffectiveBudgetsMap first
+   * and pass the result here. Categories absent from the map contribute 0.
+   *
+   * Values may be negative — rollover can produce negative effective budgets
+   * when a category has overspent its annual plan.
+   */
+  budgetsOverride?: Map<string, number>;
 }
 
 /**
@@ -579,6 +589,7 @@ export function buildCategoryTreeAggregation(
     excludeSavings = false,
     excludeTransfers = true,
     excludeHidden = true,
+    budgetsOverride,
   } = options;
 
   const actualsMap: Map<string, number> = actuals instanceof Map
@@ -639,19 +650,38 @@ export function buildCategoryTreeAggregation(
     return child;
   };
 
-  // Fold budgets into trees.
-  for (const budget of budgets) {
-    if (isExcluded(budget.categoryId)) continue;
-    const parentId = resolveParentId(budget.categoryId);
-    if (!parentId) continue;
-    const tree = ensureTree(parentId);
-    if (!tree) continue;
-    if (budget.categoryId === parentId) {
-      tree.directBudget += budget.amount;
-    } else {
-      tree.childBudgetSum += budget.amount;
-      const child = ensureChild(tree, budget.categoryId);
-      if (child) child.budgeted += budget.amount;
+  // Fold budgets into trees. When budgetsOverride is provided, source per-category
+  // amounts from it (pre-computed effective values, e.g. rollover-adjusted) and
+  // ignore the raw budgets argument — see ROLLOVER-BUDGETS-BRD REQ-022.
+  if (budgetsOverride) {
+    for (const [categoryId, amount] of budgetsOverride) {
+      if (isExcluded(categoryId)) continue;
+      const parentId = resolveParentId(categoryId);
+      if (!parentId) continue;
+      const tree = ensureTree(parentId);
+      if (!tree) continue;
+      if (categoryId === parentId) {
+        tree.directBudget += amount;
+      } else {
+        tree.childBudgetSum += amount;
+        const child = ensureChild(tree, categoryId);
+        if (child) child.budgeted += amount;
+      }
+    }
+  } else {
+    for (const budget of budgets) {
+      if (isExcluded(budget.categoryId)) continue;
+      const parentId = resolveParentId(budget.categoryId);
+      if (!parentId) continue;
+      const tree = ensureTree(parentId);
+      if (!tree) continue;
+      if (budget.categoryId === parentId) {
+        tree.directBudget += budget.amount;
+      } else {
+        tree.childBudgetSum += budget.amount;
+        const child = ensureChild(tree, budget.categoryId);
+        if (child) child.budgeted += budget.amount;
+      }
     }
   }
 
@@ -813,4 +843,187 @@ export function buildPeriodRollup(
   }
 
   return period;
+}
+
+// =============================================================================
+// Rollover Budget Utilities
+// (ROLLOVER-BUDGETS-BRD.md — derive-on-read, calendar-year, symmetric signed carry)
+// =============================================================================
+
+/**
+ * Parse YYYY-MM into { year, monthIndex (1-12) }. Returns null for malformed input.
+ */
+function parseYearMonth(month: string): { year: number; monthIndex: number } | null {
+  if (typeof month !== 'string' || month.length !== 7 || month[4] !== '-') return null;
+  const year = Number(month.slice(0, 4));
+  const monthIndex = Number(month.slice(5, 7));
+  if (!Number.isInteger(year) || !Number.isInteger(monthIndex)) return null;
+  if (monthIndex < 1 || monthIndex > 12) return null;
+  return { year, monthIndex };
+}
+
+function formatYearMonth(year: number, monthIndex: number): string {
+  return `${year.toString().padStart(4, '0')}-${monthIndex.toString().padStart(2, '0')}`;
+}
+
+/**
+ * Compute a single category's rollover balance for the target month.
+ *
+ *   balance(cat, month) = Σ (budgeted_i − actual_i) for i = Jan(Y) .. month − 1
+ *
+ * Math is type-agnostic. Goodness coloring is the consumer's job.
+ * Calendar-year period only. December 31 residual evaporates on January 1.
+ * Derived on every read — no caching. 2-user scale is trivially cheap;
+ * do not add memoization without a perf regression.
+ *
+ * Returns 0 when:
+ *   - category.isRollover is false (REQ-001 passthrough)
+ *   - category is not budgetable (transfers — REQ-002 defense)
+ *   - targetMonth is YYYY-01 — no prior months in the calendar year (REQ-005)
+ *   - targetMonth is malformed
+ *
+ * The caller is responsible for having filtered actuals upstream to exclude
+ * removed and transfer transactions (per shared/utils/transactionReader +
+ * shared/utils/transactionCalculations conventions). This utility does not
+ * re-derive actuals from raw transactions.
+ *
+ * Month-string handling: accepts pre-computed YYYY-MM and does not re-derive
+ * from a Date. Every consumer that passes month strings must already be
+ * anchored to US Eastern Time per the 2026-04 date-boundary fix.
+ */
+export function computeRolloverBalance(
+  category: Category,
+  targetMonth: string,
+  budgetsByMonth: Map<string, number>,
+  actualsByMonth: Map<string, number>,
+): number {
+  if (!category.isRollover) return 0;
+  if (isTransferCategory(category.id)) return 0;
+
+  const parsed = parseYearMonth(targetMonth);
+  if (!parsed) return 0;
+  if (parsed.monthIndex === 1) return 0;
+
+  let balance = 0;
+  for (let m = 1; m < parsed.monthIndex; m++) {
+    const key = formatYearMonth(parsed.year, m);
+    const budgeted = budgetsByMonth.get(key) ?? 0;
+    const actual = actualsByMonth.get(key) ?? 0;
+    balance += budgeted - actual;
+  }
+  return balance;
+}
+
+/**
+ * Combine a raw budget with a rollover balance.
+ *
+ *   effective = category.isRollover ? rawBudget + rolloverBalance : rawBudget
+ *
+ * Effective budgets may be negative when the user has overspent the annual
+ * plan. Negative is a legitimate state, not an error — consumers display the
+ * signed value literally with explanatory copy.
+ */
+export function computeEffectiveBudget(
+  category: Category,
+  rawBudget: number,
+  rolloverBalance: number,
+): number {
+  return category.isRollover ? rawBudget + rolloverBalance : rawBudget;
+}
+
+/**
+ * Per-category effective budget for a target month.
+ *
+ * For each category, looks up the raw budget for the target month, computes
+ * the rollover balance when flagged, and returns their sum. Non-rollover
+ * categories pass through raw. Transfers pass through raw (they cannot be
+ * rollover per REQ-002); they are filtered downstream by
+ * buildCategoryTreeAggregation's excludeTransfers.
+ *
+ * Output shape is optimized to feed buildCategoryTreeAggregation via the
+ * `budgetsOverride` option — the existing max(parent, Σ children) rollup then
+ * naturally operates on effective values (REQ-022). Categories with no raw
+ * budget and no non-zero rollover contribution are omitted to keep the map
+ * lean.
+ *
+ * @param categories All categories for the family.
+ * @param targetMonth YYYY-MM for which to compute effective budgets.
+ * @param budgetsByCategoryByMonth Raw budgets grouped by categoryId then YYYY-MM.
+ * @param actualsByCategoryByMonth Actuals grouped by categoryId then YYYY-MM.
+ *        Must be filtered upstream to exclude removed and transfer transactions
+ *        (shared/utils/transactionReader conventions — shared/ cannot import
+ *        backend/, so consumers apply the canonical predicate themselves).
+ * @returns Map<categoryId, number> of effective budgets.
+ */
+export function buildEffectiveBudgetsMap(
+  categories: Category[],
+  targetMonth: string,
+  budgetsByCategoryByMonth: Map<string, Map<string, number>>,
+  actualsByCategoryByMonth: Map<string, Map<string, number>>,
+): Map<string, number> {
+  const effective = new Map<string, number>();
+  const emptyMonthMap: Map<string, number> = new Map();
+
+  for (const category of categories) {
+    const budgets = budgetsByCategoryByMonth.get(category.id) ?? emptyMonthMap;
+    const actuals = actualsByCategoryByMonth.get(category.id) ?? emptyMonthMap;
+    const rawBudget = budgets.get(targetMonth) ?? 0;
+
+    if (isTransferCategory(category.id)) {
+      // REQ-002 defense: transfers cannot be rollover. Pass raw through.
+      if (rawBudget !== 0) effective.set(category.id, rawBudget);
+      continue;
+    }
+
+    const balance = computeRolloverBalance(category, targetMonth, budgets, actuals);
+    const value = computeEffectiveBudget(category, rawBudget, balance);
+
+    if (value !== 0) {
+      effective.set(category.id, value);
+    }
+  }
+
+  return effective;
+}
+
+/**
+ * Detect rollover subtree conflicts — categories flagged isRollover=true where
+ * an ancestor or descendant in the same subtree is also flagged (ROLLOVER-BUDGETS-BRD §3.1).
+ *
+ * The category hierarchy is two levels deep (REQ-021), so conflicts reduce to
+ * parent+child pairs within the same subtree. If the hierarchy is ever
+ * deepened, this function must generalize to "at most one node per ancestor
+ * chain."
+ *
+ * Used by:
+ *   - Backend categoryService to reject invalid updates (REQ-019).
+ *   - Frontend Categories page for an optional pre-flight check that opens the
+ *     confirmation modal without a server round-trip (REQ-019: frontend is
+ *     convenience; backend is correctness).
+ *
+ * @param categories All categories for the family.
+ * @returns One entry per parent whose subtree contains a conflict. Each entry
+ *          lists the flagged children alongside the parent. Empty array when
+ *          no conflicts exist.
+ */
+export function findRolloverSubtreeConflicts(
+  categories: Category[],
+): Array<{ parentId: string; childIds: string[] }> {
+  const conflicts: Array<{ parentId: string; childIds: string[] }> = [];
+
+  for (const parent of categories) {
+    if (parent.parentId !== null) continue;
+    if (!parent.isRollover) continue;
+    const flaggedChildren = categories.filter(
+      c => c.parentId === parent.id && c.isRollover,
+    );
+    if (flaggedChildren.length > 0) {
+      conflicts.push({
+        parentId: parent.id,
+        childIds: flaggedChildren.map(c => c.id),
+      });
+    }
+  }
+
+  return conflicts;
 }

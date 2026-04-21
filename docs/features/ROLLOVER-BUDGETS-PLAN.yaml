@@ -4,9 +4,17 @@ status: draft
 created: 2026-04-21
 last_updated: 2026-04-21
 last_updated_note: |
-  2026-04-21 — Pre-existing no-op-era subtree conflicts reconciled manually
-  in the Categories UI against prod-synced data. 7 parents unflagged (Cash,
-  Clothing and Personal Care, Discretionary, Financial, Food Dining
+  2026-04-21 — Phase 1 shipped: computeRolloverBalance, computeEffectiveBudget,
+  buildEffectiveBudgetsMap, findRolloverSubtreeConflicts added to
+  shared/utils/budgetCalculations.ts; buildCategoryTreeAggregation extended
+  with optional budgetsOverride. 24 new tests covering the BRD §2.4 worked
+  examples, boundary cases (January reset, year boundary, mid-year
+  activation, malformed input, missing data), transfer passthrough,
+  negative-effective preservation, and subtree-conflict detection.
+
+  Earlier same day — Pre-existing no-op-era subtree conflicts reconciled
+  manually in the Categories UI against prod-synced data. 7 parents unflagged
+  (Cash, Clothing and Personal Care, Discretionary, Financial, Food Dining
   Entertainment, Gifts and Special Occasions, House Stuff). Post-cleanup
   state: 51 categories flagged, 0 conflicts. Phase 4 (in-app data-integrity
   prompt) dropped as no longer needed. OQ-P1 resolved N/A.
@@ -74,7 +82,7 @@ phases:
 
   - phase: 1
     name: Shared Rollover Utility + Tests
-    status: pending
+    status: shipped
     blocks: [BUDGET-VS-ACTUALS-II Phase 2]
     goals:
       - Land the rollover math as a single-source-of-truth utility in shared/utils
