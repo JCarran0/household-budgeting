@@ -223,7 +223,7 @@ export function BudgetEditModal({
 
           {category.isRollover && useRolloverToggleOn && (
             <Alert icon={<IconInfoCircle size={16} />} color="grape" variant="light">
-              Changing this budget will recompute rollover balance for all prior months of the current calendar year.
+              Because this category uses rollover, changing this budget also updates the Available column in later months of the same calendar year.
             </Alert>
           )}
 
@@ -256,7 +256,7 @@ export function BudgetEditModal({
 
           {category.isRollover && (
             <Alert icon={<IconAlertCircle size={16} />} color="grape" variant="light">
-              This category uses rollover. Changing budgets will recompute rollover balance for all affected months.
+              Because this category uses rollover, these changes will also update the Available column in later months of the same calendar year.
             </Alert>
           )}
 

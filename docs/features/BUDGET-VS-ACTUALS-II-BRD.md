@@ -236,7 +236,7 @@ The per-section goodness mapping happens implicitly inside the Available calcula
 - Category type indicator (Spending / Income / Savings).
 - A month selector, pre-filled with the current page month but editable. Changing it updates the "primary action" button label (§5.3).
 - Current budget amount for the selected month (editable number input). If no budget record exists for that month, the input starts blank with placeholder `$0.00`.
-- If the category is `isRollover=true` and the Use Rollover toggle is on: a read-only display of the effective budget, with a note: *"Changing this budget will recompute rollover balance for all prior months of the current calendar year."*
+- If the category is `isRollover=true` and the Use Rollover toggle is on: a read-only display of the effective budget, with a note: *"Because this category uses rollover, changing this budget also updates the Available column in later months of the same calendar year."* (Rollover for a given month sums prior-month budgets and actuals — so an edit to month M ripples into months after M, not before.)
 - Two primary action buttons per §5.3.
 - Cancel button.
 
@@ -273,7 +273,7 @@ The per-section goodness mapping happens implicitly inside the Available calcula
 
 **REQ-041:** "Update all future" **always overwrites**. It does not skip months that already have a value. The confirmation modal's explicit before/after display is the safety mechanism. This choice is intentional: "Update all future months" to a new value, but silently skipping months that already differ, is the opposite of what the label says.
 
-**REQ-042:** For rollover-flagged categories, the confirmation modal must include an extra callout: *"This category uses rollover. Changing budgets will recompute rollover balance for all affected months."*
+**REQ-042:** For rollover-flagged categories, the confirmation modal must include an extra callout: *"Because this category uses rollover, these changes will also update the Available column in later months of the same calendar year."*
 
 ### 5.5 Parent vs. Child Edits
 
