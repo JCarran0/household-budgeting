@@ -79,10 +79,16 @@ function formatSignedVariance(variance: number): string {
   return formatCurrency(0);
 }
 
-/** A11y pair for color — icon carries direction for colorblind users (REQ-051). */
-function toneIcon(tone: VarianceTone) {
-  if (tone === 'favorable') return <IconTrendingUp size={14} />;
-  if (tone === 'unfavorable') return <IconTrendingDown size={14} />;
+/**
+ * A11y pair for color — the arrow tracks the sign of the variance (did the
+ * number go up or down?), which is independent of goodness. Color still
+ * carries favorable / unfavorable per section (REQ-051). Example: spending
+ * variance +$7,556 renders trending-up in red — "spending went up, which is
+ * bad for spending."
+ */
+function directionIcon(variance: number) {
+  if (variance > 0) return <IconTrendingUp size={14} />;
+  if (variance < 0) return <IconTrendingDown size={14} />;
   return <IconMinus size={14} />;
 }
 
@@ -249,7 +255,7 @@ export function BudgetVsActualsII({ selectedMonth, active }: BudgetVsActualsIIPr
         <Text c={color} fw={500} component="span">
           {formatSignedVariance(variance)}
         </Text>
-        <Text c={color} component="span" aria-hidden>{toneIcon(tone)}</Text>
+        <Text c={color} component="span" aria-hidden>{directionIcon(variance)}</Text>
       </Group>
     );
   };
@@ -436,7 +442,7 @@ export function BudgetVsActualsII({ selectedMonth, active }: BudgetVsActualsIIPr
                 {formatSignedVariance(summary.variance)}
               </Text>
               <Text c={toneMantineColor(summary.tone)} component="span" aria-hidden>
-                {toneIcon(summary.tone)}
+                {directionIcon(summary.variance)}
               </Text>
             </Group>
           </div>
