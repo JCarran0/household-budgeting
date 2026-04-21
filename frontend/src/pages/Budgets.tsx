@@ -43,6 +43,7 @@ import { BudgetForm } from '../components/budgets/BudgetForm';
 import { BudgetComparison } from '../components/budgets/BudgetComparison';
 import { BudgetSummaryCards } from '../components/budgets/BudgetSummaryCards';
 import { YearlyBudgetGrid } from '../components/budgets/YearlyBudgetGrid';
+import { BudgetVsActualsII } from '../components/budgets/BudgetVsActualsII/BudgetVsActualsII';
 // Error boundaries available for use when needed
 // import { FinancialErrorBoundary, FormErrorBoundary, AsyncErrorBoundary } from '../components/ErrorBoundary';
 import type { MonthlyBudget } from '../../../shared/types';
@@ -445,6 +446,9 @@ export function Budgets() {
               <Tabs.Tab value="yearly" leftSection={<IconCalendar size={16} />}>
                 Yearly View
               </Tabs.Tab>
+              <Tabs.Tab value="bva-ii" leftSection={<IconChartBar size={16} />}>
+                Budget vs. Actuals II
+              </Tabs.Tab>
             </Tabs.List>
 
             <Tabs.Panel value="budget" pt="md">
@@ -575,6 +579,10 @@ export function Budgets() {
                   }}
                 />
               )}
+            </Tabs.Panel>
+
+            <Tabs.Panel value="bva-ii" pt="md">
+              <BudgetVsActualsII selectedMonth={selectedMonth} active={activeTab === 'bva-ii'} />
             </Tabs.Panel>
           </Tabs>
         </Paper>

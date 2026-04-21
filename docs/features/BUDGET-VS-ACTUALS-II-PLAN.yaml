@@ -4,7 +4,16 @@ status: draft
 created: 2026-04-21
 last_updated: 2026-04-21
 last_updated_note: |
-  2026-04-21 — Rollover conflict fallback paths removed from Phase 2 and
+  2026-04-21 — Phase 1 shipped: fourth tab "Budget vs. Actuals II" on
+  /budgets?view=bva-ii. New directory
+  frontend/src/components/budgets/BudgetVsActualsII/ with the shell
+  component, useBvaIIUrlState (rollover/types/variance URL sync), and
+  useDismissedParentIds (localStorage + session-only show-dismissed,
+  with the critical "NOT isHidden" docblock per REQ-023..029). Shell
+  currently renders a debug summary of hook state; rendering logic lands
+  in later phases.
+
+  Earlier — Rollover conflict fallback paths removed from Phase 2 and
   Phase 3. Pre-existing conflicts reconciled manually in Categories UI
   before this plan ships; Rollover Plan Phase 2 prevents regression.
 depends_on:
@@ -63,7 +72,7 @@ phases:
 
   - phase: 1
     name: Tab Scaffold + URL/LocalStorage State
-    status: pending
+    status: shipped
     goals:
       - Add the new tab and empty component to /budgets without affecting
         the existing tabs
