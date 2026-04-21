@@ -4,14 +4,26 @@ status: draft
 created: 2026-04-21
 last_updated: 2026-04-21
 last_updated_note: |
-  2026-04-21 — Phase 1 shipped: fourth tab "Budget vs. Actuals II" on
+  2026-04-21 — Phase 2 shipped: new shared/utils/bvaIIDataComposition.ts
+  orchestrates per-category/per-month budget + actual grids, feeds
+  buildEffectiveBudgetsMap (when rollover is on), then routes through
+  buildCategoryTreeAggregation with the Phase-1 budgetsOverride option.
+  Actuals route through the canonical predicate (isHidden + non-transfer
+  via isBudgetableCategory; removed filter already applied server-side);
+  month extraction uses literal YYYY-MM slicing to stay ET-anchored.
+  BudgetVsActualsII.tsx now fetches yearlyBudgets + YTD transactions
+  (cache keys overlap YearlyBudgetGrid for free cross-tab hit) and
+  renders a composed-tree count. 8 backend unit tests cover January
+  reset, mid-year YTD carry, rollover-off passthrough, REQ-022
+  parent-rollup with effective values, hidden/transfer exclusion,
+  income-sign handling, and multi-day month aggregation.
+
+  Phase 1 shipped: fourth tab "Budget vs. Actuals II" on
   /budgets?view=bva-ii. New directory
   frontend/src/components/budgets/BudgetVsActualsII/ with the shell
   component, useBvaIIUrlState (rollover/types/variance URL sync), and
   useDismissedParentIds (localStorage + session-only show-dismissed,
-  with the critical "NOT isHidden" docblock per REQ-023..029). Shell
-  currently renders a debug summary of hook state; rendering logic lands
-  in later phases.
+  with the critical "NOT isHidden" docblock per REQ-023..029).
 
   Earlier — Rollover conflict fallback paths removed from Phase 2 and
   Phase 3. Pre-existing conflicts reconciled manually in Categories UI
@@ -118,7 +130,7 @@ phases:
 
   - phase: 2
     name: Data Layer — Fetch + Effective Budgets
-    status: pending
+    status: shipped
     depends_on_external: [ROLLOVER-BUDGETS-PLAN Phase 1]
     goals:
       - Fetch budgets and transactions for Jan..currentMonth of the active
