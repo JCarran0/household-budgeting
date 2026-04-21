@@ -1,6 +1,6 @@
 feature: Budget vs. Actuals II
 brd: docs/features/BUDGET-VS-ACTUALS-II-BRD.md
-status: in_progress  # reopened 2026-04-21 for the Available + Rollover column redesign (Phase 9)
+status: shipped  # Phase 9 (Available + Rollover redesign) shipped 2026-04-21
 created: 2026-04-21
 last_updated: 2026-04-21
 last_updated_note: |
@@ -606,7 +606,7 @@ phases:
 
   - phase: 9
     name: Available + Rollover Column Redesign (BRD Revision 2)
-    status: pending
+    status: shipped
     depends_on: [8]
     goals:
       - Replace the single Variance column with two columns: Rollover
