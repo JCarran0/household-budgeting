@@ -21,6 +21,12 @@ export interface UpdateCategoryDto {
   isHidden?: boolean;
   isRollover?: boolean;
   isSavings?: boolean;  // only honored when parentId === null
+  /**
+   * Opt-in atomic resolution of subtree conflicts when setting isRollover=true.
+   * Without this flag, the server rejects with code=ROLLOVER_SUBTREE_CONFLICT
+   * and a details.conflictingCategoryIds payload. See ROLLOVER-BUDGETS-BRD §3.2.
+   */
+  resolveRolloverConflicts?: boolean;
 }
 
 export function createCategoriesApi(client: AxiosInstance) {

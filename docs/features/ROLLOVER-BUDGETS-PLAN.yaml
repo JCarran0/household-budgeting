@@ -4,6 +4,19 @@ status: draft
 created: 2026-04-21
 last_updated: 2026-04-21
 last_updated_note: |
+  2026-04-21 — Phase 3 shipped: CategoryForm.tsx now shows the rollover
+  checkbox with the semantic label ("Rollover budget" + description) and
+  disables it with a tooltip for transfer categories. updateCategory
+  mutation branches on error.code: ROLLOVER_SUBTREE_CONFLICT opens a
+  confirmation modal listing conflicting categories by parent→child path
+  and retries with resolveRolloverConflicts=true on confirm (reverts the
+  checkbox on cancel); ROLLOVER_NOT_BUDGETABLE shows a red notification
+  and resets the checkbox. A client-side pre-flight check using the local
+  category cache mirrors the backend logic and opens the confirmation
+  modal directly when possible, avoiding a round-trip. Frontend
+  UpdateCategoryDto gained the resolveRolloverConflicts field. Manual
+  UAT is batched for the end of this work in concert with BvA II.
+
   2026-04-21 — Phase 2 shipped: categoryService.updateCategory now enforces
   subtree exclusivity and supports atomic resolveRolloverConflicts. New
   RolloverSubtreeConflictError (code=ROLLOVER_SUBTREE_CONFLICT, payload
@@ -235,7 +248,7 @@ phases:
 
   - phase: 3
     name: Categories Page — Toggle UX
-    status: pending
+    status: shipped
     depends_on: [2]
     goals:
       - Replace the no-op isRollover checkbox with a semantically meaningful
