@@ -1,4 +1,4 @@
-import { Fragment, useMemo, useState, type KeyboardEvent } from 'react';
+import { Fragment, useMemo, useState, type KeyboardEvent, type ReactNode } from 'react';
 import {
   ActionIcon,
   Box,
@@ -13,6 +13,7 @@ import {
   Table,
   Text,
   Title,
+  Tooltip,
 } from '@mantine/core';
 import {
   IconChevronRight,
@@ -22,6 +23,7 @@ import {
   IconTrendingDown,
   IconMinus,
   IconAlertTriangle,
+  IconInfoCircle,
 } from '@tabler/icons-react';
 import { useQuery } from '@tanstack/react-query';
 import { endOfMonth, format, parse } from 'date-fns';
@@ -85,6 +87,38 @@ function directionIcon(value: number) {
   if (value > 0) return <IconTrendingUp size={14} />;
   if (value < 0) return <IconTrendingDown size={14} />;
   return <IconMinus size={14} />;
+}
+
+/**
+ * Summary-strip cell: label + info icon with hover tooltip + value.
+ * The tooltip is the primary onboarding surface for "what is this number."
+ */
+function SummaryCell({
+  label,
+  tooltip,
+  children,
+}: {
+  label: string;
+  tooltip: ReactNode;
+  children: ReactNode;
+}) {
+  return (
+    <div>
+      <Group gap={4} wrap="nowrap" align="center">
+        <Text size="xs" c="dimmed">{label}</Text>
+        <Tooltip
+          multiline
+          w={320}
+          withArrow
+          position="bottom"
+          label={<Stack gap={2}>{tooltip}</Stack>}
+        >
+          <IconInfoCircle size={12} style={{ color: 'var(--mantine-color-dimmed)', cursor: 'help' }} />
+        </Tooltip>
+      </Group>
+      {children}
+    </div>
+  );
 }
 
 /**
@@ -198,24 +232,30 @@ export function BudgetVsActualsII({ selectedMonth, active }: BudgetVsActualsIIPr
   }, [sections, dismissed.showDismissed, dismissed.dismissedIds]);
 
   const summary = useMemo(() => {
-    let actual = 0;
-    let budgeted = 0;
+    // Cashflow-convention totals: Income contributes positive, Spending and
+    // Savings contribute negative. This matches the dashboard's Cashflow
+    // card math (Income − Spending − Savings) and lets the reader interpret
+    // Net Actual as "cash left at the end of the month" rather than a
+    // meaningless all-positive sum.
+    //
+    // Rollover and Available are already tone-signed — sum them directly.
+    let netActual = 0;
+    let netBudgeted = 0;
     let rollover = 0;
     let available = 0;
     let anyRollover = false;
     for (const fp of visibleParents) {
-      // Dismissed rows appear faded when showDismissed is on; exclude them
-      // from the aggregate so totals reflect the user's focused set.
       if (dismissed.dismissedIds.has(fp.parent.parentId)) continue;
-      actual += fp.parent.actual;
-      budgeted += fp.parent.budgeted;
+      const sign = fp.parent.section === 'income' ? 1 : -1;
+      netActual += sign * fp.parent.actual;
+      netBudgeted += sign * fp.parent.budgeted;
       if (fp.parent.rollover !== null) {
         rollover += fp.parent.rollover;
         anyRollover = true;
       }
       available += fp.parent.available;
     }
-    return { actual, budgeted, rollover, available, anyRollover };
+    return { netActual, netBudgeted, rollover, available, anyRollover };
   }, [visibleParents, dismissed.dismissedIds]);
 
   if (!active) return null;
@@ -439,19 +479,70 @@ export function BudgetVsActualsII({ selectedMonth, active }: BudgetVsActualsIIPr
 
   return (
     <Stack gap="md">
-      {/* Summary strip — totals for filter-visible rows. */}
+      {/* Summary strip — cashflow-convention totals for filter-visible rows.
+          Net Actual / Net Budgeted use Income − Spending − Savings (matches
+          the dashboard Cashflow card). Rollover / Available are tone-signed
+          and sum directly. */}
       <Paper withBorder p="sm">
         <Group justify="space-between" wrap="nowrap">
-          <div>
-            <Text size="xs" c="dimmed">Total Actual</Text>
-            <Text fw={600}>{formatCurrency(summary.actual)}</Text>
-          </div>
-          <div>
-            <Text size="xs" c="dimmed">Total Budgeted</Text>
-            <Text fw={600}>{formatCurrency(summary.budgeted)}</Text>
-          </div>
-          <div>
-            <Text size="xs" c="dimmed">Total Rollover</Text>
+          <SummaryCell
+            label="Net Actual"
+            tooltip={
+              <>
+                <Text size="sm" fw={600} mb={4}>Income − Spending − Savings (actuals)</Text>
+                <Text size="sm" mb={4}>
+                  Answers: <i>"Am I living within my means this month?"</i>
+                </Text>
+                <Text size="sm">
+                  Positive means you had cash left over after spending and
+                  saving. Negative means you drew down reserves or took on
+                  credit to cover the gap.
+                </Text>
+              </>
+            }
+          >
+            <Text fw={600} c={availableColor(summary.netActual)}>
+              {formatSigned(summary.netActual)}
+            </Text>
+          </SummaryCell>
+
+          <SummaryCell
+            label="Net Budgeted"
+            tooltip={
+              <>
+                <Text size="sm" fw={600} mb={4}>Income − Spending − Savings (budgets)</Text>
+                <Text size="sm" mb={4}>
+                  Answers: <i>"What cashflow did I plan for this month?"</i>
+                </Text>
+                <Text size="sm">
+                  Compare with Net Actual to see whether the household is
+                  tracking the plan. Matches the Cashflow card on the
+                  dashboard.
+                </Text>
+              </>
+            }
+          >
+            <Text fw={600} c={availableColor(summary.netBudgeted)}>
+              {formatSigned(summary.netBudgeted)}
+            </Text>
+          </SummaryCell>
+
+          <SummaryCell
+            label="Total Rollover"
+            tooltip={
+              <>
+                <Text size="sm" fw={600} mb={4}>Sum of rollover carries (tone-signed)</Text>
+                <Text size="sm" mb={4}>
+                  Answers: <i>"Across my rollover categories, how much surplus or shortfall have I carried in from earlier this year?"</i>
+                </Text>
+                <Text size="sm">
+                  Positive = favorable carry; negative = deficit carried.
+                  Dimmed when the Use Rollover toggle is off — the number
+                  is informational and isn't acting on Available.
+                </Text>
+              </>
+            }
+          >
             {summary.anyRollover ? (
               urlState.rollover ? (
                 <Text fw={600} c={availableColor(summary.rollover)}>
@@ -463,18 +554,33 @@ export function BudgetVsActualsII({ selectedMonth, active }: BudgetVsActualsIIPr
             ) : (
               <Text fw={600} c="dimmed">—</Text>
             )}
-          </div>
-          <div>
-            <Text size="xs" c="dimmed">Total Available</Text>
-            <Group gap={4} wrap="nowrap">
+          </SummaryCell>
+
+          <SummaryCell
+            label="Total Available"
+            tooltip={
+              <>
+                <Text size="sm" fw={600} mb={4}>Sum of Available across visible rows (tone-signed)</Text>
+                <Text size="sm" mb={4}>
+                  Answers: <i>"Across every line, how far ahead or behind plan am I overall?"</i>
+                </Text>
+                <Text size="sm">
+                  Positive = household ahead of plan (surplus to
+                  reallocate); negative = behind plan (needs attention).
+                  Respects the Use Rollover toggle.
+                </Text>
+              </>
+            }
+          >
+            <Group gap={4} wrap="nowrap" style={{ whiteSpace: 'nowrap' }}>
               <Text fw={600} c={availableColor(summary.available)}>
                 {formatSigned(summary.available)}
               </Text>
-              <Text c={availableColor(summary.available)} component="span" aria-hidden>
+              <Text c={availableColor(summary.available)} component="span" aria-hidden style={{ lineHeight: 0 }}>
                 {directionIcon(summary.available)}
               </Text>
             </Group>
-          </div>
+          </SummaryCell>
         </Group>
       </Paper>
 
