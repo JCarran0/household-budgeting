@@ -4,6 +4,15 @@ status: shipped
 created: 2026-04-21
 last_updated: 2026-04-21
 last_updated_note: |
+  2026-04-21 — Post-Phase-8 polish from user feedback: parent rows
+  always render the chevron inline to the left of the name (Group
+  wrap=nowrap, chevron flexShrink=0, name truncates on overflow) — no
+  more stacking under a narrow column. Accordion now always defaults
+  to collapsed; filter autoExpand hints are no longer applied at
+  render. Filters still narrow visible parents, and sibling
+  de-emphasis still kicks in when the user manually expands a
+  filter-matched row.
+
   2026-04-21 — Phase 8 shipped: CLAUDE.md Critical Files entry for BvA II
   (tab directory + hook docblock reminder that "dismissed" is not
   isHidden). Automated test coverage: 105 budgetCalculations tests

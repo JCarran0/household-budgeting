@@ -216,14 +216,14 @@ export function BudgetVsActualsII({ selectedMonth, active }: BudgetVsActualsIIPr
   const loading = budgetsLoading || transactionsLoading || !categories;
 
   /**
-   * Effective expand state per parent — user-override wins when present,
-   * otherwise the filter's auto-expand suggestion applies. (Plan Phase 4
-   * expansion-state design.)
+   * Effective expand state per parent — parents always default to collapsed;
+   * user toggle is the only path to expanded. The filter's autoExpand hint is
+   * retained in classify output for potential reuse but not applied here.
+   * Filters still narrow which parents appear; sibling de-emphasis kicks in
+   * when the user manually expands a match.
    */
-  const effectiveExpanded = (parentId: string, autoExpand: boolean): boolean => {
-    const override = userExpanded.get(parentId);
-    if (override !== undefined) return override;
-    return autoExpand;
+  const effectiveExpanded = (parentId: string): boolean => {
+    return userExpanded.get(parentId) ?? false;
   };
 
   const toggleExpanded = (parentId: string, currentlyExpanded: boolean) => {
@@ -281,8 +281,8 @@ export function BudgetVsActualsII({ selectedMonth, active }: BudgetVsActualsIIPr
               </Table.Tr>
             </Table.Thead>
             <Table.Tbody>
-              {visible.map(({ tree, autoExpand, deEmphasizedChildIds }) => {
-                const isExpanded = effectiveExpanded(tree.parentId, autoExpand);
+              {visible.map(({ tree, deEmphasizedChildIds }) => {
+                const isExpanded = effectiveExpanded(tree.parentId);
                 const isDismissed = dismissed.dismissedIds.has(tree.parentId);
                 const hasChildren = tree.children.length > 0;
                 const rowOpacity = isDismissed ? 0.5 : 1;
@@ -305,7 +305,7 @@ export function BudgetVsActualsII({ selectedMonth, active }: BudgetVsActualsIIPr
                       } : {})}
                     >
                       <Table.Td onClick={() => hasChildren && toggleExpanded(tree.parentId, isExpanded)}>
-                        <Group gap="xs">
+                        <Group gap="xs" wrap="nowrap" align="center">
                           {hasChildren ? (
                             <ActionIcon
                               variant="subtle"
@@ -316,6 +316,7 @@ export function BudgetVsActualsII({ selectedMonth, active }: BudgetVsActualsIIPr
                               }}
                               aria-label={isExpanded ? 'Collapse' : 'Expand'}
                               style={{
+                                flexShrink: 0,
                                 transform: isExpanded ? 'rotate(90deg)' : 'rotate(0deg)',
                                 transition: 'transform 120ms',
                               }}
@@ -323,9 +324,14 @@ export function BudgetVsActualsII({ selectedMonth, active }: BudgetVsActualsIIPr
                               <IconChevronRight size={14} />
                             </ActionIcon>
                           ) : (
-                            <Box w={22} />
+                            <Box w={22} style={{ flexShrink: 0 }} />
                           )}
-                          <Text fw={500} td={isDismissed ? 'line-through' : undefined}>
+                          <Text
+                            fw={500}
+                            td={isDismissed ? 'line-through' : undefined}
+                            truncate
+                            style={{ minWidth: 0 }}
+                          >
                             {tree.parentName}
                           </Text>
                         </Group>
