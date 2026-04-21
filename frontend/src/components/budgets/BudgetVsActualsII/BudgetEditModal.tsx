@@ -204,7 +204,17 @@ export function BudgetEditModal({
             fixedDecimalScale
             min={0}
             value={amount}
-            onChange={(v) => setAmount(typeof v === 'number' ? v : '')}
+            onChange={(v) => {
+              // Mantine NumberInput delivers number | string | '' depending on
+              // whether the user is mid-edit, using formatting, or has cleared
+              // the field. Coerce to a number when possible; empty = unset.
+              if (v === '' || v === null || v === undefined) {
+                setAmount('');
+                return;
+              }
+              const n = typeof v === 'number' ? v : Number(v);
+              setAmount(Number.isFinite(n) ? n : '');
+            }}
           />
 
           <Text size="xs" c="dimmed">
