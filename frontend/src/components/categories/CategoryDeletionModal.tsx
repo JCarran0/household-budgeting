@@ -1,6 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
-  Modal,
   Stack,
   Text,
   Button,
@@ -13,6 +12,7 @@ import {
   Divider,
   Title,
 } from '@mantine/core';
+import { ResponsiveModal } from '../ResponsiveModal';
 import { notifications } from '@mantine/notifications';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { IconAlertCircle, IconCheck, IconTrash } from '@tabler/icons-react';
@@ -244,7 +244,7 @@ export function CategoryDeletionModal({
     deleteCategoryMutation.isPending;
 
   return (
-    <Modal
+    <ResponsiveModal
       opened={opened}
       onClose={onClose}
       title={<Title order={3}>Delete Category: {category.name}</Title>}
@@ -483,6 +483,6 @@ export function CategoryDeletionModal({
           </>
         )}
       </Stack>
-    </Modal>
+    </ResponsiveModal>
   );
 }

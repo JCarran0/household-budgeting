@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
 import {
-  Modal,
   Stack,
   Group,
   TextInput,
@@ -15,6 +14,7 @@ import {
   Alert,
   Loader,
 } from '@mantine/core';
+import { ResponsiveModal } from '../ResponsiveModal';
 import { useForm } from '@mantine/form';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { notifications } from '@mantine/notifications';
@@ -309,7 +309,7 @@ export function TransactionEditModal({
   if (!transaction) return null;
 
   return (
-    <Modal
+    <ResponsiveModal
       opened={opened}
       onClose={onClose}
       title="Edit Transaction"
@@ -506,6 +506,6 @@ export function TransactionEditModal({
           </Group>
         </Stack>
       </form>
-    </Modal>
+    </ResponsiveModal>
   );
 }

@@ -1,21 +1,21 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { 
-  Modal, 
-  Text, 
-  Table, 
-  Group, 
-  Button, 
-  Stack, 
-  Skeleton, 
-  Center, 
+import {
+  Text,
+  Table,
+  Group,
+  Button,
+  Stack,
+  Skeleton,
+  Center,
   ScrollArea,
   Divider,
   Alert,
   ThemeIcon,
   Tooltip,
 } from '@mantine/core';
+import { ResponsiveModal } from '../ResponsiveModal';
 import { 
   IconEye, 
   IconCalendar, 
@@ -188,7 +188,7 @@ export function TransactionPreviewModal({
   };
 
   return (
-    <Modal
+    <ResponsiveModal
       opened={opened}
       onClose={onClose}
       size="lg"
@@ -366,6 +366,6 @@ export function TransactionPreviewModal({
         }}
         transaction={editingTransaction}
       />
-    </Modal>
+    </ResponsiveModal>
   );
 }

@@ -1,4 +1,5 @@
-import { Image, Modal, Stack, Text, Tooltip, UnstyledButton } from '@mantine/core';
+import { Image, Stack, Text, Tooltip, UnstyledButton } from '@mantine/core';
+import { ResponsiveModal } from '../../ResponsiveModal';
 import type { MantineRadius } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
 
@@ -52,7 +53,7 @@ export function PlacePhotoThumb({
           <Image src={thumbSrc} alt={alt} w={size} h={tileHeight} radius={radius} fit="cover" />
         </UnstyledButton>
       </Tooltip>
-      <Modal opened={opened} onClose={close} size="xl" centered title={alt}>
+      <ResponsiveModal opened={opened} onClose={close} size="xl" centered title={alt}>
         <Stack gap="xs">
           <Image
             src={heroSrc}
@@ -64,7 +65,7 @@ export function PlacePhotoThumb({
             {attributionText}
           </Text>
         </Stack>
-      </Modal>
+      </ResponsiveModal>
     </>
   );
 }

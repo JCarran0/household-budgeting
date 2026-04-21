@@ -2,7 +2,6 @@ import {
   Alert,
   Button,
   Group,
-  Modal,
   Paper,
   SimpleGrid,
   Stack,
@@ -10,6 +9,7 @@ import {
   ThemeIcon,
   UnstyledButton,
 } from '@mantine/core';
+import { ResponsiveModal } from '../../ResponsiveModal';
 import {
   IconBed,
   IconBuildingSkyscraper,
@@ -113,7 +113,7 @@ export function TripTemplateModal({
   };
 
   return (
-    <Modal opened={opened} onClose={onClose} title="Pick a template" size="lg">
+    <ResponsiveModal opened={opened} onClose={onClose} title="Pick a template" size="lg">
       <Stack gap="sm">
         <Alert icon={<IconInfoCircle size={16} />} color="gray" variant="light">
           Templates pre-fill the Stay form so you can add your place in one click.
@@ -144,6 +144,6 @@ export function TripTemplateModal({
           </Button>
         </Group>
       </Stack>
-    </Modal>
+    </ResponsiveModal>
   );
 }

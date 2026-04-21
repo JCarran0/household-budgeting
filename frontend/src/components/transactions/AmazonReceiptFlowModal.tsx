@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect } from 'react';
-import { Modal, Text, Stack, Center, Loader, Button, Group } from '@mantine/core';
+import { Text, Stack, Center, Loader, Button, Group } from '@mantine/core';
+import { ResponsiveModal } from '../ResponsiveModal';
 import { useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
 import { api } from '../../lib/api';
@@ -218,7 +219,7 @@ export function AmazonReceiptFlowModal({ opened, onClose }: AmazonReceiptFlowMod
   };
 
   return (
-    <Modal
+    <ResponsiveModal
       opened={opened}
       onClose={handleClose}
       title={stepTitle[step]}
@@ -308,6 +309,6 @@ export function AmazonReceiptFlowModal({ opened, onClose }: AmazonReceiptFlowMod
           </Group>
         </Stack>
       )}
-    </Modal>
+    </ResponsiveModal>
   );
 }

@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
 import {
-  Modal,
   Stack,
   Group,
   Button,
@@ -15,6 +14,7 @@ import {
   Card,
   Title,
 } from '@mantine/core';
+import { ResponsiveModal } from '../ResponsiveModal';
 import { useForm } from '@mantine/form';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { notifications } from '@mantine/notifications';
@@ -177,7 +177,7 @@ export function TransactionSplitModal({
   const canSplit = form.values.splits.length >= 2;
 
   return (
-    <Modal
+    <ResponsiveModal
       opened={opened}
       onClose={onClose}
       title={
@@ -309,6 +309,6 @@ export function TransactionSplitModal({
           </Group>
         </Stack>
       </form>
-    </Modal>
+    </ResponsiveModal>
   );
 }

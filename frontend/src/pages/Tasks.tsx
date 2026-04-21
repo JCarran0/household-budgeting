@@ -10,7 +10,6 @@ import {
   Loader,
   Center,
   Alert,
-  Modal,
   TextInput,
   Textarea,
   Menu,
@@ -61,6 +60,7 @@ import { ChecklistView } from '../components/tasks/ChecklistView';
 import { LeaderboardPanel } from '../components/tasks/LeaderboardPanel';
 import { DailyQuoteStrip } from '../components/DailyQuoteStrip';
 import { BadgeHeroModal } from '../components/tasks/BadgeHeroModal';
+import { ResponsiveModal } from '../components/ResponsiveModal';
 import { useNewBadgeCelebrations } from '../hooks/useNewBadgeCelebrations';
 import { userColor } from '../utils/userColor';
 import { UserColorDot } from '../components/common/UserColorDot';
@@ -1087,7 +1087,7 @@ export function TaskFormModal({ opened, onClose, onSubmit, members, loading, tit
   ];
 
   return (
-    <Modal opened={opened} onClose={onClose} title={title} size="md">
+    <ResponsiveModal opened={opened} onClose={onClose} title={title} size="md">
       <form onSubmit={handleSubmit}>
         <Stack gap="sm">
           <TextInput
@@ -1222,7 +1222,7 @@ export function TaskFormModal({ opened, onClose, onSubmit, members, loading, tit
           )}
         </Stack>
       </form>
-    </Modal>
+    </ResponsiveModal>
   );
 }
 
@@ -1258,7 +1258,7 @@ export function TaskDetailModal({ task, onClose, members, onStatusChange, onEdit
   const subTasks = task.subTasks ?? [];
 
   return (
-    <Modal
+    <ResponsiveModal
       opened={!!task}
       onClose={() => { onClose(); setConfirmDelete(false); }}
       title={task.title}
@@ -1333,7 +1333,7 @@ export function TaskDetailModal({ task, onClose, members, onStatusChange, onEdit
         </Group>
 
         {/* Cancel confirmation */}
-        <Modal
+        <ResponsiveModal
           opened={confirmCancel}
           onClose={() => setConfirmCancel(false)}
           title="Cancel this task?"
@@ -1357,7 +1357,7 @@ export function TaskDetailModal({ task, onClose, members, onStatusChange, onEdit
               </Button>
             </Group>
           </Stack>
-        </Modal>
+        </ResponsiveModal>
 
         {/* Transition timeline */}
         <Text fw={600} size="sm">History</Text>
@@ -1418,7 +1418,7 @@ export function TaskDetailModal({ task, onClose, members, onStatusChange, onEdit
           )}
         </Group>
       </Stack>
-    </Modal>
+    </ResponsiveModal>
   );
 }
 
@@ -1668,7 +1668,7 @@ function TemplateManagementModal({ opened, onClose, templates, members }: Templa
   const isSaving = createMutation.isPending || updateTemplateMutation.isPending;
 
   return (
-    <Modal opened={opened} onClose={onClose} title="Manage Task Templates" size="md">
+    <ResponsiveModal opened={opened} onClose={onClose} title="Manage Task Templates" size="md">
       <Stack gap="md">
         {templates.length === 0 && !showForm && (
           <Text size="sm" c="dimmed">
@@ -1827,6 +1827,6 @@ function TemplateManagementModal({ opened, onClose, templates, members }: Templa
           </Button>
         )}
       </Stack>
-    </Modal>
+    </ResponsiveModal>
   );
 }

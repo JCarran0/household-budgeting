@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect } from 'react';
-import { Modal, Text, Stack, Center, Loader, Button, Group, ThemeIcon, Progress } from '@mantine/core';
+import { Text, Stack, Center, Loader, Button, Group, ThemeIcon, Progress } from '@mantine/core';
+import { ResponsiveModal } from '../ResponsiveModal';
 import { IconSparkles, IconCheck } from '@tabler/icons-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { api } from '../../lib/api';
@@ -152,7 +153,7 @@ export function CategorizationFlowModal({ opened, onClose, uncategorizedCount }:
   const progressPct = totalBuckets > 0 ? ((currentBucketIndex) / totalBuckets) * 100 : 0;
 
   return (
-    <Modal
+    <ResponsiveModal
       opened={opened}
       onClose={handleClose}
       title={
@@ -225,6 +226,6 @@ export function CategorizationFlowModal({ opened, onClose, uncategorizedCount }:
           <Button onClick={handleClose}>Done</Button>
         </Stack>
       )}
-    </Modal>
+    </ResponsiveModal>
   );
 }

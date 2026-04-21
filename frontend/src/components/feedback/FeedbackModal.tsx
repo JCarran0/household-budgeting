@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react';
 import { useLocation, useSearchParams } from 'react-router-dom';
 import { useMutation } from '@tanstack/react-query';
 import {
-  Modal,
   Stack,
   Group,
   Title,
@@ -21,6 +20,7 @@ import {
   ActionIcon,
   Tooltip,
 } from '@mantine/core';
+import { ResponsiveModal } from '../ResponsiveModal';
 import {
   IconBug,
   IconBulb,
@@ -187,7 +187,7 @@ export function FeedbackModal({ opened, onClose }: FeedbackModalProps) {
   const applicationState = captureApplicationState();
 
   return (
-    <Modal
+    <ResponsiveModal
       opened={opened}
       onClose={onClose}
       title={
@@ -368,6 +368,6 @@ export function FeedbackModal({ opened, onClose }: FeedbackModalProps) {
           </Group>
         </Stack>
       </ScrollArea>
-    </Modal>
+    </ResponsiveModal>
   );
 }
