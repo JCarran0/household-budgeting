@@ -1,9 +1,21 @@
 feature: Budget vs. Actuals II
 brd: docs/features/BUDGET-VS-ACTUALS-II-BRD.md
-status: shipped
+status: in_progress  # reopened 2026-04-21 for the Available + Rollover column redesign (Phase 9)
 created: 2026-04-21
 last_updated: 2026-04-21
 last_updated_note: |
+  2026-04-21 — BRD Revision 2 + Phase 9 added: Available + Rollover
+  column redesign. Original Variance column retired for BvA II only
+  (existing BvA tab keeps raw `actual − budgeted`). Budgeted returns
+  to raw monthly values with the carry surfaced separately in a
+  dedicated Rollover column. Available is tone-signed across every
+  section: positive = favorable ("ahead of plan"), negative =
+  unfavorable ("behind plan"). The Use Rollover toggle narrows in
+  scope — it only controls whether Rollover participates in
+  Available, not whether the column is visible. BRD REQ-010,
+  REQ-010a, REQ-011, REQ-011a, REQ-012, REQ-018, REQ-019, §4, and
+  OQ-010..OQ-012 captured. Phase 9 task list added.
+
   2026-04-21 — Post-Phase-8 polish from user feedback: parent rows
   always render the chevron inline to the left of the name (Group
   wrap=nowrap, chevron flexShrink=0, name truncates on overflow) — no
@@ -591,6 +603,112 @@ phases:
         control row showing Total Actual / Total Budgeted / Total
         Variance for the visible rows. Trivially cheap from the
         composed tree.
+
+  - phase: 9
+    name: Available + Rollover Column Redesign (BRD Revision 2)
+    status: pending
+    depends_on: [8]
+    goals:
+      - Replace the single Variance column with two columns: Rollover
+        (always visible, tone-signed, dimmed when toggle off) and
+        Available (tone-signed surplus/shortfall vs. plan).
+      - Strip the rollover carry out of Budgeted — it returns to raw
+        monthly budget always.
+      - Unify sign convention across sections: positive Available is
+        always favorable, negative always unfavorable. Retires the
+        raw `actual − budgeted` variance convention for BvA II only.
+      - Make the Use Rollover toggle control only whether Rollover
+        participates in Available (and whether the Rollover cell
+        renders colored or dimmed) — not whether the carry is visible.
+    tasks:
+      - |
+        Shared math updates in shared/utils:
+          - New helpers in bvaIIDisplay.ts:
+              toneSignedDelta(section, actual, budgeted) — returns
+                budget−actual for spending, actual−budget for income
+                and savings. Positive = favorable.
+              toneSignedRollover(section, rawRollover) — returns
+                rawRollover as-is for spending, negated for income
+                and savings. (rawRollover from computeRolloverBalance
+                uses Σ(budget−actual) convention.)
+              computeAvailable(section, actual, budgeted, rollover,
+                useRollover) — tone-signed delta, plus rollover when
+                useRollover AND rollover !== null.
+          - composeBvaII refactor: return an array of rich rows
+              { categoryId, categoryName, section, actual, budgeted,
+                rollover (tone-signed or null for non-rollover
+                categories), available (tone-signed) } for parents
+              and children. Parent budgeted keeps the
+              max(parent_raw, Σ children_raw) rule — no override.
+              Parent rollover is the tone-signed sum across the
+              subtree. Parent available uses the parent row's
+              budgeted and actual (not the sum of child Availables).
+          - classifyVariance rename → classifyFilter (or leave name,
+            update docblock) — evaluate filter against Available
+            instead of tone-from-actual/budget. Thresholds for
+            "serious" re-expressed in Available terms per REQ-019.
+          - buildEffectiveBudgetsMap remains in the rollover utility
+            for future consumers but BvA II stops using it. Document
+            that BvA II now reads the rollover pieces directly for
+            display rather than folding them into Budgeted.
+      - |
+        Backend unit tests (backend/src/__tests__/unit):
+          - bvaIIDisplay.test.ts: toneSignedDelta and
+            toneSignedRollover per section (spending passthrough,
+            income/savings negate), computeAvailable with and
+            without useRollover.
+          - Update bvaIIDataComposition tests for the new row shape;
+            drop tests that asserted the old Budgeted=effective
+            behavior, add tests that:
+              - Budgeted never changes with toggle.
+              - Rollover column value matches computeRolloverBalance
+                tone-signed per section.
+              - Non-rollover category rollover field is null.
+              - Available with toggle off equals toneSignedDelta
+                only; with toggle on includes rollover.
+              - Parent row rollover sums tone-signed child
+                rollovers when child is flagged.
+          - Update bvaIIFilters tests: filter "over" = Available<0,
+            "under" = Available>0, "serious" re-expressed. Child
+            match still triggers parent inclusion; no auto-expand
+            (that was removed in post-Phase-7 polish).
+      - |
+        Component updates (BudgetVsActualsII.tsx):
+          - Five columns: Category / Actual / Budgeted / Rollover /
+            Available / Actions. Tablet priority per REQ-052.
+          - Render Rollover cell per REQ-010a:
+              * rollover !== null and toggle on → tone-signed number
+                colored by sign.
+              * rollover !== null and toggle off → same value in
+                c="dimmed" (opacity ≈ 0.5 via Mantine dimmed color).
+              * rollover === null → em-dash in dimmed text.
+          - Render Available cell tone-signed with sign-matched arrow
+            (positive → up, negative → down, zero → minus). Color
+            green/red/neutral.
+          - Drop the now-unused getVarianceTone call paths; color
+            routes directly off available sign.
+          - Sort rows by |available| descending (same semantic as
+            before, different variable).
+          - Summary strip gains Total Rollover. Mixed-section total
+            stays meaningful because every Available is tone-signed —
+            sum is "household-wide net surplus vs. plan."
+      - |
+        Edit modal copy: no functional changes. The rollover callout
+        in the confirmation modal already reads correctly under the
+        new semantics.
+      - |
+        BRD reconciliation — already committed separately:
+          - REQ-005 / REQ-006 column list includes Rollover +
+            Available.
+          - REQ-010 Budgeted always raw; REQ-010a Rollover column
+            semantics.
+          - REQ-011 Available formula; REQ-011a toggle-off behavior.
+          - REQ-012 toggle narrows to Available-only effect.
+          - REQ-018 / REQ-019 filter definitions keyed off Available.
+          - §4 retitled "Tone-Signed Available"; REQ-030..REQ-034
+            rewritten.
+          - Revision-2 banner added at top of the BRD.
+          - OQ-010..OQ-012 capture the decisions from this redesign.
 
 risks:
   - |

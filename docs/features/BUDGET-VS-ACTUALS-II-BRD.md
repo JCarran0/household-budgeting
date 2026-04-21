@@ -8,6 +8,8 @@
 
 ---
 
+> **Revision 2 — 2026-04-21:** Column layout and sign convention updated after initial UAT. What was a single `Variance` column (raw `actual − budgeted`) is now split into separate `Rollover` and `Available` columns, with `Available` tone-signed (positive = favorable, across every section). The Budgeted column returns to raw monthly values. The old variance convention is retired from BvA II only — the original BvA tab keeps it. See OQ-010..OQ-012 for rationale.
+
 ## 1. Overview
 
 ### 1.1 Problem Statement
@@ -70,11 +72,12 @@ This BRD is **additive**:
 
 - Parent category name (with section indicator for Spending / Income / Savings — icon, color, or label).
 - **Actual** (sum of non-removed, non-transfer transactions on the parent's entire subtree for the month).
-- **Budgeted** — the parent rollup value. When "Use Rollover" is off, this is `max(parent_budget, Σ children_budget)`. When on, both sides use effective values per Rollover Budgets BRD REQ-022.
-- **Variance** — signed difference `actual − budgeted`, colored per category type (§4).
+- **Budgeted** — the parent rollup value `max(parent_budget, Σ children_budget)` using the **raw monthly budget only**. The rollover carry is split out into its own column, not folded into Budgeted. This value is identical whether "Use Rollover" is on or off.
+- **Rollover** — tone-signed carry from prior months of the calendar year. Positive = favorable historical surplus (underspent spending, over-earned income, over-saved savings). Negative = unfavorable historical shortfall. See §4 for sign/color semantics. Always displayed; its styling and its participation in the Available column vary with the toggle — see REQ-010 and §4.
+- **Available** — tone-signed surplus or shortfall vs. plan for this row. Positive = favorable (a surplus of unspent room, excess earnings, or contributions beyond target); negative = unfavorable (overspent, short of income, short of savings target). Formula in REQ-011.
 - Row action icons: **Edit**, **Dismiss**.
 
-**REQ-006:** Expanding a parent row reveals its children as indented sub-rows with the same column layout. Children show their own `actual`, `budgeted` (effective if rollover is on), and `variance`. The parent's displayed totals do not change on expand.
+**REQ-006:** Expanding a parent row reveals its children as indented sub-rows with the same column layout. Children show their own `actual`, `budgeted`, `rollover`, and `available`. The parent's displayed totals do not change on expand.
 
 **REQ-007:** Parent accordion expand/collapse state is **ephemeral session state**. It is not URL-persisted and does not persist across page reloads. Default state is all parents collapsed.
 
@@ -84,9 +87,25 @@ This BRD is **additive**:
 
 **REQ-009:** The Actual column is always raw: it does not change based on the rollover toggle. Actuals are computed via the canonical `transactionReader.ts` filter (excludes removed transactions) and respect transfer exclusion via `transactionCalculations.ts`.
 
-**REQ-010:** The Budgeted column respects the rollover toggle. With rollover off, it shows `max(parent, Σ children)` using raw budgets. With rollover on, it shows the same rollup using effective budgets per Rollover Budgets BRD §3.5.
+**REQ-010:** The Budgeted column is always the raw monthly budget (parent rollup `max(parent, Σ children)` using per-month `MonthlyBudget` records). It does **not** change with the rollover toggle; the rollover carry is surfaced separately in the Rollover column. Splitting these two numbers makes each independently legible — users can audit the raw plan and the carry without decomposing a single "effective" figure.
 
-**REQ-011:** The Variance column is always `actual − budgeted`, where `budgeted` reflects the current rollover toggle state. The numeric sign convention is fixed across types; the color carries the "goodness" meaning (§4).
+**REQ-010a:** The Rollover column is **always shown regardless of the toggle**:
+
+- **Rollover-flagged category, toggle on:** display the tone-signed rollover value (§4), colored by favorability.
+- **Rollover-flagged category, toggle off:** display the same tone-signed value but rendered in dimmed/disabled styling — a visual hint that the number exists but isn't being applied to Available. This preserves transparency into the latent carry the user would gain by turning the toggle on.
+- **Non-rollover category (any subtree where `isRollover` is unset):** display an em-dash (`—`) in dimmed text to signal "not applicable — category opts out of rollover."
+- **Parent row rollover (when any node in its subtree is rollover-flagged):** sum the tone-signed rollover values across the subtree. Per Rollover Budgets BRD REQ-017, subtree exclusivity guarantees at most one flagged node per ancestor chain, so the sum collapses to that node's value — but stating it as a sum makes the math robust if the invariant ever relaxes.
+
+**REQ-011:** The Available column is a **tone-signed** surplus-or-shortfall measure. Positive is always favorable across every section; negative is always unfavorable. The underlying arithmetic flips per section to produce this unified sign, but the invariant the reader sees is consistent: `+$X green = $X ahead of plan`, `−$X red = $X behind plan`.
+
+Formulas:
+
+- **Spending:** `Available = (Budgeted − Actual) + (Rollover if toggle on else 0)`.
+- **Income / Savings:** `Available = (Actual − Budgeted) + (Rollover if toggle on else 0)`.
+
+Equivalent unified definition: `Available = toneSignedDelta(section, actual, budgeted) + (toggle ? toneSignedRollover : 0)`, where `toneSignedDelta` returns `budget − actual` for spending and `actual − budget` otherwise, and `toneSignedRollover` flips sign analogously.
+
+**REQ-011a:** When Use Rollover is off, Available is **strictly the current-month surplus/shortfall** — it does not incorporate the Rollover column (even though the Rollover column remains visible, dimmed, per REQ-010a). This is the "what's happening this month in isolation" view; the toggle is how users opt the carry into their working number.
 
 ---
 
@@ -94,11 +113,11 @@ This BRD is **additive**:
 
 ### 3.1 Use Rollover Toggle
 
-**REQ-012:** A "Use Rollover" toggle sits in the control row. Default: **off**. When on, budgeted and variance columns reflect effective budgets per the Rollover Budgets BRD.
+**REQ-012:** A "Use Rollover" toggle sits in the control row. Default: **off**. The toggle does NOT change the Budgeted or Rollover column values — those always render (with Rollover dimmed when the toggle is off, per REQ-010a). The toggle changes only whether the Rollover column participates in the Available computation (REQ-011/011a). This keeps the Rollover column informational regardless of toggle state, while the toggle becomes a clean "am I counting the carry in my working number" switch.
 
 **REQ-013:** The toggle is URL-persisted (`rollover=1` when on; param omitted when off). This makes filtered views bookmarkable and keeps chatbot context-awareness working (per the 2026-04 URL-based page-state ADR).
 
-**REQ-014:** When the toggle is on and the displayed month is January, rollover balance is zero for every category (per Rollover Budgets BRD REQ-005) and the displayed budgeted values match the raw budgets. This is correct behavior, not a bug, but worth noting in a brief tooltip or subtext on the toggle when January is the active month: *"January is the start of the rollover year — no carry applies yet."*
+**REQ-014:** When the toggle is on and the displayed month is January, rollover balance is zero for every category (per Rollover Budgets BRD REQ-005) and Available therefore equals the current-month delta — same as the toggle-off case, for this one month. Worth noting in a brief tooltip or subtext on the toggle when January is the active month: *"January is the start of the rollover year — no carry applies yet."*
 
 ### 3.2 Category Type Filter
 
@@ -110,24 +129,26 @@ This BRD is **additive**:
 
 ### 3.3 Variance Filter
 
-**REQ-018:** A single-select control offers:
+**REQ-018:** A single-select control offers (labels retained from the variance-era for continuity):
 
 - **All** (default)
-- **Under budget** (favorable variance — rows where the actual is on the "good" side of the budget per §4)
-- **Over budget** (unfavorable variance — rows on the "bad" side)
-- **Seriously over budget** (unfavorable variance exceeding the threshold in REQ-019)
+- **Under budget** — rows with `Available > 0` (favorable surplus)
+- **Over budget** — rows with `Available < 0` (unfavorable shortfall)
+- **Seriously over budget** — rows with `Available` deeply negative per REQ-019
 
-**REQ-019:** The "seriously over budget" threshold is **200% variance from budget**, locked in v1 (no user configuration). Concretely:
+Filter evaluation uses the **current** Available value — i.e., it respects the Use Rollover toggle. With the toggle off, a spending row with a $500 rollover but $20 current-month overspend matches "Over budget" (because toggle-off Available = −$20). With the toggle on, the same row has Available = +$480 and matches "Under budget." This makes "what the filter sees" match "what the column shows" — the only filter the user can trust is the one operating on the numbers they're looking at.
 
-- **Spending:** `actual > 3 × budgeted` (spent more than 3x the budget).
-- **Income:** `actual < budgeted / 3` (earned less than 1/3 of the target).
-- **Savings:** `actual < budgeted / 3` (saved less than 1/3 of the target).
+**REQ-019:** The "seriously over budget" threshold preserves the historic 200% semantics, re-expressed in Available terms:
 
-Where `budgeted` reflects the current rollover toggle state. Categories with `budgeted === 0` are excluded from the seriously-over calculation (division undefined).
+- **Spending:** `Available < −2 × Budgeted` (equivalent to `actual > 3 × budgeted`).
+- **Income:** `Available < −(2/3) × Budgeted` (equivalent to `actual < budgeted / 3`).
+- **Savings:** same as Income.
+
+Categories with `Budgeted === 0` are excluded from the seriously-over calculation (division undefined). Thresholds remain asymmetric across types for the same reason the current variance-era thresholds were — "3× spending" and "1/3 income" are the natural magnitude asymmetries.
 
 **REQ-020:** The variance filter is URL-persisted as `variance=under|over|serious`. Omitted when set to "All".
 
-**REQ-021:** Variance filtering applies at the **child row level** during evaluation, but the display unit is the parent accordion. If any child of a parent matches the filter, the parent row is shown and its accordion is auto-expanded to reveal the matching children. Non-matching siblings remain visible within the expanded parent (so the user has context), but are visually de-emphasized (e.g., lower opacity).
+**REQ-021:** Variance filtering applies at the **child row level** during evaluation, but the display unit is the parent accordion. If any child of a parent matches the filter, the parent row is shown. Non-matching siblings of a matched child remain visible within the expanded parent (so the user has context), but are visually de-emphasized (e.g., lower opacity). Filters do **not** auto-expand parents in v1 — parents always default to collapsed; users click to see the children their filter matched.
 
 **REQ-022:** A parent with its own budget and actual (no children, or children that don't match) is evaluated at the parent level against the same filter.
 
@@ -156,37 +177,48 @@ Where `budgeted` reflects the current rollover toggle state. Categories with `bu
 
 ## 4. Type-Aware Display Semantics
 
-### 4.1 Variance Sign Convention
+### 4.1 Sign Convention — Tone-Signed Available
 
-**REQ-030:** The numeric variance shown in the column is always `actual − budgeted`, independent of category type. This is consistent across Spending, Income, and Savings.
+**REQ-030:** The numeric values in the **Available** and **Rollover** columns are **tone-signed**: positive means favorable (surplus vs. plan), negative means unfavorable (shortfall vs. plan). The invariant across every row, regardless of section:
+
+```
++$X  →  $X ahead of plan  (green)
+−$X  →  $X behind plan    (red)
+ 0   →  on plan exactly   (neutral)
+```
+
+**REQ-031:** The underlying arithmetic flips per section to produce this unified sign:
+
+- **Spending:** favorable direction is underspend. `Available = Budgeted − Actual (+ Rollover if toggle on)`. Rollover is `Σ (Budgeted_i − Actual_i)` across prior months, same sign convention.
+- **Income:** favorable direction is over-earn. `Available = Actual − Budgeted (+ Rollover if toggle on)`. Rollover is `Σ (Actual_i − Budgeted_i)` across prior months.
+- **Savings:** favorable direction is over-save. Same formulas as Income.
+
+The reader never sees this arithmetic; they see positive/negative signed against favorability. Numeric consistency of meaning ("green positive = surplus") is preserved across every section. For **parent rows**, the section comes from the parent's own `isIncome` / `isSavings` flags; the subtree is type-consistent per the category hierarchy rules so every child shares its parent's section.
+
+**REQ-032:** Because sign is tone-signed (not raw `actual − budgeted`), `+$100` in a Spending row and `+$100` in an Income row both mean *"$100 ahead of plan for this line."* This is the intended invariant. The prior convention (raw `actual − budgeted`) is retired with this BRD revision. Any surface outside BvA II that still shows the raw convention (`Variance` columns in the existing BvA tab, for example) stays on its own convention — the two pages intentionally speak different dialects and that is not a bug.
 
 ### 4.2 Color Convention
 
-**REQ-031:** Color carries the "goodness" meaning:
+**REQ-033:** Color mirrors sign:
 
-| Type | `actual > budgeted` | `actual < budgeted` | `actual ≈ budgeted` |
-|---|---|---|---|
-| Spending | 🔴 red (unfavorable) | 🟢 green (favorable) | neutral |
-| Income | 🟢 green (favorable) | 🔴 red (unfavorable) | neutral |
-| Savings | 🟢 green (favorable) | 🔴 red (unfavorable) | neutral |
+| Row's Available | Tone | Color |
+|---|---|---|
+| `> 0` | favorable | 🟢 green |
+| `< 0` | unfavorable | 🔴 red |
+| `= 0` | neutral | default |
 
-Specific Mantine color tokens are an implementation detail, but the conventions used elsewhere in the app (green=favorable, red=unfavorable) must be preserved.
+The Rollover column follows the same sign→color mapping (tone-signed). When the Use Rollover toggle is **off**, the Rollover cell's color is suppressed — rendered in dimmed/disabled styling — to signal "visible for reference, not participating in Available." For non-rollover categories, the cell is `—` in dimmed text.
 
-**REQ-032:** The displayed number never has its sign flipped per type. A future dev reading two tables with `+$100` variance must be able to trust that both mean `actual` is $100 higher than `budgeted`.
+### 4.3 Filter Interpretation
 
-### 4.3 Filter Interpretation Across Types
+**REQ-034:** The "Under budget" / "Over budget" / "Seriously over budget" filter evaluates against the **Available** value as currently displayed (respecting the Use Rollover toggle):
 
-**REQ-033:** The "Under budget" / "Over budget" / "Seriously over budget" filter applies the **goodness** interpretation, not the raw sign:
+- **Under budget** = `Available > 0` (surplus)
+- **Over budget** = `Available < 0` (shortfall)
+- **Seriously over budget** = `Available` deeply negative per REQ-019
 
-- Spending: "Over budget" = `actual > budgeted`; "Under budget" = `actual < budgeted`.
-- Income: "Over budget" = `actual < budgeted`; "Under budget" = `actual > budgeted`.
-- Savings: "Over budget" = `actual < budgeted`; "Under budget" = `actual > budgeted`.
+The per-section goodness mapping happens implicitly inside the Available calculation. The filter's user-facing semantics are unified: "Over budget" universally means "this row is behind plan."
 
-In plain English: "Over budget" always means *the bad direction for the category's type*.
-
-### 4.4 Parent Row Type
-
-**REQ-034:** For parent rows, the category-type convention used for coloring and filtering is the parent's type. If a top-level category is Income, all rows in its subtree are treated as Income for this purpose. (The existing `isIncome` / `isSavings` hierarchy rules already ensure a subtree is type-consistent.)
 
 ---
 
@@ -285,9 +317,9 @@ In plain English: "Over budget" always means *the bad direction for the category
 
 **REQ-050:** All interactive elements (chips, toggles, edit buttons, dismiss/restore actions) must be keyboard-accessible with visible focus states. Accordion expand/collapse must be operable via Enter/Space on the parent row.
 
-**REQ-051:** Color-coded variance must not be the sole signal of favorable/unfavorable. Pair color with a text indicator (e.g., "+", "−", or a small icon) for screen-reader users and for colorblind users.
+**REQ-051:** Color-coded Available / Rollover must not be the sole signal of favorable/unfavorable. Pair color with a text indicator (sign prefix "+" / "−" and a directional icon on Available) for screen-reader users and for colorblind users.
 
-**REQ-052:** The page must remain usable at tablet widths (≥768px). Mobile-optimized layout is not required in v1 (household primarily uses laptop). If columns must compress on smaller screens, the Variance column has priority; the Budgeted column is next; the Actual column may stack under the category name on very narrow views.
+**REQ-052:** The page must remain usable at tablet widths (≥768px). Mobile-optimized layout is not required in v1 (household primarily uses laptop). If columns must compress on smaller screens, the **Available** column has priority; **Budgeted** is next; **Rollover** may collapse into the Available cell as a tooltip or supplementary line; **Actual** may stack under the category name on very narrow views.
 
 ---
 
@@ -312,9 +344,9 @@ The following are desirable but not required in v1:
 
 ## 10. Assumptions
 
-- The existing `/budgets` page tab infrastructure (Mantine Tabs + URL param `view`) can accommodate a third tab without structural changes.
-- The existing `buildCategoryTreeAggregation` utility can be extended or wrapped to produce effective values when rollover is on, without forking the rollup logic.
-- Users will understand that the numeric variance (`actual − budgeted`) means the same thing across types, with color indicating whether that number is good or bad in context.
+- The existing `/budgets` page tab infrastructure (Mantine Tabs + URL param `view`) can accommodate another tab without structural changes.
+- `buildCategoryTreeAggregation` handles the Budgeted column's max rule directly; Rollover is computed separately per-node and summed for parent rows.
+- Users adapt to the tone-signed Available framing ("green positive = ahead of plan") quickly. The previous raw-variance convention lives on in the existing BvA tab for users who prefer it.
 - Users are comfortable with the "Update all future" action overwriting existing budgets, given the explicit before/after confirmation.
 
 ---
@@ -349,16 +381,21 @@ All open questions resolved during the design conversation on 2026-04-21.
 | OQ-006 | Should the hide concept reuse the name "hide"? | **No** — renamed to **Dismiss** to avoid collision with `Category.isHidden` |
 | OQ-007 | What state persists to URL vs. ephemeral? | Month, tab, rollover, types, variance → URL. Accordion, show-dismissed, dismissed set → not URL |
 | OQ-008 | Is the "seriously over budget" threshold configurable? | **No** — locked at 200% variance |
-| OQ-009 | Does variance filtering match at parent or child level? | Matches at child level; parent auto-expands to show matches; non-matching siblings de-emphasized |
+| OQ-009 | Does variance filtering match at parent or child level? | Matches at child level; non-matching siblings de-emphasized. Parents default to collapsed — no auto-expand (Phase 4 post-UAT revision). |
+| OQ-010 | How is the rollover carry surfaced to the user? | **Dedicated Rollover column**, always shown. Tone-signed (positive = favorable). Dimmed when toggle off; em-dash for non-rollover categories. |
+| OQ-011 | What's the sign convention on the Available column? | **Tone-signed**: positive = favorable ("ahead of plan"), negative = unfavorable ("behind plan") across every section. Replaces the retired `actual − budgeted` variance convention (which lives on in the existing BvA tab). |
+| OQ-012 | Does the Use Rollover toggle change the Budgeted column? | **No.** Budgeted is always the raw monthly budget (max rule over the subtree). The toggle only affects whether the Rollover column participates in Available — and the Rollover cell's styling (full color vs. dimmed). |
 
 ---
 
 ## 13. Success Criteria
 
-- A user on `/budgets?view=bva-ii&month=2026-04` sees a parent-level accordion of their categories with Actual, Budgeted, and Variance columns.
-- Toggling Use Rollover updates the Budgeted and Variance columns to reflect effective budgets, with no impact on the Actual column.
-- Filtering by variance health correctly expands parents whose children match, and correctly interprets "over/under" per category type.
-- Dismissing a parent removes it from view immediately; "Show dismissed" toggles the dismissed set back into view with a Restore action.
-- Opening the Edit modal on any row allows single-month or future-months updates with explicit before/after confirmation.
-- The existing Budget vs. Actual tab's behavior is unchanged.
+- A user on `/budgets?view=bva-ii&month=2026-04` sees a parent-level accordion with five columns: Actual, Budgeted, Rollover, Available, Actions.
+- Available is always tone-signed — green positive across every section means "ahead of plan," red negative means "behind plan." A future reader can scan a spending row and an income row and trust that `+$100` means the same thing in both contexts.
+- Toggling Use Rollover changes only the Available column's value and the Rollover column's color (full vs. dimmed). Budgeted and Actual never change.
+- The Rollover column is always visible: tone-signed colored for rollover categories when the toggle is on, dimmed for rollover categories when the toggle is off, em-dash for non-rollover categories.
+- Variance filters ("Under / Over / Seriously over budget") evaluate against the current Available value and unify semantics across sections.
+- Dismissing a parent removes it from view immediately; "Show dismissed" toggles the dismissed set back with a Restore action.
+- The Edit modal offers single-month or future-months updates with explicit before/after confirmation.
+- The existing Budget vs. Actual tab's behavior is unchanged — it keeps the raw `actual − budgeted` variance convention.
 - Dismissal is never confused with `Category.isHidden` in code review or future documentation.
