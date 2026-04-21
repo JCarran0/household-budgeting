@@ -40,12 +40,31 @@ function todayIso(): string {
   return `${y}-${m}-${day}`;
 }
 
-/** Compute contiguous ranges of days NOT covered by any stay. Used for REQ-041 nudges. */
-function uncoveredRanges(days: string[], stops: Stop[]): Array<{ start: string; end: string }> {
+/**
+ * Compute contiguous ranges of days NOT covered by any stay. Used for REQ-041 nudges.
+ * `trip.endDate` is the declared travel-home day — Stay `endDate` is night-based (last
+ * night slept there), so the trip's final day needs no lodging and is skipped.
+ */
+function uncoveredRanges(
+  days: string[],
+  stops: Stop[],
+  tripEndDate: string,
+): Array<{ start: string; end: string }> {
   const ranges: Array<{ start: string; end: string }> = [];
   let currentStart: string | null = null;
   let currentEnd: string | null = null;
+  const closeRange = () => {
+    if (currentStart && currentEnd) {
+      ranges.push({ start: currentStart, end: currentEnd });
+    }
+    currentStart = null;
+    currentEnd = null;
+  };
   for (const d of days) {
+    if (d === tripEndDate) {
+      closeRange();
+      continue;
+    }
     const active = findActiveStay(stops, d);
     if (!active) {
       if (currentStart === null) {
@@ -53,16 +72,10 @@ function uncoveredRanges(days: string[], stops: Stop[]): Array<{ start: string; 
       }
       currentEnd = d;
     } else {
-      if (currentStart && currentEnd) {
-        ranges.push({ start: currentStart, end: currentEnd });
-        currentStart = null;
-        currentEnd = null;
-      }
+      closeRange();
     }
   }
-  if (currentStart && currentEnd) {
-    ranges.push({ start: currentStart, end: currentEnd });
-  }
+  closeRange();
   return ranges;
 }
 
@@ -283,7 +296,10 @@ export function Agenda({ trip, onAddStop, onEditStop, onDeleteStop }: AgendaProp
   }
 
   // Gap-day Stay nudges: inserted after each uncovered range boundary.
-  const uncovered = useMemo(() => uncoveredRanges(days, stops), [days, stops]);
+  const uncovered = useMemo(
+    () => uncoveredRanges(days, stops, trip.endDate),
+    [days, stops, trip.endDate],
+  );
   const gapNudges = uncovered.map((range) => (
     <Paper
       key={`gap-${range.start}`}
