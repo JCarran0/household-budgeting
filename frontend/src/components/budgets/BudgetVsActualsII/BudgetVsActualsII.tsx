@@ -177,8 +177,15 @@ export function BudgetVsActualsII({ selectedMonth, active }: BudgetVsActualsIIPr
       });
     }
 
+    // Sort parents by absolute variance descending (biggest deviations first).
+    // Ties break alphabetically so the order is stable.
     for (const key of Object.keys(buckets) as SectionType[]) {
-      buckets[key].sort((a, b) => a.tree.parentName.localeCompare(b.tree.parentName));
+      buckets[key].sort((a, b) => {
+        const aVar = Math.abs(a.tree.effectiveActual - a.tree.effectiveBudget);
+        const bVar = Math.abs(b.tree.effectiveActual - b.tree.effectiveBudget);
+        if (aVar !== bVar) return bVar - aVar;
+        return a.tree.parentName.localeCompare(b.tree.parentName);
+      });
     }
 
     return SECTION_ORDER
@@ -251,7 +258,7 @@ export function BudgetVsActualsII({ selectedMonth, active }: BudgetVsActualsIIPr
     const tone = getVarianceTone(section, actual, budgeted);
     const color = toneMantineColor(tone);
     return (
-      <Group gap={4} wrap="nowrap" style={dim ? { opacity: 0.5 } : undefined}>
+      <Group gap={4} wrap="nowrap" justify="flex-end" style={dim ? { opacity: 0.5 } : undefined}>
         <Text c={color} fw={500} component="span">
           {formatSignedVariance(variance)}
         </Text>
@@ -376,7 +383,12 @@ export function BudgetVsActualsII({ selectedMonth, active }: BudgetVsActualsIIPr
                         </Group>
                       </Table.Td>
                     </Table.Tr>
-                    {isExpanded && tree.children.map(child => {
+                    {isExpanded && [...tree.children].sort((a, b) => {
+                      const aVar = Math.abs(a.actual - a.budgeted);
+                      const bVar = Math.abs(b.actual - b.budgeted);
+                      if (aVar !== bVar) return bVar - aVar;
+                      return a.categoryName.localeCompare(b.categoryName);
+                    }).map(child => {
                       const dim = deEmphasizedChildIds.has(child.categoryId);
                       return (
                         <Table.Tr
