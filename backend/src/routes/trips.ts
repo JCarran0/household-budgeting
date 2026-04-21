@@ -20,6 +20,12 @@ const photoAlbumUrlSchema = z
   .optional()
   .transform((v) => (v === '' || v === undefined ? null : v));
 
+// Stop IDs are client-generated UUIDs, but we validate as a non-empty string to
+// avoid coupling to the UUID format used elsewhere. Null clears the cover.
+const coverStopIdSchema = z
+  .union([z.string().min(1), z.null()])
+  .optional();
+
 const createTripSchema = z
   .object({
     name: z.string().min(1).max(100),
@@ -37,6 +43,7 @@ const createTripSchema = z
     rating: z.number().int().min(1).max(5).nullable().optional(),
     notes: z.string().max(2000).optional(),
     photoAlbumUrl: photoAlbumUrlSchema,
+    coverStopId: coverStopIdSchema,
   })
   .refine((data) => data.endDate >= data.startDate, {
     message: 'endDate must be on or after startDate',
@@ -69,6 +76,7 @@ const updateTripSchema = z
     rating: z.number().int().min(1).max(5).nullable().optional(),
     notes: z.string().max(2000).optional(),
     photoAlbumUrl: photoAlbumUrlSchema,
+    coverStopId: coverStopIdSchema,
   })
   .refine(
     (data) => {

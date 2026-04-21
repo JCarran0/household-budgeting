@@ -50,7 +50,12 @@ import { AddStopSheet } from '../components/trips/agenda/AddStopSheet';
 import { ItineraryEmptyState } from '../components/trips/agenda/ItineraryEmptyState';
 import { TripTemplateModal } from '../components/trips/agenda/TripTemplateModal';
 import { TripMap } from '../components/trips/map/TripMap';
-import { hasVerifiedCoords } from '../../../shared/utils/tripHelpers';
+import { TripCoverBanner } from '../components/trips/TripCoverBanner';
+import {
+  getStopPhoto,
+  hasVerifiedCoords,
+  resolveCoverStop,
+} from '../../../shared/utils/tripHelpers';
 import type {
   TripDrillDownTarget,
 } from '../components/trips/TripSpendingBreakdown';
@@ -246,6 +251,67 @@ export function TripDetail() {
       ? `${formatCurrency(trip.totalSpent)} / ${formatCurrency(trip.totalBudget)}`
       : formatCurrency(trip.totalSpent);
 
+  const coverStop = resolveCoverStop(trip);
+  const coverPhoto = coverStop ? getStopPhoto(coverStop) : null;
+
+  const tagChip = (
+    <Tooltip label={clipboard.copied ? 'Copied!' : 'Copy tag'}>
+      <Code
+        style={{ cursor: 'pointer', userSelect: 'none' }}
+        onClick={() => clipboard.copy(trip.tag)}
+      >
+        <Group gap={4} wrap="nowrap">
+          <IconCopy size={10} />
+          <Text size="xs" span>
+            {trip.tag}
+          </Text>
+        </Group>
+      </Code>
+    </Tooltip>
+  );
+
+  const photoAlbumButton = trip.photoAlbumUrl ? (
+    <Tooltip label="Open photo album">
+      <Button
+        component="a"
+        href={trip.photoAlbumUrl}
+        target="_blank"
+        rel="noopener noreferrer"
+        leftSection={<IconPhoto size={14} />}
+        variant="light"
+        size="xs"
+      >
+        Open album
+      </Button>
+    </Tooltip>
+  ) : null;
+
+  const editButton = (
+    <Tooltip label="Edit trip">
+      <ActionIcon
+        variant="subtle"
+        color="blue"
+        onClick={openEdit}
+        aria-label="Edit trip"
+      >
+        <IconEdit size={16} />
+      </ActionIcon>
+    </Tooltip>
+  );
+
+  const deleteButton = (
+    <Tooltip label="Delete trip">
+      <ActionIcon
+        variant="subtle"
+        color="red"
+        onClick={openDelete}
+        aria-label="Delete trip"
+      >
+        <IconTrash size={16} />
+      </ActionIcon>
+    </Tooltip>
+  );
+
   return (
     <Container size="lg" py="xl">
       <Stack gap="md">
@@ -257,89 +323,89 @@ export function TripDetail() {
           </Group>
         </Anchor>
 
-        {/* Header */}
-        <Group justify="space-between" align="flex-start" wrap="nowrap">
-          <Group gap="sm" wrap="nowrap" style={{ minWidth: 0 }}>
-            <ThemeIcon variant="light" size="lg" color="blue">
-              <IconMapPin size={20} />
-            </ThemeIcon>
-            <Stack gap={4} style={{ minWidth: 0 }}>
-              <Group gap="sm" wrap="nowrap">
-                <Title order={2} style={{ margin: 0 }}>
-                  {trip.name}
-                </Title>
-                <Badge color={STATUS_BADGE_COLOR[trip.status]} variant="light">
-                  {trip.status}
-                </Badge>
+        {coverPhoto ? (
+          <>
+            <TripCoverBanner
+              photoName={coverPhoto.photoName}
+              attribution={coverPhoto.attribution}
+              title={trip.name}
+              dateRange={formatTripDateRange(trip.startDate, trip.endDate)}
+              statusLabel={trip.status}
+              statusColor={STATUS_BADGE_COLOR[trip.status]}
+              actions={
+                <Group gap={2} wrap="nowrap">
+                  <ActionIcon
+                    variant="transparent"
+                    c="white"
+                    onClick={openEdit}
+                    aria-label="Edit trip"
+                  >
+                    <IconEdit size={18} />
+                  </ActionIcon>
+                  <ActionIcon
+                    variant="transparent"
+                    c="white"
+                    onClick={openDelete}
+                    aria-label="Delete trip"
+                  >
+                    <IconTrash size={18} />
+                  </ActionIcon>
+                </Group>
+              }
+            />
+            <Group justify="space-between" align="center" wrap="wrap" gap="sm">
+              <Group gap="sm" wrap="wrap">
+                {tagChip}
+                {photoAlbumButton}
+                {trip.rating !== null && (
+                  <Rating value={trip.rating} readOnly size="sm" fractions={1} />
+                )}
               </Group>
-              <Group gap="xs" c="dimmed" wrap="nowrap">
-                <IconCalendar size={14} />
-                <Text size="sm">
-                  {formatTripDateRange(trip.startDate, trip.endDate)}
-                </Text>
+              <Text size="lg" fw={600} c={overBudget ? 'red' : undefined}>
+                {budgetLabel}
+              </Text>
+            </Group>
+          </>
+        ) : (
+          <Group justify="space-between" align="flex-start" wrap="nowrap">
+            <Group gap="sm" wrap="nowrap" style={{ minWidth: 0 }}>
+              <ThemeIcon variant="light" size="lg" color="blue">
+                <IconMapPin size={20} />
+              </ThemeIcon>
+              <Stack gap={4} style={{ minWidth: 0 }}>
+                <Group gap="sm" wrap="nowrap">
+                  <Title order={2} style={{ margin: 0 }}>
+                    {trip.name}
+                  </Title>
+                  <Badge color={STATUS_BADGE_COLOR[trip.status]} variant="light">
+                    {trip.status}
+                  </Badge>
+                </Group>
+                <Group gap="xs" c="dimmed" wrap="nowrap">
+                  <IconCalendar size={14} />
+                  <Text size="sm">
+                    {formatTripDateRange(trip.startDate, trip.endDate)}
+                  </Text>
+                </Group>
+                {trip.rating !== null && (
+                  <Rating value={trip.rating} readOnly size="sm" fractions={1} />
+                )}
+              </Stack>
+            </Group>
+
+            <Stack gap={4} align="flex-end">
+              <Text size="lg" fw={600} c={overBudget ? 'red' : undefined}>
+                {budgetLabel}
+              </Text>
+              <Group gap="xs">
+                {tagChip}
+                {photoAlbumButton}
+                {editButton}
+                {deleteButton}
               </Group>
-              {trip.rating !== null && (
-                <Rating value={trip.rating} readOnly size="sm" fractions={1} />
-              )}
             </Stack>
           </Group>
-
-          <Stack gap={4} align="flex-end">
-            <Text size="lg" fw={600} c={overBudget ? 'red' : undefined}>
-              {budgetLabel}
-            </Text>
-            <Group gap="xs">
-              <Tooltip label={clipboard.copied ? 'Copied!' : 'Copy tag'}>
-                <Code
-                  style={{ cursor: 'pointer', userSelect: 'none' }}
-                  onClick={() => clipboard.copy(trip.tag)}
-                >
-                  <Group gap={4} wrap="nowrap">
-                    <IconCopy size={10} />
-                    <Text size="xs" span>
-                      {trip.tag}
-                    </Text>
-                  </Group>
-                </Code>
-              </Tooltip>
-              {trip.photoAlbumUrl && (
-                <Tooltip label="Open photo album">
-                  <Button
-                    component="a"
-                    href={trip.photoAlbumUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    leftSection={<IconPhoto size={14} />}
-                    variant="light"
-                    size="xs"
-                  >
-                    Open album
-                  </Button>
-                </Tooltip>
-              )}
-              <Tooltip label="Edit trip">
-                <ActionIcon
-                  variant="subtle"
-                  color="blue"
-                  onClick={openEdit}
-                  aria-label="Edit trip"
-                >
-                  <IconEdit size={16} />
-                </ActionIcon>
-              </Tooltip>
-              <Tooltip label="Delete trip">
-                <ActionIcon
-                  variant="subtle"
-                  color="red"
-                  onClick={openDelete}
-                  aria-label="Delete trip"
-                >
-                  <IconTrash size={16} />
-                </ActionIcon>
-              </Tooltip>
-            </Group>
-          </Stack>
-        </Group>
+        )}
 
         <Divider />
 

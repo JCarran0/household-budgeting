@@ -55,12 +55,15 @@ export class TripService {
 
   private async loadTrips(familyId: string): Promise<StoredTrip[]> {
     const trips = (await this.dataService.getData<StoredTrip[]>(`trips_${familyId}`)) ?? [];
-    // Backwards-compat: older trips persisted before itineraries have no `stops`
-    // and trips persisted before V2 have no `photoAlbumUrl`. Default both on read.
+    // Backwards-compat: older trips persisted before itineraries have no `stops`,
+    // trips persisted before V2 have no `photoAlbumUrl`, and trips persisted
+    // before the cover-photo feature have no `coverStopId`. Default all three
+    // on read so the rest of the service can assume a fully-shaped object.
     return trips.map((t) => ({
       ...t,
       stops: t.stops ?? [],
       photoAlbumUrl: t.photoAlbumUrl ?? null,
+      coverStopId: t.coverStopId ?? null,
     }));
   }
 
@@ -150,6 +153,7 @@ export class TripService {
       notes: data.notes ?? '',
       stops: [],
       photoAlbumUrl: data.photoAlbumUrl ?? null,
+      coverStopId: data.coverStopId ?? null,
       createdAt: now,
       updatedAt: now,
       lastModifiedBy: userId,
@@ -233,6 +237,8 @@ export class TripService {
       notes: data.notes !== undefined ? data.notes : existing.notes,
       photoAlbumUrl:
         data.photoAlbumUrl !== undefined ? data.photoAlbumUrl : existing.photoAlbumUrl,
+      coverStopId:
+        data.coverStopId !== undefined ? data.coverStopId : existing.coverStopId,
       tag: tagWillChange ? candidateTag : oldTag,
       updatedAt: now,
       lastModifiedBy: userId ?? existing.lastModifiedBy,

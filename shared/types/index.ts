@@ -320,6 +320,11 @@ export interface Trip {
   stops: Stop[];
   /** Optional link to an externally-hosted photo album (Google Photos, etc). */
   photoAlbumUrl: string | null;
+  /**
+   * Stop whose photo drives the cover banner on trip surfaces. When null, the
+   * resolver falls back to the first Stay (then Eat/Play) stop with a photoName.
+   */
+  coverStopId: string | null;
 }
 
 export interface TripCategoryBudget {
@@ -536,6 +541,7 @@ export interface CreateTripDto {
   rating?: number | null;
   notes?: string;
   photoAlbumUrl?: string | null;
+  coverStopId?: string | null;
 }
 
 export interface UpdateTripDto {
@@ -547,6 +553,7 @@ export interface UpdateTripDto {
   rating?: number | null;
   notes?: string;
   photoAlbumUrl?: string | null;
+  coverStopId?: string | null;
 }
 
 // Project types

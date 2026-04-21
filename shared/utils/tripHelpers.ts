@@ -212,6 +212,74 @@ export function hasVerifiedCoords(stop: Stop): boolean {
 }
 
 /**
+ * Resolve which stop's photo should drive the cover banner for a trip.
+ *
+ * Resolution order:
+ *   1. If `trip.coverStopId` points at a still-existing stop with a `photoName`
+ *      on a verified location, use it (user's explicit pick).
+ *   2. Otherwise, the first Stay (in itinerary/date order) whose verified
+ *      location has a `photoName`.
+ *   3. Otherwise, the first Eat or Play stop with a verified-location photo.
+ *   4. Otherwise, null — caller falls back to the non-banner header.
+ *
+ * Transit stops are never considered — their locations represent travel
+ * endpoints, not a place to photograph.
+ */
+export function resolveCoverStop(
+  trip: Pick<Trip, 'coverStopId' | 'stops'>,
+): Stop | null {
+  const hasPhoto = (stop: Stop): boolean => {
+    if (stop.type === 'stay') return Boolean(stop.location.photoName);
+    if (stop.type === 'eat' || stop.type === 'play') {
+      return stop.location?.kind === 'verified' && Boolean(stop.location.photoName);
+    }
+    return false;
+  };
+
+  if (trip.coverStopId) {
+    const explicit = trip.stops.find((s) => s.id === trip.coverStopId);
+    if (explicit && hasPhoto(explicit)) return explicit;
+  }
+
+  const sorted = [...trip.stops].sort((a, b) => {
+    if (a.date !== b.date) return a.date.localeCompare(b.date);
+    return a.sortOrder - b.sortOrder;
+  });
+
+  const firstStay = sorted.find((s) => s.type === 'stay' && hasPhoto(s));
+  if (firstStay) return firstStay;
+
+  const firstEatOrPlay = sorted.find(
+    (s) => (s.type === 'eat' || s.type === 'play') && hasPhoto(s),
+  );
+  return firstEatOrPlay ?? null;
+}
+
+/**
+ * Extract a verified-location `photoName` + attribution from a stop, regardless
+ * of stop type. Returns null for transits and free-text / missing locations.
+ */
+export function getStopPhoto(
+  stop: Stop,
+): { photoName: string; attribution: string | null } | null {
+  if (stop.type === 'stay') {
+    if (!stop.location.photoName) return null;
+    return {
+      photoName: stop.location.photoName,
+      attribution: stop.location.photoAttribution ?? null,
+    };
+  }
+  if (stop.type === 'eat' || stop.type === 'play') {
+    if (stop.location?.kind !== 'verified' || !stop.location.photoName) return null;
+    return {
+      photoName: stop.location.photoName,
+      attribution: stop.location.photoAttribution ?? null,
+    };
+  }
+  return null;
+}
+
+/**
  * A transit is a "base change" (renders as a full-width connector between chapters,
  * per REQ-026) when the transit date sits at the seam between two different stays
  * OR is the last day of one stay with no next stay OR the first day of a stay with

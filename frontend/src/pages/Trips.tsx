@@ -22,6 +22,10 @@ import {
   Textarea,
   Rating,
   Code,
+  Image,
+  ScrollArea,
+  UnstyledButton,
+  Box,
 } from '@mantine/core';
 import { DatePickerInput } from '@mantine/dates';
 import { useForm } from '@mantine/form';
@@ -38,13 +42,16 @@ import {
   IconX,
   IconMapPin,
   IconCalendar,
+  IconBed,
+  IconToolsKitchen2,
+  IconCompass,
 } from '@tabler/icons-react';
 import { format } from 'date-fns';
 import { api } from '../lib/api';
 import { useCategoryOptions } from '../hooks/useCategoryOptions';
 import { formatCurrency } from '../utils/formatters';
-import type { TripSummary, TripCategoryBudget, CreateTripDto, UpdateTripDto } from '../../../shared/types';
-import { generateTripTag } from '../../../shared/utils/tripHelpers';
+import type { Stop, TripSummary, TripCategoryBudget, CreateTripDto, UpdateTripDto } from '../../../shared/types';
+import { generateTripTag, getStopPhoto, resolveCoverStop } from '../../../shared/utils/tripHelpers';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -69,6 +76,7 @@ interface TripFormValues {
   notes: string;
   categoryBudgets: TripCategoryBudget[];
   photoAlbumUrl: string;
+  coverStopId: string | null;
 }
 
 // Mantine 8's DatePickerInput returns YYYY-MM-DD strings on change but our
@@ -78,6 +86,88 @@ interface TripFormValues {
 function pickerToYmd(value: Date | string): string {
   if (typeof value === 'string') return value.slice(0, 10);
   return format(value, 'yyyy-MM-dd');
+}
+
+// ---------------------------------------------------------------------------
+// CoverPhotoThumb — one thumbnail in the cover-photo picker strip
+// ---------------------------------------------------------------------------
+
+const STOP_TYPE_ICON: Record<'stay' | 'eat' | 'play' | 'transit', typeof IconBed> = {
+  stay: IconBed,
+  eat: IconToolsKitchen2,
+  play: IconCompass,
+  transit: IconMapPin, // unreachable — transits have no photos
+};
+
+function coverThumbLabel(stop: Stop): string {
+  if (stop.type === 'transit') return 'Transit';
+  return stop.name || stop.type;
+}
+
+interface CoverPhotoThumbProps {
+  stopType: Stop['type'];
+  stopLabel: string;
+  photoName: string;
+  selected: boolean;
+  onSelect: () => void;
+}
+
+function CoverPhotoThumb({
+  stopType,
+  stopLabel,
+  photoName,
+  selected,
+  onSelect,
+}: CoverPhotoThumbProps) {
+  const key = import.meta.env.VITE_GOOGLE_PLACES_API_KEY as string | undefined;
+  if (!key) return null;
+  const src = `https://places.googleapis.com/v1/${photoName}/media?maxWidthPx=200&key=${key}`;
+  const IconComp = STOP_TYPE_ICON[stopType];
+
+  return (
+    <Tooltip label={stopLabel} withArrow>
+      <UnstyledButton
+        onClick={onSelect}
+        aria-label={`Select ${stopLabel} as cover photo`}
+        aria-pressed={selected}
+        style={{ flexShrink: 0 }}
+      >
+        <Box
+          style={{
+            position: 'relative',
+            width: 88,
+            height: 88,
+            borderRadius: 8,
+            overflow: 'hidden',
+            boxShadow: selected
+              ? '0 0 0 3px var(--mantine-color-blue-filled)'
+              : '0 0 0 1px var(--mantine-color-gray-3)',
+            transition: 'box-shadow 120ms ease',
+          }}
+        >
+          <Image src={src} alt={stopLabel} w={88} h={88} fit="cover" />
+          <Box
+            style={{
+              position: 'absolute',
+              top: 4,
+              left: 4,
+              width: 22,
+              height: 22,
+              borderRadius: '50%',
+              background: 'rgba(0, 0, 0, 0.55)',
+              color: 'white',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              pointerEvents: 'none',
+            }}
+          >
+            <IconComp size={12} />
+          </Box>
+        </Box>
+      </UnstyledButton>
+    </Tooltip>
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -108,6 +198,7 @@ export function TripFormModal({ opened, onClose, trip }: TripFormModalProps) {
       notes: '',
       categoryBudgets: [],
       photoAlbumUrl: '',
+      coverStopId: null,
     },
     validate: {
       name: (value) => (value.trim().length === 0 ? 'Name is required' : null),
@@ -165,6 +256,7 @@ export function TripFormModal({ opened, onClose, trip }: TripFormModalProps) {
         notes: trip.notes ?? '',
         categoryBudgets: trip.categoryBudgets ?? [],
         photoAlbumUrl: trip.photoAlbumUrl ?? '',
+        coverStopId: trip.coverStopId ?? null,
       });
     } else {
       form.reset();
@@ -178,6 +270,32 @@ export function TripFormModal({ opened, onClose, trip }: TripFormModalProps) {
     if (!name.trim() || !startDate) return null;
     return generateTripTag(name.trim(), pickerToYmd(startDate));
   }, [form.values]);
+
+  // Stops on this trip that have a verified-location photo — candidates for
+  // the cover picker. Sorted by date → sortOrder so the strip mirrors the
+  // itinerary reading order. Hidden entirely in create mode (no stops yet).
+  const photoCandidates = useMemo(() => {
+    if (!trip) return [];
+    const sorted = [...trip.stops].sort((a, b) => {
+      if (a.date !== b.date) return a.date.localeCompare(b.date);
+      return a.sortOrder - b.sortOrder;
+    });
+    return sorted.flatMap((stop) => {
+      const photo = getStopPhoto(stop);
+      return photo ? [{ stop, photo }] : [];
+    });
+  }, [trip]);
+
+  // Ring follows the *resolved* cover (explicit pick or default fallback) so
+  // the strip always shows what the banner will render.
+  const resolvedCoverStopId = useMemo(() => {
+    if (!trip) return null;
+    const resolved = resolveCoverStop({
+      coverStopId: form.values.coverStopId,
+      stops: trip.stops,
+    });
+    return resolved?.id ?? null;
+  }, [trip, form.values.coverStopId]);
 
   // Create mutation
   const createMutation = useMutation({
@@ -255,6 +373,7 @@ export function TripFormModal({ opened, onClose, trip }: TripFormModalProps) {
           notes: values.notes.trim(),
           categoryBudgets,
           photoAlbumUrl,
+          coverStopId: values.coverStopId,
         },
       });
     } else {
@@ -267,6 +386,7 @@ export function TripFormModal({ opened, onClose, trip }: TripFormModalProps) {
         notes: values.notes.trim(),
         categoryBudgets,
         photoAlbumUrl,
+        coverStopId: values.coverStopId,
       });
     }
   };
@@ -415,6 +535,47 @@ export function TripFormModal({ opened, onClose, trip }: TripFormModalProps) {
               fractions={1}
             />
           </Stack>
+
+          {/* Cover photo picker */}
+          {isEdit && photoCandidates.length > 0 && (
+            <Stack gap={6}>
+              <Group justify="space-between" align="center">
+                <Text size="sm" fw={500}>
+                  Cover photo
+                </Text>
+                {form.values.coverStopId !== null && (
+                  <Button
+                    size="compact-xs"
+                    variant="subtle"
+                    onClick={() => form.setFieldValue('coverStopId', null)}
+                  >
+                    Use default
+                  </Button>
+                )}
+              </Group>
+              <Text size="xs" c="dimmed">
+                Choose the stop whose photo appears on the trip header.
+              </Text>
+              <ScrollArea
+                scrollbarSize={6}
+                offsetScrollbars="x"
+                type="auto"
+              >
+                <Group gap="xs" wrap="nowrap" py={2}>
+                  {photoCandidates.map(({ stop, photo }) => (
+                    <CoverPhotoThumb
+                      key={stop.id}
+                      stopType={stop.type}
+                      stopLabel={coverThumbLabel(stop)}
+                      photoName={photo.photoName}
+                      selected={resolvedCoverStopId === stop.id}
+                      onSelect={() => form.setFieldValue('coverStopId', stop.id)}
+                    />
+                  ))}
+                </Group>
+              </ScrollArea>
+            </Stack>
+          )}
 
           {/* Notes */}
           <Textarea
