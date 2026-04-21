@@ -335,7 +335,7 @@ The per-section goodness mapping happens implicitly inside the Available calcula
 
 The following are desirable but not required in v1:
 
-- **Summary strip** at the top showing filter-aware totals (total actual, total budgeted, total variance) for the currently-visible row set. Probably cheap to include; flag it for v1 scope review.
+- **Summary strip** at the top showing filter-aware totals for the currently-visible row set. Shipped in v1 with cashflow-convention math (post-Rev-2): `Net Actual` and `Net Budgeted` use Income − Spending − Savings (matching the dashboard Cashflow card), while `Total Rollover` and `Total Available` sum their already-tone-signed per-row values directly. Each cell exposes a hover tooltip with the formula and an example question it answers.
 - **Keyboard shortcut** to expand/collapse all accordions.
 - **Compare to prior month** column (variance vs. last month's variance) — useful but adds visual density.
 - **Export current view to CSV** — useful but aligns better with the pending Data Export feature in CLAUDE.md.
