@@ -5,6 +5,44 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.50.0](https://github.com/JCarran0/household-budgeting/compare/v5.49.2...v5.50.0) (2026-04-21)
+
+
+### Features
+
+* **budgets:** add rollover balance + effective budget utilities ([f332d16](https://github.com/JCarran0/household-budgeting/commit/f332d16d94ca6d741ebea7cf5b98c6e15d014fee))
+* **budgets:** BvA II accordion render + summary strip ([aa17662](https://github.com/JCarran0/household-budgeting/commit/aa176628fef292dd1fef76a06fffd7584b801cba))
+* **budgets:** BvA II data layer with rollover-aware composition ([11ebaee](https://github.com/JCarran0/household-budgeting/commit/11ebaee95479099e227d56d567c71e50ba3d39c3))
+* **budgets:** BvA II filters — types, rollover, variance ([1190f86](https://github.com/JCarran0/household-budgeting/commit/1190f86cbe02009f631ad6bdc65337e34041775e))
+* **budgets:** BvA II keyboard-accessible parent rows ([3a4630c](https://github.com/JCarran0/household-budgeting/commit/3a4630cc4096e578ef712c2f884a1a7d6a0ed15e))
+* **budgets:** BvA II row-level budget edit modal ([deeb6ef](https://github.com/JCarran0/household-budgeting/commit/deeb6ef37ffaf122df22a73aede515f567cf2c72))
+* **budgets:** BvA II show-dismissed toggle + serialization tests ([6bcdbf6](https://github.com/JCarran0/household-budgeting/commit/6bcdbf6bbaeb9f5aa9419fdd2b00549e83c70af6))
+* **budgets:** scaffold Budget vs. Actuals II tab ([59c891d](https://github.com/JCarran0/household-budgeting/commit/59c891dcd4c1d6e82137e65dbdd7573a27aaf867))
+* **bva-ii:** Available + Rollover column redesign (BRD Rev-2) ([81f145d](https://github.com/JCarran0/household-budgeting/commit/81f145d54ca77da6d04a2cf6dba1aba1180c524e))
+* **categories:** enforce rollover subtree exclusivity on update ([b71b294](https://github.com/JCarran0/household-budgeting/commit/b71b294fa2653b7947b70af12ebb3222f94e1e04))
+* **categories:** rollover toggle UX with subtree conflict resolution ([0709136](https://github.com/JCarran0/household-budgeting/commit/0709136cbf5549ca1b783865e88e57e4d5dfe14f))
+
+
+### Bug Fixes
+
+* **budgets:** BvA II — drop row-count badge from section headers ([8e03917](https://github.com/JCarran0/household-budgeting/commit/8e0391796a8a321ca387f000e482e45ba977fba6))
+* **budgets:** BvA II arrow tracks sign, not goodness ([a0945b7](https://github.com/JCarran0/household-budgeting/commit/a0945b76a4197a1eb5a2ea6a0537714155a1e77f))
+* **budgets:** BvA II chevron stays left, rows default to collapsed ([8045341](https://github.com/JCarran0/household-budgeting/commit/8045341f9d650b9d03215d239953a12ba11d4fd5))
+* **budgets:** BvA II variance cell right-justify + sort by magnitude ([0ad4394](https://github.com/JCarran0/household-budgeting/commit/0ad43943ce34fe24809efa3fa219244481423771))
+* **bva-ii:** edit modal — Update buttons stay enabled after typing amount ([d88906b](https://github.com/JCarran0/household-budgeting/commit/d88906bc67ff9e4abba6cbcbeda2d2bf88f9d808))
+* **bva-ii:** edit modal rollover callout — later months, not prior ([ecd8972](https://github.com/JCarran0/household-budgeting/commit/ecd8972f87685d4bb739563f58a458cb7a5cae1a))
+* **bva-ii:** simpler rollover callout copy ([5647bb1](https://github.com/JCarran0/household-budgeting/commit/5647bb18f4fde0c565a3e97cf4ec1e38532e1dff))
+* **bva-ii:** table overflow — horizontal scroll + no-wrap cells ([3627bca](https://github.com/JCarran0/household-budgeting/commit/3627bca2cb7e79ba5a6927e6b19064d83d309034))
+
+
+### Documentation
+
+* add Rollover Budgets + Budget vs. Actuals II BRDs and plans ([d1e28bb](https://github.com/JCarran0/household-budgeting/commit/d1e28bb0d26527cee4a39e19822bb002d61fa2ce))
+* **bva-ii:** BRD Revision 2 — Available + Rollover column redesign ([d783b49](https://github.com/JCarran0/household-budgeting/commit/d783b497d19a7aeaae5f460da3bab2b5e20a00c6))
+* **bva-ii:** note post-Phase-9 UAT polish in plan ([0765b77](https://github.com/JCarran0/household-budgeting/commit/0765b77408fa2177e31d9ef35348f3fd47fb53a0))
+* **bva-ii:** Phase 9 marked shipped ([6fcd124](https://github.com/JCarran0/household-budgeting/commit/6fcd12444e61132ff79d095cddb4d396726aa94b))
+* finalize rollover + BvA II plans; CLAUDE.md critical files ([059efa4](https://github.com/JCarran0/household-budgeting/commit/059efa426c5ebd2d2df1c45a05e31b61d3acff33))
+
 ### [5.49.2](https://github.com/JCarran0/household-budgeting/compare/v5.49.1...v5.49.2) (2026-04-21)
 
 
