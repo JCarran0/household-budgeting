@@ -4,7 +4,17 @@ status: draft
 created: 2026-04-21
 last_updated: 2026-04-21
 last_updated_note: |
-  2026-04-21 — Phase 1 shipped: computeRolloverBalance, computeEffectiveBudget,
+  2026-04-21 — Phase 2 shipped: categoryService.updateCategory now enforces
+  subtree exclusivity and supports atomic resolveRolloverConflicts. New
+  RolloverSubtreeConflictError (code=ROLLOVER_SUBTREE_CONFLICT, payload
+  carries conflictingCategoryIds + relation) and RolloverNotBudgetableError
+  (code=ROLLOVER_NOT_BUDGETABLE). AppError gained an optional details field
+  so structured payloads flow through the global error handler unchanged.
+  11 integration tests cover descendant/ancestor/sibling/self/transfer
+  paths, both resolve-conflicts directions, non-persistence of the command
+  flag, error payload shape, and unflag-always-succeeds semantics.
+
+  Phase 1 shipped: computeRolloverBalance, computeEffectiveBudget,
   buildEffectiveBudgetsMap, findRolloverSubtreeConflicts added to
   shared/utils/budgetCalculations.ts; buildCategoryTreeAggregation extended
   with optional budgetsOverride. 24 new tests covering the BRD §2.4 worked
@@ -172,7 +182,7 @@ phases:
 
   - phase: 2
     name: Backend Subtree-Exclusivity Validation
-    status: pending
+    status: shipped
     depends_on: [1]
     goals:
       - Reject isRollover=true updates that would violate subtree exclusivity

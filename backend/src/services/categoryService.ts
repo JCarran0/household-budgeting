@@ -1,5 +1,7 @@
 import { Category } from '../shared/types';
+import { isBudgetableCategory } from '../shared/utils/categoryHelpers';
 import { DataService } from './dataService';
+import { RolloverSubtreeConflictError, RolloverNotBudgetableError } from '../errors';
 import { ImportService } from './importService';
 
 /**
@@ -43,6 +45,14 @@ export interface UpdateCategoryDto {
   isHidden?: boolean;
   isRollover?: boolean;
   isSavings?: boolean;  // only honored when parentId === null
+  /**
+   * Opt-in atomic resolution of subtree conflicts when setting isRollover=true.
+   * Without this flag, conflicting ancestors/descendants cause the update to
+   * throw RolloverSubtreeConflictError so the frontend can confirm with the
+   * user first. With this flag, conflicting peers are unflagged in the same
+   * writeCategories call as the target update. Never persisted on Category.
+   */
+  resolveRolloverConflicts?: boolean;
 }
 
 export class CategoryService {
@@ -176,9 +186,54 @@ export class CategoryService {
       throw new Error('Category not found');
     }
 
+    // Rollover subtree exclusivity enforcement (ROLLOVER-BUDGETS-BRD §3.2, REQ-019).
+    // Only triggered when the caller is setting isRollover to true — removing
+    // rollover is always safe.
+    if (updates.isRollover === true) {
+      const target = categories[index];
+
+      // REQ-002 defense: transfers are not budgetable and cannot be rollover.
+      if (!isBudgetableCategory(target.id, categories)) {
+        throw new RolloverNotBudgetableError();
+      }
+
+      const ancestorConflicts: string[] = [];
+      if (target.parentId) {
+        const parent = categories.find(c => c.id === target.parentId);
+        if (parent?.isRollover) {
+          ancestorConflicts.push(parent.id);
+        }
+      }
+
+      const descendantConflicts: string[] = categories
+        .filter(c => c.parentId === target.id && c.isRollover)
+        .map(c => c.id);
+
+      const allConflicts = [...ancestorConflicts, ...descendantConflicts];
+      if (allConflicts.length > 0) {
+        if (updates.resolveRolloverConflicts !== true) {
+          const relation: 'ancestor' | 'descendant' | 'mixed' =
+            ancestorConflicts.length && descendantConflicts.length ? 'mixed' :
+            ancestorConflicts.length ? 'ancestor' : 'descendant';
+          throw new RolloverSubtreeConflictError(allConflicts, relation);
+        }
+        // Atomic resolution: unflag conflicting peers in the same writeCategories
+        // call as the target update. writeCategories replaces the full file/S3
+        // object, so the write itself is atomic.
+        for (const cat of categories) {
+          if (allConflicts.includes(cat.id)) {
+            cat.isRollover = false;
+          }
+        }
+      }
+    }
+
+    // resolveRolloverConflicts is a command flag, not a persisted property.
+    const { resolveRolloverConflicts: _resolveRolloverConflicts, ...persistableUpdates } = updates;
+
     const updatedCategory = {
       ...categories[index],
-      ...updates
+      ...persistableUpdates
     };
 
     // Recompute isIncome when parentId changes

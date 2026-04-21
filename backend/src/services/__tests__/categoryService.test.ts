@@ -1,6 +1,7 @@
 import { CategoryService } from '../categoryService';
 import { InMemoryDataService } from '../dataService';
 import { Category } from '../../shared/types';
+import { RolloverSubtreeConflictError, RolloverNotBudgetableError } from '../../errors';
 
 describe('CategoryService', () => {
   let categoryService: CategoryService;
@@ -454,6 +455,181 @@ describe('CategoryService', () => {
       const categories = await dataService.getCategories(testUserId);
       expect(categories).toHaveLength(1);
       expect(categories[0]).toEqual(existingCategory);
+    });
+  });
+
+  describe('Rollover subtree exclusivity (ROLLOVER-BUDGETS-BRD §3.2, REQ-019)', () => {
+    // Each test seeds a parent + child, flips one or the other's isRollover,
+    // then exercises the guarded update path on categoryService.updateCategory.
+    const parent: Category = {
+      id: 'FOOD_AND_DRINK', name: 'Food and Drink', parentId: null,
+      isCustom: false, isHidden: false, isRollover: false, isIncome: false, isSavings: false,
+    };
+    const childA: Category = {
+      id: 'CUSTOM_GROCERIES', name: 'Groceries', parentId: 'FOOD_AND_DRINK',
+      isCustom: true, isHidden: false, isRollover: false, isIncome: false, isSavings: false,
+    };
+    const childB: Category = {
+      id: 'CUSTOM_RESTAURANTS', name: 'Restaurants', parentId: 'FOOD_AND_DRINK',
+      isCustom: true, isHidden: false, isRollover: false, isIncome: false, isSavings: false,
+    };
+    const sibling: Category = {
+      id: 'ENTERTAINMENT', name: 'Entertainment', parentId: null,
+      isCustom: false, isHidden: false, isRollover: false, isIncome: false, isSavings: false,
+    };
+
+    it('rejects flagging parent when a child is already flagged — descendant conflict', async () => {
+      await dataService.saveCategories(
+        [parent, { ...childA, isRollover: true }, childB],
+        testUserId,
+      );
+
+      await expect(
+        categoryService.updateCategory('FOOD_AND_DRINK', { isRollover: true }, testUserId),
+      ).rejects.toMatchObject({
+        code: 'ROLLOVER_SUBTREE_CONFLICT',
+        details: { conflictingCategoryIds: ['CUSTOM_GROCERIES'], relation: 'descendant' },
+      });
+
+      // Neither target nor peer changed
+      const stored = await dataService.getCategories(testUserId);
+      expect(stored.find(c => c.id === 'FOOD_AND_DRINK')!.isRollover).toBe(false);
+      expect(stored.find(c => c.id === 'CUSTOM_GROCERIES')!.isRollover).toBe(true);
+    });
+
+    it('rejects flagging a child when its parent is already flagged — ancestor conflict', async () => {
+      await dataService.saveCategories(
+        [{ ...parent, isRollover: true }, childA],
+        testUserId,
+      );
+
+      await expect(
+        categoryService.updateCategory('CUSTOM_GROCERIES', { isRollover: true }, testUserId),
+      ).rejects.toMatchObject({
+        code: 'ROLLOVER_SUBTREE_CONFLICT',
+        details: { conflictingCategoryIds: ['FOOD_AND_DRINK'], relation: 'ancestor' },
+      });
+    });
+
+    it('allows flagging a sibling when an unrelated sibling is flagged', async () => {
+      await dataService.saveCategories([parent, sibling], testUserId);
+
+      const result = await categoryService.updateCategory(
+        'ENTERTAINMENT',
+        { isRollover: true },
+        testUserId,
+      );
+      expect(result.isRollover).toBe(true);
+    });
+
+    it('allows re-update of an already-flagged category (self no-op)', async () => {
+      await dataService.saveCategories([parent, { ...childA, isRollover: true }], testUserId);
+
+      const result = await categoryService.updateCategory(
+        'CUSTOM_GROCERIES',
+        { isRollover: true, name: 'Grocery' },
+        testUserId,
+      );
+      expect(result.isRollover).toBe(true);
+      expect(result.name).toBe('Grocery');
+    });
+
+    it('rejects flagging a transfer category — ROLLOVER_NOT_BUDGETABLE', async () => {
+      const transfer: Category = {
+        id: 'TRANSFER_OUT_SAVINGS', name: 'Transfer Out', parentId: null,
+        isCustom: false, isHidden: false, isRollover: false, isIncome: false, isSavings: false,
+      };
+      await dataService.saveCategories([transfer], testUserId);
+
+      await expect(
+        categoryService.updateCategory('TRANSFER_OUT_SAVINGS', { isRollover: true }, testUserId),
+      ).rejects.toBeInstanceOf(RolloverNotBudgetableError);
+    });
+
+    it('flags parent atomically with resolveRolloverConflicts=true — children unflagged', async () => {
+      await dataService.saveCategories(
+        [parent, { ...childA, isRollover: true }, { ...childB, isRollover: true }],
+        testUserId,
+      );
+
+      const result = await categoryService.updateCategory(
+        'FOOD_AND_DRINK',
+        { isRollover: true, resolveRolloverConflicts: true },
+        testUserId,
+      );
+      expect(result.isRollover).toBe(true);
+
+      const stored = await dataService.getCategories(testUserId);
+      expect(stored.find(c => c.id === 'FOOD_AND_DRINK')!.isRollover).toBe(true);
+      expect(stored.find(c => c.id === 'CUSTOM_GROCERIES')!.isRollover).toBe(false);
+      expect(stored.find(c => c.id === 'CUSTOM_RESTAURANTS')!.isRollover).toBe(false);
+    });
+
+    it('flags child atomically with resolveRolloverConflicts=true — parent unflagged', async () => {
+      await dataService.saveCategories(
+        [{ ...parent, isRollover: true }, childA],
+        testUserId,
+      );
+
+      const result = await categoryService.updateCategory(
+        'CUSTOM_GROCERIES',
+        { isRollover: true, resolveRolloverConflicts: true },
+        testUserId,
+      );
+      expect(result.isRollover).toBe(true);
+
+      const stored = await dataService.getCategories(testUserId);
+      expect(stored.find(c => c.id === 'FOOD_AND_DRINK')!.isRollover).toBe(false);
+      expect(stored.find(c => c.id === 'CUSTOM_GROCERIES')!.isRollover).toBe(true);
+    });
+
+    it('does not persist resolveRolloverConflicts onto the Category record', async () => {
+      await dataService.saveCategories([parent], testUserId);
+
+      const result = await categoryService.updateCategory(
+        'FOOD_AND_DRINK',
+        { isRollover: true, resolveRolloverConflicts: true },
+        testUserId,
+      );
+      expect(result).not.toHaveProperty('resolveRolloverConflicts');
+      const stored = await dataService.getCategories(testUserId);
+      expect(stored[0]).not.toHaveProperty('resolveRolloverConflicts');
+    });
+
+    it('structured payload shape matches the frontend contract', async () => {
+      await dataService.saveCategories(
+        [parent, { ...childA, isRollover: true }],
+        testUserId,
+      );
+      try {
+        await categoryService.updateCategory('FOOD_AND_DRINK', { isRollover: true }, testUserId);
+        fail('should have thrown');
+      } catch (err) {
+        expect(err).toBeInstanceOf(RolloverSubtreeConflictError);
+        const e = err as RolloverSubtreeConflictError;
+        expect(e.code).toBe('ROLLOVER_SUBTREE_CONFLICT');
+        expect(e.statusCode).toBe(400);
+        expect(e.details).toEqual({
+          conflictingCategoryIds: ['CUSTOM_GROCERIES'],
+          relation: 'descendant',
+        });
+      }
+    });
+
+    it('unflagging a category always succeeds — validation only runs when setting to true', async () => {
+      await dataService.saveCategories(
+        [{ ...parent, isRollover: true }, { ...childA, isRollover: true }], // already invalid
+        testUserId,
+      );
+
+      // Unflagging the parent should be allowed even though the state is invalid —
+      // this is how users resolve legacy conflicts without the atomic flag.
+      const result = await categoryService.updateCategory(
+        'FOOD_AND_DRINK',
+        { isRollover: false },
+        testUserId,
+      );
+      expect(result.isRollover).toBe(false);
     });
   });
 });

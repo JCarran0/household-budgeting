@@ -9,7 +9,8 @@ export class AppError extends Error {
   constructor(
     message: string,
     public readonly statusCode: number,
-    public readonly code?: string
+    public readonly code?: string,
+    public readonly details?: Record<string, unknown>
   ) {
     super(message);
     this.name = this.constructor.name;
@@ -55,5 +56,43 @@ export class ExternalServiceError extends AppError {
 export class RateLimitError extends AppError {
   constructor(message: string = 'Too many requests') {
     super(message, 429, 'RATE_LIMIT');
+  }
+}
+
+/**
+ * Attempted to set isRollover=true on a category whose ancestor or descendant
+ * in the same subtree is already flagged. ROLLOVER-BUDGETS-BRD §3.1 / REQ-019.
+ *
+ * The frontend branches on code === 'ROLLOVER_SUBTREE_CONFLICT' and uses
+ * details.conflictingCategoryIds to render a confirmation modal listing the
+ * affected categories. Retrying the update with resolveRolloverConflicts=true
+ * atomically unflags the peers.
+ */
+export class RolloverSubtreeConflictError extends AppError {
+  constructor(
+    conflictingCategoryIds: string[],
+    relation: 'ancestor' | 'descendant' | 'mixed',
+  ) {
+    super(
+      'Only one category per parent/child chain can use rollover',
+      400,
+      'ROLLOVER_SUBTREE_CONFLICT',
+      { conflictingCategoryIds, relation },
+    );
+  }
+}
+
+/**
+ * Attempted to set isRollover=true on a non-budgetable category (transfer).
+ * ROLLOVER-BUDGETS-BRD REQ-002. Defensive — the Categories UI disables the
+ * toggle for transfers, so this should only fire for direct API calls.
+ */
+export class RolloverNotBudgetableError extends AppError {
+  constructor() {
+    super(
+      'Rollover cannot be set on non-budgetable categories (transfers)',
+      400,
+      'ROLLOVER_NOT_BUDGETABLE',
+    );
   }
 }

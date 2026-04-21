@@ -23,6 +23,12 @@ const updateCategorySchema = z.object({
   isHidden: z.boolean().optional(),
   isRollover: z.boolean().optional(),
   isSavings: z.boolean().optional(),
+  /**
+   * Opt-in confirmation that the caller accepts unflagging conflicting
+   * ancestors/descendants when setting isRollover=true. See
+   * ROLLOVER-BUDGETS-BRD §3.2 and the frontend's two-step confirmation flow.
+   */
+  resolveRolloverConflicts: z.boolean().optional(),
 });
 
 // All routes require authentication
