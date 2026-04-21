@@ -4,7 +4,20 @@ status: draft
 created: 2026-04-21
 last_updated: 2026-04-21
 last_updated_note: |
-  2026-04-21 — Phase 3 shipped: three-section Income → Spending → Savings
+  2026-04-21 — Phase 4 shipped: control-row now carries type chips
+  (multi-select, URL-persisted via types= param; empty-set sentinel
+  'types=none' honors the REQ-017 empty state), Use Rollover switch with
+  January subtext (REQ-014), and variance Select with locked 200%
+  "seriously over" threshold. classifyVariance in new
+  shared/utils/bvaIIFilters.ts resolves match decisions at child level
+  with parent auto-expand + non-matching sibling de-emphasis per
+  REQ-021. Expand state layers user override on top of the filter
+  suggestion: `effective = user.override ?? filter.autoExpand ?? false`.
+  11 backend unit tests cover the per-type direction interpretation,
+  serious threshold edge cases (boundary equality, budgeted=0), child
+  match expansion, and sibling de-emphasis.
+
+  Phase 3 shipped: three-section Income → Spending → Savings
   accordion layout, per-section Table with Category / Actual / Budgeted /
   Variance / Actions columns. Parent row click or chevron toggles
   session-only expand; expanded children render as indented sub-rows with
@@ -251,7 +264,7 @@ phases:
 
   - phase: 4
     name: Filters (Types, Variance) + Rollover Toggle
-    status: pending
+    status: shipped
     depends_on: [3]
     goals:
       - Wire filters to the URL state from Phase 1 and the tree from Phase 2
