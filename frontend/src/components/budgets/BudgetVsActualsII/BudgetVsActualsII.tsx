@@ -44,7 +44,9 @@ import {
 import { formatCurrency } from '../../../utils/formatters';
 import { CATEGORY_TYPES, useBvaIIUrlState, type CategoryTypeFilter } from './useBvaIIUrlState';
 import { useDismissedParentIds } from './useDismissedParentIds';
+import { BudgetEditModal } from './BudgetEditModal';
 import type { TreeAggregation } from '../../../../../shared/utils/budgetCalculations';
+import { isBudgetableCategory } from '../../../../../shared/utils/categoryHelpers';
 
 interface BudgetVsActualsIIProps {
   /** Currently-selected month, shared with the parent Budgets page. YYYY-MM. */
@@ -97,6 +99,7 @@ export function BudgetVsActualsII({ selectedMonth, active }: BudgetVsActualsIIPr
   // The effective expand state layers user-overrides on top of filter
   // auto-expand suggestions — see buildEffectiveExpanded below.
   const [userExpanded, setUserExpanded] = useState<Map<string, boolean>>(new Map());
+  const [editTarget, setEditTarget] = useState<{ categoryId: string } | null>(null);
 
   const selectedYear = Number(selectedMonth.slice(0, 4));
   const isJanuary = selectedMonth.slice(5, 7) === '01';
@@ -324,14 +327,19 @@ export function BudgetVsActualsII({ selectedMonth, active }: BudgetVsActualsIIPr
                       </Table.Td>
                       <Table.Td style={{ textAlign: 'right' }}>
                         <Group gap={4} justify="flex-end" wrap="nowrap">
-                          <ActionIcon
-                            variant="subtle"
-                            size="sm"
-                            aria-label="Edit budget"
-                            onClick={(e) => e.stopPropagation()}
-                          >
-                            <IconEdit size={14} />
-                          </ActionIcon>
+                          {isBudgetableCategory(tree.parentId, categories ?? []) && (
+                            <ActionIcon
+                              variant="subtle"
+                              size="sm"
+                              aria-label="Edit budget"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setEditTarget({ categoryId: tree.parentId });
+                              }}
+                            >
+                              <IconEdit size={14} />
+                            </ActionIcon>
+                          )}
                           <ActionIcon
                             variant="subtle"
                             size="sm"
@@ -368,13 +376,16 @@ export function BudgetVsActualsII({ selectedMonth, active }: BudgetVsActualsIIPr
                             {renderVarianceCell(section, child.actual, child.budgeted, dim)}
                           </Table.Td>
                           <Table.Td style={{ textAlign: 'right' }}>
-                            <ActionIcon
-                              variant="subtle"
-                              size="sm"
-                              aria-label="Edit budget"
-                            >
-                              <IconEdit size={14} />
-                            </ActionIcon>
+                            {isBudgetableCategory(child.categoryId, categories ?? []) && (
+                              <ActionIcon
+                                variant="subtle"
+                                size="sm"
+                                aria-label="Edit budget"
+                                onClick={() => setEditTarget({ categoryId: child.categoryId })}
+                              >
+                                <IconEdit size={14} />
+                              </ActionIcon>
+                            )}
                           </Table.Td>
                         </Table.Tr>
                       );
@@ -487,6 +498,17 @@ export function BudgetVsActualsII({ selectedMonth, active }: BudgetVsActualsIIPr
           )}
         </Stack>
       </Paper>
+
+      {editTarget && categoryById.get(editTarget.categoryId) && composition && (
+        <BudgetEditModal
+          opened={true}
+          onClose={() => setEditTarget(null)}
+          category={categoryById.get(editTarget.categoryId)!}
+          initialMonth={selectedMonth}
+          existingBudgetsByMonth={composition.budgetsByCategoryByMonth.get(editTarget.categoryId) ?? new Map()}
+          useRolloverToggleOn={urlState.rollover}
+        />
+      )}
 
       {loading ? (
         <Center p="md"><Loader /></Center>

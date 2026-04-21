@@ -4,7 +4,22 @@ status: draft
 created: 2026-04-21
 last_updated: 2026-04-21
 last_updated_note: |
-  2026-04-21 — Phase 5 shipped: Show dismissed switch wired into the
+  2026-04-21 — Phase 6 shipped: BudgetEditModal component renders two
+  mutually-exclusive primary actions ("Update [MonthName]" and "Update
+  all future [Year] budgets"; December disables the latter with a
+  tooltip). Confirmation step lives in the same modal — clicking a
+  primary action swaps the body to a per-month before/after Table with
+  an orange "← existing value will be overwritten" badge on rows that
+  would clobber a non-matching existing budget. Rollover categories get
+  an extra alert callout on both the editor and the confirmation.
+  Single-month path calls createOrUpdateBudget; multi-month path builds
+  a CreateBudgetDto array for every strictly-later month of the
+  selected year and calls batchUpdateBudgets (always-overwrite per
+  REQ-041). onSuccess invalidates ['budgets'] and ['bva-ii'] keys so
+  existing BvA and YearlyBudgetGrid reflect the change. Edit icons are
+  hidden for !isBudgetableCategory rows as a defensive belt.
+
+  Phase 5 shipped: Show dismissed switch wired into the
   control row (disabled when no rows dismissed, subtext shows the
   count). Parent-row dismiss icon was already live from Phase 3; it
   flips to a Restore icon when the row is dismissed and the toggle is
@@ -373,7 +388,7 @@ phases:
 
   - phase: 6
     name: Row-Level Edit Modal
-    status: pending
+    status: shipped
     depends_on: [5]
     goals:
       - Edit current-month OR all-future-months-of-year budgets from the
