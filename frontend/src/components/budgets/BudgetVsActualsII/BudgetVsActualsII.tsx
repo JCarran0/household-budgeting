@@ -1,4 +1,4 @@
-import { Fragment, useMemo, useState } from 'react';
+import { Fragment, useMemo, useState, type KeyboardEvent } from 'react';
 import {
   ActionIcon,
   Badge,
@@ -289,7 +289,21 @@ export function BudgetVsActualsII({ selectedMonth, active }: BudgetVsActualsIIPr
 
                 return (
                   <Fragment key={tree.parentId}>
-                    <Table.Tr style={{ opacity: rowOpacity, cursor: hasChildren ? 'pointer' : 'default' }}>
+                    <Table.Tr
+                      style={{ opacity: rowOpacity, cursor: hasChildren ? 'pointer' : 'default' }}
+                      {...(hasChildren ? {
+                        role: 'button',
+                        tabIndex: 0,
+                        'aria-expanded': isExpanded,
+                        'aria-label': `${tree.parentName}, ${isExpanded ? 'expanded' : 'collapsed'}. Press Enter or Space to toggle.`,
+                        onKeyDown: (e: KeyboardEvent<HTMLTableRowElement>) => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault();
+                            toggleExpanded(tree.parentId, isExpanded);
+                          }
+                        },
+                      } : {})}
+                    >
                       <Table.Td onClick={() => hasChildren && toggleExpanded(tree.parentId, isExpanded)}>
                         <Group gap="xs">
                           {hasChildren ? (

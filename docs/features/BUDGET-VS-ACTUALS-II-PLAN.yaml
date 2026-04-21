@@ -4,7 +4,20 @@ status: draft
 created: 2026-04-21
 last_updated: 2026-04-21
 last_updated_note: |
-  2026-04-21 — Phase 6 shipped: BudgetEditModal component renders two
+  2026-04-21 — Phase 7 shipped: parent rows now announce as buttons with
+  role=button, tabIndex=0, aria-expanded, and an aria-label that
+  describes state + toggle affordance. Enter/Space fires expand/
+  collapse. All ActionIcons already carried aria-labels from Phase 3.
+  Variance cells pair color with a +/− sign and trending icon so
+  colorblind users can read direction without color (REQ-051).
+  Dismissed rows use strikethrough on the name in addition to reduced
+  opacity. Modal focus trap + ESC close rely on Mantine defaults.
+  Tablet (≥768px) column layout: Category 40%, right-aligned Actual /
+  Budgeted / Variance, 80px Actions — fits without horizontal scroll.
+  Mobile (<768px) is explicitly a v1 scope boundary per REQ-052 and
+  may horizontal-scroll.
+
+  Phase 6 shipped: BudgetEditModal component renders two
   mutually-exclusive primary actions ("Update [MonthName]" and "Update
   all future [Year] budgets"; December disables the latter with a
   tooltip). Confirmation step lives in the same modal — clicking a
@@ -468,7 +481,7 @@ phases:
 
   - phase: 7
     name: Accessibility + Tablet Layout
-    status: pending
+    status: shipped
     depends_on: [6]
     goals:
       - Meet REQ-050 / REQ-051 / REQ-052
