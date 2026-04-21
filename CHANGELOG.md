@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+### [5.49.2](https://github.com/JCarran0/household-budgeting/compare/v5.49.1...v5.49.2) (2026-04-21)
+
+
+### Bug Fixes
+
+* **dates:** anchor user-visible date boundaries to US Eastern Time ([412e03d](https://github.com/JCarran0/household-budgeting/commit/412e03d6c8f58648b9696cbfa39df6e9a76087cb))
+
 ### [5.49.1](https://github.com/JCarran0/household-budgeting/compare/v5.49.0...v5.49.1) (2026-04-21)
 
 
