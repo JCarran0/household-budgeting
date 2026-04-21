@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.51.0](https://github.com/JCarran0/household-budgeting/compare/v5.50.1...v5.51.0) (2026-04-21)
+
+
+### Features
+
+* **bva-ii:** Actual cell opens transaction preview (hover → tooltip, click → modal) ([2bb0af5](https://github.com/JCarran0/household-budgeting/commit/2bb0af55b2cf96ed4a24436239b77908efd6fd1e))
+* **bva-ii:** cashflow-convention summary totals + explanatory tooltips ([96cf4a7](https://github.com/JCarran0/household-budgeting/commit/96cf4a7868eb6dd01a5440d17207c1b792171d09))
+* **bva-ii:** edit modal — toggle category rollover inline ([20b32b7](https://github.com/JCarran0/household-budgeting/commit/20b32b70ddfb9628b5048746bb2d1b75591bb17e))
+* **bva-ii:** rollover toggle auto-saves on change ([f44a6d8](https://github.com/JCarran0/household-budgeting/commit/f44a6d83e81d91a205aa1d75457e5b7c6711583f))
+
+
+### Documentation
+
+* **bva-ii:** BRD §9 — document summary-strip cashflow totals ([38d1407](https://github.com/JCarran0/household-budgeting/commit/38d14074787c4fd09a18b3188756ee93bf5002c6))
+
 ### [5.50.1](https://github.com/JCarran0/household-budgeting/compare/v5.50.0...v5.50.1) (2026-04-21)
 
 
