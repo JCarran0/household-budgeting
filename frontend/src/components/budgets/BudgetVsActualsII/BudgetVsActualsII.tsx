@@ -249,17 +249,17 @@ export function BudgetVsActualsII({ selectedMonth, active }: BudgetVsActualsIIPr
    */
   const renderRolloverCell = (value: number | null, rowDim: boolean) => {
     if (value === null) {
-      return <Text size="sm" c="dimmed" style={{ opacity: rowDim ? 0.5 : 1 }}>—</Text>;
+      return <Text size="sm" c="dimmed" style={{ opacity: rowDim ? 0.5 : 1, whiteSpace: 'nowrap' }}>—</Text>;
     }
     if (!urlState.rollover) {
       return (
-        <Text size="sm" c="dimmed" style={{ opacity: rowDim ? 0.5 : 1 }}>
+        <Text size="sm" c="dimmed" style={{ opacity: rowDim ? 0.5 : 1, whiteSpace: 'nowrap' }}>
           {formatSigned(value)}
         </Text>
       );
     }
     return (
-      <Text size="sm" c={availableColor(value)} fw={500} style={{ opacity: rowDim ? 0.5 : 1 }}>
+      <Text size="sm" c={availableColor(value)} fw={500} style={{ opacity: rowDim ? 0.5 : 1, whiteSpace: 'nowrap' }}>
         {formatSigned(value)}
       </Text>
     );
@@ -268,9 +268,9 @@ export function BudgetVsActualsII({ selectedMonth, active }: BudgetVsActualsIIPr
   const renderAvailableCell = (value: number, rowDim: boolean) => {
     const color = availableColor(value);
     return (
-      <Group gap={4} wrap="nowrap" justify="flex-end" style={{ opacity: rowDim ? 0.5 : 1 }}>
-        <Text c={color} fw={500} component="span">{formatSigned(value)}</Text>
-        <Text c={color} component="span" aria-hidden>{directionIcon(value)}</Text>
+      <Group gap={4} wrap="nowrap" justify="flex-end" style={{ opacity: rowDim ? 0.5 : 1, whiteSpace: 'nowrap' }}>
+        <Text c={color} fw={500} component="span" style={{ whiteSpace: 'nowrap' }}>{formatSigned(value)}</Text>
+        <Text c={color} component="span" aria-hidden style={{ lineHeight: 0 }}>{directionIcon(value)}</Text>
       </Group>
     );
   };
@@ -285,15 +285,16 @@ export function BudgetVsActualsII({ selectedMonth, active }: BudgetVsActualsIIPr
       <Paper key={section} withBorder p="sm">
         <Stack gap="xs">
           <Title order={5}>{SECTION_LABEL[section]}</Title>
+          <Table.ScrollContainer minWidth={720}>
           <Table striped highlightOnHover>
             <Table.Thead>
               <Table.Tr>
-                <Table.Th style={{ width: '34%' }}>Category</Table.Th>
-                <Table.Th style={{ textAlign: 'right' }}>Actual</Table.Th>
-                <Table.Th style={{ textAlign: 'right' }}>Budgeted</Table.Th>
-                <Table.Th style={{ textAlign: 'right' }}>Rollover</Table.Th>
-                <Table.Th style={{ textAlign: 'right' }}>Available</Table.Th>
-                <Table.Th style={{ width: 80, textAlign: 'right' }}>Actions</Table.Th>
+                <Table.Th style={{ width: '34%', minWidth: 180 }}>Category</Table.Th>
+                <Table.Th style={{ textAlign: 'right', minWidth: 90 }}>Actual</Table.Th>
+                <Table.Th style={{ textAlign: 'right', minWidth: 100 }}>Budgeted</Table.Th>
+                <Table.Th style={{ textAlign: 'right', minWidth: 100 }}>Rollover</Table.Th>
+                <Table.Th style={{ textAlign: 'right', minWidth: 120 }}>Available</Table.Th>
+                <Table.Th style={{ width: 90, minWidth: 90, textAlign: 'right' }}>Actions</Table.Th>
               </Table.Tr>
             </Table.Thead>
             <Table.Tbody>
@@ -428,6 +429,7 @@ export function BudgetVsActualsII({ selectedMonth, active }: BudgetVsActualsIIPr
               })}
             </Table.Tbody>
           </Table>
+          </Table.ScrollContainer>
         </Stack>
       </Paper>
     );
