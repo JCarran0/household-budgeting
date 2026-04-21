@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
 import {
-  Modal,
   Stack,
   Group,
   Button,
@@ -13,6 +12,7 @@ import {
   Divider,
   ScrollArea,
 } from '@mantine/core';
+import { ResponsiveModal } from '../ResponsiveModal';
 import { IconEye, IconArrowRight } from '@tabler/icons-react';
 import { format } from 'date-fns';
 import { formatCurrency } from '../../utils/formatters';
@@ -58,7 +58,7 @@ export function AutoCatPreviewModal({
   }, [opened, changes]);
 
   return (
-    <Modal
+    <ResponsiveModal
       opened={opened}
       onClose={onClose}
       size="xl"
@@ -184,6 +184,6 @@ export function AutoCatPreviewModal({
           </Button>
         </Group>
       </Stack>
-    </Modal>
+    </ResponsiveModal>
   );
 }

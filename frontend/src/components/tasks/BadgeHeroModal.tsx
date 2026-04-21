@@ -4,7 +4,8 @@
  * dismisses it explicitly (no auto-close), so the moment lands.
  */
 
-import { Button, Modal, Stack, Text, Title } from '@mantine/core';
+import { Button, Stack, Text, Title } from '@mantine/core';
+import { ResponsiveModal } from '../ResponsiveModal';
 import type { BadgeDefinition } from '../../../../shared/types';
 import { BadgeIcon } from './BadgeIcon';
 
@@ -23,7 +24,7 @@ export function BadgeHeroModal({
 }: BadgeHeroModalProps) {
   if (!badge) return null;
   return (
-    <Modal
+    <ResponsiveModal
       opened={opened}
       onClose={onClose}
       withCloseButton={false}
@@ -53,6 +54,6 @@ export function BadgeHeroModal({
           Heck yeah!
         </Button>
       </Stack>
-    </Modal>
+    </ResponsiveModal>
   );
 }

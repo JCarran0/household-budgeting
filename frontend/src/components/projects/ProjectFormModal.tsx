@@ -1,6 +1,5 @@
 import { useEffect, useMemo } from 'react';
 import {
-  Modal,
   Stack,
   Group,
   Button,
@@ -12,6 +11,7 @@ import {
   Text,
   Code,
 } from '@mantine/core';
+import { ResponsiveModal } from '../ResponsiveModal';
 import { DatePickerInput } from '@mantine/dates';
 import { useForm } from '@mantine/form';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
@@ -251,7 +251,7 @@ export function ProjectFormModal({ opened, onClose, project }: ProjectFormModalP
   };
 
   return (
-    <Modal
+    <ResponsiveModal
       opened={opened}
       onClose={onClose}
       title={isEdit ? 'Edit Project' : 'Create Project'}
@@ -387,6 +387,6 @@ export function ProjectFormModal({ opened, onClose, project }: ProjectFormModalP
           </Group>
         </Stack>
       </form>
-    </Modal>
+    </ResponsiveModal>
   );
 }

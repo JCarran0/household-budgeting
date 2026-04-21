@@ -1,14 +1,14 @@
 import { useQuery } from '@tanstack/react-query';
-import { 
-  Modal, 
-  Text, 
-  Stack, 
-  Skeleton, 
-  Center, 
+import {
+  Text,
+  Stack,
+  Skeleton,
+  Center,
   ScrollArea,
   Alert,
   ThemeIcon,
 } from '@mantine/core';
+import { ResponsiveModal } from './ResponsiveModal';
 import { 
   IconAlertCircle,
   IconBook,
@@ -234,7 +234,7 @@ export function ChangelogModal({
   };
 
   return (
-    <Modal
+    <ResponsiveModal
       opened={opened}
       onClose={onClose}
       title={
@@ -265,6 +265,6 @@ export function ChangelogModal({
       <ScrollArea style={{ height: '70vh' }} type="scroll">
         {renderContent()}
       </ScrollArea>
-    </Modal>
+    </ResponsiveModal>
   );
 }

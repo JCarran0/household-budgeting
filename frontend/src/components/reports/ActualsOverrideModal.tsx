@@ -2,7 +2,6 @@ import { useEffect } from 'react';
 import { useForm } from '@mantine/form';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import {
-  Modal,
   NumberInput,
   Textarea,
   Button,
@@ -11,6 +10,7 @@ import {
   Text,
   Alert,
 } from '@mantine/core';
+import { ResponsiveModal } from '../ResponsiveModal';
 import { MonthPickerInput } from '@mantine/dates';
 import { notifications } from '@mantine/notifications';
 import { IconInfoCircle, IconCalendar, IconCurrencyDollar } from '@tabler/icons-react';
@@ -135,7 +135,7 @@ export function ActualsOverrideModal({ opened, onClose, override }: ActualsOverr
   const netFlow = form.values.totalIncome - form.values.totalExpenses;
 
   return (
-    <Modal
+    <ResponsiveModal
       opened={opened}
       onClose={handleClose}
       title={isEditing ? 'Edit Actuals Override' : 'Create Actuals Override'}
@@ -234,6 +234,6 @@ export function ActualsOverrideModal({ opened, onClose, override }: ActualsOverr
           </Group>
         </Stack>
       </form>
-    </Modal>
+    </ResponsiveModal>
   );
 }

@@ -7,7 +7,6 @@
  */
 
 import {
-  Modal,
   Group,
   Stack,
   Avatar,
@@ -15,6 +14,7 @@ import {
   ThemeIcon,
   Tooltip,
 } from '@mantine/core';
+import { ResponsiveModal } from '../ResponsiveModal';
 import { format, parseISO } from 'date-fns';
 import type { BadgeCategory, BadgeDefinition, LeaderboardEntry } from '../../../../shared/types';
 import { BADGE_CATALOG } from '../../../../shared/types';
@@ -40,7 +40,7 @@ export function BadgeDetailModal({ opened, onClose, entry }: BadgeDetailModalPro
   const earnedMap = new Map(entry.earnedBadges.map((b) => [b.id, b.earnedAt]));
 
   return (
-    <Modal
+    <ResponsiveModal
       opened={opened}
       onClose={onClose}
       title={
@@ -106,6 +106,6 @@ export function BadgeDetailModal({ opened, onClose, entry }: BadgeDetailModalPro
           );
         })}
       </Stack>
-    </Modal>
+    </ResponsiveModal>
   );
 }

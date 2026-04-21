@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { Modal, TextInput, Button, Group, Text, Stack } from '@mantine/core';
+import { TextInput, Button, Group, Text, Stack } from '@mantine/core';
+import { ResponsiveModal } from '../ResponsiveModal';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { notifications } from '@mantine/notifications';
 import { api } from '../../lib/api';
@@ -60,7 +61,7 @@ export function AccountNicknameModal({ account, opened, onClose }: AccountNickna
   const officialName = account.officialName || account.accountName || account.name;
 
   return (
-    <Modal
+    <ResponsiveModal
       opened={opened}
       onClose={onClose}
       title="Edit Account Nickname"
@@ -106,6 +107,6 @@ export function AccountNicknameModal({ account, opened, onClose }: AccountNickna
           </Group>
         </Group>
       </Stack>
-    </Modal>
+    </ResponsiveModal>
   );
 }

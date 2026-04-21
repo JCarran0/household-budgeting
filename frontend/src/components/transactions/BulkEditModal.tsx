@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import {
-  Modal,
   Stack,
   Select,
   RadioGroup,
@@ -14,6 +13,7 @@ import {
   Badge,
   Divider,
 } from '@mantine/core';
+import { ResponsiveModal } from '../ResponsiveModal';
 import { IconAlertCircle } from '@tabler/icons-react';
 
 interface BulkEditModalProps {
@@ -115,7 +115,7 @@ export function BulkEditModal({
   };
   
   return (
-    <Modal
+    <ResponsiveModal
       opened={opened}
       onClose={handleClose}
       title={
@@ -238,6 +238,6 @@ export function BulkEditModal({
           </Button>
         </Group>
       </Stack>
-    </Modal>
+    </ResponsiveModal>
   );
 }

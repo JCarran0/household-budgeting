@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
 import {
-  Modal,
   Stack,
   TextInput,
   Select,
@@ -9,6 +8,7 @@ import {
   Button,
   Group,
 } from '@mantine/core';
+import { ResponsiveModal } from '../ResponsiveModal';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { notifications } from '@mantine/notifications';
 import { IconCheck, IconX } from '@tabler/icons-react';
@@ -132,7 +132,7 @@ export function ManualAccountModal({ opened, onClose, account }: ManualAccountMo
   };
 
   return (
-    <Modal
+    <ResponsiveModal
       opened={opened}
       onClose={onClose}
       title={isEditing ? 'Edit Manual Account' : 'Add Manual Account'}
@@ -192,6 +192,6 @@ export function ManualAccountModal({ opened, onClose, account }: ManualAccountMo
           </Button>
         </Group>
       </Stack>
-    </Modal>
+    </ResponsiveModal>
   );
 }
