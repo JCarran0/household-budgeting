@@ -1,12 +1,7 @@
-import type { TreeAggregation, ChildAggregation } from './budgetCalculations';
-import {
-  getVarianceTone,
-  type SectionType,
-  type VarianceTone,
-} from './bvaIIDisplay';
+import type { SectionType } from './bvaIIDisplay';
 
 /**
- * BvA II filter composition — type and variance filters.
+ * BvA II filter composition — BRD Revision 2.
  *
  * Matching happens at the child-row level; parents survive if any child
  * matches OR if the parent's own rollup matches (REQ-021/022). The result
@@ -14,11 +9,17 @@ import {
  * siblings inside a parent that qualified via a child match — so the user
  * still sees context (REQ-021).
  *
- * Variance filter "serious" locks at 200% variance in v1 (REQ-019):
- *   - Spending: actual > 3 × budgeted.
- *   - Income:   actual < budgeted / 3.
- *   - Savings:  actual < budgeted / 3.
- *   - budgeted === 0 excludes the row from serious classification entirely.
+ * Evaluation runs against **Available** (tone-signed surplus/shortfall) as
+ * currently displayed. The Use Rollover toggle is already baked into
+ * Available upstream, so "what you filter against" matches "what you see."
+ *
+ * Variance filter definitions per REQ-018/019:
+ *   - under    : Available > 0   (favorable surplus)
+ *   - over     : Available < 0   (unfavorable shortfall)
+ *   - serious  : deeply unfavorable per type (REQ-019):
+ *       Spending          : Available < −2 × Budgeted
+ *       Income / Savings  : Available < −(2/3) × Budgeted
+ *     Rows with Budgeted === 0 are excluded from "serious" entirely.
  */
 
 export type VarianceFilter = 'all' | 'under' | 'over' | 'serious';
@@ -26,92 +27,68 @@ export type VarianceFilter = 'all' | 'under' | 'over' | 'serious';
 export interface FilterDecision {
   /** Include the parent row in output. */
   include: boolean;
-  /** Suggested expand state — true when a child match forced the match. */
-  autoExpand: boolean;
   /** Ids of children that must be de-emphasized (opacity dim). */
   deEmphasizedChildIds: Set<string>;
 }
 
-function matchesDirection(
+interface RowForMatching {
+  budgeted: number;
+  available: number;
+}
+
+function matchesFilter(
   section: SectionType,
-  actual: number,
-  budgeted: number,
+  row: RowForMatching,
   filter: VarianceFilter,
 ): boolean {
   if (filter === 'all') return true;
-  const tone = getVarianceTone(section, actual, budgeted);
-  if (filter === 'under') return tone === 'favorable';
-  if (filter === 'over' || filter === 'serious') {
-    if (tone !== 'unfavorable') return false;
-    if (filter === 'over') return true;
-    // "Serious" — locked 200% per-type threshold.
-    if (budgeted === 0) return false;
-    if (section === 'spending') return actual > 3 * budgeted;
-    // Income / Savings share the same < budgeted/3 threshold.
-    return actual < budgeted / 3;
-  }
-  return false;
+  if (filter === 'under') return row.available > 0;
+  if (filter === 'over') return row.available < 0;
+  // 'serious'
+  if (row.available >= 0) return false;
+  if (row.budgeted <= 0) return false;
+  if (section === 'spending') return row.available < -2 * row.budgeted;
+  // Income / Savings
+  return row.available < -(2 / 3) * row.budgeted;
 }
 
-export interface ClassifyVarianceInput {
+export interface ClassifyAvailableInput {
   section: SectionType;
-  parent: { actual: number; budgeted: number };
-  children: ReadonlyArray<Pick<ChildAggregation, 'categoryId' | 'actual' | 'budgeted'>>;
+  parent: RowForMatching;
+  children: ReadonlyArray<{ categoryId: string; budgeted: number; available: number }>;
   filter: VarianceFilter;
 }
 
-export function classifyVariance({
+export function classifyAvailable({
   section,
   parent,
   children,
   filter,
-}: ClassifyVarianceInput): FilterDecision {
+}: ClassifyAvailableInput): FilterDecision {
   if (filter === 'all') {
-    return { include: true, autoExpand: false, deEmphasizedChildIds: new Set() };
+    return { include: true, deEmphasizedChildIds: new Set() };
   }
 
   const matchingChildIds = new Set<string>();
   for (const c of children) {
-    if (matchesDirection(section, c.actual, c.budgeted, filter)) {
+    if (matchesFilter(section, { budgeted: c.budgeted, available: c.available }, filter)) {
       matchingChildIds.add(c.categoryId);
     }
   }
 
-  const parentMatches = matchesDirection(section, parent.actual, parent.budgeted, filter);
-
   if (matchingChildIds.size > 0) {
-    // Auto-expand the parent so matching children are visible; de-emphasize
-    // the siblings that did not match (REQ-021).
+    // Non-matching siblings stay visible for context but dim (REQ-021).
+    // No auto-expand — parents default collapsed per post-Phase-7 polish.
     const deEmphasized = new Set<string>();
     for (const c of children) {
       if (!matchingChildIds.has(c.categoryId)) deEmphasized.add(c.categoryId);
     }
-    return { include: true, autoExpand: true, deEmphasizedChildIds: deEmphasized };
+    return { include: true, deEmphasizedChildIds: deEmphasized };
   }
 
-  if (parentMatches) {
-    // Parent's own numbers match; no child match → do not force expand (REQ-022).
-    return { include: true, autoExpand: false, deEmphasizedChildIds: new Set() };
+  if (matchesFilter(section, parent, filter)) {
+    return { include: true, deEmphasizedChildIds: new Set() };
   }
 
-  return { include: false, autoExpand: false, deEmphasizedChildIds: new Set() };
+  return { include: false, deEmphasizedChildIds: new Set() };
 }
-
-/**
- * Shortcut: map a TreeAggregation directly to a FilterDecision for a section.
- */
-export function classifyTreeVariance(
-  tree: TreeAggregation,
-  section: SectionType,
-  filter: VarianceFilter,
-): FilterDecision {
-  return classifyVariance({
-    section,
-    parent: { actual: tree.effectiveActual, budgeted: tree.effectiveBudget },
-    children: tree.children,
-    filter,
-  });
-}
-
-/** Export the tone type for callers that need the raw interpretation. */
-export type { SectionType, VarianceTone };

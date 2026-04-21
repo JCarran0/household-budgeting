@@ -68,3 +68,71 @@ export const SECTION_LABEL: Record<SectionType, string> = {
   spending: 'Spending',
   savings: 'Savings',
 };
+
+// =============================================================================
+// Tone-signed values — BRD Revision 2
+// (Available + Rollover columns; retires raw actual−budgeted variance for
+// BvA II. Positive = favorable across every section.)
+// =============================================================================
+
+/**
+ * Tone-signed current-month delta: positive = favorable.
+ *
+ *   Spending      favorable direction is underspend  →  budgeted − actual
+ *   Income        favorable direction is over-earn   →  actual − budgeted
+ *   Savings       favorable direction is over-save   →  actual − budgeted
+ *
+ * This replaces the raw `actual − budgeted` convention for BvA II. The old
+ * convention survives on the existing BvA tab; the two pages speak
+ * different dialects intentionally (BRD Revision 2 note).
+ */
+export function toneSignedDelta(
+  section: SectionType,
+  actual: number,
+  budgeted: number,
+): number {
+  const budgetMinusActual = budgeted - actual;
+  // Normalize -0 → 0 so callers don't see sign-of-zero artifacts.
+  if (budgetMinusActual === 0) return 0;
+  return section === 'spending' ? budgetMinusActual : -budgetMinusActual;
+}
+
+/**
+ * Tone-sign a raw rollover balance (computed as `Σ (budget_i − actual_i)`
+ * by computeRolloverBalance, which is type-agnostic by design).
+ *
+ *   Spending      positive rawRollover = underspent historically  →  passthrough
+ *   Income        positive rawRollover = under-earned historically  →  negate
+ *   Savings       same as Income
+ *
+ * Positive tone-signed rollover = favorable historical surplus.
+ */
+export function toneSignedRollover(
+  section: SectionType,
+  rawRollover: number,
+): number {
+  if (rawRollover === 0) return 0;
+  return section === 'spending' ? rawRollover : -rawRollover;
+}
+
+/**
+ * The Available column value — tone-signed surplus/shortfall vs. plan.
+ *
+ *   Available = toneSignedDelta(section, actual, budgeted)
+ *             + (useRollover && rollover != null ? rollover : 0)
+ *
+ * `rollover` is already tone-signed (from toneSignedRollover). Pass null for
+ * non-rollover categories; they don't contribute to Available regardless of
+ * the toggle.
+ */
+export function computeAvailable(
+  section: SectionType,
+  actual: number,
+  budgeted: number,
+  rollover: number | null,
+  useRollover: boolean,
+): number {
+  const base = toneSignedDelta(section, actual, budgeted);
+  if (useRollover && rollover !== null) return base + rollover;
+  return base;
+}

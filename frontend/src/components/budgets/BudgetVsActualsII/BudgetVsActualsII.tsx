@@ -27,24 +27,23 @@ import { useQuery } from '@tanstack/react-query';
 import { endOfMonth, format, parse } from 'date-fns';
 import { api } from '../../../lib/api';
 import type { Category } from '../../../../../shared/types';
-import { composeBvaII } from '../../../../../shared/utils/bvaIIDataComposition';
+import {
+  composeBvaII,
+  type BvaIIParentRow,
+} from '../../../../../shared/utils/bvaIIDataComposition';
 import {
   SECTION_LABEL,
   SECTION_ORDER,
-  getSectionType,
-  getVarianceTone,
   type SectionType,
-  type VarianceTone,
 } from '../../../../../shared/utils/bvaIIDisplay';
 import {
-  classifyTreeVariance,
+  classifyAvailable,
   type VarianceFilter,
 } from '../../../../../shared/utils/bvaIIFilters';
 import { formatCurrency } from '../../../utils/formatters';
 import { CATEGORY_TYPES, useBvaIIUrlState, type CategoryTypeFilter } from './useBvaIIUrlState';
 import { useDismissedParentIds } from './useDismissedParentIds';
 import { BudgetEditModal } from './BudgetEditModal';
-import type { TreeAggregation } from '../../../../../shared/utils/budgetCalculations';
 import { isBudgetableCategory } from '../../../../../shared/utils/categoryHelpers';
 
 interface BudgetVsActualsIIProps {
@@ -54,55 +53,50 @@ interface BudgetVsActualsIIProps {
   active: boolean;
 }
 
-interface FilteredTree {
-  tree: TreeAggregation;
-  section: SectionType;
-  autoExpand: boolean;
+interface FilteredParent {
+  parent: BvaIIParentRow;
   deEmphasizedChildIds: Set<string>;
 }
 
 interface FilteredSection {
   section: SectionType;
-  trees: FilteredTree[];
-}
-
-function toneMantineColor(tone: VarianceTone): string | undefined {
-  if (tone === 'favorable') return 'green';
-  if (tone === 'unfavorable') return 'red';
-  return undefined;
-}
-
-/** Signed variance formatter — never flips sign by section (REQ-032). */
-function formatSignedVariance(variance: number): string {
-  if (variance > 0) return `+${formatCurrency(variance)}`;
-  if (variance < 0) return `−${formatCurrency(Math.abs(variance))}`;
-  return formatCurrency(0);
+  parents: FilteredParent[];
 }
 
 /**
- * A11y pair for color — the arrow tracks the sign of the variance (did the
- * number go up or down?), which is independent of goodness. Color still
- * carries favorable / unfavorable per section (REQ-051). Example: spending
- * variance +$7,556 renders trending-up in red — "spending went up, which is
- * bad for spending."
+ * Tone → Mantine color. Tone is derived from Available sign under BRD Rev-2:
+ * positive = favorable (green), negative = unfavorable (red), zero = neutral.
  */
-function directionIcon(variance: number) {
-  if (variance > 0) return <IconTrendingUp size={14} />;
-  if (variance < 0) return <IconTrendingDown size={14} />;
+function availableColor(value: number): string | undefined {
+  if (value > 0) return 'green';
+  if (value < 0) return 'red';
+  return undefined;
+}
+
+/** Signed formatter — `+$X`, `−$X`, or `$0`. */
+function formatSigned(value: number): string {
+  if (value > 0) return `+${formatCurrency(value)}`;
+  if (value < 0) return `−${formatCurrency(Math.abs(value))}`;
+  return formatCurrency(0);
+}
+
+/** Direction icon tracks sign of the number. */
+function directionIcon(value: number) {
+  if (value > 0) return <IconTrendingUp size={14} />;
+  if (value < 0) return <IconTrendingDown size={14} />;
   return <IconMinus size={14} />;
 }
 
 /**
- * BvA II — accordion-first, rollover-aware Budget vs. Actuals view.
+ * BvA II — five-column layout (Category / Actual / Budgeted / Rollover / Available / Actions).
  *
- * @see BUDGET-VS-ACTUALS-II-BRD.md
+ * Available is tone-signed: positive = ahead of plan, negative = behind plan,
+ * consistent across every section. Rollover column is always visible; its
+ * styling dims when the Use Rollover toggle is off. See BRD Revision 2.
  */
 export function BudgetVsActualsII({ selectedMonth, active }: BudgetVsActualsIIProps) {
   const urlState = useBvaIIUrlState();
   const dismissed = useDismissedParentIds();
-  // Session-only accordion expand state (REQ-007). Not URL-persisted.
-  // The effective expand state layers user-overrides on top of filter
-  // auto-expand suggestions — see buildEffectiveExpanded below.
   const [userExpanded, setUserExpanded] = useState<Map<string, boolean>>(new Map());
   const [editTarget, setEditTarget] = useState<{ categoryId: string } | null>(null);
 
@@ -153,87 +147,81 @@ export function BudgetVsActualsII({ selectedMonth, active }: BudgetVsActualsIIPr
   }, [categories, yearlyBudgetData, ytdTransactionData, selectedMonth, urlState.rollover]);
 
   const sections = useMemo<FilteredSection[]>(() => {
-    if (!composition || categoryById.size === 0) return [];
+    if (!composition) return [];
 
-    const buckets: Record<SectionType, FilteredTree[]> = {
+    const buckets: Record<SectionType, FilteredParent[]> = {
       income: [],
       spending: [],
       savings: [],
     };
 
-    for (const tree of composition.trees.values()) {
-      const section = getSectionType(tree, categoryById);
-      // Type filter strips entire subtrees whose section is deselected (REQ-015).
-      if (!urlState.types.has(section)) continue;
+    for (const parent of composition.parents) {
+      if (!urlState.types.has(parent.section)) continue;
 
-      const decision = classifyTreeVariance(tree, section, urlState.variance);
+      const decision = classifyAvailable({
+        section: parent.section,
+        parent: { budgeted: parent.budgeted, available: parent.available },
+        children: parent.children.map(c => ({
+          categoryId: c.categoryId,
+          budgeted: c.budgeted,
+          available: c.available,
+        })),
+        filter: urlState.variance,
+      });
       if (!decision.include) continue;
 
-      buckets[section].push({
-        tree,
-        section,
-        autoExpand: decision.autoExpand,
+      buckets[parent.section].push({
+        parent,
         deEmphasizedChildIds: decision.deEmphasizedChildIds,
       });
     }
 
-    // Sort parents by absolute variance descending (biggest deviations first).
-    // Ties break alphabetically so the order is stable.
+    // Sort by |available| descending; alphabetical tiebreak for stable ordering.
     for (const key of Object.keys(buckets) as SectionType[]) {
       buckets[key].sort((a, b) => {
-        const aVar = Math.abs(a.tree.effectiveActual - a.tree.effectiveBudget);
-        const bVar = Math.abs(b.tree.effectiveActual - b.tree.effectiveBudget);
-        if (aVar !== bVar) return bVar - aVar;
-        return a.tree.parentName.localeCompare(b.tree.parentName);
+        const aMag = Math.abs(a.parent.available);
+        const bMag = Math.abs(b.parent.available);
+        if (aMag !== bMag) return bMag - aMag;
+        return a.parent.parentName.localeCompare(b.parent.parentName);
       });
     }
 
     return SECTION_ORDER
       .filter(section => urlState.types.has(section))
-      .map(section => ({ section, trees: buckets[section] }));
-  }, [composition, categoryById, urlState.types, urlState.variance]);
+      .map(section => ({ section, parents: buckets[section] }));
+  }, [composition, urlState.types, urlState.variance]);
 
-  // Filter-visible trees feed the summary strip. Matches the variance filter
-  // intent: dismissed rows (when showDismissed is on) still display but are
-  // muted; the summary already excludes them by default because dismissed
-  // entries never enter the sections list unless showDismissed is on. Per
-  // REQ-021, de-emphasized siblings are NOT counted — but they're children,
-  // not parent rows, so the parent-level summary already excludes them.
-  const visibleTrees = useMemo<FilteredTree[]>(() => {
-    return sections.flatMap(({ trees }) =>
-      trees.filter(t => dismissed.showDismissed || !dismissed.dismissedIds.has(t.tree.parentId)),
+  const visibleParents = useMemo<FilteredParent[]>(() => {
+    return sections.flatMap(({ parents }) =>
+      parents.filter(p => dismissed.showDismissed || !dismissed.dismissedIds.has(p.parent.parentId)),
     );
   }, [sections, dismissed.showDismissed, dismissed.dismissedIds]);
 
   const summary = useMemo(() => {
     let actual = 0;
     let budgeted = 0;
-    const mixedSections = new Set<SectionType>();
-    for (const t of visibleTrees) {
+    let rollover = 0;
+    let available = 0;
+    let anyRollover = false;
+    for (const fp of visibleParents) {
       // Dismissed rows appear faded when showDismissed is on; exclude them
       // from the aggregate so totals reflect the user's focused set.
-      if (dismissed.dismissedIds.has(t.tree.parentId)) continue;
-      actual += t.tree.effectiveActual;
-      budgeted += t.tree.effectiveBudget;
-      mixedSections.add(t.section);
+      if (dismissed.dismissedIds.has(fp.parent.parentId)) continue;
+      actual += fp.parent.actual;
+      budgeted += fp.parent.budgeted;
+      if (fp.parent.rollover !== null) {
+        rollover += fp.parent.rollover;
+        anyRollover = true;
+      }
+      available += fp.parent.available;
     }
-    const variance = actual - budgeted;
-    const sole = mixedSections.size === 1 ? [...mixedSections][0] : null;
-    const tone: VarianceTone = sole ? getVarianceTone(sole, actual, budgeted) : 'neutral';
-    return { actual, budgeted, variance, tone };
-  }, [visibleTrees, dismissed.dismissedIds]);
+    return { actual, budgeted, rollover, available, anyRollover };
+  }, [visibleParents, dismissed.dismissedIds]);
 
   if (!active) return null;
 
   const loading = budgetsLoading || transactionsLoading || !categories;
 
-  /**
-   * Effective expand state per parent — parents always default to collapsed;
-   * user toggle is the only path to expanded. The filter's autoExpand hint is
-   * retained in classify output for potential reuse but not applied here.
-   * Filters still narrow which parents appear; sibling de-emphasis kicks in
-   * when the user manually expands a match.
-   */
   const effectiveExpanded = (parentId: string): boolean => {
     return userExpanded.get(parentId) ?? false;
   };
@@ -253,23 +241,43 @@ export function BudgetVsActualsII({ selectedMonth, active }: BudgetVsActualsIIPr
     urlState.setTypes(next);
   };
 
-  const renderVarianceCell = (section: SectionType, actual: number, budgeted: number, dim?: boolean) => {
-    const variance = actual - budgeted;
-    const tone = getVarianceTone(section, actual, budgeted);
-    const color = toneMantineColor(tone);
-    return (
-      <Group gap={4} wrap="nowrap" justify="flex-end" style={dim ? { opacity: 0.5 } : undefined}>
-        <Text c={color} fw={500} component="span">
-          {formatSignedVariance(variance)}
+  /**
+   * Render the Rollover cell per REQ-010a:
+   *   - value null                 → em-dash, dimmed
+   *   - value !== null, toggle off → tone-signed number, dimmed (no green/red)
+   *   - value !== null, toggle on  → tone-signed number, green/red by sign
+   */
+  const renderRolloverCell = (value: number | null, rowDim: boolean) => {
+    if (value === null) {
+      return <Text size="sm" c="dimmed" style={{ opacity: rowDim ? 0.5 : 1 }}>—</Text>;
+    }
+    if (!urlState.rollover) {
+      return (
+        <Text size="sm" c="dimmed" style={{ opacity: rowDim ? 0.5 : 1 }}>
+          {formatSigned(value)}
         </Text>
-        <Text c={color} component="span" aria-hidden>{directionIcon(variance)}</Text>
+      );
+    }
+    return (
+      <Text size="sm" c={availableColor(value)} fw={500} style={{ opacity: rowDim ? 0.5 : 1 }}>
+        {formatSigned(value)}
+      </Text>
+    );
+  };
+
+  const renderAvailableCell = (value: number, rowDim: boolean) => {
+    const color = availableColor(value);
+    return (
+      <Group gap={4} wrap="nowrap" justify="flex-end" style={{ opacity: rowDim ? 0.5 : 1 }}>
+        <Text c={color} fw={500} component="span">{formatSigned(value)}</Text>
+        <Text c={color} component="span" aria-hidden>{directionIcon(value)}</Text>
       </Group>
     );
   };
 
-  const renderSection = ({ section, trees }: FilteredSection) => {
-    const visible = trees.filter(
-      t => dismissed.showDismissed || !dismissed.dismissedIds.has(t.tree.parentId),
+  const renderSection = ({ section, parents }: FilteredSection) => {
+    const visible = parents.filter(
+      fp => dismissed.showDismissed || !dismissed.dismissedIds.has(fp.parent.parentId),
     );
     if (visible.length === 0) return null;
 
@@ -280,38 +288,39 @@ export function BudgetVsActualsII({ selectedMonth, active }: BudgetVsActualsIIPr
           <Table striped highlightOnHover>
             <Table.Thead>
               <Table.Tr>
-                <Table.Th style={{ width: '40%' }}>Category</Table.Th>
+                <Table.Th style={{ width: '34%' }}>Category</Table.Th>
                 <Table.Th style={{ textAlign: 'right' }}>Actual</Table.Th>
                 <Table.Th style={{ textAlign: 'right' }}>Budgeted</Table.Th>
-                <Table.Th style={{ textAlign: 'right' }}>Variance</Table.Th>
+                <Table.Th style={{ textAlign: 'right' }}>Rollover</Table.Th>
+                <Table.Th style={{ textAlign: 'right' }}>Available</Table.Th>
                 <Table.Th style={{ width: 80, textAlign: 'right' }}>Actions</Table.Th>
               </Table.Tr>
             </Table.Thead>
             <Table.Tbody>
-              {visible.map(({ tree, deEmphasizedChildIds }) => {
-                const isExpanded = effectiveExpanded(tree.parentId);
-                const isDismissed = dismissed.dismissedIds.has(tree.parentId);
-                const hasChildren = tree.children.length > 0;
-                const rowOpacity = isDismissed ? 0.5 : 1;
+              {visible.map(({ parent, deEmphasizedChildIds }) => {
+                const isExpanded = effectiveExpanded(parent.parentId);
+                const isDismissed = dismissed.dismissedIds.has(parent.parentId);
+                const hasChildren = parent.children.length > 0;
+                const parentDim = isDismissed;
 
                 return (
-                  <Fragment key={tree.parentId}>
+                  <Fragment key={parent.parentId}>
                     <Table.Tr
-                      style={{ opacity: rowOpacity, cursor: hasChildren ? 'pointer' : 'default' }}
+                      style={{ opacity: parentDim ? 0.5 : 1, cursor: hasChildren ? 'pointer' : 'default' }}
                       {...(hasChildren ? {
                         role: 'button',
                         tabIndex: 0,
                         'aria-expanded': isExpanded,
-                        'aria-label': `${tree.parentName}, ${isExpanded ? 'expanded' : 'collapsed'}. Press Enter or Space to toggle.`,
+                        'aria-label': `${parent.parentName}, ${isExpanded ? 'expanded' : 'collapsed'}. Press Enter or Space to toggle.`,
                         onKeyDown: (e: KeyboardEvent<HTMLTableRowElement>) => {
                           if (e.key === 'Enter' || e.key === ' ') {
                             e.preventDefault();
-                            toggleExpanded(tree.parentId, isExpanded);
+                            toggleExpanded(parent.parentId, isExpanded);
                           }
                         },
                       } : {})}
                     >
-                      <Table.Td onClick={() => hasChildren && toggleExpanded(tree.parentId, isExpanded)}>
+                      <Table.Td onClick={() => hasChildren && toggleExpanded(parent.parentId, isExpanded)}>
                         <Group gap="xs" wrap="nowrap" align="center">
                           {hasChildren ? (
                             <ActionIcon
@@ -319,7 +328,7 @@ export function BudgetVsActualsII({ selectedMonth, active }: BudgetVsActualsIIPr
                               size="sm"
                               onClick={(e) => {
                                 e.stopPropagation();
-                                toggleExpanded(tree.parentId, isExpanded);
+                                toggleExpanded(parent.parentId, isExpanded);
                               }}
                               aria-label={isExpanded ? 'Collapse' : 'Expand'}
                               style={{
@@ -339,29 +348,24 @@ export function BudgetVsActualsII({ selectedMonth, active }: BudgetVsActualsIIPr
                             truncate
                             style={{ minWidth: 0 }}
                           >
-                            {tree.parentName}
+                            {parent.parentName}
                           </Text>
                         </Group>
                       </Table.Td>
-                      <Table.Td style={{ textAlign: 'right' }}>
-                        {formatCurrency(tree.effectiveActual)}
-                      </Table.Td>
-                      <Table.Td style={{ textAlign: 'right' }}>
-                        {formatCurrency(tree.effectiveBudget)}
-                      </Table.Td>
-                      <Table.Td style={{ textAlign: 'right' }}>
-                        {renderVarianceCell(section, tree.effectiveActual, tree.effectiveBudget)}
-                      </Table.Td>
+                      <Table.Td style={{ textAlign: 'right' }}>{formatCurrency(parent.actual)}</Table.Td>
+                      <Table.Td style={{ textAlign: 'right' }}>{formatCurrency(parent.budgeted)}</Table.Td>
+                      <Table.Td style={{ textAlign: 'right' }}>{renderRolloverCell(parent.rollover, parentDim)}</Table.Td>
+                      <Table.Td style={{ textAlign: 'right' }}>{renderAvailableCell(parent.available, parentDim)}</Table.Td>
                       <Table.Td style={{ textAlign: 'right' }}>
                         <Group gap={4} justify="flex-end" wrap="nowrap">
-                          {isBudgetableCategory(tree.parentId, categories ?? []) && (
+                          {isBudgetableCategory(parent.parentId, categories ?? []) && (
                             <ActionIcon
                               variant="subtle"
                               size="sm"
                               aria-label="Edit budget"
                               onClick={(e) => {
                                 e.stopPropagation();
-                                setEditTarget({ categoryId: tree.parentId });
+                                setEditTarget({ categoryId: parent.parentId });
                               }}
                             >
                               <IconEdit size={14} />
@@ -374,8 +378,8 @@ export function BudgetVsActualsII({ selectedMonth, active }: BudgetVsActualsIIPr
                             aria-label={isDismissed ? 'Restore row' : 'Dismiss row'}
                             onClick={(e) => {
                               e.stopPropagation();
-                              if (isDismissed) dismissed.restore(tree.parentId);
-                              else dismissed.dismiss(tree.parentId);
+                              if (isDismissed) dismissed.restore(parent.parentId);
+                              else dismissed.dismiss(parent.parentId);
                             }}
                           >
                             <IconX size={14} />
@@ -383,45 +387,42 @@ export function BudgetVsActualsII({ selectedMonth, active }: BudgetVsActualsIIPr
                         </Group>
                       </Table.Td>
                     </Table.Tr>
-                    {isExpanded && [...tree.children].sort((a, b) => {
-                      const aVar = Math.abs(a.actual - a.budgeted);
-                      const bVar = Math.abs(b.actual - b.budgeted);
-                      if (aVar !== bVar) return bVar - aVar;
-                      return a.categoryName.localeCompare(b.categoryName);
-                    }).map(child => {
-                      const dim = deEmphasizedChildIds.has(child.categoryId);
-                      return (
-                        <Table.Tr
-                          key={`${tree.parentId}-${child.categoryId}`}
-                          style={{ opacity: rowOpacity * (dim ? 0.5 : 1) }}
-                        >
-                          <Table.Td pl="xl">
-                            <Text size="sm" pl="lg">↳ {child.categoryName}</Text>
-                          </Table.Td>
-                          <Table.Td style={{ textAlign: 'right' }}>
-                            {formatCurrency(child.actual)}
-                          </Table.Td>
-                          <Table.Td style={{ textAlign: 'right' }}>
-                            {formatCurrency(child.budgeted)}
-                          </Table.Td>
-                          <Table.Td style={{ textAlign: 'right' }}>
-                            {renderVarianceCell(section, child.actual, child.budgeted, dim)}
-                          </Table.Td>
-                          <Table.Td style={{ textAlign: 'right' }}>
-                            {isBudgetableCategory(child.categoryId, categories ?? []) && (
-                              <ActionIcon
-                                variant="subtle"
-                                size="sm"
-                                aria-label="Edit budget"
-                                onClick={() => setEditTarget({ categoryId: child.categoryId })}
-                              >
-                                <IconEdit size={14} />
-                              </ActionIcon>
-                            )}
-                          </Table.Td>
-                        </Table.Tr>
-                      );
-                    })}
+                    {isExpanded && [...parent.children]
+                      .sort((a, b) => {
+                        const aMag = Math.abs(a.available);
+                        const bMag = Math.abs(b.available);
+                        if (aMag !== bMag) return bMag - aMag;
+                        return a.categoryName.localeCompare(b.categoryName);
+                      })
+                      .map(child => {
+                        const dim = parentDim || deEmphasizedChildIds.has(child.categoryId);
+                        return (
+                          <Table.Tr
+                            key={`${parent.parentId}-${child.categoryId}`}
+                            style={{ opacity: dim ? 0.5 : 1 }}
+                          >
+                            <Table.Td pl="xl">
+                              <Text size="sm" pl="lg">↳ {child.categoryName}</Text>
+                            </Table.Td>
+                            <Table.Td style={{ textAlign: 'right' }}>{formatCurrency(child.actual)}</Table.Td>
+                            <Table.Td style={{ textAlign: 'right' }}>{formatCurrency(child.budgeted)}</Table.Td>
+                            <Table.Td style={{ textAlign: 'right' }}>{renderRolloverCell(child.rollover, dim)}</Table.Td>
+                            <Table.Td style={{ textAlign: 'right' }}>{renderAvailableCell(child.available, dim)}</Table.Td>
+                            <Table.Td style={{ textAlign: 'right' }}>
+                              {isBudgetableCategory(child.categoryId, categories ?? []) && (
+                                <ActionIcon
+                                  variant="subtle"
+                                  size="sm"
+                                  aria-label="Edit budget"
+                                  onClick={() => setEditTarget({ categoryId: child.categoryId })}
+                                >
+                                  <IconEdit size={14} />
+                                </ActionIcon>
+                              )}
+                            </Table.Td>
+                          </Table.Tr>
+                        );
+                      })}
                   </Fragment>
                 );
               })}
@@ -436,7 +437,7 @@ export function BudgetVsActualsII({ selectedMonth, active }: BudgetVsActualsIIPr
 
   return (
     <Stack gap="md">
-      {/* Summary strip (BRD §9). Sums the filter-visible rows only. */}
+      {/* Summary strip — totals for filter-visible rows. */}
       <Paper withBorder p="sm">
         <Group justify="space-between" wrap="nowrap">
           <div>
@@ -448,20 +449,34 @@ export function BudgetVsActualsII({ selectedMonth, active }: BudgetVsActualsIIPr
             <Text fw={600}>{formatCurrency(summary.budgeted)}</Text>
           </div>
           <div>
-            <Text size="xs" c="dimmed">Total Variance</Text>
+            <Text size="xs" c="dimmed">Total Rollover</Text>
+            {summary.anyRollover ? (
+              urlState.rollover ? (
+                <Text fw={600} c={availableColor(summary.rollover)}>
+                  {formatSigned(summary.rollover)}
+                </Text>
+              ) : (
+                <Text fw={600} c="dimmed">{formatSigned(summary.rollover)}</Text>
+              )
+            ) : (
+              <Text fw={600} c="dimmed">—</Text>
+            )}
+          </div>
+          <div>
+            <Text size="xs" c="dimmed">Total Available</Text>
             <Group gap={4} wrap="nowrap">
-              <Text fw={600} c={toneMantineColor(summary.tone)}>
-                {formatSignedVariance(summary.variance)}
+              <Text fw={600} c={availableColor(summary.available)}>
+                {formatSigned(summary.available)}
               </Text>
-              <Text c={toneMantineColor(summary.tone)} component="span" aria-hidden>
-                {directionIcon(summary.variance)}
+              <Text c={availableColor(summary.available)} component="span" aria-hidden>
+                {directionIcon(summary.available)}
               </Text>
             </Group>
           </div>
         </Group>
       </Paper>
 
-      {/* Control row — type chips, rollover switch, variance filter. */}
+      {/* Control row — type chips, rollover switch, variance filter, show-dismissed. */}
       <Paper withBorder p="sm">
         <Stack gap="xs">
           <Group wrap="wrap" gap="md" align="flex-end">
@@ -523,7 +538,7 @@ export function BudgetVsActualsII({ selectedMonth, active }: BudgetVsActualsIIPr
             <Group gap={4}>
               <IconAlertTriangle size={14} />
               <Text size="xs" c="dimmed">
-                "Seriously over" — spending ×3 of budget, or income/savings under 1/3 of budget.
+                "Seriously over" — spending over 3× budget, or income/savings under 1/3 of budget.
                 Categories with $0 budget excluded.
               </Text>
             </Group>
@@ -550,7 +565,7 @@ export function BudgetVsActualsII({ selectedMonth, active }: BudgetVsActualsIIPr
             No category types selected. Toggle Spending, Income, or Savings above to see your budget.
           </Text>
         </Paper>
-      ) : sections.every(s => s.trees.length === 0) ? (
+      ) : sections.every(s => s.parents.length === 0) ? (
         <Paper withBorder p="md">
           <Text c="dimmed">No matching rows for this filter.</Text>
         </Paper>
