@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.49.0](https://github.com/JCarran0/household-budgeting/compare/v5.48.0...v5.49.0) (2026-04-21)
+
+
+### Features
+
+* **trips:** open photo hero from eat/play stop tiles ([702c537](https://github.com/JCarran0/household-budgeting/commit/702c5375df9b62ec519b6cf30cdf054aa505934e))
+* **trips:** stay thin-banner and decouple stop tile from card height ([b1e9ae1](https://github.com/JCarran0/household-budgeting/commit/b1e9ae12eec9d0de476edb5ad0b45f3e6d320076))
+
+
+### Bug Fixes
+
+* **trips:** invalidate trip detail cache on update ([4ebb941](https://github.com/JCarran0/household-budgeting/commit/4ebb941c4ba58cb7c4e6f471005688e9b5a43e8d))
+
 ## [5.48.0](https://github.com/JCarran0/household-budgeting/compare/v5.47.0...v5.48.0) (2026-04-21)
 
 
