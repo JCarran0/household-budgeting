@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.52.0](https://github.com/JCarran0/household-budgeting/compare/v5.51.1...v5.52.0) (2026-04-22)
+
+
+### Features
+
+* **inspiration:** 18% chance villain slide-in with dramatic sting ([756584f](https://github.com/JCarran0/household-budgeting/commit/756584fb76fbc02d0f54cb4669d77e33e959e76d))
+
+
+### Bug Fixes
+
+* **inspiration:** shuffle-bag daily quote + 20 new quotes (no repeats) ([2d7e29f](https://github.com/JCarran0/household-budgeting/commit/2d7e29f5533f8edbc2b9ca85181a509c44ca3ede))
+
+
+### Documentation
+
+* **task-leaderboard:** v2.0 — 48-badge catalog + tier-driven polish ([a06858f](https://github.com/JCarran0/household-budgeting/commit/a06858fe757612a0d99894b850b5c1507cca5d9e))
+
 ### [5.51.1](https://github.com/JCarran0/household-budgeting/compare/v5.51.0...v5.51.1) (2026-04-21)
 
 
