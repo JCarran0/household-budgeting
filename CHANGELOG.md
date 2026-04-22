@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+### [5.52.1](https://github.com/JCarran0/household-budgeting/compare/v5.52.0...v5.52.1) (2026-04-22)
+
+
+### Performance Improvements
+
+* **backend:** TD-011/TD-012 Sprint 1 — storage mutex, per-request memo, prompt caching ([#7](https://github.com/JCarran0/household-budgeting/issues/7)) ([c14715b](https://github.com/JCarran0/household-budgeting/commit/c14715b370910f9fc9f27e66e562913055f03b29))
+
 ## [5.52.0](https://github.com/JCarran0/household-budgeting/compare/v5.51.1...v5.52.0) (2026-04-22)
 
 
