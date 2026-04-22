@@ -135,7 +135,7 @@ When a sprint completes, mark it here with the date and link to the relevant com
 
 | Sprint | Started | Completed | Notes |
 |---|---|---|---|
-| 1 — Data Integrity + Chatbot Cache | — | — | |
+| 1 — Data Integrity + Chatbot Cache | 2026-04-22 | 2026-04-22 | Branch `chore/tech-debt-sprint-1`. TD-011 parts 1a (`Repository.withLock`, wrapping 10 read-modify-write paths in `transactionService.ts`) + 1b (`requestScopeMiddleware` + AsyncLocalStorage, memo lives at `UnifiedDataService` so both `Repository.getAll` and `ReadOnlyDataService.getData` benefit). TD-012 part 1 (`cache_control: { type: 'ephemeral' }` on system prompt + last tool; `userDisplayName` suffix placed AFTER the cache breakpoint). |
 | 2 — UX + Chatbot Tool Caps | — | — | |
 | 3 — Security Hardening | — | — | |
 | 4 — Test Foundation | — | — | |

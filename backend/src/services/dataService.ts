@@ -1,5 +1,6 @@
 import { Category, Family, UserColor } from '../shared/types';
 import { StorageAdapter, StorageFactory } from './storage';
+import { getRequestScope } from '../middleware/requestScope';
 
 export interface User {
   id: string;
@@ -179,16 +180,39 @@ export class UnifiedDataService implements DataService {
   }
 
   // Generic Data Storage Methods
+  //
+  // TD-011 part 1b — per-request memoization. Repeated reads of the same key
+  // within a single HTTP request (common in the chatbot tool loop and in
+  // composite endpoints) reuse the first read's result instead of hitting
+  // storage again. Scope is opened by requestScopeMiddleware; outside of an
+  // HTTP request the cache is absent and reads fall straight through.
   async getData<T>(key: string): Promise<T | null> {
-    return await this.storage.read<T>(key);
+    const scope = getRequestScope();
+    if (scope && scope.repoCache.has(key)) {
+      return scope.repoCache.get(key) as T | null;
+    }
+    const value = await this.storage.read<T>(key);
+    if (scope) {
+      scope.repoCache.set(key, value);
+    }
+    return value;
   }
 
   async saveData<T>(key: string, data: T): Promise<void> {
     await this.storage.write(key, data);
+    // Keep the per-request memo coherent with writes issued from the same request.
+    const scope = getRequestScope();
+    if (scope) {
+      scope.repoCache.set(key, data);
+    }
   }
 
   async deleteData(key: string): Promise<void> {
     await this.storage.delete(key);
+    const scope = getRequestScope();
+    if (scope) {
+      scope.repoCache.set(key, null);
+    }
   }
 
   async listKeys(prefix: string): Promise<string[]> {

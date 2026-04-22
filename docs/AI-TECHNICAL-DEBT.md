@@ -225,7 +225,7 @@ See table above. Sequence: Tasks.tsx → BvA II → amazonReceiptService → Tri
 ## 2026-04-22 Audit Additions
 
 ### TD-011: File-Storage Read-Modify-Write Race + Read Amplification
-**Status**: Open
+**Status**: Parts 1a + 1b Resolved (2026-04-22, Sprint 1); Part 3 (SQLite migration) deferred per the cross-cutting section of the execution plan.
 **Created**: 2026-04-22
 **Impact**: Critical - Silent data loss on concurrent edits; full-collection reads on every mutation amplify chatbot cost
 **Effort**: Low (mutex + memoization) / High (move to SQLite)
@@ -236,20 +236,21 @@ Every mutation in `transactionService.ts` runs `repo.getAll(familyId)` → mutat
 Read amplification compounds this: at 800+ transactions, every single-entity mutation deserializes the entire collection from S3 (in production) or disk (in dev). 13 call sites in `transactionService.ts` (lines 453, 481, 509, 540, 577, 661, 688, 715, 755, 776, 811, 840) call `repo.getAll(familyId)` as part of a single-entity operation. The chatbot multiplies this further: `chatbotDataService.query_transactions()` does the same full read, then filters in-memory, on every tool iteration (up to 10 per message).
 
 **Fix**:
-1. **Short term — concurrency.** Add a per-`familyId` async mutex around the read-modify-write cycle in `Repository.saveAll`. A simple `p-mutex`-style map keyed by `familyId` is sufficient. Eliminates lost writes.
-2. **Short term — read cost.** Per-request memoization on `Repository.getAll(familyId)` (cleared at request end via Express middleware). Eliminates duplicate full reads within a single chatbot tool loop or composite endpoint.
+1. **Short term — concurrency.** ✅ Added `Repository.withLock(familyId, fn)` (async-mutex, per-`(repo, familyId)` key) and wrapped every read-modify-write in `transactionService.ts` with it — eliminates lost writes. Other services can adopt `withLock` incrementally as concurrent-edit surfaces are identified.
+2. **Short term — read cost.** ✅ Added `requestScopeMiddleware` (AsyncLocalStorage-based) and taught `UnifiedDataService.getData/saveData/deleteData` to consult/populate a per-request memo. Works for both `Repository.getAll` and `ReadOnlyDataService.getData` (the chatbot's path), so the 10× tool-loop amplification collapses to one read per collection per request.
 3. **Medium term — storage migration.** File-based JSON is approaching its scaling ceiling. Plan SQLite (single-file, S3-friendly via litestream, near-zero ops cost) before transactions cross ~5k. This deprecates much of TD-011 wholesale.
 
 **Files**:
-- `backend/src/services/repository.ts`
-- `backend/src/services/transactionService.ts`
-- `backend/src/services/chatbotDataService.ts`
-- `backend/src/middleware/` (new request-scope memoization middleware)
+- `backend/src/services/repository.ts` ✅
+- `backend/src/services/transactionService.ts` ✅
+- `backend/src/services/dataService.ts` ✅ (memoization lives at data layer so ReadOnlyDataService benefits too)
+- `backend/src/middleware/requestScope.ts` ✅ (new)
+- `backend/src/app.ts` ✅ (middleware wiring)
 
 ---
 
 ### TD-012: Chatbot Cost — No Prompt Caching, Unbounded Tool Results
-**Status**: Open
+**Status**: Part 1 Resolved (2026-04-22, Sprint 1) — prompt caching shipped. Part 2 (tool result caps) deferred to Sprint 2 per the execution plan.
 **Created**: 2026-04-22
 **Impact**: High - Real Anthropic spend on every chatbot turn; latency scales with transaction count
 **Effort**: Trivial (cache_control) / Medium (tool result caps)
@@ -261,8 +262,8 @@ Two independent inefficiencies in the chatbot flow inflate cost and latency:
 2. **Tool results dump full transaction arrays into context.** `query_transactions()` returns the entire matched array verbatim into the model context. With 800+ transactions and broad filters (e.g., "show me all dining last year"), this is tens of KB of input tokens per tool call, multiplied by up to 10 tool iterations per message.
 
 **Fix**:
-1. Add `cache_control: { type: 'ephemeral' }` to the system prompt block and the tool definitions block in `chatbotService.ts`. ~30 minutes of work; pure savings.
-2. Cap tool results: default `limit=50` on `query_transactions()`. For larger result sets return `{ count, sample, summary: { byCategory, byMonth } }` and let the model request more if needed.
+1. ✅ Added `cache_control: { type: 'ephemeral' }` to both the system prompt (via structured `TextBlockParam[]` — base prompt cached, per-request `userDisplayName` suffix appended AFTER the breakpoint so it doesn't invalidate the cache) and the last entry of `CHATBOT_TOOLS`. Effect verifiable via `cache_read_input_tokens > 0` on the second turn of any conversation.
+2. Cap tool results: default `limit=50` on `query_transactions()`. For larger result sets return `{ count, sample, summary: { byCategory, byMonth } }` and let the model request more if needed. *(Sprint 2)*
 3. Push date/category filters into the storage layer so the full collection isn't loaded just to be discarded (depends on TD-011 memoization or a real index).
 
 **Files**:

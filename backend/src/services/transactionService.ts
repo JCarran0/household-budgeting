@@ -241,72 +241,74 @@ export class TransactionService {
     accounts: StoredAccount[],
     plaidTransactions: PlaidTransaction[]
   ): Promise<{ added: number; modified: number; removed: number; newTransactions: StoredTransaction[] }> {
-    // Load existing transactions
-    const existingTransactions = await this.repo.getAll(familyId);
+    return this.repo.withLock(familyId, async () => {
+      // Load existing transactions
+      const existingTransactions = await this.repo.getAll(familyId);
 
-    // Create lookup maps
-    const existingByPlaidId = new Map<string, StoredTransaction>();
-    for (const txn of existingTransactions) {
-      if (txn.plaidTransactionId) {
-        existingByPlaidId.set(txn.plaidTransactionId, txn);
-      }
-    }
-
-    const accountLookup = new Map<string, StoredAccount>();
-    for (const account of accounts) {
-      accountLookup.set(account.plaidAccountId, account);
-    }
-
-    let added = 0;
-    let modified = 0;
-    const processedIds = new Set<string>();
-    const newTransactions: StoredTransaction[] = [];
-
-    // Process each Plaid transaction
-    for (const plaidTxn of plaidTransactions) {
-      processedIds.add(plaidTxn.plaidTransactionId);
-
-      const account = accountLookup.get(plaidTxn.accountId);
-      if (!account) continue;
-
-      const existing = existingByPlaidId.get(plaidTxn.plaidTransactionId);
-
-      if (existing) {
-        // Update existing transaction
-        const updated = this.updateTransaction(existing, plaidTxn);
-        if (updated) {
-          modified++;
-        }
-      } else {
-        // Add new transaction
-        const newTxn = this.createTransaction(familyId, account.id, plaidTxn);
-        existingTransactions.push(newTxn);
-        newTransactions.push(newTxn);
-        added++;
-      }
-    }
-
-    // Mark removed transactions (only for accounts we're currently syncing)
-    let removed = 0;
-    const syncedAccountIds = new Set(accounts.map(a => a.id));
-    
-    for (const existing of existingTransactions) {
-      // Only check transactions from accounts we're currently syncing
-      if (syncedAccountIds.has(existing.accountId) && 
-          existing.plaidTransactionId && 
-          !processedIds.has(existing.plaidTransactionId)) {
-        if (existing.status !== 'removed') {
-          existing.status = 'removed';
-          existing.updatedAt = new Date();
-          removed++;
+      // Create lookup maps
+      const existingByPlaidId = new Map<string, StoredTransaction>();
+      for (const txn of existingTransactions) {
+        if (txn.plaidTransactionId) {
+          existingByPlaidId.set(txn.plaidTransactionId, txn);
         }
       }
-    }
 
-    // Save all transactions
-    await this.repo.saveAll(familyId, existingTransactions);
+      const accountLookup = new Map<string, StoredAccount>();
+      for (const account of accounts) {
+        accountLookup.set(account.plaidAccountId, account);
+      }
 
-    return { added, modified, removed, newTransactions };
+      let added = 0;
+      let modified = 0;
+      const processedIds = new Set<string>();
+      const newTransactions: StoredTransaction[] = [];
+
+      // Process each Plaid transaction
+      for (const plaidTxn of plaidTransactions) {
+        processedIds.add(plaidTxn.plaidTransactionId);
+
+        const account = accountLookup.get(plaidTxn.accountId);
+        if (!account) continue;
+
+        const existing = existingByPlaidId.get(plaidTxn.plaidTransactionId);
+
+        if (existing) {
+          // Update existing transaction
+          const updated = this.updateTransaction(existing, plaidTxn);
+          if (updated) {
+            modified++;
+          }
+        } else {
+          // Add new transaction
+          const newTxn = this.createTransaction(familyId, account.id, plaidTxn);
+          existingTransactions.push(newTxn);
+          newTransactions.push(newTxn);
+          added++;
+        }
+      }
+
+      // Mark removed transactions (only for accounts we're currently syncing)
+      let removed = 0;
+      const syncedAccountIds = new Set(accounts.map(a => a.id));
+
+      for (const existing of existingTransactions) {
+        // Only check transactions from accounts we're currently syncing
+        if (syncedAccountIds.has(existing.accountId) &&
+            existing.plaidTransactionId &&
+            !processedIds.has(existing.plaidTransactionId)) {
+          if (existing.status !== 'removed') {
+            existing.status = 'removed';
+            existing.updatedAt = new Date();
+            removed++;
+          }
+        }
+      }
+
+      // Save all transactions
+      await this.repo.saveAll(familyId, existingTransactions);
+
+      return { added, modified, removed, newTransactions };
+    });
   }
 
   /**
@@ -450,20 +452,22 @@ export class TransactionService {
     categoryId: string | null
   ): Promise<{ success: boolean; error?: string }> {
     try {
-      const transactions = await this.repo.getAll(familyId);
+      return await this.repo.withLock(familyId, async () => {
+        const transactions = await this.repo.getAll(familyId);
 
-      const transaction = transactions.find(t => t.id === transactionId);
-      if (!transaction) {
-        return { success: false, error: 'Transaction not found' };
-      }
+        const transaction = transactions.find(t => t.id === transactionId);
+        if (!transaction) {
+          return { success: false, error: 'Transaction not found' };
+        }
 
-      // Set to null if null (uncategorized), not undefined
-      transaction.categoryId = categoryId;
-      transaction.updatedAt = new Date();
+        // Set to null if null (uncategorized), not undefined
+        transaction.categoryId = categoryId;
+        transaction.updatedAt = new Date();
 
-      await this.repo.saveAll(familyId, transactions);
+        await this.repo.saveAll(familyId, transactions);
 
-      return { success: true };
+        return { success: true };
+      });
     } catch (error) {
       return { success: false, error: 'Failed to update category' };
     }
@@ -478,20 +482,22 @@ export class TransactionService {
     tags: string[]
   ): Promise<{ success: boolean; error?: string }> {
     try {
-      const transactions = await this.repo.getAll(familyId);
+      return await this.repo.withLock(familyId, async () => {
+        const transactions = await this.repo.getAll(familyId);
 
-      const transaction = transactions.find(t => t.id === transactionId);
-      if (!transaction) {
-        return { success: false, error: 'Transaction not found' };
-      }
+        const transaction = transactions.find(t => t.id === transactionId);
+        if (!transaction) {
+          return { success: false, error: 'Transaction not found' };
+        }
 
-      // Replace tags entirely (frontend sends the complete list)
-      transaction.tags = tags;
-      transaction.updatedAt = new Date();
+        // Replace tags entirely (frontend sends the complete list)
+        transaction.tags = tags;
+        transaction.updatedAt = new Date();
 
-      await this.repo.saveAll(familyId, transactions);
+        await this.repo.saveAll(familyId, transactions);
 
-      return { success: true };
+        return { success: true };
+      });
     } catch (error) {
       return { success: false, error: 'Failed to add tags' };
     }
@@ -506,23 +512,25 @@ export class TransactionService {
     tagsToAdd: string[]
   ): Promise<{ success: boolean; error?: string }> {
     try {
-      const transactions = await this.repo.getAll(familyId);
+      return await this.repo.withLock(familyId, async () => {
+        const transactions = await this.repo.getAll(familyId);
 
-      const transaction = transactions.find(t => t.id === transactionId);
-      if (!transaction) {
-        return { success: false, error: 'Transaction not found' };
-      }
+        const transaction = transactions.find(t => t.id === transactionId);
+        if (!transaction) {
+          return { success: false, error: 'Transaction not found' };
+        }
 
-      const merged = Array.from(new Set([...transaction.tags, ...tagsToAdd]));
-      if (merged.length === transaction.tags.length) {
-        return { success: true }; // no change needed
-      }
+        const merged = Array.from(new Set([...transaction.tags, ...tagsToAdd]));
+        if (merged.length === transaction.tags.length) {
+          return { success: true }; // no change needed
+        }
 
-      transaction.tags = merged;
-      transaction.updatedAt = new Date();
-      await this.repo.saveAll(familyId, transactions);
+        transaction.tags = merged;
+        transaction.updatedAt = new Date();
+        await this.repo.saveAll(familyId, transactions);
 
-      return { success: true };
+        return { success: true };
+      });
     } catch (error) {
       return { success: false, error: 'Failed to add tags' };
     }
@@ -537,24 +545,26 @@ export class TransactionService {
     tagsToRemove: string[]
   ): Promise<{ success: boolean; error?: string }> {
     try {
-      const transactions = await this.repo.getAll(familyId);
+      return await this.repo.withLock(familyId, async () => {
+        const transactions = await this.repo.getAll(familyId);
 
-      const transaction = transactions.find(t => t.id === transactionId);
-      if (!transaction) {
-        return { success: false, error: 'Transaction not found' };
-      }
+        const transaction = transactions.find(t => t.id === transactionId);
+        if (!transaction) {
+          return { success: false, error: 'Transaction not found' };
+        }
 
-      const removeSet = new Set(tagsToRemove);
-      const filtered = transaction.tags.filter(t => !removeSet.has(t));
-      if (filtered.length === transaction.tags.length) {
-        return { success: true }; // no change needed
-      }
+        const removeSet = new Set(tagsToRemove);
+        const filtered = transaction.tags.filter(t => !removeSet.has(t));
+        if (filtered.length === transaction.tags.length) {
+          return { success: true }; // no change needed
+        }
 
-      transaction.tags = filtered;
-      transaction.updatedAt = new Date();
-      await this.repo.saveAll(familyId, transactions);
+        transaction.tags = filtered;
+        transaction.updatedAt = new Date();
+        await this.repo.saveAll(familyId, transactions);
 
-      return { success: true };
+        return { success: true };
+      });
     } catch (error) {
       return { success: false, error: 'Failed to remove tags' };
     }
@@ -574,75 +584,77 @@ export class TransactionService {
     }>
   ): Promise<{ success: boolean; error?: string; splitTransactions?: StoredTransaction[] }> {
     try {
-      const transactions = await this.repo.getAll(familyId);
+      return await this.repo.withLock(familyId, async () => {
+        const transactions = await this.repo.getAll(familyId);
 
-      const originalTransaction = transactions.find(t => t.id === transactionId);
-      if (!originalTransaction) {
-        return { success: false, error: 'Transaction not found' };
-      }
+        const originalTransaction = transactions.find(t => t.id === transactionId);
+        if (!originalTransaction) {
+          return { success: false, error: 'Transaction not found' };
+        }
 
-      if (originalTransaction.isSplit) {
-        return { success: false, error: 'Transaction is already split' };
-      }
+        if (originalTransaction.isSplit) {
+          return { success: false, error: 'Transaction is already split' };
+        }
 
-      // Validate split amounts equal original
-      const totalSplitAmount = splits.reduce((sum, split) => sum + split.amount, 0);
-      if (Math.abs(totalSplitAmount - Math.abs(originalTransaction.amount)) > 0.01) {
-        return { success: false, error: 'Split amounts must equal original transaction amount' };
-      }
+        // Validate split amounts equal original
+        const totalSplitAmount = splits.reduce((sum, split) => sum + split.amount, 0);
+        if (Math.abs(totalSplitAmount - Math.abs(originalTransaction.amount)) > 0.01) {
+          return { success: false, error: 'Split amounts must equal original transaction amount' };
+        }
 
-      // Create split transactions
-      const splitTransactions: StoredTransaction[] = [];
-      const now = new Date();
+        // Create split transactions
+        const splitTransactions: StoredTransaction[] = [];
+        const now = new Date();
 
-      for (let i = 0; i < splits.length; i++) {
-        const split = splits[i];
-        const splitTxn: StoredTransaction = {
-          id: uuidv4(),
-          userId: familyId,
-          accountId: originalTransaction.accountId,
-          plaidTransactionId: null, // Split transactions don't have Plaid IDs
-          plaidAccountId: originalTransaction.plaidAccountId,
-          amount: originalTransaction.amount > 0 ? split.amount : -split.amount, // Maintain sign
-          date: originalTransaction.date,
-          // Use split description if provided, otherwise inherit from original
-          name: originalTransaction.name, // Always keep the original bank name
-          userDescription: split.description || originalTransaction.userDescription || null,
-          merchantName: originalTransaction.merchantName,
-          category: originalTransaction.category,
-          plaidCategoryId: originalTransaction.plaidCategoryId,
-          categoryId: split.categoryId || null,
-          status: originalTransaction.status,
-          pending: originalTransaction.pending,
-          isoCurrencyCode: originalTransaction.isoCurrencyCode,
-          accountOwner: originalTransaction.accountOwner || null,
-          originalDescription: originalTransaction.originalDescription || null,
-          tags: split.tags || [],
-          notes: originalTransaction.notes, // Preserve original notes
-          isHidden: false,
-          isFlagged: false,
-          isSplit: false,
-          parentTransactionId: originalTransaction.id,
-          splitTransactionIds: [],
-          location: originalTransaction.location,
-          createdAt: now,
-          updatedAt: now,
-        };
-        
-        splitTransactions.push(splitTxn);
-        transactions.push(splitTxn);
-      }
+        for (let i = 0; i < splits.length; i++) {
+          const split = splits[i];
+          const splitTxn: StoredTransaction = {
+            id: uuidv4(),
+            userId: familyId,
+            accountId: originalTransaction.accountId,
+            plaidTransactionId: null, // Split transactions don't have Plaid IDs
+            plaidAccountId: originalTransaction.plaidAccountId,
+            amount: originalTransaction.amount > 0 ? split.amount : -split.amount, // Maintain sign
+            date: originalTransaction.date,
+            // Use split description if provided, otherwise inherit from original
+            name: originalTransaction.name, // Always keep the original bank name
+            userDescription: split.description || originalTransaction.userDescription || null,
+            merchantName: originalTransaction.merchantName,
+            category: originalTransaction.category,
+            plaidCategoryId: originalTransaction.plaidCategoryId,
+            categoryId: split.categoryId || null,
+            status: originalTransaction.status,
+            pending: originalTransaction.pending,
+            isoCurrencyCode: originalTransaction.isoCurrencyCode,
+            accountOwner: originalTransaction.accountOwner || null,
+            originalDescription: originalTransaction.originalDescription || null,
+            tags: split.tags || [],
+            notes: originalTransaction.notes, // Preserve original notes
+            isHidden: false,
+            isFlagged: false,
+            isSplit: false,
+            parentTransactionId: originalTransaction.id,
+            splitTransactionIds: [],
+            location: originalTransaction.location,
+            createdAt: now,
+            updatedAt: now,
+          };
 
-      // Update original transaction
-      originalTransaction.isSplit = true;
-      originalTransaction.splitTransactionIds = splitTransactions.map(t => t.id);
-      originalTransaction.isHidden = true; // Hide original from budgets
-      originalTransaction.updatedAt = now;
+          splitTransactions.push(splitTxn);
+          transactions.push(splitTxn);
+        }
 
-      // Save all transactions
-      await this.repo.saveAll(familyId, transactions);
+        // Update original transaction
+        originalTransaction.isSplit = true;
+        originalTransaction.splitTransactionIds = splitTransactions.map(t => t.id);
+        originalTransaction.isHidden = true; // Hide original from budgets
+        originalTransaction.updatedAt = now;
 
-      return { success: true, splitTransactions };
+        // Save all transactions
+        await this.repo.saveAll(familyId, transactions);
+
+        return { success: true, splitTransactions };
+      });
     } catch (error) {
       console.error('Error splitting transaction:', error);
       return { success: false, error: 'Failed to split transaction' };
@@ -658,18 +670,20 @@ export class TransactionService {
     description: string | null
   ): Promise<{ success: boolean; error?: string }> {
     try {
-      const transactions = await this.repo.getAll(familyId);
+      return await this.repo.withLock(familyId, async () => {
+        const transactions = await this.repo.getAll(familyId);
 
-      const transaction = transactions.find(t => t.id === transactionId);
-      if (!transaction) {
-        return { success: false, error: 'Transaction not found' };
-      }
+        const transaction = transactions.find(t => t.id === transactionId);
+        if (!transaction) {
+          return { success: false, error: 'Transaction not found' };
+        }
 
-      transaction.userDescription = description;
-      transaction.updatedAt = new Date();
+        transaction.userDescription = description;
+        transaction.updatedAt = new Date();
 
-      await this.repo.saveAll(familyId, transactions);
-      return { success: true };
+        await this.repo.saveAll(familyId, transactions);
+        return { success: true };
+      });
     } catch (error) {
       console.error('Error updating transaction description:', error);
       return { success: false, error: 'Failed to update description' };
@@ -685,18 +699,20 @@ export class TransactionService {
     isFlagged: boolean
   ): Promise<{ success: boolean; error?: string }> {
     try {
-      const transactions = await this.repo.getAll(familyId);
+      return await this.repo.withLock(familyId, async () => {
+        const transactions = await this.repo.getAll(familyId);
 
-      const transaction = transactions.find(t => t.id === transactionId);
-      if (!transaction) {
-        return { success: false, error: 'Transaction not found' };
-      }
+        const transaction = transactions.find(t => t.id === transactionId);
+        if (!transaction) {
+          return { success: false, error: 'Transaction not found' };
+        }
 
-      transaction.isFlagged = isFlagged;
-      transaction.updatedAt = new Date();
+        transaction.isFlagged = isFlagged;
+        transaction.updatedAt = new Date();
 
-      await this.repo.saveAll(familyId, transactions);
-      return { success: true };
+        await this.repo.saveAll(familyId, transactions);
+        return { success: true };
+      });
     } catch (error) {
       console.error('Error updating transaction flagged status:', error);
       return { success: false, error: 'Failed to update flagged status' };
@@ -712,18 +728,20 @@ export class TransactionService {
     isHidden: boolean
   ): Promise<{ success: boolean; error?: string }> {
     try {
-      const transactions = await this.repo.getAll(familyId);
+      return await this.repo.withLock(familyId, async () => {
+        const transactions = await this.repo.getAll(familyId);
 
-      const transaction = transactions.find(t => t.id === transactionId);
-      if (!transaction) {
-        return { success: false, error: 'Transaction not found' };
-      }
+        const transaction = transactions.find(t => t.id === transactionId);
+        if (!transaction) {
+          return { success: false, error: 'Transaction not found' };
+        }
 
-      transaction.isHidden = isHidden;
-      transaction.updatedAt = new Date();
+        transaction.isHidden = isHidden;
+        transaction.updatedAt = new Date();
 
-      await this.repo.saveAll(familyId, transactions);
-      return { success: true };
+        await this.repo.saveAll(familyId, transactions);
+        return { success: true };
+      });
     } catch (error) {
       console.error('Error updating transaction hidden status:', error);
       return { success: false, error: 'Failed to update hidden status' };
@@ -773,25 +791,27 @@ export class TransactionService {
     newCategoryId: string | null,
     familyId: string
   ): Promise<number> {
-    const transactions = await this.repo.getAll(familyId);
+    return this.repo.withLock(familyId, async () => {
+      const transactions = await this.repo.getAll(familyId);
 
-    let updateCount = 0;
-    const updatedTransactions = transactions.map(transaction => {
-      if (transaction.categoryId === oldCategoryId) {
-        updateCount++;
-        return {
-          ...transaction,
-          categoryId: newCategoryId
-        };
+      let updateCount = 0;
+      const updatedTransactions = transactions.map(transaction => {
+        if (transaction.categoryId === oldCategoryId) {
+          updateCount++;
+          return {
+            ...transaction,
+            categoryId: newCategoryId
+          };
+        }
+        return transaction;
+      });
+
+      if (updateCount > 0) {
+        await this.repo.saveAll(familyId, updatedTransactions);
       }
-      return transaction;
+
+      return updateCount;
     });
-
-    if (updateCount > 0) {
-      await this.repo.saveAll(familyId, updatedTransactions);
-    }
-
-    return updateCount;
   }
 
   /**
@@ -910,16 +930,18 @@ export class TransactionService {
       updatedAt: new Date(),
     };
 
-    // Get existing transactions
-    const transactions = await this.repo.getAll(transactionData.userId);
+    return this.repo.withLock(transactionData.userId, async () => {
+      // Get existing transactions
+      const transactions = await this.repo.getAll(transactionData.userId);
 
-    // Add the new transaction
-    transactions.push(transaction);
+      // Add the new transaction
+      transactions.push(transaction);
 
-    // Save updated transactions
-    await this.repo.saveAll(transactionData.userId, transactions);
+      // Save updated transactions
+      await this.repo.saveAll(transactionData.userId, transactions);
 
-    return transaction;
+      return transaction;
+    });
   }
 
   /**
