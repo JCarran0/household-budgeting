@@ -1118,6 +1118,105 @@ describe('Task Service Integration Tests', () => {
   });
 
   // -------------------------------------------------------------------------
+  // Leaderboard — v2.0 badge categories (representative integration coverage)
+  // -------------------------------------------------------------------------
+
+  describe('GET /api/v1/tasks/leaderboard — v2.0 badge categories', () => {
+    it('night_owl_10: 10 completions after 9 PM local surfaces night_owl_10', async () => {
+      // 02:00 UTC = 22:00 EDT the previous day (April is EDT, UTC-4).
+      const events: TaskSeed[] = [];
+      for (let d = 2; d <= 11; d++) {
+        events.push({ completedAt: `2026-04-${String(d).padStart(2, '0')}T02:00:00.000Z` });
+      }
+      await seedTasks({ authToken, ownerUserId: userId, tasks: events });
+
+      const entry = await getLeaderboardEntry(authToken, userId);
+      expect(entry.earnedBadges.map((b) => b.id)).toContain('night_owl_10');
+    });
+
+    it('early_bird_10: 10 completions before 7 AM local surfaces early_bird_10', async () => {
+      // 10:00 UTC = 06:00 EDT → qualifies.
+      const events: TaskSeed[] = [];
+      for (let d = 1; d <= 10; d++) {
+        events.push({ completedAt: `2026-04-${String(d).padStart(2, '0')}T10:00:00.000Z` });
+      }
+      await seedTasks({ authToken, ownerUserId: userId, tasks: events });
+
+      const entry = await getLeaderboardEntry(authToken, userId);
+      expect(entry.earnedBadges.map((b) => b.id)).toContain('early_bird_10');
+    });
+
+    it('power_hour_5: 5 completions within a rolling 60-min window surfaces power_hour_5', async () => {
+      const base = new Date('2026-04-15T15:00:00.000Z').getTime();
+      const events: TaskSeed[] = [0, 10, 20, 30, 55].map((m) => ({
+        completedAt: new Date(base + m * 60_000).toISOString(),
+      }));
+      await seedTasks({ authToken, ownerUserId: userId, tasks: events });
+
+      const entry = await getLeaderboardEntry(authToken, userId);
+      expect(entry.earnedBadges.map((b) => b.id)).toContain('power_hour_5');
+    });
+
+    it('phoenix_1: 14-day calendar gap surfaces phoenix_1', async () => {
+      const events: TaskSeed[] = [
+        { completedAt: '2026-04-01T15:00:00.000Z' },
+        { completedAt: '2026-04-15T15:00:00.000Z' },
+      ];
+      await seedTasks({ authToken, ownerUserId: userId, tasks: events });
+
+      const entry = await getLeaderboardEntry(authToken, userId);
+      expect(entry.earnedBadges.map((b) => b.id)).toContain('phoenix_1');
+    });
+
+    it('clutch_5: 5 completions on or after dueDate surfaces clutch_5', async () => {
+      const events: TaskSeed[] = [];
+      for (let i = 0; i < 5; i++) {
+        events.push({
+          completedAt: `2026-04-${String(15 + i).padStart(2, '0')}T15:00:00.000Z`,
+          dueDate: `2026-04-${String(10 + i).padStart(2, '0')}T15:00:00.000Z`,
+        });
+      }
+      await seedTasks({ authToken, ownerUserId: userId, tasks: events });
+
+      const entry = await getLeaderboardEntry(authToken, userId);
+      expect(entry.earnedBadges.map((b) => b.id)).toContain('clutch_5');
+    });
+
+    it('spring_cleaner_25: 25 credits across Mar/Apr surfaces spring_cleaner_25', async () => {
+      const events: TaskSeed[] = [];
+      for (let i = 0; i < 25; i++) {
+        const day = 1 + (i % 28);
+        const month = i < 20 ? '03' : '04';
+        events.push({
+          completedAt: `2026-${month}-${String(day).padStart(2, '0')}T15:00:00.000Z`,
+        });
+      }
+      await seedTasks({ authToken, ownerUserId: userId, tasks: events });
+
+      const entry = await getLeaderboardEntry(authToken, userId);
+      expect(entry.earnedBadges.map((b) => b.id)).toContain('spring_cleaner_25');
+    });
+
+    it('clean_sweep_1: single-user family completing their lone open task surfaces clean_sweep_1', async () => {
+      // Single family task that gets closed → open count drops from 1 to 0.
+      const events: TaskSeed[] = [
+        {
+          createdAt: '2026-04-01T10:00:00.000Z',
+          completedAt: '2026-04-02T15:00:00.000Z',
+          transitions: [
+            { fromStatus: null, toStatus: 'todo', userId, timestamp: '2026-04-01T10:00:00.000Z' },
+            { fromStatus: 'todo', toStatus: 'done', userId, timestamp: '2026-04-02T15:00:00.000Z' },
+          ],
+        },
+      ];
+      await seedTasks({ authToken, ownerUserId: userId, tasks: events });
+
+      const entry = await getLeaderboardEntry(authToken, userId);
+      expect(entry.earnedBadges.map((b) => b.id)).toContain('clean_sweep_1');
+    });
+  });
+
+  // -------------------------------------------------------------------------
   // Task templates
   // -------------------------------------------------------------------------
 

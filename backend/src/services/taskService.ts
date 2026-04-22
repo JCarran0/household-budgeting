@@ -22,7 +22,7 @@ import {
   computeStreaksForUser,
   type CreditEvent,
 } from '../shared/utils/leaderboardStreaks';
-import { computeEarnedBadges } from '../shared/utils/leaderboardBadges';
+import { buildFamilyBadgeContext, computeEarnedBadges } from '../shared/utils/leaderboardBadges';
 import { DataService } from './dataService';
 import { FamilyService } from './familyService';
 
@@ -469,7 +469,11 @@ export class TaskService {
     // contributes one additional point, independent of the parent's
     // completion. Attribution follows the same rule: parent's assigneeId
     // when set, else the user who checked the subtask (`completedBy`).
-    const creditCount = (userIdToCredit: string, completedAt: string) => {
+    const creditCount = (
+      userIdToCredit: string,
+      completedAt: string,
+      dueDate?: string | null
+    ) => {
       if (!counts.has(userIdToCredit)) {
         counts.set(userIdToCredit, { today: 0, week: 0, month: 0 });
         eventsByUser.set(userIdToCredit, []);
@@ -479,18 +483,23 @@ export class TaskService {
       if (ms >= monthStart.getTime()) c.month++;
       if (ms >= weekStart.getTime()) c.week++;
       if (ms >= todayStart.getTime()) c.today++;
-      eventsByUser.get(userIdToCredit)!.push({ userId: userIdToCredit, completedAt });
+      eventsByUser.get(userIdToCredit)!.push({
+        userId: userIdToCredit,
+        completedAt,
+        ...(dueDate ? { dueDate } : {}),
+      });
     };
 
     for (const task of tasks) {
       if (task.scope !== 'family') continue;
 
-      // Parent task completion
+      // Parent task completion — populate dueDate for Clutch badge (subtasks
+      // have no independent due date, so only parent events get the field).
       if (task.completedAt) {
         const completionTransition = findCompletionTransition(task);
         if (completionTransition) {
           const creditedUserId = task.assigneeId ?? completionTransition.userId;
-          creditCount(creditedUserId, task.completedAt);
+          creditCount(creditedUserId, task.completedAt, task.dueDate);
         }
       }
 
@@ -505,6 +514,9 @@ export class TaskService {
       }
     }
 
+    // Build family-wide context ONCE before per-user compute loop.
+    const familyContext = buildFamilyBadgeContext(tasks, eventsByUser, timezone, now);
+
     // Build entries
     const memberMap = new Map(members.map((m) => [m.userId, m]));
     const entries: LeaderboardEntry[] = [];
@@ -516,7 +528,10 @@ export class TaskService {
       const earnedBadges = computeEarnedBadges(
         events,
         streaks.streakMilestones,
-        timezone
+        timezone,
+        familyContext,
+        userId,
+        now
       );
       entries.push({
         userId,

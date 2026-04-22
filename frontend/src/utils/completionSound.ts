@@ -273,3 +273,129 @@ export function playBadgeFanfare(): void {
     }
   }
 }
+
+/**
+ * Lighter "small triumphant" cue for non-final hero modals in a queue. ~1.5s.
+ * Shorter arpeggio than `playBadgeFanfare`, lighter harmonic content (sine
+ * + 2× only), lower fundamental gain. The audible vibe: a small "yes!"
+ * whereas fanfare is a full "YEAH!"
+ */
+export function playBadgeSmallTriumphant(): void {
+  const ctx = getAudioContext();
+  if (!ctx) return;
+  if (ctx.state === 'suspended') {
+    ctx.resume().catch(() => {});
+  }
+
+  const start = ctx.currentTime;
+  const fundamentalGain = 0.10;
+
+  const partials: { multiplier: number; gain: number; releaseScale: number }[] = [
+    { multiplier: 1, gain: fundamentalGain, releaseScale: 1.0 },
+    { multiplier: 2, gain: fundamentalGain * 0.35, releaseScale: 0.7 },
+  ];
+
+  const notes = [
+    { frequency: 523.25, offset: 0.00, duration: 0.20 }, // C5
+    { frequency: 783.99, offset: 0.15, duration: 0.30 }, // G5
+    { frequency: 1046.50, offset: 0.35, duration: 0.55 }, // C6 — sustained hero
+  ];
+
+  for (const note of notes) {
+    const noteStart = start + note.offset;
+    for (const p of partials) {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.value = note.frequency * p.multiplier;
+
+      const partialEnd = noteStart + note.duration * p.releaseScale;
+      gain.gain.setValueAtTime(0, noteStart);
+      gain.gain.linearRampToValueAtTime(p.gain, noteStart + 0.008);
+      gain.gain.exponentialRampToValueAtTime(0.0001, partialEnd);
+
+      osc.connect(gain).connect(ctx.destination);
+      osc.start(noteStart);
+      osc.stop(partialEnd + 0.02);
+    }
+  }
+}
+
+/**
+ * Legendary stinger — the single most memorable cue in the app. ~3s. Only
+ * played when the FINAL modal of a queue is a tier-5 legendary badge (so
+ * lifetime_1000 is the primary shipper today). Design notes:
+ *
+ *  - Stacked-triad intro (C5 + E5 + G5) followed by a sustained bell-like
+ *    top C6.
+ *  - Low sub-octave C4 for weight throughout the sustain.
+ *  - The hero top note gets a subtle 6 Hz vibrato via FrequencyModulation
+ *    — a low-frequency oscillator on a GainNode driving `osc.frequency`.
+ *  - A secondary E6 "bell shimmer" lands at +1.2s for the emotional peak.
+ */
+export function playBadgeLegendaryStinger(): void {
+  const ctx = getAudioContext();
+  if (!ctx) return;
+  if (ctx.state === 'suspended') {
+    ctx.resume().catch(() => {});
+  }
+
+  const start = ctx.currentTime;
+  const fundamentalGain = 0.12;
+
+  const richPartials: { multiplier: number; gain: number; releaseScale: number }[] = [
+    { multiplier: 1, gain: fundamentalGain, releaseScale: 1.0 },
+    { multiplier: 2, gain: fundamentalGain * 0.38, releaseScale: 0.75 },
+    { multiplier: 3, gain: fundamentalGain * 0.18, releaseScale: 0.55 },
+    { multiplier: 5, gain: fundamentalGain * 0.08, releaseScale: 0.35 },
+  ];
+
+  interface StingerNote {
+    frequency: number;
+    offset: number;
+    duration: number;
+    vibrato?: boolean;
+  }
+
+  const notes: StingerNote[] = [
+    { frequency: 261.63, offset: 0.00, duration: 1.80 }, // C4 sub
+    { frequency: 523.25, offset: 0.00, duration: 1.80 }, // C5
+    { frequency: 659.25, offset: 0.10, duration: 1.80 }, // E5
+    { frequency: 783.99, offset: 0.20, duration: 1.80 }, // G5
+    { frequency: 1046.50, offset: 0.30, duration: 2.20, vibrato: true }, // C6 hero
+    { frequency: 1318.51, offset: 1.20, duration: 1.40 }, // E6 bell shimmer
+  ];
+
+  for (const note of notes) {
+    const noteStart = start + note.offset;
+    for (const p of richPartials) {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      const freq = note.frequency * p.multiplier;
+      osc.frequency.value = freq;
+
+      // Apply a 6 Hz vibrato to the hero top note's fundamental (other
+      // partials track via detune, but keeping it simple: LFO on the
+      // fundamental is the most audible).
+      if (note.vibrato && p.multiplier === 1) {
+        const lfo = ctx.createOscillator();
+        const lfoGain = ctx.createGain();
+        lfo.frequency.value = 6;
+        lfoGain.gain.value = 4; // ±4 Hz depth
+        lfo.connect(lfoGain).connect(osc.frequency);
+        lfo.start(noteStart);
+        lfo.stop(noteStart + note.duration * p.releaseScale + 0.02);
+      }
+
+      const partialEnd = noteStart + note.duration * p.releaseScale;
+      gain.gain.setValueAtTime(0, noteStart);
+      gain.gain.linearRampToValueAtTime(p.gain, noteStart + 0.015);
+      gain.gain.exponentialRampToValueAtTime(0.0001, partialEnd);
+
+      osc.connect(gain).connect(ctx.destination);
+      osc.start(noteStart);
+      osc.stop(partialEnd + 0.02);
+    }
+  }
+}

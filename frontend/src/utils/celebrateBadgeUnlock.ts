@@ -1,36 +1,40 @@
 /**
- * Celebration pipeline for a newly earned badge:
- *   1. Fanfare (Web Audio synth — no asset pipeline)
- *   2. Confetti (canvas-confetti, one palette v1)
- *   3. Toast (Mantine notification)
+ * Confetti-only celebration helper for badge unlocks (BRD §5 / plan D38).
  *
- * Called from `useNewBadgeCelebrations` once per newly-detected earnedAt.
+ * Audio + notification side effects moved to `useBadgeHeroQueue` — this
+ * helper is now purely visual. The final modal of a queue gets a bigger
+ * burst with a finish-tinted palette; non-final modals get a smaller burst.
  */
 
 import confetti from 'canvas-confetti';
-import { notifications } from '@mantine/notifications';
-import type { BadgeDefinition } from '../../../shared/types';
-import { BADGE_DISPLAY } from '../components/tasks/badgeCatalog';
-import { playBadgeFanfare } from './completionSound';
+import type { Finish } from '../../../shared/utils/leaderboardBadgeSlots';
 
-export function celebrateBadgeUnlock(
-  badge: BadgeDefinition,
+const PALETTE_BY_FINISH: Record<Finish, string[]> = {
+  bronze: ['#b07a42', '#e0a870', '#8a5822', '#f4c79c'],
+  silver: ['#c9ccd1', '#e6e8eb', '#8a8f99', '#ffffff'],
+  gold: ['#e7b93a', '#f2d061', '#a87c18', '#fff3c0'],
+  platinum: ['#e4ecf3', '#c7d3dc', '#a1b4c2', '#ffffff'],
+  legendary: ['#ff6ec7', '#7bdff2', '#ffe66d', '#b48bff', '#fff3b3'],
+};
+
+export function celebrateConfetti(
+  finish: Finish,
+  isFinal: boolean,
   origin?: { x: number; y: number }
 ): void {
-  playBadgeFanfare();
-
+  const colors = PALETTE_BY_FINISH[finish];
   confetti({
-    particleCount: 80,
-    spread: 60,
-    startVelocity: 35,
+    particleCount: isFinal ? 160 : 60,
+    spread: isFinal ? 90 : 55,
+    startVelocity: isFinal ? 45 : 32,
     origin: origin ?? { x: 0.5, y: 0.35 },
-  });
-
-  const display = BADGE_DISPLAY[badge.id];
-  notifications.show({
-    title: `${display.glyph} ${badge.label} unlocked!`,
-    message: badge.description,
-    color: display.color,
-    autoClose: 6000,
+    colors,
+    ticks: isFinal ? 220 : 150,
   });
 }
+
+/**
+ * Back-compat re-export under the old name for any lingering callers. Prefer
+ * `celebrateConfetti` in new code.
+ */
+export const celebrateBadgeUnlock = celebrateConfetti;

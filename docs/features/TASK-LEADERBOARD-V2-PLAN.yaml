@@ -3,7 +3,7 @@
 # =============================================================================
 # BRD: docs/features/TASK-LEADERBOARD-BRD.md (v2.0 — 2026-04-22)
 # Supersedes: docs/features/TASK-LEADERBOARD-PLAN.yaml (v1.0, shipped)
-# Status: Draft — not started
+# Status: Implementation complete — all 8 phases shipped. Manual UAT/visual QA pending.
 # Last Updated: 2026-04-22
 # =============================================================================
 
@@ -424,7 +424,7 @@ decisions:
 # PHASE 1: Shared types + catalog expansion + BadgeDefinition extensions
 # =============================================================================
 phase_1_shared_types:
-  status: not_started
+  status: complete
   description: |
     Extend types, rewrite BADGE_CATALOG to 48 entries with tier/shippedAt/
     celebrationCopy, delete `isFinalTierBadge`, replace with tier helpers.
@@ -534,7 +534,7 @@ phase_1_shared_types:
 # PHASE 2: Shared derivation utils — 11 new categories + family context + score-based slots
 # =============================================================================
 phase_2_shared_derivations:
-  status: not_started
+  status: complete
   description: |
     Core stateless compute. Extends `computeEarnedBadges` and rewrites
     `selectBadgeSlots`. Introduces `buildFamilyBadgeContext` for cross-user /
@@ -811,7 +811,7 @@ phase_2_shared_derivations:
 # PHASE 3: Backend — getLeaderboard refactor
 # =============================================================================
 phase_3_backend:
-  status: not_started
+  status: complete
   description: |
     Plumb the new family-wide context through `getLeaderboard` and update
     the CreditEvent shape for Clutch. No endpoint signature change — response
@@ -886,7 +886,7 @@ phase_3_backend:
 # PHASE 4: Frontend — MedalBadge visual system
 # =============================================================================
 phase_4_visual_system:
-  status: not_started
+  status: complete  # All tasks including 4.4 (BadgeIcon delete) complete. 4.5 manual visual QA pending.
   description: |
     Replace the emoji-in-ThemeIcon visual with a CSS-sculpted metallic disc +
     SVG emblem. One parameterized component used everywhere badges render.
@@ -1001,7 +1001,7 @@ phase_4_visual_system:
 # PHASE 5: Frontend — slot area + detail modal rewrites
 # =============================================================================
 phase_5_row_and_modal:
-  status: not_started
+  status: complete  # 5.4 frontend DOM test skipped — no vitest infra; selectBadgeSlots logic covered by backend unit tests
   description: |
     Rewrite BadgeSlotArea (score-based, no ghosts) and BadgeDetailModal
     (full-screen, 15-cat grid, ???? obfuscation, footer, dev-panel slot).
@@ -1066,7 +1066,7 @@ phase_5_row_and_modal:
 # PHASE 6: Frontend — hero modal queue + three audio cues + celebration rewrite
 # =============================================================================
 phase_6_celebration:
-  status: not_started
+  status: complete  # 6.1-6.6 complete (audio cues, queue hook, shippedAt gate, hero modal, Tasks.tsx wiring). 6.7 manual QA pending.
   description: |
     Every tier now earns a hero modal. Queue with de-dup + rarity sort + audio
     crescendo. Audio pipeline expands to three Web Audio cues.
@@ -1265,7 +1265,7 @@ phase_6_celebration:
 # PHASE 7: Dev panel
 # =============================================================================
 phase_7_dev_panel:
-  status: not_started
+  status: complete  # Tree-shaking verified: 0 matches for BadgeDevPanel/"Simulate cascade" in prod bundle
   description: |
     Dev-build-only panel in detail modal footer. All controls must tree-shake.
 
@@ -1321,7 +1321,7 @@ phase_7_dev_panel:
 # PHASE 8: Tests
 # =============================================================================
 phase_8_tests:
-  status: not_started
+  status: complete  # 124 unit+integration tests pass; bundle +6.2KB gzipped (under 10KB budget); dev panel tree-shaken to 0 matches in prod; 8.5 manual UAT deferred
   description: |
     Consolidated regression + integration coverage. Many of these already land
     alongside their phase; this is the checklist.

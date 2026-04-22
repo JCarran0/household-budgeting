@@ -20,6 +20,12 @@ import { localDayKey } from './leaderboardDays';
 export interface CreditEvent {
   userId: string;
   completedAt: string;
+  /**
+   * Optional parent-task dueDate for Clutch badge derivation (§4.1).
+   * Populated only on parent-task events; subtask events have no independent
+   * due date. ISO datetime OR YYYY-MM-DD (date-only means end-of-day local).
+   */
+  dueDate?: string;
 }
 
 export interface StreakSummary {
