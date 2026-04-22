@@ -47,6 +47,25 @@ const MODEL_IDS: Record<ChatModel, string> = {
   opus: 'claude-opus-4-6',
 };
 
+// TD-012 part 1 — prompt caching. The static CHATBOT_SYSTEM_PROMPT and
+// CHATBOT_TOOLS together form the stable prefix of every request. A
+// `cache_control: { type: 'ephemeral' }` breakpoint at the end of each block
+// lets Anthropic reuse the tokenized prefix across the 5-minute TTL window,
+// cutting input-token cost on every follow-up turn. Per-request suffixes
+// (e.g., user display name) are appended AFTER the cache breakpoint so they
+// don't invalidate the cache.
+const SYSTEM_PROMPT_BASE: Anthropic.TextBlockParam = {
+  type: 'text',
+  text: CHATBOT_SYSTEM_PROMPT,
+  cache_control: { type: 'ephemeral' },
+};
+
+const CACHED_CHATBOT_TOOLS: Anthropic.Tool[] = CHATBOT_TOOLS.map((tool, i, arr) =>
+  i === arr.length - 1
+    ? { ...tool, cache_control: { type: 'ephemeral' as const } }
+    : tool,
+);
+
 interface ToolCallLog {
   toolName: string;
   inputParams: Record<string, unknown>;
@@ -218,16 +237,25 @@ export class ChatbotService {
     let totalInputTokens = 0;
     let totalOutputTokens = 0;
 
-    for (let iteration = 0; iteration < MAX_TOOL_ITERATIONS; iteration++) {
-      const systemPrompt = userDisplayName
-        ? `${CHATBOT_SYSTEM_PROMPT}\n\nThe user you are chatting with is named ${userDisplayName}. Address them by name occasionally.`
-        : CHATBOT_SYSTEM_PROMPT;
+    // The cached system-prompt block must stay byte-identical across turns.
+    // User-specific context is appended AFTER the cache breakpoint so it
+    // personalizes the response without invalidating the cache.
+    const systemBlocks: Anthropic.TextBlockParam[] = userDisplayName
+      ? [
+          SYSTEM_PROMPT_BASE,
+          {
+            type: 'text',
+            text: `The user you are chatting with is named ${userDisplayName}. Address them by name occasionally.`,
+          },
+        ]
+      : [SYSTEM_PROMPT_BASE];
 
+    for (let iteration = 0; iteration < MAX_TOOL_ITERATIONS; iteration++) {
       const response = await this.client.messages.create({
         model: MODEL_IDS[model],
         max_tokens: MAX_OUTPUT_TOKENS,
-        system: systemPrompt,
-        tools: CHATBOT_TOOLS,
+        system: systemBlocks,
+        tools: CACHED_CHATBOT_TOOLS,
         messages,
       });
 

@@ -254,6 +254,4 @@ df -h /home/appuser
 
 ## 🚨 Known Issues
 
-No open issues currently tracked here. See [AI-TECHNICAL-DEBT.md](docs/completed/AI-TECHNICAL-DEBT.md) for the full debt tracker.
-
-Full technical debt: [AI-TECHNICAL-DEBT.md](docs/completed/AI-TECHNICAL-DEBT.md).
+Active debt tracked in [docs/AI-TECHNICAL-DEBT.md](docs/AI-TECHNICAL-DEBT.md). Execution sequencing in [docs/TECH-DEBT-EXECUTION-PLAN-2026-04.md](docs/TECH-DEBT-EXECUTION-PLAN-2026-04.md). Resolved items archived in [docs/completed/AI-TECHNICAL-DEBT.md](docs/completed/AI-TECHNICAL-DEBT.md).

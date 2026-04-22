@@ -1,5 +1,6 @@
 import express, { Express, Request, Response, NextFunction } from 'express';
 import { errorHandler } from './middleware/errorHandler';
+import { requestScopeMiddleware } from './middleware/requestScope';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import { config } from './config';
@@ -74,6 +75,8 @@ const corsOptions = {
 app.use(cors(corsOptions));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+// Opens a per-request async scope so the data layer can memoize reads (TD-011).
+app.use(requestScopeMiddleware);
 
 // Security headers
 app.use((_req: Request, res: Response, next: NextFunction) => {

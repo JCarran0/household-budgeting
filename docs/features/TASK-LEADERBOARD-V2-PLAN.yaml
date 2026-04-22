@@ -1,0 +1,1587 @@
+# =============================================================================
+# Task Leaderboard v2.0 — Implementation Plan
+# =============================================================================
+# BRD: docs/features/TASK-LEADERBOARD-BRD.md (v2.0 — 2026-04-22)
+# Supersedes: docs/features/TASK-LEADERBOARD-PLAN.yaml (v1.0, shipped)
+# Status: Draft — not started
+# Last Updated: 2026-04-22
+# =============================================================================
+
+overview:
+  description: |
+    v1.0 is shipped: 14 badges across 4 categories (Volume/Consistency/Streak/
+    Lifetime), streak columns (Current/Best), badge slot area (up to 3 per row),
+    detail modal, final-tier hero modal, toast+fanfare+confetti for tier 1-2,
+    localStorage `lastSeenBadgeEarnedAt` marker, day-1 seed suppressing the
+    historical cascade.
+
+    v2.0 is a delta on top of v1.0. The shipped streak math, attribution rules,
+    family-scope filter, per-user `CreditEvent` stream, response shape
+    (additive-only), and the localStorage seed pattern are all UNCHANGED.
+
+    What changes:
+
+    1. Catalog expands from 14 → 48 badges across 4 → 15 categories. Every
+       badge gains required `tier: 1..5`, `shippedAt: ISO`, and
+       `celebrationCopy: string` fields.
+
+    2. "Final-tier" / capstone concept is deleted. Polish is driven purely by
+       tier index. `isFinalTierBadge()` is replaced with `getBadgeTier()` /
+       `getBadgeFinish()`. Every unlock gets a hero modal (no toast-tier path).
+
+    3. Hero modal becomes a queue: de-duplicate by category on a single load
+       (highest tier wins); sort ascending by rarity so the biggest lands last;
+       ~400ms transition between modals; each dismissed independently.
+
+    4. Three audio cues instead of one: Small triumphant (non-last), Big
+       triumphant (last), Legendary stinger (last+tier5). Single-modal loads
+       always get the "final" cue.
+
+    5. Eleven new categories require computation that crosses the v1.0 per-user
+       boundary: Clean Sweep needs family-wide open-task-count transitions;
+       Partner in Crime needs both members' events zipped by day; Comeback Kid
+       needs per-month running comparison between members. `computeEarnedBadges`
+       is refactored to accept optional family-wide context.
+
+    6. Visual: flat emoji glyphs in `<ThemeIcon>` are replaced by a CSS-sculpted
+       metallic disc (radial gradient + beveled rim + highlight crescent) with
+       a centered SVG emblem. Finish palette per tier: Bronze / Silver / Gold /
+       Platinum / Legendary. Hero-modal motion: scale+360°-rotate entry (~800ms),
+       ambient shimmer sweep, glow-pulse halo, sparkle particles on tier 5.
+       Reduced-motion replaces entry with fade and pauses ambient loops.
+
+    7. Row slot selection changes from "highest tier per category, drop
+       Consistency first if 4 earned" to score-based:
+         rarity = [1,2,4,8,16][tier-1]
+         recencyBoost = 10 * exp(-daysSinceEarnedAt / 7)
+         slot = top 3 by (rarity + recencyBoost), tie-break earnedAt DESC.
+
+    8. Detail modal becomes full-screen on all viewports (`fullScreen` prop on
+       `ResponsiveModal`, which already supports it). Adds two-level `????`
+       obfuscation: untouched categories hide the heading AND collapse to a
+       single-row placeholder (tier count hidden because it varies). Earned-in
+       categories show heading + full tier grid with `????` ghost tiles for
+       unearned tiers. Footer shows `N of M hidden categories`.
+
+    9. `shippedAt` per-badge gate prevents retroactive celebration cascades
+       when new categories or tiers land in later deploys. v1.0 day-1 seed
+       still covers the initial 14 badges; the `shippedAt` gate covers v2.0
+       and beyond.
+
+    10. Dev-only panel (`import.meta.env.DEV`) in the detail modal footer:
+        reveal-all, per-badge trigger, cascade simulation, reset marker, audio
+        preview, reduced-motion override, view-as-partner, animation replay.
+        Tree-shaken from prod.
+
+  key_files:
+    brd: docs/features/TASK-LEADERBOARD-BRD.md
+    v1_plan: docs/features/TASK-LEADERBOARD-PLAN.yaml
+    shared_types: shared/types/index.ts                    # extend BadgeId, BadgeCategory, BadgeDefinition; rewrite BADGE_CATALOG
+    shared_badges_util: shared/utils/leaderboardBadges.ts  # add 11 new derivations + family-wide context param
+    shared_badge_slots_util: shared/utils/leaderboardBadgeSlots.ts  # rewrite selectBadgeSlots; delete isFinalTierBadge; add getBadgeTier + rarity helper
+    backend_service: backend/src/services/taskService.ts   # getLeaderboard: pass family-wide context + now
+    frontend_medal: frontend/src/components/tasks/MedalBadge.tsx       # new — replaces BadgeIcon
+    frontend_emblems: frontend/src/components/tasks/medalEmblems.tsx   # new — 15 SVG emblems
+    frontend_badge_icon: frontend/src/components/tasks/BadgeIcon.tsx   # delete
+    frontend_badge_catalog: frontend/src/components/tasks/badgeCatalog.ts  # repurpose: map BadgeCategory -> emblem + label; drop per-badge glyph map
+    frontend_slot_area: frontend/src/components/tasks/BadgeSlotArea.tsx        # rewrite — score-based
+    frontend_detail_modal: frontend/src/components/tasks/BadgeDetailModal.tsx  # rewrite — full-screen, 15-cat, ???? obfuscation, footer, dev panel
+    frontend_hero_modal: frontend/src/components/tasks/BadgeHeroModal.tsx      # rewrite — every tier; scale+rotate entry; ambient loops; sparkles on t5
+    frontend_hero_queue_hook: frontend/src/hooks/useBadgeHeroQueue.ts          # new — queue state machine for sequential hero modals
+    frontend_celebrations_hook: frontend/src/hooks/useNewBadgeCelebrations.ts  # rewrite — build queue, gate by shippedAt, dispatch to hook
+    frontend_completion_sound: frontend/src/utils/completionSound.ts           # add playBadgeSmallTriumphant + playBadgeLegendaryStinger; keep playBadgeFanfare as "Big"
+    frontend_celebrate_util: frontend/src/utils/celebrateBadgeUnlock.ts        # rewrite — confetti-only variant; audio selected by queue hook
+    frontend_dev_panel: frontend/src/components/tasks/BadgeDevPanel.tsx        # new — dev-build-only panel
+
+# =============================================================================
+# DECISIONS LOG — v2.0 additions (numbering continues from v1.0's D15)
+# =============================================================================
+decisions:
+  - id: D20
+    date: 2026-04-22
+    decision: Keep v1 BadgeDefinition fields (id, category, threshold, order, label, description) AND add required `tier`, `shippedAt`, `celebrationCopy`; optional `displayName`
+    rationale: |
+      `threshold` still drives single-number derivations (Volume, Consistency,
+      Lifetime, Night Owl, Early Bird, Power Hour, Phoenix, Clutch, Partner in
+      Crime, Comeback Kid, Clean Sweep, Spring Cleaner, Holiday Hero, Streak).
+      `order` still drives in-category grid ordering. `tier` is new and is the
+      SOLE axis of visual polish. `label` falls back to `"{categoryName}
+      {finishName}"` when `displayName` is absent — BRD §4.1 explicitly allows
+      the label to come from either source. v2.0 ships with all `displayName`
+      unset so the auto-generated label ("Night Owl Bronze") applies.
+
+  - id: D21
+    date: 2026-04-22
+    decision: Delete `isFinalTierBadge`; replace with `getBadgeTier(id): 1..5` and derived helpers
+    rationale: |
+      BRD §4.6 explicitly dissolves the capstone concept. Every consumer of
+      `isFinalTierBadge` — `useNewBadgeCelebrations`, `BadgeIcon` — is
+      refactored in this plan (Phase 1.3). Keeping the old API around
+      "for backwards compat" would re-introduce the two-path design the BRD
+      rejects. Delete cleanly.
+
+  - id: D22
+    date: 2026-04-22
+    decision: `computeEarnedBadges` gains a `familyContext` param covering cross-user + family-wide badges
+    rationale: |
+      Clean Sweep needs the chronological family-wide open-task-count stream
+      (per-user events are not enough). Partner in Crime needs BOTH users'
+      credit-event day sets zipped. Comeback Kid needs per-month running
+      comparisons between the two users. Rather than threading five separate
+      inputs, the backend builds a single `FamilyBadgeContext` object once
+      and passes it to each user's `computeEarnedBadges` call. Per-user badges
+      ignore it; family-aware badges read from it. Keeps the function pure
+      and tree-shakable by category.
+
+  - id: D23
+    date: 2026-04-22
+    decision: `FamilyBadgeContext` built by a new `buildFamilyBadgeContext` helper co-located in leaderboardBadges.ts
+    rationale: |
+      Consolidates the cross-user / family-wide bookkeeping in one pure
+      function that the backend calls once before the per-user compute loop.
+      Shape:
+        interface FamilyBadgeContext {
+          // Clean Sweep: timestamps at which the family open-task count
+          // transitioned from >0 to 0, paired with the crediting event
+          // that caused the transition. Order: ascending by timestamp.
+          zeroInboxEvents: Array<{ userId: string; completedAt: string }>;
+          // Partner in Crime: for each calendar day, the set of userIds
+          // with ≥1 credit that day. Map<dayKey, Set<userId>>.
+          dayUserIndex: Map<string, Set<string>>;
+          // Comeback Kid: for each calendar month, running running tally
+          // per user captured at end-of-day-15 and end-of-month.
+          // Map<monthKey, { mid: Map<userId, count>, end: Map<userId, count> }>.
+          monthlyTallies: Map<string, { mid: Map<string, number>; end: Map<string, number> }>;
+        }
+
+  - id: D24
+    date: 2026-04-22
+    decision: Clean Sweep uses the CURRENT task list's open count as the baseline, and replays task completion events to find transitions to 0
+    rationale: |
+      The authoritative "open task" signal is the live task set. But naive
+      replay doesn't work — tasks that are currently done weren't always done.
+      Approach:
+        1. Build the set of all family tasks currently in the system.
+        2. For each task, determine whether it is CURRENTLY open (non-done,
+           non-cancelled, `snoozedUntil` in past or absent).
+        3. For every task CURRENTLY open, its existence always counted toward
+           open-count.
+        4. For every task CURRENTLY closed, the open-count treated that task
+           as "open" from its `createdAt` until its latest `completedAt` (or
+           cancellation).
+        5. Sort all open→close transitions (the `completedAt` timestamps of
+           currently-closed tasks) AND all open→create events ascending; run
+           the counter. Each step where the counter drops to 0 is a zero-inbox
+           moment. Credit the user who caused that specific `completedAt`.
+
+      Caveat: this ignores history of tasks that were re-opened then re-closed
+      (done → started → done). The final `completedAt` is what matters for the
+      live count, consistent with the "transition log is not scanned" rule in
+      §3.3 for best-streak math. Same principle here — keeps math stateless.
+
+      Snoozed tasks are treated as open if `snoozedUntil <= now`, open (not
+      counted) if snoozed into future. Consistent with "ignoring
+      snoozed-until-future" in BRD §4.1 Clean Sweep definition.
+
+  - id: D25
+    date: 2026-04-22
+    decision: Phoenix "≥14 days ago" is measured by calendar days in viewer's timezone, not 14*86400 seconds
+    rationale: |
+      Consistent with how streaks and day-of-week bucketing already work.
+      Implementation: for each credited completion, compute the day key and
+      count days between this day's key and the previous credited event's day
+      key. ≥14 qualifies. Edge case: the very first credit ever does not
+      qualify (no previous event).
+
+  - id: D26
+    date: 2026-04-22
+    decision: Power Hour uses a per-user rolling 60-minute window; sliding by actual completedAt timestamps (not bucketed)
+    rationale: |
+      BRD says "N completions within any single rolling 60-minute window."
+      Implementation is a two-pointer scan over sorted `completedAt` timestamps:
+      for each event, count the number of events within the 60-min window ending
+      at (or starting at; pick starting-at for consistency) this event. Track
+      the all-time max. Earn when max hits 5 / 10 / 15. `earnedAt` = the
+      tipping event.
+
+      Do NOT re-bucket per calendar hour — BRD explicitly says "rolling." Two-
+      pointer is O(n).
+
+  - id: D27
+    date: 2026-04-22
+    decision: Comeback Kid is evaluated only for CLOSED months (month strictly before the current month)
+    rationale: |
+      "In a single calendar month, be behind at end-of-day-15 and finish ≥1
+      ahead." The month must be complete to know the final count. For the
+      in-progress current month, the badge cannot be evaluated — the user
+      might still catch up or fall back. Decision: skip the current month.
+      Earned months are counted in ascending order; `earnedAt` for
+      comeback_kid_N is the last day of the Nth qualifying month
+      (23:59:59.999 local, converted to ISO).
+
+      Two-user app: a "comeback" in a family of one person is meaningless;
+      skip the badge entirely if the family has <2 members.
+
+  - id: D28
+    date: 2026-04-22
+    decision: Partner in Crime `earnedAt` for the Nth shared-completion day is the later of the two users' first completedAt on that day
+    rationale: |
+      The day is "shared" only once BOTH users have a completion. The tipping
+      moment is the second user's first completedAt. Natural and intuitive —
+      that's the moment the day became shared. Implementation: in
+      `FamilyBadgeContext.dayUserIndex`, also record the per-day timestamp at
+      which the day first flipped to "both users present." Use it as
+      `earnedAt` for whichever user the badge belongs to (both users earn
+      Partner in Crime on the same days, with the same `earnedAt`).
+
+  - id: D29
+    date: 2026-04-22
+    decision: Row slot selection rewrite — score-based, no Consistency-drop carve-out
+    rationale: |
+      BRD §5.1 explicit. Remove the hardcoded `slots.filter((s) => s.def.category !== 'consistency')`
+      step. New algorithm:
+        1. For each category with ≥1 earned, pick the highest-scoring earned
+           badge as the representative (score defined below).
+        2. Sort representatives by score DESC.
+        3. Take top 3; tie-break `earnedAt` DESC.
+
+        score = rarity + recencyBoost
+        rarity = [1, 2, 4, 8, 16][tier - 1]
+        recencyBoost = 10 * exp(-daysSinceEarnedAt / 7)
+        daysSinceEarnedAt = (now - earnedAt) / 86_400_000
+
+      `now` must be passed in for determinism in tests.
+
+  - id: D30
+    date: 2026-04-22
+    decision: Ghost `????` placeholders live ONLY in the detail modal; row renders fewer badges when user has fewer earned categories
+    rationale: |
+      Matches BRD §5.1 ("No ghost placeholders on the row — fewer earns = fewer
+      badges"). v1.0 row currently fills with ghosts in category order — that
+      behavior is deleted. Simplifies score-based selection: the slot area is
+      literally `selectBadgeSlots(earned).map(renderMedal)`.
+
+  - id: D31
+    date: 2026-04-22
+    decision: Untouched-category obfuscation — heading itself is `????` + single-row collapsed placeholder (NOT per-tier tiles)
+    rationale: |
+      BRD §4.7 explicit. Tier count varies across categories (3, 4, or 5);
+      rendering per-tier `????` tiles would leak the count. A single row
+      with the heading `????` preserves the "something is there, but you
+      don't know what or how big" vibe. The footer `N of M hidden categories`
+      quantifies the unknown at the aggregate level.
+
+  - id: D32
+    date: 2026-04-22
+    decision: Detail modal uses `<ResponsiveModal fullScreen>` on all viewports
+    rationale: |
+      `ResponsiveModal` already supports `fullScreen` (line 18-ish of
+      frontend/src/components/ResponsiveModal.tsx — mobile forces it; desktop
+      respects caller-passed value). Pass `fullScreen` explicitly. 48 tiles
+      across 15 categories need the canvas.
+
+  - id: D33
+    date: 2026-04-22
+    decision: Hero modal queue is component-level state with `useBadgeHeroQueue` hook managing ordering, transitions, and per-modal audio selection
+    rationale: |
+      `useNewBadgeCelebrations` currently holds a single `pendingHero`
+      useState. Extending that to a queue muddles two concerns:
+        1. Detection (diff earnedAt vs. marker)
+        2. Presentation (render current + schedule next + audio choice)
+
+      New split:
+        - `useNewBadgeCelebrations` still does detection; returns an array of
+          `QueuedHeroUnlock` objects after de-dup + sort rules.
+        - `useBadgeHeroQueue` consumes that array, owns the "current modal"
+          state + dismiss handler + ~400ms inter-modal transition + audio cue
+          selection (small vs. big vs. legendary stinger).
+
+      Tasks.tsx renders `<BadgeHeroModal opened={queue.currentOpen} badge={queue.current} ... onClose={queue.dismiss} />` and is otherwise unchanged.
+
+  - id: D34
+    date: 2026-04-22
+    decision: Tier-1/2 no longer use the toast-notification path — every tier gets a hero modal
+    rationale: |
+      BRD §4.5 + REQ-L-015 explicit: "Every newly earned badge triggers a
+      hero modal (no toast tier)." Delete the Mantine `notifications.show`
+      branch in `celebrateBadgeUnlock`. `celebrateBadgeUnlock` is repurposed
+      to a confetti-only helper; audio is selected by the queue hook based
+      on queue position + tier.
+
+      Consequence: the `@mantine/notifications` import can be removed from
+      this code path — but keep the package installed (other features use it).
+
+  - id: D35
+    date: 2026-04-22
+    decision: Three audio cues live in completionSound.ts with Web Audio synthesis — no runtime assets
+    rationale: |
+      v1.0 `playBadgeFanfare` is the Big triumphant cue — keep it, rename in
+      docs only. Add:
+        - `playBadgeSmallTriumphant()` — ~1.5s punchy. Shorter arpeggio than
+          Big; lighter harmonics; fundamental 0.10 vs. 0.14.
+        - `playBadgeLegendaryStinger()` — distinct ~3s cue. Stacked-triad
+          intro + bell-like sustained top note with vibrato + low sub-octave
+          support for weight. Intended as the single most memorable cue in
+          the app.
+
+      Silent-fail safe like the others. No `<audio>` tags, no mp3 files.
+
+  - id: D36
+    date: 2026-04-22
+    decision: `MedalBadge` is one parameterized React component — `<MedalBadge tier={1..5} emblem={EmblemKey} size={number} halo={'none' | 'halo' | 'legendary'} animate={'none' | 'hero'} />`
+    rationale: |
+      BRD §4.8. The CSS chassis (radial gradient + inset shadow rim +
+      highlight crescent) is parameterized by `--finish-*` CSS custom
+      properties set per tier. Emblem is a key into a static SVG map
+      (`medalEmblems.tsx`). The component renders identically in the row slot,
+      detail modal, and hero modal — hero adds entry animation + ambient loops
+      via `animate='hero'`. Prefers-reduced-motion is handled inside the
+      component via CSS media query.
+
+      No per-badge asset files. Swapping to real designed artwork in a future
+      iteration = swap the emblem SVG; chassis stays.
+
+  - id: D37
+    date: 2026-04-22
+    decision: Emblem library is hand-authored inline SVGs in `medalEmblems.tsx`, keyed by `BadgeCategory`
+    rationale: |
+      BRD §4.1 Assumption 4 — library-first. 15 emblems is small enough to
+      hand-author; commissioning is a future polish pass. Use Tabler/Phosphor
+      as visual reference but inline the paths so the emblem inherits
+      `currentColor` and scales cleanly from 32px → 240px. Keying by
+      category (not per-badge) halves the work and matches the BRD's "all
+      tiers in a category share one emblem" implicit model.
+
+      Categories → emblem:
+        volume            → bolt / lightning
+        consistency       → calendar-check
+        streak            → flame
+        lifetime          → trophy
+        weekday_warrior   → briefcase
+        night_owl         → moon
+        early_bird        → sunrise
+        power_hour        → stopwatch
+        clean_sweep       → broom
+        spring_cleaner    → sprout / leaf
+        holiday_hero      → evergreen / star
+        phoenix           → feather / flame-rising
+        clutch            → hourglass
+        partner_in_crime  → handshake / two-people
+        comeback_kid      → comeback-arrow / rocket
+
+  - id: D38
+    date: 2026-04-22
+    decision: Confetti color tinted by the final modal's finish (not always the same palette)
+    rationale: |
+      BRD §9 Q2 proposed; accept. `celebrateBadgeUnlock` takes a `finish`
+      param and picks a color array from a per-finish lookup:
+        bronze     → warm coppers
+        silver     → cool neutrals
+        gold       → warm yellows
+        platinum   → pale cool whites + blues
+        legendary  → iridescent rainbow
+      Final modal of queue gets 2× particle count + longer spread +
+      finish-tinted palette. Non-final modals get a smaller burst in the same
+      palette.
+
+  - id: D39
+    date: 2026-04-22
+    decision: Ambient motion (shimmer + glow pulse) is CSS-only; sparkle particles are SVG-sprite child nodes animated via CSS transforms
+    rationale: |
+      CSS is GPU-accelerated, interruptible by `@media (prefers-reduced-motion:
+      reduce)`, and requires zero JS. Sparkle particles are a small SVG
+      `<g>` child with N static circles offset around the disc; each has its
+      own `animation-delay` + `@keyframes` pulse. No JS animation loop.
+
+      Entry animation (scale 0→1 + ~360° rotate over ~800ms) fires once when
+      the modal mounts — trigger via a short-lived `.entering` class + CSS
+      transition. Replay for dev panel = toggle the class off and back on with
+      a forced reflow.
+
+  - id: D40
+    date: 2026-04-22
+    decision: `shippedAt` guard applies to EVERY badge unconditionally, even v1.0 ones
+    rationale: |
+      BRD §4.5 is explicit. v1.0 badges get `shippedAt = 2026-04-19T00:00:00Z`
+      (the v1.0 deploy date). v2.0 badges get `shippedAt = <v2.0 deploy date>`.
+      Subsequent deploys set `shippedAt` to deploy time. This means future
+      category rollouts do not trigger retroactive celebration cascades.
+
+      The v1.0 day-1 `lastSeenBadgeEarnedAt = now` seed is preserved —
+      redundant but harmless. A fresh install after v2.0 ship will seed the
+      marker AND have `shippedAt > earnedAt` guards — belt and suspenders.
+
+  - id: D41
+    date: 2026-04-22
+    decision: Dev panel uses `import.meta.env.DEV` guard; tree-shaken in prod
+    rationale: |
+      Vite tree-shakes dead branches behind `import.meta.env.DEV`. Verify
+      via `npm run build` + check that `BadgeDevPanel` identifiers are absent
+      from the output bundle. If unexpectedly retained, wrap the import
+      itself in a dynamic `await import(...)` gated by the flag.
+
+# =============================================================================
+# PHASE 1: Shared types + catalog expansion + BadgeDefinition extensions
+# =============================================================================
+phase_1_shared_types:
+  status: not_started
+  description: |
+    Extend types, rewrite BADGE_CATALOG to 48 entries with tier/shippedAt/
+    celebrationCopy, delete `isFinalTierBadge`, replace with tier helpers.
+    Does NOT change derivation or backend yet — this is type-only prep.
+
+  tasks:
+    - id: "1.1"
+      task: Extend BadgeCategory and BadgeId in shared/types/index.ts
+      details: |
+        Add 11 new categories to `BadgeCategory`:
+          'weekday_warrior' | 'night_owl' | 'early_bird' | 'power_hour'
+          | 'clean_sweep' | 'spring_cleaner' | 'holiday_hero' | 'phoenix'
+          | 'clutch' | 'partner_in_crime' | 'comeback_kid'
+
+        Add 34 new badge IDs to `BadgeId` — see BRD §4.1 for the full list.
+        Keep v1.0 IDs unchanged.
+
+    - id: "1.2"
+      task: Extend BadgeDefinition with tier, shippedAt, celebrationCopy, optional displayName
+      details: |
+        ```ts
+        export interface BadgeDefinition {
+          id: BadgeId;
+          category: BadgeCategory;
+          threshold: number;
+          order: number;
+          tier: 1 | 2 | 3 | 4 | 5;            // NEW — required
+          shippedAt: string;                    // NEW — required ISO
+          celebrationCopy: string;              // NEW — required ({displayName} token)
+          displayName?: string;                 // NEW — optional artistic override
+          label: string;                        // kept; may be replaced by "{categoryName} {finishName}" auto-label at render
+          description: string;                  // kept
+        }
+        ```
+        `tier` and `order` will overlap in some cases; keep both — `order`
+        is for grid layout within a category, `tier` is for polish. For v2.0
+        catalog they're equal (tier 1 = order 1, etc.) but leaving them
+        separate costs nothing and future-proofs against re-ordering.
+
+    - id: "1.3"
+      task: Rewrite BADGE_CATALOG — 48 entries
+      details: |
+        All 48 entries with id, category, tier, threshold, order, shippedAt,
+        label, description, celebrationCopy. v1.0 entries keep their
+        `shippedAt = '2026-04-19T00:00:00.000Z'`. v2.0 entries use the deploy
+        date (TBD; set to `2026-04-22T00:00:00.000Z` as a placeholder and
+        override at deploy time via a codemod if needed).
+
+        Use BRD §4.1 for thresholds + §4.10 for celebrationCopy. Every copy
+        string must include `{displayName}` token.
+
+        Verify in a test that `BADGE_CATALOG.length === 48` and that every
+        BadgeId in the type union has a corresponding catalog entry (and
+        vice-versa). Zod is heavy here; a simple test file is enough.
+
+    - id: "1.4"
+      task: Delete `isFinalTierBadge`; add tier helpers
+      details: |
+        File: shared/utils/leaderboardBadgeSlots.ts
+
+        Delete:
+          export function isFinalTierBadge(id: BadgeId): boolean
+
+        Delete:
+          const MAX_THRESHOLD_BY_CATEGORY = ...
+
+        Add:
+          export function getBadgeTier(id: BadgeId): 1 | 2 | 3 | 4 | 5
+          export function getBadgeFinish(tier: 1..5): 'bronze' | 'silver' | 'gold' | 'platinum' | 'legendary'
+          export function getBadgeRarity(tier: 1..5): number  // [1,2,4,8,16]
+          export function getFinishName(finish: Finish): 'Bronze' | 'Silver' | 'Gold' | 'Platinum' | 'Legendary'
+          export function getCategoryName(cat: BadgeCategory): string  // "Night Owl", "Weekday Warrior", etc.
+          export function getAutoLabel(def: BadgeDefinition): string   // "{categoryName} {finishName}" or def.displayName
+
+        Keep `EarnedSlot` and `selectBadgeSlots` — those are rewritten in 2.x.
+
+    - id: "1.5"
+      task: Type-level assertion — every BadgeId appears exactly once in BADGE_CATALOG; every category has ≥1 badge
+      details: |
+        Adds a compile-time guard via a mapped type or a runtime test
+        (simpler). Prevents dropping an entry mid-refactor.
+
+        File: shared/types/__tests__/badgeCatalog.test.ts (new)
+
+    - id: "1.6"
+      task: Callsite audit — update everything that reads BadgeDefinition/BadgeId
+      details: |
+        Grep for:
+          BADGE_CATALOG
+          BadgeDefinition
+          BadgeId
+          isFinalTierBadge
+          final tier
+
+        Known callsites (as of 2026-04-22):
+          shared/utils/leaderboardBadges.ts           — no compile impact (BadgeId union extension only adds; threshold/category still read the same)
+          shared/utils/leaderboardBadgeSlots.ts       — rewritten in 1.4 + 2.1
+          backend/src/services/taskService.ts         — refactored in Phase 3
+          frontend/src/components/tasks/BadgeIcon.tsx — DELETE (replaced by MedalBadge)
+          frontend/src/components/tasks/BadgeSlotArea.tsx        — rewrite in Phase 5
+          frontend/src/components/tasks/BadgeDetailModal.tsx     — rewrite in Phase 5
+          frontend/src/components/tasks/BadgeHeroModal.tsx       — rewrite in Phase 6
+          frontend/src/components/tasks/badgeCatalog.ts          — rewrite: replace per-badge glyph map with per-category emblem map
+          frontend/src/hooks/useNewBadgeCelebrations.ts          — rewrite in Phase 6
+
+# =============================================================================
+# PHASE 2: Shared derivation utils — 11 new categories + family context + score-based slots
+# =============================================================================
+phase_2_shared_derivations:
+  status: not_started
+  description: |
+    Core stateless compute. Extends `computeEarnedBadges` and rewrites
+    `selectBadgeSlots`. Introduces `buildFamilyBadgeContext` for cross-user /
+    family-wide derivations.
+
+  tasks:
+    - id: "2.1"
+      task: Rewrite `selectBadgeSlots` — score-based selection
+      details: |
+        File: shared/utils/leaderboardBadgeSlots.ts
+
+        New signature:
+          export function selectBadgeSlots(
+            earned: EarnedBadge[],
+            now: Date,
+          ): EarnedSlot[]
+
+        Algorithm (D29):
+          1. Group earned badges by `def.category`.
+          2. For each category, compute per-badge score:
+             score = rarity(def.tier) + 10 * exp(-daysSinceEarnedAt / 7)
+          3. Representative = highest-scoring earned badge in the category.
+          4. Sort representatives by score DESC.
+          5. Take top 3. Tie-break `earnedAt` DESC.
+
+        Unit tests (new file or extend existing):
+          - empty earned → []
+          - 1 earned tier-1 → 1 slot
+          - 4 earned categories → 3 slots (best-score wins; Consistency can
+            remain if freshest)
+          - 16 earned across all 15 categories → 3 slots (all tier-5 earned
+            the same day; tie-break picks 3 most recent)
+          - Recency test: fresh tier-3 earned today outranks year-old tier-5
+
+    - id: "2.2"
+      task: Add `buildFamilyBadgeContext` to leaderboardBadges.ts
+      details: |
+        New shape (see D23 for full definition):
+          export interface FamilyBadgeContext {
+            zeroInboxEvents: Array<{ userId: string; completedAt: string }>;
+            dayUserIndex: Map<string, { users: Set<string>; sharedAt: string | null }>;
+            monthlyTallies: Map<string, { mid: Map<string, number>; end: Map<string, number> }>;
+          }
+
+          export function buildFamilyBadgeContext(
+            tasks: Task[],                    // all family-scope tasks currently in the system
+            perUserEvents: Map<string, CreditEvent[]>,
+            timezone: string,
+            now: Date,
+          ): FamilyBadgeContext
+
+        Algorithm:
+
+        ZERO INBOX (D24):
+          1. For each currently-non-closed task, it was "open" from createdAt
+             onward; counts forever toward open-count.
+          2. For each currently-closed task (done or cancelled), it was
+             "open" from createdAt until the cancellation/completion ISO.
+          3. Skip tasks currently snoozed to future (snoozedUntil > now) —
+             they are hidden, not open, per BRD §4.1 Clean Sweep.
+          4. Build a list of (timestamp, delta) where each task contributes
+             (+1, createdAt) and (-1, closedAt) if currently closed.
+          5. Sort ascending. Run the counter. Every step where counter hits 0,
+             record the close event's {userId, completedAt} (attributed via
+             the same assignee-else-completer rule already in taskService).
+          6. Return chronologically sorted zeroInboxEvents.
+
+        DAY-USER INDEX (D28):
+          1. For each user's CreditEvent, bucket by localDayKey.
+          2. For each day, maintain Set<userId> + firstSharedAt.
+          3. When the 2nd user's first event for a day arrives (in
+             chronological order over ALL events merged), stamp `sharedAt` =
+             that event's completedAt.
+
+        MONTHLY TALLIES (D27):
+          1. For each calendar month (local TZ) with ≥1 credit:
+             - mid: cumulative count per user up to end-of-day-15
+               (2026-04-15 23:59:59.999 local)
+             - end: cumulative count per user at end-of-month
+          2. Skip the current (in-progress) month.
+
+        Pure function; heavy but O(n log n) where n = task count + event count.
+
+    - id: "2.3"
+      task: Extend `computeEarnedBadges` signature with family context + now
+      details: |
+        File: shared/utils/leaderboardBadges.ts
+
+        New signature:
+          export function computeEarnedBadges(
+            events: CreditEvent[],
+            streakMilestones: Partial<Record<7 | 30 | 100, string>>,
+            timezone: string,
+            familyContext: FamilyBadgeContext,
+            userId: string,
+            now: Date,
+          ): EarnedBadge[]
+
+        Keep existing Volume / Consistency / Streak / Lifetime derivations
+        unchanged.
+
+    - id: "2.4"
+      task: Add Weekday Warrior derivation
+      details: |
+        `weekday_warrior_10` — 10 credited completions within any single
+        Mon-Fri calendar workweek (in viewer TZ). "Workweek" = Mon 00:00 to
+        Fri 23:59:59.999 in that week's ISO week.
+
+        `weekday_warrior_25` / `_50` — across workdays (Mon-Fri) within any
+        single calendar MONTH (viewer TZ). Note: "calendar month" not
+        "ISO week" for tiers 2-3.
+
+        `earnedAt` = the `completedAt` of the tipping event within the
+        earliest qualifying window.
+
+    - id: "2.5"
+      task: Add Night Owl + Early Bird derivations
+      details: |
+        Both are all-time cumulative.
+
+        Night Owl: count credit events where the viewer-TZ local hour
+        (0-23) is ≥ 21 (i.e., >= 9 PM). `earnedAt` for each tier = the
+        completedAt of the 10th / 25th / 50th qualifying event in chronological
+        order.
+
+        Early Bird: count credit events where viewer-TZ local hour < 7
+        (before 7 AM). Mirror earnedAt semantics.
+
+    - id: "2.6"
+      task: Add Power Hour derivation (D26)
+      details: |
+        Two-pointer sliding window over `sorted[i].completedAt` (ms):
+          for each i:
+            while sorted[j].completedAt + 60*60*1000 < sorted[i].completedAt: j++
+            windowSize = i - j + 1
+            track max; record tipping index for each threshold
+
+        Tip events for 5 / 10 / 15 → earnedAt = sorted[i].completedAt where
+        windowSize first reached threshold.
+
+    - id: "2.7"
+      task: Add Clean Sweep derivation
+      details: |
+        Straightforward given `familyContext.zeroInboxEvents`:
+
+          const myZeros = familyContext.zeroInboxEvents.filter(e => e.userId === userId);
+          if (myZeros.length >= 1)  earned.set('clean_sweep_1',  myZeros[0].completedAt);
+          if (myZeros.length >= 5)  earned.set('clean_sweep_5',  myZeros[4].completedAt);
+          if (myZeros.length >= 10) earned.set('clean_sweep_10', myZeros[9].completedAt);
+          if (myZeros.length >= 25) earned.set('clean_sweep_25', myZeros[24].completedAt);
+
+    - id: "2.8"
+      task: Add Spring Cleaner + Holiday Hero derivations
+      details: |
+        Spring Cleaner: filter events to March 1 — April 30 of each year in
+        viewer TZ. Count per year. If any year reaches threshold, earn.
+
+        Holiday Hero: filter events to December 1 — December 31 of each year.
+
+        `earnedAt` = completedAt of the tipping event within the earliest
+        qualifying season.
+
+    - id: "2.9"
+      task: Add Phoenix derivation (D25)
+      details: |
+        Iterate sorted events. For each event (after the first), compute
+        days between `localDayKey(prev)` and `localDayKey(current)`. If ≥14,
+        count this as a phoenix event.
+
+        Earn 1 / 5 / 10 cumulatively. `earnedAt` = completedAt of the 1st /
+        5th / 10th phoenix event.
+
+    - id: "2.10"
+      task: Add Clutch derivation
+      details: |
+        CreditEvent currently has `{ userId, completedAt }`. We need to know
+        the task's `dueDate` too. Options:
+          A. Extend CreditEvent to `{ userId, completedAt, dueDate?: string }`.
+          B. Pass tasks through separately.
+
+        Choose A — minimal change, already threaded through
+        buildFamilyBadgeContext. Backend populates `dueDate` when available;
+        subtask events omit it (subtasks don't have their own dueDate).
+
+        Derivation:
+          const overdue = events.filter(e => e.dueDate && e.completedAt >= e.dueDate);
+          if (overdue.length >= 5)  earned.set('clutch_5',  overdue[4].completedAt);
+          if (overdue.length >= 25) earned.set('clutch_25', overdue[24].completedAt);
+          if (overdue.length >= 50) earned.set('clutch_50', overdue[49].completedAt);
+
+        Comparison: compare ISO strings lexicographically ONLY when both
+        are same-format UTC. Safer: compare via Date.parse. A task due
+        "2026-04-22" (date-only) should be considered overdue at end of
+        day in viewer TZ, but BRD §4.1 Clutch says "on or after its
+        dueDate" — accept the simple comparison; task dueDate is typically
+        stored as either ISO datetime or YYYY-MM-DD.
+
+        If dueDate is date-only (YYYY-MM-DD), convert to end-of-day in
+        viewer TZ before comparing.
+
+    - id: "2.11"
+      task: Add Partner in Crime derivation
+      details: |
+        Already prepared by `familyContext.dayUserIndex`:
+
+          const sharedDays = [...familyContext.dayUserIndex.values()]
+            .filter(entry => entry.users.size === 2)
+            .map(entry => entry.sharedAt!)
+            .sort();
+
+          // Both users earn Partner in Crime on the SAME set of days.
+          if (sharedDays.length >= 5)  earned.set('partner_in_crime_5',  sharedDays[4]);
+          if (sharedDays.length >= 25) earned.set('partner_in_crime_25', sharedDays[24]);
+          if (sharedDays.length >= 50) earned.set('partner_in_crime_50', sharedDays[49]);
+
+    - id: "2.12"
+      task: Add Comeback Kid derivation (D27)
+      details: |
+        Uses `familyContext.monthlyTallies`. For each month:
+          const mid = monthlyTallies.mid.get(userId) ?? 0;
+          const end = monthlyTallies.end.get(userId) ?? 0;
+          // viewer was behind at mid if another user was strictly ahead
+          const behindMid = [...monthlyTallies.mid.entries()]
+            .some(([otherId, n]) => otherId !== userId && n > mid);
+          const aheadEnd = [...monthlyTallies.end.entries()]
+            .every(([otherId, n]) => otherId === userId || end >= n + 1);
+          if (behindMid && aheadEnd) {
+            // earn; earnedAt = last day of month 23:59:59.999 local → ISO
+          }
+
+        Count earned months chronologically; earn tier 1/2/3 at counts 1/3/5.
+
+        Two-user assumption: in a family of 1 user, skip entirely.
+
+    - id: "2.13"
+      task: Unit tests for all 11 new derivations
+      details: |
+        File: shared/utils/__tests__/leaderboardBadges.test.ts (extend)
+
+        Per-category test coverage (at least 3 cases each):
+          - below threshold → not earned
+          - at exact threshold → earned with correct earnedAt
+          - multi-tier cumulative → all lower tiers earned + correct earnedAts
+          - boundary cases (TZ, DST, year boundary where applicable)
+
+        Cross-category tests:
+          - one user hitting 10 different categories in a single week
+          - both users hitting Partner in Crime independently
+          - Clean Sweep: open counter correctly replays for tasks completed
+            in different orders
+          - Comeback Kid: current month is skipped; closed months counted
+
+        Risk-based prioritization: Clean Sweep, Partner in Crime, and
+        Comeback Kid are highest risk (cross-user / replay logic). Volume-
+        style derivations are low risk (same pattern as v1.0).
+
+    - id: "2.14"
+      task: Performance spike — 48-badge derivation at family scale
+      details: |
+        Goal: confirm that recomputing 48 badges per leaderboard request is
+        acceptable at ~2 users * ~1000 tasks each.
+
+        Test harness: unit test that seeds 2000 family tasks with randomized
+        completedAt across 3 years, calls buildFamilyBadgeContext +
+        computeEarnedBadges for both users, and asserts total runtime < 50ms
+        on the dev machine. If it's >100ms, add a memoization layer keyed on
+        task mtime.
+
+        Expected: ~5-15ms at family scale (BRD §7 Assumption 3). If the
+        Clean Sweep replay dominates, spike an index of already-computed
+        zeroInboxEvents keyed by tasks-hash.
+
+# =============================================================================
+# PHASE 3: Backend — getLeaderboard refactor
+# =============================================================================
+phase_3_backend:
+  status: not_started
+  description: |
+    Plumb the new family-wide context through `getLeaderboard` and update
+    the CreditEvent shape for Clutch. No endpoint signature change — response
+    shape extends additively (earnedBadges list grows).
+
+  tasks:
+    - id: "3.1"
+      task: Extend CreditEvent in shared/utils/leaderboardStreaks.ts with optional dueDate
+      details: |
+        ```ts
+        export interface CreditEvent {
+          userId: string;
+          completedAt: string;
+          dueDate?: string;  // NEW — optional; populated on parent-task events only
+        }
+        ```
+        Subtask events omit dueDate (subtasks have no independent due date).
+
+    - id: "3.2"
+      task: Populate dueDate on parent-task credit events in taskService.getLeaderboard
+      details: |
+        File: backend/src/services/taskService.ts, inside the task loop at
+        line 489:
+          eventsByUser.get(creditedUserId)!.push({
+            userId: creditedUserId,
+            completedAt: task.completedAt,
+            ...(task.dueDate ? { dueDate: task.dueDate } : {}),
+          });
+
+    - id: "3.3"
+      task: Build FamilyBadgeContext once before per-user compute loop
+      details: |
+        After the task scan (line ~506), before the entry-building loop (line ~512):
+
+          const familyContext = buildFamilyBadgeContext(tasks, eventsByUser, timezone, now);
+
+        Then in the loop:
+          const earnedBadges = computeEarnedBadges(
+            events,
+            streaks.streakMilestones,
+            timezone,
+            familyContext,
+            userId,
+            now,
+          );
+
+    - id: "3.4"
+      task: Integration tests — extend leaderboard suite with coverage for new categories
+      details: |
+        File: backend/src/__tests__/integration/taskService.test.ts
+
+        Do NOT re-test every category exhaustively — unit tests cover
+        derivation. Integration tests cover wiring:
+          - response shape contains all 48 possible earnedBadges IDs under
+            seeded conditions
+          - seeding N overdue tasks → clutch badges present
+          - seeding zero-inbox transition → clean_sweep_1 present
+          - two-user shared-day seeding → partner_in_crime_5 appears on
+            BOTH entries (symmetric)
+          - family of one → comeback_kid never appears
+          - completion at 22:00 local TZ → contributes to night_owl; at
+            06:00 → contributes to early_bird
+
+    - id: "3.5"
+      task: Regression — existing v1.0 integration tests still pass
+      details: |
+        All existing volume/consistency/streak/lifetime cases must continue
+        to pass. If any break, the refactor accidentally changed per-user
+        compute semantics — investigate rather than patch.
+
+# =============================================================================
+# PHASE 4: Frontend — MedalBadge visual system
+# =============================================================================
+phase_4_visual_system:
+  status: not_started
+  description: |
+    Replace the emoji-in-ThemeIcon visual with a CSS-sculpted metallic disc +
+    SVG emblem. One parameterized component used everywhere badges render.
+
+  tasks:
+    - id: "4.1"
+      task: Create `frontend/src/components/tasks/medalEmblems.tsx` — 15 inline SVGs
+      details: |
+        Per-category SVG emblems (D37). Each emblem accepts `currentColor`
+        and scales via viewBox.
+
+        Export:
+          export type EmblemKey = BadgeCategory | 'ghost';
+          export function MedalEmblem({ emblem, size }: { emblem: EmblemKey; size: number }): JSX.Element
+
+        Include a "ghost" variant (question marks or a muted `?` glyph) for
+        use in untouched-category `????` rows.
+
+    - id: "4.2"
+      task: Create `frontend/src/components/tasks/MedalBadge.tsx` — the chassis
+      details: |
+        Props:
+          interface MedalBadgeProps {
+            tier: 1 | 2 | 3 | 4 | 5;
+            emblem: EmblemKey;
+            size: number;                                   // pixels
+            halo?: 'none' | 'auto' | 'legendary';           // auto uses tier>=3 halo
+            animate?: 'static' | 'hero';                    // hero adds entry + ambient loops
+            tooltip?: string;                               // forwarded to Mantine Tooltip
+            onClick?: () => void;
+          }
+
+        CSS architecture (all within CSS Modules or inline styles):
+          - Chassis is a `<div>` with `border-radius: 50%`; size via style.
+          - Base fill: `radial-gradient(...)` sourced from per-finish tokens.
+          - Rim: `box-shadow: inset 0 0 0 2px rgba(...), inset 2px 2px 8px rgba(255,255,255,0.6)` etc. — tune.
+          - Highlight crescent: pseudo-element `::before` with a radial gradient
+            skewed top-left.
+          - Emblem: absolutely centered; `color: <finish-accent>`.
+          - Halo: `::after` pseudo-element with `box-shadow` + opacity
+            controlled by `--halo-opacity`.
+          - Entry animation: keyframes `@keyframes medal-entry { from { transform: scale(0) rotate(0); } to { transform: scale(1) rotate(360deg); } }` applied when `.entering` class present; JS removes the class after animationend.
+          - Ambient shimmer: pseudo-element with `linear-gradient(115deg, ...)`
+            and `animation: shimmer 3s infinite`.
+          - Glow pulse: `animation: glow-pulse 2s infinite alternate` on the halo.
+          - Sparkles: only for `tier === 5`. An SVG `<g>` with N `<circle>`s
+            positioned around the disc, each with its own staggered `pulse`
+            animation.
+
+        Reduced-motion:
+          ```css
+          @media (prefers-reduced-motion: reduce) {
+            .entering { animation: none; opacity: 0; transition: opacity 200ms; }
+            .entering.visible { opacity: 1; }
+            .shimmer, .glow, .sparkles { animation: none; opacity: 0; }
+          }
+          ```
+
+        Performance budget: at most 15 simultaneous ambient-animating medals
+        in the detail modal is fine (all CSS, GPU); OK to disable shimmer/glow
+        outside `animate === 'hero'` anyway (D36).
+
+    - id: "4.3"
+      task: Repurpose `frontend/src/components/tasks/badgeCatalog.ts`
+      details: |
+        Delete `BADGE_DISPLAY` per-badge glyph map. Replace with:
+          export const CATEGORY_EMBLEM: Record<BadgeCategory, EmblemKey> = {
+            volume: 'volume',
+            consistency: 'consistency',
+            ...
+          };  // or drop this entirely if the key equals the category
+
+        Keep `CATEGORY_LABELS` and add all 11 new category display names:
+          const CATEGORY_LABELS: Record<BadgeCategory, string> = {
+            volume: 'Volume',
+            consistency: 'Consistency',
+            streak: 'Streak',
+            lifetime: 'Lifetime',
+            weekday_warrior: 'Weekday Warrior',
+            night_owl: 'Night Owl',
+            early_bird: 'Early Bird',
+            power_hour: 'Power Hour',
+            clean_sweep: 'Clean Sweep',
+            spring_cleaner: 'Spring Cleaner',
+            holiday_hero: 'Holiday Hero',
+            phoenix: 'Phoenix',
+            clutch: 'Clutch',
+            partner_in_crime: 'Partner in Crime',
+            comeback_kid: 'Comeback Kid',
+          };
+
+    - id: "4.4"
+      task: Delete `frontend/src/components/tasks/BadgeIcon.tsx`
+      details: |
+        File is replaced by MedalBadge. Verify no other imports remain
+        outside the v1.0 badge components being rewritten.
+
+    - id: "4.5"
+      task: Manual visual QA — MedalBadge in isolation
+      details: |
+        Create a dev-only preview route or storybook (if added) rendering:
+          - All 5 finishes at 48px (row size)
+          - All 5 finishes at 240px (hero size)
+          - Entry animation at hero size
+          - Ambient shimmer + glow pulse
+          - Tier-5 sparkles
+          - Reduced-motion variant (toggle via DevTools)
+
+        No automated test — pure visual.
+
+# =============================================================================
+# PHASE 5: Frontend — slot area + detail modal rewrites
+# =============================================================================
+phase_5_row_and_modal:
+  status: not_started
+  description: |
+    Rewrite BadgeSlotArea (score-based, no ghosts) and BadgeDetailModal
+    (full-screen, 15-cat grid, ???? obfuscation, footer, dev-panel slot).
+
+  tasks:
+    - id: "5.1"
+      task: Rewrite `BadgeSlotArea` to use selectBadgeSlots(earned, now) + MedalBadge
+      details: |
+        Remove ghost placeholders (D30). Render slot count = number of
+        categories with ≥1 earned, up to 3. Each rendered as `<MedalBadge
+        tier={def.tier} emblem={def.category} halo="auto" size={32} />`.
+
+        Tooltip: description only (per BRD §5.1 "minimal tooltip").
+
+    - id: "5.2"
+      task: Pass `now` into BadgeSlotArea + leaderboard panel render path
+      details: |
+        Parent computes `const now = useMemo(() => new Date(), [leaderboardQueryKey])`
+        and threads it through. Recency boost is stable within a single render.
+
+    - id: "5.3"
+      task: Rewrite `BadgeDetailModal` — full-screen, 15-cat grid, obfuscation, footer
+      details: |
+        - `<ResponsiveModal fullScreen>` (D32).
+        - Header: avatar + displayName + "N of 48 earned".
+        - Body: 15 sections in fixed order (BRD §5.2 + badgeCatalog.ts).
+          For each category:
+            ```
+            const earnedInCat = entry.earnedBadges.filter(e => CATALOG_BY_ID.get(e.id)?.category === cat);
+            if (earnedInCat.length === 0) return <UntouchedCategoryRow />;  // heading '????' + single collapsed placeholder
+            return <EarnedCategorySection heading={CATEGORY_LABELS[cat]} tiers={...} />;
+            ```
+
+        - `UntouchedCategoryRow`: `<Group>` with `????` heading + one
+          `<MedalBadge emblem="ghost" tier={1} halo="none" animate="static" size={44} />`
+          or a custom placeholder div. NO tooltip on hover.
+
+        - `EarnedCategorySection`: heading + grid of all tiers. Earned tiles
+          show a real `<MedalBadge tier={def.tier} emblem={def.category}
+          halo={def.tier >= 3 ? 'auto' : 'none'} size={44} />` with tooltip
+          "{description} — Earned {earnedAt formatted}". Unearned tiles show
+          `????` placeholder at the same size, no tooltip.
+
+        - Footer:
+            ```
+            const hiddenCount = CATEGORIES.filter(cat => earnedCategories.has(cat) === false).length;
+            <Text c="dimmed" size="xs">{hiddenCount} of {CATEGORIES.length} hidden categories</Text>
+            ```
+
+        - In dev builds only: `{import.meta.env.DEV && <BadgeDevPanel ... />}`.
+
+    - id: "5.4"
+      task: Frontend unit test — UntouchedCategoryRow has no tooltip
+      details: |
+        Vitest + testing-library. Render `<BadgeDetailModal>` with zero
+        earned badges for some category; assert the category heading is
+        `????` and `getByRole('tooltip')` returns null after hover.
+
+        Also test: `hiddenCategoriesCount` renders the correct number.
+
+# =============================================================================
+# PHASE 6: Frontend — hero modal queue + three audio cues + celebration rewrite
+# =============================================================================
+phase_6_celebration:
+  status: not_started
+  description: |
+    Every tier now earns a hero modal. Queue with de-dup + rarity sort + audio
+    crescendo. Audio pipeline expands to three Web Audio cues.
+
+  tasks:
+    - id: "6.1"
+      task: Add two new cues to `completionSound.ts`
+      details: |
+        Keep `playBadgeFanfare` as the Big triumphant cue.
+
+        Add:
+          - `playBadgeSmallTriumphant()` — ~1.5s. Lighter harmonics, shorter
+            arpeggio. Example sequence (stub, tune during implementation):
+              [{ freq: 523.25, offset: 0.00, dur: 0.20 }, // C5
+               { freq: 783.99, offset: 0.15, dur: 0.30 }, // G5
+               { freq: 1046.50, offset: 0.35, dur: 0.50 }] // C6 sustained
+              partials: sine + 2x only; gain 0.10.
+
+          - `playBadgeLegendaryStinger()` — ~3s, most memorable cue.
+            Layered chord + bell-like top note with subtle vibrato + low sub-
+            octave support. Stub:
+              [{ freq: 261.63, offset: 0.00, dur: 1.80 }, // C4 sub
+               { freq: 523.25, offset: 0.00, dur: 1.80 }, // C5
+               { freq: 659.25, offset: 0.10, dur: 1.80 }, // E5
+               { freq: 783.99, offset: 0.20, dur: 1.80 }, // G5
+               { freq: 1046.50, offset: 0.30, dur: 2.20 }, // C6 hero
+               { freq: 1318.51, offset: 1.20, dur: 1.40 }] // E6 — bell shimmer
+              partials: sine + 2x + 3x + 5x; add a 6Hz LFO on the hero note
+              frequency for vibrato. Gain 0.12 (distinct from Big's 0.14).
+
+          All three cues silent-fail the same way.
+
+        File: frontend/src/utils/completionSound.ts
+
+    - id: "6.2"
+      task: Create `useBadgeHeroQueue` hook
+      details: |
+        File: frontend/src/hooks/useBadgeHeroQueue.ts (new)
+
+        Signature:
+          export interface QueuedHeroUnlock {
+            def: BadgeDefinition;
+            earnedAt: string;
+            isFinal: boolean;  // determined at enqueue time by useNewBadgeCelebrations
+          }
+
+          export function useBadgeHeroQueue(): {
+            current: QueuedHeroUnlock | null;
+            enqueue: (items: QueuedHeroUnlock[]) => void;
+            dismiss: () => void;
+          };
+
+        Behavior:
+          - `enqueue(items)`: add to an internal array. Items arrive pre-sorted
+            (ascending rarity). If `current` is null, set `current` to items[0]
+            and pop.
+          - `dismiss()`: set `current = null`, schedule setTimeout(400ms) to
+            set `current` = next item. If queue empty, stay null.
+          - When `current` becomes non-null, call the audio pick rule:
+              if current.isFinal && current.def.tier === 5: playBadgeLegendaryStinger()
+              else if current.isFinal: playBadgeFanfare()
+              else: playBadgeSmallTriumphant()
+          - Also fire confetti (via celebrateBadgeUnlock) with finish-tinted
+            palette; final gets 2× burst.
+
+        Make the hook audio + confetti side-effect-emitting — consumer just
+        renders the modal and calls `dismiss` on close.
+
+    - id: "6.3"
+      task: Rewrite `useNewBadgeCelebrations` — build queue with de-dup + rarity sort + shippedAt gate
+      details: |
+        File: frontend/src/hooks/useNewBadgeCelebrations.ts (rewrite)
+
+        Signature (retaining hook name for consumer compatibility):
+          export function useNewBadgeCelebrations(
+            leaderboard: LeaderboardResponse | undefined,
+            currentUserId: string | undefined,
+          ): { current: QueuedHeroUnlock | null; dismiss: () => void };
+
+        Behavior:
+          1. Detect new earnedAt > marker (unchanged from v1.0).
+          2. For each candidate, check `earnedAt >= def.shippedAt`. If not,
+             silently advance marker past it (REQ-L-019).
+          3. De-dup by category: for each category, keep only the highest-
+             tier earn.
+          4. Sort ascending by rarity (getBadgeRarity(tier)). Tie-break
+             `earnedAt` ASC.
+          5. Mark the last entry as `isFinal = true`; rest `false`.
+             Single-item queues: the only item is isFinal = true (D35).
+          6. Delegate to `useBadgeHeroQueue.enqueue(items)`.
+          7. Advance marker to max(earnedAt) across all candidates processed.
+
+        Internally instantiate `useBadgeHeroQueue` and return its
+        `{current, dismiss}` so Tasks.tsx consumers keep the same surface.
+
+    - id: "6.4"
+      task: Rewrite `celebrateBadgeUnlock` — confetti-only helper taking a finish param
+      details: |
+        File: frontend/src/utils/celebrateBadgeUnlock.ts (rewrite)
+
+        New signature:
+          export function celebrateConfetti(
+            finish: Finish,
+            isFinal: boolean,
+            origin?: { x: number; y: number },
+          ): void;
+
+        Drop audio + notification side effects (those move to the queue hook).
+        Use the per-finish palette lookup (D38). `isFinal` doubles particle
+        count + spread.
+
+        Caller: useBadgeHeroQueue.
+
+    - id: "6.5"
+      task: Rewrite `BadgeHeroModal` — hero for every tier, entry animation, ambient loops
+      details: |
+        File: frontend/src/components/tasks/BadgeHeroModal.tsx
+
+        Props:
+          interface BadgeHeroModalProps {
+            opened: boolean;
+            onClose: () => void;
+            unlock: QueuedHeroUnlock | null;
+            displayName: string;
+          }
+
+        Render:
+          ```tsx
+          <ResponsiveModal opened={opened} onClose={onClose} withCloseButton={false}
+            closeOnClickOutside={false} closeOnEscape centered size="sm"
+            overlayProps={{ blur: 4, backgroundOpacity: 0.7 }}
+            transitionProps={{ transition: 'pop', duration: 250 }}
+          >
+            <Stack align="center" gap="md" py="md">
+              <MedalBadge
+                tier={unlock.def.tier}
+                emblem={unlock.def.category}
+                size={240}
+                halo={unlock.def.tier >= 3 ? 'auto' : 'none'}
+                animate="hero"
+              />
+              <Stack align="center" gap={4}>
+                <Title order={2} ta="center">
+                  {displayName}, you've earned {getAutoLabel(unlock.def)}!
+                </Title>
+                <Text ta="center" c="dimmed">
+                  {interpolateCelebrationCopy(unlock.def.celebrationCopy, displayName)}
+                </Text>
+              </Stack>
+              <Button fullWidth variant="gradient" onClick={onClose}>
+                {unlock.def.tier === 5 ? 'Heck YES!' : 'Heck yeah!'}
+              </Button>
+            </Stack>
+          </ResponsiveModal>
+          ```
+
+        `interpolateCelebrationCopy` replaces `{displayName}` token. Note
+        that celebrationCopy strings in the BRD already start with the
+        display name, so the Title + copy will overlap slightly — the BRD
+        template in §4.5 explicitly says the title is "{displayName}, you've
+        earned {badgeLabel}!" AND the body is the celebrationCopy, which
+        itself starts with "{displayName}, …". Accept the mild redundancy;
+        the emphasis is intentional.
+
+    - id: "6.6"
+      task: Wire the queue hook + modal in Tasks.tsx (replace pendingHero)
+      details: |
+        File: frontend/src/pages/Tasks.tsx
+
+        Before:
+          const { pendingHero, dismissHero } = useNewBadgeCelebrations(leaderboard, userId);
+          <BadgeHeroModal opened={!!pendingHero} onClose={dismissHero} badge={pendingHero} displayName={displayName} />
+
+        After:
+          const { current, dismiss } = useNewBadgeCelebrations(leaderboard, userId);
+          <BadgeHeroModal opened={!!current} onClose={dismiss} unlock={current} displayName={displayName} />
+
+    - id: "6.7"
+      task: Manual testing — celebration queue behavior
+      details: |
+        Seed scenarios via the dev panel (Phase 7):
+          - Single unlock tier-1 → Big triumphant (single-load rule) +
+            confetti
+          - Single unlock tier-5 → Legendary stinger + larger confetti +
+            sparkle particles in modal
+          - Cascade of 3 (e.g., Night Owl Bronze → Volume Silver → Lifetime
+            Legendary) → Small, Small, Legendary stinger in sequence, with
+            confetti scaling up; 400ms transitions between modals
+          - 20-task-in-a-day (cumulative v1-tier earn) → ONE modal (volume_20,
+            highest tier); volume_5 and volume_10 appear silently on the row
+            and in detail modal
+          - Reduced-motion OS toggle → entry animation replaced by fade;
+            ambient loops paused; sparkles dropped; confetti still fires
+
+# =============================================================================
+# PHASE 7: Dev panel
+# =============================================================================
+phase_7_dev_panel:
+  status: not_started
+  description: |
+    Dev-build-only panel in detail modal footer. All controls must tree-shake.
+
+  tasks:
+    - id: "7.1"
+      task: Create `BadgeDevPanel` component
+      details: |
+        File: frontend/src/components/tasks/BadgeDevPanel.tsx
+
+        Controls (BRD §4.9):
+          - Reveal all `????` — toggle local state on the open detail modal
+            only. Passed down via React context or a prop on the modal.
+          - Trigger hero modal per badge — a "Test" button next to every
+            badge tile. Calls `useBadgeHeroQueue.enqueue([{def, earnedAt: now, isFinal: true}])`.
+          - Simulate cascade — enqueues 3 canned items (Night Owl Bronze,
+            Volume Silver, Lifetime Legendary).
+          - Reset `lastSeenBadgeEarnedAt` — localStorage.removeItem key; on
+            next leaderboard load every earned badge re-queues (ignoring
+            shippedAt guard for this path — set a `__devForceCelebrate`
+            companion flag read once and cleared).
+          - Audio preview — three buttons calling each cue helper.
+          - Reduced-motion override — adds `data-force-reduced-motion` on
+            `<body>`; CSS includes an override selector:
+            `body[data-force-reduced-motion] .badge-medal { ... }`.
+          - View-as-partner — re-render the detail modal with the other
+            family member's entry. Prop drill the target userId through the
+            modal.
+          - Animation replay — visible only while a hero modal is open. Toggles
+            `.entering` off and on on the MedalBadge via a ref.
+
+        Gate the export at the top of the file:
+          ```ts
+          if (!import.meta.env.DEV) {
+            throw new Error('BadgeDevPanel imported in production build');
+          }
+          ```
+
+        Caller gates the import:
+          ```tsx
+          {import.meta.env.DEV && <BadgeDevPanel ... />}
+          ```
+
+        Vite should tree-shake both the import and the component.
+
+    - id: "7.2"
+      task: Verify dev panel is absent from production bundle
+      details: |
+        Run `npm run build` in frontend/. Grep output bundle for
+        `BadgeDevPanel` identifiers and dev-only strings ("Simulate cascade").
+        Should return zero hits. If hits found, audit the dynamic-import path.
+
+# =============================================================================
+# PHASE 8: Tests
+# =============================================================================
+phase_8_tests:
+  status: not_started
+  description: |
+    Consolidated regression + integration coverage. Many of these already land
+    alongside their phase; this is the checklist.
+
+  tasks:
+    - id: "8.1"
+      task: Shared utility tests — all derivations + slot selection + family context
+      details: |
+        Files:
+          shared/utils/__tests__/leaderboardBadges.test.ts (extend)
+          shared/utils/__tests__/leaderboardBadgeSlots.test.ts (extend)
+
+        Critical coverage:
+          - 48 catalog entries integrity (every BadgeId present, no extras)
+          - Every derivation: below / at / above threshold
+          - FamilyBadgeContext: zero-inbox replay with snoozed tasks
+          - Score-based slot selection: recency vs. rarity tradeoffs
+
+    - id: "8.2"
+      task: Backend integration — new categories end-to-end
+      details: |
+        File: backend/src/__tests__/integration/taskService.test.ts
+
+        One representative case per new category + symmetric Partner in Crime
+        test.
+
+    - id: "8.3"
+      task: Frontend unit/component tests
+      details: |
+        Files:
+          frontend/src/components/tasks/__tests__/BadgeSlotArea.test.tsx (extend)
+          frontend/src/components/tasks/__tests__/BadgeDetailModal.test.tsx (new)
+          frontend/src/hooks/__tests__/useBadgeHeroQueue.test.tsx (new)
+
+        Keep these focused on business logic, not rendering details:
+          - `selectBadgeSlots` wired correctly with `now`
+          - Detail modal shows correct `????` obfuscation at zero earned
+            categories
+          - Queue hook: dismiss advances correctly with 400ms delay
+            (use jest fake timers)
+
+    - id: "8.4"
+      task: Bundle-size regression check
+      details: |
+        Expected delta after v2.0 is:
+          - +~5KB for 15 SVG emblems (inline, but small)
+          - +~2KB for two new audio synth functions
+          - +~1KB for the queue hook
+          - Net ~10KB gzipped; dev panel tree-shakes to zero
+
+        Run `npm run build`; compare `dist/assets/index-*.js` gzipped size to
+        main. If delta > 25KB, investigate.
+
+    - id: "8.5"
+      task: Manual UAT — full regression + motion/audio QA
+      details: |
+        Checklist items are spread across 3.8, 4.5, 5.4, 6.7; this task
+        aggregates sign-off. Specific adds for v2.0:
+          - All 15 categories show correct emblem at all tiers
+          - Untouched-category obfuscation:  `????` heading, single
+            placeholder row, tooltip-free
+          - Footer shows `N of M hidden categories` counter, correct math
+          - Hero modal metallic finish matches tier (visual spot-check 5
+            finishes)
+          - Sparkle particles only on tier-5 hero modal
+          - Persistent halo only on tier 3+ in row + detail modal
+          - Three audio cues audibly distinct
+          - Reduced-motion OS toggle disengages entry+ambient motion;
+            confetti still fires
+          - Dev panel absent from prod bundle (verified via 7.2)
+          - Retroactive-earn silence: clear localStorage marker, reload —
+            NO cascade (shippedAt guard silently advances)
+
+# =============================================================================
+# IMPLEMENTATION ORDER
+# =============================================================================
+implementation_order:
+  description: |
+    Slice the deploy to minimize UX surprises. v1.0 is live — we cannot regress
+    the existing experience at any point.
+
+    SLICE A — Backend + derivation (Phases 1, 2, 3).
+      Returns 48 `earnedBadges` from the server; historical earns appear in the
+      response. v1.0 UI still renders whatever subset it knows how to display;
+      since v1.0 UI keys off BADGE_CATALOG via shared types, the new catalog
+      entries render as ghosts on the row + detail modal (pre-rewrite).
+      This is temporary — the next slice replaces the UI — but it's safe
+      because no celebration UX changes yet.
+      Alternative if this intermediate state looks bad: ship Slices A + B
+      together (no prod deploy between them).
+
+    SLICE B — Frontend visual + structural rewrite (Phases 4, 5).
+      Ships MedalBadge, rewrites BadgeSlotArea + BadgeDetailModal. Full-screen
+      modal, score-based row, 15-cat grid, ???? obfuscation. No hero-modal
+      changes yet — v1.0's hero-modal-only-for-final-tier + toast-for-others
+      stays in place temporarily. New tier-1/2 unlocks still go through toast
+      path; tier-3 unlocks ALSO go through toast (no hero); only v1.0
+      "final" (now tier-3 for 3-tier categories, tier-5 for Lifetime) get the
+      old hero modal. Intermediate state is ugly but not broken.
+
+    SLICE C — Celebration UX (Phases 6, 7).
+      Replaces the toast-for-tiers-1-2 path with every-tier hero modals +
+      queue + three audio cues + shippedAt guard. At this point the v2.0
+      experience is complete. `shippedAt` guard + existing day-1 marker seed
+      jointly suppress any retroactive cascade.
+
+      Phase 7 (dev panel) lands with Slice C so QA can exercise the cascade
+      without lucky real data.
+
+    Slice A must deploy behind Slices B+C by no more than 1 deploy cycle —
+    backend returning 48 badges with v1.0 UI renders as ghosts, which is
+    confusing if left too long.
+
+  sequence:
+    - slice: A
+      phases:
+        - phase: 1 — Shared types + catalog (48 entries with tier/shippedAt/celebrationCopy)
+        - phase: 2 — Shared derivations (11 new + family context + score-based slots)
+        - phase: 3 — Backend getLeaderboard wiring
+      gate: All unit + integration tests green; response shape backwards-compatible (existing frontend still renders)
+    - slice: B
+      phases:
+        - phase: 4 — MedalBadge + emblem library
+        - phase: 5 — BadgeSlotArea + BadgeDetailModal rewrites
+      gate: Manual visual QA on row + full-screen detail; ???? obfuscation works; no regressions to v1.0 celebration (still toast-based at this point)
+    - slice: C
+      phases:
+        - phase: 6 — Hero modal queue + audio expansion + celebration rewrite
+        - phase: 7 — Dev panel
+        - phase: 8 — Regression + bundle + UAT sign-off
+      gate: Post-deploy, verify retroactive-silence for users with historical earns; verify cascade scenarios via dev panel
+
+# =============================================================================
+# RISKS & MITIGATIONS
+# =============================================================================
+risks:
+  - id: R1
+    risk: Retroactive celebration cascade on v2.0 deploy — 2 users suddenly get 20+ hero modals each
+    likelihood: high-if-not-careful
+    mitigation: |
+      Two independent guards:
+        1. v1.0 day-1 seed already set `lastSeenBadgeEarnedAt` to v1.0-deploy `now`.
+           For existing users, this means any v2.0 earn with `earnedAt < v1.0-deploy`
+           is already below the marker. But v2.0 derivations for NEW categories
+           will assign `earnedAt` = historical task timestamps, which ARE before
+           the v1.0-deploy marker only if the tasks are that old.
+        2. `shippedAt` guard: every new-category badge has `shippedAt =
+           v2.0-deploy-time`. Even if `earnedAt` > marker, the shippedAt gate
+           catches it: `earnedAt < shippedAt` → silent marker advance.
+
+      Verification in UAT: clear marker on a user with long task history, load
+      page, assert ZERO hero modals fired, marker advanced silently.
+
+  - id: R2
+    risk: Clean Sweep replay semantics are subtle — easy to compute wrong open-task count
+    likelihood: medium
+    mitigation: |
+      D24 is explicit about the algorithm. Unit-test heavily with edge cases:
+        - Tasks created, completed, re-opened, re-completed (only final
+          state matters per D24)
+        - Tasks snoozed to future vs. to past
+        - Tasks cancelled
+        - Concurrent completions at same `completedAt` (stable ordering: by
+          task id)
+
+  - id: R3
+    risk: Power Hour two-pointer scan + Phoenix day-gap computation can be off-by-one
+    likelihood: medium
+    mitigation: |
+      Explicit unit tests: exactly 60-min window boundary; exactly 14-day gap
+      boundary (both inclusive per BRD).
+
+  - id: R4
+    risk: Reduced-motion path misses a CSS rule; user with vestibular sensitivity sees full motion
+    likelihood: medium
+    mitigation: |
+      Single CSS media query in MedalBadge covers entry, shimmer, glow,
+      sparkles. Dev panel's reduced-motion override forces the path for QA
+      without touching OS settings. Manual test on Mac (Settings → Display →
+      Reduce Motion) + Windows (Ease of Access).
+
+  - id: R5
+    risk: 48-badge compute per leaderboard request is slow at family scale
+    likelihood: low (per BRD Assumption 3)
+    mitigation: |
+      Phase 2.14 spike test establishes perf baseline. If >100ms at 2000-task
+      scale, add memoization keyed on tasks-hash (cheap since taskService
+      already loads tasks).
+
+  - id: R6
+    risk: Tree-shaking fails for BadgeDevPanel; ships to production
+    likelihood: low
+    mitigation: |
+      Phase 7.2 explicit bundle audit. If Vite fails to shake, fall back to
+      dynamic import() behind the env flag (guaranteed to not execute).
+
+  - id: R7
+    risk: Cross-user cadence — Partner in Crime + Comeback Kid require BOTH users' event streams
+    likelihood: ship-time (not a risk if followed correctly)
+    mitigation: |
+      `buildFamilyBadgeContext` consumes the full `eventsByUser` map. The
+      context is pre-computed BEFORE the per-user compute loop in taskService.
+      Tests cover the symmetry guarantee (Partner in Crime earnedAt is
+      identical on both users' entries).
+
+  - id: R8
+    risk: celebrationCopy strings contain apostrophes and template tokens that may break if stored in TS as single-quoted strings
+    likelihood: low
+    mitigation: |
+      Use double-quoted strings in BADGE_CATALOG for all copy entries. 48
+      strings total; manual eyeball pass + lint catches stray quotes.
+
+# =============================================================================
+# OPEN ITEMS
+# =============================================================================
+open_items:
+  - id: O10
+    item: Confirm deploy date for v2.0 `shippedAt` values
+    blocks: Phase 1.3 BADGE_CATALOG commit
+    note: |
+      v2.0 catalog entries are tentatively stamped `2026-04-22T00:00:00.000Z`
+      (BRD date). If deploy slips, update shippedAt to the actual deploy
+      timestamp before merge, else mid-April earns between now and deploy
+      will fire retroactive celebrations (risk R1).
+
+  - id: O11
+    item: Confirm emblem library choice — inline SVG vs. Tabler/Phosphor imports
+    blocks: Phase 4.1
+    note: |
+      BRD §9 Q8 proposed library-first. Tabler has all 15 emblems needed
+      and we already depend on it (check frontend/package.json). If yes, use
+      Tabler directly and skip medalEmblems.tsx entirely; the component
+      becomes `<MedalBadge emblem={IconMoon} ... />` with an icon prop.
+      Decide at start of Phase 4.
+
+  - id: O12
+    item: Final tuning of recency boost τ
+    blocks: None (post-launch tunable)
+    note: |
+      BRD §9 Q7 sets τ=7 days, maxBoost=10. Lock these in a `config` constant
+      inside leaderboardBadgeSlots.ts so they're trivially adjustable.
+
+  - id: O13
+    item: Do v1.0 BADGE_CATALOG entries need new `celebrationCopy` strings for the every-tier hero modal?
+    blocks: Phase 1.3
+    note: |
+      v1.0 shipped with tier-1/2 going through a toast path (title + message
+      from description). v2.0 replaces that with hero modals that render
+      celebrationCopy. Answer: YES, every v1.0 badge needs a celebrationCopy
+      string. BRD §4.10 already provides all 14 v1.0 strings. No open
+      question — already specified; just do it.
+
+  - id: O14
+    item: Should the dev panel's "view-as-partner" respect authorization?
+    blocks: Phase 7.1
+    note: |
+      Dev-only; only active in dev builds; the partner's leaderboard entry is
+      already in the response (the shipped leaderboard is family-scoped).
+      No security concern. Include without gating.
+
+# =============================================================================
+# END OF PLAN
+# =============================================================================
