@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+### [5.53.1](https://github.com/JCarran0/household-budgeting/compare/v5.53.0...v5.53.1) (2026-04-23)
+
+
+### Performance Improvements
+
+* TD-012/TD-013 Sprint 2 — chatbot tool caps + optimistic transaction cache ([4ffb3d4](https://github.com/JCarran0/household-budgeting/commit/4ffb3d45a929555ac7aeebc3855c25d9b98c4361))
+
 ## [5.53.0](https://github.com/JCarran0/household-budgeting/compare/v5.52.1...v5.53.0) (2026-04-23)
 
 
