@@ -5,9 +5,9 @@
  * accepts), not just the LLM-proposed fields. This lets the user add an
  * assignee, change the scope, etc. without navigating to the Tasks page.
  *
- * The form intentionally mirrors the structure of TaskFormModal in Tasks.tsx
- * so the field set stays in sync. Both are ultimately validated against the
- * same createTaskSchema on the backend.
+ * The form intentionally mirrors the structure of
+ * components/tasks/TaskFormModal.tsx so the field set stays in sync. Both are
+ * ultimately validated against the same createTaskSchema on the backend.
  */
 import { useState, useEffect } from 'react';
 import {

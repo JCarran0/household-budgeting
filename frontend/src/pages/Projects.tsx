@@ -31,7 +31,8 @@ import { api } from '../lib/api';
 import { playCompletionChime } from '../utils/completionSound';
 import { useAuthStore } from '../stores/authStore';
 import { TransactionPreviewModal } from '../components/transactions/TransactionPreviewModal';
-import { TaskFormModal, TaskDetailModal } from './Tasks';
+import { TaskFormModal } from '../components/tasks/TaskFormModal';
+import { TaskDetailModal } from '../components/tasks/TaskDetailModal';
 import { ProjectFormModal } from '../components/projects/ProjectFormModal';
 import { ProjectCard, type DrillDownState } from '../components/projects/ProjectCard';
 import type {
