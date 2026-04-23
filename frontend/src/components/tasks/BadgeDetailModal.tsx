@@ -18,7 +18,7 @@
  */
 
 import { useState } from 'react';
-import { Group, Stack, Avatar, Text } from '@mantine/core';
+import { Group, Stack, Avatar, Text, SimpleGrid } from '@mantine/core';
 import { ResponsiveModal } from '../ResponsiveModal';
 import { format, parseISO } from 'date-fns';
 import type { BadgeCategory, BadgeDefinition, LeaderboardEntry } from '../../../../shared/types';
@@ -55,8 +55,14 @@ function DevPanelSlot(props: DevPanelSlotProps) {
   );
 }
 
-const BADGE_TILE_WIDTH = 88;
 const TILE_MEDAL_SIZE = 56;
+
+/**
+ * Responsive grid columns for badge tiles. At 4 cols on a 412px viewport the
+ * tiles stay comfortably square; on sm+ we fan out to 5-7 to use horizontal
+ * space without tiles becoming comically wide.
+ */
+const TILE_GRID_COLS = { base: 4, xs: 5, sm: 6, md: 7 } as const;
 
 interface BadgeDetailModalProps {
   opened: boolean;
@@ -80,8 +86,8 @@ function UntouchedCategoryRow() {
       <Text fw={600} size="xs" tt="uppercase" c="dimmed">
         ????
       </Text>
-      <Group gap="sm" wrap="wrap">
-        <Stack gap={2} align="center" style={{ width: BADGE_TILE_WIDTH }}>
+      <SimpleGrid cols={TILE_GRID_COLS} spacing="sm" verticalSpacing="sm">
+        <Stack gap={2} align="center">
           <MedalBadge
             tier={1}
             emblem="ghost"
@@ -93,7 +99,7 @@ function UntouchedCategoryRow() {
             ????
           </Text>
         </Stack>
-      </Group>
+      </SimpleGrid>
     </Stack>
   );
 }
@@ -116,13 +122,13 @@ function EarnedCategorySection({ category, defs, earnedMap, devRevealAll }: Earn
       <Text fw={600} size="xs" tt="uppercase" c="dimmed">
         {CATEGORY_LABELS[category]}
       </Text>
-      <Group gap="sm" wrap="wrap">
+      <SimpleGrid cols={TILE_GRID_COLS} spacing="sm" verticalSpacing="sm">
         {defs.map((def) => {
           const earnedAt = earnedMap.get(def.id);
           if (earnedAt !== undefined) {
             const when = format(parseISO(earnedAt), 'MMM d, yyyy');
             return (
-              <Stack key={def.id} gap={2} align="center" style={{ width: BADGE_TILE_WIDTH }}>
+              <Stack key={def.id} gap={2} align="center">
                 <MedalBadge
                   tier={def.tier}
                   emblem={def.category}
@@ -138,7 +144,7 @@ function EarnedCategorySection({ category, defs, earnedMap, devRevealAll }: Earn
           }
           if (devRevealAll) {
             return (
-              <Stack key={def.id} gap={2} align="center" style={{ width: BADGE_TILE_WIDTH }}>
+              <Stack key={def.id} gap={2} align="center">
                 <MedalBadge
                   tier={def.tier}
                   emblem={def.category}
@@ -153,7 +159,7 @@ function EarnedCategorySection({ category, defs, earnedMap, devRevealAll }: Earn
             );
           }
           return (
-            <Stack key={def.id} gap={2} align="center" style={{ width: BADGE_TILE_WIDTH }}>
+            <Stack key={def.id} gap={2} align="center">
               <MedalBadge tier={def.tier} emblem="ghost" size={TILE_MEDAL_SIZE} halo="none" ghost />
               <Text size="xs" ta="center" c="dimmed">
                 ????
@@ -161,7 +167,7 @@ function EarnedCategorySection({ category, defs, earnedMap, devRevealAll }: Earn
             </Stack>
           );
         })}
-      </Group>
+      </SimpleGrid>
     </Stack>
   );
 }

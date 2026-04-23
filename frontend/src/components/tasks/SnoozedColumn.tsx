@@ -1,4 +1,5 @@
 import { Badge, Group, ScrollArea, Stack, Text } from '@mantine/core';
+import { useMediaQuery } from '@mantine/hooks';
 import { Droppable } from '@hello-pangea/dnd';
 import { TaskCard } from './TaskCard';
 import { SNOOZED_DROPPABLE_ID } from './boardOrdering';
@@ -13,8 +14,11 @@ export interface SnoozedColumnProps {
 }
 
 export function SnoozedColumn({ tasks, members, onTaskClick, onUnsnooze, onEdit }: SnoozedColumnProps) {
+  // On mobile, columns stack vertically — a fixed-height inner scroll area
+  // would nest scrolling awkwardly. Let the page scroll naturally instead.
+  const isMobile = useMediaQuery('(max-width: 48em)', false, { getInitialValueInEffect: false }) ?? false;
   return (
-    <div style={{ flex: 1, minWidth: 220 }}>
+    <div style={{ minWidth: 0 }}>
       <Group gap="xs" mb="xs">
         <Text fw={600} size="sm">Snoozed</Text>
         <Badge size="sm" variant="light" color="indigo" circle>
@@ -24,7 +28,7 @@ export function SnoozedColumn({ tasks, members, onTaskClick, onUnsnooze, onEdit 
       <Droppable droppableId={SNOOZED_DROPPABLE_ID} isDropDisabled>
         {(provided) => (
           <ScrollArea
-            h="calc(100vh - 280px)"
+            h={isMobile ? undefined : 'calc(100vh - 280px)'}
             type="auto"
             ref={provided.innerRef}
             {...provided.droppableProps}
