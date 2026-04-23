@@ -1,6 +1,6 @@
 {
   "name": "household-budgeting",
-  "version": "5.53.2",
+  "version": "5.53.3",
   "description": "Personal budgeting application with Plaid integration",
   "private": true,
   "devDependencies": {

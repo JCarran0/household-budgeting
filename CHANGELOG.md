@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+### [5.53.3](https://github.com/JCarran0/household-budgeting/compare/v5.53.2...v5.53.3) (2026-04-23)
+
+
+### Bug Fixes
+
+* **security:** TD-004/TD-005/TD-015 Sprint 3 — CSP, markdown sanitize, persistent rate limiter ([cd0d756](https://github.com/JCarran0/household-budgeting/commit/cd0d7566973e92f657c8567304e0e9ee2cb4121b))
+
 ### [5.53.2](https://github.com/JCarran0/household-budgeting/compare/v5.53.1...v5.53.2) (2026-04-23)
 
 
