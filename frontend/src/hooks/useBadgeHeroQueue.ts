@@ -57,7 +57,7 @@ export function useBadgeHeroQueue(): UseBadgeHeroQueueResult {
     } else {
       playBadgeSmallTriumphant();
     }
-    celebrateConfetti(finish, next.isFinal);
+    celebrateConfetti(finish, next.def.tier, next.isFinal);
   }, []);
 
   const enqueue = useCallback(
