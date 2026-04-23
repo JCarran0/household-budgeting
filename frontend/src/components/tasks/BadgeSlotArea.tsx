@@ -9,8 +9,8 @@
  * The caller passes `now` so recency boost is stable within a single render.
  */
 
-import { Group } from '@mantine/core';
-import type { EarnedBadge } from '../../../../shared/types';
+import { Group, Text, Tooltip } from '@mantine/core';
+import { BADGE_CATALOG, type EarnedBadge } from '../../../../shared/types';
 import { selectBadgeSlots } from '../../../../shared/utils/leaderboardBadgeSlots';
 import { MedalBadge } from './MedalBadge';
 
@@ -24,8 +24,10 @@ interface BadgeSlotAreaProps {
 
 export function BadgeSlotArea({ earnedBadges, now }: BadgeSlotAreaProps) {
   const slots = selectBadgeSlots(earnedBadges, now);
+  const total = BADGE_CATALOG.length;
+  const earned = earnedBadges.length;
   return (
-    <Group gap={4} wrap="nowrap" style={{ minHeight: ROW_MIN_HEIGHT }}>
+    <Group gap={6} wrap="nowrap" justify="center" style={{ minHeight: ROW_MIN_HEIGHT }}>
       {slots.map((slot) => (
         <MedalBadge
           key={slot.def.id}
@@ -36,6 +38,13 @@ export function BadgeSlotArea({ earnedBadges, now }: BadgeSlotAreaProps) {
           tooltip={slot.def.description}
         />
       ))}
+      {earned > 0 && (
+        <Tooltip label={`${earned} of ${total} earned`} withArrow openDelay={200}>
+          <Text size="xs" c="dimmed" fw={500} style={{ cursor: 'help' }}>
+            {earned}
+          </Text>
+        </Tooltip>
+      )}
     </Group>
   );
 }

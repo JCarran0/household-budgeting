@@ -1217,7 +1217,7 @@ phase_6_celebration:
                 </Text>
               </Stack>
               <Button fullWidth variant="gradient" onClick={onClose}>
-                {unlock.def.tier === 5 ? 'Heck YES!' : 'Heck yeah!'}
+                {unlock.def.tier === 5 ? 'Yas QUEEN!' : 'Booyah!'}
               </Button>
             </Stack>
           </ResponsiveModal>

@@ -30,24 +30,31 @@
    *     top-center of the face) suggests overhead light without doming.
    */
   background:
+    /* Generic white top sheen — a hint of light, not a tier-tinted specular. */
     radial-gradient(
       ellipse at 50% 18%,
-      var(--finish-highlight) 0%,
-      rgba(255, 255, 255, 0) 55%
+      rgba(255, 255, 255, 0.28) 0%,
+      rgba(255, 255, 255, 0) 50%
     ),
+    /*
+     * Concentric bevel: flat face → thin dark seam → tier-colored ring.
+     * MUST use `closest-side` — the default (farthest-corner) pushes 100%
+     * outside the clipped circle, which would hide the rim entirely.
+     */
     radial-gradient(
-      circle,
+      circle closest-side,
       var(--finish-base) 0%,
-      var(--finish-base) 76%,
-      var(--finish-edge) 78%,
+      var(--finish-base) 70%,
+      rgba(0, 0, 0, 0.22) 72%,
+      var(--finish-edge) 74%,
       var(--finish-edge) 100%
     );
   box-shadow:
-    /* Rim wall: bright highlight on top arc, shadow on bottom arc. */
-    inset 0 1.5px 1px rgba(255, 255, 255, 0.55),
-    inset 0 -1.5px 1.5px rgba(0, 0, 0, 0.38),
-    /* Ground shadow. */
-    0 2px 6px rgba(0, 0, 0, 0.22);
+    /* Softer rim lighting — top-arc highlight, bottom-arc shadow. */
+    inset 0 1px 0.5px rgba(255, 255, 255, 0.32),
+    inset 0 -1px 1px rgba(0, 0, 0, 0.22),
+    /* Lighter ground shadow — disc sits on the page, not hovering off it. */
+    0 1.5px 4px rgba(0, 0, 0, 0.18);
   color: var(--finish-emblem);
   cursor: default;
 }
@@ -62,7 +69,9 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  filter: drop-shadow(0 1px 0 rgba(0, 0, 0, 0.22));
+  /* Subtle lift so the emoji glyph sits above the cream face without the
+     "stamped into metal" look a strong shadow would give. */
+  filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.18));
 }
 
 /*
@@ -80,7 +89,11 @@
   z-index: 1;
 }
 
-/* Persistent halo ring — visible on tier 3+ via halo prop. */
+/*
+ * Persistent halo ring — visible on tier 3+ via halo prop. Uses
+ * `--finish-highlight` (tier-tinted) rather than `--finish-base` (now
+ * neutral across all tiers) so the halo still signals tier.
+ */
 .halo::after {
   content: '';
   position: absolute;
@@ -88,10 +101,10 @@
   border-radius: 50%;
   background: radial-gradient(
     circle,
-    var(--finish-base) 45%,
+    var(--finish-highlight) 45%,
     transparent 70%
   );
-  opacity: 0.35;
+  opacity: 0.55;
   z-index: -1;
   pointer-events: none;
 }

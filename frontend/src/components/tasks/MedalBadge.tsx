@@ -46,36 +46,48 @@ interface FinishPalette {
   emblem: string;    // emblem stroke color
 }
 
+/*
+ * Neutral warm-cream face across all tiers — the tier story is told by the
+ * rim ring (`edge`) only, keeping the chassis a consistent "coin" across
+ * the catalog. Emblem glyphs are rendered as OS emoji (see medalEmblems.tsx)
+ * which don't inherit text color, so `emblem` is unused at render time but
+ * retained for API compatibility. Escalation still reads via halo (3+) +
+ * pulse (5) + sparkles (5). `highlight` feeds the legendary halo radial and
+ * the sparkle fill — tier-tinted so the effects layer still escalates.
+ */
+const NEUTRAL_FACE = '#f1e3c4';
+const NEUTRAL_EMBLEM = '#3a2510';
+
 const FINISH_PALETTES: Record<Finish, FinishPalette> = {
   bronze: {
-    base: '#b07a42',
-    edge: '#6e4a24',
-    highlight: '#f4c79c',
-    emblem: '#3a2510',
+    base: NEUTRAL_FACE,
+    edge: '#c47a3a',
+    highlight: '#ffd4bf',
+    emblem: NEUTRAL_EMBLEM,
   },
   silver: {
-    base: '#c9ccd1',
-    edge: '#6e7480',
-    highlight: '#fafbfd',
-    emblem: '#2c3038',
+    base: NEUTRAL_FACE,
+    edge: '#7a8896',
+    highlight: '#dde4ec',
+    emblem: NEUTRAL_EMBLEM,
   },
   gold: {
-    base: '#e7b93a',
-    edge: '#8a6312',
-    highlight: '#fff3c0',
-    emblem: '#3c2a06',
+    base: NEUTRAL_FACE,
+    edge: '#d4a017',
+    highlight: '#ffe29a',
+    emblem: NEUTRAL_EMBLEM,
   },
   platinum: {
-    base: '#e4ecf3',
-    edge: '#7a8a99',
-    highlight: '#ffffff',
-    emblem: '#2a3341',
+    base: NEUTRAL_FACE,
+    edge: '#6a5ab8',
+    highlight: '#cac0f0',
+    emblem: NEUTRAL_EMBLEM,
   },
   legendary: {
-    base: '#b48bff',
-    edge: '#4a1f8a',
-    highlight: '#fff3b3',
-    emblem: '#1a0638',
+    base: NEUTRAL_FACE,
+    edge: '#c72e7a',
+    highlight: '#ffb8a8',
+    emblem: NEUTRAL_EMBLEM,
   },
 };
 
@@ -113,7 +125,7 @@ export function MedalBadge({
   const palette = ghost ? GHOST_PALETTE : FINISH_PALETTES[finish];
   const effectiveHalo: MedalHalo = ghost ? 'none' : halo === 'auto' ? (tier >= 3 ? 'auto' : 'none') : halo;
   const showSparkles = animate === 'hero' && tier === 5 && !ghost;
-  const emblemSize = Math.round(size * 0.58);
+  const emblemSize = Math.round(size * 0.62);
   const rootRef = useRef<HTMLSpanElement>(null);
 
   // Remove .entering after animation so subsequent re-renders don't replay.

@@ -102,9 +102,15 @@ interface EarnedCategorySectionProps {
   category: BadgeCategory;
   defs: BadgeDefinition[];
   earnedMap: Map<string, string>;
+  /**
+   * Dev-panel reveal: render unearned tiles as real badges (not ghosts) so
+   * the whole catalog can be previewed. Tooltip omits the "Earned <date>"
+   * clause since there's no real earn event.
+   */
+  devRevealAll?: boolean;
 }
 
-function EarnedCategorySection({ category, defs, earnedMap }: EarnedCategorySectionProps) {
+function EarnedCategorySection({ category, defs, earnedMap, devRevealAll }: EarnedCategorySectionProps) {
   return (
     <Stack gap={6}>
       <Text fw={600} size="xs" tt="uppercase" c="dimmed">
@@ -123,6 +129,22 @@ function EarnedCategorySection({ category, defs, earnedMap }: EarnedCategorySect
                   size={TILE_MEDAL_SIZE}
                   halo={def.tier >= 3 ? 'auto' : 'none'}
                   tooltip={`${def.description} — Earned ${when}`}
+                />
+                <Text size="xs" ta="center" lineClamp={1}>
+                  {getAutoLabel(def)}
+                </Text>
+              </Stack>
+            );
+          }
+          if (devRevealAll) {
+            return (
+              <Stack key={def.id} gap={2} align="center" style={{ width: BADGE_TILE_WIDTH }}>
+                <MedalBadge
+                  tier={def.tier}
+                  emblem={def.category}
+                  size={TILE_MEDAL_SIZE}
+                  halo={def.tier >= 3 ? 'auto' : 'none'}
+                  tooltip={def.description}
                 />
                 <Text size="xs" ta="center" lineClamp={1}>
                   {getAutoLabel(def)}
@@ -195,6 +217,7 @@ export function BadgeDetailModal({
               category={cat}
               defs={defs}
               earnedMap={earnedMap}
+              devRevealAll={devRevealAll}
             />
           );
         })}

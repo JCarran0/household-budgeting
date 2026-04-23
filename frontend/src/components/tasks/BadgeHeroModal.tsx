@@ -72,7 +72,7 @@ export function BadgeHeroModal({
           gradient={{ from: 'yellow.5', to: 'orange.6', deg: 135 }}
           onClick={onClose}
         >
-          {def.tier === 5 ? 'Heck YES!' : 'Heck yeah!'}
+          {def.tier === 5 ? 'Yas QUEEN!' : 'Booyah!'}
         </Button>
       </Stack>
     </ResponsiveModal>
