@@ -1,0 +1,13 @@
+/*
+ * Mobile overflow guard. If any descendant accidentally exceeds the viewport
+ * width (a wide Kanban row, a long table, a flex child that won't shrink),
+ * mobile browsers will widen the *layout* viewport to contain it — which then
+ * makes (max-width: 48em) media queries evaluate false, so fullScreen modals
+ * stop triggering and the whole page appears shifted. Clipping at body keeps
+ * the layout viewport anchored to device-width.
+ */
+html,
+body {
+  overflow-x: hidden;
+  max-width: 100vw;
+}

@@ -163,7 +163,8 @@ export function LeaderboardPanel({ leaderboard, tasks, heroQueue }: LeaderboardP
 
   return (
     <>
-      <Table mt="xs" horizontalSpacing="sm" verticalSpacing={4}>
+      <ScrollArea type="auto" mt="xs" offsetScrollbars>
+      <Table horizontalSpacing="sm" verticalSpacing={4} miw={560}>
         <Table.Thead>
           <Table.Tr>
             <Table.Th>Member</Table.Th>
@@ -264,6 +265,7 @@ export function LeaderboardPanel({ leaderboard, tasks, heroQueue }: LeaderboardP
           })}
         </Table.Tbody>
       </Table>
+      </ScrollArea>
       {modalEntry && (
         <BadgeDetailModal
           opened={!!modalEntry}
@@ -331,7 +333,7 @@ function LeaderboardCountCell({ count, highlight, items }: LeaderboardCountCellP
       </HoverCard.Target>
       <HoverCard.Dropdown p="xs">
         <ScrollArea.Autosize mah={240} type="hover">
-          <Stack gap={4} miw={220} maw={340}>
+          <Stack gap={4} miw={180} maw={340}>
             {items.map((item) => (
               <Group key={item.key} gap="sm" wrap="nowrap" justify="space-between">
                 <Text size="xs" style={{ flex: 1 }} lineClamp={2}>

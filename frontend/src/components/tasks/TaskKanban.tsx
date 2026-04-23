@@ -4,6 +4,7 @@ import {
   Group,
   Menu,
   MultiSelect,
+  SimpleGrid,
   Text,
 } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
@@ -231,8 +232,8 @@ export function TaskKanban({
   return (
     <>
       {/* Filters + Create */}
-      <Group gap="sm" mb="md" justify="space-between">
-        <Group gap="sm">
+      <Group gap="sm" mb="md" justify="space-between" wrap="wrap">
+        <Group gap="sm" wrap="wrap">
           {allTags.length > 0 && (
             <MultiSelect
               placeholder="Tags"
@@ -278,9 +279,13 @@ export function TaskKanban({
         </Button.Group>
       </Group>
 
-      {/* Kanban Board */}
+      {/* Kanban Board — stacks vertically on mobile, columns on ≥ sm. */}
       <DragDropContext onDragEnd={onDragEnd}>
-        <Group align="flex-start" gap="md" wrap="nowrap" style={{ overflowX: 'auto' }}>
+        <SimpleGrid
+          cols={{ base: 1, sm: showSnoozed ? 4 : 3 }}
+          spacing="md"
+          verticalSpacing="md"
+        >
           {/* Snoozed column renders to the LEFT of Todo when the toggle is on. */}
           {showSnoozed && (
             <SnoozedColumn
@@ -310,7 +315,7 @@ export function TaskKanban({
               onEdit={onEditTask}
             />
           ))}
-        </Group>
+        </SimpleGrid>
       </DragDropContext>
     </>
   );

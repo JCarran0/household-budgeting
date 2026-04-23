@@ -9,12 +9,14 @@
  */
 
 import { Button, Stack, Text, Title } from '@mantine/core';
+import { useMediaQuery } from '@mantine/hooks';
 import { ResponsiveModal } from '../ResponsiveModal';
 import { getAutoLabel } from '../../../../shared/utils/leaderboardBadgeSlots';
 import { MedalBadge } from './MedalBadge';
 import type { QueuedHeroUnlock } from '../../hooks/useBadgeHeroQueue';
 
 const HERO_MEDAL_SIZE = 240;
+const HERO_MEDAL_SIZE_MOBILE = 180;
 
 interface BadgeHeroModalProps {
   opened: boolean;
@@ -33,10 +35,12 @@ export function BadgeHeroModal({
   unlock,
   displayName,
 }: BadgeHeroModalProps) {
+  const isMobile = useMediaQuery('(max-width: 48em)', false, { getInitialValueInEffect: false }) ?? false;
   if (!unlock) return null;
   const { def } = unlock;
   const label = getAutoLabel(def);
   const body = interpolateCelebrationCopy(def.celebrationCopy, displayName);
+  const medalSize = isMobile ? HERO_MEDAL_SIZE_MOBILE : HERO_MEDAL_SIZE;
 
   return (
     <ResponsiveModal
@@ -50,19 +54,19 @@ export function BadgeHeroModal({
       overlayProps={{ blur: 4, backgroundOpacity: 0.7 }}
       transitionProps={{ transition: 'pop', duration: 250 }}
     >
-      <Stack align="center" gap="md" py="md">
+      <Stack align="center" gap="md" py="md" style={{ maxWidth: '100%' }}>
         <MedalBadge
           tier={def.tier}
           emblem={def.category}
-          size={HERO_MEDAL_SIZE}
+          size={medalSize}
           halo={def.tier >= 3 ? 'auto' : 'none'}
           animate="hero"
         />
-        <Stack align="center" gap={6}>
-          <Title order={2} ta="center">
+        <Stack align="center" gap={6} style={{ width: '100%' }}>
+          <Title order={2} ta="center" style={{ overflowWrap: 'anywhere' }}>
             {displayName}, you&rsquo;ve earned {label}!
           </Title>
-          <Text ta="center" c="dimmed" px="xs">
+          <Text ta="center" c="dimmed" px="xs" style={{ overflowWrap: 'anywhere' }}>
             {body}
           </Text>
         </Stack>

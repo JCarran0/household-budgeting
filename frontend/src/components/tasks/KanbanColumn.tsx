@@ -1,4 +1,5 @@
 import { Stack, Text, Badge, Group, ScrollArea } from '@mantine/core';
+import { useMediaQuery } from '@mantine/hooks';
 import { Droppable, Draggable } from '@hello-pangea/dnd';
 import type { StoredTask, FamilyMember } from '../../../../shared/types';
 import { TaskCard } from './TaskCard';
@@ -30,9 +31,12 @@ export function KanbanColumn({
   // Done column is auto-sorted (completedAt DESC) on the server/parent; disable
   // drag-reorder *within* Done by passing isDragDisabled on each draggable.
   const reorderDisabled = status === 'done';
+  // On mobile, columns stack vertically — a fixed-height inner scroll area
+  // would nest scrolling awkwardly. Let the page scroll naturally instead.
+  const isMobile = useMediaQuery('(max-width: 48em)', false, { getInitialValueInEffect: false }) ?? false;
 
   return (
-    <div style={{ flex: 1, minWidth: 220 }}>
+    <div style={{ minWidth: 0 }}>
       <Group gap="xs" mb="xs">
         <Text fw={600} size="sm">{label}</Text>
         <Badge size="sm" variant="light" color={color} circle>
@@ -43,7 +47,7 @@ export function KanbanColumn({
       <Droppable droppableId={status}>
         {(provided, snapshot) => (
           <ScrollArea
-            h="calc(100vh - 280px)"
+            h={isMobile ? undefined : 'calc(100vh - 280px)'}
             type="auto"
             ref={provided.innerRef}
             {...provided.droppableProps}

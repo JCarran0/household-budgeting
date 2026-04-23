@@ -266,9 +266,9 @@ export function Tasks() {
 
   return (
     <Container fluid p="md">
-      {/* Header */}
-      <Group justify="space-between" mb="md">
-        <Group>
+      {/* Header — wraps onto multiple lines on mobile. */}
+      <Group justify="space-between" mb="md" wrap="wrap" gap="xs">
+        <Group wrap="wrap" gap="xs">
           <Title order={2}>Tasks</Title>
           {view === 'board' && (
             <Select
@@ -278,7 +278,7 @@ export function Tasks() {
               value={filterAssignee}
               onChange={setFilterAssignee}
               data={assigneeOptions}
-              w={150}
+              w={140}
             />
           )}
           <SegmentedControl
