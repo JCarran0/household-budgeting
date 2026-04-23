@@ -28,12 +28,15 @@ import type {
 import { userColor } from '../../utils/userColor';
 import { BadgeSlotArea } from './BadgeSlotArea';
 import { BadgeDetailModal } from './BadgeDetailModal';
+import type { UseBadgeHeroQueueResult } from '../../hooks/useBadgeHeroQueue';
 
 const FLAME_MIN_STREAK = 5;
 
 interface LeaderboardPanelProps {
   leaderboard: LeaderboardResponse;
   tasks: StoredTask[];
+  /** Hero modal queue — exposed for the dev-only panel in the detail modal. */
+  heroQueue?: UseBadgeHeroQueueResult;
 }
 
 /**
@@ -72,7 +75,7 @@ function maxOf(entries: LeaderboardEntry[], pick: (e: LeaderboardEntry) => numbe
   return max;
 }
 
-export function LeaderboardPanel({ leaderboard, tasks }: LeaderboardPanelProps) {
+export function LeaderboardPanel({ leaderboard, tasks, heroQueue }: LeaderboardPanelProps) {
   const { entries, boundaries: rawBoundaries } = leaderboard;
   const [modalEntry, setModalEntry] = useState<LeaderboardEntry | null>(null);
 
@@ -83,6 +86,14 @@ export function LeaderboardPanel({ leaderboard, tasks }: LeaderboardPanelProps) 
       month: new Date(rawBoundaries.monthStart).getTime(),
     }),
     [rawBoundaries.todayStart, rawBoundaries.weekStart, rawBoundaries.monthStart]
+  );
+
+  // `now` stable across this render — used by selectBadgeSlots recency boost.
+  // Re-derived on every leaderboard response; the timestamp drives the score.
+  const now = useMemo(
+    () => new Date(),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [rawBoundaries.todayStart]
   );
 
   const itemsByUserBucket = useMemo(() => {
@@ -246,7 +257,7 @@ export function LeaderboardPanel({ leaderboard, tasks }: LeaderboardPanelProps) 
                   />
                 </Table.Td>
                 <Table.Td ta="center">
-                  <BadgeSlotArea earnedBadges={entry.earnedBadges} />
+                  <BadgeSlotArea earnedBadges={entry.earnedBadges} now={now} />
                 </Table.Td>
               </Table.Tr>
             );
@@ -258,6 +269,12 @@ export function LeaderboardPanel({ leaderboard, tasks }: LeaderboardPanelProps) 
           opened={!!modalEntry}
           onClose={() => setModalEntry(null)}
           entry={modalEntry}
+          allEntries={entries}
+          onSwitchEntry={(userId) => {
+            const next = entries.find((e) => e.userId === userId);
+            if (next) setModalEntry(next);
+          }}
+          heroQueue={heroQueue}
         />
       )}
     </>

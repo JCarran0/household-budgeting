@@ -1,33 +1,70 @@
 /**
- * Per-member badge detail modal — full 13-badge grid grouped by category.
+ * Per-member badge detail modal — full-screen 48-badge grid across 15
+ * categories (BRD §5.2 / plan D32).
  *
- * Earned badges show glyph + tooltip (description + earned date).
- * Unearned badges render as ???? placeholders with NO tooltip (REQ-L-012) —
- * their category header gives just enough directional signal.
+ * Obfuscation (D31 / REQ-L-018):
+ *   - Categories the user has NEVER earned a badge in are collapsed: the
+ *     heading itself is `????` and one placeholder row stands in for the
+ *     entire tier grid. Tier count is hidden because it varies across
+ *     categories (3, 4, or 5). No tooltips on these rows.
+ *   - Categories with ≥1 earned badge show the real heading and the full
+ *     tier grid. Earned tiles get tooltips with description + earned date;
+ *     unearned tiles within earned categories show `????` placeholders
+ *     (no tooltip) at the same size to communicate tier progression.
+ *   - Footer: `N of M hidden categories` — quantifies the unknown.
+ *
+ * Dev-only panel lives in the footer (import.meta.env.DEV; tree-shaken from
+ * prod).
  */
 
-import {
-  Group,
-  Stack,
-  Avatar,
-  Text,
-  ThemeIcon,
-  Tooltip,
-} from '@mantine/core';
+import { useState } from 'react';
+import { Group, Stack, Avatar, Text } from '@mantine/core';
 import { ResponsiveModal } from '../ResponsiveModal';
 import { format, parseISO } from 'date-fns';
 import type { BadgeCategory, BadgeDefinition, LeaderboardEntry } from '../../../../shared/types';
 import { BADGE_CATALOG } from '../../../../shared/types';
+import { getAutoLabel } from '../../../../shared/utils/leaderboardBadgeSlots';
 import { CATEGORY_LABELS, CATEGORY_ORDER } from './badgeCatalog';
-import { BadgeIcon } from './BadgeIcon';
+import { MedalBadge } from './MedalBadge';
 import { userColor } from '../../utils/userColor';
+import type { UseBadgeHeroQueueResult } from '../../hooks/useBadgeHeroQueue';
+import { lazy, Suspense } from 'react';
 
-const BADGE_TILE_WIDTH = 72;
+// Dynamic import keeps the dev panel out of the production bundle. Vite
+// evaluates `import.meta.env.DEV` at build time; the dynamic import below
+// only fires when the guard is true.
+const BadgeDevPanelLazy = import.meta.env.DEV
+  ? lazy(() => import('./BadgeDevPanel').then((m) => ({ default: m.BadgeDevPanel })))
+  : null;
+
+interface DevPanelSlotProps {
+  queue: UseBadgeHeroQueueResult;
+  currentEntry: LeaderboardEntry;
+  allEntries: LeaderboardEntry[];
+  onSwitchEntry: (userId: string) => void;
+  devRevealAll: boolean;
+  onToggleRevealAll: () => void;
+}
+
+function DevPanelSlot(props: DevPanelSlotProps) {
+  if (!BadgeDevPanelLazy) return null;
+  return (
+    <Suspense fallback={null}>
+      <BadgeDevPanelLazy {...props} />
+    </Suspense>
+  );
+}
+
+const BADGE_TILE_WIDTH = 88;
+const TILE_MEDAL_SIZE = 56;
 
 interface BadgeDetailModalProps {
   opened: boolean;
   onClose: () => void;
   entry: LeaderboardEntry;
+  allEntries?: LeaderboardEntry[];
+  onSwitchEntry?: (userId: string) => void;
+  heroQueue?: UseBadgeHeroQueueResult;
 }
 
 function badgesByCategory(category: BadgeCategory): BadgeDefinition[] {
@@ -36,13 +73,123 @@ function badgesByCategory(category: BadgeCategory): BadgeDefinition[] {
   );
 }
 
-export function BadgeDetailModal({ opened, onClose, entry }: BadgeDetailModalProps) {
+function UntouchedCategoryRow() {
+  // Single collapsed placeholder — heading is `????`, tier count hidden.
+  return (
+    <Stack gap={6}>
+      <Text fw={600} size="xs" tt="uppercase" c="dimmed">
+        ????
+      </Text>
+      <Group gap="sm" wrap="wrap">
+        <Stack gap={2} align="center" style={{ width: BADGE_TILE_WIDTH }}>
+          <MedalBadge
+            tier={1}
+            emblem="ghost"
+            size={TILE_MEDAL_SIZE}
+            halo="none"
+            ghost
+          />
+          <Text size="xs" ta="center" c="dimmed">
+            ????
+          </Text>
+        </Stack>
+      </Group>
+    </Stack>
+  );
+}
+
+interface EarnedCategorySectionProps {
+  category: BadgeCategory;
+  defs: BadgeDefinition[];
+  earnedMap: Map<string, string>;
+  /**
+   * Dev-panel reveal: render unearned tiles as real badges (not ghosts) so
+   * the whole catalog can be previewed. Tooltip omits the "Earned <date>"
+   * clause since there's no real earn event.
+   */
+  devRevealAll?: boolean;
+}
+
+function EarnedCategorySection({ category, defs, earnedMap, devRevealAll }: EarnedCategorySectionProps) {
+  return (
+    <Stack gap={6}>
+      <Text fw={600} size="xs" tt="uppercase" c="dimmed">
+        {CATEGORY_LABELS[category]}
+      </Text>
+      <Group gap="sm" wrap="wrap">
+        {defs.map((def) => {
+          const earnedAt = earnedMap.get(def.id);
+          if (earnedAt !== undefined) {
+            const when = format(parseISO(earnedAt), 'MMM d, yyyy');
+            return (
+              <Stack key={def.id} gap={2} align="center" style={{ width: BADGE_TILE_WIDTH }}>
+                <MedalBadge
+                  tier={def.tier}
+                  emblem={def.category}
+                  size={TILE_MEDAL_SIZE}
+                  halo={def.tier >= 3 ? 'auto' : 'none'}
+                  tooltip={`${def.description} — Earned ${when}`}
+                />
+                <Text size="xs" ta="center" lineClamp={1}>
+                  {getAutoLabel(def)}
+                </Text>
+              </Stack>
+            );
+          }
+          if (devRevealAll) {
+            return (
+              <Stack key={def.id} gap={2} align="center" style={{ width: BADGE_TILE_WIDTH }}>
+                <MedalBadge
+                  tier={def.tier}
+                  emblem={def.category}
+                  size={TILE_MEDAL_SIZE}
+                  halo={def.tier >= 3 ? 'auto' : 'none'}
+                  tooltip={def.description}
+                />
+                <Text size="xs" ta="center" lineClamp={1}>
+                  {getAutoLabel(def)}
+                </Text>
+              </Stack>
+            );
+          }
+          return (
+            <Stack key={def.id} gap={2} align="center" style={{ width: BADGE_TILE_WIDTH }}>
+              <MedalBadge tier={def.tier} emblem="ghost" size={TILE_MEDAL_SIZE} halo="none" ghost />
+              <Text size="xs" ta="center" c="dimmed">
+                ????
+              </Text>
+            </Stack>
+          );
+        })}
+      </Group>
+    </Stack>
+  );
+}
+
+export function BadgeDetailModal({
+  opened,
+  onClose,
+  entry,
+  allEntries,
+  onSwitchEntry,
+  heroQueue,
+}: BadgeDetailModalProps) {
+  const [devRevealAll, setDevRevealAll] = useState(false);
   const earnedMap = new Map(entry.earnedBadges.map((b) => [b.id, b.earnedAt]));
+  const earnedCategoryIds = new Set(
+    entry.earnedBadges
+      .map((b) => BADGE_CATALOG.find((def) => def.id === b.id)?.category)
+      .filter((c): c is BadgeCategory => Boolean(c))
+  );
+  const hiddenCount = devRevealAll
+    ? 0
+    : CATEGORY_ORDER.filter((c) => !earnedCategoryIds.has(c)).length;
 
   return (
     <ResponsiveModal
       opened={opened}
       onClose={onClose}
+      fullScreen
       title={
         <Group gap="sm">
           <Avatar size="md" radius="xl" color={userColor(entry)}>
@@ -56,55 +203,39 @@ export function BadgeDetailModal({ opened, onClose, entry }: BadgeDetailModalPro
           </Stack>
         </Group>
       }
-      size="md"
-      centered
     >
       <Stack gap="md">
         {CATEGORY_ORDER.map((cat) => {
           const defs = badgesByCategory(cat);
+          const hasEarned = earnedCategoryIds.has(cat);
+          if (!hasEarned && !devRevealAll) {
+            return <UntouchedCategoryRow key={cat} />;
+          }
           return (
-            <Stack key={cat} gap={6}>
-              <Text fw={600} size="xs" tt="uppercase" c="dimmed">
-                {CATEGORY_LABELS[cat]}
-              </Text>
-              <Group gap="sm" wrap="wrap">
-                {defs.map((def) => {
-                  const earnedAt = earnedMap.get(def.id);
-                  if (earnedAt !== undefined) {
-                    const when = format(parseISO(earnedAt), 'MMM d, yyyy');
-                    return (
-                      <Tooltip
-                        key={def.id}
-                        label={`${def.description} — Earned ${when}`}
-                        withArrow
-                        openDelay={200}
-                      >
-                        <Stack gap={2} align="center" style={{ width: BADGE_TILE_WIDTH }}>
-                          <BadgeIcon id={def.id} size={44} glyphSize="lg" />
-                          <Text size="xs" ta="center" lineClamp={1}>
-                            {def.label}
-                          </Text>
-                        </Stack>
-                      </Tooltip>
-                    );
-                  }
-                  return (
-                    <Stack key={def.id} gap={2} align="center" style={{ width: BADGE_TILE_WIDTH }}>
-                      <ThemeIcon variant="light" color="gray" radius="xl" size={44}>
-                        <Text size="sm" c="dimmed" fw={700} lh={1}>
-                          ????
-                        </Text>
-                      </ThemeIcon>
-                      <Text size="xs" ta="center" c="dimmed">
-                        ????
-                      </Text>
-                    </Stack>
-                  );
-                })}
-              </Group>
-            </Stack>
+            <EarnedCategorySection
+              key={cat}
+              category={cat}
+              defs={defs}
+              earnedMap={earnedMap}
+              devRevealAll={devRevealAll}
+            />
           );
         })}
+        <Stack gap={2}>
+          <Text c="dimmed" size="xs" ta="center">
+            {hiddenCount} of {CATEGORY_ORDER.length} hidden categories
+          </Text>
+          {import.meta.env.DEV && heroQueue && allEntries && onSwitchEntry && (
+            <DevPanelSlot
+              queue={heroQueue}
+              currentEntry={entry}
+              allEntries={allEntries}
+              onSwitchEntry={onSwitchEntry}
+              devRevealAll={devRevealAll}
+              onToggleRevealAll={() => setDevRevealAll((x) => !x)}
+            />
+          )}
+        </Stack>
       </Stack>
     </ResponsiveModal>
   );

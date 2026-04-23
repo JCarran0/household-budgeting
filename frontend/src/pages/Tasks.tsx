@@ -335,10 +335,8 @@ export function Tasks() {
     queryFn: () => api.getLeaderboard(EASTERN_TIME_ZONE),
   });
 
-  const { pendingHero, dismissHero } = useNewBadgeCelebrations(
-    leaderboard,
-    currentUser?.id,
-  );
+  const { current: pendingHeroUnlock, dismiss: dismissHero, queue: heroQueue } =
+    useNewBadgeCelebrations(leaderboard, currentUser?.id);
 
   // ---------- Mutations ----------
 
@@ -671,7 +669,7 @@ export function Tasks() {
             {leaderboardOpen ? <IconChevronUp size={16} /> : <IconChevronDown size={16} />}
           </Group>
           <Collapse in={leaderboardOpen}>
-            <LeaderboardPanel leaderboard={leaderboard} tasks={allTasks} />
+            <LeaderboardPanel leaderboard={leaderboard} tasks={allTasks} heroQueue={heroQueue} />
           </Collapse>
         </Paper>
       )}
@@ -876,11 +874,11 @@ export function Tasks() {
         members={members}
       />
 
-      {/* Final-tier badge unlock — manual dismiss, no auto-close */}
+      {/* Badge unlock — manual dismiss, no auto-close. Every tier gets a hero modal. */}
       <BadgeHeroModal
-        opened={pendingHero !== null}
+        opened={pendingHeroUnlock !== null}
         onClose={dismissHero}
-        badge={pendingHero}
+        unlock={pendingHeroUnlock}
         displayName={currentUser?.displayName ?? ''}
       />
     </Container>
