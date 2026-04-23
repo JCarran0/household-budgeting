@@ -3,7 +3,7 @@
 ## Overview
 This document tracks technical debt items identified during the April 2026 architecture audits. Items are prioritized by severity and linked to relevant code locations.
 
-**Last Updated**: 2026-04-22
+**Last Updated**: 2026-04-23
 **Previous (archived)**: [docs/completed/AI-TECHNICAL-DEBT.md](completed/AI-TECHNICAL-DEBT.md)
 **Execution sequencing**: [TECH-DEBT-EXECUTION-PLAN-2026-04.md](TECH-DEBT-EXECUTION-PLAN-2026-04.md)
 
@@ -250,7 +250,7 @@ Read amplification compounds this: at 800+ transactions, every single-entity mut
 ---
 
 ### TD-012: Chatbot Cost — No Prompt Caching, Unbounded Tool Results
-**Status**: Part 1 Resolved (2026-04-22, Sprint 1) — prompt caching shipped. Part 2 (tool result caps) deferred to Sprint 2 per the execution plan.
+**Status**: Resolved (Part 1: 2026-04-22 Sprint 1; Part 2: 2026-04-23 Sprint 2). Part 3 (push filters into storage) folds into the SQLite migration — see cross-cutting section of the execution plan.
 **Created**: 2026-04-22
 **Impact**: High - Real Anthropic spend on every chatbot turn; latency scales with transaction count
 **Effort**: Trivial (cache_control) / Medium (tool result caps)
@@ -263,8 +263,8 @@ Two independent inefficiencies in the chatbot flow inflate cost and latency:
 
 **Fix**:
 1. ✅ Added `cache_control: { type: 'ephemeral' }` to both the system prompt (via structured `TextBlockParam[]` — base prompt cached, per-request `userDisplayName` suffix appended AFTER the breakpoint so it doesn't invalidate the cache) and the last entry of `CHATBOT_TOOLS`. Effect verifiable via `cache_read_input_tokens > 0` on the second turn of any conversation.
-2. Cap tool results: default `limit=50` on `query_transactions()`. For larger result sets return `{ count, sample, summary: { byCategory, byMonth } }` and let the model request more if needed. *(Sprint 2)*
-3. Push date/category filters into the storage layer so the full collection isn't loaded just to be discarded (depends on TD-011 memoization or a real index).
+2. ✅ Added `chatbotDataService.queryTransactionsForTool` — default `limit=50`, hard-cap `limit=500`. When the full match count exceeds the effective limit, returns `{ count, truncated, limit, transactions, summary: { byCategory, byMonth } }` so the model sees aggregate shape even without the row dump. `chatbotService.executeTool`'s `query_transactions` case now calls the wrapper; internal `getBudgetSummary` / `getSpendingByCategory` / `getCashFlow` continue to call `queryTransactions` directly and are unchanged. Tool description updated so Claude knows how to read the truncated response and when to widen `limit`.
+3. Push date/category filters into the storage layer so the full collection isn't loaded just to be discarded. Superseded by the SQLite migration in the cross-cutting section — a real index removes this concern wholesale.
 
 **Files**:
 - `backend/src/services/chatbotService.ts`
@@ -274,7 +274,7 @@ Two independent inefficiencies in the chatbot flow inflate cost and latency:
 ---
 
 ### TD-013: React Query Invalidation Cascades
-**Status**: Open
+**Status**: Resolved (2026-04-23, Sprint 2) for single-row transaction edits — the remaining broad invalidations are on sync / auto-cat / Amazon-receipt / CSV-import paths where many rows change at once and a targeted patch isn't computable client-side.
 **Created**: 2026-04-22
 **Impact**: High - UX-visible flicker on every edit; amplifies TD-011 read cost
 **Effort**: Low (per-page audit)
@@ -287,13 +287,15 @@ Two costs:
 - **Storage**: Every cascaded refetch triggers another full file read (TD-011), so this and TD-011 amplify each other.
 
 **Fix**:
-Tighten query keys to `['transactions', familyId, { month, filters }]` and invalidate the specific shape. For the optimistic-update case, prefer `setQueryData` over invalidation. Half-day audit across `frontend/src/pages/` and `frontend/src/hooks/`.
+✅ Introduced `frontend/src/lib/transactionCacheSync.ts` with `patchTransactionsInCache` and `invalidateTransactionCounts`. Single-row edit mutations in `TransactionEditModal.tsx` (5 mutations), `TransactionTable.tsx` (inline category), and `useTransactionBulkOps.ts` (bulk confirm — success-only path; falls back to invalidation on partial failure where we can't tell which IDs succeeded) now use `setQueriesData` to patch cached rows under both the `['transactions', …]` and `['bva-ii', …]` roots in place, so the list the user is looking at stops doing a refetch round-trip on every tick of categorization work. Count queries (uncategorized, Amazon-eligible) are still invalidated since the cache-local delta can't tell us the new count.
+
+Remaining broad `['transactions']` invalidations are intentional — they fire on multi-row changes where optimistic patch isn't feasible without mirroring server logic: `useTransactionData.syncMutation`, `EnhancedTransactions.autoCatApplyMutation`, `CategorizationFlowModal.handleClose`, `AmazonReceiptFlowModal.handleClose`, `TransactionImport`, and `MantineAccounts` sync paths. The `['budgets']` invalidations in `Budgets.tsx` and `BudgetEditModal.tsx` are untouched — already scoped to the budget entity and off the hot path.
 
 **Files**:
-- `frontend/src/hooks/useTransactionData.ts`
-- `frontend/src/pages/EnhancedTransactions.tsx` (line 75 area)
-- `frontend/src/pages/Budgets.tsx` (line 208 area)
-- `frontend/src/pages/MantineAccounts.tsx` (lines 119–120)
+- `frontend/src/lib/transactionCacheSync.ts` (new)
+- `frontend/src/components/transactions/TransactionEditModal.tsx`
+- `frontend/src/components/transactions/TransactionTable.tsx`
+- `frontend/src/hooks/useTransactionBulkOps.ts`
 
 ---
 

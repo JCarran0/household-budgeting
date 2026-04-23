@@ -41,6 +41,64 @@ import {
   buildCategoryTreeAggregation,
 } from '../shared/utils/budgetCalculations';
 
+// Tool-facing query_transactions response shape (TD-012 Sprint 2).
+// Returned by queryTransactionsForTool so the model never gets a raw array
+// of hundreds of rows pushed into context.
+export interface QueryTransactionsAggregateBucket {
+  count: number;
+  total: number; // Sum of transaction.amount (signed; positive=expense, negative=income)
+}
+
+export interface QueryTransactionsToolResult {
+  count: number;           // Total matches BEFORE the cap
+  truncated: boolean;      // True iff count > limit and `transactions` is a sample
+  limit: number;           // Effective cap applied to `transactions`
+  transactions: Transaction[];
+  summary?: {
+    byCategory: (QueryTransactionsAggregateBucket & { categoryId: string | null })[];
+    byMonth: (QueryTransactionsAggregateBucket & { month: string })[];
+  };
+}
+
+const DEFAULT_TOOL_LIMIT = 50;
+const HARD_TOOL_LIMIT = 500;
+
+function roundMoney(n: number): number {
+  return Math.round(n * 100) / 100;
+}
+
+function aggregateByCategory(
+  transactions: Transaction[],
+): (QueryTransactionsAggregateBucket & { categoryId: string | null })[] {
+  const map = new Map<string | null, QueryTransactionsAggregateBucket>();
+  for (const t of transactions) {
+    const key = t.categoryId ?? null;
+    const entry = map.get(key) ?? { count: 0, total: 0 };
+    entry.count += 1;
+    entry.total += t.amount;
+    map.set(key, entry);
+  }
+  return Array.from(map.entries())
+    .map(([categoryId, { count, total }]) => ({ categoryId, count, total: roundMoney(total) }))
+    .sort((a, b) => b.count - a.count);
+}
+
+function aggregateByMonth(
+  transactions: Transaction[],
+): (QueryTransactionsAggregateBucket & { month: string })[] {
+  const map = new Map<string, QueryTransactionsAggregateBucket>();
+  for (const t of transactions) {
+    const month = t.date.slice(0, 7); // 'YYYY-MM'
+    const entry = map.get(month) ?? { count: 0, total: 0 };
+    entry.count += 1;
+    entry.total += t.amount;
+    map.set(month, entry);
+  }
+  return Array.from(map.entries())
+    .map(([month, { count, total }]) => ({ month, count, total: roundMoney(total) }))
+    .sort((a, b) => a.month.localeCompare(b.month));
+}
+
 // Internal storage types (matching what's stored in JSON)
 interface StoredTransaction {
   id: string;
@@ -208,6 +266,48 @@ export class ChatbotDataService {
     }
 
     return results.map(this.toTransaction);
+  }
+
+  /**
+   * Tool-facing wrapper around queryTransactions that caps how many rows land
+   * in the model context (TD-012 Sprint 2). Defaults to 50; the model can
+   * request more via `limit` but is hard-capped at 500 so no single tool call
+   * can saturate the prompt. When the filter matches more than the effective
+   * limit, returns a summary (count + byCategory + byMonth aggregates) so the
+   * model can still answer aggregate questions without the full row dump.
+   *
+   * Internal callers (getBudgetSummary, getSpendingByCategory, getCashFlow)
+   * continue to use queryTransactions directly and are unaffected.
+   */
+  async queryTransactionsForTool(
+    familyId: string,
+    filters: QueryTransactionsInput,
+  ): Promise<QueryTransactionsToolResult> {
+    const effectiveLimit = Math.min(filters.limit ?? DEFAULT_TOOL_LIMIT, HARD_TOOL_LIMIT);
+
+    // Run the underlying query without its own limit so we can observe the
+    // true match count before trimming.
+    const all = await this.queryTransactions(familyId, { ...filters, limit: undefined });
+
+    if (all.length <= effectiveLimit) {
+      return {
+        count: all.length,
+        truncated: false,
+        limit: effectiveLimit,
+        transactions: all,
+      };
+    }
+
+    return {
+      count: all.length,
+      truncated: true,
+      limit: effectiveLimit,
+      transactions: all.slice(0, effectiveLimit),
+      summary: {
+        byCategory: aggregateByCategory(all),
+        byMonth: aggregateByMonth(all),
+      },
+    };
   }
 
   /**

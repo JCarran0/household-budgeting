@@ -384,7 +384,8 @@ export class ChatbotService {
   ): Promise<unknown> {
     switch (toolName) {
       case 'query_transactions':
-        return this.chatbotDataService.queryTransactions(familyId, input as unknown as QueryTransactionsInput);
+        // TD-012 Sprint 2: cap rows in context; returns summary when truncated.
+        return this.chatbotDataService.queryTransactionsForTool(familyId, input as unknown as QueryTransactionsInput);
       case 'get_categories':
         return this.chatbotDataService.getCategories(familyId);
       case 'get_budgets':

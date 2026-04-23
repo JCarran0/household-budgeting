@@ -44,7 +44,8 @@ export const CHATBOT_TOOLS: Anthropic.Tool[] = [
   {
     name: 'query_transactions',
     description:
-      'Search and filter the user\'s transactions. Use this for questions about specific purchases, merchants, or transaction details. Supports filtering by date range, category, account, tags, amount range, text search, and status.',
+      'Search and filter the user\'s transactions. Use this for questions about specific purchases, merchants, or transaction details. Supports filtering by date range, category, account, tags, amount range, text search, and status.\n\n' +
+      'Response shape: { count, truncated, limit, transactions, summary? }. `count` is the TOTAL number of matches (not the length of `transactions`). `transactions` is capped at `limit` (default 50, hard max 500) — when `truncated=true`, the array is only a SAMPLE of the most recent `limit` matches and a `summary` is provided with `byCategory` and `byMonth` aggregates over the FULL result set, which is usually enough to answer aggregate questions without pulling every row. If you genuinely need more than the default 50 rows (e.g. user asks to list every transaction of a kind), request them by passing a larger `limit`. Prefer tighter filters (narrower date range, specific categoryIds) before bumping `limit`.',
     input_schema: {
       type: 'object' as const,
       properties: {
@@ -58,7 +59,7 @@ export const CHATBOT_TOOLS: Anthropic.Tool[] = [
         searchQuery: { type: 'string', description: 'Search transaction names, merchants, and descriptions' },
         status: { type: 'string', enum: ['pending', 'posted'], description: 'Filter by transaction status' },
         onlyUncategorized: { type: 'boolean', description: 'If true, return only transactions with no category assigned' },
-        limit: { type: 'number', description: 'Max number of results (default: all matching)' },
+        limit: { type: 'number', description: 'Max rows returned in `transactions` (default 50, hard max 500). Does NOT affect `count` or `summary`.' },
       },
       required: [],
     },

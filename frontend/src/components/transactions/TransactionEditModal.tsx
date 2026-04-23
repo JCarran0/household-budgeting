@@ -24,6 +24,7 @@ import type { Transaction } from '../../../../shared/types';
 import { formatCurrency, formatAccountOwner } from '../../utils/formatters';
 import { useCategoryOptions } from '../../hooks/useCategoryOptions';
 import { UserColorDot } from '../common/UserColorDot';
+import { patchTransactionsInCache, invalidateTransactionCounts } from '../../lib/transactionCacheSync';
 
 interface AccountInfo {
   name: string;
@@ -128,14 +129,14 @@ export function TransactionEditModal({
   const updateCategoryMutation = useMutation({
     mutationFn: ({ transactionId, categoryId }: { transactionId: string; categoryId: string }) =>
       api.updateTransactionCategory(transactionId, categoryId),
-    onSuccess: () => {
+    onSuccess: (_data, variables) => {
       notifications.show({
         title: 'Category Updated',
         message: 'Transaction category has been updated',
         color: 'green',
       });
-      queryClient.invalidateQueries({ queryKey: ['transactions'] });
-      queryClient.invalidateQueries({ queryKey: ['transactions', 'uncategorized', 'count'] });
+      patchTransactionsInCache(queryClient, [variables.transactionId], { categoryId: variables.categoryId });
+      invalidateTransactionCounts(queryClient);
     },
     onError: () => {
       notifications.show({
@@ -150,14 +151,14 @@ export function TransactionEditModal({
   const addTagsMutation = useMutation({
     mutationFn: ({ transactionId, tags }: { transactionId: string; tags: string[] }) =>
       api.addTransactionTags(transactionId, tags),
-    onSuccess: () => {
+    onSuccess: (_data, variables) => {
       notifications.show({
         title: 'Tags Updated',
         message: 'Transaction tags have been updated',
         color: 'green',
       });
-      queryClient.invalidateQueries({ queryKey: ['transactions'] });
-      queryClient.invalidateQueries({ queryKey: ['transactions', 'uncategorized', 'count'] });
+      // Backend replaces tags with the full list the client sends.
+      patchTransactionsInCache(queryClient, [variables.transactionId], { tags: variables.tags });
     },
     onError: () => {
       notifications.show({
@@ -172,14 +173,13 @@ export function TransactionEditModal({
   const updateDescriptionMutation = useMutation({
     mutationFn: ({ transactionId, description }: { transactionId: string; description: string | null }) =>
       api.updateTransactionDescription(transactionId, description),
-    onSuccess: () => {
+    onSuccess: (_data, variables) => {
       notifications.show({
         title: 'Description Updated',
         message: 'Transaction description has been updated',
         color: 'green',
       });
-      queryClient.invalidateQueries({ queryKey: ['transactions'] });
-      queryClient.invalidateQueries({ queryKey: ['transactions', 'uncategorized', 'count'] });
+      patchTransactionsInCache(queryClient, [variables.transactionId], { userDescription: variables.description });
     },
     onError: () => {
       notifications.show({
@@ -194,14 +194,13 @@ export function TransactionEditModal({
   const updateHiddenMutation = useMutation({
     mutationFn: ({ transactionId, isHidden }: { transactionId: string; isHidden: boolean }) =>
       api.updateTransactionHidden(transactionId, isHidden),
-    onSuccess: () => {
+    onSuccess: (_data, variables) => {
       notifications.show({
         title: 'Hidden Status Updated',
         message: 'Transaction hidden status has been updated',
         color: 'green',
       });
-      queryClient.invalidateQueries({ queryKey: ['transactions'] });
-      queryClient.invalidateQueries({ queryKey: ['transactions', 'uncategorized', 'count'] });
+      patchTransactionsInCache(queryClient, [variables.transactionId], { isHidden: variables.isHidden });
     },
     onError: () => {
       notifications.show({
@@ -217,14 +216,13 @@ export function TransactionEditModal({
   const updateFlaggedMutation = useMutation({
     mutationFn: ({ transactionId, isFlagged }: { transactionId: string; isFlagged: boolean }) =>
       api.updateTransactionFlagged(transactionId, isFlagged),
-    onSuccess: () => {
+    onSuccess: (_data, variables) => {
       notifications.show({
         title: 'Flagged Status Updated',
         message: 'Transaction flagged status has been updated',
         color: 'green',
       });
-      queryClient.invalidateQueries({ queryKey: ['transactions'] });
-      queryClient.invalidateQueries({ queryKey: ['transactions', 'uncategorized', 'count'] });
+      patchTransactionsInCache(queryClient, [variables.transactionId], { isFlagged: variables.isFlagged });
     },
     onError: () => {
       notifications.show({

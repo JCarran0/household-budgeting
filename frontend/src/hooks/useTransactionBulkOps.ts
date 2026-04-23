@@ -4,6 +4,7 @@ import { api } from '../lib/api';
 import type { Transaction } from '../../../shared/types';
 import type { BulkEditUpdates } from '../components/transactions/BulkEditModal';
 import { notifications } from '@mantine/notifications';
+import { patchTransactionsInCache, invalidateTransactionCounts } from '../lib/transactionCacheSync';
 
 export function useTransactionBulkOps(
   paginatedTransactions: Transaction[],
@@ -139,6 +140,31 @@ export function useTransactionBulkOps(
         if (result.errors && result.errors.length > 0) {
           console.error('Bulk update errors:', result.errors);
         }
+
+        if (result.failed > 0) {
+          // Partial failure: we can't tell which ids succeeded vs. failed,
+          // so fall back to invalidation rather than patch stale cache.
+          queryClient.invalidateQueries({ queryKey: ['transactions'] });
+        } else {
+          // Apply the same edit to the cached rows in place. tagsToAdd /
+          // tagsToRemove merge with the transaction's current tags so we
+          // compute each row's next state from its prior cached value.
+          patchTransactionsInCache(queryClient, selectedIds, (t) => {
+            const next: Transaction = { ...t };
+            if (apiUpdates.categoryId !== undefined) next.categoryId = apiUpdates.categoryId;
+            if (apiUpdates.userDescription !== undefined) next.userDescription = apiUpdates.userDescription;
+            if (apiUpdates.isHidden !== undefined) next.isHidden = apiUpdates.isHidden;
+            if (apiUpdates.isFlagged !== undefined) next.isFlagged = apiUpdates.isFlagged;
+            if (apiUpdates.tagsToAdd || apiUpdates.tagsToRemove) {
+              const tagSet = new Set(t.tags ?? []);
+              apiUpdates.tagsToAdd?.forEach((tag) => tagSet.add(tag));
+              apiUpdates.tagsToRemove?.forEach((tag) => tagSet.delete(tag));
+              next.tags = Array.from(tagSet);
+            }
+            return next;
+          });
+          if (apiUpdates.categoryId !== undefined) invalidateTransactionCounts(queryClient);
+        }
       } else {
         notifications.update({
           id: notificationId,
@@ -152,7 +178,6 @@ export function useTransactionBulkOps(
 
       setSelectedTransactionIds(new Set());
       setBulkEditMode(null);
-      queryClient.invalidateQueries({ queryKey: ['transactions'] });
     } catch (error) {
       console.error('Bulk update failed:', error);
       notifications.update({

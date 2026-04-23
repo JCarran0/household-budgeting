@@ -4,6 +4,7 @@ import { api } from '../../lib/api';
 import type { Transaction, Category } from '../../../../shared/types';
 import { formatCurrency } from '../../utils/formatters';
 import { useCategoryOptions } from '../../hooks/useCategoryOptions';
+import { patchTransactionsInCache, invalidateTransactionCounts } from '../../lib/transactionCacheSync';
 import {
   Group,
   Text,
@@ -86,15 +87,14 @@ export function TransactionTable({
   const updateCategoryMutation = useMutation({
     mutationFn: ({ transactionId, categoryId }: { transactionId: string; categoryId: string | null }) =>
       api.updateTransactionCategory(transactionId, categoryId),
-    onSuccess: async () => {
+    onSuccess: (_data, variables) => {
       notifications.show({
         title: 'Category Updated',
         message: 'Transaction category has been updated',
         color: 'green',
       });
-      await queryClient.invalidateQueries({
-        predicate: (query) => query.queryKey[0] === 'transactions',
-      });
+      patchTransactionsInCache(queryClient, [variables.transactionId], { categoryId: variables.categoryId });
+      invalidateTransactionCounts(queryClient);
       setEditingCategoryId(null);
       setSelectedCategoryValue(null);
     },
