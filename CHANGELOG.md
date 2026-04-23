@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+### [5.53.2](https://github.com/JCarran0/household-budgeting/compare/v5.53.1...v5.53.2) (2026-04-23)
+
+
+### Documentation
+
+* **claude:** trim CLAUDE.md ~54% — collapse ADRs to one-liners, pointer-ize ops sections ([5d08cd1](https://github.com/JCarran0/household-budgeting/commit/5d08cd1b2c26b5ac75c94fc277c4b83c72c339a9))
+
 ### [5.53.1](https://github.com/JCarran0/household-budgeting/compare/v5.53.0...v5.53.1) (2026-04-23)
 
 
