@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+### [5.53.6](https://github.com/JCarran0/household-budgeting/compare/v5.53.5...v5.53.6) (2026-04-23)
+
+
+### Code Refactoring
+
+* **frontend:** TD-010 Sprint 5 — decompose Tasks.tsx 1835 → 485 LOC ([#11](https://github.com/JCarran0/household-budgeting/issues/11)) ([e10a9aa](https://github.com/JCarran0/household-budgeting/commit/e10a9aaa28bbb2c0e12e89404f90f75f57b0d820))
+
 ### [5.53.5](https://github.com/JCarran0/household-budgeting/compare/v5.53.4...v5.53.5) (2026-04-23)
 
 
