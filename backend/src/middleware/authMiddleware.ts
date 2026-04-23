@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { authService, dataService } from '../services';
 import { z, ZodError } from 'zod';
+import { rateLimitAuth as rateLimitAuthImpl, resetPersistentRateLimitStore } from './rateLimit';
 
 // Extend Express Request type to include user
 declare global {
@@ -205,56 +206,19 @@ export const checkAuth = (req: Request, res: Response): void => {
 };
 
 /**
- * Rate limiting middleware for authentication endpoints
+ * Rate limiting middleware for authentication endpoints.
+ * Re-exported from `./rateLimit` so the auth surface uses the persistent
+ * (PM2-restart-safe) store. Kept under this name so existing route files
+ * (`authRoutes.ts`, `feedback.ts`) don't have to change their imports.
  */
-const attemptCounts = new Map<string, { count: number; resetTime: Date }>();
-const MAX_ATTEMPTS = 10;
-const WINDOW_MS = 15 * 60 * 1000; // 15 minutes
-
-export const rateLimitAuth = (req: Request, res: Response, next: NextFunction): void => {
-  // Skip rate limiting in test environment to allow tests to control rate limiting via authService
-  if (process.env.NODE_ENV === 'test') {
-    next();
-    return;
-  }
-
-  const identifier = req.ip || 'unknown';
-  const now = new Date();
-  
-  const attempts = attemptCounts.get(identifier);
-  
-  if (attempts) {
-    if (now > attempts.resetTime) {
-      // Reset window
-      attemptCounts.set(identifier, {
-        count: 1,
-        resetTime: new Date(now.getTime() + WINDOW_MS),
-      });
-    } else if (attempts.count >= MAX_ATTEMPTS) {
-      res.status(429).json({
-        success: false,
-        error: 'Too many requests. Please try again later.',
-      });
-      return;
-    } else {
-      attempts.count++;
-    }
-  } else {
-    attemptCounts.set(identifier, {
-      count: 1,
-      resetTime: new Date(now.getTime() + WINDOW_MS),
-    });
-  }
-  
-  next();
-};
+export const rateLimitAuth = rateLimitAuthImpl;
 
 /**
  * Reset rate limiting - FOR TESTING ONLY
  */
 export const resetRateLimiting = (): void => {
   if (process.env.NODE_ENV === 'test') {
-    attemptCounts.clear();
+    resetPersistentRateLimitStore();
   }
 };
 

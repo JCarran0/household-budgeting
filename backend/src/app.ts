@@ -1,6 +1,8 @@
 import express, { Express, Request, Response, NextFunction } from 'express';
+import helmet from 'helmet';
 import { errorHandler } from './middleware/errorHandler';
 import { requestScopeMiddleware } from './middleware/requestScope';
+import { rateLimitGlobalApi } from './middleware/rateLimit';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import { config } from './config';
@@ -71,21 +73,36 @@ const corsOptions = {
   optionsSuccessStatus: 200,
 };
 
+// Security headers (TD-004). The backend serves only JSON (never HTML), so the
+// CSP is locked all the way down to `default-src 'none'` — there is no
+// legitimate reason for a browser to ever execute a script from one of these
+// responses. The SPA's CSP is set separately at the static-asset layer.
+app.use(
+  helmet({
+    contentSecurityPolicy: {
+      useDefaults: false,
+      directives: {
+        defaultSrc: ["'none'"],
+        frameAncestors: ["'none'"],
+        baseUri: ["'none'"],
+        formAction: ["'none'"],
+      },
+    },
+    // The browser already ignores X-XSS-Protection on modern engines, but we
+    // keep it set to "0" (helmet default) since "1; mode=block" can be abused.
+    crossOriginEmbedderPolicy: false,
+    crossOriginResourcePolicy: { policy: 'same-site' },
+    referrerPolicy: { policy: 'no-referrer' },
+    strictTransportSecurity: { maxAge: 31_536_000, includeSubDomains: true },
+  }),
+);
+
 // Middleware
 app.use(cors(corsOptions));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 // Opens a per-request async scope so the data layer can memoize reads (TD-011).
 app.use(requestScopeMiddleware);
-
-// Security headers
-app.use((_req: Request, res: Response, next: NextFunction) => {
-  res.setHeader('X-Content-Type-Options', 'nosniff');
-  res.setHeader('X-Frame-Options', 'DENY');
-  res.setHeader('X-XSS-Protection', '1; mode=block');
-  res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
-  next();
-});
 
 // Request logging in development
 if (config.server.nodeEnv === 'development') {
@@ -108,6 +125,9 @@ app.get('/health', (_req: Request, res: Response) => {
 
 // API routes
 const apiPrefix = config.server.apiPrefix;
+// General per-IP rate limit on the API surface (TD-005). Auth and chatbot
+// routes layer their own tighter limits on top of this.
+app.use(apiPrefix, rateLimitGlobalApi);
 app.use(`${apiPrefix}/auth`, authRoutes);
 app.use(`${apiPrefix}/plaid`, plaidRoutes);
 app.use(`${apiPrefix}/accounts`, accountRoutes);

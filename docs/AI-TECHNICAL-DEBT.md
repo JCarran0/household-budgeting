@@ -73,7 +73,7 @@ Add `{ algorithm: 'HS256' }` to `jwt.sign()` options and `{ algorithms: ['HS256'
 ## High Priority
 
 ### TD-004: No Content-Security-Policy Header
-**Status**: Open
+**Status**: Resolved (2026-04-23, Sprint 3) for the backend JSON surface. SPA-side CSP (the policy that actually applies when a browser renders an HTML page) is left as a follow-up at the nginx layer — adding a meta tag `<head>` CSP without runtime browser verification risks breaking Plaid Link / Google Maps / Mantine inline styles in production.
 **Created**: 2026-04-08
 **Impact**: High - Missing XSS mitigation layer for a financial application
 **Effort**: Medium
@@ -82,15 +82,20 @@ Add `{ algorithm: 'HS256' }` to `jwt.sign()` options and `{ algorithms: ['HS256'
 `backend/src/app.ts` sets `X-Content-Type-Options`, `X-Frame-Options`, `X-XSS-Protection`, and `HSTS` as inline middleware but has no `Content-Security-Policy` header. For an app that renders markdown (chatbot) and user financial data, CSP is an important defense-in-depth measure.
 
 **Fix**:
-Add a strict CSP header. Consider adopting the `helmet` middleware package which provides sensible defaults for all security headers.
+✅ Adopted `helmet` in `backend/src/app.ts`. The backend serves JSON only (the SPA is built and served separately by nginx), so the CSP is locked down to `default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'` — there is no legitimate reason for a browser to ever execute a script from one of these responses. Helmet also covers HSTS, X-Content-Type-Options, X-Frame-Options, Referrer-Policy, and Cross-Origin-Resource-Policy with sane defaults; the prior inline header block is removed.
+
+Follow-up (separate, requires browser smoke test):
+- Add a CSP at the nginx layer (or a `<meta http-equiv>` in `frontend/index.html`) that allows the SPA's actual third-party origins: `cdn.plaid.com` (Plaid Link), `maps.googleapis.com`/`maps.gstatic.com` (Google Maps), `fonts.googleapis.com`/`fonts.gstatic.com` (Google Fonts), and `'unsafe-inline'` for `style-src` (Mantine CSS-in-JS). Pair with a runtime walk through Plaid Link, the Trips map, and the chatbot to confirm nothing breaks before promoting to production.
 
 **Files**:
-- `backend/src/app.ts`
+- `backend/src/app.ts` ✅
+- `backend/package.json` ✅ (helmet dep)
+- `backend/src/__tests__/app.test.ts` ✅ (asserts CSP / nosniff / HSTS on /health)
 
 ---
 
 ### TD-005: In-Memory Rate Limiting Resets on Restart
-**Status**: Open
+**Status**: Resolved (2026-04-23, Sprint 3)
 **Created**: 2026-04-08
 **Impact**: High - Rate limits are trivially bypassable by forcing a PM2 restart
 **Effort**: Medium
@@ -99,11 +104,22 @@ Add a strict CSP header. Consider adopting the `helmet` middleware package which
 Both auth rate limiting (`backend/src/middleware/authMiddleware.ts:146-185`) and chatbot rate limiting (`backend/src/routes/chatbot.ts:24-57`) use in-memory `Map`s. These reset on every process restart and don't work across multiple processes.
 
 **Fix**:
-Move rate-limit state to Redis or a persistent file-backed store. For the current single-process deployment, even a simple JSON file with TTL cleanup would survive PM2 restarts.
+✅ Introduced `backend/src/middleware/rateLimit/` with a shared `PersistentRateLimitStore` (file at `DATA_DIR/rate_limits.json`, debounced 1s flushes via atomic-rename, expired-bucket GC on flush, capped at 50k buckets). The store is local-to-process — kept on EBS even when user data lives in S3, since rate-limit state is per-instance, not per-family. Window/state survives PM2 restart by being reloaded on construction.
+
+Three named limiters wired through the same store:
+- `rateLimitGlobalApi` — per-IP, 100 req/min, applied to the entire `/api` surface in `app.ts` (closes the auth-only-coverage gap from the original TD).
+- `rateLimitAuth` — per-IP, 10 req / 15 min, re-exported from `authMiddleware.ts` so all existing callers (`authRoutes.ts`, `feedback.ts`) need no edits.
+- `rateLimitChatbot` — per-userId, 5 req/min, replaces the inline `Map` in `routes/chatbot.ts`.
+
+The test-mode bypass (`NODE_ENV === 'test'`) is preserved so existing auth/chatbot tests continue exercising the underlying handlers without rate-limit interference. Direct unit tests on the store cover the PM2-restart contract, expiry GC, scope isolation, and corruption recovery (`backend/src/__tests__/unit/persistentRateLimitStore.test.ts`).
 
 **Files**:
-- `backend/src/middleware/authMiddleware.ts`
-- `backend/src/routes/chatbot.ts`
+- `backend/src/middleware/rateLimit/persistentStore.ts` ✅ (new)
+- `backend/src/middleware/rateLimit/index.ts` ✅ (new — factory + named limiters)
+- `backend/src/middleware/authMiddleware.ts` ✅ (re-exports through new module)
+- `backend/src/routes/chatbot.ts` ✅ (drops inline Map, imports from new module)
+- `backend/src/app.ts` ✅ (mounts `rateLimitGlobalApi` on `/api`)
+- `backend/src/__tests__/unit/persistentRateLimitStore.test.ts` ✅ (new)
 
 ---
 
@@ -334,7 +350,7 @@ Stage 1 is done in an afternoon; stage 2 spreads across feature work.
 ---
 
 ### TD-015: Markdown Rendering of LLM/User Content Lacks Sanitization
-**Status**: Open
+**Status**: Resolved (2026-04-23, Sprint 3)
 **Created**: 2026-04-22
 **Impact**: High - XSS risk via chatbot output; relevant to financial app threat model
 **Effort**: Low
@@ -345,14 +361,18 @@ The chatbot renders LLM-generated markdown in `ChatOverlay.tsx` / `ActionCard.ts
 This is **related to but distinct from TD-004 (CSP)**. CSP is the outer envelope; sanitization is the inner one. Defense in depth: do both, do them together.
 
 **Fix**:
-1. Run all chatbot-rendered markdown through DOMPurify (or use `react-markdown` with `rehype-sanitize`).
-2. Audit other surfaces that render user-controlled rich text: trip notes, task descriptions, Amazon receipt parsed item names, project descriptions.
-3. Pair this PR with TD-004 — the security headers and the sanitization belong in the same review.
+✅ Added `rehype-sanitize` and configured a narrow markdown-only `tagNames` allowlist on the `ReactMarkdown` instance in `ChatMessageBubble.tsx` (the only `react-markdown` consumer in the SPA). The schema starts from `defaultSchema` (which strips `<script>`, event handlers, `javascript:` URLs) and removes everything else that isn't part of pure markdown. `href` is restricted to `http`/`https`/`mailto`.
+
+Audit of other user-controlled rich text surfaces:
+- Trip notes (`TripDetail.tsx`), task descriptions (`Tasks.tsx`), project descriptions, Amazon parsed item names — **all rendered as plain Mantine `<Text>`**, which neither interprets HTML nor markdown. Safe by construction; no change needed.
+- `ChangelogModal.tsx` does manual `<Text>`-based markdown rendering of `CHANGELOG.md` content, which comes from the repo (not user input). Out of scope.
+- No `dangerouslySetInnerHTML` anywhere in the SPA.
+
+Paired with TD-004 (Sprint 3) — CSP outer envelope + sanitization inner envelope cover the same threat model.
 
 **Files**:
-- `frontend/src/components/chat/ChatOverlay.tsx`
-- `frontend/src/components/chat/ActionCard.tsx`
-- Any other markdown render sites surfaced by the audit
+- `frontend/src/components/chat/ChatMessageBubble.tsx` ✅
+- `frontend/package.json` ✅ (rehype-sanitize dep)
 
 ---
 

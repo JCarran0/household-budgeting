@@ -19,6 +19,7 @@ import { Router, Request, Response, NextFunction } from 'express';
 import multer from 'multer';
 import { z } from 'zod';
 import { authenticate, validateBody } from '../middleware/authMiddleware';
+import { rateLimitChatbot } from '../middleware/rateLimit';
 import { chatbotService, categorizationService } from '../services';
 import {
   uploadChatAttachment,
@@ -34,47 +35,9 @@ import type { ChatAttachmentMimeType } from '../middleware/chatAttachmentUpload'
 
 const router = Router();
 
-// =============================================================================
-// Per-user rate limiting for chatbot (SEC-016): 5 requests per minute
-// Applies to both text chat and attachment uploads (SEC-A015).
-// =============================================================================
-const CHATBOT_MAX_REQUESTS = 5;
-const CHATBOT_WINDOW_MS = 60_000;
-const chatbotRateLimits = new Map<string, { count: number; resetTime: Date }>();
-
-const rateLimitChatbot = (req: Request, res: Response, next: NextFunction): void => {
-  if (process.env.NODE_ENV === 'test') {
-    next();
-    return;
-  }
-
-  const userId = req.user?.userId;
-  if (!userId) {
-    res.status(401).json({ success: false, error: 'Authentication required' });
-    return;
-  }
-
-  const now = new Date();
-  const entry = chatbotRateLimits.get(userId);
-
-  if (entry) {
-    if (now > entry.resetTime) {
-      chatbotRateLimits.set(userId, { count: 1, resetTime: new Date(now.getTime() + CHATBOT_WINDOW_MS) });
-    } else if (entry.count >= CHATBOT_MAX_REQUESTS) {
-      res.status(429).json({
-        success: false,
-        error: 'Slow down! You can send up to 5 messages per minute.',
-      });
-      return;
-    } else {
-      entry.count++;
-    }
-  } else {
-    chatbotRateLimits.set(userId, { count: 1, resetTime: new Date(now.getTime() + CHATBOT_WINDOW_MS) });
-  }
-
-  next();
-};
+// Per-user rate limiting for chatbot (SEC-016): 5 requests per minute,
+// persisted across restarts via the shared rate-limit store (TD-005).
+// Applies to text chat, attachment uploads (SEC-A015), and action confirms.
 
 // =============================================================================
 // POST /message — Send a chat message
