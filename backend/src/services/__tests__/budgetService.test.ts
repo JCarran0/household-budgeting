@@ -208,7 +208,9 @@ describe('BudgetService', () => {
         actual: 350,
         remaining: 150,
         percentUsed: 70,
-        isOverBudget: false
+        isOverBudget: false,
+        isIncomeCategory: false,
+        budgetType: 'expense',
       });
     });
 
@@ -228,7 +230,9 @@ describe('BudgetService', () => {
         actual: 600,
         remaining: -100,
         percentUsed: 120,
-        isOverBudget: true
+        isOverBudget: true,
+        isIncomeCategory: false,
+        budgetType: 'expense',
       });
     });
 
@@ -242,7 +246,9 @@ describe('BudgetService', () => {
         actual: 350,
         remaining: -350,
         percentUsed: 0,
-        isOverBudget: true
+        isOverBudget: true,
+        isIncomeCategory: false,
+        budgetType: 'expense',
       });
     });
 

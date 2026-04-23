@@ -19,11 +19,11 @@ import type { StoredTransaction } from '../../services/transactionService';
 
 describe('User Story: Auto-Categorization', () => {
   let authToken: string;
-  let userId: string;
+  let familyId: string;
   let groceryCategoryId: string;
   let coffeeCategoryId: string;
   let transportCategoryId: string;
-  
+
   beforeEach(async () => {
     // Clear all test data
     if ('clear' in dataService) {
@@ -31,12 +31,13 @@ describe('User Story: Auto-Categorization', () => {
     }
     // Reset rate limiting between tests
     authService.resetRateLimiting();
-    
+
     // Create a test user
     const rand = Math.random().toString(36).substring(2, 8);
     const user = await registerUser(`auto${rand}`, 'auto categorization secure passphrase');
     authToken = user.token;
-    userId = user.userId;
+    // Transactions are stored keyed by familyId, not userId
+    familyId = user.familyId;
     
     // Create some test categories
     const grocery = await createCategory(authToken, 'Groceries');
@@ -367,7 +368,8 @@ describe('User Story: Auto-Categorization', () => {
         }
       );
       
-      expect(updateResponse.status).toBe(400);
+      // Conflict (duplicate pattern) returns 409
+      expect(updateResponse.status).toBe(409);
       expect(updateResponse.body.error).toContain('already exist');
     });
   });
@@ -768,7 +770,7 @@ describe('User Story: Auto-Categorization', () => {
       const testTransactions: Partial<StoredTransaction>[] = [
         {
           id: uuidv4(),
-          userId,
+          userId: familyId,
           accountId: 'test-account',
           plaidTransactionId: 'camp-1',
           plaidAccountId: 'plaid-test',
@@ -796,7 +798,7 @@ describe('User Story: Auto-Categorization', () => {
         },
         {
           id: uuidv4(),
-          userId,
+          userId: familyId,
           accountId: 'test-account',
           plaidTransactionId: 'catskill-1',
           plaidAccountId: 'plaid-test',
@@ -824,7 +826,7 @@ describe('User Story: Auto-Categorization', () => {
         }
       ];
       
-      await dataService.saveData(`transactions_${userId}`, testTransactions);
+      await dataService.saveData(`transactions_${familyId}`, testTransactions);
       
       // Create rule with patterns matching merchantName (not name)
       const ruleResponse = await authenticatedPost(
@@ -852,7 +854,7 @@ describe('User Story: Auto-Categorization', () => {
       expect(applyResponse.body.categorized).toBe(2); // Both should be categorized
       
       // Verify transactions were categorized
-      const transactionsAfter = await dataService.getData<StoredTransaction[]>(`transactions_${userId}`) || [];
+      const transactionsAfter = await dataService.getData<StoredTransaction[]>(`transactions_${familyId}`) || [];
       const campBellyRub = transactionsAfter.find((t: any) => t.plaidTransactionId === 'camp-1');
       const catskill = transactionsAfter.find((t: any) => t.plaidTransactionId === 'catskill-1');
       
@@ -868,7 +870,7 @@ describe('User Story: Auto-Categorization', () => {
         // Transaction with all three fields
         {
           id: uuidv4(),
-          userId,
+          userId: familyId,
           accountId: 'test-account',
           plaidTransactionId: 'all-fields',
           plaidAccountId: 'plaid-test',
@@ -897,7 +899,7 @@ describe('User Story: Auto-Categorization', () => {
         // Transaction with only merchantName and name
         {
           id: uuidv4(),
-          userId,
+          userId: familyId,
           accountId: 'test-account',
           plaidTransactionId: 'merchant-name',
           plaidAccountId: 'plaid-test',
@@ -926,7 +928,7 @@ describe('User Story: Auto-Categorization', () => {
         // Transaction with only name
         {
           id: uuidv4(),
-          userId,
+          userId: familyId,
           accountId: 'test-account',
           plaidTransactionId: 'name-only',
           plaidAccountId: 'plaid-test',
@@ -954,7 +956,7 @@ describe('User Story: Auto-Categorization', () => {
         }
       ];
       
-      await dataService.saveData(`transactions_${userId}`, testTransactions);
+      await dataService.saveData(`transactions_${familyId}`, testTransactions);
       
       // Create rules that match different fields
       await authenticatedPost(
@@ -999,7 +1001,7 @@ describe('User Story: Auto-Categorization', () => {
       expect(applyResponse.status).toBe(200);
       
       // Verify correct categorization based on priority
-      const transactionsAfter = await dataService.getData<StoredTransaction[]>(`transactions_${userId}`) || [];
+      const transactionsAfter = await dataService.getData<StoredTransaction[]>(`transactions_${familyId}`) || [];
       
       const allFields = transactionsAfter.find((t: any) => t.plaidTransactionId === 'all-fields');
       expect(allFields).toBeDefined();
@@ -1019,7 +1021,7 @@ describe('User Story: Auto-Categorization', () => {
       const testTransactions = [
         {
           id: uuidv4(),
-          userId,
+          userId: familyId,
           accountId: 'test-account',
           plaidTransactionId: 'case-test-1',
           plaidAccountId: 'plaid-test',
@@ -1047,7 +1049,7 @@ describe('User Story: Auto-Categorization', () => {
         }
       ];
       
-      await dataService.saveData(`transactions_${userId}`, testTransactions);
+      await dataService.saveData(`transactions_${familyId}`, testTransactions);
       
       // Create rule with lowercase pattern
       const ruleResponse = await authenticatedPost(
@@ -1073,7 +1075,7 @@ describe('User Story: Auto-Categorization', () => {
       expect(applyResponse.body.categorized).toBe(1);
       
       // Verify categorization worked despite case differences
-      const transactionsAfter = await dataService.getData<StoredTransaction[]>(`transactions_${userId}`) || [];
+      const transactionsAfter = await dataService.getData<StoredTransaction[]>(`transactions_${familyId}`) || [];
       const transaction = transactionsAfter.find((t: any) => t.plaidTransactionId === 'case-test-1');
       expect(transaction).toBeDefined();
       expect(transaction?.categoryId).toBe(coffeeCategoryId);
@@ -1084,7 +1086,7 @@ describe('User Story: Auto-Categorization', () => {
       const testTransactions = [
         {
           id: uuidv4(),
-          userId,
+          userId: familyId,
           accountId: 'test-account',
           plaidTransactionId: 'recategorize-test',
           plaidAccountId: 'plaid-test',
@@ -1112,7 +1114,7 @@ describe('User Story: Auto-Categorization', () => {
         }
       ];
       
-      await dataService.saveData(`transactions_${userId}`, testTransactions);
+      await dataService.saveData(`transactions_${familyId}`, testTransactions);
       
       // Create rule matching merchantName
       await authenticatedPost(
@@ -1148,7 +1150,7 @@ describe('User Story: Auto-Categorization', () => {
       expect(applyResponse2.body.recategorized).toBe(1);
       
       // Verify recategorization
-      const transactionsAfter = await dataService.getData<StoredTransaction[]>(`transactions_${userId}`) || [];
+      const transactionsAfter = await dataService.getData<StoredTransaction[]>(`transactions_${familyId}`) || [];
       const transaction = transactionsAfter.find((t: any) => t.plaidTransactionId === 'recategorize-test');
       expect(transaction).toBeDefined();
       expect(transaction?.categoryId).toBe(coffeeCategoryId);
@@ -1159,7 +1161,7 @@ describe('User Story: Auto-Categorization', () => {
       const testTransactions = [
         {
           id: uuidv4(),
-          userId,
+          userId: familyId,
           accountId: 'test-account',
           plaidTransactionId: 'merchant-only',
           plaidAccountId: 'plaid-test',
@@ -1187,7 +1189,7 @@ describe('User Story: Auto-Categorization', () => {
         }
       ];
       
-      await dataService.saveData(`transactions_${userId}`, testTransactions);
+      await dataService.saveData(`transactions_${familyId}`, testTransactions);
       
       // Create rule matching merchantName
       await authenticatedPost(
@@ -1211,7 +1213,7 @@ describe('User Story: Auto-Categorization', () => {
       expect(applyResponse.body.categorized).toBe(1);
       
       // Verify categorization
-      const transactionsAfter = await dataService.getData<StoredTransaction[]>(`transactions_${userId}`) || [];
+      const transactionsAfter = await dataService.getData<StoredTransaction[]>(`transactions_${familyId}`) || [];
       const transaction = transactionsAfter.find((t: any) => t.plaidTransactionId === 'merchant-only');
       expect(transaction).toBeDefined();
       expect(transaction?.categoryId).toBe(coffeeCategoryId);

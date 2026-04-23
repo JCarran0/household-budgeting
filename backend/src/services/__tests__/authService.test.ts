@@ -528,7 +528,7 @@ describe('AuthService', () => {
       (bcrypt.hash as jest.Mock).mockResolvedValue('hash');
       (uuidv4 as jest.Mock).mockReturnValue('new-user');
       
-      await authService.register('newuser', 'Password123!', 'New User');
+      await authService.register('newuser', 'SecurePassword123!', 'New User');
       
       expect(logSpy).toHaveBeenCalledWith({
         event: 'USER_REGISTERED',

@@ -71,7 +71,6 @@ async function getStoredTransaction(
 
 describe('Trip Service Integration Tests', () => {
   let authToken: string;
-  let userId: string;
   let familyId: string;
 
   beforeEach(async () => {
@@ -84,7 +83,7 @@ describe('Trip Service Integration Tests', () => {
     const username = `trip${rand}`;
     const user = await registerUser(username, 'test-password-for-trip-tests');
     authToken = user.token;
-    userId = user.userId;
+    // Trips and transactions are keyed by familyId, not the personal userId
     familyId = user.familyId;
   });
 
@@ -221,7 +220,8 @@ describe('Trip Service Integration Tests', () => {
           categoryBudgets: [{ categoryId: 'FOOD_AND_DRINK', amount: 800 }],
           rating: 5,
           notes: 'Cherry blossom season',
-          userId,
+          // The trip service stores familyId in the userId field
+          userId: familyId,
         });
         expect(response.body.id).toBeDefined();
         expect(response.body.createdAt).toBeDefined();
@@ -403,11 +403,11 @@ describe('Trip Service Integration Tests', () => {
       expect(tripTag).toBe('trip:costa-rica:2026');
 
       // Seed two transactions tagged with the trip tag
-      const txn1 = await createTestTransaction(userId, {
+      const txn1 = await createTestTransaction(familyId, {
         tags: [tripTag, 'other-tag'],
         amount: 75,
       });
-      const txn2 = await createTestTransaction(userId, {
+      const txn2 = await createTestTransaction(familyId, {
         tags: [tripTag],
         amount: 120,
       });
@@ -419,8 +419,8 @@ describe('Trip Service Integration Tests', () => {
         .expect(204);
 
       // The trip tag should be removed; other tags should remain
-      const storedTxn1 = await getStoredTransaction(userId, txn1.id);
-      const storedTxn2 = await getStoredTransaction(userId, txn2.id);
+      const storedTxn1 = await getStoredTransaction(familyId, txn1.id);
+      const storedTxn2 = await getStoredTransaction(familyId, txn2.id);
 
       expect(storedTxn1?.tags).not.toContain(tripTag);
       expect(storedTxn1?.tags).toContain('other-tag');
@@ -442,7 +442,7 @@ describe('Trip Service Integration Tests', () => {
       const tripId = createResponse.body.id as string;
       const tripTag = createResponse.body.tag as string;
 
-      const unrelatedTxn = await createTestTransaction(userId, {
+      const unrelatedTxn = await createTestTransaction(familyId, {
         tags: ['other-trip', 'food'],
         amount: 30,
       });
@@ -452,7 +452,7 @@ describe('Trip Service Integration Tests', () => {
         .set('Authorization', `Bearer ${authToken}`)
         .expect(204);
 
-      const storedTxn = await getStoredTransaction(userId, unrelatedTxn.id);
+      const storedTxn = await getStoredTransaction(familyId, unrelatedTxn.id);
       expect(storedTxn?.tags).toEqual(['other-trip', 'food']);
       // Confirm the deleted tag is unrelated
       expect(tripTag).toBe('trip:greece:2026');
@@ -479,7 +479,7 @@ describe('Trip Service Integration Tests', () => {
       const oldTag = createResponse.body.tag as string;
       expect(oldTag).toBe('trip:portugal-trip:2026');
 
-      const txn = await createTestTransaction(userId, {
+      const txn = await createTestTransaction(familyId, {
         tags: [oldTag, 'vacation'],
       });
 
@@ -490,7 +490,7 @@ describe('Trip Service Integration Tests', () => {
         .expect(200);
 
       const newTag = 'trip:portugal-adventure:2026';
-      const storedTxn = await getStoredTransaction(userId, txn.id);
+      const storedTxn = await getStoredTransaction(familyId, txn.id);
 
       expect(storedTxn?.tags).toContain(newTag);
       expect(storedTxn?.tags).not.toContain(oldTag);
@@ -511,7 +511,7 @@ describe('Trip Service Integration Tests', () => {
       const tripId = createResponse.body.id as string;
       const tag = createResponse.body.tag as string;
 
-      const txn = await createTestTransaction(userId, { tags: [tag] });
+      const txn = await createTestTransaction(familyId, { tags: [tag] });
 
       await request(app)
         .put(`/api/v1/trips/${tripId}`)
@@ -519,7 +519,7 @@ describe('Trip Service Integration Tests', () => {
         .send({ totalBudget: 2000, rating: 4 })
         .expect(200);
 
-      const storedTxn = await getStoredTransaction(userId, txn.id);
+      const storedTxn = await getStoredTransaction(familyId, txn.id);
       expect(storedTxn?.tags).toContain(tag);
       expect(storedTxn?.tags).toHaveLength(1);
     });
@@ -544,9 +544,9 @@ describe('Trip Service Integration Tests', () => {
       const tripId = createResponse.body.id as string;
       const tripTag = createResponse.body.tag as string;
 
-      await createTestTransaction(userId, { tags: [tripTag], amount: 100, categoryId: 'FOOD_AND_DRINK' });
-      await createTestTransaction(userId, { tags: [tripTag], amount: 250, categoryId: 'TRAVEL' });
-      await createTestTransaction(userId, { tags: [tripTag], amount: 50,  categoryId: 'FOOD_AND_DRINK' });
+      await createTestTransaction(familyId, { tags: [tripTag], amount: 100, categoryId: 'FOOD_AND_DRINK' });
+      await createTestTransaction(familyId, { tags: [tripTag], amount: 250, categoryId: 'TRAVEL' });
+      await createTestTransaction(familyId, { tags: [tripTag], amount: 50,  categoryId: 'FOOD_AND_DRINK' });
 
       const response = await request(app)
         .get(`/api/v1/trips/${tripId}/summary`)
@@ -570,9 +570,9 @@ describe('Trip Service Integration Tests', () => {
       const tripId = createResponse.body.id as string;
       const tripTag = createResponse.body.tag as string;
 
-      await createTestTransaction(userId, { tags: [tripTag], amount: 80,  categoryId: 'FOOD_AND_DRINK' });
-      await createTestTransaction(userId, { tags: [tripTag], amount: 60,  categoryId: 'FOOD_AND_DRINK' });
-      await createTestTransaction(userId, { tags: [tripTag], amount: 200, categoryId: 'TRANSPORTATION' });
+      await createTestTransaction(familyId, { tags: [tripTag], amount: 80,  categoryId: 'FOOD_AND_DRINK' });
+      await createTestTransaction(familyId, { tags: [tripTag], amount: 60,  categoryId: 'FOOD_AND_DRINK' });
+      await createTestTransaction(familyId, { tags: [tripTag], amount: 200, categoryId: 'TRANSPORTATION' });
 
       const response = await request(app)
         .get(`/api/v1/trips/${tripId}/summary`)
@@ -607,7 +607,7 @@ describe('Trip Service Integration Tests', () => {
       const tripTag = createResponse.body.tag as string;
 
       // Transaction dated well before the trip's startDate
-      await createTestTransaction(userId, {
+      await createTestTransaction(familyId, {
         tags: [tripTag],
         amount: 300,
         date: '2026-03-01',
@@ -672,7 +672,7 @@ describe('Trip Service Integration Tests', () => {
       const tripId = createResponse.body.id as string;
       const tripTag = createResponse.body.tag as string;
 
-      await createTestTransaction(userId, {
+      await createTestTransaction(familyId, {
         tags: [tripTag],
         amount: 150,
         categoryId: 'FOOD_AND_DRINK',
@@ -747,7 +747,7 @@ describe('Trip Service Integration Tests', () => {
       const tripId = createResponse.body.id as string;
       const tripTag = createResponse.body.tag as string;
 
-      await createTestTransaction(userId, {
+      await createTestTransaction(familyId, {
         tags: [tripTag],
         amount: 90,
         categoryId: 'FOOD_AND_DRINK',
@@ -827,7 +827,7 @@ describe('Trip Service Integration Tests', () => {
 
       const tripTag = createResponse.body.tag as string;
 
-      await createTestTransaction(userId, { tags: [tripTag], amount: 500 });
+      await createTestTransaction(familyId, { tags: [tripTag], amount: 500 });
 
       const response = await request(app)
         .get('/api/v1/trips/summaries')

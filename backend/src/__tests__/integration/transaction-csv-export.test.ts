@@ -4,14 +4,14 @@
  */
 
 import request from 'supertest';
-import app from '../../index';
+import app from '../../app';
 import { authService, dataService } from '../../services';
 import type { Transaction } from '../../shared/types';
 
 
 describe('Transaction CSV Export', () => {
   let token: string;
-  let userId: string;
+  let familyId: string;
   let categoryId: string;
   let accountId: string;
 
@@ -20,21 +20,23 @@ describe('Transaction CSV Export', () => {
     if ('clear' in dataService) {
       (dataService as any).clear();
     }
-    
+
     // Reset service state
     authService.resetRateLimiting();
-    
-    // Create test user
-    const username = `test_${Date.now()}_${Math.random()}`;
+
+    // Create test user — displayName is required by the registration schema.
+    // Username must be <= 20 characters.
+    const username = `tx${Date.now().toString().slice(-8)}`;
     const registerResponse = await request(app)
       .post('/api/v1/auth/register')
       .send({
         username,
-        password: 'test secure passphrase for testing'
+        password: 'test secure passphrase for testing',
+        displayName: 'Test User',
       });
-    
+
     token = registerResponse.body.token;
-    userId = registerResponse.body.user.id;
+    familyId = registerResponse.body.user.familyId;
     
     // Create test category
     const categoryResponse = await request(app)
@@ -71,12 +73,11 @@ describe('Transaction CSV Export', () => {
     // Store account directly via dataService
     const storedAccount = {
       ...accountData,
-      userId,
-      accessToken: 'encrypted_test_token' // Would be encrypted in real scenario
+      accessToken: 'encrypted_test_token', // Would be encrypted in real scenario
     };
-    const existingAccounts = (await dataService.getData(`accounts_${userId}`) || []) as any[];
+    const existingAccounts = (await dataService.getData(`accounts_${familyId}`) || []) as any[];
     existingAccounts.push(storedAccount);
-    await dataService.saveData(`accounts_${userId}`, existingAccounts);
+    await dataService.saveData(`accounts_${familyId}`, existingAccounts);
     accountId = accountData.id;
     
     // Create test transactions with various properties
@@ -173,9 +174,9 @@ describe('Transaction CSV Export', () => {
       } as Transaction;
       
       // Store transaction directly
-      const existingTxns = (await dataService.getData(`transactions_${userId}`) || []) as Transaction[];
+      const existingTxns = (await dataService.getData(`transactions_${familyId}`) || []) as Transaction[];
       existingTxns.push(fullTxn);
-      await dataService.saveData(`transactions_${userId}`, existingTxns);
+      await dataService.saveData(`transactions_${familyId}`, existingTxns);
     }
   });
   
@@ -188,8 +189,9 @@ describe('Transaction CSV Export', () => {
       
       expect(response.status).toBe(200);
       expect(response.body.success).toBe(true);
-      expect(response.body.transactions).toHaveLength(4);
-      
+      // Default request excludes hidden transactions (txn_3 is hidden), so 3 returned
+      expect(response.body.transactions).toHaveLength(3);
+
       // Verify that exported data includes all expected fields
       const transactions = response.body.transactions;
       
@@ -237,9 +239,9 @@ describe('Transaction CSV Export', () => {
         plaidCategoryId: specialTxn.category?.[1] || specialTxn.category?.[0] || null
       } as Transaction;
       
-      const existingTxns = (await dataService.getData(`transactions_${userId}`) || []) as Transaction[];
+      const existingTxns = (await dataService.getData(`transactions_${familyId}`) || []) as Transaction[];
       existingTxns.push(fullSpecialTxn);
-      await dataService.saveData(`transactions_${userId}`, existingTxns);
+      await dataService.saveData(`transactions_${familyId}`, existingTxns);
       
       const response = await request(app)
         .get('/api/v1/transactions')
@@ -300,19 +302,21 @@ describe('Transaction CSV Export', () => {
     });
     
     it('should export only transactions with specific tags', async () => {
+      // txn_3 has the 'savings' tag but is hidden, so we need includeHidden=true
       const response = await request(app)
         .get('/api/v1/transactions')
         .set('Authorization', `Bearer ${token}`)
         .query({
-          tags: ['savings']
+          tags: ['savings'],
+          includeHidden: true,
         });
-      
+
       expect(response.status).toBe(200);
       expect(response.body.success).toBe(true);
-      
-      // Should only include transactions with 'savings' tag
+
+      // Should only include transactions with 'savings' tag (txn_3)
       const transactions = response.body.transactions;
-      expect(transactions).toHaveLength(1); // Only txn_3
+      expect(transactions).toHaveLength(1);
       expect(transactions[0].tags).toContain('savings');
     });
     
@@ -436,9 +440,9 @@ describe('Transaction CSV Export', () => {
           plaidCategoryId: txn.category?.[1] || txn.category?.[0] || null
         } as Transaction;
         
-        const existingTxns = (await dataService.getData(`transactions_${userId}`) || []) as Transaction[];
+        const existingTxns = (await dataService.getData(`transactions_${familyId}`) || []) as Transaction[];
         existingTxns.push(fullTxn);
-        await dataService.saveData(`transactions_${userId}`, existingTxns);
+        await dataService.saveData(`transactions_${familyId}`, existingTxns);
       }
       
       const startTime = Date.now();

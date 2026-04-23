@@ -177,7 +177,7 @@ describe('CategoryService', () => {
       expect(remainingCategories[0]).toEqual(categories[1]);
     });
 
-    it('should delete a parent category and all its subcategories', async () => {
+    it('should reject deletion of a parent category that has subcategories', async () => {
       const categories: Category[] = [
         {
           id: 'parent-1',
@@ -215,12 +215,14 @@ describe('CategoryService', () => {
 
       await dataService.saveCategories(categories, testUserId);
 
-      await categoryService.deleteCategory('parent-1', testUserId);
+      // Deletion of a parent with subcategories is now blocked to prevent
+      // orphaned subcategories. Subcategories must be deleted first.
+      await expect(categoryService.deleteCategory('parent-1', testUserId))
+        .rejects.toThrow('Cannot delete category with subcategories');
 
-      // Verify only Food category remains
+      // Verify all categories remain untouched
       const remainingCategories = await dataService.getCategories(testUserId);
-      expect(remainingCategories).toHaveLength(1);
-      expect(remainingCategories[0]).toEqual(categories[3]);
+      expect(remainingCategories).toHaveLength(4);
     });
   });
 
@@ -413,28 +415,13 @@ describe('CategoryService', () => {
   });
 
   describe('Default Categories', () => {
-    it('should initialize default categories if none exist', async () => {
+    it('should not create any categories when none exist (users manage their own taxonomy)', async () => {
+      // initializeDefaultCategories is now a no-op — users create their own category taxonomy
+      // rather than seeding with defaults. The method is kept for backward compatibility.
       await categoryService.initializeDefaultCategories(testUserId);
 
-      // Verify default categories were created
       const savedCategories = await dataService.getCategories(testUserId);
-      expect(savedCategories).toHaveLength(12);
-      expect(savedCategories).toEqual(
-        expect.arrayContaining([
-          expect.objectContaining({ name: 'Income', parentId: null }),
-          expect.objectContaining({ name: 'Housing', parentId: null }),
-          expect.objectContaining({ name: 'Transportation', parentId: null }),
-          expect.objectContaining({ name: 'Food & Dining', parentId: null }),
-          expect.objectContaining({ name: 'Shopping', parentId: null }),
-          expect.objectContaining({ name: 'Entertainment', parentId: null }),
-          expect.objectContaining({ name: 'Bills & Utilities', parentId: null }),
-          expect.objectContaining({ name: 'Healthcare', parentId: null }),
-          expect.objectContaining({ name: 'Education', parentId: null }),
-          expect.objectContaining({ name: 'Personal', parentId: null }),
-          expect.objectContaining({ name: 'Savings', parentId: null, isRollover: true, isIncome: false, isSavings: false }),
-          expect.objectContaining({ name: 'Transfers', parentId: null, isHidden: true })
-        ])
-      );
+      expect(savedCategories).toHaveLength(0);
     });
 
     it('should not initialize default categories if some already exist', async () => {

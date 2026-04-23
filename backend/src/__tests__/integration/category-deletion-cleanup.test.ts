@@ -79,7 +79,8 @@ describe('Category Deletion Cleanup Workflow', () => {
     const rand = Math.random().toString(36).substring(2, 8);
     const user = await registerUser(`cleanup${rand}`, 'category cleanup secure passphrase');
     authToken = user.token;
-    userId = user.userId;
+    // Services key all data by familyId, not the individual userId
+    userId = user.familyId;
 
     // Create test categories
     const categoryA = await createCategory(authToken, 'Entertainment');

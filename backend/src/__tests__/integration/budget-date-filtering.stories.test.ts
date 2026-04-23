@@ -25,23 +25,24 @@ import { format, addMonths, startOfMonth } from 'date-fns';
 describe('User Story: Budget Date Filtering Integration', () => {
   let testUserId: string;
   let authToken: string;
-  
+
   beforeEach(async () => {
     // Clear all data
     if ('clear' in dataService) {
       (dataService as InMemoryDataService).clear();
     }
-    
+
     // Reset rate limiting
     authService.resetRateLimiting();
-    
+
     // Create test user and get auth token
     const username = `bdf${Math.random().toString(36).substring(2, 8)}`;
     const password = 'budget date filtering test passphrase';
-    
+
     const result = await registerUser(username, password);
     authToken = result.token;
-    testUserId = result.userId;
+    // Services use familyId as the storage key (not the user's personal userId)
+    testUserId = result.familyId;
   });
 
   describe('As a user, monthly budget calculations must exclude next month transactions', () => {

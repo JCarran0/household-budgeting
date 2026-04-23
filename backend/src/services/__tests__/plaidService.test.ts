@@ -409,15 +409,17 @@ describe('PlaidService', () => {
         options: {
           include_personal_finance_category: true,
           offset: 0,
-          count: 100,
+          count: 500,
         },
       });
     });
 
-    it('should handle pagination for large transaction sets', async () => {
-      const mockTransactions = Array.from({ length: 100 }, (_, i) => ({
+    it('should auto-paginate and return all transactions across multiple pages', async () => {
+      // The implementation fetches all pages automatically (no longer returns hasMore=true).
+      // Simulate 2 pages: first page has 250 transactions, second page has 250 more.
+      const firstPageTransactions = Array.from({ length: 250 }, (_, i) => ({
         account_id: 'account-1',
-        transaction_id: `txn-${i}`,
+        transaction_id: `txn-page1-${i}`,
         amount: 10 + i,
         iso_currency_code: 'USD',
         category: ['Shops'],
@@ -428,25 +430,46 @@ describe('PlaidService', () => {
         payment_channel: 'online',
         pending: false,
       }));
+      const secondPageTransactions = Array.from({ length: 250 }, (_, i) => ({
+        account_id: 'account-1',
+        transaction_id: `txn-page2-${i}`,
+        amount: 10 + i,
+        iso_currency_code: 'USD',
+        category: ['Shops'],
+        category_id: '19000000',
+        date: '2025-01-15',
+        name: `Transaction ${250 + i}`,
+        merchant_name: null,
+        payment_channel: 'online',
+        pending: false,
+      }));
 
-      const mockResponse = {
-        data: {
-          accounts: [],
-          transactions: mockTransactions,
-          total_transactions: 500, // More than returned
-          item: {},
-          request_id: 'request-123',
-        },
-      };
-
-      mockPlaidClient.transactionsGet.mockResolvedValue(mockResponse);
+      mockPlaidClient.transactionsGet
+        .mockResolvedValueOnce({
+          data: {
+            accounts: [],
+            transactions: firstPageTransactions,
+            total_transactions: 500,
+            item: {},
+            request_id: 'request-123',
+          },
+        })
+        .mockResolvedValueOnce({
+          data: {
+            accounts: [],
+            transactions: secondPageTransactions,
+            total_transactions: 500,
+            item: {},
+            request_id: 'request-456',
+          },
+        });
 
       const result = await plaidService.getTransactions(mockAccessToken, startDate, endDate);
 
       expect(result.success).toBe(true);
-      expect(result.transactions?.length).toBe(100);
+      expect(result.transactions?.length).toBe(500);
       expect(result.totalTransactions).toBe(500);
-      expect(result.hasMore).toBe(true);
+      expect(result.hasMore).toBe(false); // Auto-paginated — always false
     });
 
     it('should filter out pending transactions when requested', async () => {

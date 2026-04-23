@@ -19,18 +19,12 @@ describe('User Story: Reports to Transactions Navigation with Filter Synchroniza
     const user = await registerUser(username, 'this is my secure navigation filters test passphrase');
     authToken = user.token;
     
-    // Initialize categories
-    await request(app)
-      .post('/api/v1/categories/initialize')
-      .set('Authorization', `Bearer ${authToken}`);
-    
-    // Get a test category ID
-    const categoriesResponse = await request(app)
-      .get('/api/v1/categories')
-      .set('Authorization', `Bearer ${authToken}`);
-    
-    const categories = categoriesResponse.body;
-    testCategoryId = categories.find((c: any) => c.name === 'Groceries')?.id || categories[0]?.id;
+    // Create a test category (initializeDefaultCategories is a no-op — users manage their own taxonomy)
+    const createResponse = await request(app)
+      .post('/api/v1/categories')
+      .set('Authorization', `Bearer ${authToken}`)
+      .send({ name: 'Groceries', parentId: null, isHidden: false, isRollover: false });
+    testCategoryId = createResponse.body.id;
     expect(testCategoryId).toBeDefined();
   });
   

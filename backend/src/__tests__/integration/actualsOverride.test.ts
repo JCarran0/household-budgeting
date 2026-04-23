@@ -5,7 +5,7 @@ import { registerUser } from '../helpers/apiHelper';
 
 describe('Actuals Override Integration Tests', () => {
   let authToken: string;
-  let userId: string;
+  let familyId: string;
 
   beforeEach(async () => {
     // Clear all test data
@@ -20,7 +20,9 @@ describe('Actuals Override Integration Tests', () => {
     const username = `actuals${rand}`;
     const user = await registerUser(username, 'test-password-for-actuals-override-tests');
     authToken = user.token;
-    userId = user.userId;
+    // The actualsOverrideService stores overrides keyed by familyId, not userId.
+    // The override's `userId` field also contains the familyId.
+    familyId = user.familyId;
   });
 
   describe('POST /api/actuals-overrides', () => {
@@ -39,12 +41,13 @@ describe('Actuals Override Integration Tests', () => {
         .expect(201);
 
       expect(response.body.success).toBe(true);
+      // The service stores the familyId in the override's `userId` field
       expect(response.body.override).toMatchObject({
         month: '2025-01',
         totalIncome: 5000,
         totalExpenses: 3000,
         notes: 'January historical data',
-        userId
+        userId: familyId,
       });
       expect(response.body.override.id).toBeDefined();
       expect(response.body.override.createdAt).toBeDefined();
@@ -177,8 +180,8 @@ describe('Actuals Override Integration Tests', () => {
     });
 
     it('should return empty array when no overrides exist', async () => {
-      // Clear overrides
-      await dataService.saveData(`actuals_overrides_${userId}`, []);
+      // Clear overrides using the familyId key (the service uses familyId for storage)
+      await dataService.saveData(`actuals_overrides_${familyId}`, []);
 
       const response = await request(app)
         .get('/api/v1/actuals-overrides')
