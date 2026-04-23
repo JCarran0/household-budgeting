@@ -1321,6 +1321,26 @@ describe('Budget Calculation Utilities', () => {
       expect(map.size).toBe(0);
     });
 
+    test('categories whose raw + rollover exactly cancel (net-zero effective) are omitted', () => {
+      // Characterization: the omission predicate is value !== 0 at the final sum,
+      // NOT raw !== 0. A category with raw=100 that is cancelled by a -100 carry
+      // is indistinguishable in the map from a category with no budget at all.
+      // Consumers must treat absence as "net $0" rather than "no budget"; see
+      // shared/utils/budgetCalculations.ts:981.
+      const budgets = new Map<string, Map<string, number>>([
+        // CUSTOM_GAS is isRollover=true in this suite's fixture.
+        // Jan: budgeted 100, spent 100 → carry 0 into Feb.
+        // Feb: budgeted 100, spent 200 → carry -100 into March.
+        // March raw = 100, carry = -100, effective = 0.
+        ['CUSTOM_GAS', new Map([['2026-01', 100], ['2026-02', 100], ['2026-03', 100]])],
+      ]);
+      const actuals = new Map<string, Map<string, number>>([
+        ['CUSTOM_GAS', new Map([['2026-01', 100], ['2026-02', 200]])],
+      ]);
+      const map = buildEffectiveBudgetsMap(cats, '2026-03', budgets, actuals);
+      expect(map.has('CUSTOM_GAS')).toBe(false);
+    });
+
     test('January target — rollover categories get raw passthrough (REQ-005)', () => {
       const budgets = new Map<string, Map<string, number>>([
         ['CUSTOM_GAS', new Map([['2026-01', 100]])],

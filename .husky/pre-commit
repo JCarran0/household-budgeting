@@ -1,62 +1,81 @@
 #!/bin/sh
 
-# Pre-commit hook to run linting checks on both backend and frontend
-# This prevents committing code with linting errors
+# Pre-commit hook: lint + test for each side whose files are staged.
+# Tests guard the invariants lint can't see (rollover math, BvA round-trip,
+# dismiss-is-not-isHidden, error-boundary recovery). Sprint 4 wired backend
+# unit/ tests into npm test and added a Vitest suite on the frontend.
 
-echo "🔍 Running pre-commit linting checks..."
+echo "🔍 Running pre-commit checks..."
 
 # Get the list of staged files
 STAGED_FILES=$(git diff --cached --name-only --diff-filter=ACM)
 
 # Check if there are any backend TypeScript files
 BACKEND_FILES=$(echo "$STAGED_FILES" | grep "^backend/.*\.\(ts\|tsx\)$" || true)
-# Check if there are any frontend TypeScript/JavaScript files  
+# Check if there are any frontend TypeScript/JavaScript files
 FRONTEND_FILES=$(echo "$STAGED_FILES" | grep "^frontend/.*\.\(ts\|tsx\|js\|jsx\)$" || true)
+# Shared utils — exercised by backend's Jest suite via the moduleNameMapper,
+# so changes there must also trigger the backend test run.
+SHARED_FILES=$(echo "$STAGED_FILES" | grep "^shared/.*\.\(ts\|tsx\)$" || true)
 
 # Track if any checks fail
 FAILED=0
 
-# Run backend linting if backend files are staged
-if [ -n "$BACKEND_FILES" ]; then
+# Backend: lint + test
+if [ -n "$BACKEND_FILES" ] || [ -n "$SHARED_FILES" ]; then
     echo "📦 Checking backend TypeScript..."
-    cd backend && npm run lint
+    (cd backend && npm run lint)
     if [ $? -ne 0 ]; then
         echo "❌ Backend type checking failed. Please fix the errors before committing."
         FAILED=1
     else
         echo "✅ Backend type checking passed"
+        echo "🧪 Running backend tests (critical + unit)..."
+        (cd backend && npm test)
+        if [ $? -ne 0 ]; then
+            echo "❌ Backend tests failed. Please fix the errors before committing."
+            FAILED=1
+        else
+            echo "✅ Backend tests passed"
+        fi
     fi
-    cd ..
 fi
 
-# Run frontend linting if frontend files are staged
+# Frontend: lint + test
 if [ -n "$FRONTEND_FILES" ]; then
     echo "🎨 Checking frontend code..."
-    cd frontend && npm run lint:all
+    (cd frontend && npm run lint:all)
     if [ $? -ne 0 ]; then
         echo "❌ Frontend checks failed. Please fix the errors before committing."
         FAILED=1
     else
         echo "✅ Frontend checks passed"
+        echo "🧪 Running frontend tests..."
+        (cd frontend && npm test)
+        if [ $? -ne 0 ]; then
+            echo "❌ Frontend tests failed. Please fix the errors before committing."
+            FAILED=1
+        else
+            echo "✅ Frontend tests passed"
+        fi
     fi
-    cd ..
 fi
 
 # Exit with error if any checks failed
 if [ $FAILED -ne 0 ]; then
     echo ""
     echo "💡 Tip: Run these commands to see the errors:"
-    echo "   Backend: cd backend && npm run lint"
-    echo "   Frontend: cd frontend && npm run lint:all"
+    echo "   Backend:  cd backend && npm run lint && npm test"
+    echo "   Frontend: cd frontend && npm run lint:all && npm test"
     echo "💡 ESLint errors might be auto-fixable with 'npm run lint -- --fix'"
     echo "💡 TypeScript errors need manual fixes"
     exit 1
 fi
 
 # If no relevant files were changed, just pass
-if [ -z "$BACKEND_FILES" ] && [ -z "$FRONTEND_FILES" ]; then
-    echo "ℹ️  No TypeScript/JavaScript files to lint in this commit"
+if [ -z "$BACKEND_FILES" ] && [ -z "$FRONTEND_FILES" ] && [ -z "$SHARED_FILES" ]; then
+    echo "ℹ️  No TypeScript/JavaScript files to check in this commit"
 fi
 
-echo "✨ All linting checks passed!"
+echo "✨ All pre-commit checks passed!"
 exit 0
