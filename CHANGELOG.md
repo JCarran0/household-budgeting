@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+### [5.53.4](https://github.com/JCarran0/household-budgeting/compare/v5.53.3...v5.53.4) (2026-04-23)
+
+
+### Tests
+
+* TD-014 Sprint 4 — wire backend unit tests into CI + greenfield frontend Vitest/RTL ([27c2fab](https://github.com/JCarran0/household-budgeting/commit/27c2faba988fbb3d10e8016b6b162eb76d24558d))
+
 ### [5.53.3](https://github.com/JCarran0/household-budgeting/compare/v5.53.2...v5.53.3) (2026-04-23)
 
 
