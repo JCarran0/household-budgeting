@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+### [5.53.7](https://github.com/JCarran0/household-budgeting/compare/v5.53.6...v5.53.7) (2026-04-23)
+
+
+### Bug Fixes
+
+* **mobile:** Tasks page + badge modals responsive at phone widths ([#12](https://github.com/JCarran0/household-budgeting/issues/12)) ([e1df6c8](https://github.com/JCarran0/household-budgeting/commit/e1df6c80e2452e451eff50114cdc628a133d5054))
+
 ### [5.53.6](https://github.com/JCarran0/household-budgeting/compare/v5.53.5...v5.53.6) (2026-04-23)
 
 
