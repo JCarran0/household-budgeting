@@ -267,6 +267,7 @@ describe('loadConfig — conditional validation', () => {
       NODE_ENV: 'production',
       PLAID_CLIENT_ID: 'id',
       PLAID_SECRET: 'secret',
+      PLAID_ENCRYPTION_SECRET: 'prod-encryption-secret',
       // STORAGE_TYPE intentionally omitted — should default to s3
     });
     expect(cfg.storage.type).toBe('s3');
@@ -280,6 +281,7 @@ describe('loadConfig — conditional validation', () => {
         NODE_ENV: 'production',
         PLAID_CLIENT_ID: 'id',
         PLAID_SECRET: 'secret',
+        PLAID_ENCRYPTION_SECRET: 'prod-encryption-secret',
         S3_BUCKET_NAME: '',
       })
     ).toThrow('S3_BUCKET_NAME is required when STORAGE_TYPE=s3');
@@ -350,6 +352,7 @@ describe('loadConfig — default values', () => {
       NODE_ENV: 'production',
       PLAID_CLIENT_ID: 'id',
       PLAID_SECRET: 'secret',
+      PLAID_ENCRYPTION_SECRET: 'prod-encryption-secret',
     });
     expect(cfg.storage.type).toBe('s3');
   });
@@ -414,6 +417,7 @@ describe('loadConfig — enum validation', () => {
         NODE_ENV: 'production',
         PLAID_CLIENT_ID: 'id',
         PLAID_SECRET: 'secret',
+        PLAID_ENCRYPTION_SECRET: 'prod-encryption-secret',
       })
     ).not.toThrow();
   });

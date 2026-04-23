@@ -75,7 +75,7 @@ const CATEGORIES: Category[] = [
   { id: 'HIDDEN_CHILD', name: 'Hidden Child', parentId: 'HIDDEN_CAT', isCustom: true, isHidden: false, isRollover: false, isIncome: false, isSavings: false },
 
   // Savings / rollover hierarchy
-  { id: 'CUSTOM_SAVINGS', name: 'Savings', parentId: null, isCustom: true, isHidden: false, isRollover: true, isIncome: false, isSavings: false },
+  { id: 'CUSTOM_SAVINGS', name: 'Savings', parentId: null, isCustom: true, isHidden: false, isRollover: true, isIncome: false, isSavings: true },
   { id: 'CUSTOM_SAVINGS_EMERGENCY', name: 'Emergency Fund', parentId: 'CUSTOM_SAVINGS', isCustom: true, isHidden: false, isRollover: false, isIncome: false, isSavings: false },
 ];
 

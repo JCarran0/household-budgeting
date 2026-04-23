@@ -245,6 +245,8 @@ describe('Category Helper Functions', () => {
       let parentId = 'INCOME';
       for (let i = 1; i <= 10; i++) {
         const categoryId = `LEVEL_${i}`;
+        // isIncome intentionally left undefined so hierarchical fallback is exercised —
+        // setting it explicitly short-circuits the fallback per categoryHelpers.ts:53.
         deepCategories.push({
           id: categoryId,
           name: `Level ${i}`,
@@ -252,8 +254,8 @@ describe('Category Helper Functions', () => {
           isCustom: true,
           isHidden: false,
           isRollover: false,
-          isIncome: false, isSavings: false
-        });
+          isSavings: false,
+        } as Category);
         parentId = categoryId;
       }
       
