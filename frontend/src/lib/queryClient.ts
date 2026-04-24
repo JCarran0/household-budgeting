@@ -1,5 +1,6 @@
 import { QueryClient } from '@tanstack/react-query';
 import { notifications } from '@mantine/notifications';
+import { getApiErrorMessage, getApiErrorStatus } from './api/errors';
 
 // Create a single query client instance to be shared across the app.
 //
@@ -18,8 +19,8 @@ export const queryClient = new QueryClient({
       refetchOnReconnect: true,
       retry: (failureCount, error: unknown) => {
         // Don't retry on 4xx errors except 429 (rate limit)
-        const err = error as { response?: { status?: number } };
-        if (err?.response?.status && err.response.status >= 400 && err.response.status < 500 && err.response.status !== 429) {
+        const status = getApiErrorStatus(error);
+        if (status && status >= 400 && status < 500 && status !== 429) {
           return false;
         }
         // Retry up to 2 times for other errors
@@ -30,18 +31,14 @@ export const queryClient = new QueryClient({
     mutations: {
       retry: false, // Don't retry mutations by default
       onError: (error: unknown) => {
-        // Global mutation error handler
-        const err = error as { response?: { status?: number; data?: { error?: string } }; message?: string };
-        const message = err?.response?.data?.error || err?.message || 'An unexpected error occurred';
-        
         // Don't show notification for auth errors (handled by auth logic)
-        if (err?.response?.status === 401) {
+        if (getApiErrorStatus(error) === 401) {
           return;
         }
 
         notifications.show({
           title: 'Operation Failed',
-          message,
+          message: getApiErrorMessage(error),
           color: 'red',
         });
       },

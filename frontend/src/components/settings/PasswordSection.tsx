@@ -11,6 +11,7 @@ import {
 import { notifications } from '@mantine/notifications';
 import { IconAlertCircle } from '@tabler/icons-react';
 import { api } from '../../lib/api';
+import { getApiErrorMessage } from '../../lib/api/errors';
 
 export function PasswordSection() {
   const [currentPassword, setCurrentPassword] = useState('');
@@ -40,8 +41,7 @@ export function PasswordSection() {
       setNewPassword('');
       setConfirmPassword('');
     } catch (err: unknown) {
-      const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
-      setError(msg || 'Failed to change password');
+      setError(getApiErrorMessage(err, 'Failed to change password'));
     } finally {
       setSaving(false);
     }

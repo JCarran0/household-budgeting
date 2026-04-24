@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import type { User, LoginCredentials, RegisterCredentials, UserColor } from '../../../shared/types';
 import { api } from '../lib/api';
+import { getApiErrorMessage } from '../lib/api/errors';
 import { queryClient } from '../lib/queryClient';
 import { useFilterStore } from './filterStore';
 
@@ -52,7 +53,7 @@ export const useAuthStore = create<AuthState>()(
         } catch (error: unknown) {
           set({
             isLoading: false,
-            error: (error as { response?: { data?: { error?: string } } })?.response?.data?.error || 'Login failed. Please try again.',
+            error: getApiErrorMessage(error, 'Login failed. Please try again.'),
           });
           throw error;
         }
@@ -81,7 +82,7 @@ export const useAuthStore = create<AuthState>()(
         } catch (error: unknown) {
           set({
             isLoading: false,
-            error: (error as { response?: { data?: { error?: string } } })?.response?.data?.error || 'Registration failed. Please try again.',
+            error: getApiErrorMessage(error, 'Registration failed. Please try again.'),
           });
           throw error;
         }

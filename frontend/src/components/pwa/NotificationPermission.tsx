@@ -16,6 +16,7 @@ import {
   IconBellCheck,
 } from '@tabler/icons-react';
 import { api } from '../../lib/api';
+import { getApiErrorStatus } from '../../lib/api/errors';
 
 // ---------------------------------------------------------------------------
 // VAPID key helper
@@ -118,7 +119,7 @@ function NotificationPermissionInner({
         const response = await api.notifications.getVapidPublicKey();
         publicKey = response.publicKey;
       } catch (err: unknown) {
-        const status = (err as { response?: { status?: number } })?.response?.status;
+        const status = getApiErrorStatus(err);
         if (status === 503) {
           notifications.show({
             message: 'Push notifications not configured on server.',

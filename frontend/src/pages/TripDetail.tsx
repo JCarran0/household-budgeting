@@ -42,6 +42,7 @@ import {
 } from '@tabler/icons-react';
 import { format } from 'date-fns';
 import { api } from '../lib/api';
+import { getApiErrorStatus } from '../lib/api/errors';
 import { TripFormModal } from '../components/trips/TripFormModal';
 import { DeleteTripModal } from '../components/trips/DeleteTripModal';
 import { TripSpendingBreakdown } from '../components/trips/TripSpendingBreakdown';
@@ -219,11 +220,7 @@ export function TripDetail() {
   }
 
   if (error || !trip) {
-    const isNotFound =
-      error !== null &&
-      typeof error === 'object' &&
-      'response' in error &&
-      (error as { response?: { status?: number } }).response?.status === 404;
+    const isNotFound = getApiErrorStatus(error) === 404;
     return (
       <Container size="lg" py="xl">
         <Stack gap="md">

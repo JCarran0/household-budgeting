@@ -17,6 +17,7 @@ import { notifications } from '@mantine/notifications';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { IconAlertCircle, IconCheck, IconTrash } from '@tabler/icons-react';
 import { api } from '../../lib/api';
+import { getApiErrorMessage } from '../../lib/api/errors';
 import { CategoryPicker } from './CategoryPicker';
 import type { Category } from '../../../../shared/types';
 
@@ -175,12 +176,9 @@ export function CategoryDeletionModal({
       setCurrentStep('complete');
     },
     onError: (error: unknown) => {
-      const errorMessage =
-        (error as { response?: { data?: { error?: string } } })?.response?.data?.error ||
-        'Failed to delete category';
       notifications.show({
         title: 'Error',
-        message: errorMessage,
+        message: getApiErrorMessage(error, 'Failed to delete category'),
         color: 'red',
         autoClose: false,
       });

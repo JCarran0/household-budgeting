@@ -165,7 +165,7 @@ Import and call `authStore.getState().logout()` instead of the raw redirect.
 ## Medium Priority
 
 ### TD-008: Repeated Inline Error Casting on Frontend
-**Status**: Open
+**Status**: Resolved (2026-04-24, Sprint 5)
 **Created**: 2026-04-08
 **Impact**: Medium - Maintainability; error handling is `any`-equivalent in practice
 **Effort**: Low
@@ -174,11 +174,22 @@ Import and call `authStore.getState().logout()` instead of the raw redirect.
 Error handling across 10+ frontend files uses the same inline cast: `error as { response?: { data?: { error?: string } } }`. This pattern is repeated everywhere and is effectively `any`-typed.
 
 **Fix**:
-Extract a shared `getApiErrorMessage(error: unknown): string` utility and use it across all error handling sites.
+✅ Introduced `frontend/src/lib/api/errors.ts` with `getApiErrorMessage(error: unknown, fallback?: string): string` and `getApiErrorStatus(error: unknown): number | undefined`. The helper uses `axios.isAxiosError()` when applicable and duck-types `{ response: { data: { error | message } } }` shapes otherwise, so existing tests that throw plain objects (e.g. `PasswordSection.test.tsx:92`) keep working. Migrated 11 call sites across `authStore.ts` (2 — login/register error surfacing), `queryClient.ts` (2 — retry-on-status branch + global mutation toast), `MantineAccounts.tsx` (3 — sync/sync-all/disconnect toast), `CategoryDeletionModal.tsx`, `CSVImport.tsx`, `CategorizationFlowModal.tsx`, `PasswordSection.tsx`, `NotificationPermission.tsx` (status-code branch), `TripDetail.tsx` (404 branch), `AmazonReceiptFlowModal.tsx` (replaces local `getErrorMessage` + drops direct `axios` import), `BudgetEditModal.tsx` (replaces local `getErrorMessage` + drops `ApiErrorShape` interface). **Intentionally left**: `AddStopSheet.tsx:314` reads a structured `Partial<StayOverlapPayload>` from response data (not just a message), and `CategoryForm.tsx` reads `.code` + `.details` for rollover-validation flows — both go beyond the helper's message/status contract. 16 Vitest cases on the new utility cover axios errors, duck-typed shapes, `Error` instances, strings, null/undefined, and empty-field fallthrough. Frontend test total: **172** (from 156).
 
 **Files**:
-- New: `frontend/src/lib/api/errors.ts`
-- Multiple files in `frontend/src/pages/` and `frontend/src/components/`
+- `frontend/src/lib/api/errors.ts` ✅ (new)
+- `frontend/src/lib/api/errors.test.ts` ✅ (new, 16 cases)
+- `frontend/src/lib/queryClient.ts` ✅
+- `frontend/src/stores/authStore.ts` ✅
+- `frontend/src/pages/MantineAccounts.tsx` ✅
+- `frontend/src/pages/TripDetail.tsx` ✅
+- `frontend/src/components/settings/PasswordSection.tsx` ✅
+- `frontend/src/components/pwa/NotificationPermission.tsx` ✅
+- `frontend/src/components/categories/CategoryDeletionModal.tsx` ✅
+- `frontend/src/components/categories/CSVImport.tsx` ✅
+- `frontend/src/components/transactions/CategorizationFlowModal.tsx` ✅
+- `frontend/src/components/transactions/AmazonReceiptFlowModal.tsx` ✅
+- `frontend/src/components/budgets/BudgetVsActuals/BudgetEditModal.tsx` ✅
 
 ---
 

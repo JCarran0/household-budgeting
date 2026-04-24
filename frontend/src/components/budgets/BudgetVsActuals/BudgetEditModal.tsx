@@ -20,6 +20,7 @@ import { notifications } from '@mantine/notifications';
 import { format, parse } from 'date-fns';
 import type { Category } from '../../../../../shared/types';
 import { api, type CreateBudgetDto, type UpdateCategoryDto } from '../../../lib/api';
+import { getApiErrorMessage } from '../../../lib/api/errors';
 import { formatCurrency } from '../../../utils/formatters';
 import { isBudgetableCategory } from '../../../../../shared/utils/categoryHelpers';
 
@@ -72,18 +73,6 @@ function findConflictsForTarget(targetId: string, categories: Category[]): strin
     if (c.parentId === targetId && c.isRollover) conflicts.push(c.id);
   }
   return conflicts;
-}
-
-interface ApiErrorShape {
-  response?: {
-    data?: {
-      error?: string;
-      code?: string;
-    };
-  };
-}
-function getErrorMessage(err: unknown): string | undefined {
-  return (err as ApiErrorShape)?.response?.data?.error;
 }
 
 /**
@@ -208,8 +197,11 @@ export function BudgetEditModal({
         color: 'green',
       });
     } catch (err) {
-      const message = getErrorMessage(err) ?? 'Failed to update rollover';
-      notifications.show({ title: 'Error', message, color: 'red' });
+      notifications.show({
+        title: 'Error',
+        message: getApiErrorMessage(err, 'Failed to update rollover'),
+        color: 'red',
+      });
     }
   };
 
@@ -265,8 +257,11 @@ export function BudgetEditModal({
       });
       onClose();
     } catch (err) {
-      const message = getErrorMessage(err) ?? 'Failed to update budget';
-      notifications.show({ title: 'Error', message, color: 'red' });
+      notifications.show({
+        title: 'Error',
+        message: getApiErrorMessage(err, 'Failed to update budget'),
+        color: 'red',
+      });
     }
   };
 

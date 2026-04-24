@@ -2,8 +2,8 @@ import { useState, useCallback, useEffect } from 'react';
 import { Text, Stack, Center, Loader, Button, Group } from '@mantine/core';
 import { ResponsiveModal } from '../ResponsiveModal';
 import { useQueryClient } from '@tanstack/react-query';
-import axios from 'axios';
 import { api } from '../../lib/api';
+import { getApiErrorMessage } from '../../lib/api/errors';
 import { UploadStep } from './amazon/UploadStep';
 import { MatchReviewStep } from './amazon/MatchReviewStep';
 import { CategoryReviewStep } from './amazon/CategoryReviewStep';
@@ -30,16 +30,6 @@ type FlowStep =
   | 'applying'
   | 'summary'
   | 'error';
-
-/** Extract a user-facing error message from an API error. */
-function getErrorMessage(err: unknown): string {
-  if (axios.isAxiosError(err)) {
-    const serverMessage = (err.response?.data as { error?: string } | undefined)?.error;
-    if (serverMessage) return serverMessage;
-  }
-  if (err instanceof Error) return err.message;
-  return 'An unexpected error occurred';
-}
 
 interface AmazonReceiptFlowModalProps {
   opened: boolean;
@@ -118,7 +108,7 @@ export function AmazonReceiptFlowModal({ opened, onClose }: AmazonReceiptFlowMod
 
       setStep('review-matches');
     } catch (err) {
-      setError(getErrorMessage(err));
+      setError(getApiErrorMessage(err));
       setStep('error');
     }
   }, []);
@@ -142,7 +132,7 @@ export function AmazonReceiptFlowModal({ opened, onClose }: AmazonReceiptFlowMod
 
       setStep('review-categories');
     } catch (err) {
-      setError(getErrorMessage(err));
+      setError(getApiErrorMessage(err));
       setStep('error');
     }
   }, [sessionId]);
@@ -176,7 +166,7 @@ export function AmazonReceiptFlowModal({ opened, onClose }: AmazonReceiptFlowMod
 
       setStep('summary');
     } catch (err) {
-      setError(getErrorMessage(err));
+      setError(getApiErrorMessage(err));
       setStep('error');
     }
   }, [sessionId]);

@@ -25,6 +25,7 @@ import {
   IconFileText,
 } from '@tabler/icons-react';
 import { api } from '../../lib/api';
+import { getApiErrorMessage } from '../../lib/api/errors';
 
 interface CSVImportProps {
   opened: boolean;
@@ -55,12 +56,9 @@ export function CSVImport({ opened, onClose }: CSVImportProps) {
       }
     },
     onError: (error: unknown) => {
-      const errorMessage = 
-        (error as { response?: { data?: { message?: string } } })?.response?.data?.message || 
-        'Failed to import categories';
       notifications.show({
         title: 'Import Failed',
-        message: errorMessage,
+        message: getApiErrorMessage(error, 'Failed to import categories'),
         color: 'red',
         icon: <IconX size={16} />,
       });

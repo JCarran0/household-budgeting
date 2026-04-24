@@ -4,6 +4,7 @@ import { ResponsiveModal } from '../ResponsiveModal';
 import { IconSparkles, IconCheck } from '@tabler/icons-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { api } from '../../lib/api';
+import { getApiErrorMessage } from '../../lib/api/errors';
 import { notifications } from '@mantine/notifications';
 import { BucketReviewStep, type BucketApplySelection } from './BucketReviewStep';
 import { RuleSuggestionsStep } from './RuleSuggestionsStep';
@@ -64,9 +65,7 @@ export function CategorizationFlowModal({ opened, onClose, uncategorizedCount }:
           }
         })
         .catch(err => {
-          const axiosError = err?.response?.data?.error;
-          const message = axiosError || (err instanceof Error ? err.message : 'Classification failed');
-          setError(message);
+          setError(getApiErrorMessage(err, 'Classification failed'));
           setStep('error');
         });
     }

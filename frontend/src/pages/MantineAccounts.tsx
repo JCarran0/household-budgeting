@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api, type ExtendedPlaidAccount } from '../lib/api';
+import { getApiErrorMessage } from '../lib/api/errors';
 import { PlaidButton } from '../components/PlaidButton';
 import { usePlaid } from '../hooks/usePlaidLink';
 import { useState } from 'react';
@@ -81,7 +82,7 @@ export function MantineAccounts() {
       setSyncingAccount(null);
       notifications.show({
         title: 'Sync Failed',
-        message: (error as { message?: string })?.message || 'Failed to sync account',
+        message: getApiErrorMessage(error, 'Failed to sync account'),
         color: 'red',
         icon: <IconX size={16} />,
       });
@@ -116,7 +117,7 @@ export function MantineAccounts() {
       setSyncingAccount(null);
       notifications.show({
         title: 'Sync Failed',
-        message: (error as { message?: string })?.message || 'Failed to sync accounts',
+        message: getApiErrorMessage(error, 'Failed to sync accounts'),
         color: 'red',
         icon: <IconX size={16} />,
       });
@@ -139,7 +140,7 @@ export function MantineAccounts() {
     onError: (error: unknown) => {
       notifications.show({
         title: 'Disconnect Failed',
-        message: (error as { message?: string })?.message || 'Failed to disconnect account',
+        message: getApiErrorMessage(error, 'Failed to disconnect account'),
         color: 'red',
         icon: <IconX size={16} />,
       });
