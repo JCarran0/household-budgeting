@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.57.0](https://github.com/JCarran0/household-budgeting/compare/v5.56.0...v5.57.0) (2026-04-24)
+
+
+### Features
+
+* **tasks:** B.3 — mobile swipe actions on cards (REQ-050..052) ([0b66ec1](https://github.com/JCarran0/household-budgeting/commit/0b66ec12563a0d531d623494a0352079da1e1eca))
+
 ## [5.56.0](https://github.com/JCarran0/household-budgeting/compare/v5.55.1...v5.56.0) (2026-04-24)
 
 
