@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
-  Badge,
   Button,
   Group,
   Menu,
@@ -309,31 +308,28 @@ export function TaskKanban({
           impossible because only one column is rendered at a time. */}
       <DragDropContext onDragEnd={onDragEnd}>
         {isMobile ? (
-          <Tabs value={activeMobileTab} onChange={setMobileTab} keepMounted={false}>
+          <Tabs
+            value={activeMobileTab}
+            onChange={setMobileTab}
+            keepMounted={false}
+            variant="default"
+          >
             <Tabs.List grow>
-              <Tabs.Tab
-                value="todo"
-                rightSection={<Badge size="xs" variant="light" color="blue" circle>{tasksByStatus.todo.length}</Badge>}
-              >
-                Todo
+              <Tabs.Tab value="todo" px={6}>
+                <Text span size="sm">Todo</Text>
+                <Text span size="xs" c="dimmed" ml={4}>{tasksByStatus.todo.length}</Text>
               </Tabs.Tab>
-              <Tabs.Tab
-                value="started"
-                rightSection={<Badge size="xs" variant="light" color="yellow" circle>{tasksByStatus.started.length}</Badge>}
-              >
-                Started
+              <Tabs.Tab value="started" px={6}>
+                <Text span size="sm">Started</Text>
+                <Text span size="xs" c="dimmed" ml={4}>{tasksByStatus.started.length}</Text>
               </Tabs.Tab>
-              <Tabs.Tab
-                value="done"
-                rightSection={<Badge size="xs" variant="light" color="green" circle>{tasksByStatus.done.length}</Badge>}
-              >
-                Done
+              <Tabs.Tab value="done" px={6}>
+                <Text span size="sm">Done</Text>
+                <Text span size="xs" c="dimmed" ml={4}>{tasksByStatus.done.length}</Text>
               </Tabs.Tab>
-              <Tabs.Tab
-                value="snoozed"
-                rightSection={<Badge size="xs" variant="light" color="indigo" circle>{snoozedTasks.length}</Badge>}
-              >
-                Snoozed
+              <Tabs.Tab value="snoozed" px={6}>
+                <Text span size="sm">Snoozed</Text>
+                <Text span size="xs" c="dimmed" ml={4}>{snoozedTasks.length}</Text>
               </Tabs.Tab>
             </Tabs.List>
 
