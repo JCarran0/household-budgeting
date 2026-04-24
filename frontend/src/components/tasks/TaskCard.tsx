@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState, type ReactNode } from 'react';
 import {
   Card,
   Text,
@@ -16,6 +16,7 @@ import {
 } from '@mantine/core';
 import { useMediaQuery } from '@mantine/hooks';
 import { DatePickerInput } from '@mantine/dates';
+import { useSwipeable } from 'react-swipeable';
 import {
   IconCalendar,
   IconCircleCheck,
@@ -25,11 +26,14 @@ import {
   IconBan,
   IconEdit,
   IconBellOff,
+  IconCheck,
+  IconPlayerPlay,
+  IconArrowBackUp,
 } from '@tabler/icons-react';
 import { format, isPast, formatDistanceToNowStrict } from 'date-fns';
 import { parseDateString } from '../../utils/formatters';
 import { useNavigate } from 'react-router-dom';
-import type { StoredTask, FamilyMember } from '../../../../shared/types';
+import type { StoredTask, FamilyMember, TaskStatus } from '../../../../shared/types';
 import { isProjectTag } from '../../../../shared/utils/projectHelpers';
 import { resolveSnoozeDate } from '../../../../shared/utils/taskSnooze';
 import { userColor } from '../../utils/userColor';
@@ -43,6 +47,9 @@ interface TaskCardProps {
   onSnooze?: (taskId: string, snoozedUntil: string | null) => void;
   onCancel?: (taskId: string) => void;
   onEdit?: (task: StoredTask) => void;
+  /** Swipe-action status change (mobile, REQ-050). Invoked on forward
+   *  progress (Todo→Started, Started→Done) and backward undo (Done→Started). */
+  onChangeStatus?: (taskId: string, newStatus: TaskStatus) => void;
   /** When true, renders a "Wake now" action instead of the Snooze submenu
    *  (used from the Snoozed column). */
   isSnoozedView?: boolean;
@@ -76,7 +83,7 @@ function SubTaskProgress({ subTasks }: { subTasks: StoredTask['subTasks'] }) {
   );
 }
 
-export function TaskCard({ task, members, onClick, onSnooze, onCancel, onEdit, isSnoozedView }: TaskCardProps) {
+export function TaskCard({ task, members, onClick, onSnooze, onCancel, onEdit, onChangeStatus, isSnoozedView }: TaskCardProps) {
   const navigate = useNavigate();
   const projectTagLookup = useProjectTagLookup();
   // Mobile kebab opens the Edit modal directly (REQ-054). Cancel / longer-
@@ -110,6 +117,89 @@ export function TaskCard({ task, members, onClick, onSnooze, onCancel, onEdit, i
     onSnooze(task.id, iso);
   };
 
+  // === Mobile swipe actions (BRD §3.1.7.2, REQ-050..052) ===
+  //
+  // Right-swipe = forward progress or unsnooze (blue/green)
+  // Left-swipe  = snooze tomorrow (orange) OR undo-from-done (red)
+  // Past 40% of card width: release auto-commits. Before: snaps back.
+  // Card translates with finger; colored action reveal sits behind.
+  interface SwipeAction {
+    color: 'blue' | 'green' | 'orange' | 'red';
+    label: string;
+    icon: ReactNode;
+    onCommit: () => void;
+  }
+
+  const rightAction: SwipeAction | null = !isMobile
+    ? null
+    : isSnoozedView
+      ? (onSnooze
+        ? { color: 'blue', label: 'Unsnooze', icon: <IconBellOff size={20} />, onCommit: () => onSnooze(task.id, null) }
+        : null)
+      : task.status === 'todo' && onChangeStatus
+        ? { color: 'blue', label: 'Start', icon: <IconPlayerPlay size={20} />, onCommit: () => onChangeStatus(task.id, 'started') }
+        : task.status === 'started' && onChangeStatus
+          ? { color: 'green', label: 'Done', icon: <IconCheck size={20} />, onCommit: () => onChangeStatus(task.id, 'done') }
+          : null;
+
+  const leftAction: SwipeAction | null = !isMobile || isSnoozedView
+    ? null
+    : task.status === 'done' && onChangeStatus
+      ? { color: 'red', label: 'Undo', icon: <IconArrowBackUp size={20} />, onCommit: () => onChangeStatus(task.id, 'started') }
+      : (task.status === 'todo' || task.status === 'started') && onSnooze
+        ? {
+            color: 'orange',
+            label: 'Snooze',
+            icon: <IconBellZ size={20} />,
+            onCommit: () => {
+              const iso = resolveSnoozeDate('tomorrow', new Date(), new Date().getTimezoneOffset());
+              onSnooze(task.id, iso);
+            },
+          }
+        : null;
+
+  const swipeWrapperRef = useRef<HTMLDivElement>(null);
+  const [dragX, setDragX] = useState(0);
+  const swipeCommittedRef = useRef(false);
+
+  const commitSwipe = (action: SwipeAction) => {
+    if (typeof navigator.vibrate === 'function') navigator.vibrate(10);
+    swipeCommittedRef.current = true;
+    action.onCommit();
+    // Leave dragX as-is — the task will transition away from this tab and
+    // unmount. If it doesn't (e.g. unsnooze keeps it in view briefly), snap
+    // back after a tick.
+    setTimeout(() => {
+      setDragX(0);
+      swipeCommittedRef.current = false;
+    }, 200);
+  };
+
+  const swipeHandlers = useSwipeable({
+    onSwiping: (e) => {
+      if (!isMobile) return;
+      if (e.deltaX > 0 && !rightAction) return;
+      if (e.deltaX < 0 && !leftAction) return;
+      setDragX(e.deltaX);
+    },
+    onSwiped: (e) => {
+      if (!isMobile) return;
+      const width = swipeWrapperRef.current?.getBoundingClientRect().width ?? 300;
+      const threshold = width * 0.4;
+      if (e.deltaX > threshold && rightAction) {
+        commitSwipe(rightAction);
+      } else if (e.deltaX < -threshold && leftAction) {
+        commitSwipe(leftAction);
+      } else {
+        setDragX(0);
+      }
+    },
+    trackTouch: true,
+    trackMouse: false,
+    delta: 10,
+    preventScrollOnSwipe: true,
+  });
+
   const handleCustomSnoozeConfirm = () => {
     if (!onSnooze || !customSnoozeDate) return;
     const iso = resolveSnoozeDate('custom', new Date(), new Date().getTimezoneOffset(), customSnoozeDate);
@@ -122,8 +212,51 @@ export function TaskCard({ task, members, onClick, onSnooze, onCancel, onEdit, i
     ? `Returns ${formatDistanceToNowStrict(new Date(task.snoozedUntil), { addSuffix: true })}`
     : null;
 
+  const showsSwipeReveal = isMobile && dragX !== 0;
+  const activeRevealAction = dragX > 0 ? rightAction : dragX < 0 ? leftAction : null;
+
   return (
     <>
+      <div
+        ref={swipeWrapperRef}
+        style={{
+          position: 'relative',
+          overflow: 'hidden',
+          borderRadius: 'var(--mantine-radius-sm)',
+        }}
+      >
+        {/* Colored action reveal behind the translated card. */}
+        {showsSwipeReveal && activeRevealAction && (
+          <div
+            style={{
+              position: 'absolute',
+              inset: 0,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: dragX > 0 ? 'flex-start' : 'flex-end',
+              padding: '0 20px',
+              gap: 10,
+              background: `var(--mantine-color-${activeRevealAction.color}-6)`,
+              color: 'white',
+              fontWeight: 600,
+              pointerEvents: 'none',
+            }}
+            aria-hidden="true"
+          >
+            {dragX > 0 ? activeRevealAction.icon : null}
+            <span>{activeRevealAction.label}</span>
+            {dragX < 0 ? activeRevealAction.icon : null}
+          </div>
+        )}
+        {/* The Card itself — translated by the current swipe delta. */}
+        <div
+          {...swipeHandlers}
+          style={{
+            transform: `translateX(${dragX}px)`,
+            transition: dragX === 0 ? 'transform 200ms ease-out' : undefined,
+            willChange: isMobile ? 'transform' : undefined,
+          }}
+        >
       <Card
         shadow="xs"
         padding="xs"
@@ -292,6 +425,8 @@ export function TaskCard({ task, members, onClick, onSnooze, onCancel, onEdit, i
           )}
         </Group>
       </Card>
+        </div>
+      </div>
 
       {/* Cancel confirmation */}
       <Modal

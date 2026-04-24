@@ -160,6 +160,20 @@ export function TaskKanban({
     return map;
   }, [filteredBoardTasks]);
 
+  // ---------- Mobile swipe-commit status change (REQ-050) ----------
+
+  const handleChangeStatus = (taskId: string, newStatus: TaskStatus) => {
+    statusMutate(
+      { id: taskId, status: newStatus },
+      {
+        onSuccess: () => {
+          invalidateLeaderboard();
+          invalidateBoard();
+        },
+      },
+    );
+  };
+
   // ---------- Drag handler ----------
 
   const onDragEnd = (result: DropResult) => {
@@ -350,6 +364,7 @@ export function TaskKanban({
                     { onSuccess: invalidateTasks }
                   )}
                   onEdit={onEditTask}
+                  onChangeStatus={handleChangeStatus}
                 />
               </Tabs.Panel>
             ))}

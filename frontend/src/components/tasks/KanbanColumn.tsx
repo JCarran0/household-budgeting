@@ -1,7 +1,7 @@
 import { Stack, Text, Badge, Group, ScrollArea } from '@mantine/core';
 import { useMediaQuery } from '@mantine/hooks';
 import { Droppable, Draggable } from '@hello-pangea/dnd';
-import type { StoredTask, FamilyMember } from '../../../../shared/types';
+import type { StoredTask, FamilyMember, TaskStatus } from '../../../../shared/types';
 import { TaskCard } from './TaskCard';
 
 interface KanbanColumnProps {
@@ -15,6 +15,8 @@ interface KanbanColumnProps {
   onSnooze?: (taskId: string, snoozedUntil: string | null) => void;
   onCancel?: (taskId: string) => void;
   onEdit?: (task: StoredTask) => void;
+  /** Mobile swipe-action status change (REQ-050). */
+  onChangeStatus?: (taskId: string, newStatus: TaskStatus) => void;
 }
 
 export function KanbanColumn({
@@ -27,6 +29,7 @@ export function KanbanColumn({
   onSnooze,
   onCancel,
   onEdit,
+  onChangeStatus,
 }: KanbanColumnProps) {
   // Done column is auto-sorted (completedAt DESC) on the server/parent; disable
   // drag-reorder *within* Done by passing isDragDisabled on each draggable.
@@ -81,6 +84,7 @@ export function KanbanColumn({
                         onSnooze={onSnooze}
                         onCancel={onCancel}
                         onEdit={onEdit}
+                        onChangeStatus={onChangeStatus}
                       />
                     </div>
                   )}
