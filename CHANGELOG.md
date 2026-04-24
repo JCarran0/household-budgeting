@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+### [5.57.2](https://github.com/JCarran0/household-budgeting/compare/v5.57.1...v5.57.2) (2026-04-24)
+
+
+### Code Refactoring
+
+* **amazon:** extract matcher, pdf parser, categorizer adapter ([5ef27e5](https://github.com/JCarran0/household-budgeting/commit/5ef27e55f8a46906931871a7758012e0e6b9e0ce))
+
 ### [5.57.1](https://github.com/JCarran0/household-budgeting/compare/v5.57.0...v5.57.1) (2026-04-24)
 
 
