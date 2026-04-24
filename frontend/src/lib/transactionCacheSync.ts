@@ -51,8 +51,8 @@ function applyPatchToSnapshot(
  *
  * Matches queries shaped like `{ transactions: Transaction[] }` under either
  * the `['transactions', ...]` root (Dashboard, Budgets, EnhancedTransactions,
- * MantineTransactions) or the `['bva-ii', ...]` root (Budget vs. Actuals II
- * reads transactions through a separate queryKey for caching independence).
+ * MantineTransactions) or the `['bva', ...]` root (Budget vs. Actuals reads
+ * transactions through a separate queryKey for caching independence).
  *
  * Queries with different payload shapes (e.g. the uncategorized count) are
  * left untouched because `isTransactionListSnapshot` returns false for them.
@@ -66,7 +66,7 @@ export function patchTransactionsInCache(
   const idSet = new Set(ids);
   const patcher = toPatcher(patch);
 
-  const roots: Array<readonly [string]> = [['transactions'], ['bva-ii']];
+  const roots: Array<readonly [string]> = [['transactions'], ['bva']];
   for (const root of roots) {
     queryClient.setQueriesData<TransactionListSnapshot>({ queryKey: root }, (old) => {
       if (!isTransactionListSnapshot(old)) return old;

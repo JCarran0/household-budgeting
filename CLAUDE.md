@@ -52,11 +52,11 @@ Family-scale app for 2 users: personal budgeting (with Plaid), shared tasks, tri
 **Shared calculation utilities — single source of truth, never duplicate:**
 - `shared/utils/transactionCalculations.ts` — transfer exclusion
 - `shared/utils/budgetCalculations.ts` — parent rollup (`max(parent, Σ children)`) + rollover math (`computeRolloverBalance`, `computeEffectiveBudget`, `buildEffectiveBudgetsMap`, `findRolloverSubtreeConflicts`). Type-agnostic; goodness coloring lives in the consumer.
-- `shared/utils/bvaII*.ts` — Budget vs. Actuals II composition, display, filters, serialization. BvA II is the **sole v1 consumer of rollover math**.
+- `shared/utils/bva*.ts` — Budget vs. Actuals composition, display, filters, serialization. BvA is the **sole v1 consumer of rollover math**.
 - `shared/utils/tripHelpers.ts` — stay-overlap validation, agenda composition
 
 **One landmine to know about:**
-- `frontend/src/components/budgets/BudgetVsActualsII/useDismissedParentIds.ts` — dismiss is **per-user localStorage, NOT `Category.isHidden`**. Conflating them would leak one user's dismissals into the spouse's view. Docblock at the hook; guard every touchpoint in review.
+- `frontend/src/components/budgets/BudgetVsActuals/useDismissedParentIds.ts` — dismiss is **per-user localStorage, NOT `Category.isHidden`**. Conflating them would leak one user's dismissals into the spouse's view. Docblock at the hook; guard every touchpoint in review.
 
 ## Common Debugging
 

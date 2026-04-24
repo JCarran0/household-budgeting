@@ -1,7 +1,7 @@
-import type { SectionType } from './bvaIIDisplay';
+import type { SectionType } from './bvaDisplay';
 
 /**
- * BvA II filter composition — BRD Revision 2.
+ * BvA filter composition — BRD Revision 2.
  *
  * Matching happens at the child-row level; parents survive if any child
  * matches OR if the parent's own rollup matches (REQ-021/022). The result

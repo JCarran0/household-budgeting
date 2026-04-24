@@ -3,11 +3,11 @@ import { render, screen, fireEvent, within } from '@testing-library/react';
 import { MantineProvider } from '@mantine/core';
 import { MemoryRouter } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { BvaIISectionTable, type FilteredParent } from './BvaIISectionTable';
+import { BvaSectionTable, type FilteredParent } from './BvaSectionTable';
 import type { Category } from '../../../../../shared/types';
-import type { BvaIIChildRow, BvaIIParentRow } from '../../../../../shared/utils/bvaIIDataComposition';
+import type { BvaChildRow, BvaParentRow } from '../../../../../shared/utils/bvaDataComposition';
 
-// TransactionPreviewTrigger (rendered inside BvaIISectionTable) mounts
+// TransactionPreviewTrigger (rendered inside BvaSectionTable) mounts
 // TransactionPreviewModal, which calls useNavigate() + useQueryClient(). A
 // MemoryRouter + QueryClientProvider satisfy those even though the modal
 // never opens in these tests.
@@ -22,7 +22,7 @@ function renderWithProviders(ui: React.ReactElement) {
   );
 }
 
-function makeChild(overrides: Partial<BvaIIChildRow> & { categoryId: string; categoryName: string }): BvaIIChildRow {
+function makeChild(overrides: Partial<BvaChildRow> & { categoryId: string; categoryName: string }): BvaChildRow {
   return {
     categoryId: overrides.categoryId,
     categoryName: overrides.categoryName,
@@ -34,7 +34,7 @@ function makeChild(overrides: Partial<BvaIIChildRow> & { categoryId: string; cat
   };
 }
 
-function makeParent(overrides: Partial<BvaIIParentRow> & { parentId: string; parentName: string }): BvaIIParentRow {
+function makeParent(overrides: Partial<BvaParentRow> & { parentId: string; parentName: string }): BvaParentRow {
   return {
     parentId: overrides.parentId,
     parentName: overrides.parentName,
@@ -47,7 +47,7 @@ function makeParent(overrides: Partial<BvaIIParentRow> & { parentId: string; par
   };
 }
 
-function baseProps(overrides: Partial<React.ComponentProps<typeof BvaIISectionTable>> = {}) {
+function baseProps(overrides: Partial<React.ComponentProps<typeof BvaSectionTable>> = {}) {
   return {
     section: 'spending' as const,
     parents: [] as FilteredParent[],
@@ -65,11 +65,11 @@ function baseProps(overrides: Partial<React.ComponentProps<typeof BvaIISectionTa
   };
 }
 
-describe('BvaIISectionTable', () => {
+describe('BvaSectionTable', () => {
   it('renders the section title from SECTION_LABEL', () => {
     const parent = makeParent({ parentId: 'food', parentName: 'Food' });
     renderWithProviders(
-      <BvaIISectionTable
+      <BvaSectionTable
         {...baseProps({ parents: [{ parent, deEmphasizedChildIds: new Set() }] })}
       />,
     );
@@ -78,7 +78,7 @@ describe('BvaIISectionTable', () => {
 
   it('returns null when there are no visible parents', () => {
     renderWithProviders(
-      <BvaIISectionTable {...baseProps({ parents: [] })} />,
+      <BvaSectionTable {...baseProps({ parents: [] })} />,
     );
     // Short-circuit to null: no section title, no table.
     expect(screen.queryByText('Spending')).not.toBeInTheDocument();
@@ -89,7 +89,7 @@ describe('BvaIISectionTable', () => {
     const dismissedParent = makeParent({ parentId: 'travel', parentName: 'Travel' });
     const visibleParent = makeParent({ parentId: 'food', parentName: 'Food' });
     renderWithProviders(
-      <BvaIISectionTable
+      <BvaSectionTable
         {...baseProps({
           parents: [
             { parent: dismissedParent, deEmphasizedChildIds: new Set() },
@@ -107,7 +107,7 @@ describe('BvaIISectionTable', () => {
   it('shows dismissed parents with strike-through when showDismissed is true', () => {
     const dismissedParent = makeParent({ parentId: 'travel', parentName: 'Travel' });
     renderWithProviders(
-      <BvaIISectionTable
+      <BvaSectionTable
         {...baseProps({
           parents: [{ parent: dismissedParent, deEmphasizedChildIds: new Set() }],
           dismissedIds: new Set(['travel']),
@@ -129,7 +129,7 @@ describe('BvaIISectionTable', () => {
       children: [makeChild({ categoryId: 'groceries', categoryName: 'Groceries' })],
     });
     renderWithProviders(
-      <BvaIISectionTable
+      <BvaSectionTable
         {...baseProps({
           parents: [{ parent, deEmphasizedChildIds: new Set() }],
           onToggleExpanded: onToggle,
@@ -149,7 +149,7 @@ describe('BvaIISectionTable', () => {
       children: [makeChild({ categoryId: 'groceries', categoryName: 'Groceries' })],
     });
     renderWithProviders(
-      <BvaIISectionTable
+      <BvaSectionTable
         {...baseProps({
           parents: [{ parent, deEmphasizedChildIds: new Set() }],
           onToggleExpanded: onToggle,
@@ -164,7 +164,7 @@ describe('BvaIISectionTable', () => {
   it('does NOT render a chevron for parents without children', () => {
     const parent = makeParent({ parentId: 'misc', parentName: 'Miscellaneous', children: [] });
     renderWithProviders(
-      <BvaIISectionTable
+      <BvaSectionTable
         {...baseProps({ parents: [{ parent, deEmphasizedChildIds: new Set() }] })}
       />,
     );
@@ -188,7 +188,7 @@ describe('BvaIISectionTable', () => {
       ],
     });
     renderWithProviders(
-      <BvaIISectionTable
+      <BvaSectionTable
         {...baseProps({
           parents: [{ parent, deEmphasizedChildIds: new Set() }],
           isExpanded: () => true,
@@ -214,7 +214,7 @@ describe('BvaIISectionTable', () => {
       ],
     });
     renderWithProviders(
-      <BvaIISectionTable
+      <BvaSectionTable
         {...baseProps({
           parents: [{ parent, deEmphasizedChildIds: new Set(['dining']) }],
           isExpanded: () => true,
@@ -231,7 +231,7 @@ describe('BvaIISectionTable', () => {
     // TRANSFER_IN-prefixed ids return false from isBudgetableCategory.
     const parent = makeParent({ parentId: 'TRANSFER_IN_BANK', parentName: 'Bank Transfer' });
     renderWithProviders(
-      <BvaIISectionTable
+      <BvaSectionTable
         {...baseProps({ parents: [{ parent, deEmphasizedChildIds: new Set() }] })}
       />,
     );
@@ -248,7 +248,7 @@ describe('BvaIISectionTable', () => {
       children: [makeChild({ categoryId: 'groceries', categoryName: 'Groceries' })],
     });
     renderWithProviders(
-      <BvaIISectionTable
+      <BvaSectionTable
         {...baseProps({
           parents: [{ parent, deEmphasizedChildIds: new Set() }],
           onEditBudget: onEdit,
@@ -269,7 +269,7 @@ describe('BvaIISectionTable', () => {
     const parent = makeParent({ parentId: 'food', parentName: 'Food' });
 
     renderWithProviders(
-      <BvaIISectionTable
+      <BvaSectionTable
         {...baseProps({
           parents: [{ parent, deEmphasizedChildIds: new Set() }],
           onDismiss,
@@ -288,7 +288,7 @@ describe('BvaIISectionTable', () => {
     const parent = makeParent({ parentId: 'food', parentName: 'Food' });
 
     renderWithProviders(
-      <BvaIISectionTable
+      <BvaSectionTable
         {...baseProps({
           parents: [{ parent, deEmphasizedChildIds: new Set() }],
           dismissedIds: new Set(['food']),
@@ -306,7 +306,7 @@ describe('BvaIISectionTable', () => {
   it('renders rollover cell as em-dash for null (regardless of toggle)', () => {
     const parent = makeParent({ parentId: 'food', parentName: 'Food', rollover: null });
     const { container } = renderWithProviders(
-      <BvaIISectionTable
+      <BvaSectionTable
         {...baseProps({
           parents: [{ parent, deEmphasizedChildIds: new Set() }],
           rolloverOn: true,
@@ -326,7 +326,7 @@ describe('BvaIISectionTable', () => {
       rollover: 50, // positive, would be green if toggle were on
     });
     const { container } = renderWithProviders(
-      <BvaIISectionTable
+      <BvaSectionTable
         {...baseProps({
           parents: [{ parent, deEmphasizedChildIds: new Set() }],
           rolloverOn: false,

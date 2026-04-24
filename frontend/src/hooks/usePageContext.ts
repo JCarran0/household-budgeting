@@ -51,9 +51,15 @@ function buildDescription(path: string, pageName: string, params: Record<string,
 
   if (path === '/budgets') {
     if (params.month) parts.push(`viewing ${formatMonth(params.month)}`);
-    // Default tab is now 'bva-ii' — suppress the ambient mention and any
-    // lingering references to the retired-in-UI 'budget' tab.
-    if (params.view && params.view !== 'bva-ii' && params.view !== 'budget') {
+    // Default tab is now 'bva' — suppress the ambient mention and any
+    // lingering references to the retired-in-UI 'budget' tab. Legacy
+    // `'bva-ii'` bookmarks are still silently supported for one release.
+    if (
+      params.view &&
+      params.view !== 'bva' &&
+      params.view !== 'bva-ii' &&
+      params.view !== 'budget'
+    ) {
       parts.push(`${params.view} view`);
     }
   } else if (path === '/reports') {

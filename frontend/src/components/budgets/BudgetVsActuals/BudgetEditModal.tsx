@@ -34,7 +34,7 @@ interface BudgetEditModalProps {
    * Pass the category-specific slice out of composition.budgetsByCategoryByMonth.
    */
   existingBudgetsByMonth: Map<string, number>;
-  /** Whether the BvA II Use Rollover toggle is currently on. Drives the callout. */
+  /** Whether the BvA Use Rollover toggle is currently on. Drives the callout. */
   useRolloverToggleOn: boolean;
 }
 
@@ -87,7 +87,7 @@ function getErrorMessage(err: unknown): string | undefined {
 }
 
 /**
- * Row-level inline budget editor for BvA II (BRD §5).
+ * Row-level inline budget editor for BvA (BRD §5).
  *
  * Two mutually-exclusive budget save paths:
  *   - Update the selected month only (createOrUpdateBudget).
@@ -102,8 +102,8 @@ function getErrorMessage(err: unknown): string | undefined {
  * exclusivity; the save then includes resolveRolloverConflicts: true.
  *
  * Invalidates the shared budget cache keys (+ ['categories'] for rollover
- * changes) so BvA II, the existing BvA tab, YearlyBudgetGrid, and the
- * Categories page all reflect the changes next render.
+ * changes) so BvA, YearlyBudgetGrid, and the Categories page all reflect
+ * the changes next render.
  */
 export function BudgetEditModal({
   opened,
@@ -186,7 +186,7 @@ export function BudgetEditModal({
   const invalidateBudgetQueries = async () => {
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: ['budgets'] }),
-      queryClient.invalidateQueries({ queryKey: ['bva-ii'] }),
+      queryClient.invalidateQueries({ queryKey: ['bva'] }),
     ]);
   };
 
@@ -196,11 +196,11 @@ export function BudgetEditModal({
       if (resolveConflicts) updates.resolveRolloverConflicts = true;
       await categoryMutation.mutateAsync(updates);
       // Rollover changes affect the Rollover column math + the Categories
-      // page, and the bva-ii transactions/composition cache depends on the
+      // page, and the bva transactions/composition cache depends on the
       // flag too.
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ['categories'] }),
-        queryClient.invalidateQueries({ queryKey: ['bva-ii'] }),
+        queryClient.invalidateQueries({ queryKey: ['bva'] }),
       ]);
       notifications.show({
         title: 'Category updated',

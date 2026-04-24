@@ -27,7 +27,14 @@ import {
 import { format, addMonths, subMonths, startOfMonth } from 'date-fns';
 import { api } from '../lib/api';
 import { YearlyBudgetGrid } from '../components/budgets/YearlyBudgetGrid';
-import { BudgetVsActualsII } from '../components/budgets/BudgetVsActualsII/BudgetVsActualsII';
+import { BudgetVsActuals } from '../components/budgets/BudgetVsActuals/BudgetVsActuals';
+
+// One-release fallback: treat the legacy `view=bva-ii` URL param and the
+// stale `activeTab='bva-ii'` localStorage value as the new `'bva'`. Drop
+// once every user has reloaded with the new code.
+const BVA_LEGACY_TAB = 'bva-ii';
+const BVA_TAB = 'bva';
+const normalizeTab = (tab: string): string => (tab === BVA_LEGACY_TAB ? BVA_TAB : tab);
 
 export function Budgets() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -51,16 +58,19 @@ export function Budgets() {
     return storedDate;
   }, [searchParams, storedDate]);
 
-  const activeTab = searchParams.get('view') || storedActiveTab;
+  const activeTab = normalizeTab(searchParams.get('view') || storedActiveTab);
 
-  // Sync URL params on mount if they're missing (populate from localStorage)
+  // Sync URL params on mount if they're missing (populate from localStorage),
+  // and silently migrate the legacy `view=bva-ii` param to the new `view=bva`.
   useEffect(() => {
     const monthParam = searchParams.get('month');
     const viewParam = searchParams.get('view');
-    if (!monthParam || !viewParam) {
+    const legacyView = viewParam === BVA_LEGACY_TAB;
+    if (!monthParam || !viewParam || legacyView) {
       setSearchParams((prev) => {
         if (!monthParam) prev.set('month', format(selectedDate, 'yyyy-MM'));
         if (!viewParam) prev.set('view', activeTab);
+        if (legacyView) prev.set('view', BVA_TAB);
         return prev;
       }, { replace: true });
     }
@@ -173,7 +183,7 @@ export function Budgets() {
                   onClick={() => {
                     const currentMonth = startOfMonth(new Date());
                     handleDateChange(currentMonth);
-                    setActiveTab('bva-ii');
+                    setActiveTab(BVA_TAB);
                     resetStoredFilters();
                     notifications.show({
                       title: 'View Reset',
@@ -190,9 +200,9 @@ export function Budgets() {
             </Group>
           </Group>
 
-          <Tabs value={activeTab} onChange={(value) => setActiveTab(value || 'bva-ii')}>
+          <Tabs value={activeTab} onChange={(value) => setActiveTab(normalizeTab(value || BVA_TAB))}>
             <Tabs.List>
-              <Tabs.Tab value="bva-ii" leftSection={<IconChartBar size={16} />}>
+              <Tabs.Tab value={BVA_TAB} leftSection={<IconChartBar size={16} />}>
                 Budget vs. Actuals
               </Tabs.Tab>
               <Tabs.Tab value="yearly" leftSection={<IconCalendar size={16} />}>
@@ -225,8 +235,8 @@ export function Budgets() {
               )}
             </Tabs.Panel>
 
-            <Tabs.Panel value="bva-ii" pt="md">
-              <BudgetVsActualsII selectedMonth={selectedMonth} active={activeTab === 'bva-ii'} />
+            <Tabs.Panel value={BVA_TAB} pt="md">
+              <BudgetVsActuals selectedMonth={selectedMonth} active={activeTab === BVA_TAB} />
             </Tabs.Panel>
           </Tabs>
         </Paper>

@@ -8,10 +8,10 @@ import {
   serializeVariance,
   type CategoryTypeFilter,
   type VarianceFilter,
-} from '../../../../../shared/utils/bvaIISerialization';
+} from '../../../../../shared/utils/bvaSerialization';
 
 /**
- * URL-backed state for the Budget vs. Actuals II tab.
+ * URL-backed state for the Budget vs. Actuals tab.
  *
  * Persisted params per BUDGET-VS-ACTUALS-II-BRD §6.1:
  *   - rollover   — '1' when on; omitted when off
@@ -20,13 +20,13 @@ import {
  *   - variance   — under | over | serious; omitted when 'all'
  *
  * `month` and `view` are managed by the parent Budgets page, not this hook.
- * Pure (de)serialization lives in shared/utils/bvaIISerialization.ts.
+ * Pure (de)serialization lives in shared/utils/bvaSerialization.ts.
  */
 
 export { CATEGORY_TYPES };
 export type { CategoryTypeFilter, VarianceFilter };
 
-export interface BvaIIUrlState {
+export interface BvaUrlState {
   rollover: boolean;
   types: Set<CategoryTypeFilter>;
   variance: VarianceFilter;
@@ -35,7 +35,7 @@ export interface BvaIIUrlState {
   setVariance: (next: VarianceFilter) => void;
 }
 
-export function useBvaIIUrlState(): BvaIIUrlState {
+export function useBvaUrlState(): BvaUrlState {
   const [searchParams, setSearchParams] = useSearchParams();
 
   const rollover = searchParams.get('rollover') === '1';

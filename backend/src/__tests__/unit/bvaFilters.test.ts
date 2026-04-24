@@ -1,4 +1,4 @@
-import { classifyAvailable } from '../../shared/utils/bvaIIFilters';
+import { classifyAvailable } from '../../shared/utils/bvaFilters';
 
 describe('classifyAvailable — BRD Revision 2 filters', () => {
   test('filter=all always includes, never de-emphasizes', () => {

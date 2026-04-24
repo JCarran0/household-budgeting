@@ -6,9 +6,9 @@ import {
   parseDismissedIds,
   serializeDismissedIds,
   typesEqualAll,
-} from '../../shared/utils/bvaIISerialization';
+} from '../../shared/utils/bvaSerialization';
 
-describe('parseTypes / serializeTypes — BvA II url type filter', () => {
+describe('parseTypes / serializeTypes — BvA url type filter', () => {
   test('null / empty → all three selected (default)', () => {
     expect(parseTypes(null)).toEqual(new Set(['spending', 'income', 'savings']));
     expect(parseTypes('')).toEqual(new Set(['spending', 'income', 'savings']));

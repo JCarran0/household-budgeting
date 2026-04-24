@@ -3,7 +3,7 @@ import { IconMinus, IconTrendingDown, IconTrendingUp } from '@tabler/icons-react
 import { formatCurrency } from '../../../utils/formatters';
 
 // Tone -> Mantine color. Positive = favorable (green), negative = unfavorable (red).
-// See BvA II BRD Revision 2.
+// See BvA BRD Revision 2.
 export function availableColor(value: number): string | undefined {
   if (value > 0) return 'green';
   if (value < 0) return 'red';

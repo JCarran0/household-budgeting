@@ -399,7 +399,7 @@ const budgetTotals = calculateBudgetTotals(budgets, categories, { excludeHidden:
 const actualTotals = calculateActualTotals(transactions, categories, { excludeHidden: true });
 ```
 
-- **Components Using**: Budgets.tsx, BudgetVsActualsII (via bvaIIDataComposition), backend budgets.ts
+- **Components Using**: Budgets.tsx, BudgetVsActuals (via bvaDataComposition), backend budgets.ts
 - **Test Coverage**: Comprehensive unit tests with 37 test cases covering edge cases and options
 
 ## Frontend Architecture

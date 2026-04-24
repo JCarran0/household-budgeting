@@ -1,5 +1,5 @@
 /**
- * Pure URL-param and localStorage (de)serializers for BvA II.
+ * Pure URL-param and localStorage (de)serializers for BvA.
  *
  * Kept separate from the React hooks so backend jest can exercise the parse
  * logic without a DOM or router mock. Invalid payloads fall back to defaults

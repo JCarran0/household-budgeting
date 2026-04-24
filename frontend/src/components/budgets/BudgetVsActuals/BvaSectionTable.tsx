@@ -3,18 +3,18 @@ import { ActionIcon, Box, Group, Paper, Stack, Table, Text, Title } from '@manti
 import { IconChevronRight, IconEdit, IconX } from '@tabler/icons-react';
 import { TransactionPreviewTrigger } from '../../transactions/TransactionPreviewTrigger';
 import type { Category } from '../../../../../shared/types';
-import type { BvaIIParentRow } from '../../../../../shared/utils/bvaIIDataComposition';
-import { SECTION_LABEL, type SectionType } from '../../../../../shared/utils/bvaIIDisplay';
+import type { BvaParentRow } from '../../../../../shared/utils/bvaDataComposition';
+import { SECTION_LABEL, type SectionType } from '../../../../../shared/utils/bvaDisplay';
 import { isBudgetableCategory } from '../../../../../shared/utils/categoryHelpers';
 import { formatCurrency } from '../../../utils/formatters';
-import { renderAvailableCell, renderRolloverCell } from './bvaIIFormatHelpers';
+import { renderAvailableCell, renderRolloverCell } from './bvaFormatHelpers';
 
 export interface FilteredParent {
-  parent: BvaIIParentRow;
+  parent: BvaParentRow;
   deEmphasizedChildIds: Set<string>;
 }
 
-export interface BvaIISectionTableProps {
+export interface BvaSectionTableProps {
   section: SectionType;
   parents: FilteredParent[];
   categories: Category[];
@@ -29,7 +29,7 @@ export interface BvaIISectionTableProps {
   onEditBudget: (categoryId: string) => void;
 }
 
-export function BvaIISectionTable({
+export function BvaSectionTable({
   section,
   parents,
   categories,
@@ -42,7 +42,7 @@ export function BvaIISectionTable({
   isExpanded,
   onToggleExpanded,
   onEditBudget,
-}: BvaIISectionTableProps) {
+}: BvaSectionTableProps) {
   const visible = parents.filter(
     fp => showDismissed || !dismissedIds.has(fp.parent.parentId),
   );

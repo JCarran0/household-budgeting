@@ -9,10 +9,10 @@ import {
   getSectionType,
   toneSignedRollover,
   type SectionType,
-} from './bvaIIDisplay';
+} from './bvaDisplay';
 
 /**
- * Pure-function data composition layer for BvA II — BRD Revision 2.
+ * Pure-function data composition layer for Budget vs. Actuals — BRD Revision 2.
  *
  * Responsibilities:
  *   - Bucket yearly budgets and YTD transactions into per-category/per-month
@@ -25,14 +25,14 @@ import {
  *
  * The canonical removed-transaction filter runs server-side before the GET
  * /transactions response reaches the client, so callers only respect isHidden
- * + isBudgetableCategory. Savings categories stay included — BvA II shows
+ * + isBudgetableCategory. Savings categories stay included — BvA shows
  * their rows and only global spending totals exclude savings.
  *
  * Month-string extraction uses literal YYYY-MM slicing to stay US Eastern
  * Time anchored (per the 2026-04 date-boundary fix).
  */
 
-export interface ComposeBvaIIInput {
+export interface ComposeBvaInput {
   categories: Category[];
   yearlyBudgets: MonthlyBudget[];
   yearlyTransactions: Transaction[];
@@ -41,7 +41,7 @@ export interface ComposeBvaIIInput {
 }
 
 /** A displayable child row. */
-export interface BvaIIChildRow {
+export interface BvaChildRow {
   categoryId: string;
   categoryName: string;
   actual: number;
@@ -54,7 +54,7 @@ export interface BvaIIChildRow {
 }
 
 /** A displayable parent row carrying its children. */
-export interface BvaIIParentRow {
+export interface BvaParentRow {
   parentId: string;
   parentName: string;
   section: SectionType;
@@ -64,11 +64,11 @@ export interface BvaIIParentRow {
   rollover: number | null;
   /** Tone-signed Available for the parent row — already respects useRollover. */
   available: number;
-  children: BvaIIChildRow[];
+  children: BvaChildRow[];
 }
 
-export interface ComposeBvaIIOutput {
-  parents: BvaIIParentRow[];
+export interface ComposeBvaOutput {
+  parents: BvaParentRow[];
   /** Full per-category per-month budget grid for the active year (for edit modal). */
   budgetsByCategoryByMonth: Map<string, Map<string, number>>;
   /** Full per-category per-month actuals grid for the active year. */
@@ -122,13 +122,13 @@ export function extractMonthActuals(
   return out;
 }
 
-export function composeBvaII({
+export function composeBva({
   categories,
   yearlyBudgets,
   yearlyTransactions,
   selectedMonth,
   useRollover,
-}: ComposeBvaIIInput): ComposeBvaIIOutput {
+}: ComposeBvaInput): ComposeBvaOutput {
   const budgetsByCategoryByMonth = groupBudgetsByCategoryByMonth(yearlyBudgets);
   const actualsByCategoryByMonth = groupActualsByCategoryByMonth(yearlyTransactions, categories);
   const actualsForMonth = extractMonthActuals(actualsByCategoryByMonth, selectedMonth);
@@ -164,13 +164,13 @@ export function composeBvaII({
     rolloverByCategoryId.set(c.id, toneSignedRollover(section, raw));
   }
 
-  const parents: BvaIIParentRow[] = [];
+  const parents: BvaParentRow[] = [];
 
   for (const tree of trees.values()) {
     const section = getSectionType(tree, categoryById);
 
     // Per-child rows
-    const children: BvaIIChildRow[] = tree.children.map(c => {
+    const children: BvaChildRow[] = tree.children.map(c => {
       const cat = categoryById.get(c.categoryId);
       const isRollover = cat?.isRollover ?? false;
       const rollover = rolloverByCategoryId.get(c.categoryId) ?? null;

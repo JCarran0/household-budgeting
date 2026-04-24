@@ -2,7 +2,7 @@ import type { Category } from '../types';
 import type { TreeAggregation } from './budgetCalculations';
 
 /**
- * BvA II display helpers — type-aware tone/section classification.
+ * BvA display helpers — type-aware tone/section classification.
  *
  * THE NUMERIC VARIANCE IS ALWAYS `actual − budgeted`, UNCHANGED BY SECTION.
  * Only the tone (favorable / unfavorable / neutral) and the "over / under"

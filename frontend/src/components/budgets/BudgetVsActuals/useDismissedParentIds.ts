@@ -3,10 +3,10 @@ import {
   DISMISSED_STORAGE_KEY,
   parseDismissedIds,
   serializeDismissedIds,
-} from '../../../../../shared/utils/bvaIISerialization';
+} from '../../../../../shared/utils/bvaSerialization';
 
 /**
- * Per-user dismissed-parent set for the Budget vs. Actuals II tab.
+ * Per-user dismissed-parent set for the Budget vs. Actuals tab.
  *
  * ┌──────────────────────────────────────────────────────────────────────────┐
  * │  THIS IS NOT Category.isHidden.                                         │
@@ -21,14 +21,14 @@ import {
  * │    - set Category.isHidden from this hook                               │
  * │    - read Category.isHidden to populate the dismissed set               │
  * │    - treat a "Show dismissed" toggle as revealing isHidden categories   │
- * │    - surface dismissed rows in any surface outside BvA II                │
+ * │    - surface dismissed rows in any surface outside BvA                   │
  * │                                                                         │
  * │  Enforcement: BUDGET-VS-ACTUALS-II-BRD REQ-023..029 + success criterion │
  * │  "Dismissal is never confused with Category.isHidden in code review."   │
  * └──────────────────────────────────────────────────────────────────────────┘
  *
  * Storage: localStorage key `bva2.dismissedParentCategoryIds` as JSON array.
- * Pure parse/serialize helpers live in shared/utils/bvaIISerialization.ts.
+ * Pure parse/serialize helpers live in shared/utils/bvaSerialization.ts.
  *
  * `showDismissed` is ephemeral session state (BRD REQ-048) — neither URL-
  * persisted nor stored in localStorage. Resets to false on page reload.

@@ -528,7 +528,7 @@ Budget page tabs:
 
 **Deferred (intentionally not in this PR):**
 
-- [ ] Rename the URL sentinel from `bva-ii` to `bva`. Purely cosmetic; breaks old bookmarks. Defer until there's another reason to touch the URL shape.
+- [x] Rename the URL sentinel from `bva-ii` to `bva`. ✅ 2026-04-24 — shipped as part of the broader BvA II → BvA rename sweep (Sprint 5). `Budgets.tsx` normalizes legacy `view=bva-ii` on mount and silently rewrites the URL; `usePageContext.ts` still accepts `'bva-ii'` as a no-op bookmark for one release.
 - [ ] Audit other `?view=budget` / `?view=comparison` links in docs/READMEs/fixtures. Low-signal follow-up.
 
 ---

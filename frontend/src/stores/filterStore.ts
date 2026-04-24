@@ -77,10 +77,11 @@ const defaultBudgetFilters: BudgetFilters = {
   // YYYY-MM-DD in US Eastern Time — parseDateFromStorage reconstructs this
   // as a Date at local midnight on the same calendar day.
   selectedDate: etDateString(),
-  // Default to the new BvA tab. Old 'budget' / 'comparison' values remain
-  // resolvable (bookmarks still work) but the UI no longer surfaces them —
-  // see PROJECT_PLAN "Budget Tab Retirement."
-  activeTab: 'bva-ii',
+  // Default to the BvA tab. Old 'budget' / 'comparison' / 'bva-ii' values
+  // remain resolvable (bookmarks still work; Budgets.tsx normalizes on read)
+  // but the UI no longer surfaces them — see PROJECT_PLAN "Budget Tab
+  // Retirement."
+  activeTab: 'bva',
 };
 
 const defaultDashboardFilters: DashboardFilters = {

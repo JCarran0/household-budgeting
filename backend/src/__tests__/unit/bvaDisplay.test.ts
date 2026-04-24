@@ -3,7 +3,7 @@ import {
   toneSignedRollover,
   computeAvailable,
   getVarianceTone,
-} from '../../shared/utils/bvaIIDisplay';
+} from '../../shared/utils/bvaDisplay';
 
 describe('toneSignedDelta — BRD Revision 2', () => {
   test('spending: underspent → positive (favorable)', () => {

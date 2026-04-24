@@ -1,14 +1,14 @@
 import { describe, it, expect } from 'vitest';
 import { act, renderHook } from '@testing-library/react';
 import { useDismissedParentIds } from './useDismissedParentIds';
-import { DISMISSED_STORAGE_KEY } from '../../../../../shared/utils/bvaIISerialization';
+import { DISMISSED_STORAGE_KEY } from '../../../../../shared/utils/bvaSerialization';
 
 // The landmine: dismiss is a per-user (per-browser) localStorage preference,
 // NOT Category.isHidden. These tests pin that separation.
 
 describe('useDismissedParentIds', () => {
   describe('landmine: storage key locality', () => {
-    it('reads and writes exactly the BvA II localStorage key, not a category-shaped key', () => {
+    it('reads and writes exactly the BvA localStorage key, not a category-shaped key', () => {
       // Canary: the shared key constant is the only surface the hook touches.
       // A change to DISMISSED_STORAGE_KEY that collides with category state
       // (e.g. "hiddenCategories") would break this test.
@@ -17,7 +17,7 @@ describe('useDismissedParentIds', () => {
       expect(DISMISSED_STORAGE_KEY).not.toMatch(/^categor/i);
     });
 
-    it('persists to the BvA II key and never touches any other localStorage key', () => {
+    it('persists to the BvA key and never touches any other localStorage key', () => {
       const { result } = renderHook(() => useDismissedParentIds());
       act(() => result.current.dismiss('FOOD'));
 

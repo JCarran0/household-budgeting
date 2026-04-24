@@ -16,23 +16,23 @@ import { useQuery } from '@tanstack/react-query';
 import { endOfMonth, format, parse, startOfMonth } from 'date-fns';
 import { api } from '../../../lib/api';
 import type { Category } from '../../../../../shared/types';
-import { composeBvaII } from '../../../../../shared/utils/bvaIIDataComposition';
+import { composeBva } from '../../../../../shared/utils/bvaDataComposition';
 import {
   SECTION_LABEL,
   SECTION_ORDER,
   type SectionType,
-} from '../../../../../shared/utils/bvaIIDisplay';
+} from '../../../../../shared/utils/bvaDisplay';
 import {
   classifyAvailable,
   type VarianceFilter,
-} from '../../../../../shared/utils/bvaIIFilters';
-import { CATEGORY_TYPES, useBvaIIUrlState, type CategoryTypeFilter } from './useBvaIIUrlState';
+} from '../../../../../shared/utils/bvaFilters';
+import { CATEGORY_TYPES, useBvaUrlState, type CategoryTypeFilter } from './useBvaUrlState';
 import { useDismissedParentIds } from './useDismissedParentIds';
 import { BudgetEditModal } from './BudgetEditModal';
-import { availableColor, directionIcon, formatSigned } from './bvaIIFormatHelpers';
-import { BvaIISectionTable, type FilteredParent } from './BvaIISectionTable';
+import { availableColor, directionIcon, formatSigned } from './bvaFormatHelpers';
+import { BvaSectionTable, type FilteredParent } from './BvaSectionTable';
 
-interface BudgetVsActualsIIProps {
+interface BudgetVsActualsProps {
   /** Currently-selected month, shared with the parent Budgets page. YYYY-MM. */
   selectedMonth: string;
   /** Whether this tab is currently active. Gates fetches + expensive compute. */
@@ -77,14 +77,14 @@ function SummaryCell({
 }
 
 /**
- * BvA II — five-column layout (Category / Actual / Budgeted / Rollover / Available / Actions).
+ * BvA — five-column layout (Category / Actual / Budgeted / Rollover / Available / Actions).
  *
  * Available is tone-signed: positive = ahead of plan, negative = behind plan,
  * consistent across every section. Rollover column is always visible; its
  * styling dims when the Use Rollover toggle is off. See BRD Revision 2.
  */
-export function BudgetVsActualsII({ selectedMonth, active }: BudgetVsActualsIIProps) {
-  const urlState = useBvaIIUrlState();
+export function BudgetVsActuals({ selectedMonth, active }: BudgetVsActualsProps) {
+  const urlState = useBvaUrlState();
   const dismissed = useDismissedParentIds();
   const [userExpanded, setUserExpanded] = useState<Map<string, boolean>>(new Map());
   const [editTarget, setEditTarget] = useState<{ categoryId: string } | null>(null);
@@ -117,7 +117,7 @@ export function BudgetVsActualsII({ selectedMonth, active }: BudgetVsActualsIIPr
   });
 
   const { data: ytdTransactionData, isLoading: transactionsLoading } = useQuery({
-    queryKey: ['bva-ii', 'transactions', selectedYear, selectedMonth],
+    queryKey: ['bva', 'transactions', selectedYear, selectedMonth],
     queryFn: () => api.getTransactions({
       startDate: `${selectedYear}-01-01`,
       endDate: ytdEnd,
@@ -133,7 +133,7 @@ export function BudgetVsActualsII({ selectedMonth, active }: BudgetVsActualsIIPr
 
   const composition = useMemo(() => {
     if (!categories || !yearlyBudgetData || !ytdTransactionData) return null;
-    return composeBvaII({
+    return composeBva({
       categories,
       yearlyBudgets: yearlyBudgetData.budgets,
       yearlyTransactions: ytdTransactionData.transactions,
@@ -445,7 +445,7 @@ export function BudgetVsActualsII({ selectedMonth, active }: BudgetVsActualsIIPr
         </Paper>
       ) : (
         sections.map(({ section, parents }) => (
-          <BvaIISectionTable
+          <BvaSectionTable
             key={section}
             section={section}
             parents={parents}
