@@ -14,6 +14,7 @@ import {
   Button,
   Stack,
 } from '@mantine/core';
+import { useMediaQuery } from '@mantine/hooks';
 import { DatePickerInput } from '@mantine/dates';
 import {
   IconCalendar,
@@ -78,6 +79,10 @@ function SubTaskProgress({ subTasks }: { subTasks: StoredTask['subTasks'] }) {
 export function TaskCard({ task, members, onClick, onSnooze, onCancel, onEdit, isSnoozedView }: TaskCardProps) {
   const navigate = useNavigate();
   const projectTagLookup = useProjectTagLookup();
+  // Mobile kebab opens the Edit modal directly (REQ-054). Cancel / longer-
+  // grain snooze / move-back transitions live inside the modal on mobile;
+  // on desktop they stay in the dropdown menu.
+  const isMobile = useMediaQuery('(max-width: 48em)', false, { getInitialValueInEffect: false }) ?? false;
   const [confirmCancelOpen, setConfirmCancelOpen] = useState(false);
   const [customSnoozeOpen, setCustomSnoozeOpen] = useState(false);
   // Mantine 8's DatePickerInput emits YYYY-MM-DD strings. Keep state as a
@@ -140,7 +145,16 @@ export function TaskCard({ task, members, onClick, onSnooze, onCancel, onEdit, i
           <Text size="sm" fw={500} lineClamp={2} td={isDone ? 'line-through' : undefined} style={{ flex: 1 }}>
             {task.title}
           </Text>
-          {(onSnooze || onCancel || onEdit) && (
+          {isMobile && onEdit ? (
+            <ActionIcon
+              variant="subtle"
+              size="sm"
+              onClick={(e) => { e.stopPropagation(); onEdit(task); }}
+              aria-label="Edit task"
+            >
+              <IconDotsVertical size={14} />
+            </ActionIcon>
+          ) : (onSnooze || onCancel || onEdit) && (
             <Menu position="bottom-end" withinPortal shadow="md" width={180}>
               <Menu.Target>
                 <ActionIcon
