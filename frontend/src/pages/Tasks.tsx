@@ -12,7 +12,7 @@ import {
   Text,
   Switch,
 } from '@mantine/core';
-import { useDisclosure } from '@mantine/hooks';
+import { useDisclosure, useMediaQuery } from '@mantine/hooks';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { notifications } from '@mantine/notifications';
 import { IconAlertCircle } from '@tabler/icons-react';
@@ -148,9 +148,13 @@ export function Tasks() {
   });
   const members: FamilyMember[] = familyData?.family?.members ?? [];
 
+  // Mobile detection — drives the tabbed layout (BRD §3.1.7) and forces the
+  // Snoozed tab to always be populated (REQ-047).
+  const isMobile = useMediaQuery('(max-width: 48em)', false, { getInitialValueInEffect: false }) ?? false;
+
   const { data: serverBoardTasks = [], isLoading: boardLoading, error: boardError } = useQuery({
-    queryKey: ['tasks', 'board', { includeSnoozed: showSnoozed }],
-    queryFn: () => api.getBoardTasks({ includeSnoozed: showSnoozed }),
+    queryKey: ['tasks', 'board', { includeSnoozed: showSnoozed || isMobile }],
+    queryFn: () => api.getBoardTasks({ includeSnoozed: showSnoozed || isMobile }),
   });
 
   const { data: allTasks = [] } = useQuery({
@@ -377,12 +381,16 @@ export function Tasks() {
                   { label: 'Personal', value: 'personal' },
                 ]}
               />
-              <Switch
-                size="xs"
-                label="Show snoozed"
-                checked={showSnoozed}
-                onChange={(e) => toggleShowSnoozed(e.currentTarget.checked)}
-              />
+              {/* Snoozed column is a desktop affordance only — on mobile the
+                  Snoozed tab is always present (REQ-047). */}
+              {!isMobile && (
+                <Switch
+                  size="xs"
+                  label="Show snoozed"
+                  checked={showSnoozed}
+                  onChange={(e) => toggleShowSnoozed(e.currentTarget.checked)}
+                />
+              )}
             </>
           )}
         </Group>

@@ -1,12 +1,15 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
+  Badge,
   Button,
   Group,
   Menu,
   MultiSelect,
   SimpleGrid,
+  Tabs,
   Text,
 } from '@mantine/core';
+import { useMediaQuery } from '@mantine/hooks';
 import { notifications } from '@mantine/notifications';
 import { DragDropContext, type DropResult } from '@hello-pangea/dnd';
 import {
@@ -121,6 +124,25 @@ export function TaskKanban({
     () => filteredBoardTasks.filter((t) => isSnoozed(t)).sort(bySnoozeAsc),
     [filteredBoardTasks],
   );
+
+  // ---------- Mobile tab state (BRD §3.1.7) ----------
+  //
+  // Below 48em the Kanban renders as a 4-tab single-column layout instead of
+  // side-by-side columns. Active tab is persisted per user (REQ-049).
+  const isMobile = useMediaQuery('(max-width: 48em)', false, { getInitialValueInEffect: false }) ?? false;
+  type MobileTab = 'todo' | 'started' | 'done' | 'snoozed';
+  const [activeMobileTab, setActiveMobileTab] = useState<MobileTab>(() => {
+    try {
+      const stored = localStorage.getItem('tasks.mobile.lastTab');
+      if (stored === 'started' || stored === 'done' || stored === 'snoozed') return stored;
+    } catch { /* ignore */ }
+    return 'todo';
+  });
+  const setMobileTab = (next: string | null) => {
+    if (next !== 'todo' && next !== 'started' && next !== 'done' && next !== 'snoozed') return;
+    setActiveMobileTab(next);
+    try { localStorage.setItem('tasks.mobile.lastTab', next); } catch { /* ignore */ }
+  };
 
   // Partition filtered tasks by column, preserving their order in boardTasks.
   // (boardTasks is already in render order — see the useEffect above.) No
@@ -279,43 +301,109 @@ export function TaskKanban({
         </Button.Group>
       </Group>
 
-      {/* Kanban Board — stacks vertically on mobile, columns on ≥ sm. */}
+      {/* Kanban Board —
+          - desktop (≥ sm): side-by-side SimpleGrid (REQ-003)
+          - mobile (< sm):  4-tab single-column with lastTab persistence (§3.1.7 / REQ-047..049)
+          DragDropContext wraps both paths so within-column drag-reorder works
+          on mobile too (REQ-053). Cross-column drag on mobile is naturally
+          impossible because only one column is rendered at a time. */}
       <DragDropContext onDragEnd={onDragEnd}>
-        <SimpleGrid
-          cols={{ base: 1, sm: showSnoozed ? 4 : 3 }}
-          spacing="md"
-          verticalSpacing="md"
-        >
-          {/* Snoozed column renders to the LEFT of Todo when the toggle is on. */}
-          {showSnoozed && (
-            <SnoozedColumn
-              tasks={snoozedTasks}
-              members={members}
-              onTaskClick={onTaskClick}
-              onUnsnooze={(taskId) => snoozeMutate({ id: taskId, snoozedUntil: null })}
-              onEdit={onEditTask}
-            />
-          )}
-          {BOARD_COLUMNS.map((col) => (
-            <KanbanColumn
-              key={col.status}
-              status={col.status}
-              label={col.label}
-              color={col.color}
-              tasks={tasksByStatus[col.status]}
-              members={members}
-              onTaskClick={onTaskClick}
-              onSnooze={(taskId, snoozedUntil) =>
-                snoozeMutate({ id: taskId, snoozedUntil })
-              }
-              onCancel={(taskId) => statusMutate(
-                { id: taskId, status: 'cancelled' },
-                { onSuccess: invalidateTasks }
-              )}
-              onEdit={onEditTask}
-            />
-          ))}
-        </SimpleGrid>
+        {isMobile ? (
+          <Tabs value={activeMobileTab} onChange={setMobileTab} keepMounted={false}>
+            <Tabs.List grow>
+              <Tabs.Tab
+                value="todo"
+                rightSection={<Badge size="xs" variant="light" color="blue" circle>{tasksByStatus.todo.length}</Badge>}
+              >
+                Todo
+              </Tabs.Tab>
+              <Tabs.Tab
+                value="started"
+                rightSection={<Badge size="xs" variant="light" color="yellow" circle>{tasksByStatus.started.length}</Badge>}
+              >
+                Started
+              </Tabs.Tab>
+              <Tabs.Tab
+                value="done"
+                rightSection={<Badge size="xs" variant="light" color="green" circle>{tasksByStatus.done.length}</Badge>}
+              >
+                Done
+              </Tabs.Tab>
+              <Tabs.Tab
+                value="snoozed"
+                rightSection={<Badge size="xs" variant="light" color="indigo" circle>{snoozedTasks.length}</Badge>}
+              >
+                Snoozed
+              </Tabs.Tab>
+            </Tabs.List>
+
+            {BOARD_COLUMNS.map((col) => (
+              <Tabs.Panel key={col.status} value={col.status} pt="sm">
+                <KanbanColumn
+                  status={col.status}
+                  label={col.label}
+                  color={col.color}
+                  tasks={tasksByStatus[col.status]}
+                  members={members}
+                  onTaskClick={onTaskClick}
+                  onSnooze={(taskId, snoozedUntil) =>
+                    snoozeMutate({ id: taskId, snoozedUntil })
+                  }
+                  onCancel={(taskId) => statusMutate(
+                    { id: taskId, status: 'cancelled' },
+                    { onSuccess: invalidateTasks }
+                  )}
+                  onEdit={onEditTask}
+                />
+              </Tabs.Panel>
+            ))}
+            <Tabs.Panel value="snoozed" pt="sm">
+              <SnoozedColumn
+                tasks={snoozedTasks}
+                members={members}
+                onTaskClick={onTaskClick}
+                onUnsnooze={(taskId) => snoozeMutate({ id: taskId, snoozedUntil: null })}
+                onEdit={onEditTask}
+              />
+            </Tabs.Panel>
+          </Tabs>
+        ) : (
+          <SimpleGrid
+            cols={{ base: 1, sm: showSnoozed ? 4 : 3 }}
+            spacing="md"
+            verticalSpacing="md"
+          >
+            {/* Snoozed column renders to the LEFT of Todo when the toggle is on. */}
+            {showSnoozed && (
+              <SnoozedColumn
+                tasks={snoozedTasks}
+                members={members}
+                onTaskClick={onTaskClick}
+                onUnsnooze={(taskId) => snoozeMutate({ id: taskId, snoozedUntil: null })}
+                onEdit={onEditTask}
+              />
+            )}
+            {BOARD_COLUMNS.map((col) => (
+              <KanbanColumn
+                key={col.status}
+                status={col.status}
+                label={col.label}
+                color={col.color}
+                tasks={tasksByStatus[col.status]}
+                members={members}
+                onTaskClick={onTaskClick}
+                onSnooze={(taskId, snoozedUntil) =>
+                  snoozeMutate({ id: taskId, snoozedUntil })
+                }
+                onCancel={(taskId) => statusMutate(
+                  { id: taskId, status: 'cancelled' },
+                  { onSuccess: invalidateTasks }
+                )}
+                onEdit={onEditTask}
+              />
+            ))}
+          </SimpleGrid>
+        )}
       </DragDropContext>
     </>
   );
