@@ -1,10 +1,11 @@
 /**
- * Amazon Receipt Matching Service
+ * Amazon Receipt Matching Service — orchestrator.
  *
- * Handles PDF parsing (Claude vision), order-to-transaction matching,
- * item categorization, split recommendations, and session persistence.
- *
- * Phase 3: parseAndCreateSession implemented. Phases 4–6 stubbed.
+ * Owns session persistence, cost-cap gating, eligibility computation, apply/
+ * rule-suggestion flows. Delegates the heavy work to collaborators:
+ *   - AmazonPdfParser          → Claude vision round-trip + sanitization
+ *   - amazonMatcher (pure)     → tiered order→transaction matching
+ *   - AmazonCategorizerAdapter → Claude categorization + split rounding
  */
 
 import Anthropic from '@anthropic-ai/sdk';
@@ -15,17 +16,19 @@ import { TransactionService } from './transactionService';
 import { AutoCategorizeService } from './autoCategorizeService';
 import { ChatbotDataService } from './chatbotDataService';
 import { NotFoundError, ForbiddenError, ValidationError } from '../errors';
-import type { SupportedUploadMimeType } from '../middleware/pdfUpload';
 import {
-  PDF_PARSING_SYSTEM_PROMPT,
-  PDF_EXTRACTION_TOOL,
-  AMAZON_CATEGORIZATION_SYSTEM_PROMPT,
-  AMAZON_CATEGORIZATION_TOOL,
-} from './amazonReceiptPrompt';
+  AmazonPdfParser,
+  type ReceiptUploadFile,
+  sanitizeCharges,
+  crossReference,
+} from './amazon/amazonPdfParser';
 import {
-  pdfExtractionOutputSchema,
-  type PdfExtractionOutput,
-} from '../validators/amazonReceiptValidators';
+  CUSTOM_AMAZON_CATEGORY,
+  isAmazonMerchant,
+  matchSingleOrder,
+} from './amazon/amazonMatcher';
+import { AmazonCategorizerAdapter } from './amazon/amazonCategorizerAdapter';
+import type { PdfExtractionOutput } from '../validators/amazonReceiptValidators';
 import type {
   AmazonReceiptSession,
   AmazonReceiptUploadResponse,
@@ -35,43 +38,22 @@ import type {
   AmazonApplyResponse,
   AmazonResolveAmbiguousRequest,
   AmazonTransactionMatch,
-  AmazonCategoryRecommendation,
-  AmazonSplitRecommendation,
   AmbiguousAmazonMatch,
   ParsedAmazonOrder,
   ParsedAmazonCharge,
   RuleSuggestion,
   Transaction,
-  Category,
 } from '../shared/types';
 
-const MODEL = 'claude-sonnet-4-6';
-const MAX_TOKENS = 8192;
+export type { ReceiptUploadFile } from './amazon/amazonPdfParser';
+
 const MAX_SESSIONS_PER_USER = 20;
 const STALE_COMPLETED_DAYS = 90;
 const STALE_PARSED_DAYS = 7;
 
-/** Amazon merchant name patterns for identifying Amazon transactions. */
-const AMAZON_MERCHANT_PATTERNS = [
-  'amazon', 'amzn', 'kindle svcs', 'amzn mktp',
-  'amazon digital', 'amazon mktpl', 'amazon reta',
-];
-
-const TIGHT_DATE_WINDOW_DAYS = 3;
-const WIDE_DATE_WINDOW_DAYS = 7;
-const MS_PER_DAY = 86_400_000;
-const MAX_EXAMPLES_PER_CATEGORY = 5;
-const MAX_EXAMPLE_CATEGORIES = 20;
-const CUSTOM_AMAZON_CATEGORY = 'CUSTOM_AMAZON';
-
-/** A file uploaded for receipt parsing (PDF or image). */
-export interface ReceiptUploadFile {
-  buffer: Buffer;
-  mimeType: SupportedUploadMimeType;
-}
-
 export class AmazonReceiptService {
-  private client: Anthropic;
+  private readonly pdfParser: AmazonPdfParser;
+  private readonly categorizer: AmazonCategorizerAdapter;
 
   constructor(
     private readonly dataService: DataService,
@@ -81,7 +63,13 @@ export class AmazonReceiptService {
     private readonly autoCategorizeService: AutoCategorizeService,
     anthropicApiKey: string,
   ) {
-    this.client = new Anthropic({ apiKey: anthropicApiKey });
+    const client = new Anthropic({ apiKey: anthropicApiKey });
+    this.pdfParser = new AmazonPdfParser(client);
+    this.categorizer = new AmazonCategorizerAdapter(
+      client,
+      chatbotDataService,
+      costTracker,
+    );
   }
 
   // ===========================================================================
@@ -102,7 +90,7 @@ export class AmazonReceiptService {
     await this.dataService.saveData(`amazon_receipts_${familyId}`, sessions);
   }
 
-  /** SEC-003: All public methods must go through this to verify ownership. */
+  /** SEC-003: all public methods go through this to verify ownership. */
   private async loadOwnedSession(
     familyId: string,
     sessionId: string,
@@ -115,14 +103,13 @@ export class AmazonReceiptService {
   }
 
   // ===========================================================================
-  // Phase 3: PDF Parsing
+  // Phase 3: PDF Parsing + session creation
   // ===========================================================================
 
   async parseAndCreateSession(
     familyId: string,
     files: ReceiptUploadFile[],
   ): Promise<AmazonReceiptUploadResponse> {
-    // 1. Check cost cap
     const budget = await this.costTracker.checkBudget();
     if (!budget.allowed) {
       throw new ValidationError(
@@ -130,29 +117,25 @@ export class AmazonReceiptService {
       );
     }
 
-    // 2. Parse each file via Claude vision
     let totalInputTokens = 0;
     let totalOutputTokens = 0;
     const parsedResults: PdfExtractionOutput[] = [];
 
     for (const file of files) {
       const { parsed, inputTokens, outputTokens } =
-        await this.parseFileWithClaude(file.buffer, file.mimeType);
+        await this.pdfParser.parseFile(file.buffer, file.mimeType);
       totalInputTokens += inputTokens;
       totalOutputTokens += outputTokens;
       parsedResults.push(parsed);
     }
 
-    // 3. Validate no duplicate PDF types
     const pdfTypes = parsedResults.map(r => r.pdfType);
-    const uniqueTypes = new Set(pdfTypes);
-    if (uniqueTypes.size < pdfTypes.length) {
+    if (new Set(pdfTypes).size < pdfTypes.length) {
       throw new ValidationError(
         'Cannot upload two PDFs of the same type. Please upload one Orders PDF and/or one Transactions PDF.',
       );
     }
 
-    // 4. Aggregate parsed data
     let allOrders: ParsedAmazonOrder[] = [];
     let allCharges: ParsedAmazonCharge[] = [];
 
@@ -161,20 +144,17 @@ export class AmazonReceiptService {
         allOrders = result.orders;
       }
       if (result.pdfType === 'transactions' && result.charges) {
-        // SEC-006: Sanitize card data immediately after extraction
-        allCharges = this.sanitizeCharges(result.charges);
+        // SEC-006: sanitize card data immediately after extraction
+        allCharges = sanitizeCharges(result.charges);
       }
     }
 
-    // 5. Cross-reference when both types provided
     if (allOrders.length > 0 && allCharges.length > 0) {
-      this.crossReference(allOrders, allCharges);
+      crossReference(allOrders, allCharges);
     }
 
-    // 6. Deduplicate against completed sessions only.
-    // Orders from abandoned/in-progress sessions (status 'parsed', 'matching',
-    // 'reviewing') are eligible for reprocessing — only skip orders that were
-    // fully processed in a completed session (REQ-022).
+    // Deduplicate against completed sessions only (REQ-022). Orders from
+    // abandoned/in-progress sessions are eligible for reprocessing.
     const existingSessions = await this.loadSessions(familyId);
     const completedOrderNumbers = new Set(
       existingSessions
@@ -188,7 +168,6 @@ export class AmazonReceiptService {
     const newCharges = allCharges.filter(
       c => !completedOrderNumbers.has(c.orderNumber),
     );
-    // If everything was deduped, return early with a clear message
     if (newOrders.length === 0 && newCharges.length === 0 && totalParsedCount > 0) {
       await this.costTracker.recordUsage(familyId, 'sonnet', totalInputTokens, totalOutputTokens);
       throw new ValidationError(
@@ -200,13 +179,11 @@ export class AmazonReceiptService {
     // Clean up incomplete sessions for the same orders (replace abandoned attempts)
     const newOrderNumbers = new Set(newOrders.map(o => o.orderNumber));
     const cleanedSessions = existingSessions.filter(s => {
-      if (s.status === 'completed') return true; // always keep completed
-      // Drop incomplete sessions whose orders overlap with this upload
+      if (s.status === 'completed') return true;
       const hasOverlap = s.parsedOrders.some(o => newOrderNumbers.has(o.orderNumber));
       return !hasOverlap;
     });
 
-    // 7. Create session
     const session: AmazonReceiptSession = {
       id: randomUUID(),
       userId: familyId,
@@ -218,14 +195,11 @@ export class AmazonReceiptService {
       status: 'parsed',
     };
 
-    // 8. Prune stale sessions & append (use cleanedSessions, not existingSessions)
     const prunedSessions = this.pruneSessions(cleanedSessions);
     prunedSessions.push(session);
 
-    // 9. Persist
     await this.saveSessions(familyId, prunedSessions);
 
-    // 10. Record cost
     const costResult = await this.costTracker.recordUsage(
       familyId,
       'sonnet',
@@ -233,7 +207,6 @@ export class AmazonReceiptService {
       totalOutputTokens,
     );
 
-    // 11. Return response
     return {
       sessionId: session.id,
       pdfTypes: session.pdfTypes,
@@ -241,209 +214,6 @@ export class AmazonReceiptService {
       parsedCharges: newCharges,
       costUsed: costResult.estimatedCost,
     };
-  }
-
-  // ===========================================================================
-  // Private: PDF parsing helpers
-  // ===========================================================================
-
-  /**
-   * Send a PDF buffer to Claude's vision API for structured extraction.
-   * SEC-002: PDF sent as base64 document content block, not interpolated.
-   */
-  private async parseFileWithClaude(fileBuffer: Buffer, mimeType: SupportedUploadMimeType): Promise<{
-    parsed: PdfExtractionOutput;
-    inputTokens: number;
-    outputTokens: number;
-  }> {
-    const base64Data = fileBuffer.toString('base64');
-    const isImage = mimeType.startsWith('image/');
-
-    // Build the appropriate content block based on file type
-    const fileContentBlock: Anthropic.ImageBlockParam | Anthropic.DocumentBlockParam = isImage
-      ? {
-          type: 'image' as const,
-          source: {
-            type: 'base64' as const,
-            media_type: mimeType as Exclude<SupportedUploadMimeType, 'application/pdf'>,
-            data: base64Data,
-          },
-        }
-      : {
-          type: 'document' as const,
-          source: {
-            type: 'base64' as const,
-            media_type: 'application/pdf' as const,
-            data: base64Data,
-          },
-        };
-
-    const promptText = isImage
-      ? 'Extract all order/charge data from this Amazon receipt photo using the extract_amazon_data tool. ' +
-        'The image may have perspective distortion, shadows, or partial content — extract what you can.'
-      : 'Extract all order/charge data from this Amazon PDF using the extract_amazon_data tool.';
-
-    const response = await this.client.messages.create({
-      model: MODEL,
-      max_tokens: MAX_TOKENS,
-      system: PDF_PARSING_SYSTEM_PROMPT,
-      tools: [PDF_EXTRACTION_TOOL],
-      messages: [
-        {
-          role: 'user',
-          content: [
-            fileContentBlock,
-            {
-              type: 'text',
-              text: promptText,
-            },
-          ],
-        },
-      ],
-    });
-
-    // Extract tool_use block
-    const toolUse = response.content.find(
-      (b): b is Anthropic.ToolUseBlock =>
-        b.type === 'tool_use' && b.name === 'extract_amazon_data',
-    );
-
-    if (!toolUse) {
-      throw new ValidationError(
-        "This doesn't look like an Amazon orders or transactions page. " +
-          'Please upload a PDF or photo from your Amazon order history or payment transactions.',
-      );
-    }
-
-    // Validate Claude output with Zod (defense-in-depth)
-    const parseResult = pdfExtractionOutputSchema.safeParse(toolUse.input);
-    if (!parseResult.success) {
-      console.warn(
-        '[AmazonReceiptService] Claude output failed Zod validation:',
-        parseResult.error.issues.map(i => `${i.path.join('.')}: ${i.message}`),
-      );
-      // Try to salvage valid orders/charges by parsing items individually
-      const raw = toolUse.input as Record<string, unknown>;
-      const salvaged = this.salvagePartialOutput(raw);
-      if (!salvaged) {
-        throw new ValidationError(
-          'Failed to extract valid data from the PDF. The format may not be supported.',
-        );
-      }
-      return {
-        parsed: salvaged,
-        inputTokens: response.usage.input_tokens,
-        outputTokens: response.usage.output_tokens,
-      };
-    }
-
-    return {
-      parsed: parseResult.data,
-      inputTokens: response.usage.input_tokens,
-      outputTokens: response.usage.output_tokens,
-    };
-  }
-
-  /**
-   * Attempt to salvage valid orders/charges when full Zod validation fails.
-   * Validates each order/charge individually, keeping valid ones and
-   * discarding malformed ones. Returns null if nothing is salvageable.
-   */
-  private salvagePartialOutput(
-    raw: Record<string, unknown>,
-  ): PdfExtractionOutput | null {
-    const { parsedAmazonOrderSchema, parsedAmazonChargeSchema } =
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      require('../validators/amazonReceiptValidators');
-
-    const pdfType = raw.pdfType === 'orders' || raw.pdfType === 'transactions'
-      ? raw.pdfType
-      : null;
-    if (!pdfType) return null;
-
-    const result: PdfExtractionOutput = { pdfType };
-
-    if (pdfType === 'orders' && Array.isArray(raw.orders)) {
-      const validOrders: ParsedAmazonOrder[] = [];
-      for (const order of raw.orders) {
-        const parsed = parsedAmazonOrderSchema.safeParse(order);
-        if (parsed.success) {
-          validOrders.push(parsed.data);
-        } else {
-          console.warn(
-            '[AmazonReceiptService] Skipping invalid order:',
-            parsed.error.issues.map(
-              (i: { path: (string | number)[]; message: string }) =>
-                `${i.path.join('.')}: ${i.message}`,
-            ),
-          );
-        }
-      }
-      if (validOrders.length === 0) return null;
-      result.orders = validOrders;
-    }
-
-    if (pdfType === 'transactions' && Array.isArray(raw.charges)) {
-      const validCharges: ParsedAmazonCharge[] = [];
-      for (const charge of raw.charges) {
-        const parsed = parsedAmazonChargeSchema.safeParse(charge);
-        if (parsed.success) {
-          validCharges.push(parsed.data);
-        } else {
-          console.warn(
-            '[AmazonReceiptService] Skipping invalid charge:',
-            parsed.error.issues.map(
-              (i: { path: (string | number)[]; message: string }) =>
-                `${i.path.join('.')}: ${i.message}`,
-            ),
-          );
-        }
-      }
-      if (validCharges.length === 0) return null;
-      result.charges = validCharges;
-    }
-
-    return result;
-  }
-
-  /**
-   * SEC-006: Strip full card numbers, keeping only last 4 digits.
-   * Must be called immediately after parsing, before any logging or persistence.
-   */
-  private sanitizeCharges(charges: ParsedAmazonCharge[]): ParsedAmazonCharge[] {
-    return charges.map(charge => ({
-      ...charge,
-      // Ensure only last 4 digits are stored, even if Claude extracted more
-      cardLastFour: charge.cardLastFour.slice(-4).replace(/[^0-9]/g, '').slice(-4),
-    }));
-  }
-
-  /**
-   * Cross-reference orders and charges when both PDF types are provided.
-   * Enriches orders with charge dates (tighter matching window) and
-   * charges with item details (better categorization).
-   */
-  private crossReference(
-    orders: ParsedAmazonOrder[],
-    charges: ParsedAmazonCharge[],
-  ): void {
-    const chargesByOrder = new Map<string, ParsedAmazonCharge>();
-    for (const charge of charges) {
-      chargesByOrder.set(charge.orderNumber, charge);
-    }
-
-    // Mutate orders in place — add chargeDate as the orderDate override
-    // when we have a more accurate charge date from the transactions PDF.
-    // The matching algorithm (Phase 4) will prefer chargeDate when available.
-    for (const order of orders) {
-      const charge = chargesByOrder.get(order.orderNumber);
-      if (charge) {
-        // Store the original orderDate and use chargeDate for matching
-        // We encode this by overwriting orderDate — the charge date is
-        // more accurate for matching against bank posting dates.
-        order.orderDate = charge.chargeDate;
-      }
-    }
   }
 
   /**
@@ -461,18 +231,12 @@ export class AmazonReceiptService {
       .filter(s => {
         const age = now.getTime() - new Date(s.uploadedAt).getTime();
         const ageDays = age / (1000 * 60 * 60 * 24);
-
-        // Delete abandoned sessions older than 7 days
-        if (s.status === 'parsed' && ageDays > STALE_PARSED_DAYS) {
-          return false;
-        }
+        if (s.status === 'parsed' && ageDays > STALE_PARSED_DAYS) return false;
         return true;
       })
       .map(s => {
         const age = now.getTime() - new Date(s.uploadedAt).getTime();
         const ageDays = age / (1000 * 60 * 60 * 24);
-
-        // Strip completed sessions older than 90 days to dedup-only data
         if (s.status === 'completed' && ageDays > STALE_COMPLETED_DAYS) {
           return {
             ...s,
@@ -480,7 +244,7 @@ export class AmazonReceiptService {
               orderNumber: o.orderNumber,
               orderDate: o.orderDate,
               totalAmount: o.totalAmount,
-              items: [], // Strip item data to save space
+              items: [],
             })),
             parsedCharges: [],
             matches: [],
@@ -489,7 +253,6 @@ export class AmazonReceiptService {
         return s;
       });
 
-    // Keep only the most recent sessions if over limit
     if (pruned.length > MAX_SESSIONS_PER_USER) {
       pruned.sort(
         (a, b) =>
@@ -502,7 +265,7 @@ export class AmazonReceiptService {
   }
 
   // ===========================================================================
-  // Phase 4: Transaction Matching Algorithm
+  // Phase 4: Transaction Matching
   // ===========================================================================
 
   async matchOrders(
@@ -523,18 +286,13 @@ export class AmazonReceiptService {
       o => !skippedOrderNumbers.has(o.orderNumber),
     );
 
-    // 4. Run tiered matching
     const matches: AmazonTransactionMatch[] = [];
     const unmatched: ParsedAmazonOrder[] = [];
     const ambiguous: AmbiguousAmazonMatch[] = [];
     const usedTransactionIds = new Set<string>();
 
     for (const order of ordersToMatch) {
-      const result = this.matchSingleOrder(
-        order,
-        availableTransactions,
-        usedTransactionIds,
-      );
+      const result = matchSingleOrder(order, availableTransactions, usedTransactionIds);
 
       if (result.type === 'matched') {
         matches.push(result.match);
@@ -546,7 +304,6 @@ export class AmazonReceiptService {
       }
     }
 
-    // 5. Update session
     session.matches = matches;
     session.status = 'matching';
     const sessions = await this.loadSessions(familyId);
@@ -565,13 +322,11 @@ export class AmazonReceiptService {
     const session = await this.loadOwnedSession(familyId, sessionId);
 
     for (const resolution of resolutions) {
-      // Find the order in parsed data
       const order = session.parsedOrders.find(
         o => o.orderNumber === resolution.orderNumber,
       );
       if (!order) continue;
 
-      // Create a manually resolved match
       const match: AmazonTransactionMatch = {
         id: randomUUID(),
         orderNumber: resolution.orderNumber,
@@ -589,7 +344,6 @@ export class AmazonReceiptService {
         status: 'pending',
       };
 
-      // Add to session matches (avoid duplicates)
       const existingIdx = session.matches.findIndex(
         m => m.orderNumber === resolution.orderNumber,
       );
@@ -600,16 +354,11 @@ export class AmazonReceiptService {
       }
     }
 
-    // Persist
     const sessions = await this.loadSessions(familyId);
     const idx = sessions.findIndex(s => s.id === sessionId);
     if (idx >= 0) sessions[idx] = session;
     await this.saveSessions(familyId, sessions);
   }
-
-  // ===========================================================================
-  // Private: Matching helpers
-  // ===========================================================================
 
   /**
    * Compute the set of Amazon transactions currently eligible for receipt matching.
@@ -633,11 +382,9 @@ export class AmazonReceiptService {
     totalAmazonCount: number;
     totalCount: number;
   }> {
-    const allTransactions = await this.chatbotDataService.queryTransactions(
-      familyId, {},
-    );
-    const amazonTransactions = allTransactions.filter(t =>
-      this.isAmazonMerchant(t) && !t.isHidden,
+    const allTransactions = await this.chatbotDataService.queryTransactions(familyId, {});
+    const amazonTransactions = allTransactions.filter(
+      t => isAmazonMerchant(t) && !t.isHidden,
     );
 
     const allSessions = await this.loadSessions(familyId);
@@ -671,141 +418,8 @@ export class AmazonReceiptService {
     };
   }
 
-  /** Check if a transaction is from an Amazon merchant. */
-  private isAmazonMerchant(transaction: Transaction): boolean {
-    const name = (transaction.name || '').toLowerCase();
-    const merchant = (transaction.merchantName || '').toLowerCase();
-    return AMAZON_MERCHANT_PATTERNS.some(
-      pattern => name.includes(pattern) || merchant.includes(pattern),
-    );
-  }
-
-  /**
-   * Match a single parsed order against available bank transactions.
-   * Implements the tiered matching strategy from BRD §4.1.
-   */
-  private matchSingleOrder(
-    order: ParsedAmazonOrder,
-    transactions: Transaction[],
-    usedIds: Set<string>,
-  ):
-    | { type: 'matched'; match: AmazonTransactionMatch }
-    | { type: 'ambiguous'; ambiguousMatch: AmbiguousAmazonMatch }
-    | { type: 'unmatched' } {
-
-    const orderDate = new Date(order.orderDate);
-    // Amazon charges are positive in bank data (expense = positive amount)
-    const orderAmount = order.totalAmount;
-
-    // Find all exact-amount matches not already used
-    const amountMatches = transactions.filter(
-      t => !usedIds.has(t.id) && this.amountsMatch(t.amount, orderAmount),
-    );
-
-    if (amountMatches.length === 0) {
-      return { type: 'unmatched' };
-    }
-
-    // Tier 1: exact amount + date within ±3 days → high confidence
-    const tier1 = amountMatches.filter(t =>
-      this.withinDateWindow(t.date, orderDate, TIGHT_DATE_WINDOW_DAYS),
-    );
-
-    if (tier1.length === 1) {
-      return {
-        type: 'matched',
-        match: this.createMatch(order, tier1[0], 'high'),
-      };
-    }
-
-    // Tier 2: exact amount + date within ±7 days → medium confidence
-    const tier2 = amountMatches.filter(t =>
-      this.withinDateWindow(t.date, orderDate, WIDE_DATE_WINDOW_DAYS),
-    );
-
-    if (tier2.length === 1) {
-      return {
-        type: 'matched',
-        match: this.createMatch(order, tier2[0], 'medium'),
-      };
-    }
-
-    // Tier 3: multiple matches → ambiguous
-    const candidates = (tier2.length > 0 ? tier2 : amountMatches).slice(0, 5);
-    if (candidates.length > 1) {
-      return {
-        type: 'ambiguous',
-        ambiguousMatch: {
-          order,
-          candidates: candidates.map(t => ({
-            transactionId: t.id,
-            date: t.date,
-            amount: t.amount,
-            description: t.name,
-          })),
-        },
-      };
-    }
-
-    // Single match outside 7-day window — still present as medium
-    if (candidates.length === 1) {
-      return {
-        type: 'matched',
-        match: this.createMatch(order, candidates[0], 'medium'),
-      };
-    }
-
-    return { type: 'unmatched' };
-  }
-
-  /**
-   * Compare transaction amount to order amount.
-   * Bank transactions use positive for expenses in this app's Plaid setup.
-   * Match to the cent.
-   */
-  private amountsMatch(txAmount: number, orderAmount: number): boolean {
-    // Transaction amounts may be positive (expense) or negative.
-    // Amazon charges are expenses, so compare absolute values.
-    return Math.abs(Math.abs(txAmount) - orderAmount) < 0.005;
-  }
-
-  /** Check if transaction date is within ±days of the order date. */
-  private withinDateWindow(
-    txDateStr: string,
-    orderDate: Date,
-    days: number,
-  ): boolean {
-    const txDate = new Date(txDateStr);
-    const diff = Math.abs(txDate.getTime() - orderDate.getTime());
-    return diff <= days * MS_PER_DAY;
-  }
-
-  /** Create an AmazonTransactionMatch from a parsed order and bank transaction. */
-  private createMatch(
-    order: ParsedAmazonOrder,
-    transaction: Transaction,
-    confidence: 'high' | 'medium',
-  ): AmazonTransactionMatch {
-    return {
-      id: randomUUID(),
-      orderNumber: order.orderNumber,
-      transactionId: transaction.id,
-      matchConfidence: confidence,
-      items: order.items.map(item => ({
-        name: item.name,
-        estimatedPrice: item.estimatedPrice,
-        suggestedCategoryId: null,
-        appliedCategoryId: null,
-        confidence: 0,
-        isEstimatedPrice: item.estimatedPrice === null,
-      })),
-      splitTransactionIds: [],
-      status: 'pending',
-    };
-  }
-
   // ===========================================================================
-  // Phase 5: Categorization & Split Recommendations
+  // Phase 5: Categorization & split recommendations
   // ===========================================================================
 
   async categorizeMatches(
@@ -813,13 +427,11 @@ export class AmazonReceiptService {
     sessionId: string,
     matchIds: string[],
   ): Promise<AmazonCategorizationResponse> {
-    // 1. Cost cap check
     const budget = await this.costTracker.checkBudget();
     if (!budget.allowed) {
       throw new ValidationError('Monthly AI budget cap reached. Try again next month.');
     }
 
-    // 2. Load session and validate matchIds
     const session = await this.loadOwnedSession(familyId, sessionId);
     const matchIdSet = new Set(matchIds);
     const matchesToCategorize = session.matches.filter(
@@ -830,151 +442,19 @@ export class AmazonReceiptService {
       return { recommendations: [], splitRecommendations: [], costUsed: 0 };
     }
 
-    // 3. Fetch category hierarchy and examples
-    const categories = await this.chatbotDataService.getCategories(familyId);
-    const categoryContext = this.buildCategoryContext(categories);
-    const examples = await this.buildExamples(familyId, categories);
+    const result = await this.categorizer.categorize(familyId, matchesToCategorize);
 
-    // 4. Fetch transaction data for already-categorized flags
-    const allTransactions = await this.chatbotDataService.queryTransactions(familyId, {});
-    const txMap = new Map(allTransactions.map(t => [t.id, t]));
-    const catMap = new Map(categories.map(c => [c.id, c]));
-
-    // 5. Prepare match data for Claude
-    const matchData = matchesToCategorize.map(m => {
-      const tx = txMap.get(m.transactionId);
-      return {
-        matchId: m.id,
-        orderNumber: m.orderNumber,
-        items: m.items.map(i => ({
-          name: i.name,
-          estimatedPrice: i.estimatedPrice,
-        })),
-        transactionAmount: tx ? Math.abs(tx.amount) : 0,
-        currentCategoryId: tx?.categoryId ?? null,
-        isSingleItem: m.items.length === 1,
-      };
-    });
-
-    // 6. Call Claude
-    const userMessage = `Categorize these Amazon order items:
-
-MATCHED ORDERS:
-${JSON.stringify(matchData)}
-
-CATEGORY HIERARCHY:
-${categoryContext}
-
-EXAMPLES OF PREVIOUSLY CATEGORIZED TRANSACTIONS:
-${examples}`;
-
-    const response = await this.client.messages.create({
-      model: MODEL,
-      max_tokens: MAX_TOKENS,
-      system: AMAZON_CATEGORIZATION_SYSTEM_PROMPT,
-      tools: [AMAZON_CATEGORIZATION_TOOL],
-      messages: [{ role: 'user', content: userMessage }],
-    });
-
-    // Record cost
-    const costResult = await this.costTracker.recordUsage(
-      familyId, 'sonnet', response.usage.input_tokens, response.usage.output_tokens,
-    );
-
-    // 7. Extract tool result
-    const toolUse = response.content.find(
-      (b): b is Anthropic.ToolUseBlock =>
-        b.type === 'tool_use' && b.name === 'categorize_amazon_items',
-    );
-
-    if (!toolUse) {
-      console.warn('[AmazonReceiptService] No tool_use in categorization response');
-      return { recommendations: [], splitRecommendations: [], costUsed: costResult.estimatedCost };
-    }
-
-    const output = toolUse.input as {
-      categorizations: Array<{
-        matchId: string;
-        suggestedCategoryId: string;
-        confidence: number;
-        reasoning: string;
-        itemName: string;
-      }>;
-      splitRecommendations: Array<{
-        matchId: string;
-        splits: Array<{
-          itemName: string;
-          estimatedAmount: number;
-          suggestedCategoryId: string;
-          confidence: number;
-          isEstimatedPrice: boolean;
-        }>;
-      }>;
-    };
-
-    // 8. Process categorizations
-    const recommendations: AmazonCategoryRecommendation[] = (output.categorizations || []).map(c => {
-      const match = matchesToCategorize.find(m => m.id === c.matchId);
-      const tx = match ? txMap.get(match.transactionId) : null;
-      const isAlreadyCategorized = !!tx?.categoryId && tx.categoryId !== CUSTOM_AMAZON_CATEGORY;
-      return {
-        matchId: c.matchId,
-        transactionId: match?.transactionId ?? '',
-        suggestedCategoryId: c.suggestedCategoryId,
-        categoryName: catMap.get(c.suggestedCategoryId)?.name ?? 'Unknown',
-        confidence: c.confidence,
-        reasoning: c.reasoning,
-        itemName: c.itemName,
-        isAlreadyCategorized,
-        currentCategoryId: tx?.categoryId ?? null,
-      };
-    });
-
-    // 9. Process split recommendations
-    const splitRecommendations: AmazonSplitRecommendation[] = (output.splitRecommendations || []).map(sr => {
-      const match = matchesToCategorize.find(m => m.id === sr.matchId);
-      const tx = match ? txMap.get(match.transactionId) : null;
-      const originalAmount = tx ? Math.abs(tx.amount) : 0;
-
-      // Adjust last split to absorb rounding
-      const splits = sr.splits.map(s => ({
-        ...s,
-        categoryName: catMap.get(s.suggestedCategoryId)?.name ?? 'Unknown',
-      }));
-
-      const splitsTotal = splits.reduce((sum, s) => sum + s.estimatedAmount, 0);
-      if (splits.length > 0 && Math.abs(splitsTotal - originalAmount) > 0.005) {
-        const lastSplit = splits[splits.length - 1];
-        lastSplit.estimatedAmount = Math.round(
-          (lastSplit.estimatedAmount + (originalAmount - splitsTotal)) * 100
-        ) / 100;
-      }
-
-      return {
-        matchId: sr.matchId,
-        transactionId: match?.transactionId ?? '',
-        originalAmount,
-        splits,
-        totalMatchesOriginal: true,
-      };
-    });
-
-    // 10. Update session status
     session.status = 'reviewing';
     const sessions = await this.loadSessions(familyId);
     const idx = sessions.findIndex(s => s.id === sessionId);
     if (idx >= 0) sessions[idx] = session;
     await this.saveSessions(familyId, sessions);
 
-    return {
-      recommendations: recommendations.sort((a, b) => b.confidence - a.confidence),
-      splitRecommendations,
-      costUsed: costResult.estimatedCost,
-    };
+    return result;
   }
 
   // ===========================================================================
-  // Phase 6: Apply Changes & Rule Suggestions
+  // Phase 6: Apply changes + rule suggestions
   // ===========================================================================
 
   async applyActions(
@@ -990,7 +470,6 @@ ${examples}`;
     let totalDollarsRecategorized = 0;
     const categoriesUpdated = new Set<string>();
 
-    // Fetch transactions for amount tracking
     const allTransactions = await this.chatbotDataService.queryTransactions(familyId, {});
     const txMap = new Map(allTransactions.map(t => [t.id, t]));
 
@@ -1034,7 +513,6 @@ ${examples}`;
       }
     }
 
-    // Update session to completed
     session.status = 'completed';
     const sessions = await this.loadSessions(familyId);
     const idx = sessions.findIndex(s => s.id === sessionId);
@@ -1045,7 +523,7 @@ ${examples}`;
       applied,
       splits,
       skipped,
-      rulesCreated: 0, // Rules are created separately via suggestRules
+      rulesCreated: 0,
       summary: {
         totalDollarsRecategorized: Math.round(totalDollarsRecategorized * 100) / 100,
         categoriesUpdated: [...categoriesUpdated],
@@ -1060,7 +538,6 @@ ${examples}`;
     const session = await this.loadOwnedSession(familyId, sessionId);
     const allSessions = await this.loadSessions(familyId);
 
-    // Collect all categorized items across sessions
     const itemCategoryMap = new Map<string, { categoryId: string; count: number }>();
 
     for (const s of allSessions) {
@@ -1080,7 +557,6 @@ ${examples}`;
       }
     }
 
-    // Filter to recurring items (2+ appearances)
     const recurring = [...itemCategoryMap.entries()].filter(
       ([, info]) => info.count >= 2,
     );
@@ -1089,19 +565,16 @@ ${examples}`;
       return { suggestions: [] };
     }
 
-    // Check existing rules to avoid duplicates
     const existingRules = await this.autoCategorizeService.getRules(familyId);
     const existingPatterns = new Set(
       existingRules.flatMap(r => r.patterns.map((p: string) => p.toLowerCase())),
     );
 
-    // Get categories for names
     const categories = await this.chatbotDataService.getCategories(familyId);
     const catMap = new Map(categories.map(c => [c.id, c]));
 
     const suggestions: RuleSuggestion[] = [];
 
-    // Group recurring items by category
     const byCat = new Map<string, string[]>();
     for (const [itemName, info] of recurring) {
       if (!byCat.has(info.categoryId)) byCat.set(info.categoryId, []);
@@ -1112,8 +585,6 @@ ${examples}`;
       const cat = catMap.get(categoryId);
       if (!cat) continue;
 
-      // Use Amazon merchant patterns as the rule pattern
-      // (bank descriptions don't contain product names)
       const patterns = ['AMAZON', 'AMZN MKTP'];
       if (patterns.some(p => existingPatterns.has(p.toLowerCase()))) continue;
 
@@ -1126,64 +597,14 @@ ${examples}`;
       });
     }
 
-    // Reference session to keep TS happy
     void session;
 
     return { suggestions };
   }
 
   // ===========================================================================
-  // Private: Categorization helpers
+  // Session CRUD + diagnostic getters
   // ===========================================================================
-
-  private buildCategoryContext(categories: Category[]): string {
-    const parents = categories.filter(c => !c.parentId && !c.isHidden);
-    const childMap = new Map<string, Category[]>();
-    for (const c of categories) {
-      if (c.parentId && !c.isHidden) {
-        if (!childMap.has(c.parentId)) childMap.set(c.parentId, []);
-        childMap.get(c.parentId)!.push(c);
-      }
-    }
-    const lines: string[] = [];
-    for (const p of parents) {
-      const children = childMap.get(p.id) || [];
-      if (children.length > 0) {
-        const childStr = children.map(c => `${c.name} (${c.id})`).join(', ');
-        lines.push(`${p.name} (${p.id}): ${childStr}`);
-      } else {
-        lines.push(`${p.name} (${p.id})`);
-      }
-    }
-    return lines.join('\n');
-  }
-
-  private async buildExamples(familyId: string, categories: Category[]): Promise<string> {
-    const categorized = await this.chatbotDataService.queryTransactions(familyId, { limit: 500 });
-    const withCategory = categorized.filter(t => t.categoryId);
-
-    const byCategory = new Map<string, Transaction[]>();
-    for (const t of withCategory) {
-      if (!byCategory.has(t.categoryId!)) byCategory.set(t.categoryId!, []);
-      byCategory.get(t.categoryId!)!.push(t);
-    }
-
-    const catMap = new Map(categories.map(c => [c.id, c]));
-    const lines: string[] = [];
-    const sorted = [...byCategory.entries()].sort((a, b) => b[1].length - a[1].length);
-
-    for (const [catId, txns] of sorted.slice(0, MAX_EXAMPLE_CATEGORIES)) {
-      const cat = catMap.get(catId);
-      if (!cat) continue;
-      const examples = txns.slice(0, MAX_EXAMPLES_PER_CATEGORY);
-      const txStrs = examples.map(t =>
-        `"${t.merchantName || t.name}" ($${Math.abs(t.amount).toFixed(2)})`
-      ).join(', ');
-      lines.push(`${cat.name} (${catId}): ${txStrs}`);
-    }
-
-    return lines.join('\n');
-  }
 
   async getSessions(familyId: string): Promise<AmazonReceiptSession[]> {
     return this.loadSessions(familyId);

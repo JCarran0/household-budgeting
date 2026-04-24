@@ -212,7 +212,7 @@ The 2026-04-22 re-audit found the file-size problem is materially worse than TD-
 | File | LOC | Notes |
 |---|---|---|
 | `frontend/src/pages/Tasks.tsx` | **1835** | Kanban + Checklist + Leaderboard + Snooze + drag-drop + 300 LOC of modal forms. Every Task Leaderboard v2.0 change lands here. **Highest priority.** |
-| `backend/src/services/amazonReceiptService.ts` | **1215** | 22 methods spanning PDF parsing → matching → categorization → rule suggestion. Mixes vision API calls, async state machines, business logic. |
+| ✅ `backend/src/services/amazonReceiptService.ts` | 636 (from 1215) | Resolved 2026-04-24. Split into `amazon/amazonMatcher.ts` (pure tiered match), `amazon/amazonPdfParser.ts` (Claude vision + sanitize), `amazon/amazonCategorizerAdapter.ts` (Claude categorization + rounding). 36 new Jest cases. |
 | `frontend/src/pages/Trips.tsx` | **1078** | Trip list + new-trip flow. Imports Google Maps SDK on mount. |
 | `frontend/src/pages/Settings.tsx` | **871** | |
 | `frontend/src/components/budgets/BudgetVsActualsII/BudgetVsActualsII.tsx` | **716** | Data composition + rendering + URL state + dismissal logic interleaved. |
