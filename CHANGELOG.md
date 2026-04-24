@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.58.0](https://github.com/JCarran0/household-budgeting/compare/v5.57.6...v5.58.0) (2026-04-24)
+
+
+### Features
+
+* **admin:** role-based authorization for admin routes — TD-006 ([736dfa9](https://github.com/JCarran0/household-budgeting/commit/736dfa9cae87478e9a483f96fe2e456ffbe3a6dc))
+
+
+### Code Refactoring
+
+* **errors:** extract getApiErrorMessage helper — TD-008 ([36f67d0](https://github.com/JCarran0/household-budgeting/commit/36f67d025bbe240843c8fe6c1b2fad1c34559027))
+
 ### [5.57.6](https://github.com/JCarran0/household-budgeting/compare/v5.57.5...v5.57.6) (2026-04-24)
 
 
