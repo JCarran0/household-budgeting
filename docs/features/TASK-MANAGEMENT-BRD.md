@@ -192,6 +192,8 @@ A **"Show snoozed"** toggle in the board header reveals a fourth column, **Snooz
 
 The Cancelled column from v1.0 is retired. Cancel is triggered via per-card actions (§2.3); cancelled tasks live only in Task History (§6).
 
+This layout is the **desktop** presentation. Below the 48em breakpoint the same Kanban model renders as a single-column, tabbed layout with gesture-driven status transitions — see §3.1.7 for the full mobile spec.
+
 #### 3.1.2 Task Cards
 
 Each card displays:
@@ -272,6 +274,69 @@ Default view: all tasks (family + personal, all assignees). The "Show snoozed" c
 Users may override these in the full creation form. Checklist quick entry has no form surface, so the inherited defaults are applied silently.
 
 **Hidden-by-filters fallback.** When the user overrides a pre-filled default and the resulting task would be hidden by the current filters (full creation form path only), a toast is shown: *"Task created — hidden by current filters"* with a one-click **Clear filters** action that resets Assignee, Scope, and Tags.
+
+**Filter persistence.** The active view (Board / History), assignee filter, scope filter, and tag filter are persisted per user in localStorage and restored on next load. The keys are shared across desktop and mobile — tasks are the same tasks regardless of device. Persisted tag filters that reference tags no longer present on any task are silently dropped on hydration so the UI doesn't look filtered for an invisible reason. The "Show snoozed" toggle and Kanban / Checklist view preference were already persisted in v2.0.
+
+#### 3.1.7 Mobile Layout
+
+Below the 48em breakpoint (the same threshold used by `useIsMobileModal`) the three-to-four-column desktop Kanban is unusable on a phone: either it overflows the viewport horizontally or it stacks column-per-row, which makes cross-column status changes require long drags across a tall page. Mobile instead renders a **single-column, tab-switchable** Kanban with gesture-driven status transitions. Desktop (§3.1.1–§3.1.6) is unchanged.
+
+##### 3.1.7.1 Tabs
+
+- **Four tabs, always:** Todo · Started · Done · Snoozed. Unlike desktop, the "Show snoozed" toggle is hidden on mobile — Snoozed is always a tab.
+- Tabs are switched by **tap**. Horizontal page-swipe is deliberately *not* used to switch tabs — that gesture is reserved for per-card swipe actions (§3.1.7.2), and overloading one axis with two semantics is unreliable.
+- The active tab is **persisted per user** (localStorage key `tasks.mobile.lastTab`). First-time users default to Todo.
+
+Cards within the active tab use the same sort rules as the desktop column (see §3.1.5).
+
+##### 3.1.7.2 Swipe Actions
+
+Cards support horizontal swipe gestures to commit status transitions. The card slides with the finger; a **colored action chip** reveals behind, signaling the target state.
+
+| From | Right swipe | Left swipe |
+|------|-------------|-----------|
+| Todo | → Started (blue) | Snooze (orange) |
+| Started | → Done (green) | Snooze (orange) |
+| Done | *(no-op)* | Undo → Started (red) |
+| Snoozed | Unsnooze (blue) | *(no-op)* |
+
+**Commit mechanics:**
+
+- Drag past **40%** of card width → release **auto-commits** the action.
+- Release **before** the threshold → card snaps back; the revealed chip disappears.
+- **Tap** the revealed chip at any drag distance → commits immediately.
+- A subtle haptic tap fires on commit where the browser supports `navigator.vibrate`.
+
+**Going from Started back to Todo** is not on the gesture surface — the gesture set prioritizes the common forward-progress and snooze actions. Back-transitions live in the Edit modal (§3.1.7.4).
+
+**Undo from Done** clears `completedAt` (consistent with Open Question #5). The transition log preserves the history, so no state is lost.
+
+**Snooze from swipe** commits a **Tomorrow** snooze (06:00 next day, per REQ-037). Longer-grain snooze (Next week / Next month / Custom) remains accessible from the Edit modal. Snooze from swipe produces no transition log entry, consistent with REQ-040.
+
+##### 3.1.7.3 Long-Press Reorder
+
+Long-pressing a card (~250ms, the pangea-dnd touch default) picks it up for **within-column drag-reorder**. This preserves manual `sortOrder` editing from mobile — otherwise `sortOrder` on mobile would be read-only.
+
+Cross-column drag is not supported on mobile (adjacent columns are not simultaneously visible). Status changes happen via swipe-action (§3.1.7.2), not drag.
+
+Long-press reorder is disabled in Done and Snoozed, consistent with the desktop rule (§3.1.5, REQ-035) that those columns are auto-sorted.
+
+##### 3.1.7.4 Kebab → Edit
+
+The card kebab icon (three vertical dots) on mobile **opens the Edit modal directly**, skipping the intermediate Snooze-submenu / Cancel / Edit dropdown that desktop uses. The Edit modal absorbs the rare transitions that have no gesture:
+
+- **Cancel** (REQ-017c) — destructive and infrequent, intentionally two-step.
+- **Move back to Todo** from Started.
+- **Longer-grain snooze** (Next week / Next month / Custom).
+- All field edits (title, assignee, due date, scope, description, tags).
+
+Quick actions stay on swipe gestures; the modal is the home for anything unusual.
+
+##### 3.1.7.5 Breakpoint & View Parity
+
+- Breakpoint: **48em / 768px** (matches `useIsMobileModal`).
+- Desktop Kanban (§3.1.1–§3.1.6) is unchanged.
+- Checklist view (§3.2) respects the user's existing `tasks.view` preference on mobile — no mobile-specific override. If mobile Kanban turns out not to pull its weight we can default mobile to Checklist later; that is a post-v2.1 call.
 
 ### 3.2 Checklist View
 
@@ -522,6 +587,14 @@ A cancelled or archived done task can be moved back to `todo` or `started` from 
 | REQ-041 | Auto-unsnooze (when `snoozedUntil <= now` on next view load) restores the task to its original status with its original `sortOrder` — **not** the top of the column |
 | REQ-042 | Kanban "Show snoozed" toggle reveals a fourth Snoozed column, sorted by `snoozedUntil` ASC (nearest expiry first). Toggle state is persisted per user |
 | REQ-043 | Status changes from **non-drag** sources (kebab menu, Checklist checkbox, detail view, Task History recovery) place the task at the **top** of the destination column's `sortOrder` range |
+| REQ-047 | Below 48em viewport width, the Kanban renders as a tab-switchable single-column layout with four tabs (Todo, Started, Done, Snoozed). The "Show snoozed" toggle is not exposed on mobile — Snoozed is always a tab |
+| REQ-048 | Mobile tab switching is via tap only; horizontal page-swipe does **not** switch tabs (reserved for per-card swipe actions) |
+| REQ-049 | Active mobile tab is persisted per user (`tasks.mobile.lastTab`). First-time users default to Todo |
+| REQ-050 | Mobile cards support horizontal swipe gestures to commit status transitions per the matrix in §3.1.7.2 (right = forward progress or unsnooze; left = snooze or undo) |
+| REQ-051 | Swipe mechanics: card translates with finger, a colored action chip reveals behind; past the 40% commit threshold release auto-commits; before the threshold release snaps back; tap on the revealed chip commits at any drag distance; haptic feedback fires on commit where `navigator.vibrate` is supported |
+| REQ-052 | Swipe-to-snooze applies a **Tomorrow** snooze (06:00 next day, per REQ-037). Longer-grain and custom snoozes remain in the Edit modal |
+| REQ-053 | Long-press (~250ms) on a mobile card initiates within-column drag-reorder. Cross-column drag is not supported on mobile (status changes happen via swipe). Long-press reorder is disabled in Done and Snoozed |
+| REQ-054 | Mobile card kebab opens the Edit modal directly, without an intermediate dropdown. Cancel, move-back-to-Todo, longer-grain snooze, and all field edits are performed from the modal |
 
 ### 7.2 Should Have (P1)
 
@@ -538,6 +611,7 @@ A cancelled or archived done task can be moved back to `todo` or `started` from 
 | REQ-044 | View preference (Kanban vs. Checklist) persisted per user |
 | REQ-045 | Completed accordion expand/collapse state (Checklist view) persisted per user |
 | REQ-046 | Snoozed column card shows a "Returns in X" chip computed from `snoozedUntil` |
+| REQ-055 | Board view preferences — active view (Board / History), assignee filter, scope filter, and tag filter — are persisted per user across reloads. Keys are shared across desktop and mobile. Persisted tag filters referencing tags no longer present on any task are silently removed on hydration |
 
 ### 7.3 Nice to Have (P2)
 
@@ -580,7 +654,6 @@ A cancelled or archived done task can be moved back to `todo` or `started` from 
 | Integration with calendar apps | Future enhancement. |
 | Task categories or labels beyond scope | The `family` / `personal` scope distinction plus tags is sufficient. |
 | Direct linking to financial data | Tasks are not linked to individual transactions, budgets, or category entities. Tasks may carry a project tag for contextual grouping (see §1.4 and PROJECTS-BRD.md §4.5), but this is a display-only association — no data-level link to financial records is established. |
-| Mobile-specific task UI beyond Checklist accommodations | The PWA (see PWA-MOBILE-BRD.md) is a separate initiative. Checklist view's mobile ergonomics are the v2.0 mobile story. |
 | Backlog column | Three active columns (Todo, Started, Done) plus optional Snoozed are sufficient. |
 
 ---
@@ -631,3 +704,6 @@ The MVP/v2.0 data model should not actively preclude any of these approaches.
 - Cancelled tasks never appear on the Kanban board or in Checklist; Task History is the sole surface for retrieval.
 - The board stays clean — completed tasks archive after 14 days; cancelled tasks archive immediately.
 - Task History provides full access to archived tasks with filtering and recovery.
+- On mobile (< 48em) the Kanban presents as a tabbed single-column layout; the common forward transitions (Todo → Started, Started → Done), snooze, unsnooze, and undo-from-done are doable in a single swipe without opening the Edit modal.
+- Within-column manual reorder is available on mobile via long-press pickup; cross-column moves are accomplished by swipe-action, not drag.
+- Board filter state (view, assignee, scope, tags) survives reloads on both desktop and mobile.
