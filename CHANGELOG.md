@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+### [5.57.1](https://github.com/JCarran0/household-budgeting/compare/v5.57.0...v5.57.1) (2026-04-24)
+
+
+### Code Refactoring
+
+* **bva-ii:** extract section table + formatting helpers ([ee02502](https://github.com/JCarran0/household-budgeting/commit/ee025027d6b35b5f7fca55df2af92ed3cfc84cbe)), closes [#2](https://github.com/JCarran0/household-budgeting/issues/2)
+
+
+### Documentation
+
+* **tech-debt:** update Sprint 5 status — Tasks + BvA II landed ([0bfae31](https://github.com/JCarran0/household-budgeting/commit/0bfae310eb26c4051cf6c916ee1a89e0ac2ad9c9)), closes [#1](https://github.com/JCarran0/household-budgeting/issues/1) [#2](https://github.com/JCarran0/household-budgeting/issues/2)
+
 ## [5.57.0](https://github.com/JCarran0/household-budgeting/compare/v5.56.0...v5.57.0) (2026-04-24)
 
 
