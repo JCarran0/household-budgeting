@@ -216,7 +216,7 @@ The 2026-04-22 re-audit found the file-size problem is materially worse than TD-
 | `frontend/src/pages/Trips.tsx` | **1078** | Trip list + new-trip flow. Imports Google Maps SDK on mount. |
 | `frontend/src/pages/Settings.tsx` | **871** | |
 | `frontend/src/components/budgets/BudgetVsActualsII/BudgetVsActualsII.tsx` | **716** | Data composition + rendering + URL state + dismissal logic interleaved. |
-| `frontend/src/pages/MantineAccounts.tsx` | 688 | Original TD-010 entry |
+| ✅ `frontend/src/pages/MantineAccounts.tsx` | 377 (from 688) | Resolved 2026-04-24. Extracted `ConnectedAccountCard`, `ManualAccountCard`, `DisconnectAccountModal`, `DeleteManualAccountModal`, `accountCategories.ts`. 25 new Vitest cases. |
 | `frontend/src/pages/Budgets.tsx` | 592 | Original TD-010 entry |
 | `frontend/src/pages/TripDetail.tsx` | 547 | |
 | `frontend/src/pages/MantineDashboard.tsx` | 515 | Original TD-010 entry |

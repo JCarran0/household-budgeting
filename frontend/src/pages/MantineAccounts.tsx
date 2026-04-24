@@ -2,7 +2,6 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api, type ExtendedPlaidAccount } from '../lib/api';
 import { PlaidButton } from '../components/PlaidButton';
 import { usePlaid } from '../hooks/usePlaidLink';
-import { formatDistanceToNow } from 'date-fns';
 import { useState } from 'react';
 import {
   Stack,
@@ -11,16 +10,10 @@ import {
   Text,
   Card,
   Button,
-  Badge,
   Loader,
   Center,
   SimpleGrid,
   ThemeIcon,
-  Paper,
-  ActionIcon,
-  Tooltip,
-  Menu,
-  Modal,
   Tabs,
 } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
@@ -30,56 +23,18 @@ import {
   IconCreditCard,
   IconCheck,
   IconX,
-  IconDots,
-  IconTrash,
   IconAlertCircle,
-  IconEdit,
-  IconLogin,
   IconPlus,
-  IconHome2,
-  IconCar,
-  IconPigMoney,
-  IconChartLine,
-  IconCurrencyDollar,
-  IconCurrencyBitcoin,
   IconWallet,
-  IconReceipt,
   IconLink,
 } from '@tabler/icons-react';
 import { AccountNicknameModal } from '../components/accounts/AccountNicknameModal';
 import { ManualAccountModal } from '../components/accounts/ManualAccountModal';
-import { formatCurrency } from '../utils/formatters';
-import type { ManualAccount, ManualAccountCategory } from '../../../shared/types';
-
-const CATEGORY_ICON_MAP: Record<ManualAccountCategory, typeof IconWallet> = {
-  real_estate: IconHome2,
-  vehicle: IconCar,
-  retirement: IconPigMoney,
-  brokerage: IconChartLine,
-  cash: IconCurrencyDollar,
-  crypto: IconCurrencyBitcoin,
-  other_asset: IconWallet,
-  mortgage: IconHome2,
-  auto_loan: IconCar,
-  student_loan: IconReceipt,
-  personal_loan: IconReceipt,
-  other_liability: IconReceipt,
-};
-
-const CATEGORY_LABELS: Record<ManualAccountCategory, string> = {
-  real_estate: 'Real Estate',
-  vehicle: 'Vehicle',
-  retirement: 'Retirement',
-  brokerage: 'Brokerage',
-  cash: 'Cash / Savings',
-  crypto: 'Crypto',
-  other_asset: 'Other Asset',
-  mortgage: 'Mortgage',
-  auto_loan: 'Auto Loan',
-  student_loan: 'Student Loan',
-  personal_loan: 'Personal Loan',
-  other_liability: 'Other Liability',
-};
+import { ConnectedAccountCard } from '../components/accounts/ConnectedAccountCard';
+import { ManualAccountCard } from '../components/accounts/ManualAccountCard';
+import { DisconnectAccountModal } from '../components/accounts/DisconnectAccountModal';
+import { DeleteManualAccountModal } from '../components/accounts/DeleteManualAccountModal';
+import type { ManualAccount } from '../../../shared/types';
 
 export function MantineAccounts() {
   const queryClient = useQueryClient();
@@ -108,10 +63,6 @@ export function MantineAccounts() {
     queryKey: ['manualAccounts'],
     queryFn: api.getManualAccounts,
   });
-
-  const handleReauth = (accountId: string) => {
-    openPlaidUpdate(accountId);
-  };
 
   const syncAccountMutation = useMutation({
     mutationFn: (accountId: string) => api.syncAccountTransactions(accountId),
@@ -228,11 +179,7 @@ export function MantineAccounts() {
   };
 
   const handleDisconnectClick = (account: { id: string; name: string; institution: string }) => {
-    setAccountToDisconnect({
-      id: account.id,
-      name: account.name,
-      institution: account.institution,
-    });
+    setAccountToDisconnect(account);
     open();
   };
 
@@ -267,6 +214,11 @@ export function MantineAccounts() {
     openManualModal();
   };
 
+  const handleDeleteManualClick = (account: ManualAccount) => {
+    setManualAccountToDelete(account);
+    openDeleteManual();
+  };
+
   if (isLoading) {
     return (
       <Center h={400}>
@@ -286,11 +238,14 @@ export function MantineAccounts() {
         </div>
       </Group>
 
-      <Tabs value={accountsTab} onChange={(val) => {
-        const tab = val || 'connected';
-        setAccountsTab(tab);
-        localStorage.setItem('accounts-active-tab', tab);
-      }}>
+      <Tabs
+        value={accountsTab}
+        onChange={(val) => {
+          const tab = val || 'connected';
+          setAccountsTab(tab);
+          localStorage.setItem('accounts-active-tab', tab);
+        }}
+      >
         <Tabs.List>
           <Tabs.Tab value="connected" leftSection={<IconLink size={16} />}>
             Connected{accounts && accounts.length > 0 ? ` (${accounts.length})` : ''}
@@ -300,7 +255,6 @@ export function MantineAccounts() {
           </Tabs.Tab>
         </Tabs.List>
 
-        {/* Connected Accounts Tab */}
         <Tabs.Panel value="connected" pt="lg">
           <Stack gap="lg">
             {accounts && accounts.length > 0 && (
@@ -320,125 +274,15 @@ export function MantineAccounts() {
             {accounts && accounts.length > 0 ? (
               <SimpleGrid cols={{ base: 1, md: 2 }} spacing="lg">
                 {accounts.map((account) => (
-                  <Card
+                  <ConnectedAccountCard
                     key={account.id}
-                    padding="lg"
-                    radius="md"
-                    withBorder
-                    style={account.status === 'requires_reauth' ? { borderColor: 'var(--mantine-color-orange-6)', borderWidth: 2 } : undefined}
-                  >
-                    {account.status === 'requires_reauth' && (
-                      <Badge color="orange" variant="filled" size="sm" mb="sm" leftSection={<IconAlertCircle size={12} />}>
-                        Sign-in Required
-                      </Badge>
-                    )}
-                    <Group justify="space-between" mb="md">
-                      <Group>
-                        <ThemeIcon color={account.status === 'requires_reauth' ? 'orange' : 'blue'} variant="light" size="xl" radius="md">
-                          <IconCreditCard size={24} />
-                        </ThemeIcon>
-                        <div>
-                          <Group gap="xs" align="center">
-                            <Text size="lg" fw={600}>
-                              {account.nickname || account.name}
-                            </Text>
-                            <Tooltip label="Edit nickname">
-                              <ActionIcon
-                                variant="subtle"
-                                size="sm"
-                                onClick={() => handleEditNickname(account)}
-                              >
-                                <IconEdit size={14} />
-                              </ActionIcon>
-                            </Tooltip>
-                          </Group>
-                          <Text size="xs" c="dimmed">
-                            {account.nickname ? 'Official: ' : ''}{account.officialName || account.accountName || account.name}
-                            {account.mask && ` ••${account.mask}`}
-                          </Text>
-                          <Group gap="xs" mt={4}>
-                            <Badge color="blue" variant="light" size="sm">
-                              {account.type}
-                            </Badge>
-                            {account.subtype && (
-                              <Badge color="gray" variant="light" size="sm">
-                                {account.subtype}
-                              </Badge>
-                            )}
-                          </Group>
-                        </div>
-                      </Group>
-                      <Group gap="xs">
-                        <Tooltip label="Sync transactions">
-                          <ActionIcon
-                            variant="light"
-                            color="blue"
-                            size="lg"
-                            onClick={() => handleSync(account.id)}
-                            loading={syncingAccount === account.id}
-                          >
-                            <IconRefresh size={18} />
-                          </ActionIcon>
-                        </Tooltip>
-                        <Menu position="bottom-end" withinPortal>
-                          <Menu.Target>
-                            <ActionIcon variant="subtle" color="gray" size="lg">
-                              <IconDots size={18} />
-                            </ActionIcon>
-                          </Menu.Target>
-                          <Menu.Dropdown>
-                            {account.status === 'requires_reauth' && (
-                              <Menu.Item
-                                color="orange"
-                                leftSection={<IconLogin size={16} />}
-                                onClick={() => handleReauth(account.id)}
-                              >
-                                Sign in to Bank
-                              </Menu.Item>
-                            )}
-                            <Menu.Item
-                              color="red"
-                              leftSection={<IconTrash size={16} />}
-                              onClick={() => handleDisconnectClick(account)}
-                            >
-                              Disconnect Account
-                            </Menu.Item>
-                          </Menu.Dropdown>
-                        </Menu>
-                      </Group>
-                    </Group>
-
-                    <Paper p="md" radius="md" withBorder>
-                      <Group justify="space-between">
-                        <div>
-                          <Text size="sm" c="dimmed">Institution</Text>
-                          <Text fw={500}>{account.institution}</Text>
-                          {account.mask && (
-                            <Text size="sm" c="dimmed">****{account.mask}</Text>
-                          )}
-                        </div>
-                        <div style={{ textAlign: 'right' }}>
-                          <Text size="sm" c="dimmed">Current Balance</Text>
-                          <Text size="xl" fw={700}>
-                            {formatCurrency(account.currentBalance)}
-                          </Text>
-                          {account.availableBalance !== null &&
-                           account.availableBalance !== account.currentBalance && (
-                            <Text size="sm" c="dimmed">
-                              Available: {formatCurrency(account.availableBalance)}
-                            </Text>
-                          )}
-                        </div>
-                      </Group>
-                    </Paper>
-
-                    <Text size="xs" c="dimmed" mt="md">
-                      Last synced:{' '}
-                      {account.lastSynced
-                        ? formatDistanceToNow(new Date(account.lastSynced), { addSuffix: true })
-                        : 'Never'}
-                    </Text>
-                  </Card>
+                    account={account}
+                    isSyncing={syncingAccount === account.id}
+                    onSync={handleSync}
+                    onReauth={openPlaidUpdate}
+                    onEditNickname={handleEditNickname}
+                    onDisconnect={handleDisconnectClick}
+                  />
                 ))}
               </SimpleGrid>
             ) : (
@@ -460,105 +304,24 @@ export function MantineAccounts() {
           </Stack>
         </Tabs.Panel>
 
-        {/* Manual Accounts Tab */}
         <Tabs.Panel value="manual" pt="lg">
           <Stack gap="lg">
             <Group justify="flex-end">
-              <Button
-                leftSection={<IconPlus size={16} />}
-                onClick={handleAddManualAccount}
-              >
+              <Button leftSection={<IconPlus size={16} />} onClick={handleAddManualAccount}>
                 Add Account
               </Button>
             </Group>
 
             {manualAccounts && manualAccounts.length > 0 ? (
               <SimpleGrid cols={{ base: 1, md: 2 }} spacing="lg">
-                {manualAccounts.map((account) => {
-                  const CategoryIcon = CATEGORY_ICON_MAP[account.category];
-                  return (
-                    <Card key={account.id} padding="lg" radius="md" withBorder>
-                      <Group justify="space-between" mb="md">
-                        <Group>
-                          <ThemeIcon
-                            color={account.isAsset ? 'teal' : 'orange'}
-                            variant="light"
-                            size="xl"
-                            radius="md"
-                          >
-                            <CategoryIcon size={24} />
-                          </ThemeIcon>
-                          <div>
-                            <Text size="lg" fw={600}>{account.name}</Text>
-                            <Group gap="xs" mt={4}>
-                              <Badge
-                                color={account.isAsset ? 'teal' : 'orange'}
-                                variant="light"
-                                size="sm"
-                              >
-                                {account.isAsset ? 'Asset' : 'Liability'}
-                              </Badge>
-                              <Badge color="gray" variant="light" size="sm">
-                                {CATEGORY_LABELS[account.category]}
-                              </Badge>
-                            </Group>
-                          </div>
-                        </Group>
-                        <Menu position="bottom-end" withinPortal>
-                          <Menu.Target>
-                            <ActionIcon variant="subtle" color="gray" size="lg">
-                              <IconDots size={18} />
-                            </ActionIcon>
-                          </Menu.Target>
-                          <Menu.Dropdown>
-                            <Menu.Item
-                              leftSection={<IconEdit size={16} />}
-                              onClick={() => handleEditManualAccount(account)}
-                            >
-                              Edit Account
-                            </Menu.Item>
-                            <Menu.Item
-                              color="red"
-                              leftSection={<IconTrash size={16} />}
-                              onClick={() => {
-                                setManualAccountToDelete(account);
-                                openDeleteManual();
-                              }}
-                            >
-                              Delete Account
-                            </Menu.Item>
-                          </Menu.Dropdown>
-                        </Menu>
-                      </Group>
-
-                      <Paper p="md" radius="md" withBorder>
-                        <Group justify="space-between">
-                          <div>
-                            <Text size="sm" c="dimmed">Category</Text>
-                            <Text fw={500}>{CATEGORY_LABELS[account.category]}</Text>
-                          </div>
-                          <div style={{ textAlign: 'right' }}>
-                            <Text size="sm" c="dimmed">Current Value</Text>
-                            <Text size="xl" fw={700}>
-                              {formatCurrency(account.currentBalance)}
-                            </Text>
-                          </div>
-                        </Group>
-                      </Paper>
-
-                      {account.notes && (
-                        <Text size="xs" c="dimmed" mt="md">
-                          {account.notes}
-                        </Text>
-                      )}
-
-                      <Text size="xs" c="dimmed" mt={account.notes ? 'xs' : 'md'}>
-                        Last updated:{' '}
-                        {formatDistanceToNow(new Date(account.updatedAt), { addSuffix: true })}
-                      </Text>
-                    </Card>
-                  );
-                })}
+                {manualAccounts.map((account) => (
+                  <ManualAccountCard
+                    key={account.id}
+                    account={account}
+                    onEdit={handleEditManualAccount}
+                    onDelete={handleDeleteManualClick}
+                  />
+                ))}
               </SimpleGrid>
             ) : (
               <Center>
@@ -571,10 +334,7 @@ export function MantineAccounts() {
                     <Text size="sm" c="dimmed" ta="center">
                       Add assets like your home, vehicles, or retirement accounts to get a complete net worth picture.
                     </Text>
-                    <Button
-                      leftSection={<IconPlus size={16} />}
-                      onClick={handleAddManualAccount}
-                    >
+                    <Button leftSection={<IconPlus size={16} />} onClick={handleAddManualAccount}>
                       Add Account
                     </Button>
                   </Stack>
@@ -585,99 +345,28 @@ export function MantineAccounts() {
         </Tabs.Panel>
       </Tabs>
 
-      {/* Delete Manual Account Confirmation */}
-      <Modal
+      <DeleteManualAccountModal
         opened={deleteManualOpened}
         onClose={closeDeleteManual}
-        title="Delete Manual Account"
-        centered
-      >
-        <Stack gap="md">
-          <Group>
-            <ThemeIcon color="red" variant="light" size="xl" radius="xl">
-              <IconAlertCircle size={24} />
-            </ThemeIcon>
-            <div style={{ flex: 1 }}>
-              <Text size="sm" fw={600}>
-                Are you sure you want to delete this account?
-              </Text>
-              {manualAccountToDelete && (
-                <Text size="sm" c="dimmed">
-                  {manualAccountToDelete.name} ({CATEGORY_LABELS[manualAccountToDelete.category]})
-                </Text>
-              )}
-            </div>
-          </Group>
-          <Group justify="flex-end" gap="sm">
-            <Button variant="default" onClick={closeDeleteManual}>
-              Cancel
-            </Button>
-            <Button
-              color="red"
-              onClick={() => manualAccountToDelete && deleteManualMutation.mutate(manualAccountToDelete.id)}
-              loading={deleteManualMutation.isPending}
-              leftSection={<IconTrash size={16} />}
-            >
-              Delete Account
-            </Button>
-          </Group>
-        </Stack>
-      </Modal>
+        onConfirm={() => manualAccountToDelete && deleteManualMutation.mutate(manualAccountToDelete.id)}
+        isPending={deleteManualMutation.isPending}
+        target={manualAccountToDelete}
+      />
 
-      {/* Disconnect Linked Account Confirmation */}
-      <Modal
+      <DisconnectAccountModal
         opened={opened}
         onClose={close}
-        title="Disconnect Account"
-        centered
-      >
-        <Stack gap="md">
-          <Group>
-            <ThemeIcon color="red" variant="light" size="xl" radius="xl">
-              <IconAlertCircle size={24} />
-            </ThemeIcon>
-            <div style={{ flex: 1 }}>
-              <Text size="sm" fw={600}>
-                Are you sure you want to disconnect this account?
-              </Text>
-              {accountToDisconnect && (
-                <Text size="sm" c="dimmed">
-                  {accountToDisconnect.name} from {accountToDisconnect.institution}
-                </Text>
-              )}
-            </div>
-          </Group>
+        onConfirm={handleConfirmDisconnect}
+        isPending={disconnectMutation.isPending}
+        target={accountToDisconnect}
+      />
 
-          <Text size="sm" c="dimmed">
-            This will stop syncing transactions from this account. Your existing
-            transaction history will be preserved, but you won't receive new
-            transactions unless you reconnect the account.
-          </Text>
-
-          <Group justify="flex-end" gap="sm">
-            <Button variant="default" onClick={close}>
-              Cancel
-            </Button>
-            <Button
-              color="red"
-              onClick={handleConfirmDisconnect}
-              loading={disconnectMutation.isPending}
-              leftSection={<IconTrash size={16} />}
-            >
-              Disconnect Account
-            </Button>
-          </Group>
-        </Stack>
-      </Modal>
-
-      {/* Nickname Edit Modal */}
       <AccountNicknameModal
         account={editingAccount}
         opened={nicknameModalOpened}
         onClose={handleCloseNicknameModal}
       />
 
-      {/* Manual Account Create/Edit Modal */}
       <ManualAccountModal
         opened={manualModalOpened}
         onClose={handleCloseManualModal}
