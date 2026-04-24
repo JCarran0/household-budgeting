@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+### [5.57.6](https://github.com/JCarran0/household-budgeting/compare/v5.57.5...v5.57.6) (2026-04-24)
+
+
+### Code Refactoring
+
+* rename BvA II → BvA across code, tests, and live docs ([6623187](https://github.com/JCarran0/household-budgeting/commit/6623187d674b9ee26e366e8f742fd6def53bad7f))
+
 ### [5.57.5](https://github.com/JCarran0/household-budgeting/compare/v5.57.4...v5.57.5) (2026-04-24)
 
 
