@@ -13,15 +13,6 @@ const createBudgetSchema = z.object({
   amount: z.number().min(0, 'Budget amount must not be negative')
 });
 
-const copyBudgetsSchema = z.object({
-  fromMonth: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/, 'Invalid month format. Use YYYY-MM'),
-  toMonth: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/, 'Invalid month format. Use YYYY-MM')
-});
-
-const budgetVsActualSchema = z.object({
-  actuals: z.record(z.string(), z.number())
-});
-
 const batchUpdateBudgetsSchema = z.object({
   updates: z.array(createBudgetSchema)
 });
@@ -132,60 +123,6 @@ router.post('/', async (req: Request, res: Response, next: NextFunction): Promis
   }
 });
 
-// POST /api/budgets/copy - Copy budgets from one month to another
-router.post('/copy', async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-  try {
-    const familyId = req.user?.familyId;
-    if (!familyId) throw new AuthorizationError();
-    const validatedData = copyBudgetsSchema.parse(req.body);
-    const copiedBudgets = await budgetService.copyBudgets(
-      validatedData.fromMonth,
-      validatedData.toMonth,
-      familyId
-    );
-
-    res.json({
-      message: `Copied ${copiedBudgets.length} budgets from ${validatedData.fromMonth} to ${validatedData.toMonth}`,
-      budgets: copiedBudgets
-    });
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      res.status(400).json({ error: 'Invalid request data', details: error.format() });
-      return;
-    }
-    if (error instanceof Error && error.message.includes('Invalid month format')) {
-      res.status(400).json({ error: error.message });
-      return;
-    }
-    next(error);
-  }
-});
-
-// GET /api/budgets/comparison/:month - Get budget vs actual for a month
-router.post('/comparison/:month', async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-  try {
-    const familyId = req.user?.familyId;
-    if (!familyId) throw new AuthorizationError();
-    const { month } = req.params;
-    const validatedData = budgetVsActualSchema.parse(req.body);
-
-    const actuals = new Map(Object.entries(validatedData.actuals));
-    const { comparisons, totals } = await budgetService.getBudgetComparisonForMonth(month, actuals, familyId);
-
-    res.json({
-      month,
-      comparisons,
-      totals,
-    });
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      res.status(400).json({ error: 'Invalid request data', details: error.format() });
-      return;
-    }
-    next(error);
-  }
-});
-
 // GET /api/budgets/history/:categoryId - Get budget history for a category
 router.get('/history/:categoryId', async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
@@ -251,52 +188,6 @@ router.delete('/category/:categoryId', async (req: Request, res: Response, next:
     await budgetService.deleteBudgetsByCategory(req.params.categoryId, familyId);
     res.status(204).send();
   } catch (error) {
-    next(error);
-  }
-});
-
-// POST /api/budgets/rollover - Calculate and apply rollover
-router.post('/rollover', async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-  try {
-    const familyId = req.user?.familyId;
-    if (!familyId) throw new AuthorizationError();
-    const { categoryId, fromMonth, toMonth, actualSpent } = req.body;
-
-    if (!categoryId || !fromMonth || !toMonth || actualSpent === undefined) {
-      res.status(400).json({
-        error: 'categoryId, fromMonth, toMonth, and actualSpent are required'
-      });
-      return;
-    }
-
-    // Calculate rollover from previous month
-    const rollover = await budgetService.calculateRollover(categoryId, fromMonth, actualSpent, familyId);
-
-    if (rollover > 0) {
-      // Apply rollover to next month
-      const updatedBudget = await budgetService.applyRollover(categoryId, toMonth, rollover, familyId);
-
-      res.json({
-        categoryId,
-        fromMonth,
-        toMonth,
-        rolloverAmount: rollover,
-        updatedBudget
-      });
-    } else {
-      res.json({
-        categoryId,
-        fromMonth,
-        toMonth,
-        rolloverAmount: 0,
-        message: 'No rollover available (category was overspent or has no budget)'
-      });
-    }
-  } catch (error) {
-    if (error instanceof Error && error.message.includes('Budget not found')) {
-      res.status(404).json({ error: error.message });
-      return;
-    }
     next(error);
   }
 });

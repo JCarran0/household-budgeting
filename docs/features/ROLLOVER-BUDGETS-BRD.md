@@ -161,7 +161,7 @@ where `x_effective = x_budget + rolloverBalance(x, month)` when `x.isRollover` e
 
 **REQ-025:** All other existing surfaces continue to ignore `isRollover` and display raw `budgeted` and `actual` values as they do today. This includes at minimum:
 
-- The existing `BudgetComparison.tsx` Budget vs. Actual tab
+- ~~The existing `BudgetComparison.tsx` Budget vs. Actual tab~~ — retired 2026-04-23; BvA II is now the sole Budget vs. Actuals surface.
 - `YearlyBudgetGrid.tsx` (budget planning grid)
 - Reports widgets (Budget Comparison, Spending Composition, etc.)
 - Cash Flow report
