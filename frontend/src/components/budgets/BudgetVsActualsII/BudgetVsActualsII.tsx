@@ -1,7 +1,5 @@
-import { Fragment, useMemo, useState, type KeyboardEvent, type ReactNode } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import {
-  ActionIcon,
-  Box,
   Center,
   Chip,
   Group,
@@ -10,30 +8,15 @@ import {
   Select,
   Stack,
   Switch,
-  Table,
   Text,
-  Title,
   Tooltip,
 } from '@mantine/core';
-import {
-  IconChevronRight,
-  IconEdit,
-  IconX,
-  IconTrendingUp,
-  IconTrendingDown,
-  IconMinus,
-  IconAlertTriangle,
-  IconInfoCircle,
-} from '@tabler/icons-react';
+import { IconAlertTriangle, IconInfoCircle } from '@tabler/icons-react';
 import { useQuery } from '@tanstack/react-query';
 import { endOfMonth, format, parse, startOfMonth } from 'date-fns';
-import { TransactionPreviewTrigger } from '../../transactions/TransactionPreviewTrigger';
 import { api } from '../../../lib/api';
 import type { Category } from '../../../../../shared/types';
-import {
-  composeBvaII,
-  type BvaIIParentRow,
-} from '../../../../../shared/utils/bvaIIDataComposition';
+import { composeBvaII } from '../../../../../shared/utils/bvaIIDataComposition';
 import {
   SECTION_LABEL,
   SECTION_ORDER,
@@ -43,11 +26,11 @@ import {
   classifyAvailable,
   type VarianceFilter,
 } from '../../../../../shared/utils/bvaIIFilters';
-import { formatCurrency } from '../../../utils/formatters';
 import { CATEGORY_TYPES, useBvaIIUrlState, type CategoryTypeFilter } from './useBvaIIUrlState';
 import { useDismissedParentIds } from './useDismissedParentIds';
 import { BudgetEditModal } from './BudgetEditModal';
-import { isBudgetableCategory } from '../../../../../shared/utils/categoryHelpers';
+import { availableColor, directionIcon, formatSigned } from './bvaIIFormatHelpers';
+import { BvaIISectionTable, type FilteredParent } from './BvaIISectionTable';
 
 interface BudgetVsActualsIIProps {
   /** Currently-selected month, shared with the parent Budgets page. YYYY-MM. */
@@ -56,38 +39,9 @@ interface BudgetVsActualsIIProps {
   active: boolean;
 }
 
-interface FilteredParent {
-  parent: BvaIIParentRow;
-  deEmphasizedChildIds: Set<string>;
-}
-
 interface FilteredSection {
   section: SectionType;
   parents: FilteredParent[];
-}
-
-/**
- * Tone → Mantine color. Tone is derived from Available sign under BRD Rev-2:
- * positive = favorable (green), negative = unfavorable (red), zero = neutral.
- */
-function availableColor(value: number): string | undefined {
-  if (value > 0) return 'green';
-  if (value < 0) return 'red';
-  return undefined;
-}
-
-/** Signed formatter — `+$X`, `−$X`, or `$0`. */
-function formatSigned(value: number): string {
-  if (value > 0) return `+${formatCurrency(value)}`;
-  if (value < 0) return `−${formatCurrency(Math.abs(value))}`;
-  return formatCurrency(0);
-}
-
-/** Direction icon tracks sign of the number. */
-function directionIcon(value: number) {
-  if (value > 0) return <IconTrendingUp size={14} />;
-  if (value < 0) return <IconTrendingDown size={14} />;
-  return <IconMinus size={14} />;
 }
 
 /**
@@ -270,9 +224,7 @@ export function BudgetVsActualsII({ selectedMonth, active }: BudgetVsActualsIIPr
 
   const loading = budgetsLoading || transactionsLoading || !categories;
 
-  const effectiveExpanded = (parentId: string): boolean => {
-    return userExpanded.get(parentId) ?? false;
-  };
+  const isExpanded = (parentId: string): boolean => userExpanded.get(parentId) ?? false;
 
   const toggleExpanded = (parentId: string, currentlyExpanded: boolean) => {
     setUserExpanded(prev => {
@@ -287,223 +239,6 @@ export function BudgetVsActualsII({ selectedMonth, active }: BudgetVsActualsIIPr
     if (next.has(type)) next.delete(type);
     else next.add(type);
     urlState.setTypes(next);
-  };
-
-  /**
-   * Render the Rollover cell per REQ-010a:
-   *   - value null                 → em-dash, dimmed
-   *   - value !== null, toggle off → tone-signed number, dimmed (no green/red)
-   *   - value !== null, toggle on  → tone-signed number, green/red by sign
-   */
-  const renderRolloverCell = (value: number | null, rowDim: boolean) => {
-    if (value === null) {
-      return <Text size="sm" c="dimmed" style={{ opacity: rowDim ? 0.5 : 1, whiteSpace: 'nowrap' }}>—</Text>;
-    }
-    if (!urlState.rollover) {
-      return (
-        <Text size="sm" c="dimmed" style={{ opacity: rowDim ? 0.5 : 1, whiteSpace: 'nowrap' }}>
-          {formatSigned(value)}
-        </Text>
-      );
-    }
-    return (
-      <Text size="sm" c={availableColor(value)} fw={500} style={{ opacity: rowDim ? 0.5 : 1, whiteSpace: 'nowrap' }}>
-        {formatSigned(value)}
-      </Text>
-    );
-  };
-
-  const renderAvailableCell = (value: number, rowDim: boolean) => {
-    const color = availableColor(value);
-    return (
-      <Group gap={4} wrap="nowrap" justify="flex-end" style={{ opacity: rowDim ? 0.5 : 1, whiteSpace: 'nowrap' }}>
-        <Text c={color} fw={500} component="span" style={{ whiteSpace: 'nowrap' }}>{formatSigned(value)}</Text>
-        <Text c={color} component="span" aria-hidden style={{ lineHeight: 0 }}>{directionIcon(value)}</Text>
-      </Group>
-    );
-  };
-
-  const renderSection = ({ section, parents }: FilteredSection) => {
-    const visible = parents.filter(
-      fp => dismissed.showDismissed || !dismissed.dismissedIds.has(fp.parent.parentId),
-    );
-    if (visible.length === 0) return null;
-
-    return (
-      <Paper key={section} withBorder p="sm">
-        <Stack gap="xs">
-          <Title order={5}>{SECTION_LABEL[section]}</Title>
-          <Table.ScrollContainer minWidth={720}>
-          <Table striped highlightOnHover>
-            <Table.Thead>
-              <Table.Tr>
-                <Table.Th style={{ width: '34%', minWidth: 180 }}>Category</Table.Th>
-                <Table.Th style={{ textAlign: 'right', minWidth: 90 }}>Actual</Table.Th>
-                <Table.Th style={{ textAlign: 'right', minWidth: 100 }}>Budgeted</Table.Th>
-                <Table.Th style={{ textAlign: 'right', minWidth: 100 }}>Rollover</Table.Th>
-                <Table.Th style={{ textAlign: 'right', minWidth: 120 }}>Available</Table.Th>
-                <Table.Th style={{ width: 90, minWidth: 90, textAlign: 'right' }}>Actions</Table.Th>
-              </Table.Tr>
-            </Table.Thead>
-            <Table.Tbody>
-              {visible.map(({ parent, deEmphasizedChildIds }) => {
-                const isExpanded = effectiveExpanded(parent.parentId);
-                const isDismissed = dismissed.dismissedIds.has(parent.parentId);
-                const hasChildren = parent.children.length > 0;
-                const parentDim = isDismissed;
-
-                return (
-                  <Fragment key={parent.parentId}>
-                    <Table.Tr
-                      style={{ opacity: parentDim ? 0.5 : 1, cursor: hasChildren ? 'pointer' : 'default' }}
-                      {...(hasChildren ? {
-                        role: 'button',
-                        tabIndex: 0,
-                        'aria-expanded': isExpanded,
-                        'aria-label': `${parent.parentName}, ${isExpanded ? 'expanded' : 'collapsed'}. Press Enter or Space to toggle.`,
-                        onKeyDown: (e: KeyboardEvent<HTMLTableRowElement>) => {
-                          if (e.key === 'Enter' || e.key === ' ') {
-                            e.preventDefault();
-                            toggleExpanded(parent.parentId, isExpanded);
-                          }
-                        },
-                      } : {})}
-                    >
-                      <Table.Td onClick={() => hasChildren && toggleExpanded(parent.parentId, isExpanded)}>
-                        <Group gap="xs" wrap="nowrap" align="center">
-                          {hasChildren ? (
-                            <ActionIcon
-                              variant="subtle"
-                              size="sm"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                toggleExpanded(parent.parentId, isExpanded);
-                              }}
-                              aria-label={isExpanded ? 'Collapse' : 'Expand'}
-                              style={{
-                                flexShrink: 0,
-                                transform: isExpanded ? 'rotate(90deg)' : 'rotate(0deg)',
-                                transition: 'transform 120ms',
-                              }}
-                            >
-                              <IconChevronRight size={14} />
-                            </ActionIcon>
-                          ) : (
-                            <Box w={22} style={{ flexShrink: 0 }} />
-                          )}
-                          <Text
-                            fw={500}
-                            td={isDismissed ? 'line-through' : undefined}
-                            truncate
-                            style={{ minWidth: 0 }}
-                          >
-                            {parent.parentName}
-                          </Text>
-                        </Group>
-                      </Table.Td>
-                      <Table.Td style={{ textAlign: 'right' }}>
-                        <TransactionPreviewTrigger
-                          categoryId={parent.parentId}
-                          categoryName={parent.parentName}
-                          dateRange={monthDateRange}
-                          additionalCategoryIds={parent.children.map(c => c.categoryId)}
-                          tooltipText="Click to preview transactions in this subtree"
-                        >
-                          <Text style={{ cursor: 'pointer', textAlign: 'right' }}>
-                            {formatCurrency(parent.actual)}
-                          </Text>
-                        </TransactionPreviewTrigger>
-                      </Table.Td>
-                      <Table.Td style={{ textAlign: 'right' }}>{formatCurrency(parent.budgeted)}</Table.Td>
-                      <Table.Td style={{ textAlign: 'right' }}>{renderRolloverCell(parent.rollover, parentDim)}</Table.Td>
-                      <Table.Td style={{ textAlign: 'right' }}>{renderAvailableCell(parent.available, parentDim)}</Table.Td>
-                      <Table.Td style={{ textAlign: 'right' }}>
-                        <Group gap={4} justify="flex-end" wrap="nowrap">
-                          {isBudgetableCategory(parent.parentId, categories ?? []) && (
-                            <ActionIcon
-                              variant="subtle"
-                              size="sm"
-                              aria-label="Edit budget"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setEditTarget({ categoryId: parent.parentId });
-                              }}
-                            >
-                              <IconEdit size={14} />
-                            </ActionIcon>
-                          )}
-                          <ActionIcon
-                            variant="subtle"
-                            size="sm"
-                            color={isDismissed ? 'blue' : 'gray'}
-                            aria-label={isDismissed ? 'Restore row' : 'Dismiss row'}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              if (isDismissed) dismissed.restore(parent.parentId);
-                              else dismissed.dismiss(parent.parentId);
-                            }}
-                          >
-                            <IconX size={14} />
-                          </ActionIcon>
-                        </Group>
-                      </Table.Td>
-                    </Table.Tr>
-                    {isExpanded && [...parent.children]
-                      .sort((a, b) => {
-                        const aMag = Math.abs(a.available);
-                        const bMag = Math.abs(b.available);
-                        if (aMag !== bMag) return bMag - aMag;
-                        return a.categoryName.localeCompare(b.categoryName);
-                      })
-                      .map(child => {
-                        const dim = parentDim || deEmphasizedChildIds.has(child.categoryId);
-                        return (
-                          <Table.Tr
-                            key={`${parent.parentId}-${child.categoryId}`}
-                            style={{ opacity: dim ? 0.5 : 1 }}
-                          >
-                            <Table.Td pl="xl">
-                              <Text size="sm" pl="lg">↳ {child.categoryName}</Text>
-                            </Table.Td>
-                            <Table.Td style={{ textAlign: 'right' }}>
-                              <TransactionPreviewTrigger
-                                categoryId={child.categoryId}
-                                categoryName={child.categoryName}
-                                dateRange={monthDateRange}
-                                tooltipText="Click to preview transactions"
-                              >
-                                <Text size="sm" style={{ cursor: 'pointer', textAlign: 'right' }}>
-                                  {formatCurrency(child.actual)}
-                                </Text>
-                              </TransactionPreviewTrigger>
-                            </Table.Td>
-                            <Table.Td style={{ textAlign: 'right' }}>{formatCurrency(child.budgeted)}</Table.Td>
-                            <Table.Td style={{ textAlign: 'right' }}>{renderRolloverCell(child.rollover, dim)}</Table.Td>
-                            <Table.Td style={{ textAlign: 'right' }}>{renderAvailableCell(child.available, dim)}</Table.Td>
-                            <Table.Td style={{ textAlign: 'right' }}>
-                              {isBudgetableCategory(child.categoryId, categories ?? []) && (
-                                <ActionIcon
-                                  variant="subtle"
-                                  size="sm"
-                                  aria-label="Edit budget"
-                                  onClick={() => setEditTarget({ categoryId: child.categoryId })}
-                                >
-                                  <IconEdit size={14} />
-                                </ActionIcon>
-                              )}
-                            </Table.Td>
-                          </Table.Tr>
-                        );
-                      })}
-                  </Fragment>
-                );
-              })}
-            </Table.Tbody>
-          </Table>
-          </Table.ScrollContainer>
-        </Stack>
-      </Paper>
-    );
   };
 
   const allTypesOff = urlState.types.size === 0;
@@ -709,7 +444,23 @@ export function BudgetVsActualsII({ selectedMonth, active }: BudgetVsActualsIIPr
           <Text c="dimmed">No matching rows for this filter.</Text>
         </Paper>
       ) : (
-        sections.map(renderSection)
+        sections.map(({ section, parents }) => (
+          <BvaIISectionTable
+            key={section}
+            section={section}
+            parents={parents}
+            categories={categories ?? []}
+            monthDateRange={monthDateRange}
+            rolloverOn={urlState.rollover}
+            showDismissed={dismissed.showDismissed}
+            dismissedIds={dismissed.dismissedIds}
+            onDismiss={dismissed.dismiss}
+            onRestore={dismissed.restore}
+            isExpanded={isExpanded}
+            onToggleExpanded={toggleExpanded}
+            onEditBudget={(categoryId) => setEditTarget({ categoryId })}
+          />
+        ))
       )}
     </Stack>
   );
