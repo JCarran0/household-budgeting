@@ -9,6 +9,8 @@
 ---
 
 > **Revision 2 — 2026-04-21:** Column layout and sign convention updated after initial UAT. What was a single `Variance` column (raw `actual − budgeted`) is now split into separate `Rollover` and `Available` columns, with `Available` tone-signed (positive = favorable, across every section). The Budgeted column returns to raw monthly values. The old variance convention is retired from BvA II only — the original BvA tab keeps it. See OQ-010..OQ-012 for rationale.
+>
+> **Retirement note — 2026-04-23:** The original Budget vs. Actual tab (`BudgetComparison.tsx`) and Budget Setup tab (`BudgetGrid.tsx` / `BudgetForm.tsx`) described as "existing" throughout this BRD have been permanently retired. BvA II is now the sole Budget vs. Actuals surface. References to the "existing" tab below are preserved as design history — they describe what was true when this BRD was written.
 
 ## 1. Overview
 

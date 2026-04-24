@@ -30,9 +30,7 @@ export type {
 } from './api/categories';
 export type {
   CreateBudgetDto,
-  BudgetComparison,
   MonthlyBudgetResponse,
-  BudgetComparisonResponse,
   BudgetHistoryResponse,
 } from './api/budgets';
 export type { VersionResponse, ChangelogResponse } from './api/misc';

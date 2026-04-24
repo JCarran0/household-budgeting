@@ -150,7 +150,7 @@ All open questions resolved.
 - `docs/AI-USER-STORIES.md` — "Hierarchical Budget Display" section (existing rollup rules for the Budget page that this BRD generalizes)
 - `frontend/src/components/reports/BudgetPerformanceSection.tsx:87-195` — current flat aggregation that REQ-008 replaces
 - `backend/src/services/budgetService.ts:160-267` — existing per-category `getBudgetVsActual` and `getMonthlyBudgetVsActual`; rollup utilities should be applied to consumers, not embedded here
-- `frontend/src/components/budgets/BudgetComparison.tsx:181-245` — existing inline rollup on the Budget page; ships *additive* and must be migrated to *max* per REQ-002. This is a behavior change: any user who has both parent and child budgets in the same tree will see their effective parent total drop from `parent + children` to `max(parent, children)`. Migration check is required (see plan Phase 2).
+- ~~`frontend/src/components/budgets/BudgetComparison.tsx:181-245`~~ — Retired 2026-04-23. The canonical max-rule rollup now lives only in `shared/utils/bvaII*` and is consumed by BvA II. The migration described here shipped in BvA II from day one; the legacy additive path was never migrated and was instead deleted with the tab.
 - `shared/utils/budgetCalculations.ts:338` — existing `calculateEnhancedParentTotals` (additive, currently unused by UI). Will be replaced by the canonical max-rule utilities required by REQ-007.
 - `docs/features/SAVINGS-CATEGORY-BRD.md` — orthogonal savings-exclusion behavior
 - `docs/AI-USER-STORIES.md` §"Hierarchical Budget Display" — predates this BRD. Was partially right (max for expense) and partially wrong (additive for income). Superseded by REQ-002 (max for both) and slated for cleanup in implementation.
