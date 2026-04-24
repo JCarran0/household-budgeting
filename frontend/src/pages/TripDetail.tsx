@@ -42,7 +42,8 @@ import {
 } from '@tabler/icons-react';
 import { format } from 'date-fns';
 import { api } from '../lib/api';
-import { TripFormModal, DeleteTripModal } from './Trips';
+import { TripFormModal } from '../components/trips/TripFormModal';
+import { DeleteTripModal } from '../components/trips/DeleteTripModal';
 import { TripSpendingBreakdown } from '../components/trips/TripSpendingBreakdown';
 import { TransactionPreviewModal } from '../components/transactions/TransactionPreviewModal';
 import { Agenda } from '../components/trips/agenda/Agenda';
