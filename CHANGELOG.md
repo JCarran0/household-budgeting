@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.55.0](https://github.com/JCarran0/household-budgeting/compare/v5.54.0...v5.55.0) (2026-04-24)
+
+
+### Features
+
+* **tasks:** B.1 — mobile Kanban tab shell (REQ-047..049) ([#16](https://github.com/JCarran0/household-budgeting/issues/16)) ([d12297e](https://github.com/JCarran0/household-budgeting/commit/d12297e94e0400a2277e2c6d8a225968d281f7b8))
+
+
+### Code Refactoring
+
+* **budgets:** retire legacy Budget Setup + Budget vs Actual tabs ([0d909aa](https://github.com/JCarran0/household-budgeting/commit/0d909aaa6f5294ad1d134268ce2717090d4cd3fc))
+
 ## [5.54.0](https://github.com/JCarran0/household-budgeting/compare/v5.53.7...v5.54.0) (2026-04-24)
 
 
