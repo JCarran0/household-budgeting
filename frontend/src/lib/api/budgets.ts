@@ -7,16 +7,6 @@ export interface CreateBudgetDto {
   amount: number;
 }
 
-export interface BudgetComparison {
-  categoryId: string;
-  month: string;
-  budgeted: number;
-  actual: number;
-  remaining: number;
-  percentUsed: number;
-  isOverBudget: boolean;
-}
-
 interface BudgetTotals {
   income: number;
   expense: number;
@@ -29,18 +19,6 @@ export interface MonthlyBudgetResponse {
   budgets: MonthlyBudget[];
   total: number;  // Legacy field for backward compatibility
   totals: BudgetTotals;  // New detailed breakdown
-}
-
-export interface BudgetComparisonResponse {
-  month: string;
-  comparisons: BudgetComparison[];
-  totals: {
-    budgeted: number;
-    actual: number;
-    remaining: number;
-    percentUsed: number;
-    isOverBudget: boolean;
-  };
 }
 
 export interface BudgetHistoryResponse {
@@ -84,19 +62,6 @@ export function createBudgetsApi(client: AxiosInstance) {
       return data;
     },
 
-    async copyBudgets(fromMonth: string, toMonth: string): Promise<{ message: string; budgets: MonthlyBudget[] }> {
-      const { data } = await client.post<{ message: string; budgets: MonthlyBudget[] }>('/budgets/copy', {
-        fromMonth,
-        toMonth,
-      });
-      return data;
-    },
-
-    async getBudgetComparison(month: string, actuals: Record<string, number>): Promise<BudgetComparisonResponse> {
-      const { data } = await client.post<BudgetComparisonResponse>(`/budgets/comparison/${month}`, { actuals });
-      return data;
-    },
-
     async getBudgetHistory(
       categoryId: string,
       startMonth: string,
@@ -117,28 +82,6 @@ export function createBudgetsApi(client: AxiosInstance) {
         `/categories/${categoryId}/delete-budgets`
       );
       return { deleted: data.deleted };
-    },
-
-    async applyRollover(
-      categoryId: string,
-      fromMonth: string,
-      toMonth: string,
-      actualSpent: number
-    ): Promise<{
-      categoryId: string;
-      fromMonth: string;
-      toMonth: string;
-      rolloverAmount: number;
-      updatedBudget?: MonthlyBudget;
-      message?: string;
-    }> {
-      const { data } = await client.post('/budgets/rollover', {
-        categoryId,
-        fromMonth,
-        toMonth,
-        actualSpent,
-      });
-      return data;
     },
 
     async getYearlyBudgets(year: number): Promise<{

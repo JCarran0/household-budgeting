@@ -250,8 +250,6 @@ const income = calculateIncome(transactions);
 - **Purpose**: Monthly and yearly budget management (expense categories only)
 - **Key Methods**:
   - `setBudget()`: Set monthly budget for category
-  - `copyBudgets()`: Copy from previous month
-  - `getBudgetComparison()`: Budget vs actual spending
   - `getBudgetVsActual()`: Returns `null` for income categories (excluded from budget tracking)
   - `hasBudgetsForCategory()`: Check if category has any budgets (for deletion protection)
   - `getYearlyBudgets(year, userId)`: Get all budgets for a specific year
@@ -401,7 +399,7 @@ const budgetTotals = calculateBudgetTotals(budgets, categories, { excludeHidden:
 const actualTotals = calculateActualTotals(transactions, categories, { excludeHidden: true });
 ```
 
-- **Components Using**: Budgets.tsx, BudgetComparison.tsx, BudgetDebugger.tsx, backend budgets.ts
+- **Components Using**: Budgets.tsx, BudgetVsActualsII (via bvaIIDataComposition), backend budgets.ts
 - **Test Coverage**: Comprehensive unit tests with 37 test cases covering edge cases and options
 
 ## Frontend Architecture
