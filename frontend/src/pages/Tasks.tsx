@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import {
   Container,
   Title,
@@ -48,8 +48,18 @@ export function Tasks() {
   const queryClient = useQueryClient();
   const currentUser = useAuthStore((s) => s.user);
 
-  // View state
-  const [view, setView] = useState<'board' | 'history'>('board');
+  // View state — all four persisted per user (REQ-055). Keys shared across
+  // desktop and mobile; tasks are the same tasks regardless of device.
+  const [view, setViewState] = useState<'board' | 'history'>(() => {
+    try {
+      return localStorage.getItem('tasks.page') === 'history' ? 'history' : 'board';
+    } catch { return 'board'; }
+  });
+  const setView = (next: 'board' | 'history') => {
+    setViewState(next);
+    try { localStorage.setItem('tasks.page', next); } catch { /* ignore */ }
+  };
+
   // v2.0 — board presentation (kanban vs. flat checklist), persisted per user
   const [boardMode, setBoardMode] = useState<'kanban' | 'checklist'>(() => {
     try {
@@ -61,9 +71,44 @@ export function Tasks() {
     setBoardMode(next);
     try { localStorage.setItem('tasks.view', next); } catch { /* ignore */ }
   };
-  const [filterAssignee, setFilterAssignee] = useState<string | null>(null);
-  const [filterScope, setFilterScope] = useState<string>('all');
-  const [filterTags, setFilterTags] = useState<string[]>([]);
+
+  const [filterAssignee, setFilterAssigneeState] = useState<string | null>(() => {
+    try {
+      const raw = localStorage.getItem('tasks.filter.assignee');
+      return raw && raw !== '' ? raw : null;
+    } catch { return null; }
+  });
+  const setFilterAssignee = (next: string | null) => {
+    setFilterAssigneeState(next);
+    try {
+      if (next === null || next === '') localStorage.removeItem('tasks.filter.assignee');
+      else localStorage.setItem('tasks.filter.assignee', next);
+    } catch { /* ignore */ }
+  };
+
+  const [filterScope, setFilterScopeState] = useState<string>(() => {
+    try {
+      const raw = localStorage.getItem('tasks.filter.scope');
+      return raw === 'family' || raw === 'personal' ? raw : 'all';
+    } catch { return 'all'; }
+  });
+  const setFilterScope = (next: string) => {
+    setFilterScopeState(next);
+    try { localStorage.setItem('tasks.filter.scope', next); } catch { /* ignore */ }
+  };
+
+  const [filterTags, setFilterTagsState] = useState<string[]>(() => {
+    try {
+      const raw = localStorage.getItem('tasks.filter.tags');
+      if (!raw) return [];
+      const parsed: unknown = JSON.parse(raw);
+      return Array.isArray(parsed) ? parsed.filter((x): x is string => typeof x === 'string') : [];
+    } catch { return []; }
+  });
+  const setFilterTags = (next: string[]) => {
+    setFilterTagsState(next);
+    try { localStorage.setItem('tasks.filter.tags', JSON.stringify(next)); } catch { /* ignore */ }
+  };
 
   // Modals
   const [createOpened, { open: openCreate, close: closeCreate }] = useDisclosure(false);
@@ -113,6 +158,27 @@ export function Tasks() {
     queryFn: () => api.getTasks(),
     enabled: view === 'history' || leaderboardOpen,
   });
+
+  // REQ-055 hydration cleanup: once the first board fetch lands, drop any
+  // persisted tag filters referencing tags that no longer exist on any task.
+  // One-shot — not a continuous policy. If the user re-adds the tag later,
+  // the persisted set is whatever they had at that point.
+  const tagsHydratedRef = useRef(false);
+  useEffect(() => {
+    if (tagsHydratedRef.current || boardLoading) return;
+    tagsHydratedRef.current = true;
+    setFilterTagsState((current) => {
+      if (current.length === 0) return current;
+      const liveTags = new Set<string>();
+      for (const t of serverBoardTasks) {
+        for (const tag of t.tags ?? []) liveTags.add(tag);
+      }
+      const cleaned = current.filter((tag) => liveTags.has(tag));
+      if (cleaned.length === current.length) return current;
+      try { localStorage.setItem('tasks.filter.tags', JSON.stringify(cleaned)); } catch { /* ignore */ }
+      return cleaned;
+    });
+  }, [boardLoading, serverBoardTasks]);
 
   const { data: templates = [] } = useQuery({
     queryKey: ['taskTemplates'],
