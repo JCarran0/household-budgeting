@@ -30,6 +30,7 @@ import { AccountOwnerMappingService } from './accountOwnerMappingService';
 import { TaskService } from './taskService';
 import { TaskTemplateService } from './taskTemplateService';
 import { PushNotificationService } from './pushNotificationService';
+import { AdminService } from './adminService';
 // Bootstrap chat action registry — must be imported before any chat request
 // is processed. Side-effect: registers all V1 actions and logs the list.
 import './chatActions';
@@ -112,6 +113,7 @@ export const accountOwnerMappingService = new AccountOwnerMappingService(dataSer
 export const taskService = new TaskService(dataService, familyService);
 export const taskTemplateService = new TaskTemplateService(dataService);
 export const pushNotificationService = PushNotificationService.getInstance(dataService);
+export const adminService = new AdminService(dataService);
 
 // Export dataService for other services that need it
 export { dataService };
@@ -140,4 +142,5 @@ export {
   TaskService,
   TaskTemplateService,
   PushNotificationService,
+  AdminService,
 };

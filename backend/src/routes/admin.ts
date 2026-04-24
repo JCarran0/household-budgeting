@@ -1,12 +1,16 @@
 import express, { NextFunction, Request, Response } from 'express';
-import { categoryService, dataService, accountOwnerMappingService } from '../services';
+import { adminService, categoryService, dataService, accountOwnerMappingService } from '../services';
 import { authMiddleware } from '../middleware/authMiddleware';
+import { adminMiddleware } from '../middleware/adminMiddleware';
 import { AuthorizationError } from '../errors';
 
 const router = express.Router();
 
-// All admin routes require authentication
+// All admin routes require (a) authentication, (b) admin privileges.
+// adminMiddleware reads User.isAdmin from storage and falls back to the
+// ADMIN_USERNAMES env var as a one-time seed (see adminMiddleware.ts).
 router.use(authMiddleware);
+router.use(adminMiddleware);
 
 interface MigrationResult {
   success: boolean;
@@ -26,48 +30,17 @@ router.post('/migrate-savings-to-rollover', async (req: Request, res: Response, 
 
     console.log(`Starting migration from isSavings to isRollover for family ${familyId}`);
 
-    // Get all categories for the family directly from data service to manipulate raw data
-    const dataService = (categoryService as any).dataService;
-    const categories = await dataService.getCategories(familyId);
-    let migratedCount = 0;
-
-    // Process each category to migrate the field
-    const migratedCategories = categories.map((category: any) => {
-      if (category.hasOwnProperty('isSavings')) {
-        // Copy the value to the new field
-        const isRolloverValue = category.isSavings;
-
-        // Create a new object without the old field
-        const { isSavings, ...cleanCategory } = category;
-
-        // Add the new field
-        const migratedCategory = {
-          ...cleanCategory,
-          isRollover: isRolloverValue
-        };
-
-        migratedCount++;
-        console.log(`Migrated category ${category.id} (${category.name}): isSavings(${isRolloverValue}) -> isRollover(${isRolloverValue})`);
-
-        return migratedCategory;
-      }
-      return category;
-    });
-
-    // Save all migrated categories back
-    if (migratedCount > 0) {
-      await dataService.saveCategories(migratedCategories, familyId);
-    }
+    const { migratedCount, totalCount } = await adminService.migrateSavingsToRollover(familyId);
 
     const result: MigrationResult = {
       success: true,
       message: `Successfully migrated ${migratedCount} categories from 'isSavings' to 'isRollover'`,
       migratedCount,
-      totalCount: categories.length
+      totalCount,
     };
 
-    console.log(`Migration completed: ${migratedCount}/${categories.length} categories migrated`);
-    
+    console.log(`Migration completed: ${migratedCount}/${totalCount} categories migrated`);
+
     res.json(result);
   } catch (error) {
     next(error);
@@ -82,19 +55,8 @@ router.get('/migration-status', async (req: Request, res: Response, next: NextFu
     const familyId = req.user?.familyId;
     if (!familyId) throw new AuthorizationError();
 
-    // Get categories directly from data service to check raw data
-    const dataService = (categoryService as any).dataService;
-    const categories = await dataService.getCategories(familyId);
-    const oldFieldCount = categories.filter((cat: any) => cat.hasOwnProperty('isSavings')).length;
-    const newFieldCount = categories.filter((cat: any) => cat.hasOwnProperty('isRollover')).length;
-
-    res.json({
-      totalCategories: categories.length,
-      categoriesWithOldField: oldFieldCount,
-      categoriesWithNewField: newFieldCount,
-      migrationNeeded: oldFieldCount > 0,
-      migrationComplete: oldFieldCount === 0 && newFieldCount > 0
-    });
+    const status = await adminService.getSavingsMigrationStatus(familyId);
+    res.json(status);
   } catch (error) {
     next(error);
   }
@@ -242,37 +204,8 @@ router.get('/is-income-migration-status', async (req: Request, res: Response, ne
     const familyId = req.user?.familyId;
     if (!familyId) throw new AuthorizationError();
 
-    // Get categories directly from data service to check raw data
-    const dataService = (categoryService as any).dataService;
-    const categories = await dataService.getCategories(familyId);
-
-    let withIsIncomeProperty = 0;
-    let missingIsIncomeProperty = 0;
-    let incomeCategories = 0;
-    let expenseCategories = 0;
-
-    categories.forEach((cat: any) => {
-      if (cat.hasOwnProperty('isIncome') && cat.isIncome !== undefined) {
-        withIsIncomeProperty++;
-        if (cat.isIncome) {
-          incomeCategories++;
-        } else {
-          expenseCategories++;
-        }
-      } else {
-        missingIsIncomeProperty++;
-      }
-    });
-
-    res.json({
-      totalCategories: categories.length,
-      categoriesWithIsIncomeProperty: withIsIncomeProperty,
-      categoriesMissingIsIncomeProperty: missingIsIncomeProperty,
-      incomeCategories,
-      expenseCategories,
-      migrationNeeded: missingIsIncomeProperty > 0,
-      migrationComplete: missingIsIncomeProperty === 0 && withIsIncomeProperty > 0
-    });
+    const status = await adminService.getIsIncomeMigrationStatus(familyId);
+    res.json(status);
   } catch (error) {
     next(error);
   }

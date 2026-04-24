@@ -14,6 +14,10 @@ export interface User {
   failedLoginAttempts?: number;
   lockedUntil?: Date;
   color?: UserColor;
+  // Gates access to /api/v1/admin/* via adminMiddleware. Optional — older user
+  // records omit the flag and are treated as non-admin. Seed via ADMIN_USERNAMES
+  // env var (comma-separated) which auto-persists the flag on first admin hit.
+  isAdmin?: boolean;
 }
 
 export interface DataService {

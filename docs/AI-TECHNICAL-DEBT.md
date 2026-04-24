@@ -124,7 +124,7 @@ The test-mode bypass (`NODE_ENV === 'test'`) is preserved so existing auth/chatb
 ---
 
 ### TD-006: No Role-Based Authorization for Admin Routes
-**Status**: Open
+**Status**: Resolved (2026-04-24, Sprint 5)
 **Created**: 2026-04-08
 **Impact**: High - Any authenticated user can run data migrations and access system internals
 **Effort**: Medium
@@ -133,15 +133,36 @@ The test-mode bypass (`NODE_ENV === 'test'`) is preserved so existing auth/chatb
 Admin routes in `backend/src/routes/admin.ts` only check that a user is authenticated — there is no admin role check. The same file uses `(categoryService as any).dataService` three times to bypass TypeScript encapsulation for migration operations.
 
 **Fix**:
-1. Add an `isAdmin` flag to user records
-2. Create an `adminMiddleware` that checks the flag
-3. Move migration operations into a typed `AdminService` to eliminate `as any` casts
+✅ Added optional `isAdmin?: boolean` to the `User` interface in `backend/src/services/dataService.ts`. Older user records omit the flag and are treated as non-admin — fail-closed by default.
+
+✅ New `backend/src/middleware/adminMiddleware.ts` mounted on the admin router after `authMiddleware`. Resolution order per request:
+1. If the stored `User.isAdmin === true` → allow
+2. Else if the username is in the `ADMIN_USERNAMES` env var (comma-separated, case-insensitive) → persist `isAdmin=true` to storage, then allow (one-time bootstrap)
+3. Else → **403 Admin privileges required**
+
+The env-var path is deliberately self-healing: setting `ADMIN_USERNAMES=jared` in prod env + restarting is enough for Jared's next admin hit to persist the flag, after which the env can be unset without revoking access. Fail-closed when unset *and* no user has the flag. Documented in `backend/.env.example`.
+
+✅ New `backend/src/services/adminService.ts` owns the three migration methods that previously reached into CategoryService's private `dataService` field via `(categoryService as any).dataService`. `AdminService` takes `DataService` via constructor injection — `DataService.getCategories` / `saveCategories` is already on the public contract, so no encapsulation pierce is needed. Three methods: `migrateSavingsToRollover`, `getSavingsMigrationStatus`, `getIsIncomeMigrationStatus`. The `migrate-is-income` POST still calls `categoryService.migrateIsIncomeProperty` directly — that method is already public and typed, so wrapping it in AdminService would be busywork.
+
+✅ All three `(categoryService as any).dataService` casts in `admin.ts` removed. The `any`-typed `.map((category: any)` body in `migrate-savings-to-rollover` is replaced by a typed `LegacyCategory = Category & { isSavings?: boolean }` shape in AdminService — the only place in the codebase that still references the legacy field.
+
+**Tests**: 5 new critical-tier Jest cases in `backend/src/__tests__/critical/adminMiddleware.test.ts`:
+- unauthenticated → 401
+- authenticated non-admin → 403 ("Admin privileges required")
+- stored `isAdmin === true` → 200 (AdminService payload surfaces)
+- `ADMIN_USERNAMES` auto-promotion path: 403 before env, 200 after, persisted `isAdmin=true` in storage, 200 still succeeds after the env is cleared
+- user NOT in `ADMIN_USERNAMES` is not promoted and `isAdmin` remains undefined
+
+Backend: **850 tests** (from 845). Typecheck + lint clean. Integration suite: 308/308 unchanged.
 
 **Files**:
-- `backend/src/routes/admin.ts`
-- `backend/src/services/authService.ts` (user model)
-- New: `backend/src/middleware/adminMiddleware.ts`
-- New: `backend/src/services/adminService.ts`
+- `backend/src/services/dataService.ts` ✅ (User.isAdmin flag)
+- `backend/src/middleware/adminMiddleware.ts` ✅ (new)
+- `backend/src/services/adminService.ts` ✅ (new)
+- `backend/src/services/index.ts` ✅ (adminService singleton + type re-export)
+- `backend/src/routes/admin.ts` ✅ (mounts adminMiddleware; replaces 3 `as any` casts with AdminService calls)
+- `backend/.env.example` ✅ (documents ADMIN_USERNAMES)
+- `backend/src/__tests__/critical/adminMiddleware.test.ts` ✅ (new, 5 cases)
 
 ---
 
