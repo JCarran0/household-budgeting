@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+### [5.55.1](https://github.com/JCarran0/household-budgeting/compare/v5.55.0...v5.55.1) (2026-04-24)
+
+
+### Bug Fixes
+
+* **tasks:** mobile tabs wrap to single row at Pixel 7 width ([#18](https://github.com/JCarran0/household-budgeting/issues/18)) ([658eea4](https://github.com/JCarran0/household-budgeting/commit/658eea4edc6fa3395a601b95f052a2789064b3dc))
+
 ## [5.55.0](https://github.com/JCarran0/household-budgeting/compare/v5.54.0...v5.55.0) (2026-04-24)
 
 
