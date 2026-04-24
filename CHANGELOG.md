@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.54.0](https://github.com/JCarran0/household-budgeting/compare/v5.53.7...v5.54.0) (2026-04-24)
+
+
+### Features
+
+* **tasks:** persist view + filter state across reloads (REQ-055) ([#14](https://github.com/JCarran0/household-budgeting/issues/14)) ([065ed40](https://github.com/JCarran0/household-budgeting/commit/065ed40854075d61801ccd05eaaba611285849f8))
+
+
+### Documentation
+
+* **tasks:** mobile Kanban BRD — tabs + swipe actions + long-press reorder ([#13](https://github.com/JCarran0/household-budgeting/issues/13)) ([5899ffd](https://github.com/JCarran0/household-budgeting/commit/5899ffd63f02546b944f942f4a4ccd8ac10581b8))
+
 ### [5.53.7](https://github.com/JCarran0/household-budgeting/compare/v5.53.6...v5.53.7) (2026-04-23)
 
 
