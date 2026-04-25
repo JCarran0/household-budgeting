@@ -594,6 +594,61 @@ describe('Budget Calculation Utilities', () => {
         expect(totals.income).toBe(0);
         expect(totals.expense).toBe(950); // Both expense transactions (absolute values)
       });
+
+      test('should net refunds against expense (signed accumulation)', () => {
+        // An Amazon refund (negative amount) sitting in an expense category should
+        // REDUCE the expense total, not add to it. This was a real bug: a -$23.95
+        // refund was being added to expense as +$23.95 due to Math.abs.
+        const transactions: Transaction[] = [
+          {
+            id: '1', plaidTransactionId: '1', accountId: 'acc1', amount: 100, date: '2025-01-10',
+            name: 'Amazon Order', userDescription: null, merchantName: null, category: [], plaidCategoryId: null,
+            categoryId: 'CUSTOM_GROCERIES', pending: false, tags: [], notes: null, isHidden: false,
+            isFlagged: false, isManual: false, isSplit: false, parentTransactionId: null, splitTransactionIds: [],
+            accountOwner: null, originalDescription: null, location: null,
+            createdAt: '2025-01-10', updatedAt: '2025-01-10'
+          },
+          {
+            id: '2', plaidTransactionId: '2', accountId: 'acc1', amount: -25, date: '2025-01-12',
+            name: 'Amazon Refund', userDescription: null, merchantName: null, category: [], plaidCategoryId: null,
+            categoryId: 'CUSTOM_GROCERIES', pending: false, tags: [], notes: null, isHidden: false,
+            isFlagged: false, isManual: false, isSplit: false, parentTransactionId: null, splitTransactionIds: [],
+            accountOwner: null, originalDescription: null, location: null,
+            createdAt: '2025-01-12', updatedAt: '2025-01-12'
+          }
+        ];
+
+        const totals = calculateActualTotals(transactions, mockCategories);
+        expect(totals.income).toBe(0); // Refund stays in expense category, doesn't become income
+        expect(totals.expense).toBe(75); // 100 − 25, net of refund
+      });
+
+      test('should net reversals against income (signed accumulation)', () => {
+        // A dividend reversal (positive amount in income category) should reduce
+        // income, not be silently flipped to expense.
+        const transactions: Transaction[] = [
+          {
+            id: '1', plaidTransactionId: '1', accountId: 'acc1', amount: -500, date: '2025-01-05',
+            name: 'Dividend', userDescription: null, merchantName: null, category: [], plaidCategoryId: null,
+            categoryId: 'INCOME', pending: false, tags: [], notes: null, isHidden: false,
+            isFlagged: false, isManual: false, isSplit: false, parentTransactionId: null, splitTransactionIds: [],
+            accountOwner: null, originalDescription: null, location: null,
+            createdAt: '2025-01-05', updatedAt: '2025-01-05'
+          },
+          {
+            id: '2', plaidTransactionId: '2', accountId: 'acc1', amount: 50, date: '2025-01-06',
+            name: 'Dividend Reversal', userDescription: null, merchantName: null, category: [], plaidCategoryId: null,
+            categoryId: 'INCOME', pending: false, tags: [], notes: null, isHidden: false,
+            isFlagged: false, isManual: false, isSplit: false, parentTransactionId: null, splitTransactionIds: [],
+            accountOwner: null, originalDescription: null, location: null,
+            createdAt: '2025-01-06', updatedAt: '2025-01-06'
+          }
+        ];
+
+        const totals = calculateActualTotals(transactions, mockCategories);
+        expect(totals.income).toBe(450); // 500 − 50, net of reversal
+        expect(totals.expense).toBe(0);
+      });
     });
 
     describe('calculateEnhancedParentTotals with isIncome property', () => {

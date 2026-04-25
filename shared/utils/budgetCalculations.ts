@@ -202,17 +202,18 @@ export function calculateActualTotals(
       return;
     }
 
-    const amount = Math.abs(transaction.amount);
-
-    // Categorize transaction
+    // Plaid sign convention: positive = debit (expense), negative = credit (income).
+    // Use signed accumulation so refunds net against expense and reversals net
+    // against income (a -$23.95 Amazon refund should reduce Amazon spending,
+    // not add $23.95 to it).
     if (isTransferCategory(transaction.categoryId)) {
       if (!excludeTransfers) {
-        transfer += amount;
+        transfer += Math.abs(transaction.amount);
       }
     } else if (isIncomeCategory(transaction.categoryId, categories)) {
-      income += amount;
+      income += -transaction.amount;
     } else {
-      expense += amount;
+      expense += transaction.amount;
     }
   });
 

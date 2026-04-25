@@ -155,33 +155,55 @@ export function MantineDashboard() {
   const monthlyIncome = actualTotals.income;
 
   // Calculate projected net income for the year
-  // Actuals through today + budgeted net income for remaining months
+  // Net income = income − spending (savings is retained wealth, not consumption,
+  // so we exclude it from both YTD and the budgeted projection).
   const projectedNetIncome = useMemo(() => {
     if (!ytdTransactionData?.transactions || !categories) {
       return null;
     }
 
     const ytdTotals = calculateActualTotals(ytdTransactionData.transactions, categories, { excludeHidden: true });
-    const ytdActualNet = ytdTotals.income - ytdTotals.expense;
+    const ytdTotalsIncludingHidden = calculateActualTotals(ytdTransactionData.transactions, categories, { excludeHidden: false });
+    const ytdHiddenIncome = ytdTotalsIncludingHidden.income - ytdTotals.income;
+    const ytdHiddenExpense = ytdTotalsIncludingHidden.expense - ytdTotals.expense;
+    const ytdSavings = calculateSavings(
+      ytdTransactionData.transactions as unknown as import('../../../shared/utils/transactionCalculations').TransactionForCalculation[],
+      savingsCategoryIds,
+    );
+    const ytdSpending = ytdTotals.expense - ytdSavings;
+    const ytdActualNet = ytdTotals.income - ytdSpending;
 
     // Remaining full months after current month (current month uses actuals)
     const remainingMonths = 11 - currentMonthIndex; // months after current
 
-    // Use budget totals for projection
+    // Use budget totals for projection, excluding savings from expense.
     const budgetedIncome = budgetData?.totals?.income || 0;
     const budgetedExpense = budgetData?.totals?.expense || 0;
-    const monthlyBudgetedNet = budgetedIncome - budgetedExpense;
+    const budgetedSavings = (budgetData?.budgets || []).reduce((sum, b) => (
+      savingsCategoryIds.has(b.categoryId) ? sum + b.amount : sum
+    ), 0);
+    const budgetedSpending = budgetedExpense - budgetedSavings;
+    const monthlyBudgetedNet = budgetedIncome - budgetedSpending;
 
     const projectedFromBudget = remainingMonths * monthlyBudgetedNet;
 
     return {
       total: ytdActualNet + projectedFromBudget,
       ytdActual: ytdActualNet,
+      ytdIncome: ytdTotals.income,
+      ytdSpending,
+      ytdSavings,
+      ytdHiddenIncome,
+      ytdHiddenExpense,
       projectedFromBudget,
       remainingMonths,
+      monthlyBudgetedNet,
+      budgetedIncome,
+      budgetedSpending,
+      budgetedSavings,
       hasBudget: budgetedIncome > 0 || budgetedExpense > 0,
     };
-  }, [ytdTransactionData, categories, budgetData, currentMonthIndex]);
+  }, [ytdTransactionData, categories, budgetData, currentMonthIndex, savingsCategoryIds]);
 
   // Calculate budget progress - compare spending against actual expense budget only
   const totalBudget = budgetData?.totals?.expense || 0;
@@ -207,6 +229,12 @@ export function MantineDashboard() {
       icon: IconWallet,
       color: totalBalance >= 0 ? 'yellow' : 'red',
       description: 'Assets minus liabilities',
+      formula: [
+        'Assets − Liabilities, across linked + manual accounts.',
+        `Linked (assets − loans/credit): ${formatCurrency(linkedBalance, true)}`,
+        `Manual (assets − liabilities): ${formatCurrency(manualBalance, true)}`,
+        `Total: ${formatCurrency(totalBalance, true)}`,
+      ].join('\n'),
     },
     {
       title: 'Available',
@@ -215,6 +243,11 @@ export function MantineDashboard() {
       icon: IconCash,
       color: 'green',
       description: 'In asset accounts',
+      formula: [
+        'Sum of available balance (or current if available is null) for asset',
+        'accounts only — loans and credit cards are excluded.',
+        `Total: ${formatCurrency(totalAvailable, true)}`,
+      ].join('\n'),
     },
     {
       title: 'Monthly Spending',
@@ -223,6 +256,13 @@ export function MantineDashboard() {
       icon: IconTrendingDown,
       color: 'red',
       description: 'This month',
+      formula: [
+        'Expenses − Savings contributions for the current month.',
+        'Excludes transfers and hidden categories.',
+        `Expenses: ${formatCurrency(actualTotals.expense, true)}`,
+        `Savings:  ${formatCurrency(monthlySavings, true)}`,
+        `Spending: ${formatCurrency(monthlySpending, true)}`,
+      ].join('\n'),
     },
     {
       title: 'Monthly Savings',
@@ -231,6 +271,11 @@ export function MantineDashboard() {
       icon: IconBuildingBank,
       color: 'teal',
       description: 'Savings this month',
+      formula: [
+        'Sum of transactions in categories flagged as Savings (isSavings),',
+        'for the current month. Excludes transfers and hidden categories.',
+        `Total: ${formatCurrency(monthlySavings, true)}`,
+      ].join('\n'),
     },
     {
       title: 'Monthly Income',
@@ -239,6 +284,11 @@ export function MantineDashboard() {
       icon: IconTrendingUp,
       color: 'blue',
       description: 'This month',
+      formula: [
+        'Sum of transactions in income categories for the current month.',
+        'Excludes transfers and hidden categories.',
+        `Total: ${formatCurrency(monthlyIncome, true)}`,
+      ].join('\n'),
     },
     ...(projectedNetIncome ? [{
       title: 'Projected Net Income',
@@ -249,6 +299,34 @@ export function MantineDashboard() {
       description: projectedNetIncome.hasBudget
         ? `YTD actual + ${projectedNetIncome.remainingMonths}mo budgeted`
         : 'Based on YTD actuals only',
+      formula: [
+        'YTD actual net + budgeted net for remaining months.',
+        'Net = Income − Spending. Transfers, hidden categories, and savings',
+        'contributions are excluded (savings is retained wealth, not consumption).',
+        'Refunds and reversals net against expense / income (signed).',
+        '',
+        `YTD (Jan 1 → today):`,
+        `  Income:   ${formatCurrency(projectedNetIncome.ytdIncome, true)}`,
+        `  Spending: ${formatCurrency(projectedNetIncome.ytdSpending, true)}  (savings ${formatCurrency(projectedNetIncome.ytdSavings, true)} excluded)`,
+        `  Net:      ${formatCurrency(projectedNetIncome.ytdActual, true)}`,
+        ...((projectedNetIncome.ytdHiddenIncome !== 0 || projectedNetIncome.ytdHiddenExpense !== 0) ? [
+          '',
+          `Hidden categories (excluded from totals above):`,
+          `  Income excluded:  ${formatCurrency(projectedNetIncome.ytdHiddenIncome, true)}`,
+          `  Expense excluded: ${formatCurrency(projectedNetIncome.ytdHiddenExpense, true)}`,
+        ] : []),
+        '',
+        projectedNetIncome.hasBudget
+          ? `Budgeted (${projectedNetIncome.remainingMonths} remaining months × current month's budget):`
+          : `No budget for current month — projection is YTD only.`,
+        ...(projectedNetIncome.hasBudget ? [
+          `  Income:   ${formatCurrency(projectedNetIncome.budgetedIncome, true)} / mo`,
+          `  Spending: ${formatCurrency(projectedNetIncome.budgetedSpending, true)} / mo  (savings ${formatCurrency(projectedNetIncome.budgetedSavings, true)} excluded)`,
+          `  Net:      ${formatCurrency(projectedNetIncome.monthlyBudgetedNet, true)} / mo × ${projectedNetIncome.remainingMonths} = ${formatCurrency(projectedNetIncome.projectedFromBudget, true)}`,
+        ] : []),
+        '',
+        `Projected: ${formatCurrency(projectedNetIncome.total, true)}`,
+      ].join('\n'),
     }] : []),
   ];
 
@@ -344,10 +422,17 @@ export function MantineDashboard() {
                 <stat.icon size={18} />
               </ThemeIcon>
             </Group>
-            <Tooltip 
-              label={stat.exactValue} 
-              openDelay={500}
+            <Tooltip
+              label={
+                <Text size="xs" style={{ whiteSpace: 'pre-line', fontFamily: 'var(--mantine-font-family-monospace)' }}>
+                  {stat.formula}
+                </Text>
+              }
+              multiline
+              w={360}
+              openDelay={300}
               closeDelay={200}
+              withArrow
             >
               <Text size="xl" fw={700} mb={5} style={{ cursor: 'help' }}>
                 {stat.value}
@@ -370,7 +455,31 @@ export function MantineDashboard() {
           withBorder
           style={{ display: 'block', textDecoration: 'none', color: 'inherit', cursor: 'pointer' }}
         >
-          <Text size="sm" fw={500} mb="md">Monthly Budget Status</Text>
+          <Group justify="space-between" mb="md">
+            <Text size="sm" fw={500}>Monthly Budget Status</Text>
+            <Tooltip
+              label={
+                <Text size="xs" style={{ whiteSpace: 'pre-line', fontFamily: 'var(--mantine-font-family-monospace)' }}>
+                  {[
+                    'Progress = Spending ÷ Expense budget × 100.',
+                    'Spending excludes savings, transfers, and hidden categories.',
+                    'Expense budget is the sum of non-income, non-transfer budgets',
+                    'for the current month (savings categories included as expense here).',
+                    '',
+                    `Spending: ${formatCurrency(monthlySpending, true)}`,
+                    `Budget:   ${formatCurrency(totalBudget, true)}`,
+                    `Progress: ${budgetProgress.toFixed(1)}%`,
+                  ].join('\n')}
+                </Text>
+              }
+              multiline
+              w={360}
+              openDelay={300}
+              withArrow
+            >
+              <Text size="xs" c="dimmed" style={{ cursor: 'help' }}>How is this calculated?</Text>
+            </Tooltip>
+          </Group>
           <Progress.Root size="xl" mb="md">
             <Progress.Section value={budgetProgress} color={budgetProgress > 100 ? 'red' : budgetProgress > 80 ? 'orange' : 'green'}>
               <Progress.Label>{budgetProgress.toFixed(0)}%</Progress.Label>
@@ -390,7 +499,30 @@ export function MantineDashboard() {
       ) : monthlyIncome > 0 ? (
         // Show income vs spending when no budget exists
         <Card padding="lg" radius="md" withBorder>
-          <Text size="sm" fw={500} mb="md">Income vs Spending</Text>
+          <Group justify="space-between" mb="md">
+            <Text size="sm" fw={500}>Income vs Spending</Text>
+            <Tooltip
+              label={
+                <Text size="xs" style={{ whiteSpace: 'pre-line', fontFamily: 'var(--mantine-font-family-monospace)' }}>
+                  {[
+                    'Progress = Spending ÷ Income × 100.',
+                    'Both exclude transfers and hidden categories.',
+                    'Spending also excludes savings contributions.',
+                    '',
+                    `Spending: ${formatCurrency(monthlySpending, true)}`,
+                    `Income:   ${formatCurrency(monthlyIncome, true)}`,
+                    `Progress: ${spendingVsIncomeProgress.toFixed(1)}%`,
+                  ].join('\n')}
+                </Text>
+              }
+              multiline
+              w={360}
+              openDelay={300}
+              withArrow
+            >
+              <Text size="xs" c="dimmed" style={{ cursor: 'help' }}>How is this calculated?</Text>
+            </Tooltip>
+          </Group>
           <Progress.Root size="xl" mb="md">
             <Progress.Section value={spendingVsIncomeProgress} color={spendingVsIncomeProgress > 100 ? 'red' : spendingVsIncomeProgress > 80 ? 'orange' : 'green'}>
               <Progress.Label>{spendingVsIncomeProgress.toFixed(0)}%</Progress.Label>
