@@ -5,6 +5,7 @@ import {
   ThemeIcon,
   SimpleGrid,
   RingProgress,
+  Tooltip,
 } from '@mantine/core';
 import {
   IconCash,
@@ -30,7 +31,115 @@ interface ReportsKpiCardsProps {
   timeRangeLabel: string;
 }
 
+function FormulaTooltip({ children, formula }: { children: React.ReactNode; formula: string }) {
+  return (
+    <Tooltip
+      label={
+        <Text size="xs" style={{ whiteSpace: 'pre-line', fontFamily: 'var(--mantine-font-family-monospace)' }}>
+          {formula}
+        </Text>
+      }
+      multiline
+      w={380}
+      openDelay={300}
+      closeDelay={200}
+      withArrow
+    >
+      <Text fw={700} size="xl" style={{ cursor: 'help' }}>
+        {children}
+      </Text>
+    </Tooltip>
+  );
+}
+
+function FormulaTooltipColored({
+  children,
+  formula,
+  color,
+}: {
+  children: React.ReactNode;
+  formula: string;
+  color?: string;
+}) {
+  return (
+    <Tooltip
+      label={
+        <Text size="xs" style={{ whiteSpace: 'pre-line', fontFamily: 'var(--mantine-font-family-monospace)' }}>
+          {formula}
+        </Text>
+      }
+      multiline
+      w={380}
+      openDelay={300}
+      closeDelay={200}
+      withArrow
+    >
+      <Text fw={700} size="xl" c={color} style={{ cursor: 'help' }}>
+        {children}
+      </Text>
+    </Tooltip>
+  );
+}
+
 export function ReportsKpiCards({ kpiSummary, timeRangeLabel }: ReportsKpiCardsProps) {
+  const income = kpiSummary?.totalIncome ?? 0;
+  const expenses = kpiSummary?.totalExpenses ?? 0;
+  const savings = kpiSummary?.totalSavings ?? 0;
+  const netIncome = kpiSummary?.netIncome ?? 0;
+  const avgIncome = kpiSummary?.averageMonthlyIncome ?? 0;
+  const avgExpenses = kpiSummary?.averageMonthlyExpenses ?? 0;
+  const savingsRate = kpiSummary?.savingsRate ?? 0;
+  const contributionRate = kpiSummary?.contributionRate ?? 0;
+
+  const incomeFormula = [
+    `Sum of monthly income across ${timeRangeLabel}.`,
+    'Excludes transfers, hidden categories, and savings categories.',
+    `Total:    ${formatCurrency(income, true)}`,
+    `Avg/mo:   ${formatCurrency(avgIncome, true)} (complete months only)`,
+  ].join('\n');
+
+  const expensesFormula = [
+    `Sum of monthly expenses across ${timeRangeLabel}.`,
+    'Excludes transfers, hidden categories, and savings categories.',
+    'Currently uses calculateSpending — refunds (negative-amount rows)',
+    'are dropped, NOT netted against expense. Dashboard uses signed',
+    'accumulation (calculateActualTotals), so the two can disagree.',
+    `Total:    ${formatCurrency(expenses, true)}`,
+    `Avg/mo:   ${formatCurrency(avgExpenses, true)} (complete months only)`,
+  ].join('\n');
+
+  const savingsFormula = [
+    `Sum of monthly savings contributions across ${timeRangeLabel}.`,
+    'Categories with isSavings=true (and their subcategories).',
+    'Excluded from the Expenses KPI above.',
+    `Total:    ${formatCurrency(savings, true)}`,
+  ].join('\n');
+
+  const netFormula = [
+    `Net = Income − Expenses − Savings.`,
+    `Income:   ${formatCurrency(income, true)}`,
+    `Expenses: ${formatCurrency(expenses, true)}`,
+    `Savings:  ${formatCurrency(savings, true)}`,
+    `Net:      ${formatCurrency(netIncome, true)}`,
+  ].join('\n');
+
+  const savingsRateFormula = [
+    'Industry-standard savings rate: share of income not consumed.',
+    '(Income − Expenses) ÷ Income × 100',
+    'Counts both leftover cash AND explicit savings contributions.',
+    `Income:   ${formatCurrency(income, true)}`,
+    `Expenses: ${formatCurrency(expenses, true)}`,
+    `Rate:     ${savingsRate.toFixed(2)}%`,
+  ].join('\n');
+
+  const contributionRateFormula = [
+    'Share of income explicitly sent to savings categories.',
+    'Savings ÷ Income × 100',
+    `Savings:  ${formatCurrency(savings, true)}`,
+    `Income:   ${formatCurrency(income, true)}`,
+    `Rate:     ${contributionRate.toFixed(2)}%`,
+  ].join('\n');
+
   return (
     <SimpleGrid cols={{ base: 1, sm: 2, md: 3, lg: 6 }} spacing="md">
       <Card withBorder>
@@ -39,11 +148,11 @@ export function ReportsKpiCards({ kpiSummary, timeRangeLabel }: ReportsKpiCardsP
             <Text c="dimmed" size="xs" tt="uppercase" fw={700}>
               {timeRangeLabel} Income
             </Text>
-            <Text fw={700} size="xl">
-              ${kpiSummary?.totalIncome ? Math.ceil(kpiSummary.totalIncome).toLocaleString() : 0}
-            </Text>
+            <FormulaTooltip formula={incomeFormula}>
+              ${Math.ceil(income).toLocaleString()}
+            </FormulaTooltip>
             <Text size="xs" c="dimmed" mt={7}>
-              ${kpiSummary?.averageMonthlyIncome.toFixed(0) || 0}/month avg
+              ${avgIncome.toFixed(0)}/month avg
             </Text>
           </div>
           <ThemeIcon color="green" variant="light" size={38} radius="md">
@@ -58,11 +167,11 @@ export function ReportsKpiCards({ kpiSummary, timeRangeLabel }: ReportsKpiCardsP
             <Text c="dimmed" size="xs" tt="uppercase" fw={700}>
               {timeRangeLabel} Expenses
             </Text>
-            <Text fw={700} size="xl">
-              ${kpiSummary?.totalExpenses ? Math.ceil(kpiSummary.totalExpenses).toLocaleString() : 0}
-            </Text>
+            <FormulaTooltip formula={expensesFormula}>
+              ${Math.ceil(expenses).toLocaleString()}
+            </FormulaTooltip>
             <Text size="xs" c="dimmed" mt={7}>
-              ${kpiSummary?.averageMonthlyExpenses.toFixed(0) || 0}/month avg
+              ${avgExpenses.toFixed(0)}/month avg
             </Text>
           </div>
           <ThemeIcon color="red" variant="light" size={38} radius="md">
@@ -77,9 +186,9 @@ export function ReportsKpiCards({ kpiSummary, timeRangeLabel }: ReportsKpiCardsP
             <Text c="dimmed" size="xs" tt="uppercase" fw={700}>
               {timeRangeLabel} Savings
             </Text>
-            <Text fw={700} size="xl" c="teal">
-              ${kpiSummary?.totalSavings ? Math.ceil(kpiSummary.totalSavings).toLocaleString() : 0}
-            </Text>
+            <FormulaTooltipColored formula={savingsFormula} color="teal">
+              ${Math.ceil(savings).toLocaleString()}
+            </FormulaTooltipColored>
             <Text size="xs" c="dimmed" mt={7}>
               Excluded from spending
             </Text>
@@ -96,15 +205,15 @@ export function ReportsKpiCards({ kpiSummary, timeRangeLabel }: ReportsKpiCardsP
             <Text c="dimmed" size="xs" tt="uppercase" fw={700}>
               Net Income
             </Text>
-            <Text fw={700} size="xl" c={kpiSummary?.netIncome && kpiSummary.netIncome > 0 ? 'green' : 'red'}>
-              {kpiSummary?.netIncome ? (kpiSummary.netIncome < 0 ? '-' : '') + formatCurrency(Math.abs(kpiSummary.netIncome)) : formatCurrency(0)}
-            </Text>
+            <FormulaTooltipColored formula={netFormula} color={netIncome > 0 ? 'green' : 'red'}>
+              {(netIncome < 0 ? '-' : '') + formatCurrency(Math.abs(netIncome))}
+            </FormulaTooltipColored>
             <Text size="xs" c="dimmed" mt={7}>
               {timeRangeLabel}
             </Text>
           </div>
           <ThemeIcon
-            color={kpiSummary?.netIncome && kpiSummary.netIncome > 0 ? 'green' : 'red'}
+            color={netIncome > 0 ? 'green' : 'red'}
             variant="light"
             size={38}
             radius="md"
@@ -120,9 +229,9 @@ export function ReportsKpiCards({ kpiSummary, timeRangeLabel }: ReportsKpiCardsP
             <Text c="dimmed" size="xs" tt="uppercase" fw={700}>
               Savings Rate
             </Text>
-            <Text fw={700} size="xl">
-              {kpiSummary?.savingsRate.toFixed(1) || 0}%
-            </Text>
+            <FormulaTooltip formula={savingsRateFormula}>
+              {savingsRate.toFixed(1)}%
+            </FormulaTooltip>
             <Text size="xs" c="dimmed" mt={7}>
               Of income not spent
             </Text>
@@ -132,7 +241,7 @@ export function ReportsKpiCards({ kpiSummary, timeRangeLabel }: ReportsKpiCardsP
             thickness={6}
             roundCaps
             sections={[
-              { value: Math.max(0, Math.min(100, kpiSummary?.savingsRate || 0)), color: 'teal' }
+              { value: Math.max(0, Math.min(100, savingsRate)), color: 'teal' }
             ]}
           />
         </Group>
@@ -144,9 +253,9 @@ export function ReportsKpiCards({ kpiSummary, timeRangeLabel }: ReportsKpiCardsP
             <Text c="dimmed" size="xs" tt="uppercase" fw={700}>
               Contribution Rate
             </Text>
-            <Text fw={700} size="xl">
-              {kpiSummary?.contributionRate.toFixed(1) || 0}%
-            </Text>
+            <FormulaTooltip formula={contributionRateFormula}>
+              {contributionRate.toFixed(1)}%
+            </FormulaTooltip>
             <Text size="xs" c="dimmed" mt={7}>
               Of income to savings accts
             </Text>
@@ -156,7 +265,7 @@ export function ReportsKpiCards({ kpiSummary, timeRangeLabel }: ReportsKpiCardsP
             thickness={6}
             roundCaps
             sections={[
-              { value: Math.max(0, Math.min(100, kpiSummary?.contributionRate || 0)), color: 'teal' }
+              { value: Math.max(0, Math.min(100, contributionRate)), color: 'teal' }
             ]}
           />
         </Group>
