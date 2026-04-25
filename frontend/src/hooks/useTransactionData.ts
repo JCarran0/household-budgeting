@@ -1,9 +1,10 @@
 import { useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api, type ExtendedPlaidAccount } from '../lib/api';
-import { format, startOfMonth, endOfMonth, startOfYear, subMonths } from 'date-fns';
+import { format, startOfMonth, endOfMonth, startOfYear, subMonths, parseISO } from 'date-fns';
 import type { Category } from '../../../shared/types';
 import { notifications } from '@mantine/notifications';
+import { getDateRange } from '../utils/reportDateRange';
 
 type DateFilterOption = 'this-month' | 'last-month' | 'ytd' | 'last3' | 'last6' | 'last12' | 'all' | 'custom' | string;
 
@@ -58,12 +59,10 @@ export function useTransactionData(filters: TransactionFilters) {
       return [startOfMonth(lastMonth), endOfMonth(lastMonth)] as [Date, Date];
     } else if (dateFilterOption === 'ytd') {
       return [startOfYear(now), endOfMonth(now)] as [Date, Date];
-    } else if (dateFilterOption === 'last3') {
-      return [subMonths(now, 3), now] as [Date, Date];
-    } else if (dateFilterOption === 'last6') {
-      return [subMonths(now, 6), now] as [Date, Date];
-    } else if (dateFilterOption === 'last12') {
-      return [subMonths(now, 12), now] as [Date, Date];
+    } else if (dateFilterOption === 'last3' || dateFilterOption === 'last6' || dateFilterOption === 'last12') {
+      // Share semantics with the Reports page: N complete prior months, excluding the current in-progress month.
+      const { startDate, endDate } = getDateRange(dateFilterOption);
+      return [parseISO(startDate), parseISO(endDate)] as [Date, Date];
     } else if (dateFilterOption === 'all') {
       return [null, null];
     } else if (dateFilterOption === 'custom') {
