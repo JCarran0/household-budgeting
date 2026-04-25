@@ -32,6 +32,7 @@ Family-scale app for 2 users: personal budgeting (with Plaid), shared tasks, tri
 | Projects | [PROJECTS-BRD.md](docs/features/PROJECTS-BRD.md) | [PROJECTS-ENHANCEMENTS-PLAN.yaml](docs/features/PROJECTS-ENHANCEMENTS-PLAN.yaml) |
 | Task Management v2.0 | [TASK-MANAGEMENT-BRD.md](docs/features/TASK-MANAGEMENT-BRD.md) | [TASK-MANAGEMENT-ENHANCEMENTS-PLAN.yaml](docs/features/TASK-MANAGEMENT-ENHANCEMENTS-PLAN.yaml) |
 | Task Leaderboard v2.0 | [TASK-LEADERBOARD-BRD.md](docs/features/TASK-LEADERBOARD-BRD.md) | — |
+| Wrapped | [WRAPPED-BRD.md](docs/features/WRAPPED-BRD.md) | [WRAPPED-PLAN.yaml](docs/features/WRAPPED-PLAN.yaml) |
 | Stale Data Mitigation | [STALE-DATA-MITIGATION-BRD.md](docs/features/STALE-DATA-MITIGATION-BRD.md) | [STALE-DATA-MITIGATION-PLAN.yaml](docs/features/STALE-DATA-MITIGATION-PLAN.yaml) |
 | Wishlist | [WISHLIST-BRD.md](docs/features/WISHLIST-BRD.md) | [WISHLIST-PLAN.yaml](docs/features/WISHLIST-PLAN.yaml) |
 | Business Workspace | [BUSINESS-WORKSPACE-BRD.md](docs/features/BUSINESS-WORKSPACE-BRD.md) | [BUSINESS-WORKSPACE-PLAN.yaml](docs/features/BUSINESS-WORKSPACE-PLAN.yaml) |

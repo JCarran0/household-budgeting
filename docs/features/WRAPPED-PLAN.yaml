@@ -1,0 +1,1125 @@
+# =============================================================================
+# Wrapped — Implementation Plan
+# =============================================================================
+# BRD: docs/features/WRAPPED-BRD.md (v1.0 — 2026-04-24)
+# Depends on: docs/features/TASK-MANAGEMENT-BRD.md, TASK-LEADERBOARD-BRD.md (v2.0),
+#             TRIP-ITINERARIES-BRD.md
+# Assumes merged: commit 736dfa9 (role-based admin — adds User.isAdmin +
+#                 adminMiddleware). Worktree predates this commit; rebase first.
+# Status: Draft
+# Last Updated: 2026-04-24
+# =============================================================================
+
+overview:
+  description: |
+    Daily + weekly family recap, pushed at 9 PM local on a per-user schedule.
+    Additive, presentation-only — no new write surface touches existing data
+    beyond two fields on `User` and one new persisted entity (`WeeklyWrapped`).
+
+    The feature is composed of six concerns, each owning a file or folder:
+
+    1. **Rule engine** — a pure, stateless module in `shared/utils/wrapped*.ts`
+       that takes a day's (or week's) worth of family data and returns
+       `{ headline, motivationalCopyId, highlights }`. Same entry point for
+       daily and weekly; cadence flag toggles which rules evaluate.
+
+    2. **Copy pools** — data-only file `shared/utils/wrappedCopy.ts`; tier
+       pools, highlight variants, voice rules in comments. Edited by PR.
+
+    3. **Nightly scheduler** — `backend/src/jobs/wrappedScheduler.ts`, a
+       15-minute tick started from `backend/src/index.ts`. Per user with
+       `wrappedEnabled === true`, checks whether local time is in
+       [9:00, 9:15] PM, then fires. Idempotent on
+       `(userId, cadence, localDateKey)` via a small per-user dispatch log.
+
+    4. **Persistence** — `WeeklyWrapped` records stored per family at
+       `weekly_wrappeds_${familyId}.json` (matches existing naming). No daily
+       persistence beyond the dispatch log.
+
+    5. **Push delivery** — reuses the existing `pushNotificationService`
+       (VAPID/web-push). Adds a new `NotificationType: 'wrapped'` and a
+       thin `sendWrappedPush` helper that composes the payload.
+
+    6. **Frontend surfaces** — `/wrapped/today`, `/wrapped/week`,
+       `/wrapped/archive` routes; a dashboard banner slot during the
+       viewing window; a nav item with unopened-dot indicator. Daily is
+       a single card; weekly is a 6-card swipe deck.
+
+    No new Plaid calls. No new LLM calls in v1 (AI copy is an explicit
+    P2/v2 item). The compute load is trivial: one rule-engine evaluation
+    per enabled user per day.
+
+  key_files:
+    brd: docs/features/WRAPPED-BRD.md
+
+    # Shared types + pure compute (deterministic, unit-testable)
+    shared_types: shared/types/index.ts
+    shared_wrapped_engine: shared/utils/wrappedEngine.ts            # new — rule engine, headline/highlight selection
+    shared_wrapped_rules: shared/utils/wrappedRules.ts              # new — 11 rule definitions, candidate producers
+    shared_wrapped_copy: shared/utils/wrappedCopy.ts                # new — tier pools + highlight variant pools
+    shared_wrapped_days: shared/utils/wrappedDays.ts                # new — IANA-aware window + week boundary helpers (leverage easternTime.ts style)
+
+    # Backend — service, routes, scheduler, storage
+    backend_service: backend/src/services/wrappedService.ts         # new — compose, persist, read
+    backend_scheduler: backend/src/jobs/wrappedScheduler.ts         # new — 15-min tick
+    backend_routes: backend/src/routes/wrapped.ts                   # new — GET today/week/archive, admin toggle
+    backend_index: backend/src/index.ts                             # modify — wire scheduler + routes
+    backend_services_index: backend/src/services/index.ts           # modify — export wrappedService
+    backend_push_service: backend/src/services/pushNotificationService.ts  # modify — extend NotificationType + sendWrapped helper
+    backend_data_service: backend/src/services/dataService.ts       # modify — get/save WeeklyWrapped[]
+
+    # Frontend
+    frontend_routes: frontend/src/App.tsx
+    frontend_api: frontend/src/lib/api/wrapped.ts                   # new
+    frontend_today_page: frontend/src/pages/WrappedToday.tsx        # new — daily single card
+    frontend_week_page: frontend/src/pages/WrappedWeek.tsx          # new — 6-card deck
+    frontend_archive_page: frontend/src/pages/WrappedArchive.tsx    # new
+    frontend_banner: frontend/src/components/dashboard/WrappedBanner.tsx  # new — dashboard entry
+    frontend_dashboard: frontend/src/pages/MantineDashboard.tsx     # modify — slot the banner
+    frontend_layout: frontend/src/components/MantineLayout.tsx      # modify — nav item + dot
+    frontend_admin_settings: frontend/src/components/settings/WrappedAdminSection.tsx  # new — per-user toggle panel
+    frontend_notifications_section: frontend/src/components/settings/NotificationsSection.tsx  # modify — add "Wrapped" row
+
+    # Tests
+    backend_tests_engine: backend/src/__tests__/unit/wrappedEngine.test.ts
+    backend_tests_rules: backend/src/__tests__/unit/wrappedRules.test.ts
+    backend_tests_scheduler: backend/src/__tests__/unit/wrappedScheduler.test.ts
+    backend_tests_service: backend/src/__tests__/integration/wrappedService.test.ts
+    backend_tests_routes: backend/src/__tests__/integration/wrappedRoutes.test.ts
+
+# =============================================================================
+# DECISIONS LOG — Capture key shape + pattern choices before code lands
+# =============================================================================
+decisions:
+  - id: D1
+    date: 2026-04-24
+    decision: Rule engine is pure shared TypeScript; backend calls it; no LLM in v1
+    rationale: |
+      BRD §6.4 + §11.3 REQ-W-027 make the v1 copy path explicitly templated.
+      A pure function (`computeWrapped(input): WrappedPayload`) is
+      deterministic, unit-testable with a handful of golden fixtures, and
+      cheap to run on the server. Placing it in `shared/` also means
+      the frontend can preview it in a dev-only tool if needed, without
+      a round trip.
+
+  - id: D2
+    date: 2026-04-24
+    decision: Two new User fields — `wrappedEnabled: boolean` and `timezone: string` (IANA)
+    rationale: |
+      `wrappedEnabled` is required by §9.1. `timezone` is required by §2.2
+      and §7.1 — the scheduler must know each user's local time to fire at
+      9 PM local. Absent today. Default `timezone` to the household/app
+      default (`America/New_York`) for existing users at migration time;
+      expose an editable control in settings. Adding two optional-with-
+      defaulted fields is backwards-compatible with the JSON storage model
+      — the data service reads with defaults.
+
+  - id: D3
+    date: 2026-04-24
+    decision: Reuse the shipped `isAdmin` flag (post-TD-006) for the Wrapped admin panel; do NOT use email match
+    rationale: |
+      BRD §9.1 suggested "hardcoded to user.email === env.ADMIN_EMAIL" as an
+      interim. The admin-role system (commit 736dfa9, `adminMiddleware`)
+      already ships a real `User.isAdmin` + env-bootstrapped
+      `ADMIN_USERNAMES`. Using the shipped gate is strictly better than an
+      email-match hack — same surface, one less bespoke check to maintain.
+      The "admin-only toggle per household member" panel goes behind
+      `adminMiddleware`. Mirrors the current admin routes pattern at
+      `backend/src/routes/admin.ts`.
+
+  - id: D4
+    date: 2026-04-24
+    decision: One new NotificationType (`'wrapped'`); one new NotificationPreferences key (`wrappedEnabled`)
+    rationale: |
+      `wrappedEnabled` in BRD §9 conceptually belongs on the User for the
+      feature-flag semantics (visibility gate), but the push subscription
+      plumbing already has a `NotificationPreferences` object and a
+      per-user preferences file. Split cleanly:
+        - `User.wrappedEnabled`      — gate on ALL surfaces (routes, banner,
+                                       nav, push); default `false`; admin-
+                                       only toggle in settings.
+        - `NotificationPreferences.wrappedEnabled` — push opt-in; default
+                                       `true` (the user-level gate already
+                                       hides the feature; once visible, push
+                                       should be on by default). User can
+                                       toggle push off without turning the
+                                       in-app feature off.
+      The User-level gate is the primary; the preferences toggle is a
+      standard "unsubscribe from this push type" affordance.
+
+  - id: D5
+    date: 2026-04-24
+    decision: Daily Wrapped is NOT persisted — only a dispatch log row
+    rationale: |
+      BRD §8.1 + REQ-W-002 explicit. The Wrapped is computed on-demand when
+      the viewer hits `/wrapped/today` during the window, from the current
+      task / trip / project / transaction data. A server-side re-compute
+      during the viewing window is deterministic (same inputs → same output,
+      modulo the copy-pool pick — which reads from a 7-day cache we DO
+      persist). Only persisted: a minimal dispatch log row per push fired
+      — `(userId, cadence, localDateKey, firedAt)` — for idempotency.
+      Location: `wrapped_dispatch_${userId}.json`, capped at 60 rows
+      (FIFO trim).
+
+  - id: D6
+    date: 2026-04-24
+    decision: WeeklyWrapped snapshotted at generation time, immutable thereafter
+    rationale: |
+      BRD §8.3 explicit. Mirrors the TASK-LEADERBOARD v2.0 per-badge
+      `shippedAt` + `celebrationCopy` pattern. Once the Sunday 9 PM job
+      fires for a household, the record is frozen: copy pool edits, rule
+      threshold changes, even bug fixes do not retroactively mutate the
+      archive. The `cards` field stores fully-rendered content (resolved
+      copy variant ID + slot fills), not raw inputs.
+
+  - id: D7
+    date: 2026-04-24
+    decision: Scheduler is a 15-minute setInterval loop started in `backend/src/index.ts`; no new dependency
+    rationale: |
+      BRD §10 + §14 Q1 + Q9 accept 15-minute cadence. The app does not
+      currently use node-cron or any job framework — the sole precedent is
+      the chat-action-cards `setInterval` sweep in
+      `backend/src/services/chatActions/proposalStore.ts:116`. Follow that
+      pattern: module-level `setInterval` wrapped in try/catch, `.unref()`
+      so it doesn't block process exit, graceful shutdown on SIGTERM.
+      Adds zero new dependencies. If PM2 ever shifts to multi-instance
+      mode, this needs a leader-election or cron-node guard — out of scope
+      for a single-instance deploy (noted in §12 Assumptions).
+
+  - id: D8
+    date: 2026-04-24
+    decision: Family data aggregation reuses the leaderboard's per-user `CreditEvent` stream
+    rationale: |
+      The leaderboard already computes per-user credit events from tasks.
+      `CreditEvent` is defined in `shared/utils/leaderboardStreaks.ts`. The
+      Wrapped rule engine needs the same day-by-day counts plus:
+        - Streak state (current/best) — already computed in
+          `shared/utils/leaderboardStreaks.ts`.
+        - New badge earns in the window — already computed in
+          `shared/utils/leaderboardBadges.ts` (filter by `earnedAt`).
+        - Zombie closes (age ≥7 days) — new derivation, pure from Task list.
+        - Project/Trip/Receipt deltas — new derivations.
+      The rule engine accepts a `WrappedInput` that is composed by
+      `wrappedService.buildInput(familyId, window)`, which does the data
+      assembly. Engine stays pure; service does I/O.
+
+  - id: D9
+    date: 2026-04-24
+    decision: Repetition avoidance uses a per-household rolling-7-day `usedCopyIds` cache persisted alongside WeeklyWrapped
+    rationale: |
+      BRD §6.4. Key: `wrapped_recent_copy_${familyId}.json` — a small
+      array of `{ copyId, usedAt }` records, pruned to last 7 days on
+      read. Filter logic in `wrappedCopy.pickVariant(poolId, recentIds)`
+      returns a random eligible variant or falls back to "any" when the
+      pool is exhausted. Family-level (not per-user) — both spouses see
+      the same family Wrapped so the cache is rightfully family-scoped.
+
+  - id: D10
+    date: 2026-04-24
+    decision: Vacation suppression checks `activeTripCoversDate` at generation time, not ahead of time
+    rationale: |
+      BRD §2.3. A trip being added at 8:58 PM should suppress the 9 PM push.
+      The scheduler checks `tripHelpers.getActiveTrip(familyId, today)`
+      right before firing. Cheap — trips are already in-memory if the
+      wrappedService shares a dataService instance. For weekly records
+      that span a trip-containing week, the record IS still written (with
+      `suppressed: true`) so the archive has the entry, but no push fires
+      and the in-app banner shows the muted placeholder.
+
+  - id: D11
+    date: 2026-04-24
+    decision: Weekly "Best Day" and "Leaderboard" cards use cumulative counts from CreditEvent stream; ties tie-break deterministically
+    rationale: |
+      Best Day: `max(dayCounts)`, ties → most recent day of week
+      (Sunday being "most recent" in the Mon–Sun week). Leaderboard:
+      per-user sum; tie → `winnerId: null` and the tied-week copy pool
+      (BRD §14 Q4 proposed; accept). Determinism is important: the
+      WeeklyWrapped is snapshotted once, but a user opening the archive
+      should see a stable value even if a hypothetical re-computation
+      ran on identical data.
+
+  - id: D12
+    date: 2026-04-24
+    decision: Tier-0 push body elides the zero count (BRD §14 Q7 proposed; accept)
+    rationale: |
+      Push body for tier-0: `"Your Wrapped is ready 🌙"`. Push body for
+      tier 1+: `"You two closed {N} today. {H} highlight(s) inside."` where
+      `{H}` is the highlight count (0–2). The gentle framing lives inside
+      the app; the push surface avoids broadcasting a zero count to the
+      lock screen.
+
+  - id: D13
+    date: 2026-04-24
+    decision: Leaderboard-win rule uses the family-scope CreditEvent stream (same as the shipped leaderboard)
+    rationale: |
+      BRD §5.1 rule 5 + REQ-W-019 + BRD §1.3 family-scope filter. The
+      existing leaderboard already filters by `scope === 'family'` per
+      TASK-MANAGEMENT-BRD v2.0. Wrapped's rule engine consumes the same
+      filtered events — personal tasks never contribute. No separate
+      scope-filter code lives in the Wrapped engine.
+
+  - id: D14
+    date: 2026-04-24
+    decision: Daily Wrapped stream is served via a single endpoint `GET /api/v1/wrapped/today`; client polls on open
+    rationale: |
+      The endpoint returns the full rendered payload (or 204 if out-of-
+      window / suppressed / disabled). No real-time subscription needed —
+      opening the Wrapped is a read. The response is cacheable for the
+      life of the window by a `Cache-Control: private, max-age=300` header;
+      the client invalidates on window-edge and on push receipt.
+
+  - id: D15
+    date: 2026-04-24
+    decision: Frontend uses the same `useSearchParams` URL-state pattern CLAUDE.md calls out for chatbot/BvA
+    rationale: |
+      Weekly card index goes in `?card=0..5` so deep links and "share this
+      card" screenshots reference a stable URL. Archive detail route is
+      `/wrapped/archive/:weekStart?card=0`. Consistent with the
+      2026-04 architecture decision on URL-based page state.
+
+# =============================================================================
+# PHASE 1 — Shared types, copy pools, rule engine (pure, no I/O)
+# =============================================================================
+phase_1_shared:
+  status: not_started
+  description: |
+    The foundational pure layer. Everything here is testable with
+    Jest + fixtures, no servers running. Lands first so Phases 2+ can
+    consume stable types.
+
+  tasks:
+    - id: "1.1"
+      task: Add Wrapped + timezone fields to shared types
+      details: |
+        File: `shared/types/index.ts`
+
+        Extend `User`:
+          ```ts
+          export interface User {
+            id: string;
+            username: string;
+            displayName: string;
+            familyId: string;
+            createdAt: string;
+            color?: UserColor;
+            timezone?: string;          // NEW — IANA, e.g., "America/New_York"
+            wrappedEnabled?: boolean;   // NEW — default false, admin-gated
+          }
+          ```
+          Both optional so existing stored users read without migration;
+          userService applies defaults on load (timezone →
+          `'America/New_York'`, wrappedEnabled → `false`).
+
+        Extend `NotificationType`:
+          `| 'wrapped'`  (used for push preferences + push payload)
+
+        Extend `NotificationPreferences`:
+          ```ts
+          wrappedEnabled: boolean;   // default true — push opt-in within
+                                     // the user-level feature gate
+          ```
+          Update `DEFAULT_PREFERENCES` in pushNotificationService.ts
+          accordingly (task 2.6).
+
+        Add Wrapped-specific exports:
+          ```ts
+          export type WrappedCadence = 'daily' | 'weekly';
+          export type WrappedTier = 0 | 1 | 2 | 3 | 4;
+          export type WrappedRuleId =
+            | 'zombie' | 'badge' | 'streak_milestone'
+            | 'personal_best' | 'leaderboard_win'
+            | 'wow_gain' | 'midweek_comeback' | 'category_sweep'
+            | 'project_progress' | 'trip_momentum' | 'receipt_sweep';
+
+          export type WrappedRuleCategory =
+            | 'zombie' | 'badge' | 'streak'
+            | 'personal_best' | 'leaderboard'
+            | 'wow' | 'comeback' | 'sweep'
+            | 'project' | 'trip' | 'receipts';
+
+          export interface WrappedHighlight {
+            ruleId: WrappedRuleId;
+            category: WrappedRuleCategory;
+            score: number;                        // 0..100
+            copyVariantId: string;                // e.g., "zombie.v2"
+            fills: Record<string, string | number>; // slot fills rendered client-side
+          }
+
+          export interface WrappedDailyPayload {
+            cadence: 'daily';
+            dateKey: string;                      // ISO date in viewer TZ
+            familyId: string;
+            headline: { count: number; tier: WrappedTier; copyVariantId: string };
+            highlights: WrappedHighlight[];       // 0..2
+            tz: string;
+          }
+
+          export interface WrappedWeeklyCards {
+            headline: { count: number; wowDelta: number; copyVariantId: string };
+            bestDay: { dayOfWeek: string; count: number };
+            leaderboard: { byUserId: Record<string, number>; winnerId: string | null };
+            streaks: { byUserId: Record<string, { current: number; grew: boolean }> };
+            highlights: WrappedHighlight[];        // 0..3
+            closer: { nextFireLocalIso: string };
+          }
+
+          export interface WrappedWeeklyRecord {
+            id: string;                            // `${weekStart}`
+            familyId: string;
+            weekStart: string;                     // ISO Monday
+            weekEnd: string;                       // ISO Sunday
+            tz: string;
+            suppressed: boolean;
+            cards: WrappedWeeklyCards | null;      // null when suppressed
+            usedCopyIds: string[];                 // carried forward for repetition filter
+            createdAt: string;
+          }
+
+          export interface WrappedDispatchLogEntry {
+            userId: string;
+            cadence: WrappedCadence;
+            localDateKey: string;                  // viewer-TZ YYYY-MM-DD
+            firedAt: string;
+            delivered: boolean;                    // web-push acceptance
+          }
+          ```
+
+    - id: "1.2"
+      task: Window + boundary helpers in `shared/utils/wrappedDays.ts`
+      details: |
+        Pure helpers, no Date.now() in public signatures (always accept
+        `now: Date`). Functions:
+          - `localDateKey(now: Date, tz: string): string`  — YYYY-MM-DD in
+            the given IANA TZ. Use `Intl.DateTimeFormat(... timeZone: tz)`.
+          - `isInNineToMidnightWindow(now: Date, tz: string): boolean`
+          - `isInWeeklyExtendedWindow(now: Date, tz: string): boolean`
+            — Sun 9 PM through Mon 11:59 PM local
+          - `isoWeekBoundaries(now: Date, tz: string): { start: string; end: string }`
+            — Monday start, Sunday end, in local calendar dates
+          - `dayOfWeekLabel(dateIso: string, tz: string): 'Monday' | ...`
+          - `isSchedulerWindow(now: Date, tz: string): boolean`
+            — 9:00–9:15 PM local, used by the scheduler to decide firing
+
+        Follow the pattern in `shared/utils/easternTime.ts` (existing) and
+        `leaderboardDays.ts` (handles IANA day-bucketing for streaks) —
+        same TZ conventions.
+
+        Unit tests cover DST transitions (spring forward, fall back),
+        far-East (Asia/Tokyo) and far-West (Pacific/Honolulu) users,
+        crossing midnight UTC mid-window.
+
+    - id: "1.3"
+      task: Copy pools in `shared/utils/wrappedCopy.ts`
+      details: |
+        Data-only module. Exports:
+          ```ts
+          export interface CopyVariant { id: string; template: string; }
+          export interface TierPool { tier: WrappedTier; variants: CopyVariant[]; }
+          export const HEADLINE_TIER_POOLS: TierPool[];            // 5 tiers × ≥8 variants
+          export const HIGHLIGHT_POOLS: Record<WrappedRuleId, CopyVariant[]>; // 11 rules × ≥5
+          export const WEEKLY_CARD_COPY: {
+            bestDay: CopyVariant[];
+            leaderboardPlayful: CopyVariant[];
+            leaderboardTied: CopyVariant[];         // BRD §14 Q4 — dedicated tied pool
+            streakStatus: CopyVariant[];
+            closer: CopyVariant[];
+          };
+          export const PUSH_BODIES: {
+            tier0: string;                           // BRD §14 Q7 — elides count
+            tierNonZero: string;                     // template with {N} and {H}
+          };
+
+          export function pickVariant(
+            pool: CopyVariant[],
+            recentIds: Set<string>,
+            rng: () => number,                       // injectable for determinism
+          ): CopyVariant;
+          ```
+
+        Copy strings come verbatim from BRD §6.1–6.2. Token convention:
+        `{displayName}`, `{N}`, `{M}`, `{winner}`, `{loser}`, `{taskName}`,
+        `{ageInDays}`, `{tripName}`, `{projectName}`, `{badgeLabel}`,
+        `{celebrationCopy}`, `{pct}`, `{delta}`. Match the leaderboard v2
+        convention — tokens are `{camelCase}`.
+
+        `pickVariant` filters out `recentIds`; if the filtered set is
+        empty, returns a random variant from the full pool (pool
+        exhaustion case, BRD §6.4).
+
+        Voice guide (BRD §6.3) as a top-of-file comment — the one case
+        where a comment earns its keep because the next editor will
+        add copy.
+
+        Test: snapshot the pool counts so a later PR that accidentally
+        deletes a variant fails loudly.
+
+    - id: "1.4"
+      task: Rule catalog in `shared/utils/wrappedRules.ts`
+      details: |
+        Every rule is a pure function:
+          ```ts
+          export interface WrappedInput {
+            familyId: string;
+            windowStart: string;                   // ISO
+            windowEnd: string;                     // ISO
+            cadence: WrappedCadence;
+            tz: string;
+            members: Array<{ id: string; displayName: string }>;
+            // Per-user data for the window
+            perUser: Map<string, {
+              creditEvents: CreditEvent[];        // within window
+              allTimeDaily30: number;             // per-user 30-day daily max (for personal_best)
+              currentStreak: number;
+              grewStreakInWindow: boolean;
+              newlyEarnedBadges: Array<{
+                badgeId: BadgeId; tier: 1..5; earnedAt: string;
+                label: string; celebrationCopy: string;
+              }>;
+            }>;
+            // Task-level data for zombie rule (post-scope-filter)
+            closedTasksInWindow: Array<{
+              id: string; title: string;
+              createdAt: string; completedAt: string;
+              completedByUserId: string;
+            }>;
+            // Non-task triggers
+            projectCloses: Array<{ projectId: string; projectName: string;
+                                   count: number; byUserId: string }>;
+            tripStopsAdded: Array<{ tripId: string; tripName: string;
+                                    count: number; byUserId: string }>;
+            transactionsCategorized: { count: number; byUserId: string | null };
+            // Weekly-only
+            priorWeek: { familyTotal: number } | null;
+            midweekState: { byUserId: Record<string, number> } | null;  // EOD Wed
+          }
+
+          export interface WrappedCandidate extends WrappedHighlight {
+            cadenceTag: 'daily' | 'weekly' | 'both';
+          }
+
+          export function evaluateRules(input: WrappedInput): WrappedCandidate[];
+          ```
+
+        Rule implementations — one function per BRD §5.1 row:
+          zombieRule, badgeRule, streakMilestoneRule, personalBestRule,
+          leaderboardWinRule, wowGainRule, midweekComebackRule,
+          categorySweepRule, projectProgressRule, tripMomentumRule,
+          receiptSweepRule.
+
+        Each returns 0..N candidates. `evaluateRules` concatenates and
+        filters by cadence tag.
+
+        Rule-specific logic to remember:
+          - Zombie: iterate `closedTasksInWindow`, emit candidate per task
+            where `completedAt - createdAt ≥ 7 days`. Highest-age wins
+            when multiple — keep only the oldest per user to avoid
+            stacking 5 zombie highlights.
+          - Leaderboard win: REQ-W-019 — `|N-M| ≥ 3` AND `min ≤ max/2`.
+            Score 70; category `leaderboard`.
+          - Personal best: daily-only (cadence check inside the fn).
+            Skip if `allTimeDaily30 < 3` (low-floor guard — a "new best"
+            of 2 is noise).
+          - WoW gain: weekly-only. `priorWeek.familyTotal ≥ 5` AND
+            `window ≥ 1.2 * prior`. Fill `{pct}` and `{delta}`.
+          - Midweek comeback: weekly-only. Compare mid-week state to
+            window totals; fire only if the order flipped AND final
+            gap ≥ 1.
+          - Category sweep: weekly-only. ≥1 credit event on every day.
+          - Badge: one candidate per newly-earned badge per user; score
+            = 85 + tier*2. De-dup to highest-scoring badge per user to
+            avoid 5 badge highlights from a cascade.
+
+        Unit tests: fixture-driven — one JSON fixture per rule covering
+        trigger + no-trigger + edge cases. At least one golden fixture
+        for "busy household" that fires 6 rules and verifies candidate
+        ordering.
+
+    - id: "1.5"
+      task: Engine entry point in `shared/utils/wrappedEngine.ts`
+      details: |
+        ```ts
+        export function computeDailyWrapped(input: WrappedInput, ctx: {
+          recentCopyIds: Set<string>;
+          rng: () => number;
+        }): WrappedDailyPayload;
+
+        export function computeWeeklyCards(input: WrappedInput, ctx: {
+          recentCopyIds: Set<string>;
+          rng: () => number;
+          nextFireLocalIso: string;
+        }): WrappedWeeklyCards;
+        ```
+
+        Algorithm (BRD §5.2):
+          1. Headline — sum `perUser.creditEvents`; compute tier (0/1-2/
+             3-5/6-9/10+); pick tier pool variant via `pickVariant`.
+          2. Call `evaluateRules(input)` → candidates.
+          3. Rank desc by score.
+          4. Pick candidate #1 unconditionally.
+          5. For each subsequent slot (daily: up to 2; weekly: up to 3):
+             pick next candidate with unused category AND score ≥ 40.
+          6. For each chosen candidate, pick a copy variant via
+             `HIGHLIGHT_POOLS[ruleId]` filtered by `recentCopyIds`.
+          7. Tie-break by cadenceTag ('both' first), then alpha category
+             — REQ determinism per BRD §5.4.
+
+        Deterministic RNG: accept a seeded RNG from the caller so tests
+        can snapshot output. Service layer uses `Math.random`.
+
+        Unit tests: golden fixtures that cover:
+          - Zero-activity daily → tier 0, no highlights
+          - Tier-3 + 1 zombie + 1 leaderboard win → 2 highlights
+          - Tier-4 + 3 badges same user → de-duped to 1 badge highlight
+          - Weekly with midweek comeback + wow gain → ordering correct
+          - Category de-dup: leaderboard_win + personal_best → only 1
+            wins (same `leaderboard`-ish vibe is enforced by distinct
+            categories in the catalog so this actually tests that they
+            DIFFER; use personal_best + badge to confirm DIFFERENT
+            categories both make the cut)
+
+# =============================================================================
+# PHASE 2 — Backend service, storage, push extension
+# =============================================================================
+phase_2_backend:
+  status: not_started
+  description: |
+    Bridge pure compute to stored data and the existing push service.
+
+  tasks:
+    - id: "2.1"
+      task: DataService additions
+      details: |
+        File: `backend/src/services/dataService.ts`
+
+        Add typed get/save methods (follow existing pattern —
+        `getWeeklyWrappeds(familyId)`, `saveWeeklyWrappeds(records, familyId)`).
+        Storage keys:
+          - `weekly_wrappeds_${familyId}.json`
+          - `wrapped_recent_copy_${familyId}.json`  (family-scoped cache)
+          - `wrapped_dispatch_${userId}.json`       (per-user; small, capped)
+
+        Dispatch log is user-scoped (not family-scoped) because the
+        idempotency check is per-user.
+
+        Add JSDoc noting the archive grows indefinitely by design
+        (BRD §8.2). Each WeeklyWrapped is ≤ 5 KB; 52 weeks/year for
+        20 years is under 6 MB. Fine.
+
+    - id: "2.2"
+      task: `wrappedService.ts` — core orchestrator
+      details: |
+        File: `backend/src/services/wrappedService.ts`
+
+        Constructor injection (match tripService pattern):
+          ```ts
+          constructor(
+            private dataService: DataService,
+            private taskService: TaskService,       // for CreditEvent stream + scope filter
+            private tripService: TripService,       // for activeTripCoversDate
+            private projectService: ProjectService, // for projectCloses
+            private transactionService: TransactionService, // for receipt sweep
+            private userService: UserService,       // for members + timezone + flags
+            private pushService: PushNotificationService,
+          ) {}
+          ```
+
+        Public methods:
+          - `getDailyPayload(userId, now = new Date()): Promise<WrappedDailyPayload | null>`
+            Returns `null` if out-of-window / suppressed / user disabled.
+          - `getWeeklyPayload(userId, weekStart?, now = new Date()): Promise<WrappedWeeklyRecord | null>`
+            `weekStart` optional — omitted = current week (during extended
+            window) or latest archived. Suppressed weeks return the record
+            with `suppressed: true` so the frontend can render the label.
+          - `listArchive(userId, cursor?): Promise<{ items: WrappedWeeklyRecord[]; nextCursor?: string }>`
+          - `fireDaily(userId, now): Promise<FireResult>` — scheduler entry
+          - `fireWeekly(userId, now): Promise<FireResult>` — scheduler entry
+          - `setWrappedEnabled(targetUserId, enabled, adminUserId): Promise<void>`
+            Asserts admin; updates User.wrappedEnabled.
+
+        Internal composition:
+          - `buildWrappedInput(familyId, windowStart, windowEnd, cadence, tz): WrappedInput`
+            This is the I/O boundary — all data fetching lives here.
+          - `computeDaily / computeWeekly` call the shared engine with
+            input + recentCopyIds cache.
+
+        `fireDaily`:
+          1. Load target user; if `wrappedEnabled === false` → skip.
+          2. Load activeTrip via tripService; if covers today → skip
+             (vacation suppression).
+          3. Check dispatch log for `(userId, 'daily', localDateKey)` →
+             skip if present (idempotency).
+          4. Compute payload.
+          5. `pushService.sendWrapped(userId, payload)` — returns
+             delivery result.
+          6. Append dispatch log row; trim to 60.
+          7. Append headline + highlight `copyVariantId`s to
+             `wrapped_recent_copy` cache; prune older than 7 days.
+
+        `fireWeekly`:
+          1–3 same as above, keyed on `(userId, 'weekly', mondayKey)`.
+          4. Check if `WeeklyWrapped` record already exists for this
+             weekStart; if so, reuse (BRD §8.3 snapshot immutability).
+             Otherwise compute and persist.
+          5. Send push.
+          6. Append dispatch log + recent-copy cache entries.
+
+        All methods pass `familyId = user.familyId` through. Family
+        filter is never skipped.
+
+    - id: "2.3"
+      task: Integration tests for wrappedService
+      details: |
+        File: `backend/src/__tests__/integration/wrappedService.test.ts`
+
+        Use the existing in-memory data service pattern from
+        `taskService.test.ts`. Scenarios:
+
+          - Vacation suppression: fires for non-trip day, does NOT fire
+            for active-trip day, weekly record for trip-containing week
+            has `suppressed: true`.
+          - Idempotency: calling `fireDaily` twice for same local day
+            only sends one push and logs one dispatch row.
+          - Feature flag: `wrappedEnabled === false` returns null on
+            `getDailyPayload` and skips on `fireDaily`.
+          - Admin gate: non-admin calling `setWrappedEnabled` throws
+            `AuthorizationError`.
+          - Weekly immutability: edit copy pools between two calls to
+            `getWeeklyPayload` for the same archived week; returned
+            `copyVariantId` should remain stable (reads from stored
+            record, not recomputed).
+          - Repetition avoidance: fire 7 daily Wrappeds in tier-3 with
+            same fixture; verify 7 distinct headline `copyVariantId`s.
+
+    - id: "2.4"
+      task: Extend pushNotificationService with `sendWrapped`
+      details: |
+        File: `backend/src/services/pushNotificationService.ts`
+
+        - Add `'wrapped'` to `NotificationType` (already exported via
+          shared types; import + include).
+        - Add `wrappedEnabled: true` to `DEFAULT_PREFERENCES`.
+        - Add method:
+          ```ts
+          async sendWrapped(
+            userId: string,
+            payload: WrappedDailyPayload | { cadence: 'weekly'; weekStart: string; headlineCount: number; highlightCount: number },
+            tier: WrappedTier,
+          ): Promise<{ delivered: boolean }> { ... }
+          ```
+          Builds the push notification payload:
+            - `title`:
+                `'Your Wrapped is ready'` (daily)
+              | `'Your Weekly Wrapped is ready'` (weekly)
+            - `body`: tier-0 uses `PUSH_BODIES.tier0`; otherwise
+              `'You two closed {N} today. {H} highlight(s) inside.'`
+              rendered from the template.
+            - `url`: `/wrapped/today` or `/wrapped/week`
+            - `tag`: `'wrapped-{cadence}-{localDateKey}'` — lets the OS
+              collapse multiple pushes to the same Wrapped (shouldn't
+              happen given idempotency, but belt-and-suspenders).
+          Reads `NotificationPreferences.wrappedEnabled` — respects
+          user's push opt-out.
+
+    - id: "2.5"
+      task: User service — timezone + wrappedEnabled defaults
+      details: |
+        File: `backend/src/services/userService.ts` (or wherever User
+        persistence lives; check for getUser / updateUser pattern).
+
+        On load, default `timezone` to `'America/New_York'` and
+        `wrappedEnabled` to `false` if absent. Expose:
+          - `updateTimezone(userId, tz)` — validates against IANA tz list
+            (use `Intl.supportedValuesOf('timeZone')` node 20+)
+          - `setWrappedEnabled(targetUserId, enabled, actingUserId)` —
+            asserts admin via `isAdmin`; used by admin route; unit-tested.
+
+    - id: "2.6"
+      task: Routes — `backend/src/routes/wrapped.ts`
+      details: |
+        Mount at `/api/v1/wrapped`:
+          - `GET  /today`            — authenticated; returns WrappedDailyPayload or 204
+          - `GET  /week`             — authenticated; current-week or latest-archived
+          - `GET  /archive`          — authenticated; paginated list
+          - `GET  /archive/:weekStart` — authenticated; full record
+          - `POST /admin/enable`     — authenticated + adminMiddleware;
+                                        body `{ userId: string; enabled: boolean }`
+          - `PATCH /preferences/timezone` — authenticated, self-only;
+                                        body `{ timezone: string }`
+
+        Mount order in `backend/src/index.ts`:
+          ```ts
+          app.use('/api/v1/wrapped', wrappedRoutes);
+          ```
+
+        Use `authMiddleware` for all; add `adminMiddleware` (from
+        commit 736dfa9) on `/admin/enable`. Zod validation on bodies.
+        Return shapes match frontend types.
+
+        Integration tests (backend/src/__tests__/integration/wrappedRoutes.test.ts):
+          - 401 without token
+          - 204 on out-of-window (daily)
+          - 200 with payload during window
+          - 403 on non-admin calling /admin/enable
+          - 403 on user A attempting to read user B's archive (family
+            membership check — user can read their own family's archive
+            only)
+
+# =============================================================================
+# PHASE 3 — Scheduler
+# =============================================================================
+phase_3_scheduler:
+  status: not_started
+  description: |
+    15-minute tick that fans out per-user fire checks. Runs in the same
+    Node process as the API server. Single-instance assumption.
+
+  tasks:
+    - id: "3.1"
+      task: `backend/src/jobs/wrappedScheduler.ts`
+      details: |
+        Export a class or factory:
+          ```ts
+          export function startWrappedScheduler(deps: {
+            userService: UserService;
+            wrappedService: WrappedService;
+          }): { stop: () => void };
+          ```
+
+        Tick body (every 15 min, first tick 60 sec after boot to let
+        services warm):
+          1. `const now = new Date();`
+          2. `const users = await userService.listAll();`  (includes
+             wrappedEnabled + timezone)
+          3. For each user with `wrappedEnabled === true`:
+             a. `if (!isSchedulerWindow(now, user.timezone)) continue;`
+                — only 9:00–9:15 PM local.
+             b. `const isSunday = dayOfWeekLabel(now, user.timezone) === 'Sunday';`
+             c. `await wrappedService.fireWeekly(user.id, now)` if Sunday
+                else `await wrappedService.fireDaily(user.id, now)`;
+                service does all the skip/idempotency logic internally.
+          4. Catch per-user errors; log + continue (one user's error
+             should not block others).
+
+        Follow the chatActions/proposalStore.ts pattern:
+          - Module-level `setInterval` returning a handle.
+          - `.unref()` so jest + graceful shutdown don't hang.
+          - Register SIGTERM listener in index.ts to call `.stop()`.
+
+        Catch-up on boot (BRD §10.3): on the first tick after boot, if
+        current local time is > 9:15 PM but ≤ midnight AND no dispatch
+        row exists, still fire. Implementation: the scheduler window
+        check relaxes for the first tick only when the user hasn't
+        fired today yet. Track "first tick done" with a module-level
+        boolean.
+
+    - id: "3.2"
+      task: Wire scheduler from `backend/src/index.ts`
+      details: |
+        After services are constructed:
+          ```ts
+          const wrappedScheduler = startWrappedScheduler({ userService, wrappedService });
+          process.on('SIGTERM', () => wrappedScheduler.stop());
+          ```
+
+        Guard with an env flag `WRAPPED_SCHEDULER_ENABLED=true` so
+        local dev can opt out. Default on for prod.
+
+    - id: "3.3"
+      task: Unit tests for the scheduler
+      details: |
+        File: `backend/src/__tests__/unit/wrappedScheduler.test.ts`
+
+        Mock deps. Use `jest.useFakeTimers({ now: ... })`.
+        Cases:
+          - 9:05 PM Monday NY → fireDaily called for NY user, not for
+            LA user whose 9 PM hasn't hit yet.
+          - 9:05 PM Sunday NY → fireWeekly called, NOT fireDaily.
+          - 9:20 PM with no dispatch row AND first-tick flag → catch-up
+            fires.
+          - 9:20 PM with no dispatch row AND first-tick flag=false → skip.
+          - Per-user error throws → other users still fire; error is
+            logged.
+
+# =============================================================================
+# PHASE 4 — Frontend — daily & weekly surfaces
+# =============================================================================
+phase_4_frontend_wrapped_ui:
+  status: not_started
+  description: |
+    Build the two main viewing surfaces. Match the app's Mantine style.
+
+  tasks:
+    - id: "4.1"
+      task: API client — `frontend/src/lib/api/wrapped.ts`
+      details: |
+        Typed axios wrappers:
+          - `getToday(): Promise<WrappedDailyPayload | null>`
+          - `getWeek(weekStart?: string): Promise<WrappedWeeklyRecord | null>`
+          - `listArchive(cursor?: string)`
+          - `adminSetEnabled(userId, enabled)`
+          - `updateTimezone(tz)`
+
+        Shape the API response — 204 returns `null` to callers.
+
+    - id: "4.2"
+      task: `WrappedToday` page
+      details: |
+        File: `frontend/src/pages/WrappedToday.tsx`
+
+        - React Query `['wrapped', 'today']` with `staleTime: 5 min`.
+        - On 204/null: route-based redirect to `/wrapped/archive` if
+          it's past Sunday's extended window, else a muted "See you at
+          9 PM" screen.
+        - On suppressed-for-trip: show the "On the road 🌍" placeholder.
+        - On active window: render headline + motivational line +
+          highlights stacked vertically. Use tokens from `fills` with
+          a small `renderTemplate(template, fills)` helper (shared with
+          weekly card renderer).
+        - Screenshot-friendly: `overflow: hidden` on the card;
+          `prefers-reduced-motion` disables the entry fade.
+
+        Keep to ≤ 1 viewport on mobile for the common case (1-2 highlights).
+
+    - id: "4.3"
+      task: `WrappedWeek` page — swipe deck
+      details: |
+        File: `frontend/src/pages/WrappedWeek.tsx`
+
+        6-card sequence (BRD §4.1). Use Mantine `<Carousel>` (swipeable)
+        or a lightweight custom swipe (the mobile kanban already has a
+        swipe primitive in the tasks feature — consider reusing if
+        it's extractable). Card index in URL via `useSearchParams`
+        (`?card=0..5`).
+
+        Cards:
+          0 Headline — count + `{wowDelta}` delta copy
+          1 Best day — big day label + count
+          2 Leaderboard — bar or pair of avatars; tied-week copy pool
+            when `winnerId === null`
+          3 Streaks — per-user current streak + `grew` indicator
+          4 Highlight reel — up to 3 WrappedHighlights
+          5 Closer — "Next week's Wrapped drops Sunday at 9 PM" +
+            visual screenshot nudge
+
+        Progress pips at top (Spotify Stories style). `prefers-reduced-
+        motion` disables card-transition animation but keeps swipe.
+
+    - id: "4.4"
+      task: `WrappedArchive` + detail route
+      details: |
+        Files:
+          - `frontend/src/pages/WrappedArchive.tsx` — list
+          - `frontend/src/pages/WrappedWeek.tsx` — also used for
+            detail at `/wrapped/archive/:weekStart` (same component,
+            different data source)
+
+        List: reverse-chronological; row shows `"{range} · {count} tasks · {wowDelta}"`.
+        Trip-suppressed weeks show "Trip week — paused" label + muted row.
+        Small badge/streak icon cluster at right edge if the week's
+        highlights include any (BRD §14 Q6 proposed; accept).
+
+    - id: "4.5"
+      task: Dashboard banner + nav item
+      details: |
+        - `frontend/src/components/dashboard/WrappedBanner.tsx` — fetches
+          `getToday()`, renders nothing if null. Shows during both daily
+          and weekly windows; badge message comes from the payload.
+          Dismissible (per-user localStorage); dismiss is per-day, not
+          forever.
+        - `frontend/src/pages/MantineDashboard.tsx` — slot the banner
+          at top, replacing whatever banner currently occupies that slot
+          during the window.
+        - `frontend/src/components/MantineLayout.tsx` — add a "Wrapped"
+          nav item with a small red dot when `getToday()` returns a
+          payload AND the user hasn't opened it (local state:
+          `lastOpenedAt` per-day).
+
+    - id: "4.6"
+      task: Hide all surfaces when `wrappedEnabled === false`
+      details: |
+        - Routes: return the app's standard 404 on `/wrapped/*` when the
+          user's `wrappedEnabled === false`. Do NOT show a "feature
+          disabled" page (BRD §9.1 explicit).
+        - Banner + nav item: `useQuery` for the current user's profile
+          gates render.
+        - Clean isolation test: QA with `wrappedEnabled: false` and
+          hit every entry point — nothing should leak.
+
+# =============================================================================
+# PHASE 5 — Settings: admin toggle + timezone + push preference
+# =============================================================================
+phase_5_settings:
+  status: not_started
+  description: |
+    Two settings surfaces: admin-only panel (per-user toggle), and a
+    normal user-facing Timezone + Wrapped push preference row.
+
+  tasks:
+    - id: "5.1"
+      task: Admin panel — `WrappedAdminSection`
+      details: |
+        File: `frontend/src/components/settings/WrappedAdminSection.tsx`
+
+        Hidden behind `isAdmin` check (hook: `useCurrentUser()` +
+        `user.isAdmin`; falls back to invisible when not admin).
+        Lists all family members + toggle for each. On toggle, calls
+        `adminSetEnabled`. Shows last-fired dispatch log entry per user
+        for quick visibility ("Last fired: Apr 23 9:04 PM · delivered").
+
+        Mount inside the existing settings page layout.
+
+    - id: "5.2"
+      task: Add Timezone field + Wrapped preference row to settings
+      details: |
+        File: `frontend/src/components/settings/NotificationsSection.tsx`
+
+        Add a "Wrapped" row alongside the existing notification toggles
+        (sync_failures, budget_alerts, …). Uses
+        `NotificationPreferences.wrappedEnabled` — distinct from the
+        admin-gated `User.wrappedEnabled`. User-facing copy: "Daily and
+        weekly Wrapped recap".
+
+        Add a Timezone selector (Mantine `<Select>` with
+        `Intl.supportedValuesOf('timeZone')` as options). Default to
+        household TZ. Writes via `PATCH /preferences/timezone`.
+
+        Settings layout follows the already-refactored profile/password/
+        notifications/family/mappings section pattern (see commit
+        8b6cacc).
+
+# =============================================================================
+# PHASE 6 — Observability + rollout
+# =============================================================================
+phase_6_rollout:
+  status: not_started
+  description: |
+    Ship behind the per-user flag (dark for both users at deploy time),
+    dogfood path for ~1–2 weeks, then enable spouse.
+
+  tasks:
+    - id: "6.1"
+      task: Structured logs — minimal, per BRD §9.3
+      details: |
+        Log on:
+          - Push fired: `wrapped.push.fired` — `{ userId, cadence, tier, highlightCount, delivered }`.
+          - Wrapped opened: `wrapped.opened` — `{ userId, cadence, source: 'push' | 'in-app' }`.
+          - Window expired without open: `wrapped.window_expired_unopened`
+            — `{ userId, cadence, dateKey }`. (Detect by comparing
+            dispatch log to open events at the next scheduler tick
+            after midnight.)
+        No dashboards; log to stdout with structured JSON. Tail on the
+        server when needed.
+
+    - id: "6.2"
+      task: Deploy + dogfood
+      details: |
+        - Deploy with both users `wrappedEnabled: false`. Verify feature
+          is invisible (routes 404, no banner, no nav item).
+        - Enable author via admin panel on deploy evening.
+        - Author receives 9 PM push same night. Dogfood for 1–2 weeks.
+        - Tune copy pools + rule thresholds via PR as needed; no code
+          change required to adjust text. Weekly archive remains
+          immutable per D6 — old records untouched.
+        - Launch: admin enables spouse during dinner; spouse's first push
+          lands at 9 PM that night.
+
+    - id: "6.3"
+      task: Release notes + CLAUDE.md
+      details: |
+        - Conventional commit `feat(wrapped): ...` — triggers MINOR bump.
+        - Add entry to the "Architecture Decisions (recent)" table in
+          CLAUDE.md:
+            `| 2026-04 | Wrapped — ... | WRAPPED-BRD.md |`
+          (Already added to the Feature BRDs & Plans table; update the
+          decision table in the same PR.)
+
+# =============================================================================
+# TEST PLAN SUMMARY
+# =============================================================================
+test_plan:
+  automated:
+    - layer: shared (Jest, unit)
+      focus: |
+        wrappedDays (DST, cross-TZ), wrappedCopy (pool counts, picker
+        exhaustion fallback), wrappedRules (per-rule trigger/no-trigger
+        fixtures), wrappedEngine (golden payload fixtures for tier 0, 3, 4;
+        weekly with each weekly-only rule firing).
+
+    - layer: backend service (Jest, integration)
+      focus: |
+        wrappedService vacation suppression, idempotency, feature-flag
+        gate, admin gate, weekly snapshot immutability, repetition
+        avoidance across 7 consecutive fires.
+
+    - layer: backend routes (Jest, integration)
+      focus: |
+        Auth gates (401/403), family scoping, 204 out-of-window, admin
+        toggle, timezone PATCH validation.
+
+    - layer: scheduler (Jest, unit with fake timers)
+      focus: |
+        Per-TZ fire windows, Sunday → weekly, catch-up on boot,
+        per-user error isolation.
+
+  manual:
+    - |
+      Push delivery end-to-end: enable self, wait for 9 PM, verify push
+      arrives on both iOS Safari (PWA installed) and desktop Chrome.
+      Tap push, confirm deep link lands on `/wrapped/today`.
+
+    - |
+      Vacation suppression: add an active trip covering today, verify no
+      push + banner hidden + in-app placeholder shows "On the road 🌍".
+
+    - |
+      Weekly swipe UX: on mobile Safari, swipe through all 6 cards;
+      confirm URL updates; confirm screenshot capture on each card
+      produces a clean image (no banners, no toasts).
+
+    - |
+      Dogfood repetition check: after 7 tier-3 days of dogfood, scan
+      your own Wrappeds — same headline copy twice is a bug.
+
+    - |
+      Archive immutability: ship a PR that edits a copy pool; confirm
+      a 2-week-old Wrapped renders the original text, unchanged.
+
+# =============================================================================
+# OPEN QUESTIONS (carried forward from BRD §14 — decision defaults accepted
+# into the plan are noted above; anything still undecided lives here)
+# =============================================================================
+open_questions:
+  - id: OQ1
+    source: BRD §14 Q2
+    question: Tier-4 threshold scales with household size or fixed at 10?
+    resolution: |
+      Fixed at 10 for v1 (accepted). Revisit if the app ever supports
+      > 2 users.
+
+  - id: OQ2
+    source: BRD §14 Q3
+    question: Extend Zombie rule to OR on snooze count once the Task model
+      tracks snooze history?
+    resolution: |
+      Deferred until a snooze counter lands on Task (BRD §11.3 REQ-W-031
+      captures this as P2). Plan: extend `zombieRule` in
+      `shared/utils/wrappedRules.ts` to `OR snoozeCount ≥ 3` in a future
+      PR once Task gains the field.
+
+  - id: OQ3
+    source: new
+    question: Should the weekly archive eventually support filtering
+      (e.g., "weeks with midweek comeback") as it grows?
+    resolution: |
+      Not v1. The archive at 52 rows/year is small enough to scroll.
+      Revisit at year-end 2026 if the author actually wants to browse
+      by theme.
+
+  - id: OQ4
+    source: new
+    question: Multi-instance PM2 deploy — scheduler leader-election?
+    resolution: |
+      Not relevant today (single-instance per AI-DEPLOYMENTS.md). If
+      the backend ever scales horizontally, add a filesystem-advisory-
+      lock or a DB-backed lease on `wrapped_scheduler_lock` before
+      firing. Out of scope for v1.
