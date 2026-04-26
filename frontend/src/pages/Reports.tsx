@@ -250,8 +250,8 @@ export function Reports() {
         actualIncome: cashFlowMonth?.income || 0,
         budgetedExpenses: budgetTotals.expense,
         actualExpenses: cashFlowMonth?.expenses || 0,
-        budgetedNetFlow: budgetTotals.income - budgetTotals.expense,
-        actualNetFlow: cashFlowMonth?.netFlow || 0,
+        budgetedNetCashflow: budgetTotals.income - budgetTotals.expense,
+        actualNetCashflow: cashFlowMonth?.netCashflow || 0,
         budgets: monthData.budgets
       };
     }).sort((a, b) => {
@@ -299,7 +299,7 @@ export function Reports() {
     const totalIncome = months.reduce((sum, m) => sum + m.income, 0);
     const totalExpenses = months.reduce((sum, m) => sum + m.expenses, 0);
     const totalSavings = months.reduce((sum, m) => sum + (m.savings || 0), 0);
-    const netIncome = totalIncome - totalExpenses - totalSavings;
+    const netCashflow = totalIncome - totalExpenses - totalSavings;
     const now = new Date();
     const currentMonth = format(now, 'yyyy-MM');
     const completeMonths = months.filter(m => m.month < currentMonth && (m.income > 0 || m.expenses > 0));
@@ -310,7 +310,7 @@ export function Reports() {
     const savingsRate = totalIncome > 0 ? ((totalIncome - totalExpenses) / totalIncome) * 100 : 0;
     // Share of income explicitly sent to retirement / emergency-fund / savings buckets.
     const contributionRate = totalIncome > 0 ? (totalSavings / totalIncome) * 100 : 0;
-    return { totalIncome, totalExpenses, totalSavings, netIncome, averageMonthlyIncome, averageMonthlyExpenses, savingsRate, contributionRate };
+    return { totalIncome, totalExpenses, totalSavings, netCashflow, averageMonthlyIncome, averageMonthlyExpenses, savingsRate, contributionRate };
   }, [cashFlowData]);
 
   // Dynamic label for KPI cards based on time range
@@ -390,7 +390,7 @@ export function Reports() {
               totalIncome={kpiSummary?.totalIncome ?? 0}
               totalExpenses={kpiSummary?.totalExpenses ?? 0}
               totalSavings={kpiSummary?.totalSavings ?? 0}
-              netIncome={kpiSummary?.netIncome ?? 0}
+              netCashflow={kpiSummary?.netCashflow ?? 0}
             />
           </Tabs.Panel>
 

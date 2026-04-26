@@ -157,7 +157,7 @@ export function MantineDashboard() {
   // Calculate projected net income for the year
   // Net income = income − spending (savings is retained wealth, not consumption,
   // so we exclude it from both YTD and the budgeted projection).
-  const projectedNetIncome = useMemo(() => {
+  const projectedPreSavingsNet = useMemo(() => {
     if (!ytdTransactionData?.transactions || !categories) {
       return null;
     }
@@ -290,14 +290,14 @@ export function MantineDashboard() {
         `Total: ${formatCurrency(monthlyIncome, true)}`,
       ].join('\n'),
     },
-    ...(projectedNetIncome ? [{
+    ...(projectedPreSavingsNet ? [{
       title: 'Projected Pre-Savings Net',
-      value: formatCurrency(projectedNetIncome.total),
-      exactValue: formatCurrency(projectedNetIncome.total, true),
+      value: formatCurrency(projectedPreSavingsNet.total),
+      exactValue: formatCurrency(projectedPreSavingsNet.total, true),
       icon: IconChartLine,
-      color: projectedNetIncome.total >= 0 ? 'teal' : 'red',
-      description: projectedNetIncome.hasBudget
-        ? `YTD actual + ${projectedNetIncome.remainingMonths}mo budgeted`
+      color: projectedPreSavingsNet.total >= 0 ? 'teal' : 'red',
+      description: projectedPreSavingsNet.hasBudget
+        ? `YTD actual + ${projectedPreSavingsNet.remainingMonths}mo budgeted`
         : 'Based on YTD actuals only',
       formula: [
         'YTD actual + budgeted Pre-Savings Net for remaining months.',
@@ -307,26 +307,26 @@ export function MantineDashboard() {
         'Refunds and reversals net against expense / income (signed).',
         '',
         `YTD (Jan 1 → today):`,
-        `  Income:   ${formatCurrency(projectedNetIncome.ytdIncome, true)}`,
-        `  Spending: ${formatCurrency(projectedNetIncome.ytdSpending, true)}  (savings ${formatCurrency(projectedNetIncome.ytdSavings, true)} excluded)`,
-        `  Net:      ${formatCurrency(projectedNetIncome.ytdActual, true)}`,
-        ...((projectedNetIncome.ytdHiddenIncome !== 0 || projectedNetIncome.ytdHiddenExpense !== 0) ? [
+        `  Income:   ${formatCurrency(projectedPreSavingsNet.ytdIncome, true)}`,
+        `  Spending: ${formatCurrency(projectedPreSavingsNet.ytdSpending, true)}  (savings ${formatCurrency(projectedPreSavingsNet.ytdSavings, true)} excluded)`,
+        `  Net:      ${formatCurrency(projectedPreSavingsNet.ytdActual, true)}`,
+        ...((projectedPreSavingsNet.ytdHiddenIncome !== 0 || projectedPreSavingsNet.ytdHiddenExpense !== 0) ? [
           '',
           `Hidden categories (excluded from totals above):`,
-          `  Income excluded:  ${formatCurrency(projectedNetIncome.ytdHiddenIncome, true)}`,
-          `  Expense excluded: ${formatCurrency(projectedNetIncome.ytdHiddenExpense, true)}`,
+          `  Income excluded:  ${formatCurrency(projectedPreSavingsNet.ytdHiddenIncome, true)}`,
+          `  Expense excluded: ${formatCurrency(projectedPreSavingsNet.ytdHiddenExpense, true)}`,
         ] : []),
         '',
-        projectedNetIncome.hasBudget
-          ? `Budgeted (${projectedNetIncome.remainingMonths} remaining months × current month's budget):`
+        projectedPreSavingsNet.hasBudget
+          ? `Budgeted (${projectedPreSavingsNet.remainingMonths} remaining months × current month's budget):`
           : `No budget for current month — projection is YTD only.`,
-        ...(projectedNetIncome.hasBudget ? [
-          `  Income:   ${formatCurrency(projectedNetIncome.budgetedIncome, true)} / mo`,
-          `  Spending: ${formatCurrency(projectedNetIncome.budgetedSpending, true)} / mo  (savings ${formatCurrency(projectedNetIncome.budgetedSavings, true)} excluded)`,
-          `  Net:      ${formatCurrency(projectedNetIncome.monthlyBudgetedNet, true)} / mo × ${projectedNetIncome.remainingMonths} = ${formatCurrency(projectedNetIncome.projectedFromBudget, true)}`,
+        ...(projectedPreSavingsNet.hasBudget ? [
+          `  Income:   ${formatCurrency(projectedPreSavingsNet.budgetedIncome, true)} / mo`,
+          `  Spending: ${formatCurrency(projectedPreSavingsNet.budgetedSpending, true)} / mo  (savings ${formatCurrency(projectedPreSavingsNet.budgetedSavings, true)} excluded)`,
+          `  Net:      ${formatCurrency(projectedPreSavingsNet.monthlyBudgetedNet, true)} / mo × ${projectedPreSavingsNet.remainingMonths} = ${formatCurrency(projectedPreSavingsNet.projectedFromBudget, true)}`,
         ] : []),
         '',
-        `Projected: ${formatCurrency(projectedNetIncome.total, true)}`,
+        `Projected: ${formatCurrency(projectedPreSavingsNet.total, true)}`,
       ].join('\n'),
     }] : []),
   ];

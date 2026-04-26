@@ -39,14 +39,15 @@ export interface CashFlowSummary {
   income: number;
   expenses: number;   // spending only (excludes savings)
   savings: number;    // savings category transactions
-  netFlow: number;    // income - expenses - savings
+  netCashflow: number;    // Net Cashflow = income − spending − savings (per SAVINGS-CATEGORY-BRD §2.6)
 }
 
 export interface CashFlowProjection {
   month: string;
   projectedIncome: number;
   projectedExpenses: number;
-  projectedNetFlow: number;
+  /** Pre-Savings Net = projected income − projected spending. Projection does not model savings, so this is pre-savings, not Net Cashflow. Per SAVINGS-CATEGORY-BRD §2.6. */
+  projectedPreSavingsNet: number;
   confidence: 'high' | 'medium' | 'low';
 }
 
@@ -68,7 +69,8 @@ export interface CashFlowOutlookResult {
 export interface YearToDateSummary {
   totalIncome: number;
   totalExpenses: number;
-  netIncome: number;
+  /** Pre-Savings Net = totalIncome − totalExpenses (where totalExpenses is Spending; savings is excluded upstream by calculateSpending). Per SAVINGS-CATEGORY-BRD §2.6. */
+  preSavingsNet: number;
   averageMonthlyIncome: number;
   averageMonthlyExpenses: number;
   savingsRate: number;
@@ -609,7 +611,7 @@ export class ReportService {
           income,
           expenses,
           savings,
-          netFlow: income - expenses - savings,
+          netCashflow: income - expenses - savings,
         });
       }
 
@@ -657,7 +659,7 @@ export class ReportService {
         // Simple projection using averages (could be enhanced with trends)
         const projectedIncome = avgIncome;
         const projectedExpenses = avgExpenses;
-        const projectedNetFlow = projectedIncome - projectedExpenses;
+        const projectedPreSavingsNet = projectedIncome - projectedExpenses;
         
         // Determine confidence based on volatility
         const volatility = (incomeStdDev / avgIncome + expenseStdDev / avgExpenses) / 2;
@@ -670,7 +672,7 @@ export class ReportService {
           month: projMonth,
           projectedIncome,
           projectedExpenses,
-          projectedNetFlow,
+          projectedPreSavingsNet,
           confidence
         });
       }
@@ -717,7 +719,7 @@ export class ReportService {
         return { success: false, error: 'Failed to get historical data for average calculation' };
       }
 
-      const avgNetFlow = historicalResult.summary.reduce((sum, m) => sum + m.netFlow, 0) / historicalResult.summary.length;
+      const avgNetCashflow = historicalResult.summary.reduce((sum, m) => sum + m.netCashflow, 0) / historicalResult.summary.length;
 
       // Check if we have any prior year data
       // Start from 1 year before next month (to align with i=1 being first projection month)
@@ -759,12 +761,12 @@ export class ReportService {
         if (hasPriorYearData && priorYearResult.summary) {
           const priorYearData = priorYearResult.summary.find(m => m.month === priorYearMonth);
           if (priorYearData) {
-            priorYearCashflow = priorYearData.netFlow;
+            priorYearCashflow = priorYearData.netCashflow;
           }
         }
 
         // 3. Average cashflow (already calculated)
-        const averageCashflow = avgNetFlow;
+        const averageCashflow = avgNetCashflow;
 
         projections.push({
           month: projMonth,
@@ -804,7 +806,8 @@ export class ReportService {
       // Calculate totals from cash flow summary (which includes overrides)
       const totalIncome = cashFlowResult.summary.reduce((sum, month) => sum + month.income, 0);
       const totalExpenses = cashFlowResult.summary.reduce((sum, month) => sum + month.expenses, 0);
-      const netIncome = totalIncome - totalExpenses;
+      // Pre-Savings Net (totalExpenses here is Spending, savings excluded upstream).
+      const preSavingsNet = totalIncome - totalExpenses;
 
       // Calculate months with complete data from cash flow summary
       let monthsWithData = 0;
@@ -836,7 +839,7 @@ export class ReportService {
           averageMonthlyExpenses = 0;
         }
       }
-      const savingsRate = totalIncome > 0 ? (netIncome / totalIncome) * 100 : 0;
+      const savingsRate = totalIncome > 0 ? (preSavingsNet / totalIncome) * 100 : 0;
 
       // Get top spending categories (still need raw transaction data for this)
       // Note: This part doesn't use overrides because overrides are totals, not category breakdowns
@@ -884,7 +887,7 @@ export class ReportService {
         summary: {
           totalIncome,
           totalExpenses,
-          netIncome,
+          preSavingsNet,
           averageMonthlyIncome,
           averageMonthlyExpenses,
           savingsRate,

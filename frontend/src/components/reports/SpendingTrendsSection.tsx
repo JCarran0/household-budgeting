@@ -27,8 +27,8 @@ interface BudgetVsActualEntry {
   actualIncome: number;
   budgetedExpenses: number;
   actualExpenses: number;
-  budgetedNetFlow: number;
-  actualNetFlow: number;
+  budgetedNetCashflow: number;
+  actualNetCashflow: number;
 }
 
 interface SpendingTrendsSectionProps {

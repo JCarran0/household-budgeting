@@ -34,8 +34,8 @@ interface BudgetVsActualEntry {
   actualIncome: number;
   budgetedExpenses: number;
   actualExpenses: number;
-  budgetedNetFlow: number;
-  actualNetFlow: number;
+  budgetedNetCashflow: number;
+  actualNetCashflow: number;
 }
 
 interface CashflowSectionProps {
@@ -44,10 +44,10 @@ interface CashflowSectionProps {
   totalIncome: number;
   totalExpenses: number;
   totalSavings: number;
-  netIncome: number;
+  netCashflow: number;
 }
 
-export function CashflowSection({ cashFlowChartData, budgetVsActualData, totalIncome, totalExpenses, totalSavings, netIncome }: CashflowSectionProps) {
+export function CashflowSection({ cashFlowChartData, budgetVsActualData, totalIncome, totalExpenses, totalSavings, netCashflow }: CashflowSectionProps) {
   const incomeExpenseTracker = useChartMouseTracker();
   const cashFlowTracker = useChartMouseTracker();
 
@@ -60,7 +60,7 @@ export function CashflowSection({ cashFlowChartData, budgetVsActualData, totalIn
   const IncomeExpenseTooltip = createNearestLineTooltip(incomeExpenseTracker.mouseYRef, incomeExpenseYMax, CHART_HEIGHT);
 
   const cashFlowYMax = budgetVsActualData
-    ? Math.max(...budgetVsActualData.flatMap(d => [d.budgetedNetFlow, d.actualNetFlow]), 1)
+    ? Math.max(...budgetVsActualData.flatMap(d => [d.budgetedNetCashflow, d.actualNetCashflow]), 1)
     : 1;
   const CashFlowTooltip = createNearestLineTooltip(cashFlowTracker.mouseYRef, cashFlowYMax, CHART_HEIGHT);
 
@@ -99,8 +99,8 @@ export function CashflowSection({ cashFlowChartData, budgetVsActualData, totalIn
             <Divider my={4} />
             <Group justify="space-between">
               <Text size="sm" fw={600}>Net Cashflow</Text>
-              <Text size="sm" fw={600} c={netIncome >= 0 ? 'green' : 'red'}>
-                {netIncome >= 0 ? '+' : '-'}${Math.round(Math.abs(netIncome)).toLocaleString()}
+              <Text size="sm" fw={600} c={netCashflow >= 0 ? 'green' : 'red'}>
+                {netCashflow >= 0 ? '+' : '-'}${Math.round(Math.abs(netCashflow)).toLocaleString()}
               </Text>
             </Group>
           </Stack>
@@ -162,19 +162,19 @@ export function CashflowSection({ cashFlowChartData, budgetVsActualData, totalIn
                   <Legend />
                   <Area
                     type="monotone"
-                    dataKey="budgetedNetFlow"
+                    dataKey="budgetedNetCashflow"
                     stroke={defaultPalette.chart.budgeted}
                     fill={defaultPalette.chart.budgeted}
                     fillOpacity={0.6}
-                    name="Planned Net Flow"
+                    name="Planned Net Cashflow"
                   />
                   <Area
                     type="monotone"
-                    dataKey="actualNetFlow"
+                    dataKey="actualNetCashflow"
                     stroke={defaultPalette.chart.income}
                     fill={defaultPalette.chart.income}
                     fillOpacity={0.6}
-                    name="Actual Net Flow"
+                    name="Actual Net Cashflow"
                   />
                 </AreaChart>
               </ResponsiveContainer>

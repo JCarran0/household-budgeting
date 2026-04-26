@@ -140,14 +140,14 @@ export function ReportSettings() {
                 <Table.Th>Month</Table.Th>
                 <Table.Th>Total Income</Table.Th>
                 <Table.Th>Total Expenses</Table.Th>
-                <Table.Th>Net Flow</Table.Th>
+                <Table.Th>Net Cashflow</Table.Th>
                 <Table.Th>Notes</Table.Th>
                 <Table.Th>Actions</Table.Th>
               </Table.Tr>
             </Table.Thead>
             <Table.Tbody>
               {overrides.map((override) => {
-                const netFlow = override.totalIncome - override.totalExpenses;
+                const netCashflow = override.totalIncome - override.totalExpenses;
                 return (
                   <Table.Tr key={override.id}>
                     <Table.Td>
@@ -170,11 +170,11 @@ export function ReportSettings() {
                     </Table.Td>
                     <Table.Td>
                       <Badge
-                        color={netFlow >= 0 ? 'green' : 'red'}
+                        color={netCashflow >= 0 ? 'green' : 'red'}
                         variant="light"
                         leftSection={<IconCash size={12} />}
                       >
-                        {formatCurrency(netFlow)}
+                        {formatCurrency(netCashflow)}
                       </Badge>
                     </Table.Td>
                     <Table.Td>

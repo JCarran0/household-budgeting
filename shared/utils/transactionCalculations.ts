@@ -2,20 +2,28 @@
  * Transaction Calculation Utilities
  *
  * Shared utilities for calculating income, expenses, savings, and spending across
- * the app (Reports KPIs, chatbot data, monthly summaries). Aligned with
- * `calculateActualTotals` in budgetCalculations.ts so Dashboard and Reports
- * agree numerically.
+ * the app (Reports KPIs, chatbot data, monthly summaries).
  *
  * Bucketing rule (per SAVINGS-CATEGORY-BRD REQ-005a):
  *   Transactions are bucketed by **category type**, not by amount sign.
  *   Within each bucket, amounts are accumulated **signed**, so a refund
  *   (negative amount) in an expense category nets against expense rather
  *   than being silently dropped or reclassified as income. Uncategorized
- *   transactions are excluded — match `calculateActualTotals` behavior;
- *   the app's uncategorized badge surfaces these separately.
+ *   transactions are excluded — the app's uncategorized badge surfaces
+ *   these separately.
+ *
+ * Income detection uses `isIncomeCategoryHierarchical`, which honors BOTH
+ * the Plaid `INCOME_*` prefix AND custom categories that set `isIncome=true`.
+ * Prefix-only detection (used by `calculateActualTotals` in budgetCalculations.ts)
+ * misses custom income categories and is being phased out here.
  */
 
-import { isTransferCategory, isIncomeCategory } from './categoryHelpers';
+import {
+  isTransferCategory,
+  isIncomeCategory,
+  isIncomeCategoryHierarchical,
+  createCategoryLookup,
+} from './categoryHelpers';
 import { getSavingsCategoryIds } from './budgetCalculations';
 import type { Category } from '../types';
 
@@ -33,6 +41,17 @@ function isSkippable(t: TransactionForCalculation): boolean {
 }
 
 /**
+ * Income detection: prefer hierarchical (honors custom `isIncome=true` categories
+ * and Plaid `INCOME_*` prefix). Falls back to prefix-only when no categories array
+ * is supplied — `isIncomeCategoryHierarchical` requires the category to exist in
+ * the lookup, so an empty lookup would incorrectly reject INCOME_* categories.
+ */
+function detectIncome(categoryId: string, lookup: Map<string, Category>): boolean {
+  if (lookup.size === 0) return isIncomeCategory(categoryId);
+  return isIncomeCategoryHierarchical(categoryId, lookup);
+}
+
+/**
  * Total income for the period. Signed accumulation within the income-category
  * bucket; returned as a positive number (Plaid stores income as negative).
  *
@@ -40,15 +59,13 @@ function isSkippable(t: TransactionForCalculation): boolean {
  */
 export function calculateIncome(
   transactions: TransactionForCalculation[],
-  // categories accepted for API uniformity with the other helpers; not consulted
-  // because isIncomeCategory uses Plaid's category-id prefix to detect income.
-  _categories: Category[] = []
+  categories: Category[] = []
 ): number {
-  void _categories;
+  const lookup = createCategoryLookup(categories);
   let income = 0;
   for (const t of transactions) {
     if (isSkippable(t)) continue;
-    if (!isIncomeCategory(t.categoryId!)) continue;
+    if (!detectIncome(t.categoryId!, lookup)) continue;
     income += -t.amount;
   }
   return income;
@@ -62,14 +79,14 @@ export function calculateIncome(
  */
 export function calculateExpenses(
   transactions: TransactionForCalculation[],
-  _categories: Category[] = []
+  categories: Category[] = []
 ): number {
-  void _categories;
+  const lookup = createCategoryLookup(categories);
   let expenses = 0;
   for (const t of transactions) {
     if (isSkippable(t)) continue;
     if (isTransferCategory(t.categoryId!)) continue;
-    if (isIncomeCategory(t.categoryId!)) continue;
+    if (detectIncome(t.categoryId!, lookup)) continue;
     expenses += t.amount;
   }
   return expenses;
@@ -103,12 +120,13 @@ export function calculateSpending(
   transactions: TransactionForCalculation[],
   categories: Category[]
 ): number {
+  const lookup = createCategoryLookup(categories);
   const savingsIds = getSavingsCategoryIds(categories);
   let spending = 0;
   for (const t of transactions) {
     if (isSkippable(t)) continue;
     if (isTransferCategory(t.categoryId!)) continue;
-    if (isIncomeCategory(t.categoryId!)) continue;
+    if (detectIncome(t.categoryId!, lookup)) continue;
     if (savingsIds.has(t.categoryId!)) continue;
     spending += t.amount;
   }
@@ -133,9 +151,9 @@ export function calculateNetCashFlow(
  */
 export function categorizeTransactions(
   transactions: TransactionForCalculation[],
-  _categories: Category[] = []
+  categories: Category[] = []
 ) {
-  void _categories;
+  const lookup = createCategoryLookup(categories);
   const income: TransactionForCalculation[] = [];
   const expenses: TransactionForCalculation[] = [];
   const transfers: TransactionForCalculation[] = [];
@@ -146,7 +164,7 @@ export function categorizeTransactions(
 
     if (isTransferCategory(txn.categoryId)) {
       transfers.push(txn);
-    } else if (isIncomeCategory(txn.categoryId)) {
+    } else if (detectIncome(txn.categoryId, lookup)) {
       income.push(txn);
     } else {
       expenses.push(txn);

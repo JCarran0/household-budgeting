@@ -19,7 +19,7 @@ interface KpiSummary {
   totalIncome: number;
   totalExpenses: number;
   totalSavings: number;
-  netIncome: number;
+  netCashflow: number;
   averageMonthlyIncome: number;
   averageMonthlyExpenses: number;
   savingsRate: number;
@@ -85,7 +85,7 @@ export function ReportsKpiCards({ kpiSummary, timeRangeLabel }: ReportsKpiCardsP
   const income = kpiSummary?.totalIncome ?? 0;
   const expenses = kpiSummary?.totalExpenses ?? 0;
   const savings = kpiSummary?.totalSavings ?? 0;
-  const netIncome = kpiSummary?.netIncome ?? 0;
+  const netCashflow = kpiSummary?.netCashflow ?? 0;
   const avgIncome = kpiSummary?.averageMonthlyIncome ?? 0;
   const avgExpenses = kpiSummary?.averageMonthlyExpenses ?? 0;
   const savingsRate = kpiSummary?.savingsRate ?? 0;
@@ -121,7 +121,7 @@ export function ReportsKpiCards({ kpiSummary, timeRangeLabel }: ReportsKpiCardsP
     `Income:   ${formatCurrency(income, true)}`,
     `Spending: ${formatCurrency(expenses, true)}`,
     `Savings:  ${formatCurrency(savings, true)}`,
-    `Net:      ${formatCurrency(netIncome, true)}`,
+    `Net:      ${formatCurrency(netCashflow, true)}`,
   ].join('\n');
 
   const savingsRateFormula = [
@@ -206,15 +206,15 @@ export function ReportsKpiCards({ kpiSummary, timeRangeLabel }: ReportsKpiCardsP
             <Text c="dimmed" size="xs" tt="uppercase" fw={700}>
               Net Cashflow
             </Text>
-            <FormulaTooltipColored formula={netFormula} color={netIncome > 0 ? 'green' : 'red'}>
-              {(netIncome < 0 ? '-' : '') + formatCurrency(Math.abs(netIncome))}
+            <FormulaTooltipColored formula={netFormula} color={netCashflow > 0 ? 'green' : 'red'}>
+              {(netCashflow < 0 ? '-' : '') + formatCurrency(Math.abs(netCashflow))}
             </FormulaTooltipColored>
             <Text size="xs" c="dimmed" mt={7}>
               {timeRangeLabel}
             </Text>
           </div>
           <ThemeIcon
-            color={netIncome > 0 ? 'green' : 'red'}
+            color={netCashflow > 0 ? 'green' : 'red'}
             variant="light"
             size={38}
             radius="md"

@@ -103,7 +103,7 @@ export function createReportsApi(client: AxiosInstance) {
         income: number;
         expenses: number;
         savings: number;
-        netFlow: number;
+        netCashflow: number;
       }>;
     }> {
       const { data } = await client.get('/reports/cash-flow', {
@@ -132,7 +132,7 @@ export function createReportsApi(client: AxiosInstance) {
       summary: {
         totalIncome: number;
         totalExpenses: number;
-        netIncome: number;
+        preSavingsNet: number;
         averageMonthlyIncome: number;
         averageMonthlyExpenses: number;
         savingsRate: number;

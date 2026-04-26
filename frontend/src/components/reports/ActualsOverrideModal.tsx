@@ -132,7 +132,7 @@ export function ActualsOverrideModal({ opened, onClose, override }: ActualsOverr
     onClose();
   };
 
-  const netFlow = form.values.totalIncome - form.values.totalExpenses;
+  const netCashflow = form.values.totalIncome - form.values.totalExpenses;
 
   return (
     <ResponsiveModal
@@ -200,12 +200,12 @@ export function ActualsOverrideModal({ opened, onClose, override }: ActualsOverr
           />
 
           {(form.values.totalIncome > 0 || form.values.totalExpenses > 0) && (
-            <Alert color={netFlow >= 0 ? 'green' : 'red'} variant="light">
+            <Alert color={netCashflow >= 0 ? 'green' : 'red'} variant="light">
               <Text size="sm" fw={500}>
-                Net Flow: ${netFlow.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                Net Cashflow: ${netCashflow.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </Text>
               <Text size="xs" c="dimmed">
-                {netFlow >= 0 ? 'Positive cash flow' : 'Negative cash flow'}
+                {netCashflow >= 0 ? 'Positive cash flow' : 'Negative cash flow'}
               </Text>
             </Alert>
           )}

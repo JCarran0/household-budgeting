@@ -428,7 +428,7 @@ describe('ReportService', () => {
       expect(result.summary!.map(s => s.month)).toEqual(['2025-01', '2025-02', '2025-03']);
     });
 
-    test('calculates income, expenses, savings, and netFlow per month', async () => {
+    test('calculates income, expenses, savings, and netCashflow per month', async () => {
       const result = await reportService.getCashFlowSummary(USER_ID, '2025-02', '2025-02');
 
       expect(result.summary).toBeDefined();
@@ -438,8 +438,8 @@ describe('ReportService', () => {
       expect(feb.income).toBeCloseTo(5000);
       // Spending excludes savings/transfer categories
       expect(feb.expenses).toBeGreaterThan(0);
-      // netFlow always = income − spending − savings (truly free cash after consumption AND savings commitments)
-      expect(feb.netFlow).toBeCloseTo(feb.income - feb.expenses - feb.savings);
+      // netCashflow always = income − spending − savings (truly free cash after consumption AND savings commitments)
+      expect(feb.netCashflow).toBeCloseTo(feb.income - feb.expenses - feb.savings);
     });
 
     test('excludes hidden transactions from all calculations', async () => {
@@ -494,7 +494,7 @@ describe('ReportService', () => {
       const mar = result.summary![0];
       expect(mar.income).toBeCloseTo(9999);
       expect(mar.expenses).toBeCloseTo(1111);
-      expect(mar.netFlow).toBeCloseTo(9999 - 1111);
+      expect(mar.netCashflow).toBeCloseTo(9999 - 1111);
     });
   });
 
@@ -551,7 +551,7 @@ describe('ReportService', () => {
       const s = result.summary!;
       expect(typeof s.totalIncome).toBe('number');
       expect(typeof s.totalExpenses).toBe('number');
-      expect(typeof s.netIncome).toBe('number');
+      expect(typeof s.preSavingsNet).toBe('number');
       expect(typeof s.averageMonthlyIncome).toBe('number');
       expect(typeof s.averageMonthlyExpenses).toBe('number');
       expect(typeof s.savingsRate).toBe('number');
@@ -570,12 +570,12 @@ describe('ReportService', () => {
       }
     });
 
-    test('netIncome equals totalIncome minus totalExpenses', async () => {
+    test('preSavingsNet equals totalIncome minus totalExpenses', async () => {
       const result = await reportService.getYearToDateSummary(USER_ID);
 
       expect(result.summary).toBeDefined();
       const s = result.summary!;
-      expect(s.netIncome).toBeCloseTo(s.totalIncome - s.totalExpenses);
+      expect(s.preSavingsNet).toBeCloseTo(s.totalIncome - s.totalExpenses);
     });
   });
 

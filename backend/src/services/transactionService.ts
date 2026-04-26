@@ -968,7 +968,7 @@ export class TransactionService {
     month: string;
     totalIncome: number;
     totalExpenses: number;
-    netIncome: number;
+    netCashflow: number;
     transactionCount: number;
   }> {
     const startOfMonth = etStartOfCurrentMonth();
@@ -988,7 +988,7 @@ export class TransactionService {
       month: etMonthString(),
       totalIncome: calculateIncome(result.transactions),
       totalExpenses: calculateExpenses(result.transactions),
-      netIncome: calculateNetCashFlow(result.transactions),
+      netCashflow: calculateNetCashFlow(result.transactions),
       transactionCount: result.transactions.length,
     };
   }
