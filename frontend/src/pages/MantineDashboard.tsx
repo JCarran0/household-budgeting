@@ -154,10 +154,7 @@ export function MantineDashboard() {
   const monthlySpending = actualTotals.expense - monthlySavings;
   const monthlyIncome = actualTotals.income;
 
-  // Calculate projected net income for the year
-  // Net income = income − spending (savings is retained wealth, not consumption,
-  // so we exclude it from both YTD and the budgeted projection).
-  const projectedPreSavingsNet = useMemo(() => {
+  const projectedTotals = useMemo(() => {
     if (!ytdTransactionData?.transactions || !categories) {
       return null;
     }
@@ -170,38 +167,47 @@ export function MantineDashboard() {
       ytdTransactionData.transactions as unknown as import('../../../shared/utils/transactionCalculations').TransactionForCalculation[],
       categories,
     );
+    const ytdIncome = ytdTotals.income;
     const ytdSpending = ytdTotals.expense - ytdSavings;
-    const ytdActualNet = ytdTotals.income - ytdSpending;
+    const ytdNetCashflow = ytdIncome - ytdSpending - ytdSavings;
 
-    // Remaining full months after current month (current month uses actuals)
-    const remainingMonths = 11 - currentMonthIndex; // months after current
+    const remainingMonths = 11 - currentMonthIndex;
 
-    // Use budget totals for projection, excluding savings from expense.
     const budgetedIncome = budgetData?.totals?.income || 0;
     const budgetedExpense = budgetData?.totals?.expense || 0;
     const budgetedSavings = (budgetData?.budgets || []).reduce((sum, b) => (
       savingsCategoryIds.has(b.categoryId) ? sum + b.amount : sum
     ), 0);
     const budgetedSpending = budgetedExpense - budgetedSavings;
-    const monthlyBudgetedNet = budgetedIncome - budgetedSpending;
+    const monthlyBudgetedNetCashflow = budgetedIncome - budgetedSpending - budgetedSavings;
+    const hasBudget = budgetedIncome > 0 || budgetedExpense > 0;
 
-    const projectedFromBudget = remainingMonths * monthlyBudgetedNet;
+    const projectedSavingsFromBudget = remainingMonths * budgetedSavings;
+    const projectedNetCashflowFromBudget = remainingMonths * monthlyBudgetedNetCashflow;
 
     return {
-      total: ytdActualNet + projectedFromBudget,
-      ytdActual: ytdActualNet,
-      ytdIncome: ytdTotals.income,
+      savings: {
+        total: ytdSavings + projectedSavingsFromBudget,
+        ytdActual: ytdSavings,
+        projectedFromBudget: projectedSavingsFromBudget,
+        monthlyBudgeted: budgetedSavings,
+      },
+      netCashflow: {
+        total: ytdNetCashflow + projectedNetCashflowFromBudget,
+        ytdActual: ytdNetCashflow,
+        projectedFromBudget: projectedNetCashflowFromBudget,
+        monthlyBudgeted: monthlyBudgetedNetCashflow,
+      },
+      ytdIncome,
       ytdSpending,
       ytdSavings,
       ytdHiddenIncome,
       ytdHiddenExpense,
-      projectedFromBudget,
       remainingMonths,
-      monthlyBudgetedNet,
       budgetedIncome,
       budgetedSpending,
       budgetedSavings,
-      hasBudget: budgetedIncome > 0 || budgetedExpense > 0,
+      hasBudget,
     };
   }, [ytdTransactionData, categories, budgetData, currentMonthIndex, savingsCategoryIds]);
 
@@ -290,45 +296,77 @@ export function MantineDashboard() {
         `Total: ${formatCurrency(monthlyIncome, true)}`,
       ].join('\n'),
     },
-    ...(projectedPreSavingsNet ? [{
-      title: 'Projected Pre-Savings Net',
-      value: formatCurrency(projectedPreSavingsNet.total),
-      exactValue: formatCurrency(projectedPreSavingsNet.total, true),
-      icon: IconChartLine,
-      color: projectedPreSavingsNet.total >= 0 ? 'teal' : 'red',
-      description: projectedPreSavingsNet.hasBudget
-        ? `YTD actual + ${projectedPreSavingsNet.remainingMonths}mo budgeted`
-        : 'Based on YTD actuals only',
-      formula: [
-        'YTD actual + budgeted Pre-Savings Net for remaining months.',
-        'Pre-Savings Net = Income − Spending. Transfers, hidden categories,',
-        'and savings contributions are excluded (savings is retained wealth,',
-        'not consumption — so it is not subtracted here).',
-        'Refunds and reversals net against expense / income (signed).',
-        '',
-        `YTD (Jan 1 → today):`,
-        `  Income:   ${formatCurrency(projectedPreSavingsNet.ytdIncome, true)}`,
-        `  Spending: ${formatCurrency(projectedPreSavingsNet.ytdSpending, true)}  (savings ${formatCurrency(projectedPreSavingsNet.ytdSavings, true)} excluded)`,
-        `  Net:      ${formatCurrency(projectedPreSavingsNet.ytdActual, true)}`,
-        ...((projectedPreSavingsNet.ytdHiddenIncome !== 0 || projectedPreSavingsNet.ytdHiddenExpense !== 0) ? [
+    ...(projectedTotals ? [
+      {
+        title: 'Projected Savings',
+        value: formatCurrency(projectedTotals.savings.total),
+        exactValue: formatCurrency(projectedTotals.savings.total, true),
+        icon: IconBuildingBank,
+        color: projectedTotals.savings.total >= 0 ? 'teal' : 'red',
+        description: projectedTotals.hasBudget
+          ? `YTD actual + ${projectedTotals.remainingMonths}mo budgeted`
+          : 'Based on YTD actuals only',
+        formula: [
+          'YTD actual savings + budgeted savings for remaining months.',
+          'Savings = transactions in categories flagged as Savings (isSavings).',
+          'Excludes transfers and hidden categories.',
+          'Refunds and reversals net within bucket (signed).',
           '',
-          `Hidden categories (excluded from totals above):`,
-          `  Income excluded:  ${formatCurrency(projectedPreSavingsNet.ytdHiddenIncome, true)}`,
-          `  Expense excluded: ${formatCurrency(projectedPreSavingsNet.ytdHiddenExpense, true)}`,
-        ] : []),
-        '',
-        projectedPreSavingsNet.hasBudget
-          ? `Budgeted (${projectedPreSavingsNet.remainingMonths} remaining months × current month's budget):`
-          : `No budget for current month — projection is YTD only.`,
-        ...(projectedPreSavingsNet.hasBudget ? [
-          `  Income:   ${formatCurrency(projectedPreSavingsNet.budgetedIncome, true)} / mo`,
-          `  Spending: ${formatCurrency(projectedPreSavingsNet.budgetedSpending, true)} / mo  (savings ${formatCurrency(projectedPreSavingsNet.budgetedSavings, true)} excluded)`,
-          `  Net:      ${formatCurrency(projectedPreSavingsNet.monthlyBudgetedNet, true)} / mo × ${projectedPreSavingsNet.remainingMonths} = ${formatCurrency(projectedPreSavingsNet.projectedFromBudget, true)}`,
-        ] : []),
-        '',
-        `Projected: ${formatCurrency(projectedPreSavingsNet.total, true)}`,
-      ].join('\n'),
-    }] : []),
+          `YTD (Jan 1 → today):`,
+          `  Savings: ${formatCurrency(projectedTotals.savings.ytdActual, true)}`,
+          '',
+          projectedTotals.hasBudget
+            ? `Budgeted (${projectedTotals.remainingMonths} remaining months × current month's budget):`
+            : `No budget for current month — projection is YTD only.`,
+          ...(projectedTotals.hasBudget ? [
+            `  Savings: ${formatCurrency(projectedTotals.savings.monthlyBudgeted, true)} / mo × ${projectedTotals.remainingMonths} = ${formatCurrency(projectedTotals.savings.projectedFromBudget, true)}`,
+          ] : []),
+          '',
+          `Projected: ${formatCurrency(projectedTotals.savings.total, true)}`,
+        ].join('\n'),
+      },
+      {
+        title: 'Projected Net Cashflow',
+        value: formatCurrency(projectedTotals.netCashflow.total),
+        exactValue: formatCurrency(projectedTotals.netCashflow.total, true),
+        icon: IconChartLine,
+        color: projectedTotals.netCashflow.total >= 0 ? 'teal' : 'red',
+        description: projectedTotals.hasBudget
+          ? `YTD actual + ${projectedTotals.remainingMonths}mo budgeted`
+          : 'Based on YTD actuals only',
+        formula: [
+          'YTD actual + budgeted Net Cashflow for remaining months.',
+          'Net Cashflow = Income − Spending − Savings.',
+          'Spending = Expenses − Savings (consumption only).',
+          'Excludes transfers and hidden categories.',
+          'Refunds and reversals net against expense / income (signed).',
+          '',
+          `YTD (Jan 1 → today):`,
+          `  Income:   ${formatCurrency(projectedTotals.ytdIncome, true)}`,
+          `  Spending: ${formatCurrency(projectedTotals.ytdSpending, true)}`,
+          `  Savings:  ${formatCurrency(projectedTotals.ytdSavings, true)}`,
+          `  Net:      ${formatCurrency(projectedTotals.netCashflow.ytdActual, true)}`,
+          ...((projectedTotals.ytdHiddenIncome !== 0 || projectedTotals.ytdHiddenExpense !== 0) ? [
+            '',
+            `Hidden categories (excluded from totals above):`,
+            `  Income excluded:  ${formatCurrency(projectedTotals.ytdHiddenIncome, true)}`,
+            `  Expense excluded: ${formatCurrency(projectedTotals.ytdHiddenExpense, true)}`,
+          ] : []),
+          '',
+          projectedTotals.hasBudget
+            ? `Budgeted (${projectedTotals.remainingMonths} remaining months × current month's budget):`
+            : `No budget for current month — projection is YTD only.`,
+          ...(projectedTotals.hasBudget ? [
+            `  Income:   ${formatCurrency(projectedTotals.budgetedIncome, true)} / mo`,
+            `  Spending: ${formatCurrency(projectedTotals.budgetedSpending, true)} / mo`,
+            `  Savings:  ${formatCurrency(projectedTotals.budgetedSavings, true)} / mo`,
+            `  Net:      ${formatCurrency(projectedTotals.netCashflow.monthlyBudgeted, true)} / mo × ${projectedTotals.remainingMonths} = ${formatCurrency(projectedTotals.netCashflow.projectedFromBudget, true)}`,
+          ] : []),
+          '',
+          `Projected: ${formatCurrency(projectedTotals.netCashflow.total, true)}`,
+        ].join('\n'),
+      },
+    ] : []),
   ];
 
   return (
