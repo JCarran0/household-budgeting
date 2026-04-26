@@ -1,5 +1,5 @@
-import { Fragment, type KeyboardEvent } from 'react';
-import { ActionIcon, Box, Group, Paper, Stack, Table, Text, Title } from '@mantine/core';
+import { Fragment, useMemo, type KeyboardEvent } from 'react';
+import { ActionIcon, Box, Group, Paper, Stack, Table, Text, Title, Tooltip } from '@mantine/core';
 import { IconChevronRight, IconEdit, IconX } from '@tabler/icons-react';
 import { TransactionPreviewTrigger } from '../../transactions/TransactionPreviewTrigger';
 import type { Category } from '../../../../../shared/types';
@@ -46,6 +46,34 @@ export function BvaSectionTable({
   const visible = parents.filter(
     fp => showDismissed || !dismissedIds.has(fp.parent.parentId),
   );
+
+  // Section rollups: sum across non-dismissed parent rows only, regardless of
+  // showDismissed (a dismissed row is semantically excluded even when revealed).
+  const rollup = useMemo(() => {
+    const active = parents.filter(fp => !dismissedIds.has(fp.parent.parentId));
+    let actual = 0;
+    let budgeted = 0;
+    let rolloverSum = 0;
+    let rolloverHasAny = false;
+    let available = 0;
+    for (const { parent } of active) {
+      actual += parent.actual;
+      budgeted += parent.budgeted;
+      available += parent.available;
+      if (parent.rollover !== null) {
+        rolloverHasAny = true;
+        rolloverSum += parent.rollover;
+      }
+    }
+    return {
+      hasRows: active.length > 0,
+      actual,
+      budgeted,
+      rollover: rolloverHasAny ? rolloverSum : null,
+      available,
+    };
+  }, [parents, dismissedIds]);
+
   if (visible.length === 0) return null;
 
   return (
@@ -218,6 +246,39 @@ export function BvaSectionTable({
                 );
               })}
             </Table.Tbody>
+            {rollup.hasRows && (
+              <Table.Tfoot>
+                <Table.Tr style={{ borderTop: '2px solid var(--mantine-color-default-border)' }}>
+                  <Table.Td>
+                    <Text size="sm" fw={700}>Total</Text>
+                  </Table.Td>
+                  <Table.Td style={{ textAlign: 'right', fontWeight: 700 }}>
+                    {formatCurrency(rollup.actual)}
+                  </Table.Td>
+                  <Table.Td style={{ textAlign: 'right', fontWeight: 700 }}>
+                    {formatCurrency(rollup.budgeted)}
+                  </Table.Td>
+                  <Table.Td style={{ textAlign: 'right', fontWeight: 700 }}>
+                    {rollup.rollover === null ? (
+                      <Text size="sm" c="dimmed">—</Text>
+                    ) : (
+                      <Tooltip
+                        label="Sum of tone-signed rollover across non-dismissed rows. Positive = under prior plan; negative = over."
+                        withArrow
+                        multiline
+                        w={260}
+                      >
+                        <span>{renderRolloverCell(rollup.rollover, rolloverOn, false)}</span>
+                      </Tooltip>
+                    )}
+                  </Table.Td>
+                  <Table.Td style={{ textAlign: 'right', fontWeight: 700 }}>
+                    {renderAvailableCell(rollup.available, false)}
+                  </Table.Td>
+                  <Table.Td />
+                </Table.Tr>
+              </Table.Tfoot>
+            )}
           </Table>
         </Table.ScrollContainer>
       </Stack>

@@ -7,6 +7,9 @@
 
 import type { Category, MonthlyBudget, Transaction } from '../types';
 import {
+  createCategoryLookup,
+  isIncomeCategory as isIncomeCategoryByPrefix,
+  isIncomeCategoryHierarchical,
   isIncomeCategoryWithCategories,
   isTransferCategory,
 } from './categoryHelpers';
@@ -458,6 +461,66 @@ export function getSavingsCategoryIds(categories: Category[]): Set<string> {
     }
   }
   return ids;
+}
+
+/**
+ * Budgeted-side parallel of the actuals trio in transactionCalculations.ts.
+ *
+ * Bucketing rule (REQ-005a parity): bucket budgets by category type using the
+ * same hierarchical income detection and savings-id set the actuals helpers
+ * use, so budgeted/actual aggregates agree on what counts as income, spending,
+ * and savings. Transfers and uncategorized rows are excluded from all three.
+ *
+ * Budget amounts are stored as positive values per category-month, so signed
+ * accumulation (used on the actuals side to net refunds) is unnecessary —
+ * direct summation suffices.
+ */
+function detectBudgetIncome(categoryId: string, lookup: Map<string, Category>): boolean {
+  if (lookup.size === 0) return isIncomeCategoryByPrefix(categoryId);
+  return isIncomeCategoryHierarchical(categoryId, lookup);
+}
+
+export function calculateBudgetedIncome(
+  budgets: MonthlyBudget[],
+  categories: Category[]
+): number {
+  const lookup = createCategoryLookup(categories);
+  let total = 0;
+  for (const b of budgets) {
+    if (isTransferCategory(b.categoryId)) continue;
+    if (!detectBudgetIncome(b.categoryId, lookup)) continue;
+    total += b.amount;
+  }
+  return total;
+}
+
+export function calculateBudgetedSavings(
+  budgets: MonthlyBudget[],
+  categories: Category[]
+): number {
+  const savingsIds = getSavingsCategoryIds(categories);
+  let total = 0;
+  for (const b of budgets) {
+    if (!savingsIds.has(b.categoryId)) continue;
+    total += b.amount;
+  }
+  return total;
+}
+
+export function calculateBudgetedSpending(
+  budgets: MonthlyBudget[],
+  categories: Category[]
+): number {
+  const lookup = createCategoryLookup(categories);
+  const savingsIds = getSavingsCategoryIds(categories);
+  let total = 0;
+  for (const b of budgets) {
+    if (isTransferCategory(b.categoryId)) continue;
+    if (detectBudgetIncome(b.categoryId, lookup)) continue;
+    if (savingsIds.has(b.categoryId)) continue;
+    total += b.amount;
+  }
+  return total;
 }
 
 /**

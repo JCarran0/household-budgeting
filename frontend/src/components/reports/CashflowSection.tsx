@@ -8,6 +8,7 @@ import {
   Divider,
   Badge,
 } from '@mantine/core';
+import { AnnualCashflowDashboard } from './AnnualCashflowDashboard';
 import {
   XAxis,
   YAxis,
@@ -66,6 +67,9 @@ export function CashflowSection({ cashFlowChartData, budgetVsActualData, totalIn
 
   return (
     <Grid>
+      <Grid.Col span={12}>
+        <AnnualCashflowDashboard />
+      </Grid.Col>
       <Grid.Col span={12}>
         <Paper withBorder p="md">
           <Text size="lg" fw={600} mb="md">Cash Flow Summary</Text>

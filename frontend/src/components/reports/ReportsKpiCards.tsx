@@ -204,7 +204,7 @@ export function ReportsKpiCards({ kpiSummary, timeRangeLabel }: ReportsKpiCardsP
         <Group justify="space-between">
           <div>
             <Text c="dimmed" size="xs" tt="uppercase" fw={700}>
-              Net Cashflow
+              Net Cashflow (Actuals)
             </Text>
             <FormulaTooltipColored formula={netFormula} color={netCashflow > 0 ? 'green' : 'red'}>
               {(netCashflow < 0 ? '-' : '') + formatCurrency(Math.abs(netCashflow))}
