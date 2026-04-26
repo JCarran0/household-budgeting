@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.63.0](https://github.com/JCarran0/household-budgeting/compare/v5.62.1...v5.63.0) (2026-04-26)
+
+
+### Features
+
+* **budgets:** per-cell notes in yearly budget grid ([17767f8](https://github.com/JCarran0/household-budgeting/commit/17767f86d91a976923e6c102a0a6243e33a5ac16))
+
+
+### Bug Fixes
+
+* **rollover:** subtree-aware parent rollover + render flagged carries with no current-month activity ([2ca18ac](https://github.com/JCarran0/household-budgeting/commit/2ca18ac366b8fa07a725de90de1e719c50175eec))
+
 ### [5.62.1](https://github.com/JCarran0/household-budgeting/compare/v5.62.0...v5.62.1) (2026-04-26)
 
 
