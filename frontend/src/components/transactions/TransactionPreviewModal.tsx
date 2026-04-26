@@ -27,6 +27,7 @@ import {
 import { format } from 'date-fns';
 import { api } from '../../lib/api';
 import type { Transaction } from '../../../../shared/types';
+import { createCategoryLookup, isIncomeCategoryHierarchical, isTransferCategory } from '../../../../shared/utils/categoryHelpers';
 import { formatCurrency } from '../../utils/formatters';
 import { TransactionEditModal } from './TransactionEditModal';
 
@@ -102,10 +103,31 @@ export function TransactionPreviewModal({
     [transactionData]
   );
 
-  // Calculate total amount for displayed transactions
+  // Categories drive bucket-aware signed accumulation (REQ-005a). Cached
+  // alongside other category consumers, so this is essentially free.
+  const { data: categories } = useQuery({
+    queryKey: ['categories'],
+    queryFn: api.getCategories,
+    enabled: opened,
+  });
+
+  // Calculate net total for displayed transactions using signed accumulation
+  // per bucket (REQ-005a): income flips sign so paycheck reversals net against
+  // income; expense/savings keep raw amount so refunds net against spending.
+  // Transfers (rare in preview, but defensive) skip. Falls back to absolute
+  // accumulation only when categories haven't loaded yet.
   const displayedTotal = useMemo(() => {
-    return transactions.reduce((sum, transaction) => sum + Math.abs(transaction.amount), 0);
-  }, [transactions]);
+    if (!categories) {
+      return transactions.reduce((sum, t) => sum + Math.abs(t.amount), 0);
+    }
+    const lookup = createCategoryLookup(categories);
+    return transactions.reduce((sum, t) => {
+      if (!t.categoryId) return sum + t.amount;
+      if (isTransferCategory(t.categoryId)) return sum;
+      const isIncome = isIncomeCategoryHierarchical(t.categoryId, lookup);
+      return sum + (isIncome ? -t.amount : t.amount);
+    }, 0);
+  }, [transactions, categories]);
 
   // Navigate to transactions page with filters applied
   const navigateToTransactionsWithFilter = () => {
@@ -261,7 +283,7 @@ export function TransactionPreviewModal({
                   Showing {transactions.length} of {totalCount} transactions
                 </Text>
                 <Text size="sm" fw={600}>
-                  Total: ${displayedTotal.toFixed(2)}
+                  Total: {formatCurrency(displayedTotal, true)}
                 </Text>
               </Group>
             )}

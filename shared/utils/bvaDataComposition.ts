@@ -3,7 +3,7 @@ import {
   buildCategoryTreeAggregation,
   computeRolloverBalance,
 } from './budgetCalculations';
-import { isBudgetableCategory } from './categoryHelpers';
+import { createCategoryLookup, isBudgetableCategory, isIncomeCategoryHierarchical } from './categoryHelpers';
 import {
   computeAvailable,
   getSectionType,
@@ -95,6 +95,7 @@ export function groupActualsByCategoryByMonth(
   categories: Category[],
 ): Map<string, Map<string, number>> {
   const out = new Map<string, Map<string, number>>();
+  const lookup = createCategoryLookup(categories);
   for (const t of transactions) {
     if (t.isHidden) continue;
     if (!t.categoryId) continue;
@@ -105,7 +106,12 @@ export function groupActualsByCategoryByMonth(
       byMonth = new Map();
       out.set(t.categoryId, byMonth);
     }
-    byMonth.set(monthKey, (byMonth.get(monthKey) ?? 0) + Math.abs(t.amount));
+    // REQ-005a: signed accumulation per bucket. Income flips sign so the
+    // income bucket reads positive (Plaid stores income as negative);
+    // expense/savings keep the raw amount so refunds net within bucket.
+    const isIncome = isIncomeCategoryHierarchical(t.categoryId, lookup);
+    const signed = isIncome ? -t.amount : t.amount;
+    byMonth.set(monthKey, (byMonth.get(monthKey) ?? 0) + signed);
   }
   return out;
 }

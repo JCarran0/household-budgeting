@@ -294,6 +294,7 @@ export function createActualsMap(
   // Get filtering sets if needed
   const hiddenCategoryIds = excludeHidden ? getHiddenCategoryIds(categories) : new Set<string>();
   const childCategoryIds = excludeChildren ? getChildCategoryIds(categories) : new Set<string>();
+  const lookup = createCategoryLookup(categories);
 
   const actualsByCategory: Record<string, number> = {};
 
@@ -321,9 +322,14 @@ export function createActualsMap(
       return;
     }
 
-    const amount = Math.abs(transaction.amount);
+    // REQ-005a: signed accumulation per bucket. Income transactions land
+    // negative in Plaid; flip the sign so the income bucket reads positive,
+    // and a paycheck reversal (positive amount) nets against income. Expense
+    // and savings buckets accumulate the raw signed amount so refunds net.
+    const isIncome = isIncomeCategoryHierarchical(transaction.categoryId, lookup);
+    const signed = isIncome ? -transaction.amount : transaction.amount;
     actualsByCategory[transaction.categoryId] =
-      (actualsByCategory[transaction.categoryId] || 0) + amount;
+      (actualsByCategory[transaction.categoryId] || 0) + signed;
   });
 
   return actualsByCategory;

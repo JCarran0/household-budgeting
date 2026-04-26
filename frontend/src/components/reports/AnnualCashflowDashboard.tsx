@@ -14,8 +14,11 @@ import {
 } from '@mantine/core';
 import { api } from '../../lib/api';
 import { computeYearEndForecast, type YearForecastCell } from '../../../../shared/utils/cashflowForecast';
-import { etMonthString } from '../../../../shared/utils/easternTime';
+import { etMonthString, firstDayOfMonth, lastDayOfMonth } from '../../../../shared/utils/easternTime';
+import { getSavingsCategoryIds } from '../../../../shared/utils/budgetCalculations';
+import { createCategoryLookup, isIncomeCategoryHierarchical, isTransferCategory } from '../../../../shared/utils/categoryHelpers';
 import { formatCurrency } from '../../utils/formatters';
+import { TransactionPreviewTrigger } from '../transactions/TransactionPreviewTrigger';
 
 const ROW_DEFS = [
   { key: 'income' as const, label: 'Income', color: 'green' as const },
@@ -73,6 +76,24 @@ export function AnnualCashflowDashboard() {
   const currentCol = cells.find(c => c.monthKey === currentMonthKey);
   const valueOf = (cell: YearForecastCell, key: 'income' | 'spending' | 'savings'): number => cell[key];
 
+  // Category id sets for the transaction preview filter — must match the trio's
+  // bucketing rules so the preview shows the same transactions the cell summed.
+  const cats = categories ?? [];
+  const lookup = createCategoryLookup(cats);
+  const savingsIds = getSavingsCategoryIds(cats);
+  const incomeIds = cats.filter(c => isIncomeCategoryHierarchical(c.id, lookup)).map(c => c.id);
+  const spendingIds = cats
+    .filter(c => !isTransferCategory(c.id))
+    .filter(c => !isIncomeCategoryHierarchical(c.id, lookup))
+    .filter(c => !savingsIds.has(c.id))
+    .map(c => c.id);
+  const savingsIdList = Array.from(savingsIds);
+  const previewIdsByRow: Record<'income' | 'spending' | 'savings', string[]> = {
+    income: incomeIds,
+    spending: spendingIds,
+    savings: savingsIdList,
+  };
+
   return (
     <Paper withBorder p="md">
       <Stack gap="sm">
@@ -123,6 +144,7 @@ export function AnnualCashflowDashboard() {
             <Table.Tbody>
               {ROW_DEFS.map(row => {
                 const total = totals[row.key];
+                const previewIds = previewIdsByRow[row.key];
                 return (
                   <Table.Tr key={row.label}>
                     <Table.Td>
@@ -134,17 +156,42 @@ export function AnnualCashflowDashboard() {
                     <Table.Td style={{ textAlign: 'right', fontWeight: 600, background: 'var(--mantine-color-default-hover)' }}>
                       {formatCurrency(total)}
                     </Table.Td>
-                    {cells.map(cell => (
-                      <Table.Td
-                        key={cell.monthKey}
-                        style={{
-                          textAlign: 'right',
-                          color: cell.mode === 'actual' ? 'var(--mantine-color-dimmed)' : undefined,
-                        }}
-                      >
+                    {cells.map(cell => {
+                      const display = (
                         <Text size="sm">{formatCurrency(valueOf(cell, row.key))}</Text>
-                      </Table.Td>
-                    ))}
+                      );
+                      const canPreview = cell.mode === 'actual' && previewIds.length > 0;
+                      const [year, monthIdx] = cell.monthKey.split('-').map(Number);
+                      const dateRange = canPreview
+                        ? {
+                            startDate: firstDayOfMonth(year, monthIdx - 1),
+                            endDate: lastDayOfMonth(year, monthIdx - 1),
+                          }
+                        : undefined;
+                      return (
+                        <Table.Td
+                          key={cell.monthKey}
+                          style={{
+                            textAlign: 'right',
+                            color: cell.mode === 'actual' ? 'var(--mantine-color-dimmed)' : undefined,
+                          }}
+                        >
+                          {canPreview ? (
+                            <TransactionPreviewTrigger
+                              categoryId={previewIds[0]}
+                              additionalCategoryIds={previewIds.slice(1)}
+                              categoryName={`${row.label} — ${cell.monthLabel} ${year}`}
+                              dateRange={dateRange}
+                              tooltipText={`Click to preview ${row.label.toLowerCase()} transactions for ${cell.monthLabel} ${year}`}
+                            >
+                              {display}
+                            </TransactionPreviewTrigger>
+                          ) : (
+                            display
+                          )}
+                        </Table.Td>
+                      );
+                    })}
                   </Table.Tr>
                 );
               })}
