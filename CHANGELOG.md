@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.60.0](https://github.com/JCarran0/household-budgeting/compare/v5.59.1...v5.60.0) (2026-04-26)
+
+
+### Features
+
+* **dashboard:** replace Projected Pre-Savings Net with Projected Savings + Projected Net Cashflow ([144dfe3](https://github.com/JCarran0/household-budgeting/commit/144dfe3d5035db7006e18c2c89d598970488d464))
+
+
+### Documentation
+
+* **naming:** adopt "Pre-Savings Net" and "Net Cashflow" as canonical terms ([9720514](https://github.com/JCarran0/household-budgeting/commit/972051406b73f7665c42ee5c78c3a859f54f641a))
+
+
+### Code Refactoring
+
+* **naming:** rename net variables to canonical preSavingsNet / netCashflow + fix custom income detection ([b32e105](https://github.com/JCarran0/household-budgeting/commit/b32e105df628bee6a9822a6a91459a620ebba384))
+
 ### [5.59.1](https://github.com/JCarran0/household-budgeting/compare/v5.59.0...v5.59.1) (2026-04-26)
 
 
