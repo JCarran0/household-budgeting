@@ -11,10 +11,13 @@ import { MonthlyBudget } from '../shared/types';
 import { format, subMonths, addMonths } from 'date-fns';
 import { calculateIncome, calculateSavings, calculateSpending } from '../shared/utils/transactionCalculations';
 import { etDateString, etMonthString, firstDayOfMonth, lastDayOfMonth } from '../shared/utils/easternTime';
-import { calculateBudgetTotals } from '../shared/utils/budgetCalculations';
 import { Repository } from './repository';
-import { getMonthRange, calculateStdDev, getEffectivelyHiddenCategoryIds, getSavingsCategoryIds } from './reportHelpers';
+import { getMonthRange, calculateStdDev, getEffectivelyHiddenCategoryIds } from './reportHelpers';
 import { excludeRemoved } from './transactionReader';
+import { buildIncomeBreakdown } from './reports/breakdowns/income';
+import { buildCategoryBreakdown } from './reports/breakdowns/category';
+import { buildSavingsBreakdown } from './reports/breakdowns/savings';
+import { buildCashFlowOutlook } from './reports/cashflowProjections';
 
 // Report types
 export interface SpendingTrend {
@@ -216,128 +219,10 @@ export class ReportService {
   ): Promise<CategoryBreakdownResult> {
     try {
       const transactions = await this.getActiveTransactions(familyId);
-
       const categories = await this.dataService.getCategories(familyId);
-      // Create a set of hidden category IDs including subcategories of hidden parents
-      const hiddenCategoryIds = getEffectivelyHiddenCategoryIds(categories);
-
-      // Find the Income parent category (Plaid PFC standard category)
-      const incomeParentCategory = categories.find(c => 
-        !c.parentId && 
-        (c.name.toLowerCase().includes('income') || c.id.includes('INCOME') || c.id === 'INCOME')
+      const { breakdown, total } = buildIncomeBreakdown(
+        transactions, categories, startDate, endDate, includeSubcategories
       );
-      
-      if (!incomeParentCategory) {
-        // If no Income parent category found, return empty result
-        return { success: true, breakdown: [], total: 0 };
-      }
-      
-      // Get all income category IDs (parent + children)
-      const incomeSubcategories = categories.filter(c => c.parentId === incomeParentCategory.id);
-      const incomeCategoryIds = new Set([
-        incomeParentCategory.id,
-        ...incomeSubcategories.map(c => c.id)
-      ]);
-
-      // Filter transactions for income (negative amounts from income categories only, excluding hidden categories)
-      const filteredTransactions = transactions.filter(t => 
-        t.date >= startDate && 
-        t.date <= endDate && 
-        !t.isHidden &&
-        !t.pending &&
-        t.amount < 0 && // Income only (negative amounts)
-        t.categoryId && incomeCategoryIds.has(t.categoryId) && // Only income category transactions
-        (!t.categoryId || !hiddenCategoryIds.has(t.categoryId)) // Exclude hidden categories
-      );
-
-      // Calculate total income (absolute value)
-      const total = filteredTransactions.reduce((sum, t) => sum + Math.abs(t.amount), 0);
-
-      // Group by category
-      const categoryIncome = new Map<string, { amount: number; count: number }>();
-
-      for (const txn of filteredTransactions) {
-        const categoryId = txn.categoryId || 'uncategorized';
-        const current = categoryIncome.get(categoryId) || { amount: 0, count: 0 };
-        categoryIncome.set(categoryId, {
-          amount: current.amount + Math.abs(txn.amount), // Use absolute value for income
-          count: current.count + 1
-        });
-      }
-
-      // Build hierarchy if needed
-      const breakdown: CategoryBreakdown[] = [];
-      
-      if (includeSubcategories) {
-        // Process only the Income parent category
-        const parent = incomeParentCategory;
-        const subcategories = incomeSubcategories;
-        const subcategoryBreakdown: CategoryBreakdown[] = [];
-        let parentAmount = 0;
-        let parentCount = 0;
-
-        // Add parent's own income if any
-        const parentIncome = categoryIncome.get(parent.id);
-        if (parentIncome) {
-          parentAmount += parentIncome.amount;
-          parentCount += parentIncome.count;
-        }
-
-        // Add subcategories
-        for (const sub of subcategories) {
-          const subIncome = categoryIncome.get(sub.id);
-          if (subIncome) {
-            parentAmount += subIncome.amount;
-            parentCount += subIncome.count;
-            subcategoryBreakdown.push({
-              categoryId: sub.id,
-              categoryName: sub.name,
-              amount: subIncome.amount,
-              percentage: total > 0 ? (subIncome.amount / total) * 100 : 0,
-              transactionCount: subIncome.count
-            });
-          }
-        }
-
-        if (parentAmount > 0) {
-          breakdown.push({
-            categoryId: parent.id,
-            categoryName: parent.name,
-            amount: parentAmount,
-            percentage: total > 0 ? (parentAmount / total) * 100 : 0,
-            transactionCount: parentCount,
-            subcategories: subcategoryBreakdown.length > 0 ? subcategoryBreakdown : undefined
-          });
-        }
-
-        // Add uncategorized income if any
-        const uncategorized = categoryIncome.get('uncategorized');
-        if (uncategorized) {
-          breakdown.push({
-            categoryId: 'uncategorized',
-            categoryName: 'Uncategorized',
-            amount: uncategorized.amount,
-            percentage: total > 0 ? (uncategorized.amount / total) * 100 : 0,
-            transactionCount: uncategorized.count
-          });
-        }
-      } else {
-        // Flat list
-        for (const [categoryId, data] of categoryIncome) {
-          const category = categories.find(c => c.id === categoryId);
-          breakdown.push({
-            categoryId,
-            categoryName: category?.name || 'Uncategorized',
-            amount: data.amount,
-            percentage: total > 0 ? (data.amount / total) * 100 : 0,
-            transactionCount: data.count
-          });
-        }
-      }
-
-      // Sort by amount descending
-      breakdown.sort((a, b) => b.amount - a.amount);
-
       return { success: true, breakdown, total };
     } catch (error) {
       console.error('Error getting income breakdown:', error);
@@ -356,115 +241,10 @@ export class ReportService {
   ): Promise<CategoryBreakdownResult> {
     try {
       const transactions = await this.getActiveTransactions(familyId);
-
       const categories = await this.dataService.getCategories(familyId);
-      // Create a set of hidden category IDs including subcategories of hidden parents
-      const hiddenCategoryIds = getEffectivelyHiddenCategoryIds(categories);
-      // Also exclude savings categories from spending breakdown
-      const savingsCatIds = getSavingsCategoryIds(categories);
-
-      // Filter transactions (excluding hidden categories and savings categories)
-      const filteredTransactions = transactions.filter(t =>
-        t.date >= startDate &&
-        t.date <= endDate &&
-        !t.isHidden &&
-        !t.pending &&
-        t.amount > 0 && // Expenses only
-        (!t.categoryId || !hiddenCategoryIds.has(t.categoryId)) && // Exclude hidden categories
-        (!t.categoryId || !savingsCatIds.has(t.categoryId)) // Exclude savings categories
+      const { breakdown, total } = buildCategoryBreakdown(
+        transactions, categories, startDate, endDate, includeSubcategories
       );
-
-      // Calculate total
-      const total = filteredTransactions.reduce((sum, t) => sum + t.amount, 0);
-
-      // Group by category
-      const categorySpending = new Map<string, { amount: number; count: number }>();
-
-      for (const txn of filteredTransactions) {
-        const categoryId = txn.categoryId || 'uncategorized';
-        const current = categorySpending.get(categoryId) || { amount: 0, count: 0 };
-        categorySpending.set(categoryId, {
-          amount: current.amount + txn.amount,
-          count: current.count + 1
-        });
-      }
-
-      // Build hierarchy if needed
-      const breakdown: CategoryBreakdown[] = [];
-      
-      if (includeSubcategories) {
-        // Group by parent categories
-        const parentCategories = categories.filter(c => !c.parentId);
-        
-        for (const parent of parentCategories) {
-          const subcategories = categories.filter(c => c.parentId === parent.id);
-          const subcategoryBreakdown: CategoryBreakdown[] = [];
-          let parentAmount = 0;
-          let parentCount = 0;
-
-          // Add parent's own spending if any
-          const parentSpending = categorySpending.get(parent.id);
-          if (parentSpending) {
-            parentAmount += parentSpending.amount;
-            parentCount += parentSpending.count;
-          }
-
-          // Add subcategories
-          for (const sub of subcategories) {
-            const subSpending = categorySpending.get(sub.id);
-            if (subSpending) {
-              parentAmount += subSpending.amount;
-              parentCount += subSpending.count;
-              subcategoryBreakdown.push({
-                categoryId: sub.id,
-                categoryName: sub.name,
-                amount: subSpending.amount,
-                percentage: total > 0 ? (subSpending.amount / total) * 100 : 0,
-                transactionCount: subSpending.count
-              });
-            }
-          }
-
-          if (parentAmount > 0) {
-            breakdown.push({
-              categoryId: parent.id,
-              categoryName: parent.name,
-              amount: parentAmount,
-              percentage: total > 0 ? (parentAmount / total) * 100 : 0,
-              transactionCount: parentCount,
-              subcategories: subcategoryBreakdown.length > 0 ? subcategoryBreakdown : undefined
-            });
-          }
-        }
-
-        // Add uncategorized if any
-        const uncategorized = categorySpending.get('uncategorized');
-        if (uncategorized) {
-          breakdown.push({
-            categoryId: 'uncategorized',
-            categoryName: 'Uncategorized',
-            amount: uncategorized.amount,
-            percentage: total > 0 ? (uncategorized.amount / total) * 100 : 0,
-            transactionCount: uncategorized.count
-          });
-        }
-      } else {
-        // Flat list
-        for (const [categoryId, data] of categorySpending) {
-          const category = categories.find(c => c.id === categoryId);
-          breakdown.push({
-            categoryId,
-            categoryName: category?.name || 'Uncategorized',
-            amount: data.amount,
-            percentage: total > 0 ? (data.amount / total) * 100 : 0,
-            transactionCount: data.count
-          });
-        }
-      }
-
-      // Sort by amount descending
-      breakdown.sort((a, b) => b.amount - a.amount);
-
       return { success: true, breakdown, total };
     } catch (error) {
       console.error('Error getting category breakdown:', error);
@@ -482,52 +262,10 @@ export class ReportService {
   ): Promise<CategoryBreakdownResult> {
     try {
       const transactions = await this.getActiveTransactions(familyId);
-
       const categories = await this.dataService.getCategories(familyId);
-      // Get savings categories (top-level isSavings=true + their subcategories)
-      const savingsCatIds = getSavingsCategoryIds(categories);
-
-      // Filter transactions for savings categories only
-      const filteredTransactions = transactions.filter(t =>
-        t.date >= startDate &&
-        t.date <= endDate &&
-        !t.isHidden &&
-        !t.pending &&
-        t.amount > 0 && // Expenses only (savings contributions are positive)
-        t.categoryId && savingsCatIds.has(t.categoryId) // Only savings categories
+      const { breakdown, total } = buildSavingsBreakdown(
+        transactions, categories, startDate, endDate
       );
-
-      // Calculate total
-      const total = filteredTransactions.reduce((sum, t) => sum + t.amount, 0);
-
-      // Group by category
-      const categorySpending = new Map<string, { amount: number; count: number }>();
-
-      for (const txn of filteredTransactions) {
-        const categoryId = txn.categoryId!; // We know it exists from filter
-        const current = categorySpending.get(categoryId) || { amount: 0, count: 0 };
-        categorySpending.set(categoryId, {
-          amount: current.amount + txn.amount,
-          count: current.count + 1
-        });
-      }
-
-      // Build flat breakdown (savings are all subcategories)
-      const breakdown: CategoryBreakdown[] = [];
-      for (const [categoryId, data] of categorySpending) {
-        const category = categories.find(c => c.id === categoryId);
-        breakdown.push({
-          categoryId,
-          categoryName: category?.name || 'Unknown Savings',
-          amount: data.amount,
-          percentage: total > 0 ? (data.amount / total) * 100 : 0,
-          transactionCount: data.count
-        });
-      }
-
-      // Sort by amount descending
-      breakdown.sort((a, b) => b.amount - a.amount);
-
       return { success: true, breakdown, total };
     } catch (error) {
       console.error('Error getting savings breakdown:', error);
@@ -695,15 +433,12 @@ export class ReportService {
       const today = new Date();
       const categories = await this.dataService.getCategories(familyId);
 
-      // Get last known budget for extrapolation
+      // Get last known budget for extrapolation (data-loading stays here — requires dataService)
       let lastKnownBudget: MonthlyBudget[] | null = null;
-
-      // Search backwards to find last month with budgets (up to 12 months)
       for (let i = 0; i <= 12; i++) {
         const monthToCheck = format(subMonths(today, i), 'yyyy-MM');
         const budgetsKey = `budgets_${familyId}_${monthToCheck}`;
         const budgets = await this.dataService.getData<MonthlyBudget[]>(budgetsKey) || [];
-
         if (budgets.length > 0) {
           lastKnownBudget = budgets;
           break;
@@ -719,69 +454,30 @@ export class ReportService {
         return { success: false, error: 'Failed to get historical data for average calculation' };
       }
 
-      const avgNetCashflow = historicalResult.summary.reduce((sum, m) => sum + m.netCashflow, 0) / historicalResult.summary.length;
-
       // Check if we have any prior year data
-      // Start from 1 year before next month (to align with i=1 being first projection month)
       const oneYearAgo = format(subMonths(addMonths(today, 1), 12), 'yyyy-MM');
       const checkPriorYearEnd = format(subMonths(addMonths(today, monthsToProject), 12), 'yyyy-MM');
 
       const priorYearResult = await this.getCashFlowSummary(familyId, oneYearAgo, checkPriorYearEnd);
       const hasPriorYearData = priorYearResult.success &&
-                               priorYearResult.summary &&
+                               priorYearResult.summary !== undefined &&
                                priorYearResult.summary.some(m => m.income > 0 || m.expenses > 0);
 
-      // Generate projections for each month
-      const projections: CashFlowOutlookProjection[] = [];
+      const projections = await buildCashFlowOutlook({
+        categories,
+        lastKnownBudget,
+        historicalSummary: historicalResult.summary,
+        priorYearSummary: priorYearResult.summary ?? [],
+        hasPriorYearData: hasPriorYearData ?? false,
+        monthsToProject,
+        today,
+        getMonthBudgets: async (month) => {
+          const key = `budgets_${familyId}_${month}`;
+          return await this.dataService.getData<MonthlyBudget[]>(key) ?? [];
+        },
+      });
 
-      for (let i = 1; i <= monthsToProject; i++) {
-        const projMonth = format(addMonths(today, i), 'yyyy-MM');
-
-        // 1. Get budgeted cashflow
-        const budgetsKey = `budgets_${familyId}_${projMonth}`;
-        let monthBudgets = await this.dataService.getData<MonthlyBudget[]>(budgetsKey) || [];
-        let isBudgetExtrapolated = false;
-
-        if (monthBudgets.length === 0 && lastKnownBudget) {
-          // No budget for this month, copy from last known
-          monthBudgets = lastKnownBudget;
-          isBudgetExtrapolated = true;
-        }
-
-        let budgetedCashflow: number | null = null;
-        if (monthBudgets.length > 0) {
-          const totals = calculateBudgetTotals(monthBudgets, categories, { excludeHidden: false });
-          budgetedCashflow = totals.income - totals.expense;
-        }
-
-        // 2. Get prior year same month actual cashflow
-        const priorYearMonth = format(subMonths(addMonths(today, i), 12), 'yyyy-MM');
-        let priorYearCashflow: number | null = null;
-
-        if (hasPriorYearData && priorYearResult.summary) {
-          const priorYearData = priorYearResult.summary.find(m => m.month === priorYearMonth);
-          if (priorYearData) {
-            priorYearCashflow = priorYearData.netCashflow;
-          }
-        }
-
-        // 3. Average cashflow (already calculated)
-        const averageCashflow = avgNetCashflow;
-
-        projections.push({
-          month: projMonth,
-          budgetedCashflow,
-          isBudgetExtrapolated,
-          priorYearCashflow,
-          averageCashflow
-        });
-      }
-
-      return {
-        success: true,
-        projections,
-        hasPriorYearData
-      };
+      return { success: true, projections, hasPriorYearData };
     } catch (error) {
       console.error('Error generating cash flow projections:', error);
       return { success: false, error: 'Failed to generate cash flow projections' };
