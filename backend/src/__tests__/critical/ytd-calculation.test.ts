@@ -27,6 +27,10 @@ describe('YTD Calculation - Complete Month Logic', () => {
     reportService = new ReportService(mockDataService);
   });
 
+  // Default expense category for fixtures: non-income, non-transfer, non-savings.
+  // Uncategorized transactions are excluded by the shared aggregation helpers
+  // (per SAVINGS-CATEGORY-BRD REQ-005a — bucketing is by category type, signed),
+  // so test fixtures must assign a real category to be counted.
   const createTransaction = (date: string, amount: number): StoredTransaction => ({
     id: `internal-${date}-${amount}`,
     userId,
@@ -40,7 +44,7 @@ describe('YTD Calculation - Complete Month Logic', () => {
     merchantName: null,
     category: null,
     plaidCategoryId: null,
-    categoryId: null,
+    categoryId: amount < 0 ? 'INCOME_SALARY' : 'FOOD_GROCERIES',
     status: 'posted',
     pending: false,
     isoCurrencyCode: 'USD',

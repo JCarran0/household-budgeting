@@ -144,12 +144,12 @@ export function MantineDashboard() {
   }, [categories]);
 
   const monthlySavings = useMemo(() => {
-    if (!monthlyTransactionData?.transactions) return 0;
+    if (!monthlyTransactionData?.transactions || !categories) return 0;
     return calculateSavings(
       monthlyTransactionData.transactions as unknown as import('../../../shared/utils/transactionCalculations').TransactionForCalculation[],
-      savingsCategoryIds
+      categories
     );
-  }, [monthlyTransactionData, savingsCategoryIds]);
+  }, [monthlyTransactionData, categories]);
 
   const monthlySpending = actualTotals.expense - monthlySavings;
   const monthlyIncome = actualTotals.income;
@@ -168,7 +168,7 @@ export function MantineDashboard() {
     const ytdHiddenExpense = ytdTotalsIncludingHidden.expense - ytdTotals.expense;
     const ytdSavings = calculateSavings(
       ytdTransactionData.transactions as unknown as import('../../../shared/utils/transactionCalculations').TransactionForCalculation[],
-      savingsCategoryIds,
+      categories,
     );
     const ytdSpending = ytdTotals.expense - ytdSavings;
     const ytdActualNet = ytdTotals.income - ytdSpending;

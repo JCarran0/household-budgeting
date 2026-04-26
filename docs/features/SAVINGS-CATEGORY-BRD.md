@@ -37,6 +37,8 @@ Separately, audit all app surfaces that display "spending" or "net" figures to e
 
 **REQ-005:** Any calculation labeled "spending" or "expenses" across the app must exclude transactions belonging to savings categories.
 
+**REQ-005a (Refund handling, added 2026-04-25):** Spending, income, and savings aggregations are bucketed by **category type**, not by amount sign. Within each bucket, transactions are summed using **signed accumulation**, so refunds and reversals net within their original bucket — a −$23.95 refund in an expense category reduces spending by $23.95; it is not silently dropped, and it is not reclassified as income. Uncategorized transactions are excluded from all three aggregates (the app's uncategorized badge surfaces them separately). The shared helpers `calculateSpending` / `calculateIncome` / `calculateSavings` in `shared/utils/transactionCalculations.ts` and `calculateActualTotals` in `shared/utils/budgetCalculations.ts` must agree numerically when given the same transaction set. Background: prior to this requirement, `calculateSpending` filtered `t.amount >= 0`, silently dropping refunds; this caused Reports KPIs to overstate expenses vs. the Dashboard, which uses signed accumulation.
+
 **REQ-006:** Any calculation labeled "net" (net cash flow, net budget variance, etc.) must by default exclude savings categories from the expense side.
 
 **REQ-007:** Savings are never classified as income. They are a third category alongside income and spending.

@@ -175,16 +175,16 @@ household-budgeting/
 ### Shared Utilities (`shared/utils/`)
 
 #### Transaction Calculations (`shared/utils/transactionCalculations.ts`)
-- **Purpose**: Consistent financial calculations that exclude transfer transactions
-- **Key Functions**:
-  - `calculateIncome(transactions)`: Sum negative amounts excluding transfers
-  - `calculateExpenses(transactions)`: Sum positive amounts excluding transfers (includes savings; prefer `calculateSpending` for consumption-only)
-  - `calculateSpending(transactions, savingsCategoryIds)`: Sum positive amounts excluding transfers AND savings categories
-  - `calculateSavings(transactions, savingsCategoryIds)`: Sum positive amounts in savings categories only
-  - `calculateNetCashFlow(transactions)`: Income − Expenses (excluding transfers). NOTE: treats savings as a spending bucket; when savings are split out, compute `income − spending − savings` directly.
-  - `categorizeTransactions(transactions)`: Separate into income, expenses, transfers
-- **Transfer Exclusion**: All calculations automatically exclude `TRANSFER_IN` and `TRANSFER_OUT` categories and their subcategories
-- **Usage Pattern**: Always use these utilities instead of manual `filter + reduce` to ensure consistency
+- **Purpose**: Consistent financial aggregations across Reports KPIs, chatbot data, and monthly summaries. Bucketed by **category type**, signed accumulation within bucket — refunds and reversals net within their original bucket. Aligned with `calculateActualTotals` in `budgetCalculations.ts` so Dashboard and Reports agree numerically. See SAVINGS-CATEGORY-BRD REQ-005a.
+- **Key Functions** (all take `(transactions, categories)`):
+  - `calculateIncome(transactions, categories)`: Signed sum of income-category transactions, returned positive (Plaid stores income as negative). A paycheck reversal reduces income.
+  - `calculateExpenses(transactions, categories)`: Signed sum of non-income, non-transfer transactions (INCLUDES savings). Prefer `calculateSpending` for consumption-only.
+  - `calculateSpending(transactions, categories)`: Signed sum excluding income, transfers, AND savings. **This is the canonical "spending" definition** — matches the Dashboard Monthly Spending KPI.
+  - `calculateSavings(transactions, categories)`: Signed sum of savings-category transactions. A 401k reversal reduces savings.
+  - `calculateNetCashFlow(transactions, categories)`: Income − Expenses. NOTE: treats savings as a spending bucket; when savings are split out, compute `income − spending − savings` directly.
+  - `categorizeTransactions(transactions, categories)`: Separate into income, expenses, transfers by category type.
+- **Excluded from all aggregates**: hidden, pending, and uncategorized transactions, plus transfer categories (`TRANSFER_IN` / `TRANSFER_OUT` and subcategories). Uncategorized is excluded because the bucket is undecidable without a category — the app surfaces these via the uncategorized badge instead.
+- **Usage Pattern**: Always use these utilities instead of manual `filter + reduce` to ensure consistency.
 
 ```typescript
 // Don't do this (doesn't exclude transfers):

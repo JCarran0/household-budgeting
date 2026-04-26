@@ -384,7 +384,7 @@ export class ChatbotDataService {
 
     const totalActualSavings = calculateSavings(
       transactions as unknown as import('../shared/utils/transactionCalculations').TransactionForCalculation[],
-      savingsIds,
+      categories,
     );
     const actualSpending = actualTotals.expense - totalActualSavings;
 
@@ -514,13 +514,11 @@ export class ChatbotDataService {
       this.queryTransactions(familyId, { startDate, endDate }),
       this.getCategories(familyId),
     ]);
-    const savingsIds = getSavingsCategoryIds(categories);
-
-    // Use shared utilities for consistent calculation (excludes transfers, hidden, pending)
+    // Use shared utilities for consistent calculation (excludes transfers, hidden, pending; signed)
     const calcTransactions = transactions as unknown as import('../shared/utils/transactionCalculations').TransactionForCalculation[];
-    const totalIncome = calculateIncome(calcTransactions);
-    const totalSavings = calculateSavings(calcTransactions, savingsIds);
-    const totalExpenses = calculateSpending(calcTransactions, savingsIds);
+    const totalIncome = calculateIncome(calcTransactions, categories);
+    const totalSavings = calculateSavings(calcTransactions, categories);
+    const totalExpenses = calculateSpending(calcTransactions, categories);
     const netCashFlow = totalIncome - totalExpenses - totalSavings;
 
     // Build monthly breakdown
@@ -534,9 +532,9 @@ export class ChatbotDataService {
     const monthlyBreakdown = Array.from(monthlyMap.entries())
       .map(([month, txns]) => {
         const monthCalc = txns as unknown as import('../shared/utils/transactionCalculations').TransactionForCalculation[];
-        const mIncome = calculateIncome(monthCalc);
-        const mSpending = calculateSpending(monthCalc, savingsIds);
-        const mSavings = calculateSavings(monthCalc, savingsIds);
+        const mIncome = calculateIncome(monthCalc, categories);
+        const mSpending = calculateSpending(monthCalc, categories);
+        const mSavings = calculateSavings(monthCalc, categories);
         return {
           month,
           income: mIncome,

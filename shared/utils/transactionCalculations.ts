@@ -1,11 +1,23 @@
 /**
  * Transaction Calculation Utilities
- * 
- * Shared utilities for calculating income, expenses, and other financial metrics
- * These functions ensure consistent handling of transfers across the application
+ *
+ * Shared utilities for calculating income, expenses, savings, and spending across
+ * the app (Reports KPIs, chatbot data, monthly summaries). Aligned with
+ * `calculateActualTotals` in budgetCalculations.ts so Dashboard and Reports
+ * agree numerically.
+ *
+ * Bucketing rule (per SAVINGS-CATEGORY-BRD REQ-005a):
+ *   Transactions are bucketed by **category type**, not by amount sign.
+ *   Within each bucket, amounts are accumulated **signed**, so a refund
+ *   (negative amount) in an expense category nets against expense rather
+ *   than being silently dropped or reclassified as income. Uncategorized
+ *   transactions are excluded — match `calculateActualTotals` behavior;
+ *   the app's uncategorized badge surfaces these separately.
  */
 
-import { isTransferCategory } from './categoryHelpers';
+import { isTransferCategory, isIncomeCategory } from './categoryHelpers';
+import { getSavingsCategoryIds } from './budgetCalculations';
+import type { Category } from '../types';
 
 export interface TransactionForCalculation {
   amount: number;
@@ -14,116 +26,127 @@ export interface TransactionForCalculation {
   pending?: boolean;
 }
 
-/**
- * Calculate total income from transactions (excluding transfers)
- * Income = negative amounts that are not transfers
- * @param transactions Array of transactions to calculate from
- * @returns Total income amount (positive value)
- */
-export function calculateIncome(transactions: TransactionForCalculation[]): number {
-  return transactions
-    .filter(t => {
-      // Exclude hidden and pending if specified
-      if (t.isHidden || t.pending) return false;
-      
-      // Exclude transfers
-      if (t.categoryId && isTransferCategory(t.categoryId)) return false;
-      
-      // Income = negative amounts in Plaid
-      return t.amount < 0;
-    })
-    .reduce((sum, t) => sum + Math.abs(t.amount), 0);
+function isSkippable(t: TransactionForCalculation): boolean {
+  if (t.isHidden || t.pending) return true;
+  if (!t.categoryId) return true;
+  return false;
 }
 
 /**
- * Calculate total expenses from transactions (excluding transfers)
- * Expenses = positive amounts that are not transfers
- * @param transactions Array of transactions to calculate from
- * @returns Total expense amount (positive value)
+ * Total income for the period. Signed accumulation within the income-category
+ * bucket; returned as a positive number (Plaid stores income as negative).
+ *
+ * A paycheck reversal (positive amount in an income category) reduces income.
  */
-export function calculateExpenses(transactions: TransactionForCalculation[]): number {
-  return transactions
-    .filter(t => {
-      // Exclude hidden and pending if specified
-      if (t.isHidden || t.pending) return false;
-      
-      // Exclude transfers
-      if (t.categoryId && isTransferCategory(t.categoryId)) return false;
-      
-      // Expenses = positive amounts in Plaid
-      return t.amount >= 0;
-    })
-    .reduce((sum, t) => sum + t.amount, 0);
+export function calculateIncome(
+  transactions: TransactionForCalculation[],
+  // categories accepted for API uniformity with the other helpers; not consulted
+  // because isIncomeCategory uses Plaid's category-id prefix to detect income.
+  _categories: Category[] = []
+): number {
+  void _categories;
+  let income = 0;
+  for (const t of transactions) {
+    if (isSkippable(t)) continue;
+    if (!isIncomeCategory(t.categoryId!)) continue;
+    income += -t.amount;
+  }
+  return income;
 }
 
 /**
- * Calculate total savings contributions (positive amounts in savings categories).
- * @param transactions Array of transactions to calculate from
- * @param savingsCategoryIds Set of category IDs that are savings categories
- * @returns Total savings amount (positive value)
+ * Total expenses (everything that isn't income or transfer — INCLUDES savings).
+ * Signed accumulation: refunds net against expense.
+ *
+ * Most callers want `calculateSpending` instead, which excludes savings.
+ */
+export function calculateExpenses(
+  transactions: TransactionForCalculation[],
+  _categories: Category[] = []
+): number {
+  void _categories;
+  let expenses = 0;
+  for (const t of transactions) {
+    if (isSkippable(t)) continue;
+    if (isTransferCategory(t.categoryId!)) continue;
+    if (isIncomeCategory(t.categoryId!)) continue;
+    expenses += t.amount;
+  }
+  return expenses;
+}
+
+/**
+ * Total savings contributions. Signed accumulation within the savings-category
+ * bucket: a 401k reversal (negative amount) reduces savings.
  */
 export function calculateSavings(
   transactions: TransactionForCalculation[],
-  savingsCategoryIds: Set<string>
+  categories: Category[]
 ): number {
-  return transactions
-    .filter(t => {
-      if (t.isHidden || t.pending) return false;
-      if (!t.categoryId) return false;
-      return t.amount >= 0 && savingsCategoryIds.has(t.categoryId);
-    })
-    .reduce((sum, t) => sum + t.amount, 0);
+  const savingsIds = getSavingsCategoryIds(categories);
+  let savings = 0;
+  for (const t of transactions) {
+    if (isSkippable(t)) continue;
+    if (!savingsIds.has(t.categoryId!)) continue;
+    savings += t.amount;
+  }
+  return savings;
 }
 
 /**
- * Calculate spending (positive amounts excluding transfers and savings categories).
- * @param transactions Array of transactions to calculate from
- * @param savingsCategoryIds Set of category IDs that are savings categories
- * @returns Total spending amount (positive value)
+ * Consumption-only spending: expenses excluding savings, transfers, and income.
+ * Signed accumulation, so refunds net against spending.
+ *
+ * This is the "Monthly Spending" / "Reports Expenses" definition.
  */
 export function calculateSpending(
   transactions: TransactionForCalculation[],
-  savingsCategoryIds: Set<string>
+  categories: Category[]
 ): number {
-  return transactions
-    .filter(t => {
-      if (t.isHidden || t.pending) return false;
-      if (t.categoryId && isTransferCategory(t.categoryId)) return false;
-      if (t.categoryId && savingsCategoryIds.has(t.categoryId)) return false;
-      return t.amount >= 0;
-    })
-    .reduce((sum, t) => sum + t.amount, 0);
+  const savingsIds = getSavingsCategoryIds(categories);
+  let spending = 0;
+  for (const t of transactions) {
+    if (isSkippable(t)) continue;
+    if (isTransferCategory(t.categoryId!)) continue;
+    if (isIncomeCategory(t.categoryId!)) continue;
+    if (savingsIds.has(t.categoryId!)) continue;
+    spending += t.amount;
+  }
+  return spending;
 }
 
 /**
- * Calculate net cash flow (income - expenses, excluding transfers)
- * @param transactions Array of transactions to calculate from
- * @returns Net cash flow (positive = surplus, negative = deficit)
+ * Net cash flow = income − expenses (expenses includes savings here).
+ * For the savings-aware net, callers should compute `income − spending − savings`
+ * directly so the savings line is visible.
  */
-export function calculateNetCashFlow(transactions: TransactionForCalculation[]): number {
-  const income = calculateIncome(transactions);
-  const expenses = calculateExpenses(transactions);
-  return income - expenses;
+export function calculateNetCashFlow(
+  transactions: TransactionForCalculation[],
+  categories: Category[] = []
+): number {
+  return calculateIncome(transactions, categories) - calculateExpenses(transactions, categories);
 }
 
 /**
- * Separate transactions into income, expenses, and transfers
- * @param transactions Array of transactions to categorize
- * @returns Object with separated transaction arrays
+ * Separate transactions into income, expenses, and transfers by category type.
+ * Uncategorized transactions are skipped.
  */
-export function categorizeTransactions(transactions: TransactionForCalculation[]) {
+export function categorizeTransactions(
+  transactions: TransactionForCalculation[],
+  _categories: Category[] = []
+) {
+  void _categories;
   const income: TransactionForCalculation[] = [];
   const expenses: TransactionForCalculation[] = [];
   const transfers: TransactionForCalculation[] = [];
 
   for (const txn of transactions) {
-    // Skip hidden and pending
     if (txn.isHidden || txn.pending) continue;
+    if (!txn.categoryId) continue;
 
-    // Check if transfer
-    if (txn.categoryId && isTransferCategory(txn.categoryId)) {
+    if (isTransferCategory(txn.categoryId)) {
       transfers.push(txn);
-    } else if (txn.amount < 0) {
+    } else if (isIncomeCategory(txn.categoryId)) {
       income.push(txn);
     } else {
       expenses.push(txn);

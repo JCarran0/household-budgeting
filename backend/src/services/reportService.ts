@@ -547,8 +547,6 @@ export class ReportService {
       const categories = await this.dataService.getCategories(familyId);
       // Create a set of hidden category IDs including subcategories of hidden parents
       const hiddenCategoryIds = getEffectivelyHiddenCategoryIds(categories);
-      // Get savings category IDs for separating savings from spending
-      const savingsCategoryIds = getSavingsCategoryIds(categories);
 
       const months = getMonthRange(startMonth, endMonth);
       const summary: CashFlowSummary[] = [];
@@ -581,10 +579,10 @@ export class ReportService {
               (!t.categoryId || !hiddenCategoryIds.has(t.categoryId)) // Exclude hidden categories
             );
 
-            // Calculate using shared utilities (excludes transfers)
-            income = calculateIncome(monthTransactions);
-            savings = calculateSavings(monthTransactions, savingsCategoryIds);
-            expenses = calculateSpending(monthTransactions, savingsCategoryIds);
+            // Calculate using shared utilities (excludes transfers; signed accumulation nets refunds)
+            income = calculateIncome(monthTransactions, categories);
+            savings = calculateSavings(monthTransactions, categories);
+            expenses = calculateSpending(monthTransactions, categories);
           }
         } else {
           // Fallback: calculate from transactions (no override service available)
@@ -600,10 +598,10 @@ export class ReportService {
             (!t.categoryId || !hiddenCategoryIds.has(t.categoryId)) // Exclude hidden categories
           );
 
-          // Calculate using shared utilities (excludes transfers)
-          income = calculateIncome(monthTransactions);
-          savings = calculateSavings(monthTransactions, savingsCategoryIds);
-          expenses = calculateSpending(monthTransactions, savingsCategoryIds);
+          // Calculate using shared utilities (excludes transfers; signed accumulation nets refunds)
+          income = calculateIncome(monthTransactions, categories);
+          savings = calculateSavings(monthTransactions, categories);
+          expenses = calculateSpending(monthTransactions, categories);
         }
 
         summary.push({

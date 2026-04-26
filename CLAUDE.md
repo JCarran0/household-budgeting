@@ -103,6 +103,7 @@ Entries link the BRD for full context. Older decisions live in git history.
 
 | Date | Decision | BRD |
 |------|----------|-----|
+| 2026-04-25 | Spending/income/savings aggregations bucketed by category type with signed accumulation; refunds net within bucket; uncategorized excluded. Aligns `calculateSpending`/`calculateIncome`/`calculateSavings` with `calculateActualTotals` so Dashboard and Reports KPIs agree | [SAVINGS-CATEGORY-BRD.md](docs/features/SAVINGS-CATEGORY-BRD.md) §2.2 REQ-005a |
 | 2026-04 | Rollover Budgets — derive-on-fly carry math on existing `isRollover` flag; calendar-year reset; symmetric signed carry; subtree exclusivity; BvA II is sole v1 consumer | [ROLLOVER-BUDGETS-BRD.md](docs/features/ROLLOVER-BUDGETS-BRD.md) |
 | 2026-04 | Budget vs. Actuals II — additive tab; accordion-first; Income→Spending→Savings sections; dismiss is per-user localStorage (NOT `isHidden`) | [BUDGET-VS-ACTUALS-II-BRD.md](docs/features/BUDGET-VS-ACTUALS-II-BRD.md) |
 | 2026-04 | Task Management v2.0 — Checklist view, Snooze (visibility modifier, not status), manual `sortOrder`, Cancelled column retired, family-only leaderboard | [TASK-MANAGEMENT-BRD.md](docs/features/TASK-MANAGEMENT-BRD.md) |
