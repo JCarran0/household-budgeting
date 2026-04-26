@@ -101,9 +101,9 @@ export function ReportsKpiCards({ kpiSummary, timeRangeLabel }: ReportsKpiCardsP
   const expensesFormula = [
     `Sum of monthly expenses across ${timeRangeLabel}.`,
     'Excludes transfers, hidden categories, and savings categories.',
-    'Currently uses calculateSpending — refunds (negative-amount rows)',
-    'are dropped, NOT netted against expense. Dashboard uses signed',
-    'accumulation (calculateActualTotals), so the two can disagree.',
+    'Signed accumulation: refunds net against expense (a -$24 refund',
+    'reduces this total by $24). Matches the Dashboard Monthly Spending',
+    'KPI exactly when the date ranges align.',
     `Total:    ${formatCurrency(expenses, true)}`,
     `Avg/mo:   ${formatCurrency(avgExpenses, true)} (complete months only)`,
   ].join('\n');
