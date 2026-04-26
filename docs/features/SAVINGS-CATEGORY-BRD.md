@@ -67,6 +67,19 @@ Separately, audit all app surfaces that display "spending" or "net" figures to e
 
 **REQ-016:** The AI chatbot's financial data tools (`get_accounts`, `get_spending_by_category`, `get_cash_flow`, `get_budget_summary`) must return savings-aware figures and expose savings as a distinct value where applicable.
 
+### 2.6 Net Terminology — Canonical Glossary (added 2026-04-25)
+
+Once savings became a third bucket alongside income and spending, two distinct "net" values emerged. They are NOT interchangeable. Surfaces that display either must use one of these two canonical labels — never the older, ambiguous "Net Income."
+
+| Term | Formula | Meaning | Used by |
+|---|---|---|---|
+| **Pre-Savings Net** | `Income − Spending` | Cash left over after consumption, before savings contributions are committed. Functions as a ceiling on the user's savings capacity for the period. | Dashboard "Projected Pre-Savings Net" KPI; Cash Flow report when the savings-in-net toggle is OFF (REQ-009 default). |
+| **Net Cashflow** | `Income − Spending − Savings` | True bottom line: cash unaccounted for after both consumption and savings commitments. The personal-finance "net cash flow" / "bottom line." | Reports "Net Cashflow" KPI; BvA II summary strip; Cash Flow report when the savings-in-net toggle is ON (REQ-010). |
+
+**REQ-017:** Any surface displaying a "net" number must use one of the two labels above and must apply the corresponding formula. Variable names in code (`preSavingsNet`, `netCashflow`) should mirror the labels. The legacy term "Net Income" is retired from new work — leave existing variable names alone unless touching the surrounding code, but never introduce new uses.
+
+**REQ-018:** Tooltips on net values must show the formula explicitly so the reader can verify which definition is in play (`Net Cashflow = Income − Spending − Savings`).
+
 ---
 
 ## 3. Assumptions

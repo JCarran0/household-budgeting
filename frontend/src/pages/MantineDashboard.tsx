@@ -291,7 +291,7 @@ export function MantineDashboard() {
       ].join('\n'),
     },
     ...(projectedNetIncome ? [{
-      title: 'Projected Net Income',
+      title: 'Projected Pre-Savings Net',
       value: formatCurrency(projectedNetIncome.total),
       exactValue: formatCurrency(projectedNetIncome.total, true),
       icon: IconChartLine,
@@ -300,9 +300,10 @@ export function MantineDashboard() {
         ? `YTD actual + ${projectedNetIncome.remainingMonths}mo budgeted`
         : 'Based on YTD actuals only',
       formula: [
-        'YTD actual net + budgeted net for remaining months.',
-        'Net = Income − Spending. Transfers, hidden categories, and savings',
-        'contributions are excluded (savings is retained wealth, not consumption).',
+        'YTD actual + budgeted Pre-Savings Net for remaining months.',
+        'Pre-Savings Net = Income − Spending. Transfers, hidden categories,',
+        'and savings contributions are excluded (savings is retained wealth,',
+        'not consumption — so it is not subtracted here).',
         'Refunds and reversals net against expense / income (signed).',
         '',
         `YTD (Jan 1 → today):`,

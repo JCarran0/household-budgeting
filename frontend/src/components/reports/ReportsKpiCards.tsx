@@ -116,9 +116,10 @@ export function ReportsKpiCards({ kpiSummary, timeRangeLabel }: ReportsKpiCardsP
   ].join('\n');
 
   const netFormula = [
-    `Net = Income − Expenses − Savings.`,
+    `Net Cashflow = Income − Spending − Savings.`,
+    `True bottom line after both consumption and savings commitments.`,
     `Income:   ${formatCurrency(income, true)}`,
-    `Expenses: ${formatCurrency(expenses, true)}`,
+    `Spending: ${formatCurrency(expenses, true)}`,
     `Savings:  ${formatCurrency(savings, true)}`,
     `Net:      ${formatCurrency(netIncome, true)}`,
   ].join('\n');
@@ -203,7 +204,7 @@ export function ReportsKpiCards({ kpiSummary, timeRangeLabel }: ReportsKpiCardsP
         <Group justify="space-between">
           <div>
             <Text c="dimmed" size="xs" tt="uppercase" fw={700}>
-              Net Income
+              Net Cashflow
             </Text>
             <FormulaTooltipColored formula={netFormula} color={netIncome > 0 ? 'green' : 'red'}>
               {(netIncome < 0 ? '-' : '') + formatCurrency(Math.abs(netIncome))}

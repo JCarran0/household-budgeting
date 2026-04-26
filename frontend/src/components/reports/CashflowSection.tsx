@@ -98,7 +98,7 @@ export function CashflowSection({ cashFlowChartData, budgetVsActualData, totalIn
             </Group>
             <Divider my={4} />
             <Group justify="space-between">
-              <Text size="sm" fw={600}>Net</Text>
+              <Text size="sm" fw={600}>Net Cashflow</Text>
               <Text size="sm" fw={600} c={netIncome >= 0 ? 'green' : 'red'}>
                 {netIncome >= 0 ? '+' : '-'}${Math.round(Math.abs(netIncome)).toLocaleString()}
               </Text>
