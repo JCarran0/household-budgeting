@@ -12,6 +12,7 @@ import {
   ActionIcon,
   Tooltip,
   Tabs,
+  Button,
 } from '@mantine/core';
 import { MonthPickerInput } from '@mantine/dates';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -23,11 +24,13 @@ import {
   IconRefresh,
   IconFilterOff,
   IconCalendar,
+  IconCopy,
 } from '@tabler/icons-react';
 import { format, addMonths, subMonths, startOfMonth } from 'date-fns';
 import { api } from '../lib/api';
 import { YearlyBudgetGrid } from '../components/budgets/YearlyBudgetGrid';
 import { BudgetVsActuals } from '../components/budgets/BudgetVsActuals/BudgetVsActuals';
+import { CopyBudgetMonthModal } from '../components/budgets/CopyBudgetMonthModal';
 
 // One-release fallback: treat the legacy `view=bva-ii` URL param and the
 // stale `activeTab='bva-ii'` localStorage value as the new `'bva'`. Drop
@@ -102,6 +105,7 @@ export function Budgets() {
   }, [setSearchParams, setStoredActiveTab]);
 
   const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
+  const [copyModalOpen, setCopyModalOpen] = useState(false);
   const queryClient = useQueryClient();
 
   const selectedMonth = format(selectedDate, 'yyyy-MM');
@@ -168,6 +172,15 @@ export function Budgets() {
             </Group>
 
             <Group>
+              <Button
+                leftSection={<IconCopy size={16} />}
+                variant="default"
+                size="sm"
+                onClick={() => setCopyModalOpen(true)}
+              >
+                Copy Budget
+              </Button>
+
               <Tooltip label="Refresh data">
                 <ActionIcon
                   onClick={() => queryClient.invalidateQueries({ queryKey: ['budgets'] })}
@@ -241,6 +254,12 @@ export function Budgets() {
           </Tabs>
         </Paper>
       </Stack>
+
+      <CopyBudgetMonthModal
+        opened={copyModalOpen}
+        onClose={() => setCopyModalOpen(false)}
+        initialToMonth={selectedMonth}
+      />
     </Container>
   );
 }
