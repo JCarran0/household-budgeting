@@ -40,6 +40,7 @@ Family-scale app for 2 users: personal budgeting (with Plaid), shared tasks, tri
 3. **No skipped validation** — validate inputs with Zod, sanitize outputs
 4. **No direct production edits** — all changes go through GitHub → CI/CD
 5. **No suppressed TypeScript errors** — fix, don't suppress
+6. **File size budgets** — frontend pages ≤600 LOC, backend services ≤800 LOC. If a change pushes you over the budget, extract a collaborator (sibling component, helper module) *before* adding more lines. Do not silence with `// eslint-disable max-lines` or split a file just to slip under. Pre-existing offenders are tracked in the tech-debt plan, not grandfathered for new growth. Frontend ESLint warns on overage; backend has no lint-time enforcement, so the rule lives here.
 
 ## 🔧 Security-Sensitive & Shared-Utils Files
 
