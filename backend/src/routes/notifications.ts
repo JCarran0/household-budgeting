@@ -54,6 +54,7 @@ const DEFAULT_PREFERENCES: NotificationPreferences = {
   largeTransactions: false,
   largeTransactionThreshold: 500,
   billReminders: false,
+  wrappedEnabled: true,
 };
 
 const PREFERENCES_KEY_PREFIX = 'push_preferences_';

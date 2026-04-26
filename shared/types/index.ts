@@ -8,7 +8,8 @@ export type NotificationType =
   | 'sync_failure'
   | 'budget_alert'
   | 'large_transaction'
-  | 'bill_reminder';
+  | 'bill_reminder'
+  | 'wrapped';
 
 export interface NotificationPayload {
   type: NotificationType;
@@ -25,6 +26,7 @@ export interface NotificationPreferences {
   largeTransactions: boolean;
   largeTransactionThreshold: number;  // dollar amount
   billReminders: boolean;
+  wrappedEnabled: boolean;       // push opt-in for Wrapped; default true once User.wrappedEnabled is set
 }
 
 export interface PushSubscriptionRecord {
@@ -146,6 +148,8 @@ export interface User {
   activeWorkspaceId: string;
   createdAt: string;
   color?: UserColor;       // Visual identity color chosen by the user
+  timezone?: string;       // IANA timezone, e.g. "America/New_York"; default applied by userService
+  wrappedEnabled?: boolean; // Feature flag — default false; admin-gated toggle
 }
 
 export interface AuthResponse {
@@ -1791,4 +1795,92 @@ export interface BusinessStatement {
   remittanceTotal: number;      // royaltySubtotal - Σ charges
   clientHeader: StatementHeader;
   createdAt: string;            // ISO timestamp
+}
+
+// =============================================================================
+// Wrapped Types
+// =============================================================================
+
+export type WrappedCadence = 'daily' | 'weekly';
+
+/** Task-completion tier for headline motivational copy selection. */
+export type WrappedTier = 0 | 1 | 2 | 3 | 4;
+
+/** Identifies which highlight rule produced a candidate. */
+export type WrappedRuleId =
+  | 'zombie'
+  | 'badge'
+  | 'streak_milestone'
+  | 'personal_best'
+  | 'leaderboard_win'
+  | 'wow_gain'
+  | 'midweek_comeback'
+  | 'category_sweep'
+  | 'project_progress'
+  | 'trip_momentum'
+  | 'receipt_sweep';
+
+/** Coarse category used for de-duplication: at most one highlight per category per Wrapped. */
+export type WrappedRuleCategory =
+  | 'zombie'
+  | 'badge'
+  | 'streak'
+  | 'personal_best'
+  | 'leaderboard'
+  | 'wow'
+  | 'comeback'
+  | 'sweep'
+  | 'project'
+  | 'trip'
+  | 'receipts';
+
+/** A rendered highlight ready for display. */
+export interface WrappedHighlight {
+  ruleId: WrappedRuleId;
+  category: WrappedRuleCategory;
+  score: number;                          // 0..100
+  copyVariantId: string;                  // e.g. "zombie.v2"
+  fills: Record<string, string | number>; // slot fills rendered client-side
+}
+
+/** Full payload returned by the daily Wrapped endpoint. */
+export interface WrappedDailyPayload {
+  cadence: 'daily';
+  dateKey: string;                        // ISO date in viewer TZ (YYYY-MM-DD)
+  familyId: string;
+  headline: { count: number; tier: WrappedTier; copyVariantId: string };
+  highlights: WrappedHighlight[];         // 0..2
+  tz: string;
+}
+
+/** Content for all six cards in the weekly Wrapped swipe deck. */
+export interface WrappedWeeklyCards {
+  headline: { count: number; wowDelta: number; copyVariantId: string };
+  bestDay: { dayOfWeek: string; count: number };
+  leaderboard: { byUserId: Record<string, number>; winnerId: string | null };
+  streaks: { byUserId: Record<string, { current: number; grew: boolean }> };
+  highlights: WrappedHighlight[];          // 0..3
+  closer: { nextFireLocalIso: string };
+}
+
+/** Persisted record — snapshotted at generation time, immutable thereafter. */
+export interface WrappedWeeklyRecord {
+  id: string;                              // `${weekStart}` (ISO Monday)
+  familyId: string;
+  weekStart: string;                       // ISO Monday (YYYY-MM-DD)
+  weekEnd: string;                         // ISO Sunday (YYYY-MM-DD)
+  tz: string;
+  suppressed: boolean;                     // true when vacation-suppressed
+  cards: WrappedWeeklyCards | null;        // null when suppressed
+  usedCopyIds: string[];                   // carried forward for repetition filter
+  createdAt: string;
+}
+
+/** One row in the per-user push dispatch log (idempotency + audit). */
+export interface WrappedDispatchLogEntry {
+  userId: string;
+  cadence: WrappedCadence;
+  localDateKey: string;                    // viewer-TZ YYYY-MM-DD
+  firedAt: string;
+  delivered: boolean;                      // web-push acceptance
 }

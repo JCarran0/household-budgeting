@@ -40,6 +40,7 @@ const DEFAULT_PREFERENCES: NotificationPreferences = {
   largeTransactions: false,
   largeTransactionThreshold: 500,
   billReminders: false,
+  wrappedEnabled: true,
 };
 
 // Sentinel values used as placeholders in .env before real keys are generated
