@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+### [5.62.1](https://github.com/JCarran0/household-budgeting/compare/v5.62.0...v5.62.1) (2026-04-26)
+
+
+### Code Refactoring
+
+* **dashboard:** extract stats builder + per-card components ([dee6899](https://github.com/JCarran0/household-budgeting/commit/dee689962b560f9c356b3a44682a9d6af97c092d))
+* **reports:** extract breakdowns + cashflow projections to collaborators ([4444e6b](https://github.com/JCarran0/household-budgeting/commit/4444e6b40371a38236f33c39ebdce60ddd1f9898))
+
 ## [5.62.0](https://github.com/JCarran0/household-budgeting/compare/v5.61.1...v5.62.0) (2026-04-26)
 
 
