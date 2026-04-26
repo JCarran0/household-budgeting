@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+### [5.59.1](https://github.com/JCarran0/household-budgeting/compare/v5.59.0...v5.59.1) (2026-04-26)
+
+
+### Bug Fixes
+
+* **reports:** unify spending/income/savings aggregations with signed accumulation ([ef27403](https://github.com/JCarran0/household-budgeting/commit/ef27403f19c9519dfa823b6e9e7d7a0ead2e9774))
+
+
+### Documentation
+
+* **reports:** update Expenses tooltip to reflect refund netting ([c01bd92](https://github.com/JCarran0/household-budgeting/commit/c01bd92b09e32be143677a99102513810a2e604d))
+
 ## [5.59.0](https://github.com/JCarran0/household-budgeting/compare/v5.58.2...v5.59.0) (2026-04-25)
 
 
