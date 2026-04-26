@@ -35,6 +35,8 @@ import wishlistRoutes from './routes/wishlist';
 import workspaceRoutes from './routes/workspaces';
 import businessStatementRoutes from './routes/businessStatements';
 import businessSettingsRoutes from './routes/businessSettings';
+import { createWrappedRouter } from './routes/wrapped';
+import { wrappedService, userService } from './services';
 
 // Load environment variables (skip in test mode as it's loaded in setup.ts)
 if (process.env.NODE_ENV !== 'test') {
@@ -167,6 +169,7 @@ app.use(`${apiPrefix}/wishlist`, wishlistRoutes);
 app.use(`${apiPrefix}/workspaces`, workspaceRoutes);
 app.use(`${apiPrefix}/business/statements`, businessStatementRoutes);
 app.use(`${apiPrefix}/business/settings`, businessSettingsRoutes);
+app.use(`${apiPrefix}/wrapped`, createWrappedRouter(wrappedService, userService));
 
 // Version endpoint under API prefix
 app.get(`${apiPrefix}/version`, (_req: Request, res: Response) => {

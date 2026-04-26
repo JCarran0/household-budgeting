@@ -14,7 +14,8 @@
 import webpush, { PushSubscription as WebPushSubscription } from 'web-push';
 import { DataService } from './dataService';
 import { config } from '../config';
-import type { NotificationPayload, NotificationPreferences, PushSubscriptionRecord } from '../shared/types';
+import type { NotificationPayload, NotificationPreferences, PushSubscriptionRecord, WrappedCadence, WrappedTier } from '../shared/types';
+import { PUSH_BODIES } from '../shared/utils/wrappedCopy';
 
 import { childLogger } from '../utils/logger';
 
@@ -249,6 +250,67 @@ export class PushNotificationService {
     );
     // Merge stored prefs over defaults so new fields always have a value
     return { ...DEFAULT_PREFERENCES, ...stored };
+  }
+
+  // ---------------------------------------------------------------------------
+  // Wrapped push helper
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Send a Wrapped push notification to a user.
+   *
+   * Checks `NotificationPreferences.wrappedEnabled` — if the user has opted out
+   * of Wrapped pushes, returns `{ delivered: false }` without sending.
+   *
+   * Push payload structure per BRD §7.1:
+   *   - title: "Your Wrapped is ready" (daily) / "Your Weekly Wrapped is ready" (weekly)
+   *   - body:  tier-0 uses the gentle sentinel; tier 1+ uses the template with counts.
+   *   - url:   /wrapped/today or /wrapped/week
+   *   - tag:   wrapped-{cadence}-{localDateKey} (OS deduplication belt-and-suspenders)
+   */
+  async sendWrapped(
+    userId: string,
+    cadence: WrappedCadence,
+    tier: WrappedTier,
+    headlineCount: number,
+    highlightCount: number,
+    localDateKey: string,
+  ): Promise<{ delivered: boolean }> {
+    const prefs = await this.getUserPreferences(userId);
+    if (!prefs.wrappedEnabled) {
+      return { delivered: false };
+    }
+
+    const title =
+      cadence === 'weekly' ? 'Your Weekly Wrapped is ready' : 'Your Wrapped is ready';
+
+    let body: string;
+    if (tier === 0) {
+      body = PUSH_BODIES.tier0;
+    } else {
+      body = PUSH_BODIES.tierNonZero
+        .replace('{N}', String(headlineCount))
+        .replace('{H}', String(highlightCount));
+    }
+
+    const url = cadence === 'weekly' ? '/wrapped/week' : '/wrapped/today';
+    const tag = `wrapped-${cadence}-${localDateKey}`;
+
+    const payload: NotificationPayload = {
+      type: 'wrapped',
+      title,
+      body,
+      url,
+      tag,
+    };
+
+    const subscriptions = await this.readSubscriptions(userId);
+    if (subscriptions.length === 0) {
+      return { delivered: false };
+    }
+
+    await this.sendNotification(userId, payload);
+    return { delivered: true };
   }
 
   // ---------------------------------------------------------------------------

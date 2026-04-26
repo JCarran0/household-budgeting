@@ -35,6 +35,8 @@ import { PushNotificationService } from './pushNotificationService';
 import { AdminService } from './adminService';
 import { StatementService } from './statementService';
 import { BusinessSettingsService } from './businessSettingsService';
+import { UserService } from './userService';
+import { WrappedService } from './wrappedService';
 // Bootstrap chat action registry — must be imported before any chat request
 // is processed. Side-effect: registers all V1 actions and logs the list.
 import './chatActions';
@@ -127,6 +129,16 @@ export const taskService = new TaskService(dataService, familyService);
 export const taskTemplateService = new TaskTemplateService(dataService);
 export const pushNotificationService = PushNotificationService.getInstance(dataService);
 export const adminService = new AdminService(dataService);
+export const userService = new UserService(dataService);
+export const wrappedService = new WrappedService(
+  dataService,
+  taskService,
+  tripService,
+  projectService,
+  transactionService,
+  userService,
+  pushNotificationService,
+);
 
 // statementService depends on categoryService — wire after both are initialized
 export const statementService = new StatementService(dataService, categoryService);
@@ -166,4 +178,6 @@ export {
   AdminService,
   StatementService,
   BusinessSettingsService,
+  UserService,
+  WrappedService,
 };

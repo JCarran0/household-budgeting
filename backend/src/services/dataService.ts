@@ -1,4 +1,4 @@
-import { Category, Family, UserColor } from '../shared/types';
+import { Category, Family, UserColor, WrappedWeeklyRecord, WrappedDispatchLogEntry } from '../shared/types';
 import { StorageAdapter, StorageFactory } from './storage';
 import { getRequestScope } from '../middleware/requestScope';
 
@@ -26,6 +26,10 @@ export interface User {
   // records omit the flag and are treated as non-admin. Seed via ADMIN_USERNAMES
   // env var (comma-separated) which auto-persists the flag on first admin hit.
   isAdmin?: boolean;
+  // Wrapped feature fields (D2 / plan task 2.5).
+  // Optional on stored records — userService applies defaults on load.
+  timezone?: string;          // IANA, e.g. "America/New_York"
+  wrappedEnabled?: boolean;   // Feature flag — default false; admin-gated
 }
 
 export interface DataService {
@@ -51,6 +55,26 @@ export interface DataService {
   saveData<T>(key: string, data: T): Promise<void>;
   deleteData(key: string): Promise<void>;
   listKeys(prefix: string): Promise<string[]>;
+
+  // -------------------------------------------------------------------------
+  // Wrapped persistence
+  // -------------------------------------------------------------------------
+
+  /**
+   * Load all weekly Wrapped records for a family.
+   * The archive grows indefinitely by design (BRD §8.2). Each WeeklyWrapped
+   * is ≤5 KB; 52 weeks/year for 20 years is under 6 MB — fine for JSON storage.
+   */
+  getWeeklyWrappeds(familyId: string): Promise<WrappedWeeklyRecord[]>;
+  saveWeeklyWrappeds(records: WrappedWeeklyRecord[], familyId: string): Promise<void>;
+
+  /** Rolling 7-day copy-variant ID cache for repetition avoidance (family-scoped). */
+  getRecentCopyIds(familyId: string): Promise<Array<{ copyId: string; usedAt: string }>>;
+  saveRecentCopyIds(entries: Array<{ copyId: string; usedAt: string }>, familyId: string): Promise<void>;
+
+  /** Per-user push dispatch log for idempotency. Capped at 60 rows (FIFO). */
+  getWrappedDispatchLog(userId: string): Promise<WrappedDispatchLogEntry[]>;
+  saveWrappedDispatchLog(entries: WrappedDispatchLogEntry[], userId: string): Promise<void>;
 }
 
 /**
@@ -230,6 +254,34 @@ export class UnifiedDataService implements DataService {
   async listKeys(prefix: string): Promise<string[]> {
     return this.storage.list(prefix);
   }
+
+  // -------------------------------------------------------------------------
+  // Wrapped persistence (delegates to generic getData/saveData)
+  // -------------------------------------------------------------------------
+
+  async getWeeklyWrappeds(familyId: string): Promise<WrappedWeeklyRecord[]> {
+    return (await this.getData<WrappedWeeklyRecord[]>(`weekly_wrappeds_${familyId}`)) ?? [];
+  }
+
+  async saveWeeklyWrappeds(records: WrappedWeeklyRecord[], familyId: string): Promise<void> {
+    await this.saveData(`weekly_wrappeds_${familyId}`, records);
+  }
+
+  async getRecentCopyIds(familyId: string): Promise<Array<{ copyId: string; usedAt: string }>> {
+    return (await this.getData<Array<{ copyId: string; usedAt: string }>>(`wrapped_recent_copy_${familyId}`)) ?? [];
+  }
+
+  async saveRecentCopyIds(entries: Array<{ copyId: string; usedAt: string }>, familyId: string): Promise<void> {
+    await this.saveData(`wrapped_recent_copy_${familyId}`, entries);
+  }
+
+  async getWrappedDispatchLog(userId: string): Promise<WrappedDispatchLogEntry[]> {
+    return (await this.getData<WrappedDispatchLogEntry[]>(`wrapped_dispatch_${userId}`)) ?? [];
+  }
+
+  async saveWrappedDispatchLog(entries: WrappedDispatchLogEntry[], userId: string): Promise<void> {
+    await this.saveData(`wrapped_dispatch_${userId}`, entries);
+  }
 }
 
 // In-memory implementation for testing
@@ -316,6 +368,34 @@ export class InMemoryDataService implements DataService {
 
   async listKeys(prefix: string): Promise<string[]> {
     return Array.from(this.genericData.keys()).filter(k => k.startsWith(prefix));
+  }
+
+  // -------------------------------------------------------------------------
+  // Wrapped persistence (delegates to generic getData/saveData)
+  // -------------------------------------------------------------------------
+
+  async getWeeklyWrappeds(familyId: string): Promise<WrappedWeeklyRecord[]> {
+    return (await this.getData<WrappedWeeklyRecord[]>(`weekly_wrappeds_${familyId}`)) ?? [];
+  }
+
+  async saveWeeklyWrappeds(records: WrappedWeeklyRecord[], familyId: string): Promise<void> {
+    await this.saveData(`weekly_wrappeds_${familyId}`, records);
+  }
+
+  async getRecentCopyIds(familyId: string): Promise<Array<{ copyId: string; usedAt: string }>> {
+    return (await this.getData<Array<{ copyId: string; usedAt: string }>>(`wrapped_recent_copy_${familyId}`)) ?? [];
+  }
+
+  async saveRecentCopyIds(entries: Array<{ copyId: string; usedAt: string }>, familyId: string): Promise<void> {
+    await this.saveData(`wrapped_recent_copy_${familyId}`, entries);
+  }
+
+  async getWrappedDispatchLog(userId: string): Promise<WrappedDispatchLogEntry[]> {
+    return (await this.getData<WrappedDispatchLogEntry[]>(`wrapped_dispatch_${userId}`)) ?? [];
+  }
+
+  async saveWrappedDispatchLog(entries: WrappedDispatchLogEntry[], userId: string): Promise<void> {
+    await this.saveData(`wrapped_dispatch_${userId}`, entries);
   }
 
   // Test helper method to clear all data
