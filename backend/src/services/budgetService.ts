@@ -22,6 +22,7 @@ export interface CreateBudgetDto {
   categoryId: string;
   month: string; // YYYY-MM format
   amount: number;
+  notes?: string;
 }
 
 export interface BudgetComparison {
@@ -49,8 +50,14 @@ export class BudgetService {
   }
 
   private validateAmount(amount: number): void {
-    if (amount <= 0) {
-      throw new Error('Budget amount must be positive');
+    if (amount < 0) {
+      throw new Error('Budget amount must not be negative');
+    }
+  }
+
+  private validateNotes(notes: string | undefined): void {
+    if (notes !== undefined && notes.length > 1000) {
+      throw new Error('Budget notes must be 1000 characters or fewer');
     }
   }
 
@@ -71,6 +78,7 @@ export class BudgetService {
   async createOrUpdateBudget(data: CreateBudgetDto, familyId: string): Promise<StoredBudget> {
     this.validateMonth(data.month);
     this.validateAmount(data.amount);
+    this.validateNotes(data.notes);
 
     const budgets = await this.getAllBudgets(familyId);
 
@@ -80,18 +88,28 @@ export class BudgetService {
     );
 
     const now = new Date();
+    // Only overwrite notes if the caller explicitly passed the field — an
+    // amount-only edit from the grid must not clobber a previously saved note.
+    const notesProvided = 'notes' in data;
 
     if (existingIndex !== -1) {
-      // Update existing budget
-      budgets[existingIndex] = {
+      const updated: StoredBudget = {
         ...budgets[existingIndex],
         amount: data.amount,
-        updatedAt: now
+        updatedAt: now,
       };
+      if (notesProvided) {
+        const trimmed = data.notes?.trim();
+        if (trimmed) {
+          updated.notes = trimmed;
+        } else {
+          delete updated.notes;
+        }
+      }
+      budgets[existingIndex] = updated;
       await this.dataService.saveData(`budgets_${familyId}`, budgets);
       return budgets[existingIndex];
     } else {
-      // Create new budget
       const newBudget: StoredBudget = {
         id: uuidv4(),
         userId: familyId,
@@ -99,8 +117,14 @@ export class BudgetService {
         month: data.month,
         amount: data.amount,
         createdAt: now,
-        updatedAt: now
+        updatedAt: now,
       };
+      if (notesProvided) {
+        const trimmed = data.notes?.trim();
+        if (trimmed) {
+          newBudget.notes = trimmed;
+        }
+      }
       budgets.push(newBudget);
       await this.dataService.saveData(`budgets_${familyId}`, budgets);
       return newBudget;
@@ -406,26 +430,28 @@ export class BudgetService {
   }
 
   async batchUpdateBudgets(updates: CreateBudgetDto[], familyId: string): Promise<StoredBudget[]> {
-    // Validate all updates first
     for (const update of updates) {
       this.validateMonth(update.month);
       if (update.amount < 0) {
         throw new Error('Budget amount cannot be negative');
       }
+      this.validateNotes(update.notes);
     }
 
     const updatedBudgets: StoredBudget[] = [];
 
-    // Process updates one by one to maintain data consistency
     for (const update of updates) {
-      if (update.amount === 0) {
-        // If amount is 0, delete the budget if it exists
-        const existingBudget = await this.getBudget(update.categoryId, update.month, familyId);
+      const existingBudget = await this.getBudget(update.categoryId, update.month, familyId);
+      const incomingNote = 'notes' in update ? update.notes?.trim() ?? '' : undefined;
+      // If notes were not provided in this update, fall back to whatever is already stored
+      // — this is what determines whether a $0 row should survive deletion.
+      const effectiveNote = incomingNote !== undefined ? incomingNote : existingBudget?.notes ?? '';
+
+      if (update.amount === 0 && !effectiveNote) {
         if (existingBudget) {
           await this.deleteBudget(existingBudget.id, familyId);
         }
       } else {
-        // Create or update the budget
         const budget = await this.createOrUpdateBudget(update, familyId);
         updatedBudgets.push(budget);
       }

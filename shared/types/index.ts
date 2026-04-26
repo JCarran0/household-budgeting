@@ -230,6 +230,7 @@ export interface MonthlyBudget {
   categoryId: string;
   month: string; // YYYY-MM format
   amount: number;
+  notes?: string; // Optional cell-level note, max 1000 chars
 }
 
 // Budget type classification

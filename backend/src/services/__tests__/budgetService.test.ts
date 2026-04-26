@@ -374,18 +374,21 @@ describe('BudgetService', () => {
       }, testUserId)).rejects.toThrow('Invalid month format');
     });
 
-    it('should validate amount is positive', async () => {
+    it('should reject negative amounts; zero is allowed (paired with a note)', async () => {
       await expect(budgetService.createOrUpdateBudget({
         categoryId: 'cat-1',
         month: '2025-01',
         amount: -100
-      }, testUserId)).rejects.toThrow('Budget amount must be positive');
+      }, testUserId)).rejects.toThrow('Budget amount must not be negative');
 
+      // Zero is intentionally permitted — supports "$0 with a note" cells
+      // (e.g. "skipped this month, see Apr").
       await expect(budgetService.createOrUpdateBudget({
         categoryId: 'cat-1',
         month: '2025-01',
-        amount: 0
-      }, testUserId)).rejects.toThrow('Budget amount must be positive');
+        amount: 0,
+        notes: 'skipped — see Apr'
+      }, testUserId)).resolves.toBeDefined();
     });
   });
 

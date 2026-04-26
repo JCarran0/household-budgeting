@@ -5,6 +5,7 @@ export interface CreateBudgetDto {
   categoryId: string;
   month: string;
   amount: number;
+  notes?: string;
 }
 
 interface BudgetTotals {

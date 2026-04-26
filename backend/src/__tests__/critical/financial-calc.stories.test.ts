@@ -698,42 +698,40 @@ describe('User Story: Financial Calculations', () => {
   });
 
   describe('As a user, I need accurate handling of edge cases', () => {
-    it('should handle zero budget amounts correctly', async () => {
-      // Create a category
+    it('should accept zero budget amounts (paired with a note)', async () => {
+      // $0 is intentionally allowed so users can leave a note on a cell
+      // they're explicitly skipping for the month — see yearly-grid notes feature.
       const category = await categoryService.createCategory({
         name: 'Miscellaneous',
         parentId: null,
         isHidden: false,
         isRollover: false
       }, testUserId);
-      
-      const categoryId = category.id;
-      
-      // Try to create budget with zero amount
-      await expect(budgetService.createOrUpdateBudget({
-        categoryId,
+
+      const result = await budgetService.createOrUpdateBudget({
+        categoryId: category.id,
         month: '2025-01',
-        amount: 0
-      }, testUserId)).rejects.toThrow('Budget amount must be positive');
+        amount: 0,
+        notes: 'skipped this month'
+      }, testUserId);
+
+      expect(result.amount).toBe(0);
+      expect(result.notes).toBe('skipped this month');
     });
 
-    it('should handle negative budget amounts correctly', async () => {
-      // Create a category
+    it('should reject negative budget amounts', async () => {
       const category = await categoryService.createCategory({
         name: 'TestCategory',
         parentId: null,
         isHidden: false,
         isRollover: false
       }, testUserId);
-      
-      const categoryId = category.id;
-      
-      // Try to create budget with negative amount
+
       await expect(budgetService.createOrUpdateBudget({
-        categoryId,
+        categoryId: category.id,
         month: '2025-01',
         amount: -100
-      }, testUserId)).rejects.toThrow('Budget amount must be positive');
+      }, testUserId)).rejects.toThrow('Budget amount must not be negative');
     });
 
     it('should validate month format correctly', async () => {

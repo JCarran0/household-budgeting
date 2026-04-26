@@ -1,14 +1,12 @@
 import {
   Table,
   Text,
-  NumberInput,
   Group,
   Badge,
   Box,
   Loader,
   Center,
   Stack,
-  ThemeIcon,
   Button,
   ActionIcon,
   Tooltip,
@@ -19,13 +17,14 @@ import { notifications } from '@mantine/notifications';
 import { useDebouncedValue } from '@mantine/hooks';
 import { IconDeviceFloppy, IconChevronLeft, IconChevronRight, IconFilterOff } from '@tabler/icons-react';
 import { api } from '../../lib/api';
-import { formatCurrency } from '../../utils/formatters';
 import type { MonthlyBudget, Category } from '../../../../shared/types';
+import { YearlyBudgetCell, type EditingCell } from './YearlyBudgetCell';
 
 interface CreateBudgetDto {
   categoryId: string;
   month: string;
   amount: number;
+  notes?: string;
 }
 import {
   isIncomeCategoryWithCategories,
@@ -46,16 +45,10 @@ interface YearlyBudgetGridProps {
 interface CategoryBudgetData {
   category: Category;
   budgets: Record<string, number>; // month -> amount
+  notes: Record<string, string>; // month -> notes (empty string when none)
   isParent: boolean;
   isChild: boolean;
   children?: CategoryBudgetData[];
-}
-
-interface EditingCell {
-  categoryId: string;
-  month: string;
-  value: number;
-  originalValue: number;
 }
 
 const MONTHS = [
@@ -196,9 +189,13 @@ export function YearlyBudgetGrid({
 
     // Create budget lookup by category and month
     const budgetLookup = new Map<string, number>();
+    const notesLookup = new Map<string, string>();
     budgets.forEach(budget => {
       const key = `${budget.categoryId}_${budget.month}`;
       budgetLookup.set(key, budget.amount);
+      if (budget.notes) {
+        notesLookup.set(key, budget.notes);
+      }
     });
 
     // Group categories into parents and children
@@ -218,17 +215,20 @@ export function YearlyBudgetGrid({
     // Create category budget data
     const createCategoryData = (category: Category, isChild = false): CategoryBudgetData => {
       const budgets: Record<string, number> = {};
+      const notes: Record<string, string> = {};
 
       // Get budgets for all months of the year
       MONTHS.forEach(month => {
         const monthKey = `${year}-${month.key}`;
         const budgetKey = `${category.id}_${monthKey}`;
         budgets[month.key] = budgetLookup.get(budgetKey) || 0;
+        notes[month.key] = notesLookup.get(budgetKey) || '';
       });
 
       return {
         category,
         budgets,
+        notes,
         isParent: !isChild && childrenByParent.has(category.id),
         isChild,
       };
@@ -334,10 +334,12 @@ export function YearlyBudgetGrid({
     // Detect batch editing patterns
     detectBatchMode();
 
-    // Update pending updates
+    // Update pending updates — preserve any notes already queued for this cell
     setPendingUpdates(prev => {
       const newUpdates = new Map(prev);
+      const existing = prev.get(updateKey);
       newUpdates.set(updateKey, {
+        ...(existing ?? {}),
         categoryId,
         month: monthKey,
         amount: value,
@@ -346,14 +348,46 @@ export function YearlyBudgetGrid({
     });
   }, [year, detectBatchMode]);
 
+  const handleNoteEdit = useCallback((categoryId: string, month: string, notes: string, currentAmount: number) => {
+    const monthKey = `${year}-${month}`;
+    const updateKey = `${categoryId}_${monthKey}`;
+
+    detectBatchMode();
+
+    setPendingUpdates(prev => {
+      const newUpdates = new Map(prev);
+      const existing = prev.get(updateKey);
+      newUpdates.set(updateKey, {
+        ...(existing ?? {}),
+        categoryId,
+        month: monthKey,
+        amount: existing?.amount ?? currentAmount,
+        notes,
+      });
+      return newUpdates;
+    });
+  }, [year, detectBatchMode]);
+
+  const commitEditingCell = useCallback(() => {
+    if (!editingCell) return;
+    handleCellEdit(editingCell.categoryId, editingCell.month, editingCell.value, editingCell.originalValue);
+  }, [editingCell, handleCellEdit]);
+
+  const moveToCell = useCallback(
+    (direction: 'next' | 'prev') => {
+      if (!editingCell) return;
+      commitEditingCell();
+      const next = findNextCell(editingCell.categoryId, editingCell.month, direction);
+      if (next) navigateToCell(next.categoryId, next.month);
+      else setEditingCell(null);
+    },
+    [editingCell, commitEditingCell, findNextCell, navigateToCell],
+  );
+
   const renderCategoryRow = (data: CategoryBudgetData) => {
-    const { category, budgets: categoryBudgets, isParent, isChild } = data;
+    const { category, budgets: categoryBudgets, notes: categoryNotes, isParent, isChild } = data;
 
-    // Get category type icon
-    const isIncomeCategory = isIncomeCategoryWithCategories(category.id, categories);
-    const budgetTypeIcon = isIncomeCategory ? '💰 ' :
-                          isTransferCategory(category.id) ? '🔄 ' : '💳 ';
-
+    const budgetTypeIcon = isIncomeCategoryWithCategories(category.id, categories) ? '💰 ' : isTransferCategory(category.id) ? '🔄 ' : '💳 ';
     const displayName = budgetTypeIcon + category.name;
 
     return (
@@ -396,94 +430,36 @@ export function YearlyBudgetGrid({
 
         {MONTHS.map((month) => {
           const serverValue = categoryBudgets[month.key] || 0;
+          const serverNote = categoryNotes[month.key] || '';
           const isEditing = editingCell?.categoryId === category.id && editingCell?.month === month.key;
           const updateKey = `${category.id}_${year}-${month.key}`;
           const pendingUpdate = pendingUpdates.get(updateKey);
           const hasPendingUpdate = pendingUpdate !== undefined;
           const currentValue = hasPendingUpdate ? pendingUpdate.amount : serverValue;
+          const effectiveNote = pendingUpdate && 'notes' in pendingUpdate
+            ? pendingUpdate.notes ?? ''
+            : serverNote;
 
           return (
-            <Table.Td key={month.key} width={100}>
-              {isEditing ? (
-                <NumberInput
-                  value={editingCell.value}
-                  onChange={(value) => {
-                    if (editingCell) {
-                      setEditingCell({ ...editingCell, value: Number(value) || 0 });
-                    }
-                  }}
-                  onBlur={() => {
-                    if (editingCell) {
-                      handleCellEdit(editingCell.categoryId, editingCell.month, editingCell.value, editingCell.originalValue);
-                      setEditingCell(null);
-                    }
-                  }}
-                  onKeyDown={(e) => {
-                    if (!editingCell) return;
-
-                    if (e.key === 'Tab') {
-                      e.preventDefault();
-                      // Save current cell first
-                      handleCellEdit(editingCell.categoryId, editingCell.month, editingCell.value, editingCell.originalValue);
-
-                      // Navigate to next/previous cell
-                      const direction = e.shiftKey ? 'prev' : 'next';
-                      const nextCell = findNextCell(editingCell.categoryId, editingCell.month, direction);
-
-                      if (nextCell) {
-                        navigateToCell(nextCell.categoryId, nextCell.month);
-                      } else {
-                        setEditingCell(null);
-                      }
-                    } else if (e.key === 'Enter') {
-                      handleCellEdit(editingCell.categoryId, editingCell.month, editingCell.value, editingCell.originalValue);
-
-                      // Navigate to cell below (next row, same column)
-                      const nextCell = findNextCell(editingCell.categoryId, editingCell.month, 'next');
-                      if (nextCell) {
-                        navigateToCell(nextCell.categoryId, nextCell.month);
-                      } else {
-                        setEditingCell(null);
-                      }
-                    } else if (e.key === 'Escape') {
-                      setEditingCell(null);
-                    }
-                  }}
-                  min={0}
-                  step={10}
-                  prefix="$"
-                  size="xs"
-                  styles={{ input: { textAlign: 'center' } }}
-                  autoFocus
-                />
-              ) : (
-                <Box
-                  style={{
-                    cursor: 'pointer',
-                    textAlign: 'center',
-                    padding: '2px',
-                    borderRadius: '4px',
-                    backgroundColor: hasPendingUpdate ? 'var(--mantine-color-yellow-light)' : 'transparent',
-                    position: 'relative'
-                  }}
-                  onClick={() => setEditingCell({ categoryId: category.id, month: month.key, value: currentValue, originalValue: currentValue })}
-                >
-                  <Text size="xs" fw={currentValue > 0 ? 500 : 400} c={currentValue > 0 ? undefined : 'dimmed'}>
-                    {currentValue > 0 ? formatCurrency(currentValue) : '—'}
-                  </Text>
-                  {hasPendingUpdate && (
-                    <ThemeIcon
-                      size="xs"
-                      variant="light"
-                      color="yellow"
-                      style={{ position: 'absolute', top: -2, right: -2 }}
-                    >
-                      <IconDeviceFloppy size={8} />
-                    </ThemeIcon>
-                  )}
-                </Box>
-              )}
-            </Table.Td>
+            <YearlyBudgetCell
+              key={month.key}
+              categoryId={category.id}
+              categoryName={category.name}
+              monthKey={month.key}
+              monthName={month.name}
+              currentValue={currentValue}
+              effectiveNote={effectiveNote}
+              hasPendingUpdate={hasPendingUpdate}
+              isEditing={isEditing}
+              editingCell={editingCell}
+              onBeginEdit={setEditingCell}
+              onChangeEditingValue={(value) => editingCell && setEditingCell({ ...editingCell, value })}
+              onCommitEdit={() => { commitEditingCell(); setEditingCell(null); }}
+              onCancelEdit={() => setEditingCell(null)}
+              onTab={(shift) => moveToCell(shift ? 'prev' : 'next')}
+              onEnter={() => moveToCell('next')}
+              onSaveNote={(notes) => handleNoteEdit(category.id, month.key, notes, currentValue)}
+            />
           );
         })}
       </Table.Tr>
