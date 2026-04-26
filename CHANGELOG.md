@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.62.0](https://github.com/JCarran0/household-budgeting/compare/v5.61.1...v5.62.0) (2026-04-26)
+
+
+### Features
+
+* **budgets:** copy-month modal — bulk copy a FROM month into TO month ([c004691](https://github.com/JCarran0/household-budgeting/commit/c0046915fff6010ab90a6f31b2993f9fd46e2367))
+
+
+### Chores
+
+* **tech-debt:** add Sprint 5.5 + LOC budget enforcement ([df7c63d](https://github.com/JCarran0/household-budgeting/commit/df7c63d1d209c89715094d3c48c0ac121a2ce225))
+
 ### [5.61.1](https://github.com/JCarran0/household-budgeting/compare/v5.61.0...v5.61.1) (2026-04-26)
 
 
