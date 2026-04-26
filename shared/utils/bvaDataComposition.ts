@@ -151,6 +151,17 @@ export function composeBva({
   const categoryById = new Map(categories.map(c => [c.id, c]));
   const emptyMonthMap: Map<string, number> = new Map();
 
+  // Index children by parent so parent rollover can be subtree-aware
+  // (mirrors REQ-022/023 — umbrella parent budget nets against subtree spend).
+  const childrenByParent = new Map<string, Category[]>();
+  for (const c of categories) {
+    if (c.parentId) {
+      const arr = childrenByParent.get(c.parentId) ?? [];
+      arr.push(c);
+      childrenByParent.set(c.parentId, arr);
+    }
+  }
+
   // Precompute tone-signed rollover per category id so parent rollup sums
   // identical values the children display.
   const rolloverByCategoryId = new Map<string, number | null>();
@@ -161,13 +172,68 @@ export function composeBva({
     }
     const budgets = budgetsByCategoryByMonth.get(c.id) ?? emptyMonthMap;
     const actuals = actualsByCategoryByMonth.get(c.id) ?? emptyMonthMap;
-    const raw = computeRolloverBalance(c, selectedMonth, budgets, actuals);
+    const isParent = c.parentId === null || c.parentId === undefined;
+    const subtree = isParent
+      ? {
+          childrenBudgetsByMonth: (childrenByParent.get(c.id) ?? []).map(
+            ch => budgetsByCategoryByMonth.get(ch.id) ?? emptyMonthMap,
+          ),
+          childrenActualsByMonth: (childrenByParent.get(c.id) ?? []).map(
+            ch => actualsByCategoryByMonth.get(ch.id) ?? emptyMonthMap,
+          ),
+        }
+      : undefined;
+    const raw = computeRolloverBalance(c, selectedMonth, budgets, actuals, subtree);
     const section: SectionType = c.isIncome
       ? 'income'
       : (c.isSavings ? 'savings' : (c.parentId
           ? (categoryById.get(c.parentId)?.isSavings ? 'savings' : 'spending')
           : 'spending'));
     rolloverByCategoryId.set(c.id, toneSignedRollover(section, raw));
+  }
+
+  // Seed tree entries for rollover-flagged categories that have a non-zero
+  // carry but no current-month budget/activity — otherwise they silently
+  // disappear from BvA in months where their whole point (banked balance)
+  // is the only thing to show.
+  const ensureTreeForCategory = (cat: Category): void => {
+    if (!isBudgetableCategory(cat.id, categories)) return;
+    if (cat.isHidden) return;
+    const parentId = cat.parentId ?? cat.id;
+    const parentCat = categoryById.get(parentId);
+    if (!parentCat || parentCat.isHidden) return;
+    let tree = trees.get(parentId);
+    if (!tree) {
+      tree = {
+        parentId,
+        parentName: parentCat.name,
+        isIncome: parentCat.isIncome ?? false,
+        directBudget: 0,
+        childBudgetSum: 0,
+        effectiveBudget: 0,
+        directActual: 0,
+        childActualSum: 0,
+        effectiveActual: 0,
+        children: [],
+      };
+      trees.set(parentId, tree);
+    }
+    // If a child is the flagged node, ensure it appears in the children list
+    // so its rollover gets summed into the parent row.
+    if (cat.id !== parentId && !tree.children.find(ch => ch.categoryId === cat.id)) {
+      tree.children.push({
+        categoryId: cat.id,
+        categoryName: cat.name,
+        budgeted: 0,
+        actual: 0,
+      });
+    }
+  };
+  for (const c of categories) {
+    if (!c.isRollover) continue;
+    const r = rolloverByCategoryId.get(c.id);
+    if (r === null || r === undefined || r === 0) continue;
+    ensureTreeForCategory(c);
   }
 
   const parents: BvaParentRow[] = [];

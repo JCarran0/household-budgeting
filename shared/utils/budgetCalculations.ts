@@ -952,6 +952,15 @@ function formatYearMonth(year: number, monthIndex: number): string {
  *   - targetMonth is YYYY-01 — no prior months in the calendar year (REQ-005)
  *   - targetMonth is malformed
  *
+ * Subtree-aware for parent categories: when `category` is a top-level parent,
+ * each prior month's `budgeted_i` uses `max(parent_budget, Σ children_budget)`
+ * and `actual_i` uses `parent_direct + Σ children_direct` — mirroring the
+ * REQ-022/023 display semantics so a parent budgeted as the umbrella over its
+ * subtree carries forward its umbrella's variance, not just direct-on-parent
+ * activity. (Without this, a parent whose children carry all the spending
+ * would never see actuals net against the carry.) Children-flagged-rollover
+ * stay self-contained — siblings' budgets and actuals are not pooled.
+ *
  * The caller is responsible for having filtered actuals upstream to exclude
  * removed and transfer transactions (per shared/utils/transactionReader +
  * shared/utils/transactionCalculations conventions). This utility does not
@@ -966,6 +975,10 @@ export function computeRolloverBalance(
   targetMonth: string,
   budgetsByMonth: Map<string, number>,
   actualsByMonth: Map<string, number>,
+  subtree?: {
+    childrenBudgetsByMonth: Array<Map<string, number>>;
+    childrenActualsByMonth: Array<Map<string, number>>;
+  },
 ): number {
   if (!category.isRollover) return 0;
   if (isTransferCategory(category.id)) return 0;
@@ -974,12 +987,27 @@ export function computeRolloverBalance(
   if (!parsed) return 0;
   if (parsed.monthIndex === 1) return 0;
 
+  const isParent = category.parentId === null || category.parentId === undefined;
+  const childBudgets = isParent ? (subtree?.childrenBudgetsByMonth ?? []) : [];
+  const childActuals = isParent ? (subtree?.childrenActualsByMonth ?? []) : [];
+
   let balance = 0;
   for (let m = 1; m < parsed.monthIndex; m++) {
     const key = formatYearMonth(parsed.year, m);
-    const budgeted = budgetsByMonth.get(key) ?? 0;
-    const actual = actualsByMonth.get(key) ?? 0;
-    balance += budgeted - actual;
+    const directBudget = budgetsByMonth.get(key) ?? 0;
+    const directActual = actualsByMonth.get(key) ?? 0;
+
+    if (isParent && (childBudgets.length > 0 || childActuals.length > 0)) {
+      let childBudgetSum = 0;
+      for (const cb of childBudgets) childBudgetSum += cb.get(key) ?? 0;
+      let childActualSum = 0;
+      for (const ca of childActuals) childActualSum += ca.get(key) ?? 0;
+      const effectiveBudget = Math.max(directBudget, childBudgetSum);
+      const effectiveActual = directActual + childActualSum;
+      balance += effectiveBudget - effectiveActual;
+    } else {
+      balance += directBudget - directActual;
+    }
   }
   return balance;
 }
@@ -1034,6 +1062,16 @@ export function buildEffectiveBudgetsMap(
   const effective = new Map<string, number>();
   const emptyMonthMap: Map<string, number> = new Map();
 
+  // Index children by parent so parent rollover can be subtree-aware.
+  const childrenByParent = new Map<string, Category[]>();
+  for (const c of categories) {
+    if (c.parentId) {
+      const arr = childrenByParent.get(c.parentId) ?? [];
+      arr.push(c);
+      childrenByParent.set(c.parentId, arr);
+    }
+  }
+
   for (const category of categories) {
     const budgets = budgetsByCategoryByMonth.get(category.id) ?? emptyMonthMap;
     const actuals = actualsByCategoryByMonth.get(category.id) ?? emptyMonthMap;
@@ -1045,7 +1083,19 @@ export function buildEffectiveBudgetsMap(
       continue;
     }
 
-    const balance = computeRolloverBalance(category, targetMonth, budgets, actuals);
+    const isParent = category.parentId === null || category.parentId === undefined;
+    const subtree = isParent
+      ? {
+          childrenBudgetsByMonth: (childrenByParent.get(category.id) ?? []).map(
+            ch => budgetsByCategoryByMonth.get(ch.id) ?? emptyMonthMap,
+          ),
+          childrenActualsByMonth: (childrenByParent.get(category.id) ?? []).map(
+            ch => actualsByCategoryByMonth.get(ch.id) ?? emptyMonthMap,
+          ),
+        }
+      : undefined;
+
+    const balance = computeRolloverBalance(category, targetMonth, budgets, actuals, subtree);
     const value = computeEffectiveBudget(category, rawBudget, balance);
 
     if (value !== 0) {
