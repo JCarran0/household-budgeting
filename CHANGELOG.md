@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+### [5.63.2](https://github.com/JCarran0/household-budgeting/compare/v5.63.1...v5.63.2) (2026-05-01)
+
+
+### Performance Improvements
+
+* **plaid:** migrate transaction sync to cursor-based transactionsSync (TD-016) ([51043c9](https://github.com/JCarran0/household-budgeting/commit/51043c9066383d444f21430f02a618462bb79191))
+
 ### [5.63.1](https://github.com/JCarran0/household-budgeting/compare/v5.63.0...v5.63.1) (2026-05-01)
 
 
