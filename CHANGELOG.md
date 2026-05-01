@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+### [5.63.3](https://github.com/JCarran0/household-budgeting/compare/v5.63.2...v5.63.3) (2026-05-01)
+
+
+### Chores
+
+* **quotes:** replace flight-themed inspiration quotes with perseverance set ([6163eb3](https://github.com/JCarran0/household-budgeting/commit/6163eb3822b2949f7b4acdab5a20100a3371c1b1))
+
 ### [5.63.2](https://github.com/JCarran0/household-budgeting/compare/v5.63.1...v5.63.2) (2026-05-01)
 
 
