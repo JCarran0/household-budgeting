@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.64.0](https://github.com/JCarran0/household-budgeting/compare/v5.63.3...v5.64.0) (2026-05-01)
+
+
+### Features
+
+* **pwa:** accept shared photos via Android Web Share Target into Helper Bot ([d931b31](https://github.com/JCarran0/household-budgeting/commit/d931b313f49ebbcacea2a145d455385c218b2ff7))
+
+
+### CI/CD
+
+* **deploy:** wire ADMIN_USERNAMES into .env.production ([ad4aacd](https://github.com/JCarran0/household-budgeting/commit/ad4aacd27f94076a8df51179b98e226f73877c00))
+
 ### [5.63.3](https://github.com/JCarran0/household-budgeting/compare/v5.63.2...v5.63.3) (2026-05-01)
 
 
