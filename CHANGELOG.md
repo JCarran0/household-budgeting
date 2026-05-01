@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.65.0](https://github.com/JCarran0/household-budgeting/compare/v5.64.0...v5.65.0) (2026-05-01)
+
+
+### Features
+
+* **amazon-receipt:** show order date on ambiguous match review cards ([a8f4003](https://github.com/JCarran0/household-budgeting/commit/a8f4003193ccf2a77506c3a367c6802eb9f3b456))
+* **logging:** adopt Pino structured logger with redaction (TD-017) ([b2675d6](https://github.com/JCarran0/household-budgeting/commit/b2675d631d29da0e35bc7c535c3e4ba0a02940bf))
+
 ## [5.64.0](https://github.com/JCarran0/household-budgeting/compare/v5.63.3...v5.64.0) (2026-05-01)
 
 
