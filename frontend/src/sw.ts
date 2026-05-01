@@ -9,6 +9,44 @@ precacheAndRoute(self.__WB_MANIFEST);
 cleanupOutdatedCaches();
 clientsClaim();
 
+const SHARE_CACHE_NAME = 'share-target-v1';
+
+// ---------------------------------------------------------------------------
+// Web Share Target — Android share sheet POSTs the chosen file(s) to
+// /share-target. We stash the file in Cache Storage under a one-shot key,
+// then 303 to /?share=<id> so the React app can pick it up and feed it to
+// the chatbot's attachment slot.
+// ---------------------------------------------------------------------------
+self.addEventListener('fetch', (event: FetchEvent) => {
+  const url = new URL(event.request.url);
+  if (event.request.method !== 'POST' || url.pathname !== '/share-target') return;
+
+  event.respondWith((async () => {
+    try {
+      const formData = await event.request.formData();
+      const file = formData
+        .getAll('shared')
+        .find((v): v is File => v instanceof File);
+      if (!file) return Response.redirect('/', 303);
+
+      const cache = await caches.open(SHARE_CACHE_NAME);
+      const id = crypto.randomUUID();
+      await cache.put(
+        new Request(`/__share/${id}`),
+        new Response(file, {
+          headers: {
+            'content-type': file.type || 'application/octet-stream',
+            'x-share-filename': encodeURIComponent(file.name),
+          },
+        }),
+      );
+      return Response.redirect(`/?share=${id}`, 303);
+    } catch {
+      return Response.redirect('/', 303);
+    }
+  })());
+});
+
 // Handle SKIP_WAITING message sent by updateServiceWorker(true) in PWAUpdatePrompt
 self.addEventListener('message', (event: ExtendableMessageEvent) => {
   if (event.data && event.data.type === 'SKIP_WAITING') {

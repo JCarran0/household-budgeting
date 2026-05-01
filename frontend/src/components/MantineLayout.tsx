@@ -28,13 +28,23 @@ import { InspirationModal } from './InspirationModal';
 import { AppLogo } from './AppLogo';
 import { userColor } from '../utils/userColor';
 import { useDailyInspiration } from '../hooks/useDailyInspiration';
+import { useSharedAttachment } from '../hooks/useSharedAttachment';
 
 export function MantineLayout() {
   const [mobileOpened, { toggle: toggleMobile }] = useDisclosure();
   const [desktopOpened, { toggle: toggleDesktop }] = useDisclosure(true);
   const [changelogOpened, { open: openChangelog, close: closeChangelog }] = useDisclosure(false);
   const [feedbackOpened, { open: openFeedback, close: closeFeedback }] = useDisclosure(false);
-  const [chatOpened, { toggle: toggleChat, close: closeChat }] = useDisclosure(false);
+  const [chatOpened, { toggle: toggleChat, close: closeChat, open: openChat }] = useDisclosure(false);
+  const sharedAttachment = useSharedAttachment();
+  const [pendingSharedAttachment, setPendingSharedAttachment] = useState<File | null>(null);
+
+  useEffect(() => {
+    if (sharedAttachment) {
+      setPendingSharedAttachment(sharedAttachment);
+      openChat();
+    }
+  }, [sharedAttachment, openChat]);
   const { opened: inspirationOpened, close: closeInspiration } = useDailyInspiration();
   const [version, setVersion] = useState<string | null>(null);
   const navigate = useNavigate();
@@ -228,7 +238,12 @@ export function MantineLayout() {
       />
 
       <ChatFAB onClick={toggleChat} isOpen={chatOpened} />
-      <ChatOverlay opened={chatOpened} onClose={closeChat} />
+      <ChatOverlay
+        opened={chatOpened}
+        onClose={closeChat}
+        initialAttachment={pendingSharedAttachment}
+        onInitialAttachmentConsumed={() => setPendingSharedAttachment(null)}
+      />
 
       <InspirationModal opened={inspirationOpened} onClose={closeInspiration} />
     </AppShell>

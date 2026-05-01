@@ -45,6 +45,19 @@ export default defineConfig({
             purpose: 'maskable',
           },
         ],
+        share_target: {
+          action: '/share-target',
+          method: 'POST',
+          enctype: 'multipart/form-data',
+          params: {
+            files: [
+              {
+                name: 'shared',
+                accept: ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'],
+              },
+            ],
+          },
+        },
       },
       injectManifest: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff,woff2}'],

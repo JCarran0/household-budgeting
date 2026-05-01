@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../../stores/authStore';
+import { PENDING_SHARE_KEY } from '../ProtectedRoute';
 import {
   Paper,
   TextInput,
@@ -28,7 +29,15 @@ export function LoginForm() {
     
     try {
       await login({ username, password });
-      navigate('/dashboard');
+      // Resume a Web Share Target hand-off if ProtectedRoute parked a share id
+      // here on the way to the login page.
+      const pendingShareId = sessionStorage.getItem(PENDING_SHARE_KEY);
+      if (pendingShareId) {
+        sessionStorage.removeItem(PENDING_SHARE_KEY);
+        navigate(`/dashboard?share=${encodeURIComponent(pendingShareId)}`);
+      } else {
+        navigate('/dashboard');
+      }
     } catch {
       // Error is handled in the store
     }

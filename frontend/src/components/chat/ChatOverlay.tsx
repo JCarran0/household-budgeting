@@ -65,9 +65,21 @@ type ActionErrorMap = Record<string, string>;
 interface ChatOverlayProps {
   opened: boolean;
   onClose: () => void;
+  /**
+   * File piped in from outside the overlay (e.g. Android Web Share Target).
+   * Validated against the same MIME/size rules as the paperclip picker;
+   * consumed once per File instance.
+   */
+  initialAttachment?: File | null;
+  onInitialAttachmentConsumed?: () => void;
 }
 
-export function ChatOverlay({ opened, onClose }: ChatOverlayProps) {
+export function ChatOverlay({
+  opened,
+  onClose,
+  initialAttachment,
+  onInitialAttachmentConsumed,
+}: ChatOverlayProps) {
   const userDisplayName = useAuthStore((s) => s.user?.displayName);
 
   // ---- Core chat state ----
@@ -312,6 +324,39 @@ export function ChatOverlay({ opened, onClose }: ChatOverlayProps) {
 
     setAttachment(file);
   }, []);
+
+  // ---- Ingest externally-piped attachment (Web Share Target) ----
+  // Same validation as handleFilePick; consumed once per File reference.
+  useEffect(() => {
+    if (!initialAttachment) return;
+    const file = initialAttachment;
+
+    const reject = (message: string) => {
+      notifications.show({ color: 'orange', message });
+      onInitialAttachmentConsumed?.();
+    };
+
+    if (
+      file.type === 'image/heic' ||
+      file.type === 'image/heif' ||
+      file.name.toLowerCase().endsWith('.heic') ||
+      file.name.toLowerCase().endsWith('.heif')
+    ) {
+      reject('HEIC photos are not supported. Convert to JPEG and try again.');
+      return;
+    }
+    if (file.size > MAX_ATTACHMENT_BYTES) {
+      reject('Shared file too large (10 MB max).');
+      return;
+    }
+    if (!ALLOWED_CLIENT_MIMES.has(file.type)) {
+      reject('Shared file type not supported. Accepted: JPEG, PNG, WebP, PDF.');
+      return;
+    }
+
+    setAttachment(file);
+    onInitialAttachmentConsumed?.();
+  }, [initialAttachment, onInitialAttachmentConsumed]);
 
   // ---- Send message (Phase 6.1 + 7.1 integration) ----
   const sendMessage = useCallback(async () => {
