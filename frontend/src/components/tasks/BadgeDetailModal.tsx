@@ -71,6 +71,8 @@ interface BadgeDetailModalProps {
   allEntries?: LeaderboardEntry[];
   onSwitchEntry?: (userId: string) => void;
   heroQueue?: UseBadgeHeroQueueResult;
+  /** Click handler for an earned tile — opens hero view-mode in the parent. */
+  onBadgeClick?: (def: BadgeDefinition, earnedAt: string) => void;
 }
 
 function badgesByCategory(category: BadgeCategory): BadgeDefinition[] {
@@ -114,9 +116,10 @@ interface EarnedCategorySectionProps {
    * clause since there's no real earn event.
    */
   devRevealAll?: boolean;
+  onBadgeClick?: (def: BadgeDefinition, earnedAt: string) => void;
 }
 
-function EarnedCategorySection({ category, defs, earnedMap, devRevealAll }: EarnedCategorySectionProps) {
+function EarnedCategorySection({ category, defs, earnedMap, devRevealAll, onBadgeClick }: EarnedCategorySectionProps) {
   return (
     <Stack gap={6}>
       <Text fw={600} size="xs" tt="uppercase" c="dimmed">
@@ -135,6 +138,7 @@ function EarnedCategorySection({ category, defs, earnedMap, devRevealAll }: Earn
                   size={TILE_MEDAL_SIZE}
                   halo={def.tier >= 3 ? 'auto' : 'none'}
                   tooltip={`${def.description} — Earned ${when}`}
+                  onClick={onBadgeClick ? () => onBadgeClick(def, earnedAt) : undefined}
                 />
                 <Text size="xs" ta="center" lineClamp={1}>
                   {getAutoLabel(def)}
@@ -179,6 +183,7 @@ export function BadgeDetailModal({
   allEntries,
   onSwitchEntry,
   heroQueue,
+  onBadgeClick,
 }: BadgeDetailModalProps) {
   const [devRevealAll, setDevRevealAll] = useState(false);
   const earnedMap = new Map(entry.earnedBadges.map((b) => [b.id, b.earnedAt]));
@@ -224,6 +229,7 @@ export function BadgeDetailModal({
               defs={defs}
               earnedMap={earnedMap}
               devRevealAll={devRevealAll}
+              onBadgeClick={onBadgeClick}
             />
           );
         })}

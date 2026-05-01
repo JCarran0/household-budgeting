@@ -21,6 +21,7 @@ import {
 } from '@mantine/core';
 import { format, parseISO } from 'date-fns';
 import type {
+  BadgeDefinition,
   LeaderboardEntry,
   LeaderboardResponse,
   StoredTask,
@@ -28,7 +29,8 @@ import type {
 import { userColor } from '../../utils/userColor';
 import { BadgeSlotArea } from './BadgeSlotArea';
 import { BadgeDetailModal } from './BadgeDetailModal';
-import type { UseBadgeHeroQueueResult } from '../../hooks/useBadgeHeroQueue';
+import { BadgeHeroModal } from './BadgeHeroModal';
+import type { QueuedHeroUnlock, UseBadgeHeroQueueResult } from '../../hooks/useBadgeHeroQueue';
 
 const FLAME_MIN_STREAK = 5;
 
@@ -78,6 +80,9 @@ function maxOf(entries: LeaderboardEntry[], pick: (e: LeaderboardEntry) => numbe
 export function LeaderboardPanel({ leaderboard, tasks, heroQueue }: LeaderboardPanelProps) {
   const { entries, boundaries: rawBoundaries } = leaderboard;
   const [modalEntry, setModalEntry] = useState<LeaderboardEntry | null>(null);
+  // View-mode hero: re-display an already-earned badge in the gallery's hero
+  // presentation. Bypasses `useBadgeHeroQueue`, so no audio/confetti fire.
+  const [viewingUnlock, setViewingUnlock] = useState<QueuedHeroUnlock | null>(null);
 
   const boundaries = useMemo(
     () => ({
@@ -277,8 +282,17 @@ export function LeaderboardPanel({ leaderboard, tasks, heroQueue }: LeaderboardP
             if (next) setModalEntry(next);
           }}
           heroQueue={heroQueue}
+          onBadgeClick={(def: BadgeDefinition, earnedAt: string) =>
+            setViewingUnlock({ def, earnedAt, isFinal: false })
+          }
         />
       )}
+      <BadgeHeroModal
+        opened={viewingUnlock !== null}
+        onClose={() => setViewingUnlock(null)}
+        unlock={viewingUnlock}
+        displayName={modalEntry?.displayName ?? ''}
+      />
     </>
   );
 }
