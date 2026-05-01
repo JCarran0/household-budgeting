@@ -144,7 +144,7 @@ export function MatchReviewStep({
                 {ambiguous.map(amb => (
                   <Paper key={amb.order.orderNumber} p="sm" withBorder>
                     <Text size="sm" fw={500} mb="xs">
-                      Order {amb.order.orderNumber} — ${amb.order.totalAmount.toFixed(2)}
+                      Order {amb.order.orderNumber} — ${amb.order.totalAmount.toFixed(2)} ({amb.order.orderDate})
                     </Text>
                     <Text size="xs" c="dimmed" mb="xs">
                       {amb.order.items.map(i => i.name).join(', ')}
