@@ -173,6 +173,73 @@ pm2 save
 pm2 startup
 ```
 
+## Logging — Pino + CloudWatch (TD-017)
+
+The backend emits structured JSON logs via Pino. In production each line is a single
+self-contained JSON object with an ISO timestamp; this is the format CloudWatch Logs
+parses natively. PM2's own `log_date_format` is intentionally **disabled** in
+`ecosystem.config.js` — re-enabling it would prepend a wall-clock string and break the
+JSON parser.
+
+### What gets redacted
+
+The redaction list in `backend/src/utils/logger.ts` covers (top-level + nested):
+`accessToken`, `plaidAccessToken`, `publicToken`, `linkToken`, `password`,
+`passwordHash`, `token`, `refreshToken`, `resetToken`, `jwt`, `accountName`,
+`accountNumber`, `routingNumber`, `officialName`, `email`, `privateKey`. Replaced
+with `[Redacted]`. Add new paths there rather than relying on every call site.
+
+### Forwarding logs to CloudWatch
+
+The CloudWatch agent install lives on the EC2 instance, not in the repo. One-time setup:
+
+```bash
+# 1. Install the agent
+sudo yum install -y amazon-cloudwatch-agent
+
+# 2. Attach an IAM role to the EC2 instance with `CloudWatchAgentServerPolicy`
+
+# 3. Drop this config at /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json
+{
+  "logs": {
+    "logs_collected": {
+      "files": {
+        "collect_list": [
+          {
+            "file_path": "/home/appuser/logs/output.log",
+            "log_group_name": "budget-backend",
+            "log_stream_name": "{instance_id}-stdout",
+            "timezone": "UTC"
+          },
+          {
+            "file_path": "/home/appuser/logs/error.log",
+            "log_group_name": "budget-backend",
+            "log_stream_name": "{instance_id}-stderr",
+            "timezone": "UTC"
+          }
+        ]
+      }
+    }
+  }
+}
+
+# 4. Start the agent
+sudo /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl \
+  -a fetch-config -m ec2 -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json -s
+
+# 5. Verify ingestion
+aws logs tail budget-backend --follow
+```
+
+CloudWatch Insights queries against `budget-backend` work directly because each line
+is JSON — for example, find decryption failures across the last day:
+
+```
+fields @timestamp, plaidItemId, accountCount
+| filter module = "transactionService" and msg = "failed to decrypt access token"
+| sort @timestamp desc
+```
+
 ## Troubleshooting Deployment Issues
 
 ### Issue: Health check fails after deployment

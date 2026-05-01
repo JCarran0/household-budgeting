@@ -2,6 +2,10 @@ import { StorageAdapter, StorageConfig } from './types';
 import { FilesystemAdapter } from './filesystemAdapter';
 import { S3Adapter } from './s3Adapter';
 
+import { childLogger } from '../../utils/logger';
+
+const log = childLogger('storageFactory');
+
 /**
  * Factory for creating storage adapters based on environment
  */
@@ -48,11 +52,10 @@ export class StorageFactory {
 
     switch (finalConfig.type) {
       case 's3':
-        console.log('Using S3 storage adapter with config:', {
-          bucketName: finalConfig.bucketName,
-          region: finalConfig.region,
-          prefix: finalConfig.prefix
-        });
+        log.info(
+          { bucketName: finalConfig.bucketName, region: finalConfig.region, prefix: finalConfig.prefix },
+          'using s3 storage adapter',
+        );
         this.instance = new S3Adapter(
           finalConfig.bucketName,
           finalConfig.region,
@@ -62,7 +65,7 @@ export class StorageFactory {
       
       case 'filesystem':
       default:
-        console.log('Using filesystem storage adapter with dataDir:', finalConfig.dataDir);
+        log.info({ value: finalConfig.dataDir }, 'using filesystem storage adapter with dataDir');
         this.instance = new FilesystemAdapter(finalConfig.dataDir);
         break;
     }

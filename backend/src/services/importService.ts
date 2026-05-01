@@ -16,6 +16,9 @@ import { TransactionCSVParser, ParsedTransaction } from '../utils/csvImport/Tran
 import { MappingCSVParser, ParsedMapping } from '../utils/csvImport/MappingCSVParser';
 import { TransactionMatcher, TransactionMatch } from './transactionMatcher';
 import { Category } from '../shared/types';
+import { childLogger } from '../utils/logger';
+
+const log = childLogger('importService');
 
 /**
  * Unified service for handling all CSV imports
@@ -279,7 +282,7 @@ export class ImportService {
         categoriesToAdd.length = 0;
         
         // Log progress for monitoring
-        console.log(`Import progress: ${job.processedRows}/${job.totalRows} rows processed (${job.progress}%)`)
+        log.info({ processed: job.processedRows, total: job.totalRows, progress: job.progress }, 'import progress');
       }
     }
 
@@ -674,12 +677,16 @@ export class ImportService {
     // TODO: Implement job history storage
     // This could be stored in the database or S3
     // For now, just log it
-    console.log(`Import job completed: ${job.id}`, {
-      type: job.type,
-      status: job.status,
-      imported: job.result?.imported,
-      errors: job.result?.errors?.length || 0
-    });
+    log.info(
+      {
+        jobId: job.id,
+        type: job.type,
+        status: job.status,
+        imported: job.result?.imported,
+        errors: job.result?.errors?.length || 0,
+      },
+      'import job completed',
+    );
   }
 
   /**

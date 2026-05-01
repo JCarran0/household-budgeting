@@ -15,7 +15,8 @@ module.exports = {
     },
     error_file: '/home/appuser/logs/error.log',
     out_file: '/home/appuser/logs/output.log',
-    log_date_format: 'YYYY-MM-DD HH:mm:ss',
+    // No log_date_format — Pino emits its own ISO timestamp per JSON line.
+    // Prepending a PM2 timestamp would break CloudWatch JSON parsing (TD-017).
     max_memory_restart: '500M',
     watch: false,
     autorestart: true,

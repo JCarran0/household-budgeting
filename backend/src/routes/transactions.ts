@@ -9,6 +9,10 @@ import { AuthorizationError } from '../errors';
 import { z } from 'zod';
 import type { StoredTransaction } from '../services/transactionService';
 
+import { childLogger } from '../utils/logger';
+
+const log = childLogger('transactions');
+
 const router = Router();
 
 // ---------------------------------------------------------------------------
@@ -54,7 +58,7 @@ async function fireLargeTransactionNotifications(
       });
     }
   } catch (err) {
-    console.error('[notifications] Failed to send large transaction notifications:', err);
+    log.error({ err: err }, '[notifications] Failed to send large transaction notifications');
   }
 }
 
@@ -118,7 +122,7 @@ async function fireBudgetAlertNotification(
       tag: `budget-alert-${transaction.categoryId}-${month}-${thresholdBand}`,
     });
   } catch (err) {
-    console.error('[notifications] Failed to send budget alert notification:', err);
+    log.error({ err: err }, '[notifications] Failed to send budget alert notification');
   }
 }
 

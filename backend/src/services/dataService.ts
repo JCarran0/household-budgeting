@@ -2,6 +2,10 @@ import { Category, Family, UserColor } from '../shared/types';
 import { StorageAdapter, StorageFactory } from './storage';
 import { getRequestScope } from '../middleware/requestScope';
 
+import { childLogger } from '../utils/logger';
+
+const log = childLogger('dataService');
+
 export interface User {
   id: string;
   username: string;
@@ -76,7 +80,7 @@ export class UnifiedDataService implements DataService {
       const data = await this.storage.read<{ users: User[] }>(this.USERS_KEY);
       return data?.users || [];
     } catch (error) {
-      console.error('Error reading users:', error);
+      log.error({ err: error }, 'error reading users');
       return [];
     }
   }
@@ -130,7 +134,7 @@ export class UnifiedDataService implements DataService {
       const data = await this.storage.read<{ families: Family[] }>(this.FAMILIES_KEY);
       return data?.families || [];
     } catch (error) {
-      console.error('Error reading families:', error);
+      log.error({ err: error }, 'error reading families');
       return [];
     }
   }

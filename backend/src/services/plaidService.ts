@@ -1,3 +1,6 @@
+import { childLogger } from '../utils/logger';
+
+const log = childLogger('plaidService');
 import {
   Configuration,
   PlaidApi,
@@ -162,11 +165,14 @@ export class PlaidService {
     this.redirectUri = process.env.PLAID_REDIRECT_URI;
     
     // Log initialization (for debugging)
-    console.log('PlaidService initialized with:', {
-      environment: process.env.PLAID_ENV || 'sandbox',
-      clientId: process.env.PLAID_CLIENT_ID?.substring(0, 10) + '...',
-      hasSecret: !!process.env.PLAID_SECRET,
-    });
+    log.info(
+      {
+        environment: process.env.PLAID_ENV || 'sandbox',
+        clientIdPrefix: process.env.PLAID_CLIENT_ID?.substring(0, 6) + '...',
+        hasSecret: !!process.env.PLAID_SECRET,
+      },
+      'PlaidService initialized',
+    );
   }
 
   /**
@@ -398,7 +404,7 @@ export class PlaidService {
         
         // Safety check to prevent infinite loops
         if (offset > 10000) {
-          console.warn('Stopping pagination at 10,000 transactions to prevent infinite loop');
+          log.warn('stopping pagination at 10,000 transactions to prevent infinite loop');
           break;
         }
       }
@@ -670,7 +676,7 @@ export class PlaidService {
    * Handle errors consistently
    */
   private handleError(error: unknown): { success: false; error: string } {
-    console.error('Plaid API error:', error);
+    log.error({ err: error }, 'plaid API error');
     
     // Type guard for axios errors with response data
     if (

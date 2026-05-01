@@ -11,6 +11,10 @@ import { AutoCategorizeRule, Category } from '../shared/types';
 import { CategoryService } from './categoryService';
 import { getActiveTransactions, excludeRemoved } from './transactionReader';
 
+import { childLogger } from '../utils/logger';
+
+const log = childLogger('autoCategorizeService');
+
 export interface StoredAutoCategorizeRule extends Omit<AutoCategorizeRule, 'patterns'> {
   userId: string;
   patterns: string[]; // Ensure patterns is always an array
@@ -107,7 +111,7 @@ export class AutoCategorizeService {
 
       return { success: true, rule: newRule };
     } catch (error) {
-      console.error('Error creating auto-categorize rule:', error);
+      log.error({ err: error }, 'error creating auto-categorize rule');
       return { success: false, error: 'Failed to create rule' };
     }
   }
@@ -153,7 +157,7 @@ export class AutoCategorizeService {
 
       return { success: true };
     } catch (error) {
-      console.error('Error updating auto-categorize rule:', error);
+      log.error({ err: error }, 'error updating auto-categorize rule');
       return { success: false, error: 'Failed to update rule' };
     }
   }
@@ -178,7 +182,7 @@ export class AutoCategorizeService {
       await this.dataService.saveData(`autocategorize_rules_${familyId}`, filteredRules);
       return { success: true };
     } catch (error) {
-      console.error('Error deleting auto-categorize rule:', error);
+      log.error({ err: error }, 'error deleting auto-categorize rule');
       return { success: false, error: 'Failed to delete rule' };
     }
   }
@@ -213,7 +217,7 @@ export class AutoCategorizeService {
       await this.dataService.saveData(`autocategorize_rules_${familyId}`, rules);
       return { success: true };
     } catch (error) {
-      console.error('Error reordering auto-categorize rules:', error);
+      log.error({ err: error }, 'error reordering auto-categorize rules');
       return { success: false, error: 'Failed to reorder rules' };
     }
   }
@@ -366,7 +370,7 @@ export class AutoCategorizeService {
         changes,
       };
     } catch (error) {
-      console.error('Error previewing categorization:', error);
+      log.error({ err: error }, 'error previewing categorization');
       return { success: false, error: 'Failed to preview categorization' };
     }
   }
@@ -424,7 +428,7 @@ export class AutoCategorizeService {
         total: targetTransactions.length,
       };
     } catch (error) {
-      console.error('Error applying auto-categorization rules:', error);
+      log.error({ err: error }, 'error applying auto-categorization rules');
       return { success: false, error: 'Failed to apply rules' };
     }
   }
@@ -459,7 +463,7 @@ export class AutoCategorizeService {
       await this.dataService.saveData(`autocategorize_rules_${familyId}`, rules);
       return { success: true };
     } catch (error) {
-      console.error('Error moving rule up:', error);
+      log.error({ err: error }, 'error moving rule up');
       return { success: false, error: 'Failed to move rule' };
     }
   }
@@ -494,7 +498,7 @@ export class AutoCategorizeService {
       await this.dataService.saveData(`autocategorize_rules_${familyId}`, rules);
       return { success: true };
     } catch (error) {
-      console.error('Error moving rule down:', error);
+      log.error({ err: error }, 'error moving rule down');
       return { success: false, error: 'Failed to move rule' };
     }
   }

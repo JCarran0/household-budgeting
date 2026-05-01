@@ -23,6 +23,9 @@
  */
 import fs from 'fs';
 import path from 'path';
+import { childLogger } from '../../utils/logger';
+
+const log = childLogger('rateLimit');
 
 interface RateLimitEntry {
   count: number;
@@ -71,7 +74,7 @@ export class PersistentRateLimitStore {
       }
     } catch (err) {
       // A corrupt file should never crash the server — start fresh.
-      console.warn('[rateLimit] Failed to load persistent state, starting fresh:', err);
+      log.warn({ err }, 'failed to load persistent state, starting fresh');
     }
   }
 
@@ -143,7 +146,7 @@ export class PersistentRateLimitStore {
       await fs.promises.writeFile(tmp, JSON.stringify(data), 'utf-8');
       await fs.promises.rename(tmp, this.filePath);
     } catch (err) {
-      console.warn('[rateLimit] Failed to flush state:', err);
+      log.warn({ err }, 'failed to flush state');
       // Mark dirty so we retry on the next hit.
       this.dirty = true;
     }

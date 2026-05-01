@@ -10,6 +10,9 @@
 import Anthropic from '@anthropic-ai/sdk';
 import type { SupportedUploadMimeType } from '../../middleware/pdfUpload';
 import { ValidationError } from '../../errors';
+import { childLogger } from '../../utils/logger';
+
+const log = childLogger('amazonPdfParser');
 import {
   PDF_PARSING_SYSTEM_PROMPT,
   PDF_EXTRACTION_TOOL,
@@ -115,9 +118,9 @@ export class AmazonPdfParser {
       };
     }
 
-    console.warn(
-      '[AmazonPdfParser] Claude output failed Zod validation:',
-      parseResult.error.issues.map(i => `${i.path.join('.')}: ${i.message}`),
+    log.warn(
+      { issues: parseResult.error.issues.map(i => `${i.path.join('.')}: ${i.message}`) },
+      'Claude output failed Zod validation',
     );
     const salvaged = salvagePartialOutput(toolUse.input as Record<string, unknown>);
     if (!salvaged) {
@@ -155,9 +158,9 @@ export function salvagePartialOutput(
       if (parsed.success) {
         validOrders.push(parsed.data);
       } else {
-        console.warn(
-          '[AmazonPdfParser] Skipping invalid order:',
-          parsed.error.issues.map(i => `${i.path.join('.')}: ${i.message}`),
+        log.warn(
+          { issues: parsed.error.issues.map(i => `${i.path.join('.')}: ${i.message}`) },
+          'skipping invalid order',
         );
       }
     }
@@ -172,9 +175,9 @@ export function salvagePartialOutput(
       if (parsed.success) {
         validCharges.push(parsed.data);
       } else {
-        console.warn(
-          '[AmazonPdfParser] Skipping invalid charge:',
-          parsed.error.issues.map(i => `${i.path.join('.')}: ${i.message}`),
+        log.warn(
+          { issues: parsed.error.issues.map(i => `${i.path.join('.')}: ${i.message}`) },
+          'skipping invalid charge',
         );
       }
     }

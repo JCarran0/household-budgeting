@@ -28,6 +28,9 @@ import {
   matchSingleOrder,
 } from './amazon/amazonMatcher';
 import { AmazonCategorizerAdapter } from './amazon/amazonCategorizerAdapter';
+import { childLogger } from '../utils/logger';
+
+const log = childLogger('amazonReceiptService');
 import type { PdfExtractionOutput } from '../validators/amazonReceiptValidators';
 import type {
   AmazonReceiptSession,
@@ -277,9 +280,9 @@ export class AmazonReceiptService {
     const { availableTransactions, skippedOrderNumbers, totalAmazonCount, totalCount } =
       await this.computeEligibleAmazonTransactions(familyId, sessionId);
 
-    console.log(
-      `[AmazonReceiptService] matchOrders: ${session.parsedOrders.length} orders to match, ` +
-        `${totalAmazonCount} Amazon transactions found (of ${totalCount} total)`,
+    log.info(
+      { ordersToMatch: session.parsedOrders.length, totalAmazonCount, totalCount },
+      'matchOrders started',
     );
 
     const ordersToMatch = session.parsedOrders.filter(

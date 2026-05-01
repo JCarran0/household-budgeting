@@ -1,6 +1,9 @@
 import fs from 'fs-extra';
 import path from 'path';
 import { StorageAdapter } from './types';
+import { childLogger } from '../../utils/logger';
+
+const log = childLogger('filesystemAdapter');
 
 /**
  * Filesystem storage adapter for local development
@@ -33,7 +36,7 @@ export class FilesystemAdapter implements StorageAdapter {
       }
       return null;
     } catch (error) {
-      console.error(`Error reading data for key ${key}:`, error);
+      log.error({ err: error, key }, 'error reading data');
       return null;
     }
   }
@@ -44,7 +47,7 @@ export class FilesystemAdapter implements StorageAdapter {
       await fs.ensureDir(path.dirname(filePath));
       await fs.writeJson(filePath, data, { spaces: 2 });
     } catch (error) {
-      console.error(`Error writing data for key ${key}:`, error);
+      log.error({ err: error, key }, 'error writing data');
       throw error;
     }
   }
@@ -56,7 +59,7 @@ export class FilesystemAdapter implements StorageAdapter {
         await fs.remove(filePath);
       }
     } catch (error) {
-      console.error(`Error deleting data for key ${key}:`, error);
+      log.error({ err: error, key }, 'error deleting data');
       throw error;
     }
   }
@@ -79,7 +82,7 @@ export class FilesystemAdapter implements StorageAdapter {
       // Remove .json extension from results
       return matchingFiles.map(file => file.replace(/\.json$/, ''));
     } catch (error) {
-      console.error(`Error listing files with prefix ${prefix}:`, error);
+      log.error({ err: error, prefix }, 'error listing files');
       return [];
     }
   }

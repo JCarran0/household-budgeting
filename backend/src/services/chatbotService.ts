@@ -20,6 +20,9 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { ChatbotDataService } from './chatbotDataService';
 import { ChatbotCostTracker } from './chatbotCostTracker';
+import { childLogger } from '../utils/logger';
+
+const log = childLogger('chatbotService');
 import { CHATBOT_SYSTEM_PROMPT, CHATBOT_TOOLS } from './chatbotPrompt';
 import { getChatAction, listChatActionIds, issueProposal } from './chatActions';
 import type {
@@ -193,15 +196,17 @@ export class ChatbotService {
       };
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unknown error';
-      console.error('[ChatbotService] Error:', {
-        familyId,
-        model: request.model,
-        error: message,
-        stack: error instanceof Error ? error.stack : undefined,
-        status: (error as Record<string, unknown>)?.status,
-        errorBody: (error as Record<string, unknown>)?.error,
-        toolCallLogs,
-      });
+      log.error(
+        {
+          err: error,
+          familyId,
+          model: request.model,
+          status: (error as Record<string, unknown>)?.status,
+          errorBody: (error as Record<string, unknown>)?.error,
+          toolCallLogs,
+        },
+        message,
+      );
 
       if (message === 'CHATBOT_REQUEST_TIMEOUT') {
         return this.errorResponse('That took too long — try a simpler question or a faster model.', budget);
@@ -560,20 +565,23 @@ export class ChatbotService {
     toolCallLogs: ToolCallLog[],
     totalLatencyMs: number,
   ): void {
-    console.log('[ChatbotService] Request completed:', {
-      familyId,
-      model,
-      inputTokens,
-      outputTokens,
-      estimatedCost: `$${estimatedCost.toFixed(6)}`,
-      toolCallCount: toolCallLogs.length,
-      toolCalls: toolCallLogs.map(t => ({
-        tool: t.toolName,
-        resultSize: t.resultSize,
-        latencyMs: t.latencyMs,
-      })),
-      totalLatencyMs,
-    });
+    log.info(
+      {
+        familyId,
+        model,
+        inputTokens,
+        outputTokens,
+        estimatedCost,
+        toolCallCount: toolCallLogs.length,
+        toolCalls: toolCallLogs.map(t => ({
+          tool: t.toolName,
+          resultSize: t.resultSize,
+          latencyMs: t.latencyMs,
+        })),
+        totalLatencyMs,
+      },
+      'request completed',
+    );
   }
 
   private generateId(): string {

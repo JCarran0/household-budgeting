@@ -8,6 +8,10 @@ import { authMiddleware } from '../middleware/authMiddleware';
 import { AuthorizationError } from '../errors';
 import { z } from 'zod';
 
+import { childLogger } from '../utils/logger';
+
+const log = childLogger('accounts');
+
 const router = Router();
 
 // Extended Request with user
@@ -135,7 +139,7 @@ router.post('/sync', authMiddleware, async (req: AuthRequest, res: Response, nex
             }
           }
         } catch (err) {
-          console.error('[notifications] Failed to send sync failure notifications:', err);
+          log.error({ err: err }, '[notifications] Failed to send sync failure notifications');
         }
       })();
     }

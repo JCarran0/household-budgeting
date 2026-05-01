@@ -2,6 +2,9 @@ import { Request, Response, NextFunction } from 'express';
 import { authService, dataService } from '../services';
 import { z, ZodError } from 'zod';
 import { rateLimitAuth as rateLimitAuthImpl, resetPersistentRateLimitStore } from './rateLimit';
+import { childLogger } from '../utils/logger';
+
+const log = childLogger('authMiddleware');
 
 // Extend Express Request type to include user
 declare global {
@@ -141,7 +144,7 @@ export const authenticate = async (req: Request, res: Response, next: NextFuncti
 
     next();
   } catch (error) {
-    console.error('Authentication error:', error);
+    log.error({ err: error }, 'authentication error');
     res.status(500).json({
       success: false,
       error: 'Authentication failed',

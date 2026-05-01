@@ -1,5 +1,8 @@
 import { S3Client, GetObjectCommand, PutObjectCommand, DeleteObjectCommand, ListObjectsV2Command, HeadObjectCommand } from '@aws-sdk/client-s3';
 import { StorageAdapter } from './types';
+import { childLogger } from '../../utils/logger';
+
+const log = childLogger('s3Adapter');
 
 /**
  * S3 storage adapter for production
@@ -49,7 +52,7 @@ export class S3Adapter implements StorageAdapter {
       if (error.name === 'NoSuchKey') {
         return null;
       }
-      console.error(`Error reading data from S3 for key ${key}:`, error);
+      log.error({ err: error, key }, 'error reading data from s3');
       return null;
     }
   }
@@ -68,7 +71,7 @@ export class S3Adapter implements StorageAdapter {
 
       await this.s3Client.send(command);
     } catch (error) {
-      console.error(`Error writing data to S3 for key ${key}:`, error);
+      log.error({ err: error, key }, 'error writing data to s3');
       throw error;
     }
   }
@@ -83,7 +86,7 @@ export class S3Adapter implements StorageAdapter {
 
       await this.s3Client.send(command);
     } catch (error) {
-      console.error(`Error deleting data from S3 for key ${key}:`, error);
+      log.error({ err: error, key }, 'error deleting data from s3');
       throw error;
     }
   }
@@ -102,7 +105,7 @@ export class S3Adapter implements StorageAdapter {
       if (error.name === 'NotFound' || error.name === 'NoSuchKey') {
         return false;
       }
-      console.error(`Error checking existence in S3 for key ${key}:`, error);
+      log.error({ err: error, key }, 'error checking existence in s3');
       return false;
     }
   }
@@ -132,7 +135,7 @@ export class S3Adapter implements StorageAdapter {
           return withoutPrefix.replace(/\.json$/, '');
         });
     } catch (error) {
-      console.error(`Error listing objects in S3 with prefix ${prefix}:`, error);
+      log.error({ err: error, prefix }, 'error listing objects in s3');
       return [];
     }
   }

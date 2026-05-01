@@ -21,6 +21,9 @@ import { z } from 'zod';
 import { authenticate, validateBody } from '../middleware/authMiddleware';
 import { rateLimitChatbot } from '../middleware/rateLimit';
 import { chatbotService, categorizationService } from '../services';
+import { childLogger } from '../utils/logger';
+
+const log = childLogger('chatbot');
 import {
   uploadChatAttachment,
   validateAttachmentMagicBytes,
@@ -146,15 +149,17 @@ router.post(
       // SECURITY: Only metadata logged — never attachment content
       if (req.file && attachment) {
         const pageCount = countPdfPages(req.file);
-        console.log(JSON.stringify({
-          event: 'chat_attachment_received',
-          timestamp: new Date().toISOString(),
-          userId,
-          familyId,
-          mimeType: attachment.mimeType,
-          sizeBytes: req.file.size,
-          pageCount,
-        }));
+        log.info(
+          {
+            event: 'chat_attachment_received',
+            userId,
+            familyId,
+            mimeType: attachment.mimeType,
+            sizeBytes: req.file.size,
+            pageCount,
+          },
+          'chat attachment received',
+        );
       }
 
       res.json({ success: true, ...response });
@@ -193,9 +198,9 @@ router.post(
       const { familyId } = req.user!;
       const { transactionIds } = req.body as { transactionIds?: string[] };
 
-      console.log(`[Chatbot] classify-transactions: starting for family ${familyId}`);
+      log.info({ familyId }, 'classify-transactions: starting');
       const result = await categorizationService.classifyTransactions(familyId, transactionIds);
-      console.log(`[Chatbot] classify-transactions: done, ${result.totalClassified} classified, ${result.buckets.length} buckets`);
+      log.info({ familyId, totalClassified: result.totalClassified, buckets: result.buckets.length }, 'classify-transactions: done');
 
       res.json({ success: true, ...result });
     } catch (error) {

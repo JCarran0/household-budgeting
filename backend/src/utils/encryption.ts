@@ -1,6 +1,10 @@
 import crypto from 'crypto';
 import { config } from '../config';
 
+import { childLogger } from '../utils/logger';
+
+const log = childLogger('encryption');
+
 /**
  * Encryption utility for sensitive data using AES-256-GCM
  * This provides authenticated encryption with associated data (AEAD)
@@ -67,7 +71,7 @@ export class EncryptionService {
       // Return base64 encoded string
       return combined.toString('base64');
     } catch (error) {
-      console.error('Encryption error:', error);
+      log.error({ err: error }, 'encryption error');
       throw new Error('Failed to encrypt data');
     }
   }
@@ -116,7 +120,7 @@ export class EncryptionService {
 
       return decrypted.toString('utf8');
     } catch (error) {
-      console.error('Decryption error:', error);
+      log.error({ err: error }, 'decryption error');
       throw new Error('Failed to decrypt data - token may be corrupted or tampered with');
     }
   }
@@ -132,7 +136,7 @@ export class EncryptionService {
       const decrypted = this.decrypt(encrypted);
       return decrypted === testData;
     } catch (error) {
-      console.error('Encryption validation failed:', error);
+      log.error({ err: error }, 'encryption validation failed');
       return false;
     }
   }

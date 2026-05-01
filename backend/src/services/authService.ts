@@ -5,6 +5,10 @@ import crypto from 'crypto';
 import { DataService, User } from './dataService';
 import type { Family, FamilyMember, UserColor } from '../shared/types';
 
+import { childLogger } from '../utils/logger';
+
+const log = childLogger('authService');
+
 interface AuthResult {
   success: boolean;
   error?: string;
@@ -203,7 +207,7 @@ export class AuthService {
         },
       };
     } catch (error) {
-      console.error('Registration error:', error);
+      log.error({ err: error }, 'registration error');
       return {
         success: false,
         error: 'Registration failed. Please try again.',
@@ -279,7 +283,7 @@ export class AuthService {
         user.familyId = familyId;
         user.displayName = displayName;
 
-        console.log(`Migrated user "${user.username}" to family "${familyId}"`);
+        log.info({ username: user.username, familyId }, 'migrated user to family');
       }
 
       // Generate JWT token with familyId
@@ -310,7 +314,7 @@ export class AuthService {
         },
       };
     } catch (error) {
-      console.error('Login error:', error);
+      log.error({ err: error }, 'login error');
       return {
         success: false,
         error: 'Login failed. Please try again.',
@@ -433,7 +437,7 @@ export class AuthService {
         },
       };
     } catch (error) {
-      console.error('Profile update error:', error);
+      log.error({ err: error }, 'profile update error');
       return { success: false, error: 'Profile update failed. Please try again.' };
     }
   }
@@ -499,7 +503,7 @@ export class AuthService {
         message: 'Password changed successfully',
       };
     } catch (error) {
-      console.error('Password change error:', error);
+      log.error({ err: error }, 'password change error');
       return {
         success: false,
         error: 'Password change failed',
@@ -556,8 +560,8 @@ export class AuthService {
       // Update request time
       this.resetRequestTime.set(username, new Date());
 
-      // Log that a reset was generated (token is NOT logged for security)
-      console.log(`Password reset token generated for user: ${username} (expires: ${expiresAt.toISOString()})`);
+      // Log that a reset was generated (token is NOT logged for security — TD-002)
+      log.info({ username, expiresAt: expiresAt.toISOString() }, 'password reset token generated');
 
       this.logSecurityEvent({
         event: 'PASSWORD_RESET_REQUESTED',
@@ -572,7 +576,7 @@ export class AuthService {
         message: 'Reset token generated successfully. Check server logs for the token.',
       };
     } catch (error) {
-      console.error('Password reset request error:', error);
+      log.error({ err: error }, 'password reset request error');
       return {
         success: false,
         error: 'Reset request failed. Please try again.',
@@ -697,7 +701,7 @@ export class AuthService {
         message: 'Password has been reset successfully. You can now log in with your new password.',
       };
     } catch (error) {
-      console.error('Password reset error:', error);
+      log.error({ err: error }, 'password reset error');
       return {
         success: false,
         error: 'Password reset failed. Please try again.',
@@ -799,10 +803,9 @@ export class AuthService {
 
   logSecurityEvent(event: SecurityEvent): void {
     this.securityLogs.push(event);
-    // In production, this would write to a secure log file or service
-    if (process.env.NODE_ENV !== 'test') {
-      console.log('Security Event:', JSON.stringify(event));
-    }
+    // Logger is silent in test mode, so the env check is unnecessary.
+    // Pino's redaction layer scrubs nested email/token fields if any sneak in.
+    log.info({ securityEvent: event }, 'security event');
   }
 
   getSecurityLogs(): SecurityEvent[] {

@@ -10,6 +10,10 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { ChatbotDataService } from './chatbotDataService';
 import { ChatbotCostTracker } from './chatbotCostTracker';
+import { childLogger } from '../utils/logger';
+
+const log = childLogger('categorizationService');
+
 import {
   CATEGORIZATION_SYSTEM_PROMPT,
   CATEGORIZATION_TOOL,
@@ -66,11 +70,11 @@ export class CategorizationService {
     ]);
 
     if (uncategorized.length === 0) {
-      console.log('[CategorizationService] No uncategorized transactions found');
+      log.info('no uncategorized transactions found');
       return { buckets: [], unsureBucket: this.emptyBucket(), totalClassified: 0, costUsed: 0 };
     }
 
-    console.log(`[CategorizationService] Classifying ${uncategorized.length} transactions`);
+    log.info({ count: uncategorized.length }, 'classifying transactions');
 
     // Build few-shot examples from previously categorized transactions
     const examples = await this.buildExamples(familyId, categories);
@@ -86,17 +90,17 @@ export class CategorizationService {
     for (let i = 0; i < uncategorized.length; i += BATCH_SIZE) {
       const batchNum = Math.floor(i / BATCH_SIZE) + 1;
       const batch = uncategorized.slice(i, i + BATCH_SIZE);
-      console.log(`[CategorizationService] Batch ${batchNum}/${totalBatches}: classifying ${batch.length} transactions...`);
+      log.info({ batchNum, totalBatches, batchSize: batch.length }, 'classifying batch');
       const { results, cost } = await this.classifyBatch(batch, categoryContext, examples, existingRules);
-      console.log(`[CategorizationService] Batch ${batchNum}/${totalBatches}: got ${results.length} results, cost $${cost.toFixed(4)}`);
+      log.info({ batchNum, totalBatches, results: results.length, cost: Number(cost.toFixed(4)) }, 'batch complete');
       allResults.push(...results);
       totalCost += cost;
     }
 
     // Group into buckets
-    console.log(`[CategorizationService] Grouping ${allResults.length} results into buckets`);
+    log.info({ resultCount: allResults.length }, 'grouping results into buckets');
     const { buckets, unsureBucket } = this.groupIntoBuckets(allResults, uncategorized, categories);
-    console.log(`[CategorizationService] Done: ${buckets.length} buckets + ${unsureBucket.transactions.length} unsure`);
+    log.info({ buckets: buckets.length, unsure: unsureBucket.transactions.length }, 'classification done');
 
     return {
       buckets,
@@ -170,7 +174,7 @@ export class CategorizationService {
       const output = toolUse.input as { suggestions: RuleSuggestion[] };
       return { suggestions: output.suggestions || [] };
     } catch (error) {
-      console.error('[CategorizationService] suggestRules error:', error instanceof Error ? error.message : error);
+      log.error({ err: error }, 'suggestRules error');
       return { suggestions: [] };
     }
   }
@@ -294,14 +298,14 @@ ${examples}`;
       );
 
       if (!toolUse) {
-        console.warn('[CategorizationService] No tool_use in response, returning empty');
+        log.warn('[CategorizationService] No tool_use in response, returning empty');
         return { results: [], cost };
       }
 
       const output = toolUse.input as { classifications: ClassificationResult[] };
       return { results: output.classifications || [], cost };
     } catch (error) {
-      console.error('[CategorizationService] classifyBatch error:', error instanceof Error ? error.message : error);
+      log.error({ err: error }, 'classifyBatch error');
       throw error;
     }
   }

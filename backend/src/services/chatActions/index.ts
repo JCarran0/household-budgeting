@@ -16,6 +16,9 @@ export * from './proposalStore';
 export * from './auditLog';
 
 import { listChatActionIds } from './registry';
+import { childLogger } from '../../utils/logger';
+
+const log = childLogger('chatActions');
 
 // Deployment-time sanity check — proves the registry is populated
-console.log('[chatActions] Registered:', listChatActionIds().join(', '));
+log.info({ registered: listChatActionIds() }, 'chat actions registered');

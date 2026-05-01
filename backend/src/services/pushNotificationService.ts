@@ -16,6 +16,10 @@ import { DataService } from './dataService';
 import { config } from '../config';
 import type { NotificationPayload, NotificationPreferences, PushSubscriptionRecord } from '../shared/types';
 
+import { childLogger } from '../utils/logger';
+
+const log = childLogger('pushNotificationService');
+
 // PushSubscription as sent from the browser (matches the Web Push spec JSON shape)
 export interface PushSubscriptionJSON {
   endpoint: string;
@@ -69,11 +73,7 @@ export class PushNotificationService {
     const { publicKey, privateKey, subject } = config.vapid;
 
     if (isPlaceholder(publicKey) || isPlaceholder(privateKey) || !subject) {
-      console.warn(
-        '[PushNotificationService] VAPID keys are not configured. ' +
-        'Push notifications will not be sent. ' +
-        'Generate keys with: npx web-push generate-vapid-keys',
-      );
+      log.warn('VAPID keys not configured. Push notifications will not be sent. Generate keys with: npx web-push generate-vapid-keys');
       this.vapidConfigured = false;
       return;
     }
@@ -81,9 +81,9 @@ export class PushNotificationService {
     try {
       webpush.setVapidDetails(subject, publicKey, privateKey);
       this.vapidConfigured = true;
-      console.log('[PushNotificationService] VAPID configured successfully.');
+      log.info('VAPID configured successfully');
     } catch (error) {
-      console.error('[PushNotificationService] Failed to configure VAPID:', error);
+      log.error({ err: error }, '[PushNotificationService] Failed to configure VAPID');
       this.vapidConfigured = false;
     }
   }
@@ -132,10 +132,7 @@ export class PushNotificationService {
     }
 
     await this.writeSubscriptions(userId, subscriptions);
-    console.log(
-      `[PushNotificationService] Subscription registered for user ${userId}. ` +
-      `Total devices: ${subscriptions.length}`,
-    );
+    log.info({ userId, deviceCount: subscriptions.length }, 'subscription registered');
   }
 
   /**
@@ -147,7 +144,7 @@ export class PushNotificationService {
 
     if (filtered.length !== subscriptions.length) {
       await this.writeSubscriptions(userId, filtered);
-      console.log(`[PushNotificationService] Subscription removed for user ${userId}.`);
+      log.info({ userId }, 'subscription removed');
     }
   }
 
@@ -168,7 +165,7 @@ export class PushNotificationService {
    */
   async sendNotification(userId: string, payload: NotificationPayload): Promise<void> {
     if (!this.vapidConfigured) {
-      console.warn('[PushNotificationService] Skipping send — VAPID not configured.');
+      log.warn('skipping send — VAPID not configured');
       return;
     }
 
@@ -196,15 +193,12 @@ export class PushNotificationService {
           if (statusCode === 410 || statusCode === 404) {
             // Subscription is no longer valid — queue for removal
             staleEndpoints.push(record.endpoint);
-            console.log(
-              `[PushNotificationService] Removing stale subscription for user ${userId} ` +
-              `(HTTP ${statusCode}): ${record.endpoint.slice(0, 60)}...`,
+            log.info(
+              { userId, statusCode, endpointPrefix: record.endpoint.slice(0, 60) },
+              'removing stale subscription',
             );
           } else {
-            console.error(
-              `[PushNotificationService] Failed to send notification to user ${userId}:`,
-              error,
-            );
+            log.error({ err: error, userId }, 'failed to send notification');
           }
         }
       }),
@@ -221,7 +215,7 @@ export class PushNotificationService {
    */
   async sendNotificationToAll(payload: NotificationPayload): Promise<void> {
     if (!this.vapidConfigured) {
-      console.warn('[PushNotificationService] Skipping broadcast — VAPID not configured.');
+      log.warn('[PushNotificationService] Skipping broadcast — VAPID not configured.');
       return;
     }
 

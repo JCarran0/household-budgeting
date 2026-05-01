@@ -13,6 +13,9 @@
  */
 
 import type { ActionResource } from '../../shared/types';
+import { childLogger } from '../../utils/logger';
+
+const log = childLogger('chatActionsAudit');
 
 interface AuditSuccessEntry {
   userId: string;
@@ -33,24 +36,24 @@ interface AuditRejectionEntry {
 
 /** Log a successful action execution. SEC-A017. */
 export function logAuditSuccess(entry: AuditSuccessEntry): void {
-  console.log(
-    JSON.stringify({
+  log.info(
+    {
       event: 'chat_action_confirmed',
-      timestamp: new Date().toISOString(),
       source: 'chatbot_action_card', // SEC-A017
       ...entry,
-    }),
+    },
+    'chat action confirmed',
   );
 }
 
 /** Log a rejected confirmation (invalid nonce, schema failure, etc.). SEC-A018. */
 export function logAuditRejection(entry: AuditRejectionEntry): void {
-  console.warn(
-    JSON.stringify({
+  log.warn(
+    {
       event: 'chat_action_rejected',
-      timestamp: new Date().toISOString(),
       source: 'chatbot_action_card',
       ...entry,
-    }),
+    },
+    'chat action rejected',
   );
 }

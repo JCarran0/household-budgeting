@@ -16,6 +16,10 @@ import {
   AMAZON_CATEGORIZATION_TOOL,
 } from '../amazonReceiptPrompt';
 import { CUSTOM_AMAZON_CATEGORY } from './amazonMatcher';
+import { childLogger } from '../../utils/logger';
+
+const log = childLogger('amazonCategorizerAdapter');
+
 import type {
   AmazonTransactionMatch,
   AmazonCategoryRecommendation,
@@ -120,7 +124,7 @@ ${examples}`;
     );
 
     if (!toolUse) {
-      console.warn('[AmazonCategorizerAdapter] No tool_use in categorization response');
+      log.warn('[AmazonCategorizerAdapter] No tool_use in categorization response');
       return { recommendations: [], splitRecommendations: [], costUsed: costResult.estimatedCost };
     }
 

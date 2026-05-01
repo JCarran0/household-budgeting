@@ -430,7 +430,7 @@ Paired with TD-004 (Sprint 3) — CSP outer envelope + sanitization inner envelo
 ---
 
 ### TD-017: Console Logging Throughout — No Structured Logger
-**Status**: Open
+**Status**: Resolved (2026-05-01, Sprint 6)
 **Created**: 2026-04-22
 **Impact**: Medium - Incident response is grep-archaeology; PII redaction is per-call-site
 **Effort**: Medium
@@ -441,14 +441,21 @@ The backend uses `console.log` / `console.error` directly throughout. In product
 A specific concrete leak: `transactionService.ts:163` logs `account.accountName` for failed-decryption accounts — a structured logger with field-level redaction prevents this category of mistake at the edge.
 
 **Fix**:
-1. Adopt Pino. Replace `console.*` with logger calls. JSON output by default in production, pretty-print in dev.
-2. Configure a redaction list for sensitive fields: `accessToken`, `password`, `accountNumber`, `email`, `accountName`, `plaidAccessToken`, etc.
-3. Forward production logs to CloudWatch (the EC2 instance is already in AWS — minor IAM + agent setup).
+✅ `backend/src/utils/logger.ts` adds Pino. Pretty-print in dev (timestamp + colorized level), JSON in production (CloudWatch-ready), `silent` in test. Reads `NODE_ENV` directly rather than going through the config singleton — keeps the encryption tests' partial config mocks working. `childLogger(module)` adds a `module` binding for filterability. Redaction list (`REDACT_PATHS`) covers top-level + nested + array-element paths for: auth (`password`, `passwordHash`, `token`, `refreshToken`, `resetToken`, `jwt`), Plaid (`accessToken`, `plaidAccessToken`, `publicToken`, `linkToken`), account PII (`accountName`, `accountNumber`, `routingNumber`, `officialName`), user PII (`email`), VAPID (`privateKey`). Pre-shipping the redaction backstop lets call sites focus on signal without remembering every PII field.
+
+Migrated all 156 production `console.*` call sites across 30 files to `log.{info,warn,error,debug}` with structured field bags. The TD-017-cited leak is closed: `transactionService.ts:160-167` now logs `{ plaidItemId, accountCount }` on decryption failure — never the array of `accountName`s. Other notable cleanups: `routes/categories.ts:113-118` (which was dumping full `req.headers` and `req.user` on every initialize call) reduced to `{ familyId, userId }`; `services/plaidService.ts:168` (was logging the full `clientId`) now logs a 6-char prefix; `chatActions/auditLog.ts` switched from manual `JSON.stringify({...})` envelopes to structured `log.info({ event, ...entry })` so the audit JSON now flows through the same redaction layer as everything else.
+
+`ecosystem.config.js` no longer sets `log_date_format` — Pino's own ISO timestamp is the single source of truth, and a PM2-prepended wall-clock string would break the CloudWatch JSON parser. CloudWatch agent install (one-time EC2-side: `amazon-cloudwatch-agent` + IAM `CloudWatchAgentServerPolicy` + collect_list pointing at `output.log`/`error.log`) and a sample CloudWatch Insights query are documented in [AI-DEPLOYMENTS.md](AI-DEPLOYMENTS.md) §Logging.
+
+**Tests**: 8 new Jest cases in `backend/src/__tests__/unit/logger.test.ts` build a parallel Pino instance with the same `REDACT_PATHS` and a captured destination stream (the shipped `logger` is `silent` in test mode). Cases cover top-level redaction (`accessToken`/`password`/`resetToken`/`jwt`/`privateKey`), nested-object redaction (`account.accountName`/`plaidAccessToken`/`accountNumber`), the **TD-017 leak shape verbatim** (array of `{ accountName, plaidAccessToken }` objects — pins the `*[*].field` path syntax), nested `user.email`, non-secret fields preserved (`familyId`/`transactionId`/`amount`/`cursor` untouched), message string preserved, child-logger inheritance of redaction + `module` binding, level filtering. Backend: **896 tests** (from 888).
 
 **Files**:
-- `backend/src/utils/logger.ts` (new)
-- `backend/src/**/*.ts` (codemod `console.log` → `logger.info`)
-- `ecosystem.config.js` (PM2 log rotation if not already configured)
+- `backend/src/utils/logger.ts` ✅ (new)
+- `backend/src/__tests__/unit/logger.test.ts` ✅ (new, 8 cases)
+- `backend/src/index.ts`, `backend/src/app.ts`, all middleware/, all routes/, all services/, `backend/src/utils/encryption.ts` ✅ (156 console.* → logger calls)
+- `ecosystem.config.js` ✅ (drop `log_date_format`)
+- `docs/AI-DEPLOYMENTS.md` ✅ (CloudWatch agent setup + Insights query)
+- `backend/package.json` ✅ (pino + pino-pretty deps)
 
 ---
 

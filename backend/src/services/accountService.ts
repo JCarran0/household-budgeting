@@ -9,6 +9,10 @@ import { PlaidService } from './plaidService';
 import { DataService } from './dataService';
 import { encryptionService } from '../utils/encryption';
 
+import { childLogger } from '../utils/logger';
+
+const log = childLogger('accountService');
+
 // Account status types
 export type AccountStatus = 'active' | 'inactive' | 'requires_reauth' | 'error';
 
@@ -142,7 +146,7 @@ export class AccountService {
         account: storedAccounts[0],
       };
     } catch (error) {
-      console.error('Error connecting account:', error);
+      log.error({ err: error }, 'error connecting account');
       return {
         success: false,
         error: error instanceof Error ? error.message : 'Failed to connect account',
@@ -162,7 +166,7 @@ export class AccountService {
         accounts: accounts.filter((a: StoredAccount) => a.status !== 'inactive'),
       };
     } catch (error) {
-      console.error('Error fetching user accounts:', error);
+      log.error({ err: error }, 'error fetching user accounts');
       return {
         success: false,
         error: 'Failed to fetch accounts',
@@ -254,7 +258,7 @@ export class AccountService {
         reauthRequiredAccounts,
       };
     } catch (error) {
-      console.error('Error syncing account balances:', error);
+      log.error({ err: error }, 'error syncing account balances');
       return {
         success: false,
         error: 'Failed to sync balances',
@@ -287,7 +291,7 @@ export class AccountService {
 
       return { success: true };
     } catch (error) {
-      console.error('Error updating account nickname:', error);
+      log.error({ err: error }, 'error updating account nickname');
       return { 
         success: false, 
         error: error instanceof Error ? error.message : 'Failed to update account nickname'
@@ -319,11 +323,11 @@ export class AccountService {
         if (!removeResult.success) {
           // Log the error but continue with disconnection
           // User can still disconnect locally even if Plaid removal fails
-          console.error(`Failed to remove Plaid Item ${account.plaidItemId}: ${removeResult.error || 'Unknown error'}`);
+          log.error({ plaidItemId: account.plaidItemId, error: removeResult.error || 'Unknown error' }, 'failed to remove Plaid Item');
         }
       } catch (plaidError) {
         // Log error but don't fail the whole disconnection
-        console.error(`Error calling Plaid removeItem for account ${accountId}:`, plaidError);
+        log.error({ err: plaidError, accountId }, 'error calling Plaid removeItem');
       }
 
       // Mark as inactive locally
@@ -332,7 +336,7 @@ export class AccountService {
       await this.saveAccount(familyId, account);
       return { success: true };
     } catch (error) {
-      console.error('Error disconnecting account:', error);
+      log.error({ err: error }, 'error disconnecting account');
       return {
         success: false,
         error: 'Failed to disconnect account',
@@ -404,7 +408,7 @@ export class AccountService {
         expiration: result.expiration,
       };
     } catch (error) {
-      console.error('Error creating update link token:', error);
+      log.error({ err: error }, 'error creating update link token');
       return {
         success: false,
         error: error instanceof Error ? error.message : 'Failed to create update link token',
@@ -430,7 +434,7 @@ export class AccountService {
 
       return { success: true };
     } catch (error) {
-      console.error('Error marking account active:', error);
+      log.error({ err: error }, 'error marking account active');
       return {
         success: false,
         error: error instanceof Error ? error.message : 'Failed to update account status',

@@ -1,4 +1,8 @@
 import { Octokit } from '@octokit/rest';
+import { childLogger } from '../utils/logger';
+
+const log = childLogger('feedbackService');
+
 import type {
   FeedbackSubmission,
   FeedbackResponse,
@@ -24,7 +28,7 @@ export class FeedbackService {
     };
 
     if (!this.config.token) {
-      console.warn('GITHUB_TOKEN not provided. Feedback submission will fail.');
+      log.warn('gITHUB_TOKEN not provided. Feedback submission will fail.');
     }
 
     this.octokit = new Octokit({
@@ -58,7 +62,7 @@ export class FeedbackService {
         issueUrl: response.data.html_url,
       };
     } catch (error) {
-      console.error('Failed to create GitHub issue:', error);
+      log.error({ err: error }, 'failed to create GitHub issue');
 
       return {
         success: false,
@@ -199,7 +203,7 @@ export class FeedbackService {
 
       return { success: true };
     } catch (error) {
-      console.error('GitHub API test failed:', error);
+      log.error({ err: error }, 'gitHub API test failed');
       return {
         success: false,
         error: error instanceof Error ? error.message : 'Unknown error',

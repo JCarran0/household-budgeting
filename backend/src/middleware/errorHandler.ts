@@ -1,6 +1,9 @@
 import { Request, Response, NextFunction } from 'express';
 import { AppError } from '../errors';
 import { config } from '../config';
+import { childLogger } from '../utils/logger';
+
+const log = childLogger('errorHandler');
 
 /**
  * Global error handler middleware.
@@ -15,7 +18,7 @@ export function errorHandler(
   _next: NextFunction
 ): void {
   // Log all errors
-  console.error(`[${err.name}]`, err.message);
+  log.error({ err, errName: err.name }, err.message);
 
   if (err instanceof AppError) {
     res.status(err.statusCode).json({

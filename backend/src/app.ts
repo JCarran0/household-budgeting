@@ -6,6 +6,9 @@ import { rateLimitGlobalApi } from './middleware/rateLimit';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import { config } from './config';
+import { childLogger } from './utils/logger';
+
+const log = childLogger('app');
 import authRoutes from './routes/authRoutes';
 import plaidRoutes from './routes/plaid';
 import accountRoutes from './routes/accounts';
@@ -64,7 +67,7 @@ const corsOptions = {
       if (!origin || allowedOrigins.includes(origin)) {
         callback(null, true);
       } else {
-        console.error(`CORS rejected origin: ${origin}`);
+        log.warn({ origin }, 'CORS rejected origin');
         callback(new Error('Not allowed by CORS'));
       }
     }
@@ -107,7 +110,7 @@ app.use(requestScopeMiddleware);
 // Request logging in development
 if (config.server.nodeEnv === 'development') {
   app.use((req: Request, _res: Response, next: NextFunction) => {
-    console.log(`${new Date().toISOString()} - ${req.method} ${req.path}`);
+    log.debug({ method: req.method, path: req.path }, 'request');
     next();
   });
 }
@@ -167,7 +170,7 @@ app.get(`${apiPrefix}/version`, (_req: Request, res: Response) => {
       unreleased = unreleasedMatch[1].trim();
     }
   } catch (error) {
-    console.error('Error reading changelog:', error);
+    log.error({ err: error }, 'error reading changelog');
   }
   
   res.json({
@@ -189,7 +192,7 @@ app.get(`${apiPrefix}/changelog`, (_req: Request, res: Response) => {
 
     // Check if file exists first
     if (!fs.existsSync(changelogPath)) {
-      console.warn('CHANGELOG.md not found at:', changelogPath);
+      log.warn({ changelogPath }, 'CHANGELOG.md not found');
       res.json({
         success: true,
         content: '# Changelog\n\nChangelog is currently unavailable. Please check back after the next deployment.',
@@ -204,7 +207,7 @@ app.get(`${apiPrefix}/changelog`, (_req: Request, res: Response) => {
       content: changelog,
     });
   } catch (error) {
-    console.error('Error reading changelog:', error);
+    log.error({ err: error }, 'error reading changelog');
     res.status(500).json({
       success: false,
       error: 'Failed to read changelog',

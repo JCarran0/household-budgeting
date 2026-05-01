@@ -19,6 +19,10 @@ import { buildCategoryBreakdown } from './reports/breakdowns/category';
 import { buildSavingsBreakdown } from './reports/breakdowns/savings';
 import { buildCashFlowOutlook } from './reports/cashflowProjections';
 
+import { childLogger } from '../utils/logger';
+
+const log = childLogger('reportService');
+
 // Report types
 export interface SpendingTrend {
   month: string;
@@ -203,7 +207,7 @@ export class ReportService {
 
       return { success: true, trends };
     } catch (error) {
-      console.error('Error getting spending trends:', error);
+      log.error({ err: error }, 'error getting spending trends');
       return { success: false, error: 'Failed to get spending trends' };
     }
   }
@@ -225,7 +229,7 @@ export class ReportService {
       );
       return { success: true, breakdown, total };
     } catch (error) {
-      console.error('Error getting income breakdown:', error);
+      log.error({ err: error }, 'error getting income breakdown');
       return { success: false, error: 'Failed to get income breakdown' };
     }
   }
@@ -247,7 +251,7 @@ export class ReportService {
       );
       return { success: true, breakdown, total };
     } catch (error) {
-      console.error('Error getting category breakdown:', error);
+      log.error({ err: error }, 'error getting category breakdown');
       return { success: false, error: 'Failed to get category breakdown' };
     }
   }
@@ -268,7 +272,7 @@ export class ReportService {
       );
       return { success: true, breakdown, total };
     } catch (error) {
-      console.error('Error getting savings breakdown:', error);
+      log.error({ err: error }, 'error getting savings breakdown');
       return { success: false, error: 'Failed to get savings breakdown' };
     }
   }
@@ -355,7 +359,7 @@ export class ReportService {
 
       return { success: true, summary };
     } catch (error) {
-      console.error('Error getting cash flow summary:', error);
+      log.error({ err: error }, 'error getting cash flow summary');
       return { success: false, error: 'Failed to get cash flow summary' };
     }
   }
@@ -417,7 +421,7 @@ export class ReportService {
 
       return { success: true, projections };
     } catch (error) {
-      console.error('Error generating projections:', error);
+      log.error({ err: error }, 'error generating projections');
       return { success: false, error: 'Failed to generate projections' };
     }
   }
@@ -479,7 +483,7 @@ export class ReportService {
 
       return { success: true, projections, hasPriorYearData };
     } catch (error) {
-      console.error('Error generating cash flow projections:', error);
+      log.error({ err: error }, 'error generating cash flow projections');
       return { success: false, error: 'Failed to generate cash flow projections' };
     }
   }
@@ -591,7 +595,7 @@ export class ReportService {
         }
       };
     } catch (error) {
-      console.error('Error getting YTD summary:', error);
+      log.error({ err: error }, 'error getting YTD summary');
       return { success: false, error: 'Failed to get YTD summary' };
     }
   }

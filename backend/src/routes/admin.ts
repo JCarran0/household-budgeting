@@ -4,6 +4,10 @@ import { authMiddleware } from '../middleware/authMiddleware';
 import { adminMiddleware } from '../middleware/adminMiddleware';
 import { AuthorizationError } from '../errors';
 
+import { childLogger } from '../utils/logger';
+
+const log = childLogger('admin');
+
 const router = express.Router();
 
 // All admin routes require (a) authentication, (b) admin privileges.
@@ -28,7 +32,7 @@ router.post('/migrate-savings-to-rollover', async (req: Request, res: Response, 
     const familyId = req.user?.familyId;
     if (!familyId) throw new AuthorizationError();
 
-    console.log(`Starting migration from isSavings to isRollover for family ${familyId}`);
+    log.info({ familyId }, 'starting migration from isSavings to isRollover');
 
     const { migratedCount, totalCount } = await adminService.migrateSavingsToRollover(familyId);
 
@@ -39,7 +43,7 @@ router.post('/migrate-savings-to-rollover', async (req: Request, res: Response, 
       totalCount,
     };
 
-    console.log(`Migration completed: ${migratedCount}/${totalCount} categories migrated`);
+    log.info({ migratedCount, totalCount }, 'isSavings → isRollover migration completed');
 
     res.json(result);
   } catch (error) {
@@ -70,7 +74,7 @@ router.post('/clean-location-data', async (req: Request, res: Response, next: Ne
     const familyId = req.user?.familyId;
     if (!familyId) throw new AuthorizationError();
 
-    console.log(`Starting location data cleanup for family ${familyId}`);
+    log.info({ familyId }, 'starting location data cleanup');
 
     // Get all transactions for the family directly from data service to manipulate raw data
     const transactions = await dataService.getData<any[]>(`transactions_${familyId}`) || [];
@@ -90,7 +94,7 @@ router.post('/clean-location-data', async (req: Request, res: Response, next: Ne
     const cleanedTransactions = transactions.map((transaction: any) => {
       if (transaction.location && !hasLocationData(transaction.location)) {
         cleanedCount++;
-        console.log(`Cleaned location data for transaction ${transaction.id} (${transaction.merchantName})`);
+        log.debug({ transactionId: transaction.id, merchantName: transaction.merchantName }, 'cleaned location data');
         
         return {
           ...transaction,
@@ -112,7 +116,7 @@ router.post('/clean-location-data', async (req: Request, res: Response, next: Ne
       totalCount: transactions.length
     };
 
-    console.log(`Location cleanup completed for family ${familyId}: ${cleanedCount}/${transactions.length} transactions cleaned`);
+    log.info({ familyId, cleanedCount, totalTransactions: transactions.length }, 'location cleanup completed');
     
     res.json(result);
   } catch (error) {
@@ -177,7 +181,7 @@ router.post('/migrate-is-income', async (req: Request, res: Response, next: Next
     const familyId = req.user?.familyId;
     if (!familyId) throw new AuthorizationError();
 
-    console.log(`Starting isIncome migration for family ${familyId}`);
+    log.info({ familyId }, 'starting isIncome migration');
 
     const result = await categoryService.migrateIsIncomeProperty(familyId);
 
@@ -188,7 +192,7 @@ router.post('/migrate-is-income', async (req: Request, res: Response, next: Next
       totalCount: result.migrated + result.skipped
     };
 
-    console.log(`isIncome migration completed for family ${familyId}: ${result.migrated} migrated, ${result.skipped} already had property`);
+    log.info({ familyId, migrated: result.migrated, skipped: result.skipped }, 'isIncome migration completed');
 
     res.json(migrationResult);
   } catch (error) {
@@ -246,7 +250,7 @@ interface UserMigrationStatus {
  */
 router.get('/family-migration-status', async (_req: Request, res: Response, next: NextFunction) => {
   try {
-    console.log('Checking family migration status...');
+    log.info('checking family migration status...');
 
     const users = await dataService.getAllUsers();
 
@@ -289,7 +293,7 @@ router.get('/family-migration-status', async (_req: Request, res: Response, next
       }
     }
 
-    console.log(`Family migration status: migrationNeeded=${migrationNeeded}, usersWithoutFamily=${usersWithoutFamily.length}`);
+    log.info({ migrationNeeded, usersWithoutFamily: usersWithoutFamily.length }, 'family migration status');
 
     res.json({
       migrationNeeded,
@@ -311,7 +315,7 @@ router.get('/family-migration-status', async (_req: Request, res: Response, next
  */
 router.post('/migrate-to-families', async (_req: Request, res: Response, next: NextFunction) => {
   try {
-    console.log('Starting family data migration...');
+    log.info('starting family data migration...');
 
     const users = await dataService.getAllUsers();
 
@@ -330,11 +334,11 @@ router.post('/migrate-to-families', async (_req: Request, res: Response, next: N
 
     for (const user of users) {
       if (!user.familyId) {
-        console.log(`Skipping user ${user.id} — no familyId assigned`);
+        log.warn({ userId: user.id }, 'skipping user — no familyId assigned');
         continue;
       }
 
-      console.log(`Migrating data for user ${user.id} -> family ${user.familyId}`);
+      log.info({ userId: user.id, familyId: user.familyId }, 'migrating user data to family');
 
       const migratedEntities: EntityResult[] = [];
 
@@ -345,20 +349,20 @@ router.post('/migrate-to-families', async (_req: Request, res: Response, next: N
         const existingData = await dataService.getData(userKey);
 
         if (existingData === null) {
-          console.log(`  ${userKey}: no data, skipping`);
+          log.debug({ userKey }, 'no data, skipping');
           migratedEntities.push({ entity, result: 'no_data' });
           continue;
         }
 
         const familyDataAlreadyExists = await dataService.getData(familyKey);
         if (familyDataAlreadyExists !== null) {
-          console.log(`  ${userKey} -> ${familyKey}: family key already exists, skipping`);
+          log.debug({ userKey, familyKey }, 'family key already exists, skipping');
           migratedEntities.push({ entity, result: 'skipped' });
           continue;
         }
 
         await dataService.saveData(familyKey, existingData);
-        console.log(`  ${userKey} -> ${familyKey}: migrated`);
+        log.info({ userKey, familyKey }, 'migrated');
         migratedEntities.push({ entity, result: 'migrated' });
       }
 
@@ -366,7 +370,7 @@ router.post('/migrate-to-families', async (_req: Request, res: Response, next: N
     }
 
     // chatbot_costs keys are formatted as chatbot_costs_YYYY-MM (not userId-scoped), skip them.
-    console.log('Note: chatbot_costs_* keys are not userId-scoped and are skipped by this migration.');
+    log.info('note: chatbot_costs_* keys are not userId-scoped and are skipped by this migration.');
 
     // Seed initial account owner mappings for each family (idempotent)
     const seededFamilies = new Set<string>();
@@ -384,9 +388,9 @@ router.post('/migrate-to-families', async (_req: Request, res: Response, next: N
         for (const seed of seedMappings) {
           await accountOwnerMappingService.createMapping(user.familyId, seed);
         }
-        console.log(`Seeded ${seedMappings.length} account owner mappings for family ${user.familyId}`);
+        log.info({ familyId: user.familyId, count: seedMappings.length }, 'seeded account owner mappings');
       } else {
-        console.log(`Account owner mappings already exist for family ${user.familyId}, skipping seed`);
+        log.debug({ familyId: user.familyId }, 'account owner mappings already exist, skipping seed');
       }
     }
 
@@ -395,7 +399,7 @@ router.post('/migrate-to-families', async (_req: Request, res: Response, next: N
       0
     );
 
-    console.log(`Family migration complete: ${totalMigrated} entity files migrated across ${userResults.length} users`);
+    log.info({ totalMigrated, userCount: userResults.length }, 'family migration complete');
 
     res.json({
       success: true,
@@ -423,7 +427,7 @@ router.post('/migrate-to-families/cleanup', async (req: Request, res: Response, 
       return;
     }
 
-    console.log('Starting family migration cleanup (deleting old userId-scoped keys)...');
+    log.info('starting family migration cleanup (deleting old userId-scoped keys)...');
 
     const users = await dataService.getAllUsers();
 
@@ -437,7 +441,7 @@ router.post('/migrate-to-families/cleanup', async (req: Request, res: Response, 
 
     for (const user of users) {
       if (!user.familyId) {
-        console.log(`Skipping user ${user.id} — no familyId assigned`);
+        log.warn({ userId: user.id }, 'skipping user — no familyId assigned');
         continue;
       }
 
@@ -453,7 +457,7 @@ router.post('/migrate-to-families/cleanup', async (req: Request, res: Response, 
 
         const familyDataExists = await dataService.getData(familyKey);
         if (familyDataExists === null) {
-          console.log(`  Skipping deletion of ${userKey} — familyId-scoped key ${familyKey} not yet created`);
+          log.warn({ userKey, familyKey }, 'skipping deletion — family-scoped key not yet created');
           deletedKeys.push({
             key: userKey,
             deleted: false,
@@ -463,7 +467,7 @@ router.post('/migrate-to-families/cleanup', async (req: Request, res: Response, 
         }
 
         await dataService.deleteData(userKey);
-        console.log(`  Deleted ${userKey} (family key ${familyKey} confirmed present)`);
+        log.info({ userKey, familyKey }, 'deleted user-scoped key (family key confirmed present)');
         deletedKeys.push({ key: userKey, deleted: true, reason: `replaced by ${familyKey}` });
       }
     }
@@ -471,7 +475,7 @@ router.post('/migrate-to-families/cleanup', async (req: Request, res: Response, 
     const deletedCount = deletedKeys.filter(k => k.deleted).length;
     const skippedCount = deletedKeys.filter(k => !k.deleted).length;
 
-    console.log(`Cleanup complete: ${deletedCount} keys deleted, ${skippedCount} skipped`);
+    log.info({ deletedCount, skippedCount }, 'cleanup complete');
 
     res.json({
       success: true,

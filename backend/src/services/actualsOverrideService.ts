@@ -7,6 +7,10 @@
 
 import { DataService } from './dataService';
 
+import { childLogger } from '../utils/logger';
+
+const log = childLogger('actualsOverrideService');
+
 // Core data model for actuals overrides
 export interface StoredActualsOverride {
   id: string;
@@ -57,7 +61,7 @@ export class ActualsOverrideService {
 
       return { success: true, overrides };
     } catch (error) {
-      console.error('Error getting actuals overrides:', error);
+      log.error({ err: error }, 'error getting actuals overrides');
       return { success: false, error: 'Failed to get actuals overrides' };
     }
   }
@@ -79,7 +83,7 @@ export class ActualsOverrideService {
 
       return { success: true, override };
     } catch (error) {
-      console.error('Error getting actuals override:', error);
+      log.error({ err: error }, 'error getting actuals override');
       return { success: false, error: 'Failed to get actuals override' };
     }
   }
@@ -143,7 +147,7 @@ export class ActualsOverrideService {
         return { success: true, override: newOverride };
       }
     } catch (error) {
-      console.error('Error creating/updating actuals override:', error);
+      log.error({ err: error }, 'error creating/updating actuals override');
       return { success: false, error: 'Failed to save actuals override' };
     }
   }
@@ -168,7 +172,7 @@ export class ActualsOverrideService {
 
       return { success: true };
     } catch (error) {
-      console.error('Error deleting actuals override:', error);
+      log.error({ err: error }, 'error deleting actuals override');
       return { success: false, error: 'Failed to delete actuals override' };
     }
   }
@@ -195,7 +199,7 @@ export class ActualsOverrideService {
 
       return { success: true, overrides: filteredOverrides };
     } catch (error) {
-      console.error('Error getting actuals overrides for range:', error);
+      log.error({ err: error }, 'error getting actuals overrides for range');
       return { success: false, error: 'Failed to get actuals overrides for range' };
     }
   }

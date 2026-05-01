@@ -10,6 +10,7 @@ import { DataService } from './dataService';
 import { Repository } from './repository';
 import { StoredAccount, AccountService } from './accountService';
 import { encryptionService } from '../utils/encryption';
+import { childLogger } from '../utils/logger';
 import { filterTransactions } from './transactionFilterEngine';
 import { calculateIncome, calculateExpenses, calculateNetCashFlow } from '../shared/utils/transactionCalculations';
 import {
@@ -17,6 +18,8 @@ import {
   etStartOfCurrentMonth,
   etEndOfCurrentMonth,
 } from '../shared/utils/easternTime';
+
+const log = childLogger('transactionService');
 
 // Transaction status
 export type TransactionStatus = 'posted' | 'pending' | 'removed';
@@ -159,9 +162,11 @@ export class TransactionService {
         try {
           accessToken = this.decryptToken(itemAccounts[0].plaidAccessToken);
         } catch (error) {
-          console.error('Failed to decrypt access token:', error);
+          // Do not log accountName here — logger redacts it as a backstop, but the
+          // call shape itself avoids the array. Use plaidItemId + count for triage.
+          log.error({ err: error, plaidItemId, accountCount: itemAccounts.length }, 'failed to decrypt access token');
           if (error instanceof Error && error.message.includes('reconnect')) {
-            console.warn(`Skipping ${itemAccounts.length} accounts - token needs reconnection`);
+            log.warn({ plaidItemId, accountCount: itemAccounts.length }, 'skipping accounts - token needs reconnection');
             itemAccounts.forEach(account => failedAccounts.push(account.accountName));
           }
           continue;
@@ -169,12 +174,12 @@ export class TransactionService {
 
         // All accounts under one Item share the same cursor; pick any.
         const cursor = itemAccounts[0].plaidCursor ?? undefined;
-        console.log(`Syncing Item ${plaidItemId} (${itemAccounts.length} accounts) with cursor=${cursor ? 'present' : 'null (initial pull)'}`);
+        log.info({ plaidItemId, accountCount: itemAccounts.length, cursorState: cursor ? 'present' : 'initial' }, 'syncing item');
 
         const plaidResult = await this.plaidService.syncTransactions(accessToken, cursor);
 
         if (!plaidResult.success) {
-          console.error('Failed to sync transactions:', plaidResult.error);
+          log.error({ plaidItemId, error: plaidResult.error }, 'failed to sync transactions');
           continue;
         }
 
@@ -182,7 +187,7 @@ export class TransactionService {
         const modified = plaidResult.modified ?? [];
         const removedIds = plaidResult.removed ?? [];
 
-        console.log(`Plaid sync delta: +${added.length} ~${modified.length} -${removedIds.length} (next cursor: ${plaidResult.nextCursor ? 'set' : 'empty'})`);
+        log.info({ plaidItemId, added: added.length, modified: modified.length, removed: removedIds.length, nextCursor: plaidResult.nextCursor ? 'set' : 'empty' }, 'plaid sync delta');
 
         const result = await this.applyPlaidSyncDelta(
           familyId,
@@ -205,7 +210,7 @@ export class TransactionService {
           try {
             await this.accountService.setItemCursor(familyId, plaidItemId, plaidResult.nextCursor);
           } catch (cursorError) {
-            console.error(`Failed to persist cursor for Item ${plaidItemId}:`, cursorError);
+            log.error({ err: cursorError, plaidItemId }, 'failed to persist cursor');
           }
         }
       }
@@ -236,7 +241,7 @@ export class TransactionService {
         newTransactions: allNewTransactions,
       };
     } catch (error) {
-      console.error('Error syncing transactions:', error);
+      log.error({ err: error }, 'error syncing transactions');
       return {
         success: false,
         error: error instanceof Error ? error.message : 'Sync failed',
@@ -458,7 +463,7 @@ export class TransactionService {
       const allTransactions = await this.repo.getAll(familyId);
       return filterTransactions(allTransactions, filter);
     } catch (error) {
-      console.error('Error fetching transactions:', error);
+      log.error({ err: error }, 'error fetching transactions');
       return {
         success: false,
         error: 'Failed to fetch transactions',
@@ -679,7 +684,7 @@ export class TransactionService {
         return { success: true, splitTransactions };
       });
     } catch (error) {
-      console.error('Error splitting transaction:', error);
+      log.error({ err: error }, 'error splitting transaction');
       return { success: false, error: 'Failed to split transaction' };
     }
   }
@@ -708,7 +713,7 @@ export class TransactionService {
         return { success: true };
       });
     } catch (error) {
-      console.error('Error updating transaction description:', error);
+      log.error({ err: error }, 'error updating transaction description');
       return { success: false, error: 'Failed to update description' };
     }
   }
@@ -737,7 +742,7 @@ export class TransactionService {
         return { success: true };
       });
     } catch (error) {
-      console.error('Error updating transaction flagged status:', error);
+      log.error({ err: error }, 'error updating transaction flagged status');
       return { success: false, error: 'Failed to update flagged status' };
     }
   }
@@ -766,7 +771,7 @@ export class TransactionService {
         return { success: true };
       });
     } catch (error) {
-      console.error('Error updating transaction hidden status:', error);
+      log.error({ err: error }, 'error updating transaction hidden status');
       return { success: false, error: 'Failed to update hidden status' };
     }
   }
@@ -900,7 +905,7 @@ export class TransactionService {
       
       return counts;
     } catch (error) {
-      console.error('Error getting transaction counts by category:', error);
+      log.error({ err: error }, 'error getting transaction counts by category');
       return {};
     }
   }

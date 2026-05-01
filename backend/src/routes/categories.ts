@@ -4,6 +4,10 @@ import { categoryService, transactionService, budgetService, autoCategorizeServi
 import { authMiddleware } from '../middleware/authMiddleware';
 import { AuthorizationError } from '../errors';
 
+import { childLogger } from '../utils/logger';
+
+const log = childLogger('categories');
+
 const router = Router();
 
 // Validation schemas
@@ -109,20 +113,19 @@ router.get('/savings', async (req: Request, res: Response, next: NextFunction) =
 // POST /api/categories/initialize - Initialize default categories
 router.post('/initialize', async (req: Request, res: Response, next: NextFunction) => {
   try {
-    console.log('=== INITIALIZE CATEGORIES ENDPOINT CALLED ===');
-    console.log('Request headers:', req.headers);
-    console.log('Request user object:', req.user);
-
+    // Do not log req.headers (Authorization bearer) or full req.user (JWT payload)
+    // — tag the request with familyId/userId only.
     const familyId = req.user?.familyId;
+    const userId = req.user?.userId;
     if (!familyId) {
-      console.error('ERROR: No familyId found in request. req.user is:', req.user);
+      log.error({ userId, hasUser: !!req.user }, 'initialize categories: no familyId in request');
       throw new AuthorizationError();
     }
 
-    console.log('Initializing categories for family:', familyId);
+    log.info({ familyId, userId }, 'initializing default categories');
     await categoryService.initializeDefaultCategories(familyId);
     const categories = await categoryService.getAllCategories(familyId);
-    console.log('Categories initialized successfully:', categories.length);
+    log.info({ familyId, count: categories.length }, 'categories initialized');
     res.json({ message: 'Default categories initialized', categories });
   } catch (error) {
     next(error);

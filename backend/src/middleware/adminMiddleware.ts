@@ -1,5 +1,8 @@
 import { Request, Response, NextFunction } from 'express';
 import { dataService } from '../services';
+import { childLogger } from '../utils/logger';
+
+const log = childLogger('adminMiddleware');
 
 // Case-insensitive allowlist of usernames that auto-promote to admin on first
 // hit. Empty array when the env var is unset — then adminMiddleware only
@@ -52,7 +55,7 @@ async function requireAdmin(req: Request, res: Response, next: NextFunction): Pr
 
     res.status(403).json({ success: false, error: 'Admin privileges required' });
   } catch (error) {
-    console.error('adminMiddleware error:', error);
+    log.error({ err: error }, 'authorization check failed');
     res.status(500).json({ success: false, error: 'Authorization check failed' });
   }
 }
