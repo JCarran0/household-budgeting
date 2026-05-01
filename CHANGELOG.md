@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+### [5.63.1](https://github.com/JCarran0/household-budgeting/compare/v5.63.0...v5.63.1) (2026-05-01)
+
+
+### Chores
+
+* **data:** add orphan categoryId audit + cleanup scripts and run plan ([0f48a98](https://github.com/JCarran0/household-budgeting/commit/0f48a9868fbcdf53db04063fb51e077631e3e731))
+
 ## [5.63.0](https://github.com/JCarran0/household-budgeting/compare/v5.62.1...v5.63.0) (2026-04-26)
 
 
