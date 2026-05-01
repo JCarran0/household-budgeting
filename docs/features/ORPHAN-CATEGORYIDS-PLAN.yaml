@@ -1,0 +1,139 @@
+feature: Orphan transaction.categoryId Cleanup
+brd: null
+status: in_progress  # phases 1+3 done; 2/4/5 are optional hardening
+created: 2026-04-27
+last_updated: 2026-05-01 (prod cleanup applied + pm2 restarted; phase 3 done)
+
+overview: |
+  Audit, clean, and prevent orphaned `transaction.categoryId` values — ids that
+  point to no row in the family's categories file. Surfaced by the 2026 Forecast
+  cell-vs-modal mismatch (Reports → Spending Feb cell = $15,539.36 but modal
+  total = $14,903.11; the $636.25 gap is 3 transactions whose categoryIds
+  (`CUSTOM_GIFTS_AND_SPECIAL_OCCASIONS:all`, `MEDICAL_PHARMACIES_AND_SUPPLEMENTS`)
+  do not exist in `categories_<familyId>.json`).
+
+  Audit (2026-04-27): 103 orphan transactions across 4 family files
+  (`64a86709`, `2f5b6e74`, `dfe511e4`, `ef2ccf54` — all copies of the same
+  household; `85aeccad` is clean), totaling $15,825.94 across 11 unknown ids.
+  Two failure modes:
+    1. `<X>:all` virtual filter values that leaked into stored `categoryId`
+       (root cause: 2025-09-13..2026-04-08 inline category Select on transaction
+       rows used the grouped filter options including `value:'PARENT:all'`;
+       fixed in commit e995ed7 when TransactionTable.tsx switched to flat
+       useCategoryOptions). Live writes are no longer possible. Affected
+       orphan ids: `CUSTOM_DINING_ENTERTAINMENT:all`,
+       `CUSTOM_GIFTS_AND_SPECIAL_OCCASIONS:all`, `MEDICAL:all`,
+       `ENTERTAINMENT:all`, `TRANSFER_OUT:all`.
+    2. Plaid PFC ids and custom categories that were renamed/deleted without
+       recategorizing their existing transactions. Affected orphan ids:
+       `MEDICAL_PHARMACIES_AND_SUPPLEMENTS`, `FOOD_AND_DRINK_RESTAURANT`,
+       `FOOD_AND_DRINK_GROCERIES`, `CUSTOM_FAMILY_OUTINGS`, `CUSTOM_INVESTING`,
+       `CUSTOM_AMAZON_2`. Suggests a gap in the category-deletion flow's
+       `recategorizeCategoryTransactions` step.
+
+  Why orphans cause incorrect totals: `calculateSpending` (and the trio in
+  `shared/utils/transactionCalculations.ts`) tolerates unknown categoryIds and
+  counts them as spending (not transfer/income/savings). The
+  TransactionPreviewModal queries with a precomputed `spendingIds` list of
+  known category ids, which excludes orphans. So Reports cells include the
+  orphan amounts but the click-through modal does not — visible mismatch.
+
+phases:
+
+  - phase: 1
+    name: Audit & Diagnosis
+    status: done
+    goals:
+      - Reproduce the cell-vs-modal mismatch from real data
+      - Surface every orphan across all family files
+      - Identify the write path that leaked `:all` ids
+    tasks:
+      - DONE - Reproduced Feb 2026 mismatch from data files (cell 15539.36, modal 14903.11, diff 636.25 = 3 orphan tx)
+      - DONE - Wrote read-only audit script `backend/scripts/audit-orphan-categoryids.ts`
+      - DONE - Ran audit; output in `backend/tmp/orphan-categoryids.json` (103 tx, $15,825.94, 11 unknown ids, 4 families)
+      - DONE - Traced `:all` leak to commit 56f3145 (2025-09-13) and confirmed fix in commit e995ed7 (2026-04-08) via TransactionTable.tsx using flat useCategoryOptions
+
+  - phase: 2
+    name: Defensive Server-Side Guard (optional)
+    status: not_started
+    goals:
+      - Prevent any future UI bug from persisting an invalid categoryId
+      - Belt-and-suspenders even though the known leak is closed
+    tasks:
+      - PENDING - Add Zod refine on `updateCategorySchema` (PUT /transactions/:id/category) rejecting categoryId values that are not valid (must match `^[A-Z][A-Z0-9_]*$` — no colons, no lowercase)
+      - PENDING - Add same refine on `bulkUpdateSchema.updates.categoryId`
+      - PENDING - Optional - validate server-side that `categoryId` exists in the family's categories before persisting (transactionService.updateTransactionCategory + bulkUpdate path); reject with 400 + clear error if not
+      - PENDING - Unit test for each rejection case
+    notes: |
+      Schema-level shape check is cheap and catches the `:all` family of bugs.
+      Existence check is stricter but adds a categories read on every category
+      write — acceptable for a 2-user app.
+
+  - phase: 3
+    name: Cleanup Script & Run
+    status: done
+    goals:
+      - Set every orphan tx categoryId to null so jared can re-categorize via UI
+      - Make the cell vs modal match for 2026 Forecast and any other consumer
+    decision: |
+      Remap target chosen 2026-04-27: NULL (Uncategorized) for all orphans —
+      simpler than picking a destination per id, and the user can categorize
+      via the existing UI which now uses flat options (no `:all` re-leak risk).
+    tasks:
+      - DONE - Wrote `backend/scripts/cleanup-orphan-categoryids.ts`:
+          - Scans via UnifiedDataService (works against filesystem AND S3)
+          - Sets every orphan categoryId to null with updatedAt = now
+          - Backs up each pre-write transactions blob through the same adapter at `backups/<timestamp>/transactions_<familyId>` (lands in S3 in prod)
+          - --dry-run flag
+          - --prod flag bridges the env-var naming gap - maps PRODUCTION_S3_BUCKET_NAME -> S3_BUCKET_NAME and PRODUCTION_S3_PREFIX -> S3_PREFIX, forces STORAGE_TYPE=s3 (so the same .env that powers `npm run sync:production` works without manual export)
+      - DONE - Refactored `backend/scripts/audit-orphan-categoryids.ts` to use UnifiedDataService and accept the same --prod flag
+      - DONE - Local apply (2026-04-27 14:07:46 UTC): updated 103 tx across 4 family files, backup at `data/backups/2026-04-27T14-07-46-332Z/`. Re-audit shows 0 orphans.
+      - DONE - Local UI verified by jared (Reports -> 2026 Forecast cell vs modal now agree)
+      - DONE - Production apply (2026-05-01): audit -> dry-run -> apply -> re-audit (0 orphans) -> SSM `pm2 restart budget-backend` (instance i-05cd17258cce207a3 via AWS_PROFILE=budget-app-prod). Reports cell vs modal verified.
+    rollback: |
+      Two independent paths if prod cleanup goes wrong:
+      1. Explicit backup the script writes: `aws s3 cp s3://<bucket>/data/backups/<ts>/transactions_<familyId>.json s3://<bucket>/data/transactions_<familyId>.json` (one cp per touched family)
+      2. S3 versioning (90-day retention per terraform/s3-data.tf): `aws s3api list-object-versions --bucket <bucket> --prefix data/transactions_<familyId>` then copy the previous version back via --version-id
+
+  - phase: 4
+    name: Category Deletion Flow Fix
+    status: not_started
+    goals:
+      - Stop new orphans being created when a category is deleted/renamed
+    tasks:
+      - PENDING - Audit `categoryService.deleteCategory` + `recategorizeCategoryTransactions` — verify deletion of a category that still has tx forces a recategorization step in the UI flow before the delete commits
+      - PENDING - Check whether Plaid PFC migration (`rm backend/data/categories_*.json`) leaves tx pointing at removed PFC ids; if yes, consider auto-remapping during migration or surfacing a recategorize step
+      - PENDING - Add a startup data-integrity check (dev-only console warn) that runs the orphan audit and flags any orphans in current data
+
+  - phase: 5
+    name: Make Reports/Modal Robust to Future Orphans
+    status: not_started
+    goals:
+      - Even if an orphan slips through, cells and modals agree
+    tasks:
+      - PENDING - Add `bucket: 'income' | 'spending' | 'savings'` prop to TransactionPreviewTrigger / TransactionPreviewModal
+      - PENDING - When `bucket` is set, modal queries by date range only (no `categoryIds`) and post-filters in-memory using the same trio bucket logic (`calculateSpending` etc.) — orphans get bucketed the same way the cell buckets them
+      - PENDING - Switch AnnualCashflowDashboard row triggers from `categoryId={previewIds[0]}, additionalCategoryIds={previewIds.slice(1)}` to `bucket={row.key}`
+      - PENDING - Verify other callers (BvA section table, Reports breakdowns, CategoryTree) still work unchanged
+      - PENDING - Add a unit test that constructs a fixture with an orphan categoryId and asserts cell total == modal `displayedTotal`
+
+open_questions:
+  - Remap targets for `:all` ids whose parent name no longer exists in the
+    current taxonomy (`CUSTOM_DINING_ENTERTAINMENT:all`, `ENTERTAINMENT:all`).
+    Likely renamed parents — jared to confirm intended target.
+  - Remap targets for deleted custom categories (`CUSTOM_FAMILY_OUTINGS`,
+    `CUSTOM_INVESTING`, `CUSTOM_AMAZON_2`).
+  - Whether to also run audit + cleanup against production data or wait for
+    next prod->local sync to absorb the cleanup naturally (production may have
+    its own additional orphans not in the local snapshot).
+
+related_files:
+  audit_script: backend/scripts/audit-orphan-categoryids.ts
+  audit_output: backend/tmp/orphan-categoryids.json
+  cell_calc: shared/utils/transactionCalculations.ts (calculateSpending et al.)
+  modal: frontend/src/components/transactions/TransactionPreviewModal.tsx
+  trigger: frontend/src/components/transactions/TransactionPreviewTrigger.tsx
+  affected_view: frontend/src/components/reports/AnnualCashflowDashboard.tsx
+  prior_fix_for_income: 9fa054e (signed accumulation in modal/cell — did not address orphan-id divergence)
+  leak_introduced: 56f3145 (2025-09-13)
+  leak_fixed: e995ed7 (2026-04-08)

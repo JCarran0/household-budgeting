@@ -673,8 +673,8 @@ cp -r backend/dist deployment/backend/
 
 Run these checks after deployment to verify correct structure:
 ```bash
-# SSH to server
-ssh -i ~/.ssh/budget-app-key ubuntu@budget.jaredcarrano.com
+# Connect to server via SSM (no SSH — port 22 is closed; AWS SSM Session Manager is the only access path)
+aws ssm start-session --target "$EC2_INSTANCE_ID"
 
 # Switch to app user
 sudo -u appuser bash
