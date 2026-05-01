@@ -541,6 +541,166 @@ describe('PlaidService', () => {
     });
   });
 
+  describe('Cursor-based transactionsSync', () => {
+    it('omits cursor on first call and persists next_cursor', async () => {
+      mockPlaidClient.transactionsSync.mockResolvedValueOnce({
+        data: {
+          transactions_update_status: 'HISTORICAL_UPDATE_COMPLETE',
+          accounts: [],
+          added: [
+            {
+              account_id: 'account-1',
+              transaction_id: 'sync-txn-1',
+              amount: 12.34,
+              iso_currency_code: 'USD',
+              category: ['Shops'],
+              category_id: '19000000',
+              date: '2025-02-01',
+              name: 'Initial Pull',
+              merchant_name: null,
+              pending: false,
+            },
+          ],
+          modified: [],
+          removed: [],
+          next_cursor: 'cursor-after-page-1',
+          has_more: false,
+          request_id: 'req-1',
+        },
+      });
+
+      const result = await plaidService.syncTransactions(mockAccessToken);
+
+      expect(result.success).toBe(true);
+      expect(result.added).toHaveLength(1);
+      expect(result.added?.[0].plaidTransactionId).toBe('sync-txn-1');
+      expect(result.modified).toHaveLength(0);
+      expect(result.removed).toHaveLength(0);
+      expect(result.nextCursor).toBe('cursor-after-page-1');
+
+      // First call must omit `cursor` (initial pull semantics).
+      expect(mockPlaidClient.transactionsSync).toHaveBeenCalledTimes(1);
+      const firstCallArgs = mockPlaidClient.transactionsSync.mock.calls[0][0];
+      expect(firstCallArgs.access_token).toBe(mockAccessToken);
+      expect(firstCallArgs).not.toHaveProperty('cursor');
+    });
+
+    it('passes the supplied cursor through and loops while has_more is true', async () => {
+      mockPlaidClient.transactionsSync
+        .mockResolvedValueOnce({
+          data: {
+            transactions_update_status: 'HISTORICAL_UPDATE_COMPLETE',
+            accounts: [],
+            added: [
+              { account_id: 'a1', transaction_id: 't1', amount: 1, iso_currency_code: 'USD', category: ['x'], category_id: '1', date: '2025-02-01', name: 'A', merchant_name: null, pending: false },
+            ],
+            modified: [],
+            removed: [],
+            next_cursor: 'cursor-mid',
+            has_more: true,
+            request_id: 'req-1',
+          },
+        })
+        .mockResolvedValueOnce({
+          data: {
+            transactions_update_status: 'HISTORICAL_UPDATE_COMPLETE',
+            accounts: [],
+            added: [],
+            modified: [
+              { account_id: 'a1', transaction_id: 't2', amount: 2, iso_currency_code: 'USD', category: ['x'], category_id: '1', date: '2025-02-02', name: 'B', merchant_name: null, pending: false },
+            ],
+            removed: [{ transaction_id: 't3', account_id: 'a1' }],
+            next_cursor: 'cursor-final',
+            has_more: false,
+            request_id: 'req-2',
+          },
+        });
+
+      const result = await plaidService.syncTransactions(mockAccessToken, 'cursor-start');
+
+      expect(result.success).toBe(true);
+      expect(result.added).toHaveLength(1);
+      expect(result.modified).toHaveLength(1);
+      expect(result.removed).toEqual(['t3']);
+      expect(result.nextCursor).toBe('cursor-final');
+
+      expect(mockPlaidClient.transactionsSync).toHaveBeenCalledTimes(2);
+      expect(mockPlaidClient.transactionsSync.mock.calls[0][0].cursor).toBe('cursor-start');
+      expect(mockPlaidClient.transactionsSync.mock.calls[1][0].cursor).toBe('cursor-mid');
+    });
+
+    it('restarts from the original cursor on TRANSACTIONS_SYNC_MUTATION_DURING_PAGINATION', async () => {
+      mockPlaidClient.transactionsSync
+        .mockResolvedValueOnce({
+          data: {
+            transactions_update_status: 'HISTORICAL_UPDATE_COMPLETE',
+            accounts: [],
+            added: [
+              { account_id: 'a1', transaction_id: 't1', amount: 1, iso_currency_code: 'USD', category: ['x'], category_id: '1', date: '2025-02-01', name: 'A', merchant_name: null, pending: false },
+            ],
+            modified: [],
+            removed: [],
+            next_cursor: 'cursor-mid',
+            has_more: true,
+            request_id: 'req-1',
+          },
+        })
+        .mockRejectedValueOnce({
+          response: {
+            data: {
+              error_type: 'TRANSACTIONS_ERROR',
+              error_code: 'TRANSACTIONS_SYNC_MUTATION_DURING_PAGINATION',
+              error_message: 'Data changed mid-pull',
+              display_message: null,
+            },
+          },
+        })
+        .mockResolvedValueOnce({
+          data: {
+            transactions_update_status: 'HISTORICAL_UPDATE_COMPLETE',
+            accounts: [],
+            added: [
+              { account_id: 'a1', transaction_id: 't1', amount: 1, iso_currency_code: 'USD', category: ['x'], category_id: '1', date: '2025-02-01', name: 'A', merchant_name: null, pending: false },
+              { account_id: 'a1', transaction_id: 't2', amount: 2, iso_currency_code: 'USD', category: ['x'], category_id: '1', date: '2025-02-02', name: 'B', merchant_name: null, pending: false },
+            ],
+            modified: [],
+            removed: [],
+            next_cursor: 'cursor-final',
+            has_more: false,
+            request_id: 'req-3',
+          },
+        });
+
+      const result = await plaidService.syncTransactions(mockAccessToken, 'cursor-start');
+
+      expect(result.success).toBe(true);
+      // Restart should drop the partial accumulator (the t1 from the failed first attempt).
+      expect(result.added).toHaveLength(2);
+      expect(result.nextCursor).toBe('cursor-final');
+      // After restart, the third (recovery) call must use the *original* cursor again.
+      expect(mockPlaidClient.transactionsSync.mock.calls[2][0].cursor).toBe('cursor-start');
+    });
+
+    it('returns requiresReauth when Plaid returns ITEM_LOGIN_REQUIRED', async () => {
+      mockPlaidClient.transactionsSync.mockRejectedValueOnce({
+        response: {
+          data: {
+            error_type: 'ITEM_ERROR',
+            error_code: 'ITEM_LOGIN_REQUIRED',
+            error_message: 'Item login required',
+            display_message: 'Please reconnect',
+          },
+        },
+      });
+
+      const result = await plaidService.syncTransactions(mockAccessToken, 'cursor-start');
+
+      expect(result.success).toBe(false);
+      expect(result.requiresReauth).toBe(true);
+      expect(result.errorCode).toBe('ITEM_LOGIN_REQUIRED');
+    });
+  });
+
   describe('Institution Information', () => {
     it('should fetch institution details by ID', async () => {
       const mockInstitution = {

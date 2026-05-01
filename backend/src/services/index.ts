@@ -45,7 +45,7 @@ const dataService: DataService = config.server.nodeEnv === 'test'
 export const authService = new AuthService(dataService);
 export const plaidService = new PlaidService();
 export const accountService = new AccountService(dataService, plaidService);
-export const transactionService = new TransactionService(dataService, plaidService);
+export const transactionService = new TransactionService(dataService, plaidService, accountService);
 export const budgetService = new BudgetService(dataService);
 
 // Build the dependency checker before CategoryService is created. The checker

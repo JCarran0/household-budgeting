@@ -8,7 +8,9 @@ import {
   ItemPublicTokenExchangeRequest,
   AccountsGetRequest,
   TransactionsGetRequest,
+  TransactionsSyncRequest,
   Transaction as PlaidTransaction,
+  RemovedTransaction,
   PlaidError,
   ItemRemoveRequest,
   InstitutionsGetByIdRequest,
@@ -82,6 +84,25 @@ export interface TransactionsResult {
   itemId?: string;
   hasMore?: boolean;
   error?: string;
+}
+
+export interface SyncTransactionsResult {
+  success: boolean;
+  /** Transactions added since the provided cursor (mapped to our internal shape). */
+  added?: Transaction[];
+  /** Transactions modified since the provided cursor (mapped to our internal shape). */
+  modified?: Transaction[];
+  /** Plaid transaction IDs that have been removed since the provided cursor. */
+  removed?: string[];
+  /**
+   * Cursor to persist for the next call. Empty string indicates Plaid is not
+   * yet ready to return transactions (initial pull pending) — caller should
+   * persist it as-is and retry later; passing it back is valid.
+   */
+  nextCursor?: string;
+  error?: string;
+  errorCode?: string;
+  requiresReauth?: boolean;
 }
 
 export interface Institution {
@@ -399,6 +420,83 @@ export class PlaidService {
     } catch (error) {
       return this.handleError(error);
     }
+  }
+
+  /**
+   * Incrementally sync transactions for an Item using `transactions/sync`.
+   *
+   * Pass `cursor` from the previous successful sync (or undefined for the
+   * first call). Internally loops while `has_more` is true, accumulating all
+   * added/modified/removed pages, and returns the final `next_cursor` for
+   * persistence. On `TRANSACTIONS_SYNC_MUTATION_DURING_PAGINATION` mid-pull,
+   * the loop restarts once from the original cursor (per Plaid guidance).
+   */
+  async syncTransactions(
+    accessToken: string,
+    cursor?: string
+  ): Promise<SyncTransactionsResult> {
+    const startCursor = cursor;
+    let attempts = 0;
+    while (attempts < 2) {
+      attempts++;
+      try {
+        const added: Transaction[] = [];
+        const modified: Transaction[] = [];
+        const removed: string[] = [];
+        let nextCursor: string = startCursor ?? '';
+        let hasMore = true;
+
+        while (hasMore) {
+          const request: TransactionsSyncRequest = {
+            access_token: accessToken,
+            count: 500,
+          };
+          // Plaid requires omitting `cursor` (not sending empty string) on the
+          // very first call to receive the full available history.
+          if (nextCursor) {
+            request.cursor = nextCursor;
+          }
+
+          const response = await this.client.transactionsSync(request);
+          const data = response.data;
+
+          added.push(...this.mapTransactions(data.added));
+          modified.push(...this.mapTransactions(data.modified));
+          for (const r of data.removed as RemovedTransaction[]) {
+            if (r.transaction_id) removed.push(r.transaction_id);
+          }
+
+          nextCursor = data.next_cursor;
+          hasMore = data.has_more;
+        }
+
+        return {
+          success: true,
+          added,
+          modified,
+          removed,
+          nextCursor,
+        };
+      } catch (error) {
+        const code = this.getErrorCode(error);
+        if (code === 'TRANSACTIONS_SYNC_MUTATION_DURING_PAGINATION' && attempts < 2) {
+          // Plaid recommends restarting from the original cursor on mutation
+          // mid-pagination. Loop and retry once.
+          continue;
+        }
+        const result = this.handleError(error);
+        if (result.error && this.isReauthError(error)) {
+          return {
+            ...result,
+            requiresReauth: true,
+            errorCode: code,
+          };
+        }
+        return result;
+      }
+    }
+    // Defensive: unreachable — the loop returns or continues.
+    return { success: false, error: 'Sync retry exhausted' };
   }
 
   /**

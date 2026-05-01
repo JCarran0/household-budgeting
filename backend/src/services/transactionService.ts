@@ -8,12 +8,11 @@ import { v4 as uuidv4 } from 'uuid';
 import { PlaidService, Transaction as PlaidTransaction } from './plaidService';
 import { DataService } from './dataService';
 import { Repository } from './repository';
-import { StoredAccount } from './accountService';
+import { StoredAccount, AccountService } from './accountService';
 import { encryptionService } from '../utils/encryption';
 import { filterTransactions } from './transactionFilterEngine';
 import { calculateIncome, calculateExpenses, calculateNetCashFlow } from '../shared/utils/transactionCalculations';
 import {
-  etDateString,
   etMonthString,
   etStartOfCurrentMonth,
   etEndOfCurrentMonth,
@@ -106,7 +105,8 @@ export class TransactionService {
 
   constructor(
     dataService: DataService,
-    private plaidService: PlaidService
+    private plaidService: PlaidService,
+    private accountService?: AccountService
   ) {
     this.repo = new Repository<StoredTransaction>(dataService, 'transactions');
   }
@@ -124,69 +124,72 @@ export class TransactionService {
   }
 
   /**
-   * Sync transactions from Plaid for all user accounts
+   * Sync transactions from Plaid for all user accounts.
+   *
+   * Uses Plaid's `transactions/sync` cursor API: groups accounts by Plaid
+   * Item, calls sync once per Item with the persisted cursor, applies the
+   * returned added/modified/removed deltas, and persists the new cursor on
+   * every account in the Item. The legacy `startDate` parameter is retained
+   * only for route compatibility — it is ignored, since cursor-based sync
+   * derives its own incremental window. The initial pull's history horizon is
+   * set at link time via `transactions.days_requested` in `createLinkToken`.
    */
   async syncTransactions(
     familyId: string,
     accounts: StoredAccount[],
-    startDate: string = '2025-01-01'
+    _startDate?: string
   ): Promise<SyncResult> {
     try {
-      const endDate = etDateString(); // Today in US Eastern Time
       let totalAdded = 0;
       let totalModified = 0;
       let totalRemoved = 0;
       const allNewTransactions: StoredTransaction[] = [];
       const failedAccounts: string[] = [];
 
-      // Group accounts by access token
-      const tokenGroups = new Map<string, StoredAccount[]>();
+      // Group accounts by Plaid Item (cursor is per-Item).
+      const itemGroups = new Map<string, StoredAccount[]>();
       for (const account of accounts) {
-        const token = account.plaidAccessToken;
-        const group = tokenGroups.get(token) || [];
+        const group = itemGroups.get(account.plaidItemId) || [];
         group.push(account);
-        tokenGroups.set(token, group);
+        itemGroups.set(account.plaidItemId, group);
       }
 
-      // Sync each token's transactions
-      for (const [encryptedToken, tokenAccounts] of tokenGroups) {
+      for (const [plaidItemId, itemAccounts] of itemGroups) {
         let accessToken: string;
         try {
-          accessToken = this.decryptToken(encryptedToken);
+          accessToken = this.decryptToken(itemAccounts[0].plaidAccessToken);
         } catch (error) {
           console.error('Failed to decrypt access token:', error);
-          // If we can't decrypt the token, skip these accounts
-          // and continue with others
           if (error instanceof Error && error.message.includes('reconnect')) {
-            console.warn(`Skipping ${tokenAccounts.length} accounts - token needs reconnection`);
-            // Track failed accounts
-            tokenAccounts.forEach(account => failedAccounts.push(account.accountName));
+            console.warn(`Skipping ${itemAccounts.length} accounts - token needs reconnection`);
+            itemAccounts.forEach(account => failedAccounts.push(account.accountName));
           }
           continue;
         }
-        
-        console.log(`Syncing transactions for ${tokenAccounts.length} accounts from ${startDate} to ${endDate}`);
-        
-        // Fetch from Plaid (now with automatic pagination)
-        const plaidResult = await this.plaidService.getTransactions(
-          accessToken,
-          startDate,
-          endDate,
-          { includePending: true }
-        );
 
-        if (!plaidResult.success || !plaidResult.transactions) {
+        // All accounts under one Item share the same cursor; pick any.
+        const cursor = itemAccounts[0].plaidCursor ?? undefined;
+        console.log(`Syncing Item ${plaidItemId} (${itemAccounts.length} accounts) with cursor=${cursor ? 'present' : 'null (initial pull)'}`);
+
+        const plaidResult = await this.plaidService.syncTransactions(accessToken, cursor);
+
+        if (!plaidResult.success) {
           console.error('Failed to sync transactions:', plaidResult.error);
           continue;
         }
 
-        console.log(`Received ${plaidResult.transactions.length} transactions from Plaid (total available: ${plaidResult.totalTransactions})`);
+        const added = plaidResult.added ?? [];
+        const modified = plaidResult.modified ?? [];
+        const removedIds = plaidResult.removed ?? [];
 
-        // Process transactions
-        const result = await this.processPlaidTransactions(
+        console.log(`Plaid sync delta: +${added.length} ~${modified.length} -${removedIds.length} (next cursor: ${plaidResult.nextCursor ? 'set' : 'empty'})`);
+
+        const result = await this.applyPlaidSyncDelta(
           familyId,
-          tokenAccounts,
-          plaidResult.transactions
+          itemAccounts,
+          added,
+          modified,
+          removedIds
         );
 
         totalAdded += result.added;
@@ -194,10 +197,19 @@ export class TransactionService {
         totalRemoved += result.removed;
         allNewTransactions.push(...result.newTransactions);
 
-        console.log(`Sync complete: ${result.added} added, ${result.modified} modified, ${result.removed} removed`);
+        // Persist cursor for the next call. We do this after applying the
+        // delta so a crash mid-write doesn't advance the cursor past data we
+        // failed to store. `nextCursor` may be empty string if the initial
+        // pull is still pending — persist that too, so the next call retries.
+        if (this.accountService && plaidResult.nextCursor !== undefined) {
+          try {
+            await this.accountService.setItemCursor(familyId, plaidItemId, plaidResult.nextCursor);
+          } catch (cursorError) {
+            console.error(`Failed to persist cursor for Item ${plaidItemId}:`, cursorError);
+          }
+        }
       }
 
-      // If some accounts failed but others succeeded, return partial success
       if (failedAccounts.length > 0 && (totalAdded > 0 || totalModified > 0)) {
         return {
           success: true,
@@ -209,7 +221,6 @@ export class TransactionService {
         };
       }
 
-      // If all accounts failed, return an error
       if (failedAccounts.length > 0 && totalAdded === 0 && totalModified === 0) {
         return {
           success: false,
@@ -234,18 +245,21 @@ export class TransactionService {
   }
 
   /**
-   * Process Plaid transactions and update our store
+   * Apply a Plaid `transactions/sync` delta to the local store under a single
+   * familyId lock. Added rows produce new StoredTransactions; modified rows
+   * update existing fields in place (preserving user categorization);
+   * removed IDs flip status to 'removed' (idempotent).
    */
-  private async processPlaidTransactions(
+  private async applyPlaidSyncDelta(
     familyId: string,
     accounts: StoredAccount[],
-    plaidTransactions: PlaidTransaction[]
+    added: PlaidTransaction[],
+    modified: PlaidTransaction[],
+    removedIds: string[]
   ): Promise<{ added: number; modified: number; removed: number; newTransactions: StoredTransaction[] }> {
     return this.repo.withLock(familyId, async () => {
-      // Load existing transactions
       const existingTransactions = await this.repo.getAll(familyId);
 
-      // Create lookup maps
       const existingByPlaidId = new Map<string, StoredTransaction>();
       for (const txn of existingTransactions) {
         if (txn.plaidTransactionId) {
@@ -258,56 +272,65 @@ export class TransactionService {
         accountLookup.set(account.plaidAccountId, account);
       }
 
-      let added = 0;
-      let modified = 0;
-      const processedIds = new Set<string>();
+      let addedCount = 0;
+      let modifiedCount = 0;
+      let removedCount = 0;
       const newTransactions: StoredTransaction[] = [];
 
-      // Process each Plaid transaction
-      for (const plaidTxn of plaidTransactions) {
-        processedIds.add(plaidTxn.plaidTransactionId);
-
+      // Plaid sometimes returns a row in `added` that we already have
+      // (e.g., re-pulls on the historical update). Guard against that by
+      // upgrading to a modify when the ID is already present.
+      for (const plaidTxn of added) {
         const account = accountLookup.get(plaidTxn.accountId);
         if (!account) continue;
 
         const existing = existingByPlaidId.get(plaidTxn.plaidTransactionId);
-
         if (existing) {
-          // Update existing transaction
-          const updated = this.updateTransaction(existing, plaidTxn);
-          if (updated) {
-            modified++;
-          }
-        } else {
-          // Add new transaction
+          if (this.updateTransaction(existing, plaidTxn)) modifiedCount++;
+          continue;
+        }
+
+        const newTxn = this.createTransaction(familyId, account.id, plaidTxn);
+        existingTransactions.push(newTxn);
+        existingByPlaidId.set(newTxn.plaidTransactionId!, newTxn);
+        newTransactions.push(newTxn);
+        addedCount++;
+      }
+
+      for (const plaidTxn of modified) {
+        const existing = existingByPlaidId.get(plaidTxn.plaidTransactionId);
+        if (!existing) {
+          // Plaid sent a modify for a row we never saw — treat as add.
+          const account = accountLookup.get(plaidTxn.accountId);
+          if (!account) continue;
           const newTxn = this.createTransaction(familyId, account.id, plaidTxn);
           existingTransactions.push(newTxn);
+          existingByPlaidId.set(newTxn.plaidTransactionId!, newTxn);
           newTransactions.push(newTxn);
-          added++;
+          addedCount++;
+          continue;
+        }
+        if (this.updateTransaction(existing, plaidTxn)) modifiedCount++;
+      }
+
+      for (const plaidId of removedIds) {
+        const existing = existingByPlaidId.get(plaidId);
+        if (!existing) continue;
+        if (existing.status !== 'removed') {
+          existing.status = 'removed';
+          existing.updatedAt = new Date();
+          removedCount++;
         }
       }
 
-      // Mark removed transactions (only for accounts we're currently syncing)
-      let removed = 0;
-      const syncedAccountIds = new Set(accounts.map(a => a.id));
-
-      for (const existing of existingTransactions) {
-        // Only check transactions from accounts we're currently syncing
-        if (syncedAccountIds.has(existing.accountId) &&
-            existing.plaidTransactionId &&
-            !processedIds.has(existing.plaidTransactionId)) {
-          if (existing.status !== 'removed') {
-            existing.status = 'removed';
-            existing.updatedAt = new Date();
-            removed++;
-          }
-        }
-      }
-
-      // Save all transactions
       await this.repo.saveAll(familyId, existingTransactions);
 
-      return { added, modified, removed, newTransactions };
+      return {
+        added: addedCount,
+        modified: modifiedCount,
+        removed: removedCount,
+        newTransactions,
+      };
     });
   }
 

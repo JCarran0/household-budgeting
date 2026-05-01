@@ -409,7 +409,7 @@ Paired with TD-004 (Sprint 3) — CSP outer envelope + sanitization inner envelo
 ---
 
 ### TD-016: Plaid Sync Re-Pulls a Year on Every Manual Sync
-**Status**: Open
+**Status**: Resolved (2026-05-01)
 **Created**: 2026-04-22
 **Impact**: Medium - Plaid quota burn + sync latency; will get worse as date window stretches
 **Effort**: Medium

@@ -56,6 +56,7 @@ describe('User Story: Transaction Synchronization', () => {
       currency: 'USD',
       status: 'active',
       lastSynced: new Date(),
+      plaidCursor: null,
       createdAt: new Date(),
       updatedAt: new Date(),
     };
@@ -102,18 +103,20 @@ describe('User Story: Transaction Synchronization', () => {
         },
       ];
 
-      // Mock Plaid service to return transactions
-      jest.spyOn(plaidService, 'getTransactions').mockResolvedValueOnce({
+      // Mock Plaid service to return transactions via cursor sync
+      jest.spyOn(plaidService, 'syncTransactions').mockResolvedValueOnce({
         success: true,
-        transactions: mockTransactions,
-        totalTransactions: 2,
+        added: mockTransactions,
+        modified: [],
+        removed: [],
+        nextCursor: 'cursor-after-initial-sync',
       });
 
-      // Sync transactions
+      // Sync transactions (startDate parameter is ignored under cursor model)
       const syncResult = await transactionService.syncTransactions(
         testUserId,
         [testAccount],
-        '2023-01-01' // Request 2 years of history
+        '2023-01-01'
       );
 
       if (!syncResult.success) {
@@ -136,7 +139,7 @@ describe('User Story: Transaction Synchronization', () => {
       expect(storedTransactions![0].name).toBe('Coffee Shop');
     });
 
-    test('I can sync ALL available transactions (pagination handling)', async () => {
+    test('I can sync ALL available transactions across multiple Plaid sync pages', async () => {
       // Create 150 mock transactions to test pagination
       const mockTransactions: PlaidTransaction[] = [];
       for (let i = 1; i <= 150; i++) {
@@ -158,11 +161,14 @@ describe('User Story: Transaction Synchronization', () => {
         });
       }
 
-      // Mock Plaid service to return all transactions
-      jest.spyOn(plaidService, 'getTransactions').mockResolvedValueOnce({
+      // PlaidService.syncTransactions internally loops while has_more,
+      // so the orchestrator sees a single flat delta.
+      jest.spyOn(plaidService, 'syncTransactions').mockResolvedValueOnce({
         success: true,
-        transactions: mockTransactions,
-        totalTransactions: 150, // Indicates all were fetched
+        added: mockTransactions,
+        modified: [],
+        removed: [],
+        nextCursor: 'cursor-150',
       });
 
       const syncResult = await transactionService.syncTransactions(
@@ -215,10 +221,12 @@ describe('User Story: Transaction Synchronization', () => {
         },
       ];
 
-      jest.spyOn(plaidService, 'getTransactions').mockResolvedValueOnce({
+      jest.spyOn(plaidService, 'syncTransactions').mockResolvedValueOnce({
         success: true,
-        transactions: mockTransactions,
-        totalTransactions: 2,
+        added: mockTransactions,
+        modified: [],
+        removed: [],
+        nextCursor: 'cursor-pending',
       });
 
       const syncResult = await transactionService.syncTransactions(
@@ -242,7 +250,7 @@ describe('User Story: Transaction Synchronization', () => {
       expect(pendingTxn!.pending).toBe(true);
     });
 
-    test('Duplicate transactions are not added on re-sync', async () => {
+    test('Cursor advances between syncs; second sync sees no new transactions', async () => {
       const mockTransaction: PlaidTransaction = {
         id: 'txn-duplicate-test',
         plaidTransactionId: 'txn-duplicate-test',
@@ -260,11 +268,15 @@ describe('User Story: Transaction Synchronization', () => {
         location: undefined,
       };
 
-      // First sync
-      jest.spyOn(plaidService, 'getTransactions').mockResolvedValueOnce({
+      const syncSpy = jest.spyOn(plaidService, 'syncTransactions');
+
+      // First sync — initial pull, cursor=undefined, returns one added.
+      syncSpy.mockResolvedValueOnce({
         success: true,
-        transactions: [mockTransaction],
-        totalTransactions: 1,
+        added: [mockTransaction],
+        modified: [],
+        removed: [],
+        nextCursor: 'cursor-after-initial',
       });
 
       const firstSync = await transactionService.syncTransactions(
@@ -272,25 +284,36 @@ describe('User Story: Transaction Synchronization', () => {
         [testAccount]
       );
       expect(firstSync.added).toBe(1);
+      expect(syncSpy).toHaveBeenLastCalledWith(expect.any(String), undefined);
 
-      // Second sync with same transaction
-      jest.spyOn(plaidService, 'getTransactions').mockResolvedValueOnce({
+      // Reload account to pick up persisted cursor.
+      const reloadedAccounts = await dataService.getData<StoredAccount[]>(
+        `accounts_${testUserId}`
+      );
+      const reloadedAccount = reloadedAccounts!.find(a => a.id === testAccount.id)!;
+      expect(reloadedAccount.plaidCursor).toBe('cursor-after-initial');
+
+      // Second sync — cursor is now set; Plaid returns an empty delta.
+      syncSpy.mockResolvedValueOnce({
         success: true,
-        transactions: [mockTransaction],
-        totalTransactions: 1,
+        added: [],
+        modified: [],
+        removed: [],
+        nextCursor: 'cursor-after-initial',
       });
 
       const secondSync = await transactionService.syncTransactions(
         testUserId,
-        [testAccount]
+        [reloadedAccount]
       );
-      expect(secondSync.added).toBe(0); // No new transactions
-      expect(secondSync.modified).toBe(0); // No modifications
+      expect(secondSync.added).toBe(0);
+      expect(secondSync.modified).toBe(0);
+      expect(syncSpy).toHaveBeenLastCalledWith(expect.any(String), 'cursor-after-initial');
 
       const storedTransactions = await dataService.getData<StoredTransaction[]>(
         `transactions_${testUserId}`
       );
-      expect(storedTransactions).toHaveLength(1); // Still only one transaction
+      expect(storedTransactions).toHaveLength(1);
     });
 
     test('Modified transactions are updated correctly', async () => {
@@ -311,11 +334,13 @@ describe('User Story: Transaction Synchronization', () => {
         location: undefined,
       };
 
-      // First sync - pending transaction
-      jest.spyOn(plaidService, 'getTransactions').mockResolvedValueOnce({
+      // First sync - pending transaction (returned in `added`)
+      jest.spyOn(plaidService, 'syncTransactions').mockResolvedValueOnce({
         success: true,
-        transactions: [originalTransaction],
-        totalTransactions: 1,
+        added: [originalTransaction],
+        modified: [],
+        removed: [],
+        nextCursor: 'cursor-pending',
       });
 
       await transactionService.syncTransactions(testUserId, [testAccount]);
@@ -328,17 +353,25 @@ describe('User Story: Transaction Synchronization', () => {
         name: 'Updated Name', // Name changed
       };
 
-      jest.spyOn(plaidService, 'getTransactions').mockResolvedValueOnce({
+      jest.spyOn(plaidService, 'syncTransactions').mockResolvedValueOnce({
         success: true,
-        transactions: [modifiedTransaction],
-        totalTransactions: 1,
+        added: [],
+        modified: [modifiedTransaction],
+        removed: [],
+        nextCursor: 'cursor-after-modify',
       });
+
+      // Reload to pick up persisted cursor.
+      const reloadedAccounts = await dataService.getData<StoredAccount[]>(
+        `accounts_${testUserId}`
+      );
+      const reloadedAccount = reloadedAccounts!.find(a => a.id === testAccount.id)!;
 
       const secondSync = await transactionService.syncTransactions(
         testUserId,
-        [testAccount]
+        [reloadedAccount]
       );
-      
+
       expect(secondSync.modified).toBe(1);
 
       const storedTransactions = await dataService.getData<StoredTransaction[]>(
@@ -388,27 +421,36 @@ describe('User Story: Transaction Synchronization', () => {
         },
       ];
 
-      // First sync with both transactions
-      jest.spyOn(plaidService, 'getTransactions').mockResolvedValueOnce({
+      // First sync — both transactions added
+      jest.spyOn(plaidService, 'syncTransactions').mockResolvedValueOnce({
         success: true,
-        transactions,
-        totalTransactions: 2,
+        added: transactions,
+        modified: [],
+        removed: [],
+        nextCursor: 'cursor-after-add',
       });
 
       await transactionService.syncTransactions(testUserId, [testAccount]);
 
-      // Second sync with only first transaction (second was removed by bank)
-      jest.spyOn(plaidService, 'getTransactions').mockResolvedValueOnce({
+      // Second sync — Plaid reports the second transaction as removed
+      jest.spyOn(plaidService, 'syncTransactions').mockResolvedValueOnce({
         success: true,
-        transactions: [transactions[0]], // Only first transaction
-        totalTransactions: 1,
+        added: [],
+        modified: [],
+        removed: ['txn-removed'],
+        nextCursor: 'cursor-after-remove',
       });
+
+      const reloadedAccounts = await dataService.getData<StoredAccount[]>(
+        `accounts_${testUserId}`
+      );
+      const reloadedAccount = reloadedAccounts!.find(a => a.id === testAccount.id)!;
 
       const secondSync = await transactionService.syncTransactions(
         testUserId,
-        [testAccount]
+        [reloadedAccount]
       );
-      
+
       expect(secondSync.removed).toBe(1);
 
       const storedTransactions = await dataService.getData<StoredTransaction[]>(
@@ -422,12 +464,13 @@ describe('User Story: Transaction Synchronization', () => {
       expect(removedTxn!.status).toBe('removed');
     });
 
-    test('Sync handles multiple accounts with different access tokens', async () => {
-      // Create second account with different token
+    test('Sync handles multiple accounts under different Plaid Items', async () => {
+      // Create second account under a different Plaid Item (so it gets its own cursor)
       const secondAccessToken = 'second-test-access-token';
       const secondAccount: StoredAccount = {
         ...testAccount,
         id: uuidv4(),
+        plaidItemId: 'second-test-item-id',
         plaidAccountId: 'second-plaid-account-id',
         plaidAccessToken: encryptionService.encrypt(secondAccessToken),
         accountName: 'Test Savings',
@@ -476,17 +519,21 @@ describe('User Story: Transaction Synchronization', () => {
         },
       ];
 
-      // Mock calls for each token
-      jest.spyOn(plaidService, 'getTransactions')
+      // Mock one syncTransactions call per Item.
+      jest.spyOn(plaidService, 'syncTransactions')
         .mockResolvedValueOnce({
           success: true,
-          transactions: firstAccountTxns,
-          totalTransactions: 1,
+          added: firstAccountTxns,
+          modified: [],
+          removed: [],
+          nextCursor: 'cursor-item-1',
         })
         .mockResolvedValueOnce({
           success: true,
-          transactions: secondAccountTxns,
-          totalTransactions: 1,
+          added: secondAccountTxns,
+          modified: [],
+          removed: [],
+          nextCursor: 'cursor-item-2',
         });
 
       const syncResult = await transactionService.syncTransactions(
@@ -515,6 +562,7 @@ describe('User Story: Transaction Synchronization', () => {
       const secondAccount: StoredAccount = {
         ...testAccount,
         id: uuidv4(),
+        plaidItemId: 'failing-test-item-id',
         plaidAccountId: 'second-plaid-account-id',
         plaidAccessToken: encryptionService.encrypt(secondAccessToken),
         accountName: 'Test Savings',
@@ -542,12 +590,14 @@ describe('User Story: Transaction Synchronization', () => {
         },
       ];
 
-      // First account succeeds, second fails
-      jest.spyOn(plaidService, 'getTransactions')
+      // First Item succeeds, second fails
+      jest.spyOn(plaidService, 'syncTransactions')
         .mockResolvedValueOnce({
           success: true,
-          transactions: successTxns,
-          totalTransactions: 1,
+          added: successTxns,
+          modified: [],
+          removed: [],
+          nextCursor: 'cursor-success',
         })
         .mockResolvedValueOnce({
           success: false,
@@ -591,9 +641,9 @@ describe('User Story: Transaction Synchronization', () => {
       await dataService.saveData(`accounts_${secondUserId}`, [secondUserAccount]);
 
       // Mock transactions for first user
-      jest.spyOn(plaidService, 'getTransactions').mockResolvedValueOnce({
+      jest.spyOn(plaidService, 'syncTransactions').mockResolvedValueOnce({
         success: true,
-        transactions: [{
+        added: [{
           id: 'user1-txn',
           plaidTransactionId: 'user1-txn',
           accountId: 'test-plaid-account-id',
@@ -609,15 +659,17 @@ describe('User Story: Transaction Synchronization', () => {
           originalDescription: null,
           location: undefined,
         }],
-        totalTransactions: 1,
+        modified: [],
+        removed: [],
+        nextCursor: 'cursor-user1',
       });
 
       await transactionService.syncTransactions(testUserId, [testAccount]);
 
       // Mock transactions for second user
-      jest.spyOn(plaidService, 'getTransactions').mockResolvedValueOnce({
+      jest.spyOn(plaidService, 'syncTransactions').mockResolvedValueOnce({
         success: true,
-        transactions: [{
+        added: [{
           id: 'user2-txn',
           plaidTransactionId: 'user2-txn',
           accountId: 'test-plaid-account-id',
@@ -633,7 +685,9 @@ describe('User Story: Transaction Synchronization', () => {
           originalDescription: null,
           location: undefined,
         }],
-        totalTransactions: 1,
+        modified: [],
+        removed: [],
+        nextCursor: 'cursor-user2',
       });
 
       await transactionService.syncTransactions(secondUserId, [secondUserAccount]);
@@ -680,10 +734,12 @@ describe('User Story: Transaction Synchronization', () => {
         },
       };
 
-      jest.spyOn(plaidService, 'getTransactions').mockResolvedValueOnce({
+      jest.spyOn(plaidService, 'syncTransactions').mockResolvedValueOnce({
         success: true,
-        transactions: [transactionWithLocation],
-        totalTransactions: 1,
+        added: [transactionWithLocation],
+        modified: [],
+        removed: [],
+        nextCursor: 'cursor-with-location',
       });
 
       await transactionService.syncTransactions(testUserId, [testAccount]);

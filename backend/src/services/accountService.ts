@@ -33,6 +33,14 @@ export interface StoredAccount {
   currency: string;              // ISO currency code
   status: AccountStatus;         // Account status
   lastSynced: Date | null;       // Last successful sync
+  /**
+   * Plaid `transactions/sync` cursor for the Item this account belongs to.
+   * Persisted on every account belonging to the Item (one cursor per Item, but
+   * mirrored across its accounts since accounts are the storage unit). `null`
+   * means we have not yet completed an initial sync — the next call will omit
+   * `cursor` and Plaid will return the full available history.
+   */
+  plaidCursor: string | null;
   createdAt: Date;              // When account was connected
   updatedAt: Date;              // Last update
 }
@@ -118,6 +126,7 @@ export class AccountService {
           currency: plaidAccount.currency || 'USD',
           status: 'active',
           lastSynced: new Date(),
+          plaidCursor: null,
           createdAt: new Date(),
           updatedAt: new Date(),
         };
@@ -328,6 +337,26 @@ export class AccountService {
         success: false,
         error: 'Failed to disconnect account',
       };
+    }
+  }
+
+  /**
+   * Persist a Plaid `transactions/sync` cursor on every active account
+   * belonging to the given Item. Cursor is per-Item but mirrored across
+   * accounts since accounts are our storage unit.
+   */
+  async setItemCursor(familyId: string, plaidItemId: string, cursor: string): Promise<void> {
+    const accounts = await this.dataService.getData<StoredAccount[]>(`accounts_${familyId}`) || [];
+    let changed = false;
+    for (const account of accounts) {
+      if (account.plaidItemId === plaidItemId && account.plaidCursor !== cursor) {
+        account.plaidCursor = cursor;
+        account.updatedAt = new Date();
+        changed = true;
+      }
+    }
+    if (changed) {
+      await this.dataService.saveData(`accounts_${familyId}`, accounts);
     }
   }
 
