@@ -203,7 +203,7 @@ export function BadgeDetailModal({
       fullScreen
       title={
         <Group gap="sm">
-          <Avatar size="md" radius="xl" color={userColor(entry)}>
+          <Avatar variant="filled" size="md" radius="xl" color={userColor(entry)}>
             {entry.displayName.charAt(0).toUpperCase()}
           </Avatar>
           <Stack gap={0}>

@@ -366,7 +366,7 @@ export function TaskCard({ task, members, onClick, onSnooze, onCancel, onEdit, o
         <Group gap="xs" mt={4}>
           {assignee && (
             <Tooltip label={assignee.displayName}>
-              <Avatar size="xs" radius="xl" color={userColor(assignee)}>
+              <Avatar variant="filled" size="xs" radius="xl" color={userColor(assignee)}>
                 {assignee.displayName.charAt(0).toUpperCase()}
               </Avatar>
             </Tooltip>

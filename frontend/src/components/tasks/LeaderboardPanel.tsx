@@ -220,7 +220,7 @@ export function LeaderboardPanel({ leaderboard, tasks, heroQueue }: LeaderboardP
               >
                 <Table.Td>
                   <Group gap="xs">
-                    <Avatar size="xs" radius="xl" color={userColor(entry)}>
+                    <Avatar variant="filled" size="xs" radius="xl" color={userColor(entry)}>
                       {entry.displayName.charAt(0).toUpperCase()}
                     </Avatar>
                     <Text size="sm">{entry.displayName}</Text>

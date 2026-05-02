@@ -1,10 +1,11 @@
 import { useState } from 'react';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../lib/api';
 import type { Transaction, Category } from '../../../../shared/types';
 import { formatCurrency } from '../../utils/formatters';
 import { useCategoryOptions } from '../../hooks/useCategoryOptions';
 import { patchTransactionsInCache, invalidateTransactionCounts } from '../../lib/transactionCacheSync';
+import { UserColorDot } from '../common/UserColorDot';
 import {
   Group,
   Text,
@@ -82,6 +83,28 @@ export function TransactionTable({
     categories,
     includeUncategorized: true,
   });
+
+  // Resolve the family member who owns each transaction's account (via card→user mappings)
+  // so we can show their identity-color dot in the Account cell.
+  const { data: ownerMappingsData } = useQuery({
+    queryKey: ['account-owner-mappings'],
+    queryFn: () => api.getAccountOwnerMappings(),
+    staleTime: 5 * 60 * 1000,
+  });
+  const { data: familyData } = useQuery({
+    queryKey: ['family'],
+    queryFn: () => api.getFamily(),
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const getLinkedMember = (transaction: Transaction) => {
+    if (!transaction.accountOwner) return undefined;
+    const mapping = ownerMappingsData?.mappings?.find(m =>
+      transaction.accountOwner!.includes(m.cardIdentifier),
+    );
+    if (!mapping?.linkedUserId) return undefined;
+    return familyData?.family?.members?.find(m => m.userId === mapping.linkedUserId);
+  };
 
   // Update category mutation
   const updateCategoryMutation = useMutation({
@@ -310,9 +333,13 @@ export function TransactionTable({
                   <Table.Td>
                     {(() => {
                       const accountInfo = accountLookup.get(transaction.accountId);
+                      const linkedMember = getLinkedMember(transaction);
                       if (!accountInfo) {
                         return (
-                          <Text size="xs" c="dimmed">{transaction.accountName || 'Unknown'}</Text>
+                          <Group gap={6} wrap="nowrap">
+                            {linkedMember && <UserColorDot user={linkedMember} />}
+                            <Text size="xs" c="dimmed">{transaction.accountName || 'Unknown'}</Text>
+                          </Group>
                         );
                       }
                       const displayName = accountInfo.nickname || accountInfo.name;
@@ -320,15 +347,18 @@ export function TransactionTable({
                         ? `${displayName} ••${accountInfo.mask}`
                         : displayName;
                       return (
-                        <Tooltip
-                          label={`${displayName} - ${accountInfo.institution}${accountInfo.mask ? ` ••${accountInfo.mask}` : ''}`}
-                          openDelay={1000}
-                          closeDelay={200}
-                        >
-                          <Text size="xs" c="dimmed" truncate maw={140}>
-                            {shortLabel}
-                          </Text>
-                        </Tooltip>
+                        <Group gap={6} wrap="nowrap">
+                          {linkedMember && <UserColorDot user={linkedMember} />}
+                          <Tooltip
+                            label={`${displayName} - ${accountInfo.institution}${accountInfo.mask ? ` ••${accountInfo.mask}` : ''}`}
+                            openDelay={1000}
+                            closeDelay={200}
+                          >
+                            <Text size="xs" c="dimmed" truncate maw={140}>
+                              {shortLabel}
+                            </Text>
+                          </Tooltip>
+                        </Group>
                       );
                     })()}
                   </Table.Td>

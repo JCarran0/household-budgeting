@@ -509,7 +509,7 @@ function TaskMetadataChips({ task, members, onProjectClick }: TaskMetadataChipsP
     <>
       {assignee && (
         <Tooltip label={assignee.displayName}>
-          <Avatar size="xs" radius="xl" color={userColor(assignee)}>
+          <Avatar variant="filled" size="xs" radius="xl" color={userColor(assignee)}>
             {assignee.displayName.charAt(0).toUpperCase()}
           </Avatar>
         </Tooltip>
@@ -613,7 +613,7 @@ function TaskKebabMenu({ task, members, callbacks }: TaskKebabMenuProps) {
                   key={m.userId}
                   onClick={() => callbacks.onAssigneeChange(task, m.userId)}
                   leftSection={
-                    <Avatar size="xs" radius="xl" color={userColor(m)}>
+                    <Avatar variant="filled" size="xs" radius="xl" color={userColor(m)}>
                       {m.displayName.charAt(0).toUpperCase()}
                     </Avatar>
                   }

@@ -138,7 +138,7 @@ export function MantineLayout() {
           <Menu shadow="md" width={200}>
             <Menu.Target>
               <ActionIcon variant="subtle" size="lg">
-                <Avatar color={userColor(user)} radius="xl" size="md">
+                <Avatar variant="filled" color={userColor(user)} radius="xl" size="md">
                   {user?.username?.charAt(0).toUpperCase()}
                 </Avatar>
               </ActionIcon>

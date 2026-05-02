@@ -63,22 +63,27 @@ export function ProfileSection() {
           <Text size="xs" c="dimmed" mb="xs">
             Shown next to your name throughout the app so it's easy to tell family members apart.
           </Text>
-          <Group gap="xs">
+          <Group gap="sm">
             {USER_COLOR_PALETTE.map((c) => {
               const selected = c === color;
               return (
                 <Tooltip key={c} label={c} withArrow>
                   <ActionIcon
-                    variant={selected ? 'filled' : 'light'}
+                    variant="filled"
                     color={c}
                     radius="xl"
-                    size="lg"
+                    size="xl"
                     aria-label={`Choose ${c}`}
                     aria-pressed={selected}
                     onClick={() => setColor(c)}
-                    style={selected ? { outline: '2px solid var(--mantine-color-white)', outlineOffset: 2 } : undefined}
+                    style={{
+                      backgroundColor: `var(--mantine-color-${c}-6)`,
+                      boxShadow: selected
+                        ? `0 0 0 2px var(--mantine-color-body), 0 0 0 4px var(--mantine-color-${c}-6)`
+                        : undefined,
+                    }}
                   >
-                    {selected ? <IconCheck size={14} /> : null}
+                    {selected ? <IconCheck size={20} stroke={3} /> : null}
                   </ActionIcon>
                 </Tooltip>
               );
