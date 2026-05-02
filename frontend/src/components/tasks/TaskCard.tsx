@@ -36,7 +36,7 @@ import { useNavigate } from 'react-router-dom';
 import type { StoredTask, FamilyMember, TaskStatus } from '../../../../shared/types';
 import { isProjectTag } from '../../../../shared/utils/projectHelpers';
 import { resolveSnoozeDate } from '../../../../shared/utils/taskSnooze';
-import { userColor } from '../../utils/userColor';
+import { userColor, userAvatarStyle } from '../../utils/userColor';
 import { useProjectTagLookup } from '../../hooks/useProjectTagLookup';
 
 interface TaskCardProps {
@@ -366,7 +366,7 @@ export function TaskCard({ task, members, onClick, onSnooze, onCancel, onEdit, o
         <Group gap="xs" mt={4}>
           {assignee && (
             <Tooltip label={assignee.displayName}>
-              <Avatar variant="filled" size="xs" radius="xl" color={userColor(assignee)}>
+              <Avatar variant="filled" size="xs" radius="xl" color={userColor(assignee)} style={userAvatarStyle(assignee)}>
                 {assignee.displayName.charAt(0).toUpperCase()}
               </Avatar>
             </Tooltip>

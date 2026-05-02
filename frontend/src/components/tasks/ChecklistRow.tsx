@@ -52,7 +52,7 @@ import { parseDateString } from '../../utils/formatters';
 import type { StoredTask, FamilyMember, SubTask } from '../../../../shared/types';
 import { resolveSnoozeDate } from '../../../../shared/utils/taskSnooze';
 import { isProjectTag } from '../../../../shared/utils/projectHelpers';
-import { userColor } from '../../utils/userColor';
+import { userColor, userAvatarStyle } from '../../utils/userColor';
 import { useProjectTagLookup } from '../../hooks/useProjectTagLookup';
 
 // =============================================================================
@@ -509,7 +509,7 @@ function TaskMetadataChips({ task, members, onProjectClick }: TaskMetadataChipsP
     <>
       {assignee && (
         <Tooltip label={assignee.displayName}>
-          <Avatar variant="filled" size="xs" radius="xl" color={userColor(assignee)}>
+          <Avatar variant="filled" size="xs" radius="xl" color={userColor(assignee)} style={userAvatarStyle(assignee)}>
             {assignee.displayName.charAt(0).toUpperCase()}
           </Avatar>
         </Tooltip>
@@ -613,7 +613,7 @@ function TaskKebabMenu({ task, members, callbacks }: TaskKebabMenuProps) {
                   key={m.userId}
                   onClick={() => callbacks.onAssigneeChange(task, m.userId)}
                   leftSection={
-                    <Avatar variant="filled" size="xs" radius="xl" color={userColor(m)}>
+                    <Avatar variant="filled" size="xs" radius="xl" color={userColor(m)} style={userAvatarStyle(m)}>
                       {m.displayName.charAt(0).toUpperCase()}
                     </Avatar>
                   }

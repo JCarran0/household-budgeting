@@ -1,3 +1,4 @@
+import type React from 'react';
 import { USER_COLOR_PALETTE, type UserColor } from '../../../shared/types';
 
 export { USER_COLOR_PALETTE };
@@ -24,6 +25,16 @@ export function userColor(user: UserLike | null | undefined): UserColor {
 
 function isUserColor(value: unknown): value is UserColor {
   return typeof value === 'string' && (USER_COLOR_PALETTE as readonly string[]).includes(value);
+}
+
+/**
+ * Inline style that forces a Mantine Avatar's `filled` variant to use the
+ * brighter shade-5 instead of Mantine's default (shade-8 in dark mode), so
+ * user-identity avatars match the vibrancy of the settings palette.
+ */
+export function userAvatarStyle(user: UserLike | null | undefined): React.CSSProperties {
+  const c = userColor(user);
+  return { ['--avatar-bg' as string]: `var(--mantine-color-${c}-7)` } as React.CSSProperties;
 }
 
 function hashToPalette(id: string): UserColor {

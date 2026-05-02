@@ -22,7 +22,7 @@ export function UserColorDot({ user, size = 10, tooltip = true }: UserColorDotPr
         width: size,
         height: size,
         borderRadius: '50%',
-        backgroundColor: `var(--mantine-color-${color}-6)`,
+        backgroundColor: `var(--mantine-color-${color}-7)`,
         flexShrink: 0,
       }}
       aria-hidden

@@ -77,9 +77,9 @@ export function ProfileSection() {
                     aria-pressed={selected}
                     onClick={() => setColor(c)}
                     style={{
-                      backgroundColor: `var(--mantine-color-${c}-6)`,
+                      backgroundColor: `var(--mantine-color-${c}-7)`,
                       boxShadow: selected
-                        ? `0 0 0 2px var(--mantine-color-body), 0 0 0 4px var(--mantine-color-${c}-6)`
+                        ? `0 0 0 2px var(--mantine-color-body), 0 0 0 4px var(--mantine-color-${c}-7)`
                         : undefined,
                     }}
                   >

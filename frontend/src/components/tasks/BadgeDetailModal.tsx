@@ -26,7 +26,7 @@ import { BADGE_CATALOG } from '../../../../shared/types';
 import { getAutoLabel } from '../../../../shared/utils/leaderboardBadgeSlots';
 import { CATEGORY_LABELS, CATEGORY_ORDER } from './badgeCatalog';
 import { MedalBadge } from './MedalBadge';
-import { userColor } from '../../utils/userColor';
+import { userColor, userAvatarStyle } from '../../utils/userColor';
 import type { UseBadgeHeroQueueResult } from '../../hooks/useBadgeHeroQueue';
 import { lazy, Suspense } from 'react';
 
@@ -203,7 +203,7 @@ export function BadgeDetailModal({
       fullScreen
       title={
         <Group gap="sm">
-          <Avatar variant="filled" size="md" radius="xl" color={userColor(entry)}>
+          <Avatar variant="filled" size="md" radius="xl" color={userColor(entry)} style={userAvatarStyle(entry)}>
             {entry.displayName.charAt(0).toUpperCase()}
           </Avatar>
           <Stack gap={0}>
