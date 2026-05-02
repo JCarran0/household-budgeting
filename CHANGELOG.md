@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+### [5.68.1](https://github.com/JCarran0/household-budgeting/compare/v5.68.0...v5.68.1) (2026-05-02)
+
+
+### Bug Fixes
+
+* **ci:** wire ADMIN_USERNAMES into the live deploy + drop redundant workflow ([e6eabe6](https://github.com/JCarran0/household-budgeting/commit/e6eabe64b640d4dd3054df51bb29d2cc6dc799bd))
+
 ## [5.68.0](https://github.com/JCarran0/household-budgeting/compare/v5.67.0...v5.68.0) (2026-05-02)
 
 
