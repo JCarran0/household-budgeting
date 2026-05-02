@@ -414,8 +414,9 @@ The deployment process includes version metadata:
 - **Purpose**: Parse commits and update CHANGELOG.md
 - **Frequency**: Every commit to main
 
-#### deploy-production.yml (with versioning)
-- **Includes**: Version from package.json
+#### release-and-deploy.yml (with versioning)
+- **Trigger**: Auto on push to `main`, or manual dispatch
+- **Includes**: Version from package.json (cut by `standard-version`)
 - **Deploys**: Tagged releases to production
 - **Metadata**: Commit hash, timestamp, version
 

@@ -14,12 +14,13 @@ This directory contains the CI/CD pipeline for Family Tracker.
   - Security audit for dependencies
   - Bundle size check for frontend
 
-### 2. Production Deployment (`deploy-production.yml`)
-- **Trigger**: Manual dispatch only (button in GitHub Actions)
-- **Purpose**: Deploy application to production server
+### 2. Release and Deploy (`release-and-deploy.yml`)
+- **Trigger**: Automatically on push to `main`, or manual dispatch
+- **Purpose**: Cut a `standard-version` release and deploy to production
 - **Actions**:
-  - Build and test application
-  - Create deployment package
+  - Validate (build + test backend, build frontend)
+  - Create release commit/tag via `standard-version` (skippable via dispatch input)
+  - Build and package backend + frontend
   - Upload package to S3
   - Deploy via AWS Systems Manager (SSM)
   - Zero-downtime deployment with PM2
@@ -88,11 +89,8 @@ If you haven't created an IAM user yet:
 
 1. Create a pull request with your changes
 2. PR validation workflow runs automatically
-3. After PR is approved and merged to `main`
-4. Go to Actions tab → "Deploy to Production"
-5. Click "Run workflow"
-6. Add optional deployment message
-7. Click green "Run workflow" button
+3. After PR is approved and merged to `main`, "Release and Deploy to Production" runs automatically — cuts a `standard-version` release and deploys
+4. To deploy without cutting a release (or to redeploy current version), go to Actions tab → "Release and Deploy to Production" → "Run workflow" with `skip_release: true`
 
 ### Emergency Rollback
 

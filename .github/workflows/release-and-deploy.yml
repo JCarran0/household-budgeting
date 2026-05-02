@@ -317,6 +317,7 @@ jobs:
           VAPID_PUBLIC_KEY=${{ secrets.VAPID_PUBLIC_KEY }}
           VAPID_PRIVATE_KEY=${{ secrets.VAPID_PRIVATE_KEY }}
           VAPID_SUBJECT=${{ secrets.VAPID_SUBJECT }}
+          ADMIN_USERNAMES=${{ vars.PRODUCTION_ADMIN_USERNAMES }}
           DEPLOYMENT_VERSION=${{ steps.deploy_version.outputs.version }}
           EOF
           
