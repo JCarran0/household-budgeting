@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.68.0](https://github.com/JCarran0/household-budgeting/compare/v5.67.0...v5.68.0) (2026-05-02)
+
+
+### Features
+
+* **ui:** saturate user identity colors to shade-7 for distinguishability ([9d79363](https://github.com/JCarran0/household-budgeting/commit/9d793631bc8be46801b69563d5fddee3fe19d01d))
+
 ## [5.67.0](https://github.com/JCarran0/household-budgeting/compare/v5.66.0...v5.67.0) (2026-05-02)
 
 
