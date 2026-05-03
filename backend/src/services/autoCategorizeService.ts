@@ -256,21 +256,24 @@ export class AutoCategorizeService {
 
       const originalCategoryId = transaction.categoryId;
 
-      // Try user-defined rules
-      // Check userDescription first (user override), then merchantName (cleaner), then name (raw)
-      const description = (
-        transaction.userDescription ||
-        transaction.merchantName ||
-        transaction.name ||
-        ''
-      ).toLowerCase();
+      // Test each pattern against userDescription, merchantName, and name (in that order).
+      // The first non-empty field that contains a pattern wins — we don't keep
+      // checking once a match lands. Searching all three matters because Plaid
+      // normalizes merchantName aggressively (e.g., "Rocket Money" covers both
+      // Rocket Money Premium and Rocket Savings deposits), so a rule keyed off the
+      // raw bank string in `name` would otherwise be shadowed.
+      const haystacks = [
+        transaction.userDescription,
+        transaction.merchantName,
+        transaction.name,
+      ]
+        .filter((s): s is string => !!s)
+        .map(s => s.toLowerCase());
 
       for (const rule of activeRules) {
-        // Check if any pattern matches (OR logic)
-        const matches = rule.patterns.some(pattern => {
-          const lowerPattern = pattern.toLowerCase();
-          return rule.matchType === 'contains' && description.includes(lowerPattern);
-        });
+        if (rule.matchType !== 'contains') continue;
+        const lowerPatterns = rule.patterns.map(p => p.toLowerCase());
+        const matches = haystacks.some(h => lowerPatterns.some(p => h.includes(p)));
 
         if (matches) {
           transaction.categoryId = rule.categoryId;
