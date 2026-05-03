@@ -937,6 +937,9 @@ export interface ClassifyTransactionsResponse {
   unsureBucket: ClassificationBucket;
   totalClassified: number;
   costUsed: number;
+  // Uncategorized transactions left over after this batch was capped at
+  // CLASSIFICATION_BATCH_LIMIT. Frontend re-runs the flow to drain them.
+  remainingUncategorized: number;
 }
 
 export interface RuleSuggestion {

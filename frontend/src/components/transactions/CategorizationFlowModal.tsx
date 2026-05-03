@@ -32,6 +32,8 @@ export function CategorizationFlowModal({ opened, onClose, uncategorizedCount }:
   const [createdRulesCount, setCreatedRulesCount] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [costUsed, setCostUsed] = useState(0);
+  const [remainingUncategorized, setRemainingUncategorized] = useState(0);
+  const [isReclassifying, setIsReclassifying] = useState(false);
 
   // Track all categorizations for rule suggestion
   const [allCategorizations, setAllCategorizations] = useState<{ transactionId: string; categoryId: string }[]>([]);
@@ -58,6 +60,7 @@ export function CategorizationFlowModal({ opened, onClose, uncategorizedCount }:
           setBuckets(result.buckets);
           setUnsureBucket(result.unsureBucket);
           setCostUsed(result.costUsed);
+          setRemainingUncategorized(result.remainingUncategorized);
           if (result.buckets.length === 0 && result.unsureBucket.transactions.length === 0) {
             setStep('summary');
           } else {
@@ -70,6 +73,33 @@ export function CategorizationFlowModal({ opened, onClose, uncategorizedCount }:
         });
     }
   }, [opened]);
+
+  const startNextBatch = useCallback(() => {
+    setIsReclassifying(true);
+    setStep('loading');
+    setBuckets([]);
+    setUnsureBucket(null);
+    setCurrentBucketIndex(0);
+    setRuleSuggestions([]);
+    setError(null);
+    api.classifyTransactions()
+      .then(result => {
+        setBuckets(result.buckets);
+        setUnsureBucket(result.unsureBucket);
+        setCostUsed(prev => prev + result.costUsed);
+        setRemainingUncategorized(result.remainingUncategorized);
+        if (result.buckets.length === 0 && result.unsureBucket.transactions.length === 0) {
+          setStep('summary');
+        } else {
+          setStep('review');
+        }
+      })
+      .catch(err => {
+        setError(getApiErrorMessage(err, 'Classification failed'));
+        setStep('error');
+      })
+      .finally(() => setIsReclassifying(false));
+  }, []);
 
   const advanceBucket = useCallback(() => {
     const nextIndex = currentBucketIndex + 1;
@@ -168,7 +198,12 @@ export function CategorizationFlowModal({ opened, onClose, uncategorizedCount }:
         <Center py="xl">
           <Stack align="center" gap="md">
             <Loader size="lg" />
-            <Text c="dimmed">Analyzing {uncategorizedCount} transactions...</Text>
+            <Text c="dimmed">
+              Analyzing first {Math.min(50, uncategorizedCount)} of {uncategorizedCount} transaction{uncategorizedCount !== 1 ? 's' : ''}…
+            </Text>
+            {uncategorizedCount > 50 && (
+              <Text size="xs" c="dimmed">Re-run after review to categorize the next batch</Text>
+            )}
           </Stack>
         </Center>
       )}
@@ -202,9 +237,7 @@ export function CategorizationFlowModal({ opened, onClose, uncategorizedCount }:
           <Text size="lg" fw={600}>Classification Failed</Text>
           <Text size="sm" c="dimmed" ta="center" maw={400}>{error}</Text>
           <Group>
-            <Button variant="light" onClick={() => { setError(null); setStep('loading'); api.classifyTransactions().then(result => { setBuckets(result.buckets); setUnsureBucket(result.unsureBucket); setStep(result.buckets.length === 0 && result.unsureBucket.transactions.length === 0 ? 'summary' : 'review'); }).catch(err => { setError(err?.response?.data?.error || 'Classification failed'); setStep('error'); }); }}>
-              Retry
-            </Button>
+            <Button variant="light" onClick={startNextBatch}>Retry</Button>
             <Button variant="subtle" color="gray" onClick={handleClose}>Close</Button>
           </Group>
         </Stack>
@@ -221,8 +254,20 @@ export function CategorizationFlowModal({ opened, onClose, uncategorizedCount }:
             {skippedCount > 0 && <Text size="sm" c="dimmed">{skippedCount} skipped</Text>}
             {createdRulesCount > 0 && <Text size="sm" c="blue">{createdRulesCount} new auto-categorization rule{createdRulesCount !== 1 ? 's' : ''} created</Text>}
             {costUsed > 0 && <Text size="xs" c="dimmed">AI cost: ~${costUsed.toFixed(4)}</Text>}
+            {remainingUncategorized > 0 && (
+              <Text size="sm" c="dimmed" mt="xs">
+                {remainingUncategorized} uncategorized transaction{remainingUncategorized !== 1 ? 's' : ''} remaining
+              </Text>
+            )}
           </Stack>
-          <Button onClick={handleClose}>Done</Button>
+          <Group>
+            {remainingUncategorized > 0 && (
+              <Button onClick={startNextBatch} loading={isReclassifying} leftSection={<IconSparkles size={16} />}>
+                Categorize next {Math.min(50, remainingUncategorized)}
+              </Button>
+            )}
+            <Button variant={remainingUncategorized > 0 ? 'subtle' : 'filled'} onClick={handleClose}>Done</Button>
+          </Group>
         </Stack>
       )}
     </ResponsiveModal>

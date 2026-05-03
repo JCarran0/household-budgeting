@@ -33,6 +33,11 @@ import type {
 } from '../shared/types';
 
 const BATCH_SIZE = 50;
+// Hard cap on transactions classified per request. Each batch of 50 takes
+// ~30-90s of Claude time; running many batches synchronously inside one HTTP
+// request blows past nginx/ALB/browser timeouts. The frontend re-invokes
+// classifyTransactions until remainingUncategorized hits 0.
+const CLASSIFICATION_REQUEST_LIMIT = BATCH_SIZE;
 const MAX_EXAMPLES_PER_CATEGORY = 5;
 const MAX_EXAMPLE_CATEGORIES = 20;
 const MODEL = 'claude-sonnet-4-6';
@@ -63,18 +68,34 @@ export class CategorizationService {
     }
 
     // Fetch data
-    const [uncategorized, categories, existingRules] = await Promise.all([
+    const [allUncategorized, categories, existingRules] = await Promise.all([
       this.getUncategorizedTransactions(familyId, transactionIds),
       this.chatbotDataService.getCategories(familyId),
       this.chatbotDataService.getAutoCategorizeRules(familyId),
     ]);
 
-    if (uncategorized.length === 0) {
+    if (allUncategorized.length === 0) {
       log.info('no uncategorized transactions found');
-      return { buckets: [], unsureBucket: this.emptyBucket(), totalClassified: 0, costUsed: 0 };
+      return {
+        buckets: [],
+        unsureBucket: this.emptyBucket(),
+        totalClassified: 0,
+        costUsed: 0,
+        remainingUncategorized: 0,
+      };
     }
 
-    log.info({ count: uncategorized.length }, 'classifying transactions');
+    // Cap to a single batch per request — see CLASSIFICATION_REQUEST_LIMIT
+    // comment. Newest transactions first so the user works the freshest
+    // backlog as they re-run the flow.
+    const sorted = [...allUncategorized].sort((a, b) => b.date.localeCompare(a.date));
+    const uncategorized = sorted.slice(0, CLASSIFICATION_REQUEST_LIMIT);
+    const remainingUncategorized = Math.max(0, allUncategorized.length - uncategorized.length);
+
+    log.info(
+      { batchCount: uncategorized.length, totalUncategorized: allUncategorized.length, remainingUncategorized },
+      'classifying transactions',
+    );
 
     // Build few-shot examples from previously categorized transactions
     const examples = await this.buildExamples(familyId, categories);
@@ -107,6 +128,7 @@ export class CategorizationService {
       unsureBucket,
       totalClassified: allResults.length,
       costUsed: Math.round(totalCost * 1_000_000) / 1_000_000,
+      remainingUncategorized,
     };
   }
 
