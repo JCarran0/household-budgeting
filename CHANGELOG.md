@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+### [5.68.2](https://github.com/JCarran0/household-budgeting/compare/v5.68.1...v5.68.2) (2026-05-03)
+
+
+### Bug Fixes
+
+* **ai-categorization:** cap classification at 50 tx/request to avoid timeouts ([9e582ab](https://github.com/JCarran0/household-budgeting/commit/9e582abffd695db492e0db8bdda8142c85b4d4de))
+
 ### [5.68.1](https://github.com/JCarran0/household-budgeting/compare/v5.68.0...v5.68.1) (2026-05-02)
 
 
