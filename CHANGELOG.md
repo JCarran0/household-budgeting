@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.69.0](https://github.com/JCarran0/household-budgeting/compare/v5.68.2...v5.69.0) (2026-05-03)
+
+
+### Features
+
+* **auto-categorize:** raise per-rule pattern cap from 5 to 10 ([9bd0e75](https://github.com/JCarran0/household-budgeting/commit/9bd0e754c5c8763f34b28a35cd5c3c78d7be9634))
+
 ### [5.68.2](https://github.com/JCarran0/household-budgeting/compare/v5.68.1...v5.68.2) (2026-05-03)
 
 
