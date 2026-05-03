@@ -172,18 +172,18 @@ describe('User Story: Auto-Categorization', () => {
       expect(duplicateResponse.body.error).toContain('already exist');
     });
 
-    test('I cannot create a rule with more than 5 patterns', async () => {
+    test('I cannot create a rule with more than 10 patterns', async () => {
       const response = await authenticatedPost(
         '/api/v1/autocategorize/rules',
         authToken,
         {
           description: 'Too Many Patterns',
-          patterns: ['p1', 'p2', 'p3', 'p4', 'p5', 'p6'], // 6 patterns
+          patterns: ['p1', 'p2', 'p3', 'p4', 'p5', 'p6', 'p7', 'p8', 'p9', 'p10', 'p11'], // 11 patterns
           categoryId: groceryCategoryId,
           isActive: true,
         }
       );
-      
+
       expect(response.status).toBe(400);
       expect(response.body.error).toContain('Invalid');
     });

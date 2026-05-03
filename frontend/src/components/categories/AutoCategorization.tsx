@@ -38,6 +38,10 @@ import type { AutoCategorizeRule } from '../../../../shared/types';
 import { useCategoryOptions } from '../../hooks/useCategoryOptions';
 import { AutoCatPreviewModal, type TransactionChange } from './AutoCatPreviewModal';
 
+// Mirror of MAX_PATTERNS_PER_RULE in backend/src/routes/autoCategorize.ts.
+// If you bump one, bump the other.
+const MAX_PATTERNS_PER_RULE = 10;
+
 interface RuleFormValues {
   description: string;
   patterns: string[];
@@ -84,7 +88,7 @@ export function AutoCategorization() {
         if (!value || value.length === 0) return 'At least one pattern is required';
         const nonEmptyPatterns = value.filter((p: string) => p.trim());
         if (nonEmptyPatterns.length === 0) return 'At least one pattern is required';
-        if (value.length > 5) return 'Maximum 5 patterns allowed';
+        if (value.length > MAX_PATTERNS_PER_RULE) return `Maximum ${MAX_PATTERNS_PER_RULE} patterns allowed`;
         
         // Validate individual patterns
         for (let i = 0; i < value.length; i++) {
@@ -128,7 +132,7 @@ export function AutoCategorization() {
 
   // Add pattern field
   const addPatternField = () => {
-    if (form.values.patterns.length < 5) {
+    if (form.values.patterns.length < MAX_PATTERNS_PER_RULE) {
       form.insertListItem('patterns', '');
     }
   };
@@ -616,7 +620,7 @@ export function AutoCategorization() {
                   )}
                 </Group>
               ))}
-              {form.values.patterns.length < 5 && (
+              {form.values.patterns.length < MAX_PATTERNS_PER_RULE && (
                 <Button
                   variant="subtle"
                   size="xs"
