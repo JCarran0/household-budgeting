@@ -459,6 +459,38 @@ Migrated all 156 production `console.*` call sites across 30 files to `log.{info
 
 ---
 
+### TD-018: Frontend Bundle Has Outgrown the Workbox Precache Cap
+**Status**: Open (band-aid in place)
+**Created**: 2026-05-04
+**Impact**: Medium — deploy-blocking when crossed; PWA update cost grows linearly with bundle size; first-load on cellular feels it
+**Effort**: Medium
+
+**Problem**:
+The frontend ships as a single ~2.1 MB JS chunk (gzip 621 KB). On 2026-05-04 the bundle crossed workbox's default `maximumFileSizeToCacheInBytes` of 2 MiB and the GHA `Validate Code → build` step started failing with `assets/index-*.js is 2.11 MB, and won't be precached`. We unblocked the deploy by raising the limit to 4 MiB in `frontend/vite.config.ts:65-67`, but that only buys headroom — it doesn't address the underlying problem:
+
+1. Every release reinstalls the full bundle through the service worker precache. At ~2 MB per update, that's painful on slow / metered connections — and we silently re-cross 4 MiB on the next round of growth.
+2. Vite already warns about it on every build: *"Some chunks are larger than 500 kB after minification"*.
+3. There's a second, related warning that's been ignored: `authStore.ts` is dynamically imported by `lib/api/client.ts` but **also** statically imported by 13 other modules (`InspirationModal`, `MantineLayout`, `ProtectedRoute`, `LoginForm`, `RegisterForm`, `ChatOverlay`, `FeedbackModal`, `FamilySection`, `ProfileSection`, `MantineDashboard`, `Projects`, `Tasks`, `ThemeProvider`). Vite says: *"dynamic import will not move module into another chunk."* The intended split is being defeated.
+
+**Fix**:
+Three independent pieces, in increasing order of effort:
+
+1. **Resolve the static-vs-dynamic `authStore` conflict.** Either inline `client.ts`'s lazy import back to a static one (auth store is small, the dynamic import isn't buying anything since 13 statics already root it) or — better — flip the 13 statics to access the store via a thin DI seam so the dynamic split can actually take effect. Pick the static-everywhere option unless we have a specific reason for the lazy boundary.
+2. **Route-level code-splitting on the heavy pages.** `React.lazy()` + `Suspense` boundaries on `Tasks`, `Trips`, `EnhancedTransactions`, `BudgetVsActuals`, `Admin`, `Settings`, `Reports`. These are independent destinations; the user pays the chunk cost only when they navigate. Expected savings: ~40-50% off the initial JS shell.
+3. **`build.rollupOptions.output.manualChunks` for the obvious vendor splits.** Mantine, `@tabler/icons-react`, `@tanstack/react-query`, the Google Maps + Places stack (used only by Trips). Vendor chunks change rarely → service-worker cache hit rate goes up across releases.
+
+After 1+2, drop `maximumFileSizeToCacheInBytes` back to (or near) the workbox default — keeping the limit elevated removes the forcing function.
+
+**Why not urgent**: 2-user app on broadband; PWA update annoyance is bounded. The deploy block is what dragged this from "ignored warning" to "tracked debt." If we hit 4 MiB the same way, that's the signal to schedule it.
+
+**Files**:
+- `frontend/vite.config.ts` (current 4 MiB band-aid; chunk warning will reappear after the fix shrinks the bundle and we drop the override)
+- `frontend/src/lib/api/client.ts` + `frontend/src/stores/authStore.ts` (static-vs-dynamic conflict)
+- `frontend/src/App.tsx` or wherever routes are declared (route lazy boundaries)
+- `frontend/src/components/InspirationModal.tsx`, `MantineLayout.tsx`, `ProtectedRoute.tsx`, `auth/LoginForm.tsx`, `auth/RegisterForm.tsx`, `chat/ChatOverlay.tsx`, `feedback/FeedbackModal.tsx`, `settings/FamilySection.tsx`, `settings/ProfileSection.tsx`, `pages/MantineDashboard.tsx`, `pages/Projects.tsx`, `pages/Tasks.tsx`, `providers/ThemeProvider.tsx` (the 13 static authStore importers — touched only if we choose option 1.b)
+
+---
+
 ## Reports Page: Excessive Parallel API Requests
 **Status**: Open (carried from previous tracker)
 **Created**: 2025-10-14

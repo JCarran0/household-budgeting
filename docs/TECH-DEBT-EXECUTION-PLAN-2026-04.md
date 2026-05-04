@@ -143,6 +143,7 @@ Surfaced 2026-04-25 during a Sprint-5 exit-criteria spot-check: `MantineDashboar
 | ✅ **[TD-016](AI-TECHNICAL-DEBT.md)**: Plaid `transactionsSync` cursor migration | Landed 2026-05-01. Manual sync is infrequent; quota burn is real but bounded. Sets up future webhook work. |
 | ✅ **[TD-017](AI-TECHNICAL-DEBT.md)**: Pino structured logging + redaction list + CloudWatch forwarding | Landed 2026-05-01. Operational. Pays back on the next incident, not before. |
 | **Reports parallel requests** (orphan): batch endpoint `GET /api/v1/budgets/year/:year` | Workaround (nginx limit increase) is in place; proper fix unblocks revisiting the limit. |
+| **[TD-018](AI-TECHNICAL-DEBT.md)**: Frontend bundle code-splitting + authStore static/dynamic fix | Surfaced 2026-05-04 as a deploy block — main bundle (2.1 MB / 621 KB gzip) crossed workbox's 2 MiB precache cap; band-aided to 4 MiB. Schedule when feature work isn't blocking, or sooner if we re-cross the limit. Sequence within the sprint: fix the authStore static-vs-dynamic conflict first (cheap, immediate signal in the next build), then route lazy boundaries, then `manualChunks`, then drop the workbox override back near default. |
 
 > TD-007 (401 handler) and TD-009 (stale `@types/react-router-dom` v5) were both **resolved 2026-04-08** in the original audit pass and are not part of Sprint 6's open work. They were carried into the table by mistake when this plan was first drafted; the tracker has them as Resolved.
 
