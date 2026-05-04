@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.70.0](https://github.com/JCarran0/household-budgeting/compare/v5.69.1...v5.70.0) (2026-05-04)
+
+
+### Features
+
+* **auto-categorize:** suggest rules from clustered uncategorized transactions ([d79c1ae](https://github.com/JCarran0/household-budgeting/commit/d79c1ae37b2037c17a3934d8c2b0f03e54d76330))
+* **task-templates:** pin templates and inherit board filters on quick-create ([feee466](https://github.com/JCarran0/household-budgeting/commit/feee46622ad3b09e9e84381668e78a7ad77d788c))
+
+
+### Bug Fixes
+
+* **build:** raise workbox precache limit so 2.1 MB main bundle ships ([706d32c](https://github.com/JCarran0/household-budgeting/commit/706d32c4c64fef77ef792991a22196dfc6da094b))
+
+
+### Documentation
+
+* **tech-debt:** track frontend bundle splitting as TD-018 ([b7c8af4](https://github.com/JCarran0/household-budgeting/commit/b7c8af499b3cf7d97d16d153bd11f31c0cd06b5c))
+
 ### [5.69.1](https://github.com/JCarran0/household-budgeting/compare/v5.69.0...v5.69.1) (2026-05-03)
 
 
