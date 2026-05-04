@@ -61,6 +61,9 @@ export default defineConfig({
       },
       injectManifest: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff,woff2}'],
+        // Main bundle crossed the workbox 2 MiB default; bump headroom until
+        // we get around to code-splitting (chunk-size warning is pre-existing).
+        maximumFileSizeToCacheInBytes: 4 * 1024 * 1024,
       },
     }),
   ],
