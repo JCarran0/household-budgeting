@@ -21,6 +21,7 @@ Family-scale app for 2 users: personal budgeting (with Plaid), shared tasks, tri
 | AI Categorization | [AI-CATEGORIZATION-BRD.md](docs/features/AI-CATEGORIZATION-BRD.md) | [AI-CATEGORIZATION-PLAN.yaml](docs/features/AI-CATEGORIZATION-PLAN.yaml) |
 | AI Amazon Receipts | [AI-AMAZON-RECEIPT-BRD.md](docs/features/AI-AMAZON-RECEIPT-BRD.md) | [AI-AMAZON-RECEIPT-PLAN.yaml](docs/features/AI-AMAZON-RECEIPT-PLAN.yaml) |
 | AI Chat Actions | [AI-CHAT-ACTIONS-BRD.md](docs/features/AI-CHAT-ACTIONS-BRD.md) | [AI-CHAT-ACTIONS-PLAN.yaml](docs/features/AI-CHAT-ACTIONS-PLAN.yaml) |
+| Auto-Cat Suggestions | [AUTO-CAT-SUGGESTIONS-BRD.md](docs/features/AUTO-CAT-SUGGESTIONS-BRD.md) | [AUTO-CAT-SUGGESTIONS-PLAN.yaml](docs/features/AUTO-CAT-SUGGESTIONS-PLAN.yaml) |
 | Category Hierarchy | [CATEGORY-HIERARCHY-BUDGETING-BRD.md](docs/features/CATEGORY-HIERARCHY-BUDGETING-BRD.md) | [CATEGORY-HIERARCHY-BUDGETING-PLAN.yaml](docs/features/CATEGORY-HIERARCHY-BUDGETING-PLAN.yaml) |
 | Savings Categories | [SAVINGS-CATEGORY-BRD.md](docs/features/SAVINGS-CATEGORY-BRD.md) | [SAVINGS-CATEGORY-PLAN.yaml](docs/features/SAVINGS-CATEGORY-PLAN.yaml) |
 | Rollover Budgets | [ROLLOVER-BUDGETS-BRD.md](docs/features/ROLLOVER-BUDGETS-BRD.md) | — |
@@ -104,6 +105,7 @@ Entries link the BRD for full context. Older decisions live in git history.
 
 | Date | Decision | BRD |
 |------|----------|-----|
+| 2026-05-04 | Auto-cat rule suggestions — deterministic merchant clustering on the user's own categorized transactions; 3 / 80% / 180-day bar; per-user localStorage dismissals (NOT a shared flag); BRD-listed match fields corrected to `userDescription` / `merchantName` / `name` per dce0615 | [AUTO-CAT-SUGGESTIONS-BRD.md](docs/features/AUTO-CAT-SUGGESTIONS-BRD.md) |
 | 2026-04-25 | Net terminology — **Pre-Savings Net** (`Income − Spending`) and **Net Cashflow** (`Income − Spending − Savings`) are the two canonical labels. "Net Income" is retired from new work; surfaces showing a net must label it with one of these two and show the formula in a tooltip | [SAVINGS-CATEGORY-BRD.md](docs/features/SAVINGS-CATEGORY-BRD.md) §2.6 REQ-017/018 |
 | 2026-04-25 | Spending/income/savings aggregations bucketed by category type with signed accumulation; refunds net within bucket; uncategorized excluded. Aligns `calculateSpending`/`calculateIncome`/`calculateSavings` with `calculateActualTotals` so Dashboard and Reports KPIs agree | [SAVINGS-CATEGORY-BRD.md](docs/features/SAVINGS-CATEGORY-BRD.md) §2.2 REQ-005a |
 | 2026-04 | Rollover Budgets — derive-on-fly carry math on existing `isRollover` flag; calendar-year reset; symmetric signed carry; subtree exclusivity; BvA II is sole v1 consumer | [ROLLOVER-BUDGETS-BRD.md](docs/features/ROLLOVER-BUDGETS-BRD.md) |

@@ -7,7 +7,10 @@ import { AutoCategorizeService } from '../services/autoCategorizeService';
 import { dataService } from '../services';
 import { authMiddleware } from '../middleware/authMiddleware';
 import { AuthorizationError } from '../errors';
+import { childLogger } from '../utils/logger';
 import { z } from 'zod';
+
+const log = childLogger('autoCategorize');
 
 const router = Router();
 const autoCategorizeService = new AutoCategorizeService(dataService);
@@ -27,6 +30,27 @@ const createRuleSchema = z.object({
   categoryName: z.string().optional(),
   userDescription: z.string().max(200).optional(),
   isActive: z.boolean().optional(),
+  /**
+   * Optional telemetry tag — distinguishes manual rule creation from
+   * suggestion-driven creation. Logged out via auto_cat_suggestions.rule_created;
+   * not stored on the rule itself.
+   */
+  source: z.enum(['manual', 'suggestion']).default('manual'),
+  /**
+   * Optional metadata piped through from the suggestion card so the
+   * rule_created log line can include cluster context. Ignored unless
+   * source === 'suggestion'.
+   */
+  suggestionMeta: z.object({
+    clusterSize: z.number().int().nonnegative(),
+    topCategoryCount: z.number().int().nonnegative(),
+    agreementPct: z.number().int().min(0).max(100),
+    pendingMatchCount: z.number().int().nonnegative(),
+    appliedToTxnCount: z.number().int().nonnegative().optional(),
+    outcome: z.enum(['created', 'appended', 'replaced']).optional(),
+    replacedExisting: z.boolean().optional(),
+    addedToExistingRuleId: z.string().optional(),
+  }).optional(),
 });
 
 const updateRuleSchema = z.object({
@@ -36,6 +60,18 @@ const updateRuleSchema = z.object({
   categoryName: z.string().optional(),
   userDescription: z.string().max(200).optional(),
   isActive: z.boolean().optional(),
+  /** Telemetry tag for suggestion-driven Replace flow. Not stored on the rule. */
+  source: z.enum(['manual', 'suggestion']).default('manual'),
+  suggestionMeta: z.object({
+    clusterSize: z.number().int().nonnegative(),
+    topCategoryCount: z.number().int().nonnegative(),
+    agreementPct: z.number().int().min(0).max(100),
+    pendingMatchCount: z.number().int().nonnegative(),
+    appliedToTxnCount: z.number().int().nonnegative().optional(),
+    outcome: z.enum(['created', 'appended', 'replaced']).optional(),
+    replacedExisting: z.boolean().optional(),
+    addedToExistingRuleId: z.string().optional(),
+  }).optional(),
 });
 
 const reorderRulesSchema = z.object({
@@ -75,14 +111,29 @@ router.post('/rules', authMiddleware, async (req: AuthRequest, res: Response, ne
       return;
     }
 
+    const { source, suggestionMeta, ...ruleData } = validation.data;
     const result = await autoCategorizeService.createRule(
       req.user.familyId,
-      validation.data
+      ruleData
     );
 
     if (!result.success) {
       res.status(400).json({ success: false, error: result.error });
       return;
+    }
+
+    if (source === 'suggestion' && result.rule) {
+      log.info(
+        {
+          familyId: req.user.familyId,
+          userId: req.user.userId,
+          ruleId: result.rule.id,
+          normalizedKey: result.rule.patterns[0],
+          categoryId: result.rule.categoryId,
+          ...suggestionMeta,
+        },
+        'auto_cat_suggestions.rule_created',
+      );
     }
 
     res.json({ success: true, rule: result.rule });
@@ -196,16 +247,30 @@ router.put('/rules/:ruleId', authMiddleware, async (req: AuthRequest, res: Respo
     }
 
     const { ruleId } = req.params;
+    const { source, suggestionMeta, ...updateData } = validation.data;
     const result = await autoCategorizeService.updateRule(
       req.user.familyId,
       ruleId,
-      validation.data
+      updateData
     );
 
     if (!result.success) {
       const status = result.code === 'NOT_FOUND' ? 404 : result.code === 'DUPLICATE' ? 409 : 400;
       res.status(status).json({ success: false, error: result.error });
       return;
+    }
+
+    if (source === 'suggestion') {
+      log.info(
+        {
+          familyId: req.user.familyId,
+          userId: req.user.userId,
+          ruleId,
+          categoryId: updateData.categoryId,
+          ...suggestionMeta,
+        },
+        'auto_cat_suggestions.rule_created',
+      );
     }
 
     res.json({ success: true });

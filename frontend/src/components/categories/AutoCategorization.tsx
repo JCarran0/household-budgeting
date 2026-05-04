@@ -37,6 +37,7 @@ import { api } from '../../lib/api';
 import type { AutoCategorizeRule } from '../../../../shared/types';
 import { useCategoryOptions } from '../../hooks/useCategoryOptions';
 import { AutoCatPreviewModal, type TransactionChange } from './AutoCatPreviewModal';
+import { SuggestedRulesSection } from './SuggestedRulesSection';
 
 // Mirror of MAX_PATTERNS_PER_RULE in backend/src/routes/autoCategorize.ts.
 // If you bump one, bump the other.
@@ -357,6 +358,8 @@ export function AutoCategorization() {
 
   return (
     <Stack gap="lg">
+      <SuggestedRulesSection />
+
       {/* Header with stats and apply button */}
       <Group justify="space-between">
         <div>

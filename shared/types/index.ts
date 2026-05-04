@@ -277,6 +277,55 @@ export interface AutoCategorizeRule {
   updatedAt: string;
 }
 
+// =============================================================================
+// Auto-Categorization Rule Suggestions
+// =============================================================================
+
+/** Minimal transaction summary embedded in suggestion previews. */
+export interface AutoCatSuggestionTxn {
+  id: string;
+  date: string;
+  /** userDescription || merchantName || name, for display. */
+  description: string;
+  amount: number;
+}
+
+export interface AutoCatSuggestion {
+  /** Normalized merchant key — also the proposed rule pattern. */
+  normalizedKey: string;
+  /** Human-friendly merchant label, e.g. "Lola Pizza". */
+  displayLabel: string;
+  topCategoryId: string;
+  topCategoryName: string;
+  /** Integer 0–100. */
+  agreementPct: number;
+  /** Total categorized matches in the lookback window. */
+  clusterSize: number;
+  /** Categorized matches that voted for the top category. */
+  topCategoryCount: number;
+  /** Active uncategorized matches the rule would catch. */
+  pendingMatchCount: number;
+  /** Up to 5 sample categorized transaction IDs for the preview view. */
+  sampleCategorizedTxnIds: string[];
+  /** All pending uncategorized transaction IDs the rule would catch (no cap). */
+  pendingTxnIds: string[];
+  /**
+   * Embedded transaction summaries so the preview UI does not need a second
+   * round trip. Sample categorized txns capped to 5; pending list mirrors
+   * pendingTxnIds in full.
+   */
+  sampleCategorizedTxns: AutoCatSuggestionTxn[];
+  pendingTxns: AutoCatSuggestionTxn[];
+}
+
+export interface AutoCatSuggestionsResponse {
+  suggestions: AutoCatSuggestion[];
+  /** True if more than the visible top-N suggestions exist. */
+  truncated: boolean;
+  /** Count of all eligible suggestions, before any truncation. */
+  totalSuggestions: number;
+}
+
 // Feedback types
 export type FeedbackType = 'bug' | 'feature';
 

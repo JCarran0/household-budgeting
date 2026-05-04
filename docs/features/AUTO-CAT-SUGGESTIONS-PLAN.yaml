@@ -1,0 +1,690 @@
+# =============================================================================
+# Auto-Categorization Rule Suggestions — Implementation Plan
+# =============================================================================
+# BRD: docs/features/AUTO-CAT-SUGGESTIONS-BRD.md
+# Status: Not Started
+# Last Updated: 2026-05-04
+# =============================================================================
+
+overview:
+  description: |
+    Implementation plan for the deterministic auto-categorization rule
+    suggestion feature. Adds a "Suggested Rules" section to the top of
+    the Auto Cat tab on the Categories page. Backend scans active
+    transactions, clusters them by a normalized merchant key, and surfaces
+    suggestions when the user has consistently categorized the same
+    cluster ≥80% of the time. One-click rule creation applies the rule
+    to matching uncategorized transactions immediately.
+
+    No LLM, no Anthropic dependency, no new infrastructure.
+
+  key_files:
+    brd: docs/features/AUTO-CAT-SUGGESTIONS-BRD.md
+    shared_types: shared/types/index.ts
+    transaction_reader: backend/src/services/transactionReader.ts
+    auto_categorize_service: backend/src/services/autoCategorizeService.ts
+    auto_categorize_routes: backend/src/routes/autoCategorize.ts
+    auto_categorization_component: frontend/src/components/categories/AutoCategorization.tsx
+    api_client: frontend/src/lib/api/autoCategorize.ts
+    categories_page: frontend/src/pages/Categories.tsx
+
+# =============================================================================
+# DECISIONS LOG
+# =============================================================================
+decisions:
+  - id: D1
+    date: 2026-05-04
+    decision: Deterministic clustering — no LLM
+    rationale: |
+      The rule that gets created is a string-pattern auto-cat rule. Smarter
+      LLM-based clustering would be lost on serialization. Determinism is
+      cheap, instant, explainable, and uses the same matching shape as
+      the rule itself, so suggestion previews equal real match counts.
+
+  - id: D2
+    date: 2026-05-04
+    decision: Match the auto-cat rule field set — userDescription, merchantName, name
+    rationale: |
+      autoCategorizeService.ts (post-dce0615) tests rule patterns against
+      these three fields in this order. The suggestion engine uses the same
+      three fields when computing pending-uncategorized-match counts, so
+      "Preview matches: 3" today equals "Categorized 3 transactions" on
+      Create. NOTE: the BRD currently lists "name / originalDescription /
+      merchantName" — the implementation truth is the three fields named
+      here, and the BRD should be updated for accuracy when convenient.
+
+  - id: D3
+    date: 2026-05-04
+    decision: Thresholds — 3 categorized matches, 80% agreement, 180-day window
+    rationale: |
+      For a 2-user app, 2 matches is too noisy (one impulse-buy session
+      copy-pasted). 3 + 80% means near-unanimous at small N. 180 days
+      catches monthly/quarterly recurrers without being haunted by stale
+      categories from years past.
+
+  - id: D4
+    date: 2026-05-04
+    decision: Synchronous on-demand scan, no cache
+    rationale: |
+      ~10K transactions across 2 users = sub-100ms work. Pre-computation
+      adds invalidation complexity for negligible UX gain. Add a cache
+      layer only if scans exceed ~200ms.
+
+  - id: D5
+    date: 2026-05-04
+    decision: Per-user localStorage dismissals
+    rationale: |
+      Same pattern as useDismissedParentIds in BvA. Dismissal is a UI
+      preference; the rule that results from a Create is server-side and
+      shared. Avoids a schema migration for low-stakes state.
+
+  - id: D6
+    date: 2026-05-04
+    decision: Include transfers in clustering
+    rationale: |
+      User redirect during design (Q7). Uncategorized transfers ARE valid
+      cleanup targets; "Transfer - In" / "Transfer - Out" are exactly the
+      kind of recurring high-confidence cluster the feature should catch.
+      Transfers' exclusion from spending/income aggregations is orthogonal.
+
+  - id: D7
+    date: 2026-05-04
+    decision: Auto-apply on rule creation
+    rationale: |
+      The user's stated intent in clicking "Create rule" is to clean up
+      the pending matches. Splitting into "create rule" and "now click to
+      apply" would be hostile UX. The toast count reflects actual work
+      done, not a projection.
+
+  - id: D8
+    date: 2026-05-04
+    decision: Confirm dialog on category-conflict, no-op on exact duplicate
+    rationale: |
+      Exact-duplicate (same pattern, same categoryId) means a race; silent
+      no-op is right. Different categoryId is a real conflict and surfaces
+      a Replace/Cancel dialog so we never silently shadow the user's
+      existing rule.
+
+# =============================================================================
+# PHASE 1: Shared Types
+# =============================================================================
+phase_1_types:
+  status: not_started
+  description: |
+    Define the suggestion DTO in shared/types/index.ts. Single new
+    interface, no enums or discriminated unions needed.
+
+  tasks:
+    - id: "1.1"
+      task: Add AutoCatSuggestion + response types to shared/types/index.ts
+      status: not_started
+      details: |
+        interface AutoCatSuggestion {
+          normalizedKey: string;          // also the proposed rule pattern
+          displayLabel: string;           // human-friendly, e.g. "Lola Pizza"
+          topCategoryId: string;
+          topCategoryName: string;
+          agreementPct: number;           // integer 0–100
+          clusterSize: number;            // total categorized matches in window
+          topCategoryCount: number;       // matches voting for top category
+          pendingMatchCount: number;      // active uncategorized matches
+          sampleCategorizedTxnIds: string[]; // up to 5
+          pendingTxnIds: string[];        // unbounded (used for preview)
+        }
+
+        interface AutoCatSuggestionsResponse {
+          suggestions: AutoCatSuggestion[];
+          truncated: boolean;             // true if > 10 suggestions exist
+          totalSuggestions: number;
+        }
+
+# =============================================================================
+# PHASE 2: Backend — Merchant Normalization Utility
+# =============================================================================
+phase_2_normalization:
+  status: not_started
+  description: |
+    Pure function module that derives the normalized merchant key for a
+    transaction. Lives in shared/utils so both backend (suggestion engine)
+    and tests can use it; no React or DB dependencies.
+
+  tasks:
+    - id: "2.1"
+      task: Create shared/utils/merchantNormalization.ts
+      status: not_started
+      details: |
+        export function normalizeMerchantKey(
+          tx: Pick<Transaction, 'merchantName' | 'name'>
+        ): string | null {
+          // Returns null when the transaction can't yield a usable key
+          // (key < 4 chars, purely numeric, or all source fields empty).
+        }
+
+        Algorithm (priority order):
+        1. If tx.merchantName is non-empty, lowercase + trim it.
+        2. Else fall back to tx.name and apply strips:
+           - Leading processor prefixes (case-insensitive):
+             SQ *, TST*, TST , PAYPAL *, SP *, PP*, CKE*
+           - Trailing store/location noise:
+             #\d+ tokens, ` \d{3,}` (store numbers),
+             trailing 1–2 ALL-CAPS tokens of length ≥2 (city/state)
+           - Collapse runs of whitespace to single spaces, trim
+           - Lowercase
+        3. If resulting string is < 4 chars or matches /^\d+$/, return null.
+
+        Export named regex constants so tests can iterate on them without
+        the tests reaching into internals.
+
+    - id: "2.2"
+      task: Unit tests for merchantNormalization
+      status: not_started
+      details: |
+        File: shared/utils/__tests__/merchantNormalization.test.ts
+
+        Cover:
+        - merchantName preferred over name
+        - Lowercasing
+        - "SQ *LOLA PIZZA" → "lola pizza"
+        - "TST* JOES BAR 4421" → "joes bar"
+        - "STARBUCKS #1234 BROOKLYN NY" → "starbucks"
+        - "AMZN Mktp US*RT4ABC" → "amzn mktp us" (left intact when name is the source)
+        - "1234" → null (purely numeric)
+        - "AB" → null (too short)
+        - empty merchantName + empty name → null
+        - whitespace collapse
+
+# =============================================================================
+# PHASE 3: Backend — Suggestion Engine Service
+# =============================================================================
+phase_3_suggestion_service:
+  status: not_started
+  description: |
+    Pure service that builds suggestions from transactions, categories,
+    and existing rules. Stateless; computed per-request.
+
+  tasks:
+    - id: "3.1"
+      task: Create backend/src/services/autoCatSuggestionService.ts
+      status: not_started
+      details: |
+        Constructor receives:
+        - dataService (for getCategories, getTransactions per familyId)
+        - autoCategorizeService (for existing rules)
+
+        Public method:
+
+        async getSuggestions(familyId: string): Promise<AutoCatSuggestionsResponse>
+
+        Algorithm:
+        1. const categorized = (await transactionReader.getActiveTransactions(familyId))
+             .filter(t => !t.pending)
+             .filter(t => t.categoryId)
+             .filter(t => isWithinDays(t.date, 180));
+
+        2. const uncategorized = (await transactionReader.getActiveTransactions(familyId))
+             .filter(t => !t.pending)
+             .filter(t => !t.categoryId);
+           // No time bound on uncategorized — the rule should sweep up old ones too.
+
+        3. For each transaction, compute normalizeMerchantKey(t). Drop nulls.
+
+        4. Group categorized by normalized key. Drop groups with size < 3.
+
+        5. For each surviving group:
+           - Tally categoryId counts.
+           - topCategoryCount / clusterSize = agreementPct.
+           - Drop if agreementPct < 80.
+
+        6. Build a parallel index of uncategorized by normalized key.
+           For each surviving categorized group:
+           - pendingMatchCount = uncategorized[key]?.length ?? 0.
+           - Drop if pendingMatchCount < 1.
+
+        7. Existing-rule dedup:
+           - For each active auto-cat rule, normalize each pattern via
+             a lighter "lowercase + trim" pass (rule patterns aren't
+             merchant strings, so the processor-prefix strip would be
+             wrong; use a dedicated normalizeRulePattern() variant).
+           - If any normalized rule pattern includes the cluster's
+             normalized key, OR the cluster's key includes any normalized
+             rule pattern, drop the cluster. (Either direction means the
+             user's existing rule already governs this merchant.)
+
+        8. Sort survivors by pendingMatchCount desc, tie-break by
+           clusterSize desc.
+
+        9. Build display label:
+           - Take the most common original merchantName among the
+             cluster's transactions (or, if all null, the most common
+             raw name). Title-case it. This is what shows on the card.
+
+        10. Truncate to 10 results, return totalSuggestions + truncated.
+
+        11. Log structured event auto_cat_suggestions.scan with
+            {familyId, totalCategorizedScanned, totalUncategorizedScanned,
+             clustersFound, suggestionsReturned, durationMs}.
+
+    - id: "3.2"
+      task: Add normalizeRulePattern() helper in merchantNormalization.ts
+      status: not_started
+      details: |
+        Different from normalizeMerchantKey(): rule patterns are
+        user-typed and shouldn't have processor-prefix or store-number
+        strips applied. Just lowercase + trim + collapse whitespace.
+        Reused at suggestion-time and at rule-creation collision check.
+
+    - id: "3.3"
+      task: Register the service
+      status: not_started
+      details: |
+        Wire into backend/src/services/index.ts (or wherever the existing
+        service singletons are constructed). Inject dataService and
+        autoCategorizeService.
+
+    - id: "3.4"
+      task: Unit tests for AutoCatSuggestionService
+      status: not_started
+      details: |
+        File: backend/src/services/__tests__/autoCatSuggestionService.test.ts
+
+        Use a fake dataService + fake autoCategorizeService. No mocks
+        of the algorithm itself.
+
+        Cases:
+        - Empty inputs → empty suggestions
+        - 3 Lola Pizza categorized as Restaurants, 1 uncategorized
+          → 1 suggestion, agreement 100%
+        - 3 Lola Pizza categorized (2 Restaurants, 1 Coffee), 1 pending
+          → no suggestion (66% < 80%)
+        - 4 categorized (3 Restaurants, 1 Coffee), 1 pending
+          → no suggestion (75% < 80%)
+        - 5 categorized (4 Restaurants, 1 Coffee), 1 pending
+          → suggestion (80% qualifies)
+        - 3 categorized but 0 pending → no suggestion
+        - Cluster covered by existing rule "lola" → suppressed
+        - Transfer cluster (3 Chase->BoA categorized as Transfer-Out,
+          1 pending) → surfaces as suggestion
+        - Pending transactions in source data → excluded from both sides
+        - Transactions older than 180 days excluded from categorized
+          side, but old uncategorized still counted on pending side
+        - Sort order: 5-pending cluster sorts above 2-pending cluster
+        - Truncation: 12 valid clusters → 10 returned, truncated=true,
+          totalSuggestions=12
+
+# =============================================================================
+# PHASE 4: Backend — API Route
+# =============================================================================
+phase_4_routes:
+  status: not_started
+  description: |
+    Single GET endpoint exposed under the existing /api/v1/categories
+    namespace (sibling to auto-cat rule endpoints).
+
+  tasks:
+    - id: "4.1"
+      task: Add GET /api/v1/categories/auto-cat/suggestions
+      status: not_started
+      details: |
+        Router file: backend/src/routes/autoCategorize.ts (or wherever the
+        existing auto-cat routes live — confirm during impl).
+
+        - Auth middleware: required (familyId from session)
+        - No query params
+        - Calls autoCatSuggestionService.getSuggestions(familyId)
+        - Returns AutoCatSuggestionsResponse
+        - Errors: 401 unauthenticated, 500 on internal error (logged)
+
+    - id: "4.2"
+      task: Augment rule-creation log line with source field
+      status: not_started
+      details: |
+        Existing POST /api/v1/autocategorize/rules log line should accept
+        an optional source: 'manual' | 'suggestion' field (default
+        'manual'). Frontend passes 'suggestion' when the create comes
+        from a suggestion card (see Phase 6.4).
+
+        Body shape addition:
+          { source?: 'manual' | 'suggestion' }
+        — accepted but not stored on the rule itself; only used for
+        logging. Validate via Zod with a default.
+
+    - id: "4.3"
+      task: Route-level integration test
+      status: not_started
+      details: |
+        File: backend/src/routes/__tests__/autoCategorize.suggestions.test.ts
+
+        - 401 when unauthenticated
+        - 200 + empty list when no eligible clusters
+        - 200 + populated list with seeded data exercising one happy path
+
+# =============================================================================
+# PHASE 5: Frontend — API Client
+# =============================================================================
+phase_5_api_client:
+  status: not_started
+  description: |
+    Add the suggestions fetcher and extend the rule creation method to
+    optionally pass source='suggestion'.
+
+  tasks:
+    - id: "5.1"
+      task: Add getAutoCatSuggestions() to frontend/src/lib/api/autoCategorize.ts
+      status: not_started
+      details: |
+        async getAutoCatSuggestions(): Promise<AutoCatSuggestionsResponse>
+        - GET /api/v1/categories/auto-cat/suggestions
+        - Typed response from shared/types
+
+    - id: "5.2"
+      task: Extend createAutoCategorizeRule() to accept source
+      status: not_started
+      details: |
+        Optional second arg or extra body field: source?: 'suggestion'.
+        Default unset so the existing manual-create call sites are
+        unaffected.
+
+# =============================================================================
+# PHASE 6: Frontend — Suggested Rules Section UI
+# =============================================================================
+phase_6_ui:
+  status: not_started
+  description: |
+    All UI lives inside or above frontend/src/components/categories/
+    AutoCategorization.tsx. Keep it modular — new files for the section,
+    card, preview, and dismissal hook so AutoCategorization.tsx doesn't
+    bloat past its size budget.
+
+  tasks:
+    - id: "6.1"
+      task: Create useDismissedAutoCatSuggestions hook
+      status: not_started
+      details: |
+        File: frontend/src/components/categories/useDismissedAutoCatSuggestions.ts
+
+        - localStorage key: 'autoCatSuggestionsDismissed'
+        - Stores Set<string> of normalized keys
+        - API: { dismissed: Set<string>, dismiss(key), undismiss(key) }
+        - Mirror the shape of useDismissedParentIds from BvA.
+        - Add a JSDoc note: "Per-user, NOT shared. See SECURITY note in
+          BvA's useDismissedParentIds for the same rationale."
+
+    - id: "6.2"
+      task: Create SuggestedRulesSection component
+      status: not_started
+      details: |
+        File: frontend/src/components/categories/SuggestedRulesSection.tsx
+
+        - Calls useQuery(['autoCatSuggestions'], api.getAutoCatSuggestions)
+          with staleTime 5 * 60 * 1000, refetchOnWindowFocus: true.
+        - Filters out dismissed keys client-side.
+        - If filtered list is empty → render nothing (no empty state).
+        - Else: section header "Suggested Rules" + "Refresh" icon button
+          that calls queryClient.invalidateQueries(['autoCatSuggestions']).
+        - Renders up to 10 SuggestedRuleCard components.
+        - "Show N more" button if filteredCount > 10 — expands to all.
+        - Sorts by pendingMatchCount desc (server already does this; just
+          preserve order).
+
+    - id: "6.3"
+      task: Create SuggestedRuleCard component
+      status: not_started
+      details: |
+        File: frontend/src/components/categories/SuggestedRuleCard.tsx
+
+        Props: AutoCatSuggestion, onCreate, onDismiss.
+
+        Layout (Mantine Card):
+        - Title: displayLabel
+        - Body line 1: "You categorize this as {topCategoryName}
+          {agreementPct}% of the time ({topCategoryCount} of {clusterSize}
+          past matches in the last 180 days)"
+        - Body line 2: "Would categorize {pendingMatchCount} pending
+          uncategorized {pluralize('transaction', pendingMatchCount)}"
+        - Actions row: [Preview matches] (toggles inline expansion),
+          [Create rule] (primary), [Dismiss ✕] (subtle/icon, top-right)
+        - Preview expansion: collapsible panel listing pending
+          transactions (date, name, amount) and a sample of categorized
+          transactions for confirmation. Fetched via existing
+          api.getTransactions({ ids: [...] }) call.
+
+    - id: "6.4"
+      task: Wire the Create rule action with collision handling
+      status: not_started
+      details: |
+        Mutation flow on Create click:
+
+        1. Look up active rules (already in cache via existing
+           AutoCategorization queries — reuse).
+        2. For each active rule, normalize patterns via shared
+           normalizeRulePattern() helper. Find any rule whose normalized
+           pattern equals the suggestion's normalizedKey.
+        3. Branch:
+           a. No match → call api.createAutoCategorizeRule({
+                patterns: [normalizedKey],
+                categoryId: topCategoryId,
+                matchType: 'contains',
+                source: 'suggestion'
+              }), then call api.applyAutoCategorizeRules(false,
+                pendingTxnIds).
+              On success: toast "Rule created. Categorized N transactions.",
+              invalidate ['autoCatSuggestions'] and transaction queries.
+           b. Match with same categoryId → toast "Rule already exists",
+              invalidate ['autoCatSuggestions'] (the suggestion will
+              vanish on refetch via dedup).
+           c. Match with different categoryId → open Mantine confirm
+              modal: "A rule for '{normalizedKey}' already maps to
+              {OldCategoryName}. Replace with {topCategoryName}?"
+              Replace → api.updateAutoCategorizeRule(id,
+                { categoryId: topCategoryId }) + apply, then same
+                success toast + invalidations.
+              Cancel → no-op, suggestion remains visible.
+
+        4. Auto-clear dismissal entry on successful create (open Q-2
+           in the BRD; default behavior is to clean up so re-suggested
+           variants of the cluster aren't perma-hidden by an old
+           dismissal).
+
+    - id: "6.5"
+      task: Mount SuggestedRulesSection at top of Auto Cat tab
+      status: not_started
+      details: |
+        Inside AutoCategorization.tsx, render <SuggestedRulesSection />
+        directly above the existing rules table.
+
+        Watch the file's size budget (≤600 LOC for frontend pages —
+        this is a component, but keep an eye on it). Prefer extracting
+        small helpers into co-located files rather than inflating
+        AutoCategorization.tsx itself.
+
+    - id: "6.6"
+      task: Component tests for SuggestedRuleCard
+      status: not_started
+      details: |
+        File: frontend/src/components/categories/__tests__/
+              SuggestedRuleCard.test.tsx
+
+        - Renders display label, agreement, cluster size, pending count
+        - "Create rule" calls onCreate with the suggestion
+        - "Dismiss" calls onDismiss with the normalizedKey
+        - Preview expansion toggles visibility
+
+    - id: "6.7"
+      task: Component test for SuggestedRulesSection — empty + populated
+      status: not_started
+      details: |
+        - Empty suggestions array → renders nothing
+        - 3 suggestions, 1 dismissed → renders 2 cards
+        - 12 suggestions → renders 10 cards + "Show 2 more" button
+
+# =============================================================================
+# PHASE 7: Telemetry
+# =============================================================================
+phase_7_telemetry:
+  status: not_started
+  description: |
+    Lightweight server-side structured logs only (per BRD §7).
+
+  tasks:
+    - id: "7.1"
+      task: Emit auto_cat_suggestions.scan from suggestion service
+      status: not_started
+      details: |
+        Already specified in 3.1 step 11. Verify it's wired and shows up
+        in dev logs with all required fields.
+
+    - id: "7.2"
+      task: Emit auto_cat_suggestions.rule_created from rule POST handler
+      status: not_started
+      details: |
+        When the rule POST handler receives source='suggestion', additionally
+        log auto_cat_suggestions.rule_created with:
+        - familyId, normalizedKey (=pattern), categoryId
+        - clusterSize, topCategoryCount, agreementPct, pendingMatchCount —
+          these aren't on the rule POST body today; either pipe them
+          through (preferred) or recompute via the suggestion service
+          on success.
+        - appliedToTxnCount (from the apply-rules result)
+        - replacedExisting: boolean (true if the user took the Replace
+          path in Phase 6.4)
+
+        Decision: pipe the metadata through. Add optional fields to the
+        rule POST body schema and log them out — they aren't stored on
+        the rule.
+
+    - id: "7.3"
+      task: Manual log inspection during testing
+      status: not_started
+      details: |
+        Confirm both events fire with correct payloads in dev. No
+        automated test for log emission unless trivially cheap.
+
+# =============================================================================
+# PHASE 8: Manual Testing & Polish
+# =============================================================================
+phase_8_testing:
+  status: not_started
+  description: |
+    Manual validation. Run against real production-shape data via
+    AWS-LOCAL-SETUP.
+
+  tasks:
+    - id: "8.1"
+      task: Manual testing checklist
+      status: not_started
+      details: |
+        Discovery:
+        - [ ] Section hidden when zero suggestions
+        - [ ] Section appears with seeded clusters meeting the bar
+        - [ ] Sort order matches pendingMatchCount desc
+        - [ ] Top 10 + "Show N more" works
+
+        Card content:
+        - [ ] displayLabel renders correctly (title-case, no SQ * etc.)
+        - [ ] Agreement percentage matches the math
+        - [ ] Cluster size and pending count match underlying data
+
+        Preview:
+        - [ ] Pending transactions shown match the rule's actual matches
+        - [ ] Categorized sample is representative (capped at 5)
+
+        Create rule (no collision):
+        - [ ] Rule appears in the rules table immediately
+        - [ ] Pending transactions get categorized (verify via Transactions
+              page)
+        - [ ] Toast count matches actually-categorized count
+        - [ ] Suggestions list refetches and the card disappears
+
+        Create rule (exact-duplicate collision):
+        - [ ] No new rule created
+        - [ ] Toast: "Rule already exists"
+        - [ ] Suggestion vanishes after refetch (dedup catches it)
+
+        Create rule (different-category collision):
+        - [ ] Replace dialog appears with correct old/new category names
+        - [ ] Replace updates the existing rule
+        - [ ] Cancel leaves the existing rule untouched
+
+        Dismiss:
+        - [ ] Card disappears immediately
+        - [ ] Reload page → card stays gone
+        - [ ] Spouse's session (different localStorage) still sees the card
+        - [ ] Creating a rule for the same cluster later cleans up the
+              dismissal (if Q-2 default kept)
+
+        Refresh:
+        - [ ] Manual refresh button forces a re-scan
+        - [ ] Tab focus refetches stale data
+
+        Edge cases:
+        - [ ] Transfers cluster correctly when consistent
+        - [ ] Pending transactions don't appear in either side
+        - [ ] Removed transactions don't appear in either side
+        - [ ] Hidden categories still produce suggestions
+        - [ ] CUSTOM_AMAZON cluster surfaces if pattern is consistent
+
+    - id: "8.2"
+      task: Performance sanity check
+      status: not_started
+      details: |
+        With production-shape data (npm run backup:local first),
+        time the suggestions endpoint. Target: < 200ms p50.
+        If exceeded, profile the normalization pass and the
+        existing-rule dedup loop.
+
+    - id: "8.3"
+      task: Update CLAUDE.md docs index
+      status: not_started
+      details: |
+        Add to the "Feature BRDs & Plans" table:
+        | Auto-Cat Suggestions | AUTO-CAT-SUGGESTIONS-BRD.md |
+        AUTO-CAT-SUGGESTIONS-PLAN.yaml |
+
+        Add to "Architecture Decisions (recent)":
+        | 2026-05-04 | Auto-cat rule suggestions — deterministic
+        merchant clustering on existing user data; 3/80%/180d bar;
+        per-user localStorage dismissals | AUTO-CAT-SUGGESTIONS-BRD.md |
+
+# =============================================================================
+# IMPLEMENTATION ORDER
+# =============================================================================
+implementation_order:
+  description: |
+    Linear, backend-first. Each phase produces something independently
+    verifiable so the work is bisectable.
+  sequence:
+    - phase: 1 — Shared Types
+      reason: Types referenced by all later phases
+    - phase: 2 — Merchant Normalization Utility
+      reason: Pure, testable, foundational; landing it first means the
+        suggestion service has a stable dependency
+    - phase: 3 — Suggestion Engine Service
+      reason: Build and unit-test the algorithm in isolation before
+        wiring to HTTP
+    - phase: 4 — API Route
+      reason: Expose the service so the frontend can consume it
+    - phase: 5 — API Client
+      reason: Typed methods unblock UI work
+    - phase: 6 — Suggested Rules Section UI
+      reason: Main user-facing deliverable; depends on everything above
+    - phase: 7 — Telemetry
+      reason: Slot in once both sides exist
+    - phase: 8 — Manual Testing & Polish
+      reason: End-to-end verification on real data
+
+# =============================================================================
+# NOTES & FOLLOW-UPS
+# =============================================================================
+notes:
+  brd_field_mismatch: |
+    BRD §3.5 / §4.1 say "name / originalDescription / merchantName" but
+    autoCategorizeService.ts actually searches userDescription /
+    merchantName / name. Plan locks to the implementation truth (D2);
+    BRD should be updated for accuracy in a follow-up edit.
+  open_brd_questions:
+    - Q-1 (preview shows categorized sample too?): default in Phase 6.3
+      is YES, capped at 5
+    - Q-2 (auto-clear dismissal on rule creation?): default in Phase 6.4
+      is YES
+    - Q-3 (numeric badge on Auto Cat tab itself?): NOT in v1; revisit
+      after the section ships

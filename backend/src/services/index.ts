@@ -14,6 +14,7 @@ import { CategoryService, CategoryDependencyChecker } from './categoryService';
 import { BudgetService } from './budgetService';
 import { ReportService } from './reportService';
 import { AutoCategorizeService } from './autoCategorizeService';
+import { AutoCatSuggestionService } from './autoCatSuggestionService';
 import { ImportService } from './importService';
 import { ActualsOverrideService } from './actualsOverrideService';
 import { TripService, getTripService } from './tripService';
@@ -68,6 +69,11 @@ export const categoryService = new CategoryService(dataService, categoryDependen
 // dependency checker closure can resolve it.
 export const autoCategorizeService = new AutoCategorizeService(dataService, categoryService);
 autoCategorizeServiceRef = autoCategorizeService;
+
+export const autoCatSuggestionService = new AutoCatSuggestionService(
+  dataService,
+  autoCategorizeService,
+);
 
 // Create importService with all required dependencies, then wire it back into
 // categoryService via the typed setter (no `as any` needed).
@@ -128,6 +134,7 @@ export {
   CategoryService,
   BudgetService,
   ReportService,
+  AutoCatSuggestionService,
   ImportService,
   ActualsOverrideService,
   TripService,

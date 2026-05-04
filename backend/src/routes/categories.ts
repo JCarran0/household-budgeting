@@ -1,6 +1,6 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
-import { categoryService, transactionService, budgetService, autoCategorizeService } from '../services';
+import { categoryService, transactionService, budgetService, autoCategorizeService, autoCatSuggestionService } from '../services';
 import { authMiddleware } from '../middleware/authMiddleware';
 import { AuthorizationError } from '../errors';
 
@@ -164,6 +164,20 @@ router.post('/import-csv', async (req: Request, res: Response, next: NextFunctio
         errors: result.errors
       });
     }
+  } catch (error) {
+    next(error);
+  }
+});
+
+// GET /api/categories/auto-cat/suggestions - Deterministic auto-cat rule
+// suggestions clustered from active transactions. Must be declared before the
+// /:id catchall so the literal segment is not consumed as an id.
+router.get('/auto-cat/suggestions', async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const familyId = req.user?.familyId;
+    if (!familyId) throw new AuthorizationError();
+    const result = await autoCatSuggestionService.getSuggestions(familyId);
+    res.json(result);
   } catch (error) {
     next(error);
   }

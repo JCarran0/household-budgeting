@@ -1,6 +1,24 @@
 import axios from 'axios';
 import type { AxiosInstance } from 'axios';
-import type { AutoCategorizeRule } from '../../../../shared/types';
+import type {
+  AutoCategorizeRule,
+  AutoCatSuggestionsResponse,
+} from '../../../../shared/types';
+
+/** Mirrors the suggestionMeta zod object on the backend create/update routes. */
+export interface AutoCatRuleSuggestionMeta {
+  clusterSize: number;
+  topCategoryCount: number;
+  agreementPct: number;
+  pendingMatchCount: number;
+  appliedToTxnCount?: number;
+  /** Telemetry distinguishing the three suggestion outcomes. */
+  outcome?: 'created' | 'appended' | 'replaced';
+  /** Legacy mirror of `outcome === 'replaced'`; retained for log continuity. */
+  replacedExisting?: boolean;
+  /** Set when outcome === 'appended' — id of the rule we patterned into. */
+  addedToExistingRuleId?: string;
+}
 
 export function createAutoCategorizeApi(client: AxiosInstance) {
   return {
@@ -11,6 +29,13 @@ export function createAutoCategorizeApi(client: AxiosInstance) {
       return data.rules;
     },
 
+    async getAutoCatSuggestions(): Promise<AutoCatSuggestionsResponse> {
+      const { data } = await client.get<AutoCatSuggestionsResponse>(
+        '/categories/auto-cat/suggestions'
+      );
+      return data;
+    },
+
     async createAutoCategorizeRule(rule: {
       description: string;
       patterns: string[];
@@ -18,6 +43,10 @@ export function createAutoCategorizeApi(client: AxiosInstance) {
       categoryName?: string;
       userDescription?: string;
       isActive?: boolean;
+      /** Telemetry tag — pass 'suggestion' when created from a suggestion card. */
+      source?: 'manual' | 'suggestion';
+      /** Cluster context piped through for the rule_created log. */
+      suggestionMeta?: AutoCatRuleSuggestionMeta;
     }): Promise<AutoCategorizeRule> {
       const { data } = await client.post<{ success: boolean; rule: AutoCategorizeRule }>(
         '/autocategorize/rules',
@@ -35,6 +64,8 @@ export function createAutoCategorizeApi(client: AxiosInstance) {
         categoryName?: string;
         userDescription?: string;
         isActive?: boolean;
+        source?: 'manual' | 'suggestion';
+        suggestionMeta?: AutoCatRuleSuggestionMeta;
       }
     ): Promise<void> {
       try {
