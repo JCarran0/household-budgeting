@@ -1291,6 +1291,7 @@ export interface TaskTemplate {
   defaultTags: string[];          // default tags applied to created task
   defaultSubTasks: string[];      // default sub-task titles
   sortOrder: number;              // display order in dropdown
+  pinned: boolean;                // surfaces in the quick-create dropdown; unpinned only via "Manage"
 }
 
 export interface StoredTaskTemplate extends TaskTemplate {
@@ -1306,6 +1307,7 @@ export interface CreateTaskTemplateDto {
   defaultScope?: TaskScope;
   defaultTags?: string[];
   defaultSubTasks?: string[];
+  pinned?: boolean;
 }
 
 export interface UpdateTaskTemplateDto {
@@ -1316,6 +1318,7 @@ export interface UpdateTaskTemplateDto {
   defaultTags?: string[];
   defaultSubTasks?: string[];
   sortOrder?: number;
+  pinned?: boolean;
 }
 
 // Leaderboard types

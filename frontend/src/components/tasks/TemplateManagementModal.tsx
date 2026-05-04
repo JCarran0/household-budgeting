@@ -20,6 +20,9 @@ import {
   IconArrowDown,
   IconArrowUp,
   IconEdit,
+  IconPin,
+  IconPinFilled,
+  IconPlayerPlayFilled,
   IconPlus,
   IconTrash,
 } from '@tabler/icons-react';
@@ -37,9 +40,10 @@ export interface TemplateManagementModalProps {
   onClose: () => void;
   templates: StoredTaskTemplate[];
   members: FamilyMember[];
+  onQuickCreateFromTemplate: (template: StoredTaskTemplate) => void;
 }
 
-export function TemplateManagementModal({ opened, onClose, templates, members }: TemplateManagementModalProps) {
+export function TemplateManagementModal({ opened, onClose, templates, members, onQuickCreateFromTemplate }: TemplateManagementModalProps) {
   const queryClient = useQueryClient();
   const [showForm, setShowForm] = useState(false);
   const [editingTemplateId, setEditingTemplateId] = useState<string | null>(null);
@@ -94,7 +98,6 @@ export function TemplateManagementModal({ opened, onClose, templates, members }:
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['taskTemplates'] });
       resetForm();
-      notifications.show({ message: 'Template updated', color: 'green' });
     },
   });
 
@@ -148,8 +151,8 @@ export function TemplateManagementModal({ opened, onClose, templates, members }:
         )}
 
         {templates.map((t) => (
-          <Group key={t.id} justify="space-between">
-            <div>
+          <Group key={t.id} justify="space-between" wrap="nowrap">
+            <div style={{ flex: 1, minWidth: 0 }}>
               <Text size="sm" fw={500}>{t.name}</Text>
               <Text size="xs" c="dimmed">
                 {t.defaultScope === 'personal' ? 'Personal' : 'Family'}
@@ -158,7 +161,29 @@ export function TemplateManagementModal({ opened, onClose, templates, members }:
                 {t.defaultSubTasks && t.defaultSubTasks.length > 0 && ` · ${t.defaultSubTasks.length} sub-tasks`}
               </Text>
             </div>
-            <Group gap={4}>
+            <Group gap={4} wrap="nowrap">
+              <ActionIcon
+                variant="subtle"
+                size="sm"
+                title="Create task from this template"
+                onClick={() => {
+                  onQuickCreateFromTemplate(t);
+                  onClose();
+                }}
+              >
+                <IconPlayerPlayFilled size={14} />
+              </ActionIcon>
+              <ActionIcon
+                variant="subtle"
+                size="sm"
+                color={t.pinned ? 'yellow' : 'gray'}
+                title={t.pinned ? 'Unpin from quick-create dropdown' : 'Pin to quick-create dropdown'}
+                onClick={() =>
+                  updateTemplateMutation.mutate({ id: t.id, data: { pinned: !t.pinned } })
+                }
+              >
+                {t.pinned ? <IconPinFilled size={14} /> : <IconPin size={14} />}
+              </ActionIcon>
               <ActionIcon
                 variant="subtle"
                 size="sm"

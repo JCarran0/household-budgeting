@@ -294,17 +294,28 @@ export function TaskKanban({
               </Button>
             </Menu.Target>
             <Menu.Dropdown>
-              {templates.length === 0 ? (
-                <Menu.Item disabled>
-                  <Text size="xs" c="dimmed">No templates yet</Text>
-                </Menu.Item>
-              ) : (
-                templates.map((t) => (
+              {(() => {
+                const pinned = templates.filter((t) => t.pinned);
+                if (templates.length === 0) {
+                  return (
+                    <Menu.Item disabled>
+                      <Text size="xs" c="dimmed">No templates yet</Text>
+                    </Menu.Item>
+                  );
+                }
+                if (pinned.length === 0) {
+                  return (
+                    <Menu.Item disabled>
+                      <Text size="xs" c="dimmed">No pinned templates — pin one in Manage</Text>
+                    </Menu.Item>
+                  );
+                }
+                return pinned.map((t) => (
                   <Menu.Item key={t.id} onClick={() => onQuickCreateFromTemplate(t)}>
                     {t.name}
                   </Menu.Item>
-                ))
-              )}
+                ));
+              })()}
               <Menu.Divider />
               <Menu.Item leftSection={<IconSettings size={14} />} onClick={onOpenTemplates}>
                 Manage Templates...

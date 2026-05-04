@@ -30,6 +30,7 @@ export class TaskTemplateService {
       if (t.defaultDescription === undefined) t.defaultDescription = '';
       if (!t.defaultTags) t.defaultTags = [];
       if (!t.defaultSubTasks) t.defaultSubTasks = [];
+      if (typeof t.pinned !== 'boolean') t.pinned = true;
     }
     return templates;
   }
@@ -64,6 +65,7 @@ export class TaskTemplateService {
       defaultTags: data.defaultTags ?? [],
       defaultSubTasks: data.defaultSubTasks ?? [],
       sortOrder: maxSort + 1,
+      pinned: data.pinned ?? true,
       createdAt: now,
       updatedAt: now,
     };
@@ -105,6 +107,7 @@ export class TaskTemplateService {
       defaultTags: data.defaultTags !== undefined ? data.defaultTags : existing.defaultTags,
       defaultSubTasks: data.defaultSubTasks !== undefined ? data.defaultSubTasks : existing.defaultSubTasks,
       sortOrder: data.sortOrder ?? existing.sortOrder,
+      pinned: data.pinned !== undefined ? data.pinned : existing.pinned,
       updatedAt: now,
     };
 

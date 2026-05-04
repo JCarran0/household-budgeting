@@ -15,6 +15,7 @@ const createTemplateSchema = z.object({
   defaultScope: z.enum(['family', 'personal']).optional(),
   defaultTags: z.array(z.string().min(1).max(50)).max(20).optional(),
   defaultSubTasks: z.array(z.string().min(1).max(200)).max(50).optional(),
+  pinned: z.boolean().optional(),
 });
 
 const updateTemplateSchema = z.object({
@@ -25,6 +26,7 @@ const updateTemplateSchema = z.object({
   defaultTags: z.array(z.string().min(1).max(50)).max(20).optional(),
   defaultSubTasks: z.array(z.string().min(1).max(200)).max(50).optional(),
   sortOrder: z.number().int().positive().optional(),
+  pinned: z.boolean().optional(),
 });
 
 const reorderSchema = z.object({

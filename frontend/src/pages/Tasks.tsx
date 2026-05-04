@@ -38,6 +38,7 @@ import type {
   CreateTaskDto,
   UpdateTaskDto,
   StoredTaskTemplate,
+  TaskScope,
 } from '../../../shared/types';
 
 // ---------------------------------------------------------------------------
@@ -295,14 +296,33 @@ export function Tasks() {
   ], [members]);
 
   // ---------- Quick create from template ----------
+  // Active board filters override template defaults so a one-tap creation lands
+  // in the user's current view — same semantics as the regular Create modal's
+  // createDefaults below.
 
   const quickCreateFromTemplate = (template: StoredTaskTemplate) => {
+    const scope: TaskScope =
+      filterScope === 'family' || filterScope === 'personal'
+        ? (filterScope as TaskScope)
+        : template.defaultScope;
+
+    const assigneeId =
+      filterAssignee === '__unassigned__'
+        ? null
+        : filterAssignee
+        ? filterAssignee
+        : template.defaultAssigneeId;
+
+    const mergedTags = Array.from(
+      new Set([...(template.defaultTags ?? []), ...filterTags])
+    );
+
     createMutation.mutate({
       title: template.name,
       description: template.defaultDescription || undefined,
-      scope: template.defaultScope,
-      assigneeId: template.defaultAssigneeId,
-      tags: template.defaultTags?.length ? template.defaultTags : undefined,
+      scope,
+      assigneeId,
+      tags: mergedTags.length ? mergedTags : undefined,
       subTasks: template.defaultSubTasks?.length
         ? template.defaultSubTasks.map((title) => ({ title }))
         : undefined,
@@ -544,6 +564,7 @@ export function Tasks() {
         onClose={closeTemplates}
         templates={templates}
         members={members}
+        onQuickCreateFromTemplate={quickCreateFromTemplate}
       />
 
       {/* Badge unlock — manual dismiss, no auto-close. Every tier gets a hero modal. */}
