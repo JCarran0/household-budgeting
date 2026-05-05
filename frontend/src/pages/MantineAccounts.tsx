@@ -18,6 +18,7 @@ import {
   Tabs,
 } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
+import { useUrlDisclosure } from '../hooks/useUrlDisclosure';
 import { notifications } from '@mantine/notifications';
 import {
   IconRefresh,
@@ -49,7 +50,7 @@ export function MantineAccounts() {
   const [opened, { open, close }] = useDisclosure(false);
   const [editingAccount, setEditingAccount] = useState<ExtendedPlaidAccount | null>(null);
   const [nicknameModalOpened, { open: openNicknameModal, close: closeNicknameModal }] = useDisclosure(false);
-  const [manualModalOpened, { open: openManualModal, close: closeManualModal }] = useDisclosure(false);
+  const [manualModalOpened, { open: openManualModal, close: closeManualModal }] = useUrlDisclosure('manualAccount');
   const [editingManualAccount, setEditingManualAccount] = useState<ManualAccount | null>(null);
   const [manualAccountToDelete, setManualAccountToDelete] = useState<ManualAccount | null>(null);
   const [deleteManualOpened, { open: openDeleteManual, close: closeDeleteManual }] = useDisclosure(false);
