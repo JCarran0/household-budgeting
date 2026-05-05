@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.71.0](https://github.com/JCarran0/household-budgeting/compare/v5.70.0...v5.71.0) (2026-05-05)
+
+
+### Features
+
+* **navigation:** URL-backed disclosure hook so browser Back closes modals ([032b3ce](https://github.com/JCarran0/household-budgeting/commit/032b3ce672fad7f03278483f78b4d2a4e80a2515))
+
 ## [5.70.0](https://github.com/JCarran0/household-budgeting/compare/v5.69.1...v5.70.0) (2026-05-04)
 
 
