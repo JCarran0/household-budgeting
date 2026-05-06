@@ -52,6 +52,7 @@ export class TaskService {
       for (const st of task.subTasks) {
         if (st.completedAt === undefined) st.completedAt = null;
         if (st.completedBy === undefined) st.completedBy = null;
+        if (st.assigneeId === undefined) st.assigneeId = null;
       }
       // v2.0 fields — lazy heal on read
       if (task.snoozedUntil === undefined) task.snoozedUntil = null;
@@ -150,6 +151,7 @@ export class TaskService {
         id: uuidv4(),
         title: st.title,
         completed: false,
+        assigneeId: null,
         completedAt: null,
         completedBy: null,
       })),
@@ -467,8 +469,10 @@ export class TaskService {
     //
     // Subtasks (v2.1+): each completed subtask on a family-scope parent
     // contributes one additional point, independent of the parent's
-    // completion. Attribution follows the same rule: parent's assigneeId
-    // when set, else the user who checked the subtask (`completedBy`).
+    // completion. Attribution credit chain (v2.2+):
+    //   subTask.assigneeId ?? parent.assigneeId ?? subTask.completedBy
+    // The per-subtask assignee lets a single parent task split work
+    // between multiple users without changing the Task data model.
     const creditCount = (
       userIdToCredit: string,
       completedAt: string,
@@ -507,8 +511,8 @@ export class TaskService {
       for (const st of task.subTasks) {
         if (!st.completed) continue;
         if (!st.completedAt) continue; // legacy unstamped — skip
-        // Prefer parent assignee; fall back to whoever checked the subtask.
-        const creditedUserId = task.assigneeId ?? st.completedBy;
+        // Credit chain: explicit subtask owner > parent owner > completer.
+        const creditedUserId = st.assigneeId ?? task.assigneeId ?? st.completedBy;
         if (!creditedUserId) continue;
         creditCount(creditedUserId, st.completedAt);
       }
@@ -583,6 +587,10 @@ function reconcileSubtaskStamps(
 ): SubTask[] {
   const existingById = new Map(existing.map((s) => [s.id, s]));
   return incoming.map((incomingSt) => {
+    // assigneeId on the wire: undefined means "no change" on existing rows
+    // and "null" (unassigned) on new rows. We never auto-inherit from the
+    // parent — assignment is always explicit (Q3 design decision).
+    const incomingAssignee = incomingSt.assigneeId;
     const prior = existingById.get(incomingSt.id);
     if (!prior) {
       // New subtask introduced in this update. Stamp if it arrives checked.
@@ -590,15 +598,18 @@ function reconcileSubtaskStamps(
         id: incomingSt.id,
         title: incomingSt.title,
         completed: incomingSt.completed,
+        assigneeId: incomingAssignee ?? null,
         completedAt: incomingSt.completed ? now : null,
         completedBy: incomingSt.completed ? userId : null,
       };
     }
+    const nextAssigneeId = incomingAssignee !== undefined ? incomingAssignee : prior.assigneeId;
     if (!prior.completed && incomingSt.completed) {
       return {
         ...prior,
         title: incomingSt.title,
         completed: true,
+        assigneeId: nextAssigneeId,
         completedAt: now,
         completedBy: userId,
       };
@@ -608,12 +619,13 @@ function reconcileSubtaskStamps(
         ...prior,
         title: incomingSt.title,
         completed: false,
+        assigneeId: nextAssigneeId,
         completedAt: null,
         completedBy: null,
       };
     }
-    // No completion change — preserve existing stamps, allow title edits.
-    return { ...prior, title: incomingSt.title };
+    // No completion change — preserve existing stamps, allow title/assignee edits.
+    return { ...prior, title: incomingSt.title, assigneeId: nextAssigneeId };
   });
 }
 

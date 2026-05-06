@@ -55,6 +55,62 @@ interface TaskCardProps {
   isSnoozedView?: boolean;
 }
 
+/**
+ * Renders the avatar(s) on a task card. Always stacks: parent's assignee
+ * first (if any), then unique subtask assignees not already shown.
+ * Returns null only when nothing is assigned anywhere.
+ */
+function TaskAssigneeStack({
+  parentAssigneeId,
+  subTasks,
+  members,
+}: {
+  parentAssigneeId: string | null;
+  subTasks: StoredTask['subTasks'];
+  members: FamilyMember[];
+}) {
+  const seen = new Set<string>();
+  const stack: FamilyMember[] = [];
+
+  if (parentAssigneeId) {
+    const member = members.find((m) => m.userId === parentAssigneeId);
+    if (member) {
+      seen.add(parentAssigneeId);
+      stack.push(member);
+    }
+  }
+
+  for (const st of (subTasks ?? [])) {
+    if (!st.assigneeId || seen.has(st.assigneeId)) continue;
+    const member = members.find((m) => m.userId === st.assigneeId);
+    if (!member) continue;
+    seen.add(st.assigneeId);
+    stack.push(member);
+    if (stack.length >= 3) break;
+  }
+
+  if (stack.length === 0) return null;
+  const tooltipLabel = stack.map((m) => m.displayName).join(' & ');
+  return (
+    <Tooltip label={tooltipLabel}>
+      <Avatar.Group spacing="xs">
+        {stack.map((m) => (
+          <Avatar
+            key={m.userId}
+            variant="filled"
+            size="xs"
+            radius="xl"
+            color={userColor(m)}
+            style={userAvatarStyle(m)}
+          >
+            {m.displayName.charAt(0).toUpperCase()}
+          </Avatar>
+        ))}
+      </Avatar.Group>
+    </Tooltip>
+  );
+}
+
 function SubTaskProgress({ subTasks }: { subTasks: StoredTask['subTasks'] }) {
   if (!subTasks || subTasks.length === 0) return null;
   const completed = subTasks.filter((s) => s.completed).length;
@@ -97,7 +153,6 @@ export function TaskCard({ task, members, onClick, onSnooze, onCancel, onEdit, o
   // of UTC (see formHelpers.dateToIso).
   const [customSnoozeDate, setCustomSnoozeDate] = useState<string | null>(null);
 
-  const assignee = members.find((m) => m.userId === task.assigneeId);
   const isOverdue = task.dueDate && task.status !== 'done' && task.status !== 'cancelled'
     && isPast(parseDateString(task.dueDate));
   const isPersonal = task.scope === 'personal';
@@ -364,13 +419,15 @@ export function TaskCard({ task, members, onClick, onSnooze, onCancel, onEdit, o
         )}
 
         <Group gap="xs" mt={4}>
-          {assignee && (
-            <Tooltip label={assignee.displayName}>
-              <Avatar variant="filled" size="xs" radius="xl" color={userColor(assignee)} style={userAvatarStyle(assignee)}>
-                {assignee.displayName.charAt(0).toUpperCase()}
-              </Avatar>
-            </Tooltip>
-          )}
+          {/* Always-stack: parent's assignee + unique subtask assignees.
+              When the only owner is the parent (or no one), this
+              collapses to a single avatar — the common case is
+              unaffected. */}
+          <TaskAssigneeStack
+            parentAssigneeId={task.assigneeId}
+            subTasks={task.subTasks}
+            members={members}
+          />
 
           {task.dueDate && (
             <Badge

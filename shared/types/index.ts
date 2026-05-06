@@ -1177,6 +1177,13 @@ export interface SubTask {
   title: string;
   completed: boolean;
   /**
+   * Per-subtask assignee. Null means inherit-or-unassigned: leaderboard
+   * credit falls back to `parent.assigneeId`, then `completedBy`. Set
+   * explicitly via the task form modal; never auto-inherited from the
+   * parent (intentional — keeps assignment decisions explicit).
+   */
+  assigneeId: string | null;
+  /**
    * Server-stamped timestamp when `completed` transitioned false → true.
    * Cleared (null) when the subtask is unchecked. Populated by the server
    * on each toggle; client-supplied values are ignored.
@@ -1185,7 +1192,7 @@ export interface SubTask {
   /**
    * Server-stamped userId of whoever most recently checked this subtask.
    * Cleared when unchecked. Subtask leaderboard credit falls through to
-   * this field when the parent task has no assignee.
+   * this field when neither the subtask nor the parent has an assignee.
    */
   completedBy: string | null;
 }
@@ -1244,7 +1251,14 @@ export interface CreateTaskDto {
  * `completedAt` / `completedBy` are server-stamped based on toggles and
  * cannot be set by the client.
  */
-export type SubTaskUpdate = Pick<SubTask, 'id' | 'title' | 'completed'>;
+export type SubTaskUpdate = Pick<SubTask, 'id' | 'title' | 'completed'> & {
+  /**
+   * Optional on the wire: omitted means "no change" on existing rows
+   * (preserves the prior assigneeId), and "null" (unassigned) on new rows.
+   * Never auto-inherited from the parent — assignment is always explicit.
+   */
+  assigneeId?: string | null;
+};
 
 export interface UpdateTaskDto {
   title?: string;

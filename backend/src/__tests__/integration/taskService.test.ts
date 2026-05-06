@@ -861,6 +861,53 @@ describe('Task Service Integration Tests', () => {
       expect(assigneeEntry.completedToday).toBe(1);
     });
 
+    it('should credit subtasks to the per-subtask assignee, overriding parent assignee', async () => {
+      // Credit chain: subTask.assigneeId ?? parent.assigneeId ?? completedBy.
+      // Parent is assigned to OTHER_USER, but the subtask is explicitly
+      // assigned to `userId` — credit must land on `userId`.
+      const OTHER_USER = '33333333-4444-5555-6666-777777777777';
+
+      const createRes = await request(app)
+        .post('/api/v1/tasks')
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({
+          title: 'Split chore',
+          assigneeId: OTHER_USER,
+          subTasks: [{ title: 'My piece' }],
+        })
+        .expect(201);
+
+      const subId = createRes.body.subTasks[0].id;
+
+      // Set explicit subtask assignee + complete in one update
+      await request(app)
+        .put(`/api/v1/tasks/${createRes.body.id}`)
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({
+          subTasks: [
+            { id: subId, title: 'My piece', completed: true, assigneeId: userId },
+          ],
+        })
+        .expect(200);
+
+      const res = await request(app)
+        .get('/api/v1/tasks/leaderboard')
+        .query({ timezone: 'America/New_York' })
+        .set('Authorization', `Bearer ${authToken}`)
+        .expect(200);
+
+      const meEntry = res.body.entries.find((e: any) => e.userId === userId);
+      const otherEntry = res.body.entries.find((e: any) => e.userId === OTHER_USER);
+
+      // Subtask credit lands on the explicit subtask assignee, not the
+      // parent's. OTHER_USER isn't a family member in this fixture, so
+      // they only appear on the leaderboard if some event lands on them —
+      // which it must not, since the subtask overrides the parent's
+      // assignee.
+      expect(meEntry.completedToday).toBe(1);
+      expect(otherEntry?.completedToday ?? 0).toBe(0);
+    });
+
     it('should un-credit a subtask when it is unchecked', async () => {
       const createRes = await request(app)
         .post('/api/v1/tasks')
@@ -1054,10 +1101,10 @@ describe('Task Service Integration Tests', () => {
             title: 'Revoke test',
             completedAt: now,
             subTasks: [
-              { id: 'a', title: 'A', completed: true, completedAt: now, completedBy: userId },
-              { id: 'b', title: 'B', completed: true, completedAt: now, completedBy: userId },
-              { id: 'c', title: 'C', completed: true, completedAt: now, completedBy: userId },
-              { id: 'd', title: 'D', completed: true, completedAt: now, completedBy: userId },
+              { id: 'a', title: 'A', completed: true, assigneeId: null, completedAt: now, completedBy: userId },
+              { id: 'b', title: 'B', completed: true, assigneeId: null, completedAt: now, completedBy: userId },
+              { id: 'c', title: 'C', completed: true, assigneeId: null, completedAt: now, completedBy: userId },
+              { id: 'd', title: 'D', completed: true, assigneeId: null, completedAt: now, completedBy: userId },
             ],
           },
         ],

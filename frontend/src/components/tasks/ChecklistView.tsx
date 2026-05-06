@@ -224,6 +224,7 @@ export function ChecklistView({ tasks, members, onEdit, quickCreateDefaults }: C
           id: crypto.randomUUID(),
           title: s.title,
           completed: false,
+          assigneeId: null,
           completedAt: null,
           completedBy: null,
         })),
@@ -331,6 +332,7 @@ export function ChecklistView({ tasks, members, onEdit, quickCreateDefaults }: C
         id: crypto.randomUUID(),
         title: trimmed,
         completed: false,
+        assigneeId: null,
         completedAt: null,
         completedBy: null,
       };

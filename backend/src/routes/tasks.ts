@@ -16,6 +16,7 @@ const subTaskSchema = z.object({
   id: z.string(),
   title: z.string().min(1).max(200),
   completed: z.boolean(),
+  assigneeId: z.string().nullable().optional(),
 });
 
 // Exported so the chat action handler can re-use the same schema.

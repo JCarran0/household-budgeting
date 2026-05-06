@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
 import {
+  Avatar,
   Button,
   Group,
+  Menu,
   Stack,
   TextInput,
   Textarea,
@@ -11,6 +13,7 @@ import {
   ActionIcon,
   CloseButton,
   Text,
+  Tooltip,
 } from '@mantine/core';
 import { DatePickerInput } from '@mantine/dates';
 import { useForm } from '@mantine/form';
@@ -19,8 +22,11 @@ import {
   IconPlayerPlay,
   IconArrowUp,
   IconArrowDown,
+  IconUserCircle,
+  IconCheck,
 } from '@tabler/icons-react';
 import { ResponsiveModal } from '../ResponsiveModal';
+import { userColor, userAvatarStyle } from '../../utils/userColor';
 import type {
   StoredTask,
   TaskScope,
@@ -58,10 +64,20 @@ export interface TaskFormModalProps {
   };
 }
 
+/**
+ * Local form-state shape for a subtask row. Holds the editable fields the
+ * user can change in this modal (title, per-row assignee). On submit we
+ * either map back to the wire `SubTask` (edit) or `{ title }[]` (create).
+ */
+interface SubtaskDraft {
+  title: string;
+  assigneeId: string | null;
+}
+
 export function TaskFormModal({ opened, onClose, onSubmit, members, loading, title, initialValues, currentUserId, lockedTags, createDefaults }: TaskFormModalProps) {
   const [tags, setTags] = useState<string[]>(initialValues?.tags ?? []);
-  const [subTaskTitles, setSubTaskTitles] = useState<string[]>(
-    initialValues?.subTasks?.map((s) => s.title) ?? []
+  const [subTaskDrafts, setSubTaskDrafts] = useState<SubtaskDraft[]>(
+    initialValues?.subTasks?.map((s) => ({ title: s.title, assigneeId: s.assigneeId ?? null })) ?? []
   );
   const [newSubTask, setNewSubTask] = useState('');
   const submitModeRef = React.useRef<'create' | 'start'>('create');
@@ -114,7 +130,9 @@ export function TaskFormModal({ opened, onClose, onSubmit, members, loading, tit
       const defaults = initialValues ? [] : (createDefaults?.tags ?? []);
       const merged = Array.from(new Set([...locked, ...existing, ...defaults]));
       setTags(merged);
-      setSubTaskTitles(initialValues?.subTasks?.map((s) => s.title) ?? []);
+      setSubTaskDrafts(
+        initialValues?.subTasks?.map((s) => ({ title: s.title, assigneeId: s.assigneeId ?? null })) ?? []
+      );
       setNewSubTask('');
       submitModeRef.current = 'create';
     }
@@ -124,16 +142,23 @@ export function TaskFormModal({ opened, onClose, onSubmit, members, loading, tit
   const handleSubmit = form.onSubmit((values) => {
     const isEdit = !!initialValues;
     if (isEdit) {
-      // When editing, preserve sub-task IDs and completed status for existing items
+      // When editing, preserve sub-task IDs and completion stamps for
+      // existing items by index. New rows beyond the existing length get a
+      // fresh UUID and start uncompleted/null-stamped.
       const existingSubTasks = initialValues?.subTasks ?? [];
-      const updatedSubTasks: SubTask[] = subTaskTitles.map((st, i) => {
+      const updatedSubTasks: SubTask[] = subTaskDrafts.map((draft, i) => {
         const existing = existingSubTasks[i];
-        if (existing && existing.title === st) {
-          return existing;
+        if (existing) {
+          return { ...existing, title: draft.title, assigneeId: draft.assigneeId };
         }
-        return existing
-          ? { ...existing, title: st }
-          : { id: crypto.randomUUID(), title: st, completed: false, completedAt: null, completedBy: null };
+        return {
+          id: crypto.randomUUID(),
+          title: draft.title,
+          completed: false,
+          assigneeId: draft.assigneeId,
+          completedAt: null,
+          completedBy: null,
+        };
       });
       onSubmit({
         title: values.title,
@@ -153,8 +178,11 @@ export function TaskFormModal({ opened, onClose, onSubmit, members, loading, tit
         dueDate: values.dueDate ?? null,
         scope: values.scope,
         tags: tags.length > 0 ? tags : undefined,
-        subTasks: subTaskTitles.length > 0
-          ? subTaskTitles.map((t) => ({ title: t }))
+        // Per-row assigneeId on create is intentionally dropped: CreateTaskDto
+        // accepts only `{ title }[]` for subtasks. Users assign people via
+        // Edit after the task exists. Keeps the create wire shape unchanged.
+        subTasks: subTaskDrafts.length > 0
+          ? subTaskDrafts.map((d) => ({ title: d.title }))
           : undefined,
         ...(startMode ? { status: 'started' as const } : {}),
       });
@@ -164,9 +192,15 @@ export function TaskFormModal({ opened, onClose, onSubmit, members, loading, tit
   const addSubTask = () => {
     const trimmed = newSubTask.trim();
     if (trimmed) {
-      setSubTaskTitles((prev) => [...prev, trimmed]);
+      setSubTaskDrafts((prev) => [...prev, { title: trimmed, assigneeId: null }]);
       setNewSubTask('');
     }
+  };
+
+  const setSubTaskAssignee = (index: number, assigneeId: string | null) => {
+    setSubTaskDrafts((prev) =>
+      prev.map((d, i) => (i === index ? { ...d, assigneeId } : d))
+    );
   };
 
   const assigneeData = [
@@ -228,39 +262,92 @@ export function TaskFormModal({ opened, onClose, onSubmit, members, loading, tit
           <div>
             <Text size="sm" fw={500} mb={4}>Sub-tasks</Text>
             <Stack gap={4}>
-              {subTaskTitles.map((st, i) => (
-                <Group key={i} gap="xs">
-                  <Text size="sm" style={{ flex: 1 }}>{st}</Text>
-                  <ActionIcon
-                    size="xs"
-                    variant="subtle"
-                    disabled={i === 0}
-                    onClick={() => setSubTaskTitles((prev) => {
-                      const next = [...prev];
-                      [next[i - 1], next[i]] = [next[i], next[i - 1]];
-                      return next;
-                    })}
-                  >
-                    <IconArrowUp size={12} />
-                  </ActionIcon>
-                  <ActionIcon
-                    size="xs"
-                    variant="subtle"
-                    disabled={i === subTaskTitles.length - 1}
-                    onClick={() => setSubTaskTitles((prev) => {
-                      const next = [...prev];
-                      [next[i], next[i + 1]] = [next[i + 1], next[i]];
-                      return next;
-                    })}
-                  >
-                    <IconArrowDown size={12} />
-                  </ActionIcon>
-                  <CloseButton
-                    size="xs"
-                    onClick={() => setSubTaskTitles((prev) => prev.filter((_, idx) => idx !== i))}
-                  />
-                </Group>
-              ))}
+              {subTaskDrafts.map((draft, i) => {
+                const assignee = members.find((m) => m.userId === draft.assigneeId) ?? null;
+                return (
+                  <Group key={i} gap="xs" wrap="nowrap">
+                    <Text size="sm" style={{ flex: 1 }}>{draft.title}</Text>
+                    <Menu position="bottom-end" withinPortal shadow="md" width={200}>
+                      <Menu.Target>
+                        <Tooltip label={assignee ? `Assignee: ${assignee.displayName}` : 'Assign sub-task'}>
+                          <ActionIcon
+                            size="sm"
+                            variant={assignee ? 'filled' : 'subtle'}
+                            color={assignee ? userColor(assignee) : 'gray'}
+                            style={assignee ? userAvatarStyle(assignee) : undefined}
+                            aria-label="Assign sub-task"
+                          >
+                            {assignee ? (
+                              <Avatar
+                                variant="filled"
+                                size="xs"
+                                radius="xl"
+                                color={userColor(assignee)}
+                                style={userAvatarStyle(assignee)}
+                              >
+                                {assignee.displayName.charAt(0).toUpperCase()}
+                              </Avatar>
+                            ) : (
+                              <IconUserCircle size={16} />
+                            )}
+                          </ActionIcon>
+                        </Tooltip>
+                      </Menu.Target>
+                      <Menu.Dropdown>
+                        <Menu.Item
+                          onClick={() => setSubTaskAssignee(i, null)}
+                          rightSection={draft.assigneeId === null ? <IconCheck size={12} /> : null}
+                        >
+                          Unassigned
+                        </Menu.Item>
+                        <Menu.Divider />
+                        {members.map((m) => (
+                          <Menu.Item
+                            key={m.userId}
+                            onClick={() => setSubTaskAssignee(i, m.userId)}
+                            leftSection={
+                              <Avatar variant="filled" size="xs" radius="xl" color={userColor(m)} style={userAvatarStyle(m)}>
+                                {m.displayName.charAt(0).toUpperCase()}
+                              </Avatar>
+                            }
+                            rightSection={draft.assigneeId === m.userId ? <IconCheck size={12} /> : null}
+                          >
+                            {m.displayName}
+                          </Menu.Item>
+                        ))}
+                      </Menu.Dropdown>
+                    </Menu>
+                    <ActionIcon
+                      size="xs"
+                      variant="subtle"
+                      disabled={i === 0}
+                      onClick={() => setSubTaskDrafts((prev) => {
+                        const next = [...prev];
+                        [next[i - 1], next[i]] = [next[i], next[i - 1]];
+                        return next;
+                      })}
+                    >
+                      <IconArrowUp size={12} />
+                    </ActionIcon>
+                    <ActionIcon
+                      size="xs"
+                      variant="subtle"
+                      disabled={i === subTaskDrafts.length - 1}
+                      onClick={() => setSubTaskDrafts((prev) => {
+                        const next = [...prev];
+                        [next[i], next[i + 1]] = [next[i + 1], next[i]];
+                        return next;
+                      })}
+                    >
+                      <IconArrowDown size={12} />
+                    </ActionIcon>
+                    <CloseButton
+                      size="xs"
+                      onClick={() => setSubTaskDrafts((prev) => prev.filter((_, idx) => idx !== i))}
+                    />
+                  </Group>
+                );
+              })}
               <Group gap="xs">
                 <TextInput
                   size="xs"

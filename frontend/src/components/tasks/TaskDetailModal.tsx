@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import {
+  Avatar,
   Badge,
   Button,
   Checkbox,
@@ -7,6 +8,7 @@ import {
   Stack,
   Text,
   Timeline,
+  Tooltip,
 } from '@mantine/core';
 import {
   IconPlayerPlay,
@@ -19,7 +21,7 @@ import {
 import { format, parseISO } from 'date-fns';
 import { ResponsiveModal } from '../ResponsiveModal';
 import { UserColorDot } from '../common/UserColorDot';
-import { userColor } from '../../utils/userColor';
+import { userColor, userAvatarStyle } from '../../utils/userColor';
 import { parseDateString } from '../../utils/formatters';
 import { COLUMNS } from './boardOrdering';
 import type {
@@ -95,15 +97,33 @@ export function TaskDetailModal({ task, onClose, members, onStatusChange, onEdit
               Sub-tasks ({subTasks.filter((s) => s.completed).length}/{subTasks.length})
             </Text>
             <Stack gap={4}>
-              {subTasks.map((st) => (
-                <Checkbox
-                  key={st.id}
-                  label={st.title}
-                  checked={st.completed}
-                  onChange={(e) => onSubTaskToggle(task.id, st.id, e.currentTarget.checked)}
-                  size="sm"
-                />
-              ))}
+              {subTasks.map((st) => {
+                const subAssignee = st.assigneeId ? getMember(st.assigneeId) : null;
+                return (
+                  <Group key={st.id} gap="xs" wrap="nowrap" align="center">
+                    <Checkbox
+                      label={st.title}
+                      checked={st.completed}
+                      onChange={(e) => onSubTaskToggle(task.id, st.id, e.currentTarget.checked)}
+                      size="sm"
+                      style={{ flex: 1 }}
+                    />
+                    {subAssignee && (
+                      <Tooltip label={subAssignee.displayName}>
+                        <Avatar
+                          variant="filled"
+                          size="xs"
+                          radius="xl"
+                          color={userColor(subAssignee)}
+                          style={userAvatarStyle(subAssignee)}
+                        >
+                          {subAssignee.displayName.charAt(0).toUpperCase()}
+                        </Avatar>
+                      </Tooltip>
+                    )}
+                  </Group>
+                );
+              })}
             </Stack>
           </div>
         )}

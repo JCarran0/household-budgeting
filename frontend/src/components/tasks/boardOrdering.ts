@@ -52,6 +52,12 @@ export function bySnoozeAsc(a: StoredTask, b: StoredTask): number {
  * Predicate for the Board view filter bar (assignee + scope + tags). Shared
  * between the render-time filter and the post-create "hidden by filters"
  * detection so they can't drift.
+ *
+ * Subtask-aware assignee match (v2.2+): when filtering by a specific user,
+ * a parent task qualifies if either the parent's `assigneeId` matches OR
+ * any subtask's `assigneeId` matches. The "Unassigned" bucket still
+ * requires the parent to be unassigned (subtask assignment doesn't make
+ * the parent "assigned").
  */
 export function matchesBoardFilters(
   t: StoredTask,
@@ -61,8 +67,10 @@ export function matchesBoardFilters(
 ): boolean {
   if (filterAssignee === '__unassigned__') {
     if (t.assigneeId !== null) return false;
-  } else if (filterAssignee && t.assigneeId !== filterAssignee) {
-    return false;
+  } else if (filterAssignee) {
+    const matchesParent = t.assigneeId === filterAssignee;
+    const matchesSubtask = (t.subTasks ?? []).some((st) => st.assigneeId === filterAssignee);
+    if (!matchesParent && !matchesSubtask) return false;
   }
   if (filterScope === 'family' && t.scope !== 'family') return false;
   if (filterScope === 'personal' && t.scope !== 'personal') return false;
