@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.72.0](https://github.com/JCarran0/household-budgeting/compare/v5.71.0...v5.72.0) (2026-05-06)
+
+
+### Features
+
+* **tasks:** per-subtask assignee with subtask-aware leaderboard credit ([b5b845d](https://github.com/JCarran0/household-budgeting/commit/b5b845da96d002e63891b2f8b7ae7b20511827c3))
+
 ## [5.71.0](https://github.com/JCarran0/household-budgeting/compare/v5.70.0...v5.71.0) (2026-05-05)
 
 
