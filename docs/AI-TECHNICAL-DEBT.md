@@ -460,8 +460,9 @@ Migrated all 156 production `console.*` call sites across 30 files to `log.{info
 ---
 
 ### TD-018: Frontend Bundle Has Outgrown the Workbox Precache Cap
-**Status**: Open (band-aid in place)
+**Status**: Open — step (a) landed 2026-05-23 (commit `1668dc7`); steps (b)–(d) remaining
 **Created**: 2026-05-04
+**Updated**: 2026-05-23
 **Impact**: Medium — deploy-blocking when crossed; PWA update cost grows linearly with bundle size; first-load on cellular feels it
 **Effort**: Medium
 
@@ -475,19 +476,19 @@ The frontend ships as a single ~2.1 MB JS chunk (gzip 621 KB). On 2026-05-04 the
 **Fix**:
 Three independent pieces, in increasing order of effort:
 
-1. **Resolve the static-vs-dynamic `authStore` conflict.** Either inline `client.ts`'s lazy import back to a static one (auth store is small, the dynamic import isn't buying anything since 13 statics already root it) or — better — flip the 13 statics to access the store via a thin DI seam so the dynamic split can actually take effect. Pick the static-everywhere option unless we have a specific reason for the lazy boundary.
+1. ✅ **Resolve the static-vs-dynamic `authStore` conflict** — landed 2026-05-23 (commit `1668dc7`). Took the static-everywhere option: `client.ts:54` flipped from `import('../../stores/authStore').then(...)` to a top-level `import { useAuthStore } from '../../stores/authStore'`. The "circular dep" the lazy import was guarding against doesn't exist at module-init — `useAuthStore` is only referenced inside the response-interceptor body (runs on actual HTTP responses, well after all modules have initialized), so ES module live bindings close the cycle safely. The 13 other statics that were defeating the split now match the canonical import shape. Vite's "dynamic import will not move module into another chunk" warning is gone. Bundle size unchanged at 2.08 MB / 611 KB gzip — expected; this step unblocks (2) and (3), it doesn't move the needle by itself. The chunk-size-warning over 500 KB is independent and is what (2)+(3) address.
 2. **Route-level code-splitting on the heavy pages.** `React.lazy()` + `Suspense` boundaries on `Tasks`, `Trips`, `EnhancedTransactions`, `BudgetVsActuals`, `Admin`, `Settings`, `Reports`. These are independent destinations; the user pays the chunk cost only when they navigate. Expected savings: ~40-50% off the initial JS shell.
 3. **`build.rollupOptions.output.manualChunks` for the obvious vendor splits.** Mantine, `@tabler/icons-react`, `@tanstack/react-query`, the Google Maps + Places stack (used only by Trips). Vendor chunks change rarely → service-worker cache hit rate goes up across releases.
 
-After 1+2, drop `maximumFileSizeToCacheInBytes` back to (or near) the workbox default — keeping the limit elevated removes the forcing function.
+After 2+3, drop `maximumFileSizeToCacheInBytes` back to (or near) the workbox default — keeping the limit elevated removes the forcing function.
 
 **Why not urgent**: 2-user app on broadband; PWA update annoyance is bounded. The deploy block is what dragged this from "ignored warning" to "tracked debt." If we hit 4 MiB the same way, that's the signal to schedule it.
 
 **Files**:
 - `frontend/vite.config.ts` (current 4 MiB band-aid; chunk warning will reappear after the fix shrinks the bundle and we drop the override)
-- `frontend/src/lib/api/client.ts` + `frontend/src/stores/authStore.ts` (static-vs-dynamic conflict)
-- `frontend/src/App.tsx` or wherever routes are declared (route lazy boundaries)
-- `frontend/src/components/InspirationModal.tsx`, `MantineLayout.tsx`, `ProtectedRoute.tsx`, `auth/LoginForm.tsx`, `auth/RegisterForm.tsx`, `chat/ChatOverlay.tsx`, `feedback/FeedbackModal.tsx`, `settings/FamilySection.tsx`, `settings/ProfileSection.tsx`, `pages/MantineDashboard.tsx`, `pages/Projects.tsx`, `pages/Tasks.tsx`, `providers/ThemeProvider.tsx` (the 13 static authStore importers — touched only if we choose option 1.b)
+- ✅ `frontend/src/lib/api/client.ts` — static-vs-dynamic conflict resolved (commit `1668dc7`)
+- `frontend/src/App.tsx` or wherever routes are declared (route lazy boundaries — step 2)
+- Vendor split config — step 3
 
 ---
 
