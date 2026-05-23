@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+### [5.72.1](https://github.com/JCarran0/household-budgeting/compare/v5.72.0...v5.72.1) (2026-05-23)
+
+
+### Code Refactoring
+
+* **api:** static authStore import in client interceptor (TD-018 step a) ([52e8cf0](https://github.com/JCarran0/household-budgeting/commit/52e8cf0558daf6aad45e5be5a2a022d76db9c25a))
+
+
+### Documentation
+
+* **tech-debt:** mark TD-018 step (a) landed ([1de9ebe](https://github.com/JCarran0/household-budgeting/commit/1de9ebec48e04a6df190e02a7299268b6f209985))
+
 ## [5.72.0](https://github.com/JCarran0/household-budgeting/compare/v5.71.0...v5.72.0) (2026-05-06)
 
 
