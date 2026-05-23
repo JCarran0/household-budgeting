@@ -1,4 +1,5 @@
 import axios, { type AxiosInstance, type AxiosError } from 'axios';
+import { useAuthStore } from '../../stores/authStore';
 
 // Use relative URL in production, localhost in development
 const API_BASE_URL = import.meta.env.PROD
@@ -48,13 +49,8 @@ export function createApiClient(): AxiosInstance {
     (response) => response,
     (error: AxiosError) => {
       if (error.response?.status === 401) {
-        // Token expired or invalid — use store logout for full cleanup
-        // (clears localStorage, React Query cache, and filter state)
-        // Lazy import to avoid circular dependency: authStore → api → client
-        import('../../stores/authStore').then(({ useAuthStore }) => {
-          useAuthStore.getState().logout();
-          window.location.href = '/login';
-        });
+        useAuthStore.getState().logout();
+        window.location.href = '/login';
       }
       return Promise.reject(error);
     }
