@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.73.0](https://github.com/JCarran0/household-budgeting/compare/v5.72.1...v5.73.0) (2026-05-25)
+
+
+### Features
+
+* **transactions:** persist notes from edit modal ([e0e383c](https://github.com/JCarran0/household-budgeting/commit/e0e383cd125b856216307a7e561d2db929f85dd4))
+
+
+### Bug Fixes
+
+* bug bash — categorize filter, cardholder label, stable BvA sort, refresh ([0bba6cf](https://github.com/JCarran0/household-budgeting/commit/0bba6cf9998ed75d4dd92ca157346475063702ae))
+
 ### [5.72.1](https://github.com/JCarran0/household-budgeting/compare/v5.72.0...v5.72.1) (2026-05-23)
 
 
