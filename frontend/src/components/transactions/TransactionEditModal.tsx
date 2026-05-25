@@ -190,6 +190,27 @@ export function TransactionEditModal({
     },
   });
 
+  // Update notes mutation
+  const updateNotesMutation = useMutation({
+    mutationFn: ({ transactionId, notes }: { transactionId: string; notes: string | null }) =>
+      api.updateTransactionNotes(transactionId, notes),
+    onSuccess: (_data, variables) => {
+      notifications.show({
+        title: 'Notes Updated',
+        message: 'Transaction notes have been updated',
+        color: 'green',
+      });
+      patchTransactionsInCache(queryClient, [variables.transactionId], { notes: variables.notes });
+    },
+    onError: () => {
+      notifications.show({
+        title: 'Error',
+        message: 'Failed to update notes',
+        color: 'red',
+      });
+    },
+  });
+
   // Update hidden status mutation
   const updateHiddenMutation = useMutation({
     mutationFn: ({ transactionId, isHidden }: { transactionId: string; isHidden: boolean }) =>
@@ -236,7 +257,7 @@ export function TransactionEditModal({
   // Build tag options (existing tags)
   const tagOptions = availableTags.map(tag => tag);
 
-  const isLoading = updateCategoryMutation.isPending || addTagsMutation.isPending || updateDescriptionMutation.isPending || updateHiddenMutation.isPending || updateFlaggedMutation.isPending;
+  const isLoading = updateCategoryMutation.isPending || addTagsMutation.isPending || updateDescriptionMutation.isPending || updateNotesMutation.isPending || updateHiddenMutation.isPending || updateFlaggedMutation.isPending;
 
   const handleSubmit = async (values: EditFormValues) => {
     if (!transaction) return;
@@ -274,6 +295,16 @@ export function TransactionEditModal({
         await addTagsMutation.mutateAsync({
           transactionId: transaction.id,
           tags: values.tags,
+        });
+      }
+
+      // Update notes if changed — treat empty string as null for clearing.
+      const currentNotes = transaction.notes ?? '';
+      const notesChanged = values.notes !== currentNotes;
+      if (notesChanged) {
+        await updateNotesMutation.mutateAsync({
+          transactionId: transaction.id,
+          notes: values.notes.trim() === '' ? null : values.notes,
         });
       }
 

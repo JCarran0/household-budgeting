@@ -748,6 +748,35 @@ export class TransactionService {
   }
 
   /**
+   * Update transaction notes
+   */
+  async updateTransactionNotes(
+    familyId: string,
+    transactionId: string,
+    notes: string | null
+  ): Promise<{ success: boolean; error?: string }> {
+    try {
+      return await this.repo.withLock(familyId, async () => {
+        const transactions = await this.repo.getAll(familyId);
+
+        const transaction = transactions.find(t => t.id === transactionId);
+        if (!transaction) {
+          return { success: false, error: 'Transaction not found' };
+        }
+
+        transaction.notes = notes;
+        transaction.updatedAt = new Date();
+
+        await this.repo.saveAll(familyId, transactions);
+        return { success: true };
+      });
+    } catch (error) {
+      log.error({ err: error }, 'error updating transaction notes');
+      return { success: false, error: 'Failed to update notes' };
+    }
+  }
+
+  /**
    * Update transaction hidden status
    */
   async updateTransactionHidden(

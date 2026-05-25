@@ -95,6 +95,13 @@ export function createTransactionsApi(client: AxiosInstance) {
       }
     },
 
+    async updateTransactionNotes(transactionId: string, notes: string | null): Promise<void> {
+      const response = await client.put(`/transactions/${transactionId}/notes`, { notes });
+      if (!response.data.success) {
+        throw new Error(response.data.error || 'Failed to update notes');
+      }
+    },
+
     async updateTransactionHidden(transactionId: string, isHidden: boolean): Promise<void> {
       const response = await client.put(`/transactions/${transactionId}/hidden`, { isHidden });
       if (!response.data.success) {

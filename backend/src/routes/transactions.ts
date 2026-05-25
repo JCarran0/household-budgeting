@@ -193,6 +193,10 @@ const updateDescriptionSchema = z.object({
   description: z.string().nullable(),
 });
 
+const updateNotesSchema = z.object({
+  notes: z.string().nullable(),
+});
+
 const updateHiddenSchema = z.object({
   isHidden: z.boolean(),
 });
@@ -445,6 +449,44 @@ router.put('/:transactionId/description', authMiddleware, async (req: AuthReques
       req.user.familyId,
       transactionId,
       description
+    );
+
+    if (!result.success) {
+      res.status(404).json({ success: false, error: result.error });
+      return;
+    }
+
+    res.json({ success: true });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * PUT /api/v1/transactions/:transactionId/notes
+ * Update transaction notes
+ */
+router.put('/:transactionId/notes', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    if (!req.user) throw new AuthorizationError();
+
+    const validation = updateNotesSchema.safeParse(req.body);
+    if (!validation.success) {
+      res.status(400).json({
+        success: false,
+        error: 'Invalid request data',
+        details: validation.error.format(),
+      });
+      return;
+    }
+
+    const { transactionId } = req.params;
+    const { notes } = validation.data;
+
+    const result = await transactionService.updateTransactionNotes(
+      req.user.familyId,
+      transactionId,
+      notes
     );
 
     if (!result.success) {
