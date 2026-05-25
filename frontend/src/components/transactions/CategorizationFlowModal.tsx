@@ -16,9 +16,13 @@ interface CategorizationFlowModalProps {
   opened: boolean;
   onClose: () => void;
   uncategorizedCount: number;
+  // IDs of uncategorized transactions matching the user's current filter set.
+  // The backend caps each batch to 50 newest; re-running with the same list
+  // is safe because already-categorized rows are filtered out server-side.
+  transactionIds: string[];
 }
 
-export function CategorizationFlowModal({ opened, onClose, uncategorizedCount }: CategorizationFlowModalProps) {
+export function CategorizationFlowModal({ opened, onClose, uncategorizedCount, transactionIds }: CategorizationFlowModalProps) {
   const queryClient = useQueryClient();
 
   const [step, setStep] = useState<FlowStep>('loading');
@@ -55,7 +59,7 @@ export function CategorizationFlowModal({ opened, onClose, uncategorizedCount }:
       setCostUsed(0);
       setError(null);
 
-      api.classifyTransactions()
+      api.classifyTransactions(transactionIds)
         .then(result => {
           setBuckets(result.buckets);
           setUnsureBucket(result.unsureBucket);
@@ -72,6 +76,9 @@ export function CategorizationFlowModal({ opened, onClose, uncategorizedCount }:
           setStep('error');
         });
     }
+    // transactionIds snapshot at open-time is intentional — changing filters
+    // mid-flow shouldn't re-trigger classification.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [opened]);
 
   const startNextBatch = useCallback(() => {
@@ -82,7 +89,7 @@ export function CategorizationFlowModal({ opened, onClose, uncategorizedCount }:
     setCurrentBucketIndex(0);
     setRuleSuggestions([]);
     setError(null);
-    api.classifyTransactions()
+    api.classifyTransactions(transactionIds)
       .then(result => {
         setBuckets(result.buckets);
         setUnsureBucket(result.unsureBucket);
@@ -99,7 +106,7 @@ export function CategorizationFlowModal({ opened, onClose, uncategorizedCount }:
         setStep('error');
       })
       .finally(() => setIsReclassifying(false));
-  }, []);
+  }, [transactionIds]);
 
   const advanceBucket = useCallback(() => {
     const nextIndex = currentBucketIndex + 1;

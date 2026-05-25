@@ -255,6 +255,13 @@ export function EnhancedTransactions() {
 
   const transactions = useMemo(() => transactionData?.transactions || [], [transactionData?.transactions]);
 
+  // Uncategorized IDs scoped to the current filter set — drives AI Categorize
+  // so the user processes the same slice they're looking at, not all-time.
+  const filteredUncategorizedIds = useMemo(
+    () => transactions.filter(t => t.categoryId === null).map(t => t.id),
+    [transactions],
+  );
+
   const amazonTransactionCount = amazonEligibleData?.count ?? 0;
 
   // Paginate transactions
@@ -614,7 +621,8 @@ export function EnhancedTransactions() {
         <CategorizationFlowModal
           opened={isCategorizationOpen}
           onClose={() => setIsCategorizationOpen(false)}
-          uncategorizedCount={uncategorizedData?.count || 0}
+          uncategorizedCount={filteredUncategorizedIds.length}
+          transactionIds={filteredUncategorizedIds}
         />
         <AmazonReceiptFlowModal
           opened={isAmazonReceiptsOpen}

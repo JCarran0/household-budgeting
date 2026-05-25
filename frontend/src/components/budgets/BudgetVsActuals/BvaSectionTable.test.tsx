@@ -61,6 +61,7 @@ function baseProps(overrides: Partial<React.ComponentProps<typeof BvaSectionTabl
     isExpanded: () => false,
     onToggleExpanded: vi.fn(),
     onEditBudget: vi.fn(),
+    sortKey: 'test',
     ...overrides,
   };
 }

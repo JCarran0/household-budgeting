@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../lib/api';
-import type { Transaction, Category } from '../../../../shared/types';
+import type { Transaction, Category, FamilyMember } from '../../../../shared/types';
 import { formatCurrency } from '../../utils/formatters';
 import { useCategoryOptions } from '../../hooks/useCategoryOptions';
 import { patchTransactionsInCache, invalidateTransactionCounts } from '../../lib/transactionCacheSync';
@@ -97,13 +97,20 @@ export function TransactionTable({
     staleTime: 5 * 60 * 1000,
   });
 
-  const getLinkedMember = (transaction: Transaction) => {
-    if (!transaction.accountOwner) return undefined;
+  // Returns the linked family member when the card mapping points at one,
+  // otherwise the mapping's displayName so cardholders (e.g. an authorized
+  // user who isn't a family member) still appear on the row.
+  const getCardholder = (transaction: Transaction): { member?: FamilyMember; label?: string } => {
+    if (!transaction.accountOwner) return {};
     const mapping = ownerMappingsData?.mappings?.find(m =>
       transaction.accountOwner!.includes(m.cardIdentifier),
     );
-    if (!mapping?.linkedUserId) return undefined;
-    return familyData?.family?.members?.find(m => m.userId === mapping.linkedUserId);
+    if (!mapping) return {};
+    const member = mapping.linkedUserId
+      ? familyData?.family?.members?.find(m => m.userId === mapping.linkedUserId)
+      : undefined;
+    if (member) return { member };
+    return { label: mapping.displayName };
   };
 
   // Update category mutation
@@ -333,11 +340,20 @@ export function TransactionTable({
                   <Table.Td>
                     {(() => {
                       const accountInfo = accountLookup.get(transaction.accountId);
-                      const linkedMember = getLinkedMember(transaction);
+                      const cardholder = getCardholder(transaction);
+                      const cardholderEl = cardholder.member ? (
+                        <Tooltip label={cardholder.member.displayName} openDelay={300}>
+                          <span><UserColorDot user={cardholder.member} /></span>
+                        </Tooltip>
+                      ) : cardholder.label ? (
+                        <Tooltip label={cardholder.label} openDelay={300}>
+                          <Badge size="xs" variant="light" color="gray">{cardholder.label}</Badge>
+                        </Tooltip>
+                      ) : null;
                       if (!accountInfo) {
                         return (
                           <Group gap={6} wrap="nowrap">
-                            {linkedMember && <UserColorDot user={linkedMember} />}
+                            {cardholderEl}
                             <Text size="xs" c="dimmed">{transaction.accountName || 'Unknown'}</Text>
                           </Group>
                         );
@@ -348,7 +364,7 @@ export function TransactionTable({
                         : displayName;
                       return (
                         <Group gap={6} wrap="nowrap">
-                          {linkedMember && <UserColorDot user={linkedMember} />}
+                          {cardholderEl}
                           <Tooltip
                             label={`${displayName} - ${accountInfo.institution}${accountInfo.mask ? ` ••${accountInfo.mask}` : ''}`}
                             openDelay={1000}

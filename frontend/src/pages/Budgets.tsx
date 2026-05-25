@@ -106,6 +106,10 @@ export function Budgets() {
 
   const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
   const [copyModalOpen, setCopyModalOpen] = useState(false);
+  // Bumped by the Refresh button. BvA uses it as part of its sort-key so
+  // re-sorting parent rows only happens on a deliberate refresh (or filter
+  // change), not on every amount edit.
+  const [refreshNonce, setRefreshNonce] = useState(0);
   const queryClient = useQueryClient();
 
   const selectedMonth = format(selectedDate, 'yyyy-MM');
@@ -183,7 +187,12 @@ export function Budgets() {
 
               <Tooltip label="Refresh data">
                 <ActionIcon
-                  onClick={() => queryClient.invalidateQueries({ queryKey: ['budgets'] })}
+                  onClick={() => {
+                    queryClient.invalidateQueries({ queryKey: ['budgets'] });
+                    queryClient.invalidateQueries({ queryKey: ['bva'] });
+                    queryClient.invalidateQueries({ queryKey: ['categories'] });
+                    setRefreshNonce(n => n + 1);
+                  }}
                   size="lg"
                   variant="default"
                 >
@@ -249,7 +258,7 @@ export function Budgets() {
             </Tabs.Panel>
 
             <Tabs.Panel value={BVA_TAB} pt="md">
-              <BudgetVsActuals selectedMonth={selectedMonth} active={activeTab === BVA_TAB} />
+              <BudgetVsActuals selectedMonth={selectedMonth} active={activeTab === BVA_TAB} refreshNonce={refreshNonce} />
             </Tabs.Panel>
           </Tabs>
         </Paper>

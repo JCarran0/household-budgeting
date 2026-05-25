@@ -1,4 +1,4 @@
-import { useMemo, useState, type ReactNode } from 'react';
+import { useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   Center,
   Chip,
@@ -37,6 +37,13 @@ interface BudgetVsActualsProps {
   selectedMonth: string;
   /** Whether this tab is currently active. Gates fetches + expensive compute. */
   active: boolean;
+  /**
+   * Bumped by the page's Refresh button. Triggers a re-sort of parent rows.
+   * Without this, parent rows are sorted by |available| only on filter/month
+   * changes — amount edits within a session preserve the current order so
+   * rows don't jump as the user types.
+   */
+  refreshNonce: number;
 }
 
 interface FilteredSection {
@@ -83,7 +90,7 @@ function SummaryCell({
  * consistent across every section. Rollover column is always visible; its
  * styling dims when the Use Rollover toggle is off. See BRD Revision 2.
  */
-export function BudgetVsActuals({ selectedMonth, active }: BudgetVsActualsProps) {
+export function BudgetVsActuals({ selectedMonth, active, refreshNonce }: BudgetVsActualsProps) {
   const urlState = useBvaUrlState();
   const dismissed = useDismissedParentIds();
   const [userExpanded, setUserExpanded] = useState<Map<string, boolean>>(new Map());
@@ -142,6 +149,15 @@ export function BudgetVsActuals({ selectedMonth, active }: BudgetVsActualsProps)
     });
   }, [categories, yearlyBudgetData, ytdTransactionData, selectedMonth, urlState.rollover]);
 
+  // Sort-order cache so amount edits don't reshuffle parent rows mid-session.
+  // Recomputes on filter/month/refresh changes; preserves prior order otherwise,
+  // appending any newly-visible parents at the end (sorted by |available|).
+  const sortKey = `${selectedMonth}|${[...urlState.types].sort().join(',')}|${urlState.variance}|${urlState.rollover ? '1' : '0'}|${refreshNonce}`;
+  const orderCache = useRef<{ key: string; orders: Record<SectionType, string[]> }>({
+    key: '',
+    orders: { income: [], spending: [], savings: [] },
+  });
+
   const sections = useMemo<FilteredSection[]>(() => {
     if (!composition) return [];
 
@@ -172,20 +188,42 @@ export function BudgetVsActuals({ selectedMonth, active }: BudgetVsActualsProps)
       });
     }
 
-    // Sort by |available| descending; alphabetical tiebreak for stable ordering.
+    const sortFreshByAvailable = (a: FilteredParent, b: FilteredParent) => {
+      const aMag = Math.abs(a.parent.available);
+      const bMag = Math.abs(b.parent.available);
+      if (aMag !== bMag) return bMag - aMag;
+      return a.parent.parentName.localeCompare(b.parent.parentName);
+    };
+
+    const sortKeyChanged = orderCache.current.key !== sortKey;
+
     for (const key of Object.keys(buckets) as SectionType[]) {
-      buckets[key].sort((a, b) => {
-        const aMag = Math.abs(a.parent.available);
-        const bMag = Math.abs(b.parent.available);
-        if (aMag !== bMag) return bMag - aMag;
-        return a.parent.parentName.localeCompare(b.parent.parentName);
-      });
+      if (sortKeyChanged) {
+        // Filter/month/refresh changed — sort fresh by |available| desc.
+        buckets[key].sort(sortFreshByAvailable);
+      } else {
+        // Stable session order: existing parents keep their slot; brand-new
+        // parents (e.g., a category just gained a budget) get appended,
+        // sorted among themselves by |available|.
+        const order = orderCache.current.orders[key];
+        const slot = new Map(order.map((id, i) => [id, i]));
+        buckets[key].sort((a, b) => {
+          const aSlot = slot.get(a.parent.parentId);
+          const bSlot = slot.get(b.parent.parentId);
+          if (aSlot !== undefined && bSlot !== undefined) return aSlot - bSlot;
+          if (aSlot !== undefined) return -1;
+          if (bSlot !== undefined) return 1;
+          return sortFreshByAvailable(a, b);
+        });
+      }
+      orderCache.current.orders[key] = buckets[key].map(p => p.parent.parentId);
     }
+    orderCache.current.key = sortKey;
 
     return SECTION_ORDER
       .filter(section => urlState.types.has(section))
       .map(section => ({ section, parents: buckets[section] }));
-  }, [composition, urlState.types, urlState.variance]);
+  }, [composition, urlState.types, urlState.variance, sortKey]);
 
   const visibleParents = useMemo<FilteredParent[]>(() => {
     return sections.flatMap(({ parents }) =>
@@ -459,6 +497,7 @@ export function BudgetVsActuals({ selectedMonth, active }: BudgetVsActualsProps)
             isExpanded={isExpanded}
             onToggleExpanded={toggleExpanded}
             onEditBudget={(categoryId) => setEditTarget({ categoryId })}
+            sortKey={sortKey}
           />
         ))
       )}
