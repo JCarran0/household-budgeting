@@ -16,7 +16,7 @@ const createCategorySchema = z.object({
   parentId: z.string().nullable(),
   description: z.string().max(500).optional(),
   isHidden: z.boolean(),
-  isRollover: z.boolean(),
+  isRollover: z.boolean().optional(),
   isSavings: z.boolean().optional(),
 });
 

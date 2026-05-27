@@ -241,6 +241,15 @@ export class ImportService {
             childCounter++;
           }
 
+          // Default isRollover when the CSV omits the column: leaves on,
+          // top-level off; defer to parent if parent is already rollover so we
+          // don't write a state that would violate subtree exclusivity (REQ-017).
+          const resolvedParent = parentId
+            ? categoriesToAdd.find(c => c.id === parentId)
+              ?? existingNames.get(`root:${parsedCat.parent ?? ''}`)
+            : null;
+          const defaultIsRollover = parentId !== null && !resolvedParent?.isRollover;
+
           const childCategory: Category = {
             id: childId,
             name: parsedCat.name,
@@ -248,7 +257,7 @@ export class ImportService {
             description: parsedCat.description,
             isCustom: true,
             isHidden: parsedCat.isHidden,
-            isRollover: parsedCat.isRollover,
+            isRollover: parsedCat.isRollover ?? defaultIsRollover,
             isIncome: false, // Custom child categories default to expense (will be computed correctly by category service if needed)
             isSavings: false,
           };

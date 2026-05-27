@@ -33,7 +33,13 @@ export interface CreateCategoryDto {
   parentId: string | null;
   description?: string;
   isHidden: boolean;
-  isRollover: boolean;
+  /**
+   * When omitted, defaults per ROLLOVER-BUDGETS-BRD REQ-001:
+   * leaves default to `true`, top-level parents default to `false`. If the
+   * resolved parent is already `isRollover=true`, the new leaf defaults to
+   * `false` to respect existing subtree exclusivity (REQ-017).
+   */
+  isRollover?: boolean;
   isSavings?: boolean;  // only honored when parentId === null
   // isIncome is computed automatically based on parentId
 }
@@ -161,6 +167,13 @@ export class CategoryService {
     const existingIds = categories.map(c => c.id);
     const categoryId = this.generateCategoryId(data.name, existingIds);
 
+    // Default isRollover: leaves on, parents off; leaf defers to parent if
+    // parent is already rollover to avoid subtree conflict (REQ-017).
+    const parent = data.parentId
+      ? categories.find(c => c.id === data.parentId)
+      : null;
+    const defaultIsRollover = data.parentId !== null && !parent?.isRollover;
+
     const newCategory: Category = {
       id: categoryId,
       name: data.name,
@@ -168,7 +181,7 @@ export class CategoryService {
       description: data.description || undefined,
       isCustom: true, // User-created categories are always custom
       isHidden: data.isHidden,
-      isRollover: data.isRollover,
+      isRollover: data.isRollover ?? defaultIsRollover,
       isIncome: this.isIncomeCategory(categoryId, data.parentId, categories),
       isSavings: data.parentId === null ? (data.isSavings ?? false) : false,
     };

@@ -47,7 +47,7 @@ Both family members. Rollover is a per-category property, so one user flagging a
 
 ### 2.1 Flag
 
-**REQ-001:** The `Category.isRollover` boolean flag (already present in the schema) governs whether a category participates in rollover math. Default: `false`.
+**REQ-001:** The `Category.isRollover` boolean flag (already present in the schema) governs whether a category participates in rollover math. Default on creation: **child categories default to `true`**, **top-level categories default to `false`**. If the chosen parent is already `isRollover=true`, the new leaf defaults to `false` to respect subtree exclusivity (REQ-017). Existing categories are not migrated — the default applies only to new creations.
 
 **REQ-002:** `isRollover` can only be set on budgetable categories. A category where `isBudgetableCategory(id) === false` (today: transfers) cannot be flagged rollover.
 

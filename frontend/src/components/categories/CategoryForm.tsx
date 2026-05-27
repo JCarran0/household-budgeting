@@ -106,6 +106,18 @@ export function CategoryForm({ opened, onClose, category, onSuccess }: CategoryF
   const hasChildren = isEdit && allCategories?.some(c => c.parentId === category?.id);
   const isTransferTarget = isEdit && category ? !isBudgetableCategory(category.id, allCategories ?? []) : false;
 
+  // Default rule for new categories (ROLLOVER-BUDGETS-BRD REQ-001): leaves on,
+  // top-level parents off; defer to parent if parent is already rollover.
+  const defaultRolloverFor = (parentId: string | null): boolean => {
+    if (parentId === null) return false;
+    const parent = allCategories?.find(c => c.id === parentId);
+    return !parent?.isRollover;
+  };
+
+  // True after the user manually toggles the rollover checkbox in create mode,
+  // so subsequent parent changes don't stomp their choice.
+  const [rolloverTouched, setRolloverTouched] = useState(false);
+
   const form = useForm<FormValues>({
     initialValues: {
       name: '',
@@ -140,6 +152,7 @@ export function CategoryForm({ opened, onClose, category, onSuccess }: CategoryF
   useEffect(() => {
     if (opened) {
       setConflictState(null);
+      setRolloverTouched(false);
       if (category) {
         form.setValues({
           name: category.name,
@@ -155,6 +168,18 @@ export function CategoryForm({ opened, onClose, category, onSuccess }: CategoryF
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [opened, category]);
+
+  // In create mode, keep isRollover in sync with the chosen parent until the
+  // user manually toggles it. Top-level → false; child → true unless parent
+  // is already rollover (defer to parent, REQ-017).
+  useEffect(() => {
+    if (isEdit || rolloverTouched || !opened) return;
+    const next = defaultRolloverFor(form.values.parentId);
+    if (form.values.isRollover !== next) {
+      form.setFieldValue('isRollover', next);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form.values.parentId, isEdit, rolloverTouched, opened, allCategories]);
 
   // Create mutation
   const createMutation = useMutation({
@@ -298,10 +323,15 @@ export function CategoryForm({ opened, onClose, category, onSuccess }: CategoryF
     return options;
   }, [parentCategories, category]);
 
+  const rolloverInputProps = form.getInputProps('isRollover', { type: 'checkbox' });
   const rolloverCheckbox = (
     <Checkbox
       label="Rollover budget"
-      {...form.getInputProps('isRollover', { type: 'checkbox' })}
+      {...rolloverInputProps}
+      onChange={(event) => {
+        setRolloverTouched(true);
+        rolloverInputProps.onChange?.(event);
+      }}
       description="Surpluses and deficits carry month-to-month within the calendar year. Resets January 1."
       disabled={isTransferTarget}
     />

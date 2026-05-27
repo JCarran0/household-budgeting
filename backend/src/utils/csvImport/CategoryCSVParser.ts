@@ -5,7 +5,12 @@ export interface ParsedCategory {
   parent: string | null;
   name: string;
   isHidden: boolean;
-  isRollover: boolean;
+  /**
+   * Undefined when the CSV row has no `Rollover` column or it's blank, so the
+   * importer can apply the default rule (leaves on, parents off) per
+   * ROLLOVER-BUDGETS-BRD REQ-001. Explicit `Yes`/`No` are honored as-is.
+   */
+  isRollover?: boolean;
   description?: string;
 }
 
@@ -95,7 +100,8 @@ export class CategoryCSVParser extends BaseCSVParser<ParsedCategory> {
 
       // Extract other fields
       const isHidden = this.applyMapping(row, 'isHidden') || false;
-      const isRollover = this.applyMapping(row, 'isRollover') || false;
+      const rolloverRaw = row['Rollover']?.trim();
+      const isRollover = rolloverRaw ? this.parseBoolean(rolloverRaw) : undefined;
       const description = this.applyMapping(row, 'description');
 
       // Validate description if present
@@ -144,7 +150,7 @@ Travel,Flights,,Yes,No,Air travel expenses`;
 - Child: Category name (required)
 - Type: Reserved for future use (optional)
 - Hidden: Whether the category is hidden (Yes/No, optional, defaults to No)
-- Rollover: Whether this is a rollover category (Yes/No, optional, defaults to No)
+- Rollover: Whether this is a rollover category (Yes/No, optional; when blank, child categories default to Yes and top-level categories default to No)
 - Description: Category description (optional)
 
 Note: If a parent category doesn't exist, it will be created automatically.`;
