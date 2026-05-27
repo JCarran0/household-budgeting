@@ -16,6 +16,7 @@ import {
   IconMapPin,
   IconHammer,
   IconChecklist,
+  IconShoppingBag,
 } from '@tabler/icons-react';
 import { useAuthStore } from '../stores/authStore';
 import { api } from '../lib/api';
@@ -85,6 +86,7 @@ export function MantineLayout() {
     { label: 'Reports', icon: IconChartBar, path: '/reports' },
     { label: 'Trips', icon: IconMapPin, path: '/trips' },
     { label: 'Projects', icon: IconHammer, path: '/projects' },
+    { label: 'Wishlist', icon: IconShoppingBag, path: '/wishlist' },
     { label: 'Tasks', icon: IconChecklist, path: '/tasks' },
     { label: 'Admin', icon: IconSettings, path: '/admin' },
   ];

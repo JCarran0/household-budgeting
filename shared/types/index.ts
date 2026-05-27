@@ -686,6 +686,43 @@ export interface UpdateProjectDto {
 }
 
 // =============================================================================
+// Wishlist Types
+// =============================================================================
+
+export type WishlistStatus = 'PENDING' | 'AGREED' | 'REJECTED';
+
+export interface WishlistItem {
+  id: string;
+  name: string;               // required, 1–100 chars
+  estimatedAmount: number;    // positive
+  estimatedMonth: string;     // YYYY-MM
+  categoryId: string;         // spending category only
+  status: WishlistStatus;
+  createdBy: string;          // userId of the creator
+}
+
+export interface StoredWishlistItem extends WishlistItem {
+  createdAt: string;          // ISO timestamp
+  updatedAt: string;          // ISO timestamp
+}
+
+export interface CreateWishlistItemDto {
+  name: string;
+  estimatedAmount: number;
+  estimatedMonth: string;
+  categoryId: string;
+  status?: WishlistStatus;    // defaults to PENDING server-side
+}
+
+export interface UpdateWishlistItemDto {
+  name?: string;
+  estimatedAmount?: number;
+  estimatedMonth?: string;
+  categoryId?: string;
+  status?: WishlistStatus;
+}
+
+// =============================================================================
 // Chatbot Types (Phase 1)
 // =============================================================================
 

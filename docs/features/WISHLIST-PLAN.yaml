@@ -1,0 +1,639 @@
+# =============================================================================
+# Wishlist — Implementation Plan
+# =============================================================================
+# BRD: docs/features/WISHLIST-BRD.md
+# Status: Not Started
+# Last Updated: 2026-05-26
+# =============================================================================
+
+overview:
+  description: |
+    Implementation plan for the standalone Wishlist feature. A new
+    top-level page where either family member can create, edit, status,
+    and delete planned-purchase items. Per-family storage; no integration
+    with budgets, BvA, transactions, or notifications in v1.
+
+    Architecturally a near-twin of Projects: per-family JSON file via
+    DataService, Zod-validated REST routes under /api/v1/wishlist,
+    React Query on the frontend, Mantine modal-based CRUD.
+
+  key_files:
+    brd: docs/features/WISHLIST-BRD.md
+    shared_types: shared/types/index.ts
+    category_helpers: shared/utils/categoryHelpers.ts
+    backend_service: backend/src/services/wishlistService.ts          # new
+    backend_routes: backend/src/routes/wishlist.ts                    # new
+    backend_app: backend/src/app.ts                                    # mount
+    backend_services_index: backend/src/services/index.ts              # wire singleton
+    frontend_page: frontend/src/pages/Wishlist.tsx                    # new
+    frontend_components: frontend/src/components/wishlist/             # new dir
+    frontend_api_client: frontend/src/lib/api/wishlist.ts             # new
+    frontend_api_index: frontend/src/lib/api.ts                       # register
+    frontend_app_routes: frontend/src/App.tsx                          # route
+    frontend_nav: frontend/src/components/MantineLayout.tsx           # nav item
+    docs_index: CLAUDE.md                                             # BRD table + ADR row
+
+# =============================================================================
+# DECISIONS LOG
+# =============================================================================
+decisions:
+  - id: D1
+    date: 2026-05-26
+    decision: Per-family JSON storage via DataService (`wishlist_{familyId}`)
+    rationale: |
+      Same pattern Projects uses (`projects_{familyId}`). No new
+      persistence layer, no migration, no schema. Matches the v1
+      "lightweight" framing in the BRD.
+
+  - id: D2
+    date: 2026-05-26
+    decision: Single REST router at /api/v1/wishlist with POST/GET/PUT/DELETE
+    rationale: |
+      Standard CRUD shape; mirrors Projects routes. No /summary or
+      derived endpoints in v1 — there are no derivations to do.
+
+  - id: D3
+    date: 2026-05-26
+    decision: Server-side category validation against family categories
+    rationale: |
+      BRD REQ-002 requires spending-only categories (not income, not
+      savings, not transfer). Validation must be authoritative on the
+      server — Zod can't know which IDs are spending vs income, so the
+      service resolves the category and rejects ineligible IDs with a
+      400. Frontend filter is a UX convenience, not a security boundary.
+
+  - id: D4
+    date: 2026-05-26
+    decision: Status is a plain string union, no state-machine enforcement
+    rationale: |
+      BRD REQ-007 explicitly says "no workflow restrictions." Either
+      user can flip to any of PENDING/AGREED/REJECTED at any time.
+      Zod enum on the status field is the only constraint.
+
+  - id: D5
+    date: 2026-05-26
+    decision: estimatedMonth stored as `YYYY-MM` string (BRD assumption)
+    rationale: |
+      Avoids timezone foot-guns of a Date. Sorts lexicographically.
+      Same shape MonthlyBudget keys already use elsewhere in the app.
+      Regex-validated in Zod: `/^\d{4}-(0[1-9]|1[0-2])$/`.
+
+  - id: D6
+    date: 2026-05-26
+    decision: estimatedAmount stored as a plain Number (not cents)
+    rationale: |
+      Matches MonthlyBudget.amount and Project totalBudget conventions
+      already in the codebase. Don't invent a parallel money format
+      for one feature.
+
+  - id: D7
+    date: 2026-05-26
+    decision: Hard delete with Mantine confirm modal — no soft delete
+    rationale: |
+      BRD REQ-006. Soft-delete adds a state field and a recovery
+      surface for a feature explicitly framed as low-stakes. Use the
+      existing modals.openConfirmModal helper to keep the dialog
+      consistent with other destructive actions in the app.
+
+  - id: D8
+    date: 2026-05-26
+    decision: Single-page list — no per-item detail route
+    rationale: |
+      Wishlist items are small enough to render fully in a table row.
+      Edit happens in a modal, same as how Tasks and the BvA dismiss
+      flows work. Avoids the router complexity of /wishlist/:id.
+
+  - id: D9
+    date: 2026-05-26
+    decision: No `lastModifiedBy` audit field in v1
+    rationale: |
+      BRD §4 explicitly says no audit trail. Skip the Projects-style
+      `lastModifiedBy` until/unless requested. Re-adding later is
+      additive and backward-compatible.
+
+  - id: D10
+    date: 2026-05-26
+    decision: Defer sort/filter spec to UI phase, with a documented default
+    rationale: |
+      BRD open question. Default v1 sort: status group order
+      PENDING → AGREED → REJECTED, then `estimatedMonth` ascending,
+      then `createdAt` ascending. No filter chips in v1 (revisit if
+      the list grows enough to need them). Captured here so the UI
+      task isn't blocked on a re-decision.
+
+# =============================================================================
+# PHASE 1: Shared Types
+# =============================================================================
+phase_1_types:
+  status: not_started
+  description: |
+    Add wishlist types to shared/types/index.ts in the same style as
+    Project types. One status union, one Item interface, one Stored
+    variant, two DTOs.
+
+  tasks:
+    - id: "1.1"
+      task: Add wishlist types to shared/types/index.ts
+      status: not_started
+      details: |
+        Place after the Project types block.
+
+        export type WishlistStatus = 'PENDING' | 'AGREED' | 'REJECTED';
+
+        export interface WishlistItem {
+          id: string;
+          name: string;                  // required, 1–100 chars
+          estimatedAmount: number;       // positive
+          estimatedMonth: string;        // YYYY-MM
+          categoryId: string;            // spending category only
+          status: WishlistStatus;
+          createdBy: string;             // userId of the creator
+        }
+
+        export interface StoredWishlistItem extends WishlistItem {
+          createdAt: string;             // ISO timestamp
+          updatedAt: string;             // ISO timestamp
+        }
+
+        export interface CreateWishlistItemDto {
+          name: string;
+          estimatedAmount: number;
+          estimatedMonth: string;
+          categoryId: string;
+          status?: WishlistStatus;       // defaults to PENDING server-side
+        }
+
+        export interface UpdateWishlistItemDto {
+          name?: string;
+          estimatedAmount?: number;
+          estimatedMonth?: string;
+          categoryId?: string;
+          status?: WishlistStatus;
+        }
+
+# =============================================================================
+# PHASE 2: Backend — WishlistService
+# =============================================================================
+phase_2_service:
+  status: not_started
+  description: |
+    Per-family CRUD service backed by DataService. Mirrors ProjectService
+    in structure (loadX/saveX private helpers, public CRUD methods,
+    module-level singleton getter). Resolves the category at create/update
+    time to enforce BRD REQ-002.
+
+  tasks:
+    - id: "2.1"
+      task: Create backend/src/services/wishlistService.ts
+      status: not_started
+      details: |
+        Constructor receives: dataService, categoryService.
+
+        Private helpers:
+          loadItems(familyId): StoredWishlistItem[]
+          saveItems(items, familyId): void
+          assertCategoryIsSpending(categoryId, familyId):
+            - Loads categories for familyId via categoryService.getAllCategories
+            - Throws ValidationError if the category:
+              * does not exist for the family
+              * has isSavings === true
+              * has isIncome === true (or, if missing, hierarchy-derived
+                isIncomeCategoryHierarchical returns true)
+              * is a transfer (isBudgetableCategory returns false)
+            - Returns the resolved Category (callers can use if needed)
+
+        Public API:
+          createItem(data: CreateWishlistItemDto, familyId, userId): StoredWishlistItem
+            - assertCategoryIsSpending(data.categoryId, familyId)
+            - Default status to 'PENDING' if not provided
+            - Build StoredWishlistItem with uuid, createdBy=userId,
+              createdAt/updatedAt = now
+            - push, save, return
+
+          listItems(familyId): StoredWishlistItem[]
+            - Return loadItems unsorted; sort is a UI concern
+
+          updateItem(id, data: UpdateWishlistItemDto, familyId): StoredWishlistItem
+            - If categoryId present in data, assertCategoryIsSpending
+            - Merge over existing, bump updatedAt
+            - Throw NotFoundError if id missing
+
+          deleteItem(id, familyId): void
+            - Throw NotFoundError if id missing
+            - Filter and save
+
+        Module-level singleton getter `getWishlistService(dataService,
+        categoryService)` matching the projectService pattern.
+
+    - id: "2.2"
+      task: Wire singleton in backend/src/services/index.ts
+      status: not_started
+      details: |
+        Import getWishlistService; create:
+          export const wishlistService = getWishlistService(
+            dataService, categoryService
+          );
+        Export WishlistService type alongside the others.
+
+    - id: "2.3"
+      task: Unit tests for WishlistService
+      status: not_started
+      details: |
+        File: backend/src/services/__tests__/wishlistService.test.ts
+
+        Use InMemoryDataService (already used by other service tests).
+        Stub categoryService with a minimal fake exposing getAllCategories.
+
+        Cases:
+        - createItem with spending category → returns item with PENDING
+          default, sane timestamps, createdBy populated
+        - createItem with explicit status=AGREED → respected
+        - createItem with income category → ValidationError
+        - createItem with savings category (isSavings=true) → ValidationError
+        - createItem with transfer category → ValidationError
+        - createItem with unknown categoryId → ValidationError
+        - listItems returns all items for the family
+        - listItems isolates by familyId (two families, two stores)
+        - updateItem changes name/amount/month/status individually
+        - updateItem with new ineligible category → ValidationError
+        - updateItem on unknown id → NotFoundError
+        - deleteItem removes from store
+        - deleteItem on unknown id → NotFoundError
+
+# =============================================================================
+# PHASE 3: Backend — API Routes
+# =============================================================================
+phase_3_routes:
+  status: not_started
+  description: |
+    Single Express router under /api/v1/wishlist with the four CRUD
+    verbs. Zod validation per BRD REQ-001/002.
+
+  tasks:
+    - id: "3.1"
+      task: Create backend/src/routes/wishlist.ts
+      status: not_started
+      details: |
+        Boilerplate copy from routes/projects.ts; trim to the four verbs.
+
+        Zod schemas:
+
+          const wishlistStatusSchema = z.enum(['PENDING', 'AGREED', 'REJECTED']);
+          const monthSchema = z.string().regex(
+            /^\d{4}-(0[1-9]|1[0-2])$/,
+            'Invalid month. Use YYYY-MM'
+          );
+
+          const createSchema = z.object({
+            name: z.string().min(1).max(100),
+            estimatedAmount: z.number().positive(),
+            estimatedMonth: monthSchema,
+            categoryId: z.string().min(1),
+            status: wishlistStatusSchema.optional(),
+          });
+
+          const updateSchema = z.object({
+            name: z.string().min(1).max(100).optional(),
+            estimatedAmount: z.number().positive().optional(),
+            estimatedMonth: monthSchema.optional(),
+            categoryId: z.string().min(1).optional(),
+            status: wishlistStatusSchema.optional(),
+          }).refine(
+            (d) => Object.keys(d).length > 0,
+            { message: 'At least one field must be provided' }
+          );
+
+        Routes (all require authMiddleware):
+
+          POST   /                  → createItem  → 201
+          GET    /                  → listItems   → 200
+          PUT    /:id               → updateItem  → 200
+          DELETE /:id               → deleteItem  → 204
+
+        Error mapping (match Projects):
+          - ZodError → 400 with details
+          - ValidationError (from service) → 400
+          - NotFoundError → 404
+          - else → next(error)
+
+    - id: "3.2"
+      task: Mount router in backend/src/app.ts
+      status: not_started
+      details: |
+        Add:
+          import wishlistRoutes from './routes/wishlist';
+        And under the route mounts:
+          app.use(`${apiPrefix}/wishlist`, wishlistRoutes);
+        Place alphabetically or beside /projects — pick consistent with
+        the surrounding ordering.
+
+    - id: "3.3"
+      task: Route integration test (smoke)
+      status: not_started
+      details: |
+        File: backend/src/routes/__tests__/wishlist.test.ts
+
+        Spin up the Express app with InMemoryDataService and a seeded
+        category set (one spending, one income, one savings, one
+        transfer). Authenticated requests via the same helper other
+        route tests use (e.g. plaid.integration.test.ts as reference).
+
+        Cases:
+        - 401 unauthenticated on each verb
+        - POST happy path → 201, returned body matches input + server fields
+        - POST with income category → 400
+        - POST with savings category → 400
+        - POST with bad month format → 400 (Zod)
+        - GET returns the created item
+        - PUT updates status only → 200
+        - PUT with empty body → 400 (refine catches it)
+        - PUT on missing id → 404
+        - DELETE existing id → 204, subsequent GET excludes it
+        - DELETE missing id → 404
+
+# =============================================================================
+# PHASE 4: Frontend — API Client
+# =============================================================================
+phase_4_api_client:
+  status: not_started
+  description: |
+    Thin axios-wrapper module matching the createXApi(client) pattern
+    used by every other domain client.
+
+  tasks:
+    - id: "4.1"
+      task: Create frontend/src/lib/api/wishlist.ts
+      status: not_started
+      details: |
+        export function createWishlistApi(client: AxiosInstance) {
+          return {
+            async createWishlistItem(data: CreateWishlistItemDto):
+              Promise<StoredWishlistItem> { POST '/wishlist' },
+            async getWishlistItems():
+              Promise<StoredWishlistItem[]> { GET '/wishlist' },
+            async updateWishlistItem(id, updates: UpdateWishlistItemDto):
+              Promise<StoredWishlistItem> { PUT `/wishlist/${id}` },
+            async deleteWishlistItem(id):
+              Promise<void> { DELETE `/wishlist/${id}` },
+          };
+        }
+
+    - id: "4.2"
+      task: Register in frontend/src/lib/api.ts
+      status: not_started
+      details: |
+        Import createWishlistApi; spread it into the `api` object beside
+        createProjectsApi.
+
+# =============================================================================
+# PHASE 5: Frontend — Page & Components
+# =============================================================================
+phase_5_ui:
+  status: not_started
+  description: |
+    New top-level page. Split into a small page shell + table + edit
+    modal so the page file stays well under the 600-LOC budget.
+
+  tasks:
+    - id: "5.1"
+      task: Create components folder frontend/src/components/wishlist/
+      status: not_started
+      details: |
+        Files:
+          WishlistTable.tsx          — table of items, row actions
+          WishlistItemModal.tsx      — create/edit form modal
+          wishlistSort.ts            — pure sort util (D10)
+
+    - id: "5.2"
+      task: Implement wishlistSort.ts
+      status: not_started
+      details: |
+        export function sortWishlistItems(
+          items: StoredWishlistItem[]
+        ): StoredWishlistItem[] {
+          const statusRank: Record<WishlistStatus, number> = {
+            PENDING: 0, AGREED: 1, REJECTED: 2,
+          };
+          return [...items].sort((a, b) => {
+            const s = statusRank[a.status] - statusRank[b.status];
+            if (s !== 0) return s;
+            const m = a.estimatedMonth.localeCompare(b.estimatedMonth);
+            if (m !== 0) return m;
+            return a.createdAt.localeCompare(b.createdAt);
+          });
+        }
+
+        Unit test the three tie-breaker layers.
+
+    - id: "5.3"
+      task: Implement WishlistItemModal.tsx
+      status: not_started
+      details: |
+        Props: { item?: StoredWishlistItem; opened: boolean; onClose; }
+        Mantine `Modal` + form with `@mantine/form`.
+
+        Fields:
+          - name           (TextInput, required, max 100)
+          - estimatedAmount (NumberInput, min 0.01, precision 2)
+          - estimatedMonth (MonthPickerInput or YearPicker+Month combo;
+                            serialize to YYYY-MM on submit)
+          - categoryId     (Select filtered to spending categories —
+                            use api.getCategories and locally filter by
+                            !isSavings && !isIncome && isBudgetable.
+                            Frontend filter is convenience; server is
+                            authoritative per D3.)
+          - status         (SegmentedControl: Pending/Agreed/Rejected;
+                            defaults to PENDING for new items)
+
+        Submit calls api.createWishlistItem or api.updateWishlistItem
+        through a useMutation; on success, invalidate ['wishlist'].
+        Show server validation errors inline (parse error.details from
+        the 400 response).
+
+    - id: "5.4"
+      task: Implement WishlistTable.tsx
+      status: not_started
+      details: |
+        Mantine Table; columns: Name, Amount, Month, Category, Status,
+        Created by (optional small text), Actions.
+
+        Row actions:
+          - Edit pencil → opens WishlistItemModal with the item
+          - Delete trash → opens modals.openConfirmModal with copy
+            "Delete this wishlist item?" / "This cannot be undone."
+            On confirm, call api.deleteWishlistItem then invalidate.
+          - Status quick-toggle: SegmentedControl in the Status cell
+            calls api.updateWishlistItem({ status }) with optimistic
+            update. (Either user may toggle per D4.)
+
+        Empty state: friendly placeholder with an "Add wishlist item"
+        button.
+
+        Mobile (< 48em): collapse to stacked Card layout — same pattern
+        Tasks/Projects use. Actions in a kebab Menu.
+
+    - id: "5.5"
+      task: Create frontend/src/pages/Wishlist.tsx
+      status: not_started
+      details: |
+        - Page title + "Add wishlist item" primary button (opens modal in
+          create mode).
+        - useQuery(['wishlist'], api.getWishlistItems).
+        - Pipe through sortWishlistItems before rendering WishlistTable.
+        - State for the edit/create modal (single instance, controlled).
+        - Keep this file under ~200 LOC; the table and modal do the work.
+
+    - id: "5.6"
+      task: Add route in frontend/src/App.tsx
+      status: not_started
+      details: |
+        Import Wishlist; add:
+          <Route path="/wishlist" element={
+            <RouteErrorBoundary routeName="Wishlist">
+              <Wishlist />
+            </RouteErrorBoundary>
+          } />
+        Slot beside /projects.
+
+    - id: "5.7"
+      task: Add nav item in MantineLayout.tsx
+      status: not_started
+      details: |
+        Pick an icon (IconHeart, IconStar, or IconShoppingBag — choose
+        one that's not already used in the nav). Add:
+          { label: 'Wishlist', icon: IconHeart, path: '/wishlist' },
+        Position: between Projects and Tasks reads naturally.
+
+    - id: "5.8"
+      task: Component tests
+      status: not_started
+      details: |
+        Files:
+          frontend/src/components/wishlist/__tests__/
+            wishlistSort.test.ts
+            WishlistItemModal.test.tsx
+            WishlistTable.test.tsx
+
+        Coverage:
+        - sortWishlistItems: status grouping, month sort within group,
+          createdAt tie-breaker
+        - WishlistItemModal: name required, amount positive, month
+          format, category list excludes savings/income/transfer
+          (assert with mocked api.getCategories)
+        - WishlistItemModal: create flow calls createWishlistItem with
+          the right payload; edit flow calls updateWishlistItem
+        - WishlistTable: status quick-toggle calls updateWishlistItem
+          with { status: 'AGREED' }
+        - WishlistTable: delete trash opens confirm; confirming calls
+          deleteWishlistItem; canceling does not
+
+# =============================================================================
+# PHASE 6: Docs & Polish
+# =============================================================================
+phase_6_docs:
+  status: not_started
+  description: |
+    Update the project-level index docs so a future agent reading
+    CLAUDE.md sees the feature.
+
+  tasks:
+    - id: "6.1"
+      task: Update CLAUDE.md "Feature BRDs & Plans" table
+      status: not_started
+      details: |
+        Add row:
+        | Wishlist | WISHLIST-BRD.md | WISHLIST-PLAN.yaml |
+
+    - id: "6.2"
+      task: Add an Architecture Decisions row
+      status: not_started
+      details: |
+        | 2026-05-26 | Wishlist v1 — standalone shared list (PENDING/
+        AGREED/REJECTED); spending categories only; per-family JSON;
+        no budget/BvA/transaction integration | WISHLIST-BRD.md |
+
+    - id: "6.3"
+      task: Manual testing checklist
+      status: not_started
+      details: |
+        Create / edit / delete:
+        - [ ] Create item with all fields → appears in list, status PENDING
+        - [ ] Create with bad month, bad amount, empty name → blocked
+        - [ ] Category picker shows only spending categories (no
+              "Income" parent, no isSavings categories, no Transfer)
+        - [ ] Edit all fields individually, save → table reflects each
+        - [ ] Edit category to an income category via API tool
+              (curl/Postman) → server returns 400
+        - [ ] Delete → confirm dialog appears → confirm removes row
+        - [ ] Delete → cancel leaves row intact
+
+        Status:
+        - [ ] Quick-toggle status from each value to each other value
+        - [ ] Spouse session sees the same status change after refetch
+              (use AWS-LOCAL-SETUP synced data with both users)
+
+        Sort:
+        - [ ] PENDING items render above AGREED above REJECTED
+        - [ ] Within status, earlier estimatedMonth sorts first
+        - [ ] Past-month items stay visible (no auto-archive)
+
+        Boundary:
+        - [ ] Confirm no entries appear in BvA for AGREED items
+        - [ ] Confirm no budget records are created
+        - [ ] Confirm no transactions are created
+
+        Multi-user:
+        - [ ] Both users can create, edit, status, delete any item
+        - [ ] createdBy field reflects the actual creator
+
+    - id: "6.4"
+      task: Performance sanity check
+      status: not_started
+      details: |
+        With ~50 seeded items, confirm the list renders < 100ms and the
+        status toggle round-trip is < 200ms p50. Likely trivially below
+        these; this is just a guardrail.
+
+# =============================================================================
+# IMPLEMENTATION ORDER
+# =============================================================================
+implementation_order:
+  description: |
+    Linear, backend-first. Each phase produces something
+    independently verifiable so the work is bisectable.
+  sequence:
+    - phase: 1 — Shared Types
+      reason: All later phases import from here
+    - phase: 2 — WishlistService
+      reason: Pure CRUD + category validation, fully unit-testable in
+        isolation
+    - phase: 3 — Routes
+      reason: Exposes the service over HTTP; integration test confirms
+        wiring + auth
+    - phase: 4 — API Client
+      reason: Typed methods unblock UI work
+    - phase: 5 — Page & Components
+      reason: Main user-facing deliverable; depends on everything above
+    - phase: 6 — Docs & Polish
+      reason: Index + manual validation against real category data
+
+# =============================================================================
+# NOTES & FOLLOW-UPS
+# =============================================================================
+notes:
+  brd_open_questions_resolved_in_plan:
+    - Q (default sort): resolved in D10 — status group then month asc
+    - Q (filter chips): not in v1; revisit if list grows
+    - Q (nav placement): between Projects and Tasks (Phase 5.7)
+    - Q (empty state copy): "No wishlist items yet. Add one to get
+      started." placeholder in WishlistTable (Phase 5.4)
+    - Q (mobile interactions): stacked Card layout + kebab menu, no
+      swipe actions in v1 (Phase 5.4)
+
+  future_work_if_validated:
+    - BvA integration (BRD §6 out-of-scope item 1) — surface AGREED
+      items as upcoming planned line in BvA II
+    - Link to actual transaction on purchase (BRD §6 out-of-scope item 2)
+    - Notifications on status change (BRD §6 out-of-scope item 3)
+    - lastModifiedBy audit field (D9)
+    - Item attachments / product links (BRD §6)
