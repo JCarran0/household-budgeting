@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.74.0](https://github.com/JCarran0/household-budgeting/compare/v5.73.0...v5.74.0) (2026-05-27)
+
+
+### Features
+
+* **wishlist:** shared list of planned purchases with status workflow ([73059d8](https://github.com/JCarran0/household-budgeting/commit/73059d8b2f24fb80dbfc6d9672cd318a4cf1c870))
+
 ## [5.73.0](https://github.com/JCarran0/household-budgeting/compare/v5.72.1...v5.73.0) (2026-05-25)
 
 
