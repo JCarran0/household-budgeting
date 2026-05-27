@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+### [5.75.2](https://github.com/JCarran0/household-budgeting/compare/v5.75.1...v5.75.2) (2026-05-27)
+
+
+### Bug Fixes
+
+* **auth:** add autocomplete attributes so password managers detect login/register/change-password forms ([a8b791b](https://github.com/JCarran0/household-budgeting/commit/a8b791b4b23b5c0936f3fa63e5167dbc443bb810))
+
 ### [5.75.1](https://github.com/JCarran0/household-budgeting/compare/v5.75.0...v5.75.1) (2026-05-27)
 
 
