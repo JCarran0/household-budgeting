@@ -1,6 +1,6 @@
 import { Badge, Box, Group, Stack, Text, Title } from '@mantine/core';
 import { useMediaQuery } from '@mantine/hooks';
-import type { ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 
 interface TripCoverBannerProps {
   photoName: string;
@@ -34,6 +34,10 @@ export function TripCoverBanner({
 }: TripCoverBannerProps) {
   const key = import.meta.env.VITE_GOOGLE_PLACES_API_KEY as string | undefined;
   const isMobile = useMediaQuery('(max-width: 48em)');
+  const [imgFailed, setImgFailed] = useState(false);
+  useEffect(() => {
+    setImgFailed(false);
+  }, [photoName]);
   const height = compact ? 130 : isMobile ? 200 : 280;
   const titleOrder: 2 | 3 | 4 = compact ? 4 : isMobile ? 3 : 2;
   const badgeSize = compact ? 'xs' : isMobile ? 'sm' : 'md';
@@ -44,7 +48,11 @@ export function TripCoverBanner({
   if (!key) return null;
 
   const bgSrc = `https://places.googleapis.com/v1/${photoName}/media?maxWidthPx=1600&key=${key}`;
-  const attributionText = attribution ? `Photo: ${attribution}` : 'Photo via Google';
+  const attributionText = imgFailed
+    ? 'Photo unavailable'
+    : attribution
+      ? `Photo: ${attribution}`
+      : 'Photo via Google';
 
   return (
     <Box
@@ -57,12 +65,25 @@ export function TripCoverBanner({
         // Caller clips corners in compact mode; detail view rounds its own.
         borderRadius: compact ? 0 : 'var(--mantine-radius-md)',
         overflow: 'hidden',
-        backgroundImage: `url(${bgSrc})`,
-        backgroundSize: 'cover',
-        backgroundPosition: 'center',
         backgroundColor: 'var(--mantine-color-dark-6)',
       }}
     >
+      {/* Real <img> instead of CSS background so onError can fire on Places API failures. */}
+      {!imgFailed && (
+        <img
+          src={bgSrc}
+          alt=""
+          aria-hidden="true"
+          onError={() => setImgFailed(true)}
+          style={{
+            position: 'absolute',
+            inset: 0,
+            width: '100%',
+            height: '100%',
+            objectFit: 'cover',
+          }}
+        />
+      )}
       <Box
         style={{
           position: 'absolute',
