@@ -60,18 +60,21 @@ export function PasswordSection() {
           label="Current Password"
           value={currentPassword}
           onChange={(e) => setCurrentPassword(e.currentTarget.value)}
+          autoComplete="current-password"
         />
         <PasswordInput
           label="New Password"
           description="At least 15 characters"
           value={newPassword}
           onChange={(e) => setNewPassword(e.currentTarget.value)}
+          autoComplete="new-password"
         />
         <PasswordInput
           label="Confirm New Password"
           value={confirmPassword}
           onChange={(e) => setConfirmPassword(e.currentTarget.value)}
           error={confirmPassword && newPassword !== confirmPassword ? 'Passwords do not match' : ''}
+          autoComplete="new-password"
         />
         <Group justify="flex-end">
           <Button

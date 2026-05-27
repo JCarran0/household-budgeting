@@ -68,6 +68,7 @@ export function LoginForm() {
               onChange={(e) => setUsername(e.currentTarget.value)}
               required
               autoFocus
+              autoComplete="username"
             />
 
             <PasswordInput
@@ -76,6 +77,7 @@ export function LoginForm() {
               value={password}
               onChange={(e) => setPassword(e.currentTarget.value)}
               required
+              autoComplete="current-password"
             />
 
             <Button

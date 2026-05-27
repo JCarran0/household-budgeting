@@ -98,6 +98,7 @@ export function RegisterForm() {
               onChange={(e) => setUsername(e.currentTarget.value)}
               required
               autoFocus
+              autoComplete="username"
             />
 
             <TextInput
@@ -107,6 +108,7 @@ export function RegisterForm() {
               value={displayName}
               onChange={(e) => setDisplayName(e.currentTarget.value)}
               required
+              autoComplete="nickname"
             />
 
             <TextInput
@@ -134,6 +136,7 @@ export function RegisterForm() {
               value={password}
               onChange={(e) => setPassword(e.currentTarget.value)}
               required
+              autoComplete="new-password"
             />
 
             {password && (
@@ -171,6 +174,7 @@ export function RegisterForm() {
               onChange={(e) => setConfirmPassword(e.currentTarget.value)}
               required
               error={confirmPassword && password !== confirmPassword ? 'Passwords do not match' : ''}
+              autoComplete="new-password"
             />
 
             <Button
