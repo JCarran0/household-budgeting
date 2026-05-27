@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.75.0](https://github.com/JCarran0/household-budgeting/compare/v5.74.0...v5.75.0) (2026-05-27)
+
+
+### Features
+
+* **categories:** default new leaves to rollover, new top-level parents to flat ([36d42f4](https://github.com/JCarran0/household-budgeting/commit/36d42f4b99de89b908bd9e2b9f6c93a7012c4a75))
+
 ## [5.74.0](https://github.com/JCarran0/household-budgeting/compare/v5.73.0...v5.74.0) (2026-05-27)
 
 
