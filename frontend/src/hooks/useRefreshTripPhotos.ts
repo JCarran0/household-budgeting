@@ -7,6 +7,10 @@
  * photo via Places API. New `photoName` + `photoAttribution` values are
  * PATCHed back and the trip queries invalidate, so the UI heals on its own.
  *
+ * Concurrency: photo fetches run in parallel, but the PATCHes are SEQUENTIAL.
+ * Each updateStop is an unlocked read-modify-write of the whole trips record;
+ * parallel writes tear the file (filesystem) or drop heals (S3). See Phase 2.
+ *
  * Guard: each tripId is refresh-attempted at most once per page load to avoid
  * request storms if the fresh names also fail (e.g., stale `placeId`).
  */
@@ -57,7 +61,9 @@ export async function refreshTripPhotos(
 
   if (targets.length === 0) return;
 
-  await Promise.all(
+  // Phase 1 — fetch fresh photos for every stop in PARALLEL. These are
+  // read-only Google calls; running them concurrently is the latency win.
+  const updates = await Promise.all(
     targets.map(async ({ stop, location }) => {
       try {
         const place = new g.maps.places.Place({ id: location.placeId });
@@ -75,7 +81,7 @@ export async function refreshTripPhotos(
           };
           break;
         }
-        if (!fresh) return;
+        if (!fresh) return null;
 
         const newLocation: VerifiedLocation = {
           ...location,
@@ -83,13 +89,28 @@ export async function refreshTripPhotos(
           ...(fresh.photoAttribution ? { photoAttribution: fresh.photoAttribution } : {}),
         };
         const update = makeLocationUpdate(stop, newLocation);
-        if (!update) return;
-        await api.updateStop(tripId, stop.id, update);
+        if (!update) return null;
+        return { stopId: stop.id, update };
       } catch (err) {
-        console.warn('refreshTripPhotos: failed for stop', stop.id, err);
+        console.warn('refreshTripPhotos: fetch failed for stop', stop.id, err);
+        return null;
       }
     }),
   );
+
+  // Phase 2 — persist SEQUENTIALLY. Each updateStop is a full read-modify-write
+  // of the whole trips_{familyId} record with no cross-request locking. Firing
+  // them in parallel races: torn writes corrupt the JSON on the filesystem
+  // adapter, and lost updates silently drop heals on the S3 adapter. One at a
+  // time, each PATCH reads the prior result, so every stop's photo persists.
+  for (const u of updates) {
+    if (!u) continue;
+    try {
+      await api.updateStop(tripId, u.stopId, u.update);
+    } catch (err) {
+      console.warn('refreshTripPhotos: persist failed for stop', u.stopId, err);
+    }
+  }
 
   await Promise.all([
     queryClient.invalidateQueries({ queryKey: ['trip', tripId] }),
