@@ -3,13 +3,14 @@
 ## Overview
 This document tracks technical debt items identified during the April 2026 architecture audits. Items are prioritized by severity and linked to relevant code locations.
 
-**Last Updated**: 2026-04-23
+**Last Updated**: 2026-06-02
 **Previous (archived)**: [docs/completed/AI-TECHNICAL-DEBT.md](completed/AI-TECHNICAL-DEBT.md)
 **Execution sequencing**: [TECH-DEBT-EXECUTION-PLAN-2026-04.md](TECH-DEBT-EXECUTION-PLAN-2026-04.md)
 
 ## Audits
 - **2026-04-08** — initial audit, TD-001 through TD-010
 - **2026-04-22** — architect review, TD-011 through TD-017 (also updated TD-010)
+- **2026-06-02** — trip-photo corruption incident: updated TD-011 (`tripService` unprotected RMW surface), added TD-019 (backup posture)
 
 ---
 
@@ -273,8 +274,9 @@ See table above. Sequence: Tasks.tsx → BvA II → amazonReceiptService → Tri
 ## 2026-04-22 Audit Additions
 
 ### TD-011: File-Storage Read-Modify-Write Race + Read Amplification
-**Status**: Parts 1a + 1b Resolved (2026-04-22, Sprint 1); Part 3 (SQLite migration) deferred per the cross-cutting section of the execution plan.
+**Status**: Parts 1a + 1b Resolved (2026-04-22, Sprint 1); Part 3 (SQLite migration) deferred per the cross-cutting section of the execution plan. **`tripService` identified as an unprotected surface (2026-06-02) — see update below.**
 **Created**: 2026-04-22
+**Updated**: 2026-06-02
 **Impact**: Critical - Silent data loss on concurrent edits; full-collection reads on every mutation amplify chatbot cost
 **Effort**: Low (mutex + memoization) / High (move to SQLite)
 
@@ -288,12 +290,23 @@ Read amplification compounds this: at 800+ transactions, every single-entity mut
 2. **Short term — read cost.** ✅ Added `requestScopeMiddleware` (AsyncLocalStorage-based) and taught `UnifiedDataService.getData/saveData/deleteData` to consult/populate a per-request memo. Works for both `Repository.getAll` and `ReadOnlyDataService.getData` (the chatbot's path), so the 10× tool-loop amplification collapses to one read per collection per request.
 3. **Medium term — storage migration.** File-based JSON is approaching its scaling ceiling. Plan SQLite (single-file, S3-friendly via litestream, near-zero ops cost) before transactions cross ~5k. This deprecates much of TD-011 wholesale.
 
+**Update (2026-06-02) — `tripService` surfaced as a concurrent-edit case.**
+The "other services adopt `withLock` incrementally as surfaces are identified" caveat in fix (1) came due. The self-healing trip-photo feature ([TRIP-PLACE-PHOTOS](features/TRIP-PLACE-PHOTOS-BRD.md)) fired N parallel `updateStop` PATCHes on page load; each is an unlocked `loadTrips → mutate → saveTrips` cycle. The race manifested exactly as TD-011 predicts:
+- **Filesystem adapter (local dev):** non-atomic `fs.writeJson` → torn file. `trips_{familyId}.json` was corrupted with a valid array followed by a leftover tail fragment (`SyntaxError: Unexpected non-whitespace character after JSON`). Repaired by hand; corrupt copy preserved as `*.corrupt.bak`.
+- **S3 adapter (prod):** `PutObject` is atomic so no corruption, but the N writes off one baseline → lost updates (only one stop's heal survives, the rest silently dropped and re-fire each reload). Prod object verified valid; no data loss.
+
+Stopgap shipped (`f8fc1d4`): the caller (`refreshTripPhotos`) now serializes its PATCHes — fetches stay parallel, writes are sequential. This removes the trigger but is a band-aid at one call site.
+
+**Proper fix:** wrap `tripService`'s stop/trip read-modify-write paths in `Repository.withLock(familyId, fn)`, the same pattern `transactionService` uses. Then audit the remaining JSON-backed services (`projectService`, `taskService`, `wishlistService`, `categoryService`) for the same unprotected RMW shape — any of them can corrupt locally / lose writes in prod under concurrent edits. The SQLite migration (Part 3) deprecates this wholesale, but `withLock` on `tripService` is Low effort and worth doing before then.
+
 **Files**:
 - `backend/src/services/repository.ts` ✅
 - `backend/src/services/transactionService.ts` ✅
 - `backend/src/services/dataService.ts` ✅ (memoization lives at data layer so ReadOnlyDataService benefits too)
 - `backend/src/middleware/requestScope.ts` ✅ (new)
 - `backend/src/app.ts` ✅ (middleware wiring)
+- `backend/src/services/tripService.ts` — unprotected RMW; needs `withLock` (identified 2026-06-02)
+- `frontend/src/hooks/useRefreshTripPhotos.ts` — caller-side serialization band-aid (`f8fc1d4`)
 
 ---
 
@@ -489,6 +502,39 @@ After 2+3, drop `maximumFileSizeToCacheInBytes` back to (or near) the workbox de
 - ✅ `frontend/src/lib/api/client.ts` — static-vs-dynamic conflict resolved (commit `1668dc7`)
 - `frontend/src/App.tsx` or wherever routes are declared (route lazy boundaries — step 2)
 - Vendor split config — step 3
+
+---
+
+### TD-019: No Off-Bucket / Long-Term Backup of Production Data
+**Status**: Open — partially mitigated by existing S3 versioning (see below)
+**Created**: 2026-06-02
+**Impact**: Low-Medium — single-bucket dependence; no recovery from bucket-level loss or edits older than 90 days
+**Effort**: Low
+
+**Problem**:
+Prompted by the TD-011 trip-photo corruption (2026-06-02), we audited what backup actually exists. The finding: **more than expected, but with one real gap.**
+
+Already in place on `budget-app-data-f5b52f89` (verified 2026-06-02):
+- **Versioning: Enabled** — every `PutObject` retains the prior version, so accidental overwrite/corruption is recoverable by restoring an earlier version. This is the primary safety net and it is the right tool for JSON-blob storage.
+- **Lifecycle:** noncurrent versions → STANDARD-IA at 30 days, expire at 90 days. Incomplete multipart uploads aborted at 7 days. Keeps version history cost-bounded.
+- **Scale:** ~22 objects, ~7 MB total. Versioning overhead is pennies/month.
+
+The gap:
+1. **All eggs in one bucket.** Versioning protects against *object*-level mistakes, not against bucket deletion, a destructive lifecycle/policy change, or account compromise. There is no copy outside the bucket.
+2. **90-day horizon.** Versions expire at 90 days, so there is no point-in-time recovery older than a quarter (e.g., "restore the state from 6 months ago").
+3. **No restore drill.** We have never exercised a version-restore, so recovery is untested.
+
+**Fix** (cost-minimal, matched to a 2-user app — pick the cheapest sufficient option, do not gold-plate):
+1. **Cheapest, highest-value:** a scheduled cross-bucket/cross-account copy of the `data/` prefix to a second cheap location — e.g. a weekly `aws s3 sync` into a separate bucket (ideally a different account) with its own lifecycle, or a Glacier Deep Archive tier for >90-day retention. ~7 MB → effectively free; storage cost is rounding error.
+2. Either run (1) from the existing EC2 host via cron, or as a tiny scheduled Lambda. No new always-on infra.
+3. **Test the restore once** and write the 3-line runbook into [AWS-DEPLOYMENTS.md](AI-DEPLOYMENTS.md). An untested backup is a hope, not a backup.
+4. Optional / probably overkill here: S3 MFA-delete, Object Lock. Note them and move on unless the threat model changes.
+
+**Why not urgent**: versioning already covers the overwhelmingly most-likely failure (a bad write — exactly what TD-011 produces). The remaining gap is whole-bucket loss, which for a 2-person app on a personal AWS account is low-probability. Schedule (1)+(3) when convenient; they're an afternoon and a few cents/month.
+
+**Files**:
+- New: a sync script (e.g. `backend/scripts/backup-prod-snapshot.ts` or a shell cron) + schedule
+- [docs/AI-DEPLOYMENTS.md](AI-DEPLOYMENTS.md) — restore runbook
 
 ---
 
