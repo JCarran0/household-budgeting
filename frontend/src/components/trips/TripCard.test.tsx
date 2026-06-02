@@ -2,15 +2,21 @@ import { describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { MantineProvider } from '@mantine/core';
 import { MemoryRouter } from 'react-router-dom';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { TripCard } from './TripCard';
 import { formatTripDateRange } from './tripCardHelpers';
 import type { StayStop, TripSummary } from '../../../../shared/types';
 
 function renderCard(ui: React.ReactElement) {
+  // A photo-bearing trip renders TripPhotoRefreshProvider, which reads the
+  // QueryClient for self-heal invalidation — provide one for all cases.
+  const queryClient = new QueryClient();
   return render(
-    <MemoryRouter>
-      <MantineProvider>{ui}</MantineProvider>
-    </MemoryRouter>,
+    <QueryClientProvider client={queryClient}>
+      <MemoryRouter>
+        <MantineProvider>{ui}</MantineProvider>
+      </MemoryRouter>
+    </QueryClientProvider>,
   );
 }
 

@@ -1,7 +1,10 @@
-import { Image, Stack, Text, Tooltip, UnstyledButton } from '@mantine/core';
+import { Center, Image, Paper, Stack, Text, Tooltip, UnstyledButton } from '@mantine/core';
+import { IconPhotoOff } from '@tabler/icons-react';
 import { ResponsiveModal } from '../../ResponsiveModal';
 import type { MantineRadius } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
+import { useEffect, useState } from 'react';
+import { useTripPhotoRefresh } from '../../../hooks/useRefreshTripPhotos';
 
 interface PlacePhotoThumbProps {
   photoName: string;
@@ -31,6 +34,11 @@ export function PlacePhotoThumb({
 }: PlacePhotoThumbProps) {
   const key = import.meta.env.VITE_GOOGLE_PLACES_API_KEY as string | undefined;
   const [opened, { open, close }] = useDisclosure(false);
+  const [imgFailed, setImgFailed] = useState(false);
+  const refreshPhotos = useTripPhotoRefresh();
+  useEffect(() => {
+    setImgFailed(false);
+  }, [photoName]);
   if (!key) return null;
 
   const tileHeight = height ?? size;
@@ -42,6 +50,24 @@ export function PlacePhotoThumb({
   const heroSrc = `https://places.googleapis.com/v1/${photoName}/media?maxWidthPx=${HERO_MAX_WIDTH_PX}&key=${key}`;
   const attributionText = attribution ? `Photo: ${attribution}` : 'Photo via Google';
 
+  if (imgFailed) {
+    return (
+      <Tooltip label="Photo unavailable" withArrow>
+        <Paper
+          w={size}
+          h={tileHeight}
+          radius={radius}
+          withBorder
+          style={{ background: 'var(--mantine-color-gray-1)' }}
+        >
+          <Center h="100%">
+            <IconPhotoOff size={Math.max(14, size / 4)} color="var(--mantine-color-gray-5)" />
+          </Center>
+        </Paper>
+      </Tooltip>
+    );
+  }
+
   return (
     <>
       <Tooltip label={attributionText} withArrow>
@@ -50,7 +76,18 @@ export function PlacePhotoThumb({
           aria-label={`View ${alt} photo full size`}
           style={{ display: 'inline-block', borderRadius: 'var(--mantine-radius-sm)' }}
         >
-          <Image src={thumbSrc} alt={alt} w={size} h={tileHeight} radius={radius} fit="cover" />
+          <Image
+            src={thumbSrc}
+            alt={alt}
+            w={size}
+            h={tileHeight}
+            radius={radius}
+            fit="cover"
+            onError={() => {
+              setImgFailed(true);
+              refreshPhotos?.();
+            }}
+          />
         </UnstyledButton>
       </Tooltip>
       <ResponsiveModal opened={opened} onClose={close} size="xl" centered title={alt}>

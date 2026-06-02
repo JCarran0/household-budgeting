@@ -5,10 +5,11 @@ import {
   IconTrash,
   IconGripVertical,
 } from '@tabler/icons-react';
-import type { HTMLAttributes, KeyboardEvent, MouseEvent } from 'react';
+import { useEffect, useState, type HTMLAttributes, type KeyboardEvent, type MouseEvent } from 'react';
 import type { Stop, StopLocation, TransitMode } from '../../../../../shared/types';
 import { ResponsiveModal } from '../../ResponsiveModal';
 import { stopIcon } from './stopIcons';
+import { useTripPhotoRefresh } from '../../../hooks/useRefreshTripPhotos';
 
 interface StopPhotoInfo {
   photoName: string;
@@ -100,14 +101,19 @@ export function StopCard({
   const isTouch = useMediaQuery('(hover: none)');
   const handleVisible = Boolean(showDragHandle) && (isTouch || hovered);
   const [heroOpened, { open: openHero, close: closeHero }] = useDisclosure(false);
+  const [imgFailed, setImgFailed] = useState(false);
+  const refreshPhotos = useTripPhotoRefresh();
+  useEffect(() => {
+    setImgFailed(false);
+  }, [photo?.photoName]);
 
   const apiKey = import.meta.env.VITE_GOOGLE_PLACES_API_KEY as string | undefined;
   const photoSrc =
-    photo && apiKey
+    photo && apiKey && !imgFailed
       ? `https://places.googleapis.com/v1/${photo.photoName}/media?maxWidthPx=${TILE_WIDTH * 2}&key=${apiKey}`
       : null;
   const heroSrc =
-    photo && apiKey
+    photo && apiKey && !imgFailed
       ? `https://places.googleapis.com/v1/${photo.photoName}/media?maxWidthPx=${HERO_MAX_WIDTH_PX}&key=${apiKey}`
       : null;
   const attributionText = photo?.photoAttribution
@@ -172,6 +178,10 @@ export function StopCard({
             <img
               src={photoSrc}
               alt={photo?.alt ?? ''}
+              onError={() => {
+                setImgFailed(true);
+                refreshPhotos?.();
+              }}
               style={{
                 display: 'block',
                 width: TILE_WIDTH,

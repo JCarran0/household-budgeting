@@ -1,6 +1,7 @@
 import { Badge, Box, Group, Stack, Text, Title } from '@mantine/core';
 import { useMediaQuery } from '@mantine/hooks';
 import { useEffect, useState, type ReactNode } from 'react';
+import { useTripPhotoRefresh } from '../../hooks/useRefreshTripPhotos';
 
 interface TripCoverBannerProps {
   photoName: string;
@@ -35,6 +36,7 @@ export function TripCoverBanner({
   const key = import.meta.env.VITE_GOOGLE_PLACES_API_KEY as string | undefined;
   const isMobile = useMediaQuery('(max-width: 48em)');
   const [imgFailed, setImgFailed] = useState(false);
+  const refreshPhotos = useTripPhotoRefresh();
   useEffect(() => {
     setImgFailed(false);
   }, [photoName]);
@@ -74,7 +76,10 @@ export function TripCoverBanner({
           src={bgSrc}
           alt=""
           aria-hidden="true"
-          onError={() => setImgFailed(true)}
+          onError={() => {
+            setImgFailed(true);
+            refreshPhotos?.();
+          }}
           style={{
             position: 'absolute',
             inset: 0,

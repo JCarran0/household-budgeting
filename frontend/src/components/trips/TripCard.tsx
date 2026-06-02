@@ -17,6 +17,7 @@ import {
   IconTrash,
 } from '@tabler/icons-react';
 import { TripCoverBanner } from './TripCoverBanner';
+import { TripPhotoRefreshProvider } from './TripPhotoRefreshProvider';
 import { formatTripDateRange, STATUS_BADGE_COLOR } from './tripCardHelpers';
 import { formatCurrency } from '../../utils/formatters';
 import type { TripSummary } from '../../../../shared/types';
@@ -47,6 +48,7 @@ export function TripCard({ trip, onEdit, onDelete }: TripCardProps) {
 
   if (coverPhoto) {
     return (
+      <TripPhotoRefreshProvider tripId={trip.id} stops={trip.stops}>
       <Paper
         component={Link}
         to={`/trips/${trip.id}`}
@@ -98,6 +100,7 @@ export function TripCard({ trip, onEdit, onDelete }: TripCardProps) {
           )}
         </Group>
       </Paper>
+      </TripPhotoRefreshProvider>
     );
   }
 

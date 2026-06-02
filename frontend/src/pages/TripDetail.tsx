@@ -53,6 +53,7 @@ import { ItineraryEmptyState } from '../components/trips/agenda/ItineraryEmptySt
 import { TripTemplateModal } from '../components/trips/agenda/TripTemplateModal';
 import { TripMap } from '../components/trips/map/TripMap';
 import { TripCoverBanner } from '../components/trips/TripCoverBanner';
+import { TripPhotoRefreshProvider } from '../components/trips/TripPhotoRefreshProvider';
 import {
   getStopPhoto,
   hasVerifiedCoords,
@@ -311,6 +312,7 @@ export function TripDetail() {
   );
 
   return (
+    <TripPhotoRefreshProvider tripId={trip.id} stops={trip.stops}>
     <Container size="lg" py="xl">
       <Stack gap="md">
         {/* Back link */}
@@ -541,5 +543,6 @@ export function TripDetail() {
         }}
       />
     </Container>
+    </TripPhotoRefreshProvider>
   );
 }

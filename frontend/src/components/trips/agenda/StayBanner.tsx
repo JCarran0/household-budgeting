@@ -10,8 +10,9 @@ import {
 } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
 import { IconBed, IconEdit } from '@tabler/icons-react';
-import type { KeyboardEvent, MouseEvent } from 'react';
+import { useEffect, useState, type KeyboardEvent, type MouseEvent } from 'react';
 import type { StayStop } from '../../../../../shared/types';
+import { useTripPhotoRefresh } from '../../../hooks/useRefreshTripPhotos';
 
 interface StayBannerProps {
   stay: StayStop;
@@ -39,8 +40,13 @@ export function StayBanner({ stay, totalNights, onEdit }: StayBannerProps) {
   const photoName = stay.location.photoName;
   const attribution = stay.location.photoAttribution ?? null;
   const [heroOpened, { open: openHero, close: closeHero }] = useDisclosure(false);
+  const [imgFailed, setImgFailed] = useState(false);
+  const refreshPhotos = useTripPhotoRefresh();
+  useEffect(() => {
+    setImgFailed(false);
+  }, [photoName]);
 
-  if (photoName && apiKey) {
+  if (photoName && apiKey && !imgFailed) {
     const bgSrc = `https://places.googleapis.com/v1/${photoName}/media?maxWidthPx=1200&key=${apiKey}`;
     const heroSrc = `https://places.googleapis.com/v1/${photoName}/media?maxWidthPx=${HERO_MAX_WIDTH_PX}&key=${apiKey}`;
     const attributionText = attribution ? `Photo: ${attribution}` : 'Photo via Google';
@@ -71,14 +77,28 @@ export function StayBanner({ stay, totalNights, onEdit }: StayBannerProps) {
             height: BANNER_HEIGHT,
             borderRadius: 'var(--mantine-radius-md)',
             overflow: 'hidden',
-            backgroundImage: `url(${bgSrc})`,
-            backgroundSize: 'cover',
-            backgroundPosition: 'center',
             backgroundColor: 'var(--mantine-color-dark-6)',
             border: '1px solid var(--mantine-color-blue-outline)',
             cursor: 'pointer',
           }}
         >
+        {/* Real <img> so onError can fire and trigger self-heal. */}
+        <img
+          src={bgSrc}
+          alt=""
+          aria-hidden="true"
+          onError={() => {
+            setImgFailed(true);
+            refreshPhotos?.();
+          }}
+          style={{
+            position: 'absolute',
+            inset: 0,
+            width: '100%',
+            height: '100%',
+            objectFit: 'cover',
+          }}
+        />
         <div
           style={{
             position: 'absolute',
