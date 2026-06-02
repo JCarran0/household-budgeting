@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+### [5.76.2](https://github.com/JCarran0/household-budgeting/compare/v5.76.1...v5.76.2) (2026-06-02)
+
+
+### Documentation
+
+* **tech-debt:** record trip RMW race under TD-011, add TD-019 backup posture ([2d9f174](https://github.com/JCarran0/household-budgeting/commit/2d9f174aa5078077d4bba06a5418012192127513))
+
 ### [5.76.1](https://github.com/JCarran0/household-budgeting/compare/v5.76.0...v5.76.1) (2026-06-02)
 
 
