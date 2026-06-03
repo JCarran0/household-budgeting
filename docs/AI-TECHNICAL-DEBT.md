@@ -295,9 +295,11 @@ The "other services adopt `withLock` incrementally as surfaces are identified" c
 - **Filesystem adapter (local dev):** non-atomic `fs.writeJson` → torn file. `trips_{familyId}.json` was corrupted with a valid array followed by a leftover tail fragment (`SyntaxError: Unexpected non-whitespace character after JSON`). Repaired by hand; corrupt copy preserved as `*.corrupt.bak`.
 - **S3 adapter (prod):** `PutObject` is atomic so no corruption, but the N writes off one baseline → lost updates (only one stop's heal survives, the rest silently dropped and re-fire each reload). Prod object verified valid; no data loss.
 
-Stopgap shipped (`f8fc1d4`): the caller (`refreshTripPhotos`) now serializes its PATCHes — fetches stay parallel, writes are sequential. This removes the trigger but is a band-aid at one call site.
+Stopgap shipped (`f8fc1d4`): the caller (`refreshTripPhotos`) now serializes its PATCHes — fetches stay parallel, writes are sequential. This removed the trigger but was a band-aid at one call site.
 
-**Proper fix:** wrap `tripService`'s stop/trip read-modify-write paths in `Repository.withLock(familyId, fn)`, the same pattern `transactionService` uses. Then audit the remaining JSON-backed services (`projectService`, `taskService`, `wishlistService`, `categoryService`) for the same unprotected RMW shape — any of them can corrupt locally / lose writes in prod under concurrent edits. The SQLite migration (Part 3) deprecates this wholesale, but `withLock` on `tripService` is Low effort and worth doing before then.
+**Proper fix — ✅ done (2026-06-03).** `tripService` now owns a `Repository<StoredTrip>` and wraps all four read-modify-write cycles (`createTrip`, `updateTrip`, `deleteTrip`, `saveStopsOnTrip` — the last covers every stop op) in `Repository.withLock(familyId, fn)`, the same pattern `transactionService` uses. Regression locked in by `tripService.concurrency.test.ts`, which fires N parallel `updateStop`s through a write-delaying `DataService` stub and asserts no lost updates — verified to fail without the lock. The caller-side serialization in `refreshTripPhotos` is now belt-and-suspenders; it can stay (parallel writes would be safe but pointless).
+
+**Still open:** audit the remaining JSON-backed services (`projectService`, `taskService`, `wishlistService`, `categoryService`) for the same unprotected RMW shape — any can corrupt locally / lose writes in prod under concurrent edits. The SQLite migration (Part 3) deprecates this wholesale.
 
 **Files**:
 - `backend/src/services/repository.ts` ✅
@@ -305,8 +307,9 @@ Stopgap shipped (`f8fc1d4`): the caller (`refreshTripPhotos`) now serializes its
 - `backend/src/services/dataService.ts` ✅ (memoization lives at data layer so ReadOnlyDataService benefits too)
 - `backend/src/middleware/requestScope.ts` ✅ (new)
 - `backend/src/app.ts` ✅ (middleware wiring)
-- `backend/src/services/tripService.ts` — unprotected RMW; needs `withLock` (identified 2026-06-02)
-- `frontend/src/hooks/useRefreshTripPhotos.ts` — caller-side serialization band-aid (`f8fc1d4`)
+- `backend/src/services/tripService.ts` ✅ — now wraps all RMW cycles in `withLock` (2026-06-03)
+- `backend/src/__tests__/unit/tripService.concurrency.test.ts` ✅ — lost-update regression (new)
+- `frontend/src/hooks/useRefreshTripPhotos.ts` — caller-side serialization, now belt-and-suspenders (`f8fc1d4`)
 
 ---
 

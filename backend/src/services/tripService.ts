@@ -16,6 +16,7 @@ import {
   StayStop,
 } from '../shared/types';
 import { DataService } from './dataService';
+import { Repository } from './repository';
 import { TransactionService, StoredTransaction } from './transactionService';
 import {
   generateTripTag,
@@ -44,17 +45,29 @@ export class StayOverlapError extends ConflictError {
 }
 
 export class TripService {
+  /**
+   * Backing repository for the `trips_{familyId}` collection. Used both for
+   * load/save and for `withLock` — TD-011: every read-modify-write of the trips
+   * collection must run under the per-family mutex or concurrent writers race
+   * (torn JSON on the filesystem adapter, lost updates on S3). The self-healing
+   * trip-photo refresh, which fires many stop updates at once, made this routine
+   * rather than rare.
+   */
+  private readonly trips: Repository<StoredTrip>;
+
   constructor(
     private dataService: DataService,
     private transactionService: TransactionService
-  ) {}
+  ) {
+    this.trips = new Repository<StoredTrip>(dataService, 'trips');
+  }
 
   // ---------------------------------------------------------------------------
   // Private helpers
   // ---------------------------------------------------------------------------
 
   private async loadTrips(familyId: string): Promise<StoredTrip[]> {
-    const trips = (await this.dataService.getData<StoredTrip[]>(`trips_${familyId}`)) ?? [];
+    const trips = await this.trips.getAll(familyId);
     // Backwards-compat: older trips persisted before itineraries have no `stops`,
     // trips persisted before V2 have no `photoAlbumUrl`, and trips persisted
     // before the cover-photo feature have no `coverStopId`. Default all three
@@ -68,7 +81,7 @@ export class TripService {
   }
 
   private async saveTrips(trips: StoredTrip[], familyId: string): Promise<void> {
-    await this.dataService.saveData(`trips_${familyId}`, trips);
+    await this.trips.saveAll(familyId, trips);
   }
 
   /**
@@ -132,37 +145,41 @@ export class TripService {
    * Generates a tag from the name and start date, then validates uniqueness.
    */
   async createTrip(data: CreateTripDto, familyId: string, userId?: string): Promise<StoredTrip> {
-    const tag = generateTripTag(data.name, data.startDate);
+    // Lock spans the duplicate-tag check through the save so the check and the
+    // write are atomic — two concurrent creates can't both pass the check.
+    return this.trips.withLock(familyId, async () => {
+      const tag = generateTripTag(data.name, data.startDate);
 
-    const existingTrips = await this.loadTrips(familyId);
-    if (existingTrips.some((t) => t.tag === tag)) {
-      throw new Error('A trip with this tag already exists');
-    }
+      const existingTrips = await this.loadTrips(familyId);
+      if (existingTrips.some((t) => t.tag === tag)) {
+        throw new Error('A trip with this tag already exists');
+      }
 
-    const now = new Date().toISOString();
-    const trip: StoredTrip = {
-      id: uuidv4(),
-      userId: familyId,
-      name: data.name,
-      tag,
-      startDate: data.startDate,
-      endDate: data.endDate,
-      totalBudget: data.totalBudget ?? null,
-      categoryBudgets: data.categoryBudgets ?? [],
-      rating: data.rating ?? null,
-      notes: data.notes ?? '',
-      stops: [],
-      photoAlbumUrl: data.photoAlbumUrl ?? null,
-      coverStopId: data.coverStopId ?? null,
-      createdAt: now,
-      updatedAt: now,
-      lastModifiedBy: userId,
-    };
+      const now = new Date().toISOString();
+      const trip: StoredTrip = {
+        id: uuidv4(),
+        userId: familyId,
+        name: data.name,
+        tag,
+        startDate: data.startDate,
+        endDate: data.endDate,
+        totalBudget: data.totalBudget ?? null,
+        categoryBudgets: data.categoryBudgets ?? [],
+        rating: data.rating ?? null,
+        notes: data.notes ?? '',
+        stops: [],
+        photoAlbumUrl: data.photoAlbumUrl ?? null,
+        coverStopId: data.coverStopId ?? null,
+        createdAt: now,
+        updatedAt: now,
+        lastModifiedBy: userId,
+      };
 
-    existingTrips.push(trip);
-    await this.saveTrips(existingTrips, familyId);
+      existingTrips.push(trip);
+      await this.saveTrips(existingTrips, familyId);
 
-    return trip;
+      return trip;
+    });
   }
 
   /**
@@ -199,55 +216,57 @@ export class TripService {
     familyId: string,
     userId?: string
   ): Promise<StoredTrip> {
-    const trips = await this.loadTrips(familyId);
-    const index = trips.findIndex((t) => t.id === tripId);
-    if (index === -1) {
-      throw new Error('Trip not found');
-    }
-
-    const existing = trips[index];
-    const oldTag = existing.tag;
-
-    // Determine whether the tag would change
-    const newName = data.name ?? existing.name;
-    const newStartDate = data.startDate ?? existing.startDate;
-    const candidateTag = generateTripTag(newName, newStartDate);
-    const tagWillChange = candidateTag !== oldTag;
-
-    if (tagWillChange) {
-      // Validate the new tag is unique among this family's other trips
-      const otherTrips = trips.filter((t) => t.id !== tripId);
-      if (otherTrips.some((t) => t.tag === candidateTag)) {
-        throw new Error('A trip with this tag already exists');
+    return this.trips.withLock(familyId, async () => {
+      const trips = await this.loadTrips(familyId);
+      const index = trips.findIndex((t) => t.id === tripId);
+      if (index === -1) {
+        throw new Error('Trip not found');
       }
 
-      // Rename tag on transactions BEFORE updating the entity (D6)
-      await this.renameTagOnTransactions(oldTag, candidateTag, familyId);
-    }
+      const existing = trips[index];
+      const oldTag = existing.tag;
 
-    const now = new Date().toISOString();
-    const updatedTrip: StoredTrip = {
-      ...existing,
-      name: newName,
-      startDate: newStartDate,
-      endDate: data.endDate ?? existing.endDate,
-      totalBudget: data.totalBudget !== undefined ? data.totalBudget : existing.totalBudget,
-      categoryBudgets: data.categoryBudgets ?? existing.categoryBudgets,
-      rating: data.rating !== undefined ? data.rating : existing.rating,
-      notes: data.notes !== undefined ? data.notes : existing.notes,
-      photoAlbumUrl:
-        data.photoAlbumUrl !== undefined ? data.photoAlbumUrl : existing.photoAlbumUrl,
-      coverStopId:
-        data.coverStopId !== undefined ? data.coverStopId : existing.coverStopId,
-      tag: tagWillChange ? candidateTag : oldTag,
-      updatedAt: now,
-      lastModifiedBy: userId ?? existing.lastModifiedBy,
-    };
+      // Determine whether the tag would change
+      const newName = data.name ?? existing.name;
+      const newStartDate = data.startDate ?? existing.startDate;
+      const candidateTag = generateTripTag(newName, newStartDate);
+      const tagWillChange = candidateTag !== oldTag;
 
-    trips[index] = updatedTrip;
-    await this.saveTrips(trips, familyId);
+      if (tagWillChange) {
+        // Validate the new tag is unique among this family's other trips
+        const otherTrips = trips.filter((t) => t.id !== tripId);
+        if (otherTrips.some((t) => t.tag === candidateTag)) {
+          throw new Error('A trip with this tag already exists');
+        }
 
-    return updatedTrip;
+        // Rename tag on transactions BEFORE updating the entity (D6)
+        await this.renameTagOnTransactions(oldTag, candidateTag, familyId);
+      }
+
+      const now = new Date().toISOString();
+      const updatedTrip: StoredTrip = {
+        ...existing,
+        name: newName,
+        startDate: newStartDate,
+        endDate: data.endDate ?? existing.endDate,
+        totalBudget: data.totalBudget !== undefined ? data.totalBudget : existing.totalBudget,
+        categoryBudgets: data.categoryBudgets ?? existing.categoryBudgets,
+        rating: data.rating !== undefined ? data.rating : existing.rating,
+        notes: data.notes !== undefined ? data.notes : existing.notes,
+        photoAlbumUrl:
+          data.photoAlbumUrl !== undefined ? data.photoAlbumUrl : existing.photoAlbumUrl,
+        coverStopId:
+          data.coverStopId !== undefined ? data.coverStopId : existing.coverStopId,
+        tag: tagWillChange ? candidateTag : oldTag,
+        updatedAt: now,
+        lastModifiedBy: userId ?? existing.lastModifiedBy,
+      };
+
+      trips[index] = updatedTrip;
+      await this.saveTrips(trips, familyId);
+
+      return updatedTrip;
+    });
   }
 
   /**
@@ -256,17 +275,19 @@ export class TripService {
    * (D6: transactions before entity deletion).
    */
   async deleteTrip(tripId: string, familyId: string): Promise<void> {
-    const trips = await this.loadTrips(familyId);
-    const trip = trips.find((t) => t.id === tripId);
-    if (!trip) {
-      throw new Error('Trip not found');
-    }
+    await this.trips.withLock(familyId, async () => {
+      const trips = await this.loadTrips(familyId);
+      const trip = trips.find((t) => t.id === tripId);
+      if (!trip) {
+        throw new Error('Trip not found');
+      }
 
-    // Remove tag from transactions first (D6)
-    await this.removeTagFromTransactions(trip.tag, familyId);
+      // Remove tag from transactions first (D6)
+      await this.removeTagFromTransactions(trip.tag, familyId);
 
-    const remaining = trips.filter((t) => t.id !== tripId);
-    await this.saveTrips(remaining, familyId);
+      const remaining = trips.filter((t) => t.id !== tripId);
+      await this.saveTrips(remaining, familyId);
+    });
   }
 
   /**
@@ -362,7 +383,10 @@ export class TripService {
   //
   // All stop mutations are whole-trip writes — simpler to reason about than
   // partial writes, and consistent with the existing category-budgets pattern.
-  // Last-write-wins is acceptable for a 2-user family app.
+  // Each runs under the per-family lock (TD-011): the self-healing photo refresh
+  // issues many stop updates near-simultaneously, so unlocked writes raced and
+  // corrupted the trips file. `mutate` must stay synchronous so the lock isn't
+  // held across awaits it doesn't control.
   // ---------------------------------------------------------------------------
 
   private async saveStopsOnTrip(
@@ -371,25 +395,27 @@ export class TripService {
     mutate: (trip: StoredTrip) => Stop[],
     userId?: string,
   ): Promise<StoredTrip> {
-    const trips = await this.loadTrips(familyId);
-    const index = trips.findIndex((t) => t.id === tripId);
-    if (index === -1) {
-      throw new NotFoundError('Trip not found');
-    }
+    return this.trips.withLock(familyId, async () => {
+      const trips = await this.loadTrips(familyId);
+      const index = trips.findIndex((t) => t.id === tripId);
+      if (index === -1) {
+        throw new NotFoundError('Trip not found');
+      }
 
-    const now = new Date().toISOString();
-    const existing = trips[index];
-    const nextStops = mutate(existing);
+      const now = new Date().toISOString();
+      const existing = trips[index];
+      const nextStops = mutate(existing);
 
-    trips[index] = {
-      ...existing,
-      stops: nextStops,
-      updatedAt: now,
-      lastModifiedBy: userId ?? existing.lastModifiedBy,
-    };
+      trips[index] = {
+        ...existing,
+        stops: nextStops,
+        updatedAt: now,
+        lastModifiedBy: userId ?? existing.lastModifiedBy,
+      };
 
-    await this.saveTrips(trips, familyId);
-    return trips[index];
+      await this.saveTrips(trips, familyId);
+      return trips[index];
+    });
   }
 
   /**
