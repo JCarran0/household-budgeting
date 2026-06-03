@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+### [5.76.4](https://github.com/JCarran0/household-budgeting/compare/v5.76.3...v5.76.4) (2026-06-03)
+
+
+### Documentation
+
+* **tech-debt:** record RMW audit of remaining JSON services (TD-011) ([fae35ab](https://github.com/JCarran0/household-budgeting/commit/fae35ab15a0b3415ab7b2442d4236e25096b2286))
+
 ### [5.76.3](https://github.com/JCarran0/household-budgeting/compare/v5.76.2...v5.76.3) (2026-06-03)
 
 
