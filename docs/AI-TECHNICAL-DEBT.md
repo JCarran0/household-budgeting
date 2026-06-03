@@ -299,7 +299,16 @@ Stopgap shipped (`f8fc1d4`): the caller (`refreshTripPhotos`) now serializes its
 
 **Proper fix — ✅ done (2026-06-03).** `tripService` now owns a `Repository<StoredTrip>` and wraps all four read-modify-write cycles (`createTrip`, `updateTrip`, `deleteTrip`, `saveStopsOnTrip` — the last covers every stop op) in `Repository.withLock(familyId, fn)`, the same pattern `transactionService` uses. Regression locked in by `tripService.concurrency.test.ts`, which fires N parallel `updateStop`s through a write-delaying `DataService` stub and asserts no lost updates — verified to fail without the lock. The caller-side serialization in `refreshTripPhotos` is now belt-and-suspenders; it can stay (parallel writes would be safe but pointless).
 
-**Still open:** audit the remaining JSON-backed services (`projectService`, `taskService`, `wishlistService`, `categoryService`) for the same unprotected RMW shape — any can corrupt locally / lose writes in prod under concurrent edits. The SQLite migration (Part 3) deprecates this wholesale.
+**Remaining services audited (2026-06-03).** All four JSON-backed services have the same unprotected `load → mutate → save` shape and are all module singletons (so `withLock` *would* apply if added), but the calibrated risk is **Low**, not the mechanical "High" a pattern-match gives — because none of them has a *trigger*. The trip case was elevated specifically because the photo-heal feature fired N writes in parallel programmatically; nothing here does:
+
+| Service | Unprotected mutators | Parallel-write trigger today? | Real risk |
+|---------|---------------------|-------------------------------|-----------|
+| `taskService` | create/update/delete/updateStatus/snooze/reorder | No — drag-drop fires **one** `reorderTask` per drop (`TaskKanban.tsx:246`, `ChecklistView.tsx:480`), not a batch. `reorderTask` does load→(updateTaskStatus)→load→save, widening its own window but still single-request | Low |
+| `projectService` | create/update/delete | No — human-paced. **Caveat:** `updateProject`/`deleteProject` also write `transactions_`/`tasks_` directly, bypassing those services' own locks. Wrapping naively risks lock-ordering deadlock — needs care, not a copy-paste of the trip fix | Low (but the cross-collection bypass is a separate, broader consistency gap) |
+| `wishlistService` | create/update/delete | No | Low |
+| `categoryService` | create/update/delete + idempotent `migrate*` | No — `migrate*` transforms are idempotent (concurrent runs converge); no seeding path fires in parallel | Low |
+
+**Decision: do not mechanically lock all four now.** It's speculative hardening for a race nothing currently triggers, and the SQLite migration (Part 3) deprecates the whole RMW model. Instead: (a) add `withLock` to a service **when** a feature introduces parallel writes to it (the actual trigger — exactly how `tripService` earned it), and (b) treat `projectService`'s cross-collection writes as the one item here worth a deliberate look independent of RMW locking. Tracked, not scheduled.
 
 **Files**:
 - `backend/src/services/repository.ts` ✅
