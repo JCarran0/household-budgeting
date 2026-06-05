@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+### [5.76.5](https://github.com/JCarran0/household-budgeting/compare/v5.76.4...v5.76.5) (2026-06-05)
+
+
+### Documentation
+
+* **business-workspace:** add Business Workspace BRD ([30203df](https://github.com/JCarran0/household-budgeting/commit/30203dfa60f4a9affa0f2dd3b6e633fbc718bb82))
+* **business-workspace:** add implementation plan with release grouping ([562718e](https://github.com/JCarran0/household-budgeting/commit/562718ef3c7c19bbd39a67c752320f6cf7c7eabc))
+
 ### [5.76.4](https://github.com/JCarran0/household-budgeting/compare/v5.76.3...v5.76.4) (2026-06-03)
 
 
