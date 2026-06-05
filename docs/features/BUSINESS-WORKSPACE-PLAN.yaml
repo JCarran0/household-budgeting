@@ -1,0 +1,878 @@
+# =============================================================================
+# Business Workspace — Implementation Plan
+# =============================================================================
+# BRD: docs/features/BUSINESS-WORKSPACE-BRD.md
+# Status: Not Started
+# Last Updated: 2026-06-05
+# =============================================================================
+
+overview:
+  description: |
+    Implementation plan for the Business Workspace feature. Adds a second,
+    fully-isolated workspace (= a second `familyId` partition) reachable by
+    an in-app workspace switcher (one login, no logout). The business
+    workspace reuses Plaid sync, the transaction list, and tag-based
+    categorization, but replaces the family budgeting surfaces with a single
+    new capability: a monthly client royalty statement (PDF + CSV) derived
+    from tagged transactions.
+
+    The feature decomposes into three independently shippable layers:
+      (A) Multi-workspace membership + switcher (auth + frontend shell).
+      (B) Business category seed + Plaid/transactions reuse in the new
+          workspace (mostly configuration over existing machinery).
+      (C) The statement generator (the only genuinely new domain logic) +
+          its PDF/CSV output.
+
+    Layer A is the foundation everything else rides on; build it first and
+    verify it in isolation by creating an empty business workspace and
+    switching to it before any statement code exists.
+
+  key_files:
+    brd: docs/features/BUSINESS-WORKSPACE-BRD.md
+    # --- shared ---
+    shared_types: shared/types/index.ts                                  # User, Family, JWT-adjacent, new Statement + WorkspaceType types
+    # --- backend: workspace/auth ---
+    auth_service: backend/src/services/authService.ts                    # JWTPayload, generateToken, login/register, switchWorkspace (new)
+    auth_middleware: backend/src/middleware/authMiddleware.ts            # membership check → array membership
+    family_service: backend/src/services/familyService.ts               # members, consumeInvitation, removeMember, createWorkspace (new)
+    auth_routes: backend/src/routes/auth.ts                              # POST /switch-workspace, GET /workspaces
+    # --- backend: categories ---
+    category_service: backend/src/services/categoryService.ts           # seedCategoriesForWorkspaceType (new)
+    category_templates: backend/src/constants/categoryTemplates.ts      # new — BUSINESS_CATEGORY_SEED + well-known IDs
+    # --- backend: statement ---
+    statement_service: backend/src/services/statementService.ts         # new — the generator + persistence
+    statement_routes: backend/src/routes/businessStatements.ts          # new — generate/list/get
+    backend_app: backend/src/app.ts                                     # mount new router
+    services_index: backend/src/services/index.ts                       # wire singletons
+    # --- backend: isolation fixes ---
+    chatbot_cost_tracker: backend/src/services/chatbotCostTracker.ts    # per-workspace cost cap (REQ-007)
+    rate_limit: backend/src/middleware/rateLimit.ts                     # confirm/adjust scope (REQ-007)
+    # --- frontend ---
+    auth_store: frontend/src/stores/authStore.ts                        # workspaces, activeWorkspaceId, switchWorkspace
+    api_client: frontend/src/lib/api/client.ts                          # interceptor (token already re-read per request)
+    api_index: frontend/src/lib/api.ts                                  # register workspace + statement api modules
+    layout: frontend/src/components/MantineLayout.tsx                   # workspace switcher control + nav gating
+    app_routes: frontend/src/App.tsx                                    # business statement route
+    plaid_provider: frontend/src/providers/PlaidLinkProvider.tsx        # reused as-is (scoped by active workspace)
+    tsv_export: frontend/src/utils/transactionExport.ts                # CSV/TSV pattern to mirror for statement CSV
+    docs_index: CLAUDE.md                                              # BRD table + ADR (already added at BRD commit)
+
+# =============================================================================
+# DECISIONS LOG
+# =============================================================================
+decisions:
+  - id: D1
+    date: 2026-06-05
+    decision: A "workspace" IS a `familyId` partition; no new persistence concept.
+    rationale: |
+      Every entity is already keyed `{entity}_{familyId}` with per-family
+      locks and JWT-enforced scoping. "Business" is a second familyId owned
+      by the same user. This reuses the app's strongest existing guarantee
+      (family isolation) instead of inventing a parallel tenant model.
+      BRD REQ-001/003/005.
+
+  - id: D2
+    date: 2026-06-05
+    decision: User gains `workspaceIds: string[]`; active workspace lives in the JWT.
+    rationale: |
+      `User.familyId` (single string) becomes membership list `workspaceIds`.
+      The currently-active workspace is the `familyId` claim in the JWT, so
+      "switch workspace" = re-issue a token with a different active familyId
+      (no server session state). authMiddleware changes from
+      `user.familyId === claim` to `user.workspaceIds.includes(claim)`.
+      Persist `activeWorkspaceId` on the user too, only so a fresh login
+      restores the last-used workspace — it is NOT the authority for
+      access (workspaceIds is).
+
+  - id: D3
+    date: 2026-06-05
+    decision: Backward-compat migration — backfill `workspaceIds = [familyId]`.
+    rationale: |
+      Existing users have `familyId` only. On deploy, a one-shot migration
+      (or lazy backfill on first authenticated request) sets
+      `workspaceIds = [familyId]` and `activeWorkspaceId = familyId`. Keep
+      `familyId` populated as an alias of activeWorkspaceId so no existing
+      familyId-scoped route changes. 2-user app → a one-shot script is the
+      right tool, not a long-lived feature flag.
+
+  - id: D4
+    date: 2026-06-05
+    decision: `Family.workspaceType: 'personal' | 'business'` drives feature gating.
+    rationale: |
+      The frontend filters nav + routes by the active workspace's type
+      (BRD REQ-029/030). Default 'personal' for all existing families;
+      new business workspace is created with 'business'. One enum field,
+      no behavior coupling beyond gating.
+
+  - id: D5
+    date: 2026-06-05
+    decision: No existing default category seed to mirror — business seed is a clean add.
+    rationale: |
+      `categoryService.initializeDefaultCategories` is intentionally a
+      no-op today (users build their own trees). So there is nothing to
+      conflict with: we add `seedCategoriesForWorkspaceType(familyId,
+      'business')` that writes a fixed business taxonomy. Personal
+      workspaces remain seed-free (unchanged behavior).
+
+  - id: D6
+    date: 2026-06-05
+    decision: Statement roles map to WELL-KNOWN seeded category IDs, not a new field.
+    rationale: |
+      The generator must know which transactions are trust-inflow vs.
+      billable-by-subtype vs. remittance vs. overhead. Rather than add a
+      `statementRole` to the global Category type (pollutes the family
+      model), the business seed creates categories with reserved, stable
+      IDs (e.g. BIZ_TRUST_INFLOW, BIZ_BILLABLE_BOOK_REPORT, BIZ_OVERHEAD,
+      BIZ_REMITTANCE, BIZ_COMMISSION). A small map in categoryTemplates.ts
+      is the single source of truth linking role → categoryId. The user
+      can still create child categories under these roots; role membership
+      is determined by walking up to the reserved root (hierarchical),
+      reusing existing parent-rollup helpers.
+
+  - id: D7
+    date: 2026-06-05
+    decision: Commission = 5% per deposit, rounded to cents per row; royalty = remainder.
+    rationale: |
+      Matches the current Google Sheet exactly. Golden fixture from the
+      real statement (payment 068):
+        deposit 70220.83 → commission 3511.04 → royalty 66709.79
+        Σ deposits 96665.49 → royalty subtotal 91832.22
+        minus other-fees 19.00 → remittance 91813.22
+      `commissionRate` (0.05) is workspace/client config, not hard-coded.
+      The fixture is the authoritative test for rounding behavior.
+
+  - id: D8
+    date: 2026-06-05
+    decision: Statements are persisted, immutable records; payment number auto-increments.
+    rationale: |
+      BRD REQ-024/025/026. New entity `statements_{familyId}`. A generated
+      statement snapshots its line items + totals so it renders identically
+      later even if source transactions are re-tagged. Payment number
+      derives from `max(existing) + 1`, editable before finalize.
+
+  - id: D9
+    date: 2026-06-05
+    decision: PDF rendered on the FRONTEND with @react-pdf/renderer from the stored record.
+    rationale: |
+      No PDF infra exists anywhere (confirmed). Frontend rendering matches
+      the existing client-side TSV export pattern, gives React-component
+      layout control for a client-facing doc, and needs no new backend
+      dependency. Correctness/immutability is satisfied because it renders
+      from the persisted statement record, not live transactions.
+      ALTERNATIVE (noted, not chosen): backend pdfkit — only worth it if we
+      later need to EMAIL the statement; revisit then. CSV mirrors
+      transactionExport.ts.
+
+  - id: D10
+    date: 2026-06-05
+    decision: Business workspace provisioned via a backend endpoint, triggered from Admin.
+    rationale: |
+      No public signup exists; it's one user. `POST /workspaces` creates a
+      family with workspaceType='business', adds the caller as the sole
+      member, seeds the business categories, and returns it. Surfaced as a
+      small "Create business workspace" action on the existing Admin page —
+      no standalone onboarding flow. A seed script is an acceptable
+      fallback if we want zero UI for v1.
+
+  - id: D11
+    date: 2026-06-05
+    decision: Global counters scoped per workspace (chatbot cost cap; rate limits).
+    rationale: |
+      BRD REQ-007. `chatbot_costs_{month}` → `chatbot_costs_{familyId}_{month}`
+      so business chatbot use doesn't consume the family's $20/mo cap.
+      Confirm auth rate-limit/lockout state cannot let business-login
+      attempts lock out the family account; adjust keying if it can.
+
+# =============================================================================
+# PHASE 0: Shared Types
+# =============================================================================
+phase_0_types:
+  status: not_started
+  description: |
+    Type changes that every later phase imports. Additive and
+    backward-compatible.
+
+  tasks:
+    - id: "0.1"
+      task: Extend User and Family in shared/types/index.ts
+      status: not_started
+      details: |
+        User (currently has single `familyId`):
+          familyId: string;            // KEEP — alias of activeWorkspaceId (D2/D3)
+          workspaceIds: string[];      // NEW — all workspaces the user belongs to
+          activeWorkspaceId: string;   // NEW — last-active (convenience, not authority)
+
+        Family:
+          workspaceType: 'personal' | 'business';  // NEW (D4), default 'personal'
+
+        export type WorkspaceType = 'personal' | 'business';
+
+    - id: "0.2"
+      task: Add Statement types
+      status: not_started
+      details: |
+        export interface StatementLineItem {     // one Amazon deposit
+          disbursementDate: string;              // YYYY-MM-DD
+          payout: number;                        // Amazon gross
+          commission: number;                    // rounded per-row
+          royalty: number;                       // payout - commission
+          transactionId: string;                 // provenance
+        }
+        export interface StatementCharge {       // an "other fees & charges" line
+          subType: string;                       // e.g. 'BOOK_REPORT'
+          label: string;                         // 'Book Report - data analytics'
+          amount: number;                        // subtracted from remittance
+        }
+        export interface BusinessStatement {
+          id: string;
+          paymentNumber: number;                 // 068, 069, ...
+          paymentDate: string;                   // YYYY-MM-DD
+          periodMonth: string;                   // YYYY-MM
+          commissionRate: number;                // 0.05 snapshot
+          lineItems: StatementLineItem[];
+          royaltySubtotal: number;
+          charges: StatementCharge[];
+          remittanceTotal: number;
+          clientHeader: StatementHeader;         // snapshot of client/business identity
+          createdAt: string;
+        }
+        export interface StatementHeader {
+          businessName: string; businessAddress: string;
+          clientName: string; clientCompany: string; clientAddress: string;
+        }
+
+# =============================================================================
+# PHASE 1: Backend — Multi-Workspace Membership & Switching
+# =============================================================================
+phase_1_workspace_backend:
+  status: not_started
+  description: |
+    Turn single-family membership into multi-workspace membership, add the
+    switch endpoint, and the workspace-list/create endpoints. This is the
+    foundation; nothing business-specific yet.
+
+  tasks:
+    - id: "1.1"
+      task: Migration / backfill for existing users (D3)
+      status: not_started
+      details: |
+        Lazy backfill in authMiddleware (preferred for a 2-user app): when
+        loading a user that lacks `workspaceIds`, set
+        workspaceIds = [familyId], activeWorkspaceId = familyId, persist.
+        Also provide a one-shot script under backend/scripts/ that does the
+        same for all users in users.json (run once on deploy; idempotent).
+        Default every existing Family.workspaceType to 'personal'.
+
+    - id: "1.2"
+      task: authMiddleware — membership by array (authMiddleware.ts)
+      status: not_started
+      details: |
+        verifyFamilyMembership(userId, claimedFamilyId):
+          - was: user.familyId === claimedFamilyId
+          - now: user.workspaceIds.includes(claimedFamilyId)
+        Keep the 60s cache; cache the user's workspaceIds set.
+        Attach req.user = { userId, username, familyId, workspaceIds }.
+        familyId remains the active workspace (the JWT claim).
+
+    - id: "1.3"
+      task: authService — JWT + switchWorkspace (authService.ts)
+      status: not_started
+      details: |
+        JWTPayload: unchanged shape — `familyId` is the ACTIVE workspace.
+        login/register: set familyId claim = user.activeWorkspaceId
+          (fallback to first workspaceIds / legacy familyId).
+        New: switchWorkspace(userId, targetFamilyId): AuthResult
+          - assert targetFamilyId ∈ user.workspaceIds (else 403)
+          - persist user.activeWorkspaceId = targetFamilyId
+          - return generateToken(userId, username, targetFamilyId) + user
+        New: listWorkspaces(userId): { id, name, workspaceType }[]
+          - map user.workspaceIds → Family records.
+
+    - id: "1.4"
+      task: familyService — createWorkspace + array-aware membership (familyService.ts)
+      status: not_started
+      details: |
+        createWorkspace(userId, name, workspaceType): Family
+          - create Family { workspaceType, members: [caller] }
+          - push family.id into user.workspaceIds (NOT replacing existing)
+          - if workspaceType === 'business':
+              categoryService.seedCategoriesForWorkspaceType(family.id, 'business')
+          - return family
+        consumeInvitation: push into workspaceIds instead of overwriting
+          familyId (still set activeWorkspaceId if it's the first).
+        removeMember: remove from workspaceIds; if it was activeWorkspaceId,
+          repoint active to another membership.
+
+    - id: "1.5"
+      task: Routes — switch + workspaces + create (routes/auth.ts)
+      status: not_started
+      details: |
+        POST /api/v1/auth/switch-workspace  { familyId }  → new token + user
+        GET  /api/v1/workspaces                            → listWorkspaces
+        POST /api/v1/workspaces  { name, workspaceType }   → createWorkspace
+          (createWorkspace gated: only allow 'business' creation for now;
+           keep it admin-only per D10.)
+        Zod-validate bodies. All require authMiddleware.
+
+    - id: "1.6"
+      task: Tests — membership, switching, isolation
+      status: not_started
+      details: |
+        backend/src/services/__tests__/workspaceSwitch.test.ts
+        - switchWorkspace to a workspace the user belongs to → new token,
+          activeWorkspaceId persisted
+        - switchWorkspace to a workspace the user does NOT belong to → 403
+        - authMiddleware accepts a JWT whose familyId ∈ workspaceIds
+        - authMiddleware rejects a JWT whose familyId ∉ workspaceIds
+        - createWorkspace('business') seeds business categories and adds
+          membership WITHOUT dropping the personal workspace
+        - data written under business familyId is unreadable via the
+          personal familyId (isolation assertion)
+        - backfill: a legacy user (familyId only) gains workspaceIds=[familyId]
+
+# =============================================================================
+# PHASE 2: Frontend — Workspace Switcher & Gating
+# =============================================================================
+phase_2_workspace_frontend:
+  status: not_started
+  description: |
+    Header switcher control, auth store support, nav/route gating by the
+    active workspace type. After this phase you can create a business
+    workspace (via Admin/script) and switch into an empty version of it.
+
+  tasks:
+    - id: "2.1"
+      task: authStore — workspaces + switchWorkspace (authStore.ts)
+      status: not_started
+      details: |
+        State: workspaces: Family[]; activeWorkspaceId: string | null.
+        On login: also GET /workspaces → store list; set activeWorkspaceId
+          from returned user.
+        switchWorkspace(familyId):
+          - POST /auth/switch-workspace → { token, user }
+          - replace token + user + activeWorkspaceId in store (persisted)
+          - invalidate ALL React Query caches (queryClient.clear()) so no
+            personal data leaks into the business view, and vice versa.
+        persist partialize: add activeWorkspaceId.
+
+    - id: "2.2"
+      task: Workspace switcher control in header (MantineLayout.tsx)
+      status: not_started
+      details: |
+        In the header Group (~line 138), render a Menu/Select showing the
+        user's workspaces (label = family name, badge = type). Hidden/inert
+        when workspaces.length <= 1 (BRD REQ-004). Selecting one calls
+        authStore.switchWorkspace and navigates to a sensible default route
+        for that workspace type (personal → /dashboard, business →
+        /business/statements).
+
+    - id: "2.3"
+      task: Nav + route gating by workspace type (MantineLayout.tsx, App.tsx)
+      status: not_started
+      details: |
+        Derive activeWorkspaceType from the active workspace.
+        navItems → split into PERSONAL_NAV and BUSINESS_NAV:
+          BUSINESS_NAV = [ Transactions, Accounts, Categories,
+                           { label: 'Statements', icon: IconFileInvoice,
+                             path: '/business/statements' } ]
+          (hide Dashboard, Budgets, Reports, Trips, Projects, Wishlist,
+           Tasks in business — BRD REQ-029)
+        PERSONAL_NAV = current list (hide the business Statements route —
+          REQ-030).
+        Guard business-only and personal-only routes so a deep link to the
+        wrong workspace redirects to that workspace's default page.
+
+    - id: "2.4"
+      task: Tests — switcher + gating
+      status: not_started
+      details: |
+        - switcher hidden with a single workspace
+        - switching invalidates query cache (spy on queryClient.clear)
+        - business workspace renders BUSINESS_NAV only (no Budgets/Trips/etc.)
+        - personal workspace does not show the Statements nav item
+
+# =============================================================================
+# PHASE 3: Backend — Business Category Seed
+# =============================================================================
+phase_3_business_seed:
+  status: not_started
+  description: |
+    The trust-ledger taxonomy with reserved, well-known category IDs that
+    the statement generator references (D6).
+
+  tasks:
+    - id: "3.1"
+      task: Define BUSINESS_CATEGORY_SEED + role map (constants/categoryTemplates.ts)
+      status: not_started
+      details: |
+        Reserved root IDs (isCustom=false so users can't delete the roots):
+          BIZ_TRUST_INFLOW      — "Royalties Held in Trust" (Amazon payouts)
+          BIZ_REMITTANCE        — "Client Remittance"
+          BIZ_BILLABLE          — "Billable to Client" (parent)
+            BIZ_BILLABLE_BOOK_REPORT   — "Book Report - data analytics"
+            BIZ_BILLABLE_BOOK_PURCHASE — "Book Purchase"
+            BIZ_BILLABLE_BOOK_SHIPPING — "Book Shipping"
+          BIZ_OVERHEAD          — "Overhead" (bank fees, subscriptions)
+          BIZ_COMMISSION        — "Commission / Revenue"
+        Each is a Category (parentId wiring per above). Export:
+          export const STATEMENT_ROLES = {
+            trustInflow: 'BIZ_TRUST_INFLOW',
+            remittance:  'BIZ_REMITTANCE',
+            billableRoot:'BIZ_BILLABLE',
+            overhead:    'BIZ_OVERHEAD',
+            commission:  'BIZ_COMMISSION',
+          } as const;
+          export const BILLABLE_SUBTYPES = [
+            { id: 'BIZ_BILLABLE_BOOK_REPORT', label: 'Book Report - data analytics' },
+            { id: 'BIZ_BILLABLE_BOOK_PURCHASE', label: 'Book Purchase' },
+            { id: 'BIZ_BILLABLE_BOOK_SHIPPING', label: 'Book Shipping' },
+          ];
+
+    - id: "3.2"
+      task: seedCategoriesForWorkspaceType (categoryService.ts)
+      status: not_started
+      details: |
+        async seedCategoriesForWorkspaceType(familyId, type: WorkspaceType) {
+          if (type !== 'business') return;            // personal stays seed-free (D5)
+          // refuse if categories already exist for familyId (idempotent)
+          await dataService.saveCategories(BUSINESS_CATEGORY_SEED, familyId);
+        }
+        Called from familyService.createWorkspace (task 1.4).
+
+    - id: "3.3"
+      task: Role resolution helper (categoryService.ts or a small util)
+      status: not_started
+      details: |
+        resolveStatementRole(categoryId, familyId): role | null
+          - walk parentId up to a reserved root; return which STATEMENT_ROLES
+            root it descends from (so user-made children of BIZ_OVERHEAD
+            still count as overhead). Reuse existing hierarchy walk helpers.
+        billableSubTypeOf(categoryId, familyId): subTypeId | null
+          - if under BIZ_BILLABLE, return the nearest BILLABLE_SUBTYPES ancestor.
+
+    - id: "3.4"
+      task: Tests — seed + role resolution
+      status: not_started
+      details: |
+        - seeding a business workspace writes the reserved tree exactly once
+        - seeding 'personal' is a no-op
+        - resolveStatementRole maps a child of BIZ_TRUST_INFLOW → trustInflow
+        - billableSubTypeOf maps a tx under BIZ_BILLABLE_BOOK_REPORT correctly
+
+# =============================================================================
+# PHASE 4: Business Plaid + Transactions (reuse)
+# =============================================================================
+phase_4_plaid_txns:
+  status: not_started
+  description: |
+    Connect the Chase business account inside the business workspace and
+    confirm transactions/tagging/auto-cat all work scoped to it. Almost
+    entirely reuse — the work is verification + an auto-cat rule for Amazon.
+
+  tasks:
+    - id: "4.1"
+      task: Verify Plaid connect works in business workspace
+      status: not_started
+      details: |
+        With the active workspace = business, the existing PlaidLinkProvider
+        flow (createLinkToken → Link → connectAccount) stores the item under
+        accounts_{businessFamilyId}. No code change expected; confirm token
+        + cursor land in the business partition and never the personal one.
+
+    - id: "4.2"
+      task: Auto-cat rule seed for Amazon deposits (optional convenience)
+      status: not_started
+      details: |
+        Seed (or document) an auto-categorize rule in the business workspace:
+        description contains 'AMAZON' → BIZ_TRUST_INFLOW. Reuses existing
+        autocategorize_rules_{familyId}. Manual tagging remains the
+        fallback. Overhead subs (e.g. known SaaS) → BIZ_OVERHEAD.
+
+    - id: "4.3"
+      task: Confirm transaction list + tagging UI render in business workspace
+      status: not_started
+      details: |
+        EnhancedTransactions / TransactionTable / TransactionEditModal are
+        category-agnostic (they take categories as props). Confirm they show
+        the business categories and write to the business partition. No new
+        UI; this is a gating + smoke check.
+
+# =============================================================================
+# PHASE 5: Backend — Statement Generator
+# =============================================================================
+phase_5_statement_service:
+  status: not_started
+  description: |
+    The only genuinely new domain logic. Pure, heavily unit-tested against
+    the real payment-068 fixture (D7). Persistence + payment numbering (D8).
+
+  tasks:
+    - id: "5.1"
+      task: Statement math as a pure module (statementService.ts or shared/utils)
+      status: not_started
+      details: |
+        computeStatement(input): BusinessStatement-without-id
+          inputs: trustInflowTxns[], billableTxns[] grouped by subtype,
+                  commissionRate, header, paymentNumber, paymentDate, period
+          per row: commission = round2(payout * rate); royalty = payout - commission
+          royaltySubtotal = Σ royalty
+          charges = BILLABLE_SUBTYPES.map(st => sum of billable txns of that
+                    subtype) — INCLUDE zero lines (BRD REQ-016)
+          remittanceTotal = royaltySubtotal - Σ charges
+        round2 = standard half-up to cents; golden fixture is authoritative.
+        Keep this PURE (no IO) so it lives in shared/utils if convenient for
+        the frontend preview to reuse.
+
+    - id: "5.2"
+      task: StatementService — load + persist (statementService.ts)
+      status: not_started
+      details: |
+        generateStatement(familyId, periodMonth, opts):
+          - load active transactions for the month (use transactionReader /
+            getActiveTransactions — excludeRemoved)
+          - partition by resolveStatementRole → trustInflow + billable(bysubtype)
+          - nextPaymentNumber = max(persisted.paymentNumber) + 1 (default 68→...)
+          - call computeStatement; assign id; persist to statements_{familyId}
+            via Repository (per-family lock)
+        listStatements(familyId): BusinessStatement[]   (desc by paymentNumber)
+        getStatement(familyId, id): BusinessStatement
+        Statements are immutable once created (D8); no update path in v1.
+        Use withLock for the read-modify-write of the payment counter.
+
+    - id: "5.3"
+      task: Wire singleton (services/index.ts)
+      status: not_started
+
+    - id: "5.4"
+      task: Tests — the money math is the highest-risk surface
+      status: not_started
+      details: |
+        backend/src/services/__tests__/statementService.test.ts
+        GOLDEN FIXTURE (payment 068, from the real statement):
+          - 16 Amazon deposits incl. 70220.83 → commission 3511.04,
+            royalty 66709.79
+          - Σ payouts 96665.49 → royaltySubtotal 91832.22
+          - one billable: Book Report 19.00; Book Purchase 0; Book Shipping 0
+          - remittanceTotal === 91813.22
+        Also:
+          - per-row rounding edge values (x.xx5 boundaries)
+          - zero-charge subtypes still appear as $0.00 lines
+          - overhead + commission + remittance txns are EXCLUDED from the
+            statement entirely (BRD REQ-018)
+          - payment number increments from the last persisted statement
+          - re-tagging a source txn after generation does NOT change the
+            stored statement (immutability, BRD REQ-025)
+          - familyId isolation (business statements invisible to personal)
+
+# =============================================================================
+# PHASE 6: Backend — Statement Routes
+# =============================================================================
+phase_6_statement_routes:
+  status: not_started
+  description: |
+    REST surface for the generator, gated to business workspaces.
+
+  tasks:
+    - id: "6.1"
+      task: routes/businessStatements.ts
+      status: not_started
+      details: |
+        Guard: reject if the active workspace's type !== 'business' (404/403).
+        POST /api/v1/business/statements        { periodMonth, paymentNumber?,
+                                                   paymentDate? } → 201 statement
+        GET  /api/v1/business/statements                          → list
+        GET  /api/v1/business/statements/:id                      → one
+        Zod: periodMonth /^\d{4}-(0[1-9]|1[0-2])$/; optional overrides.
+        Error mapping consistent with existing routers.
+
+    - id: "6.2"
+      task: Mount in app.ts + integration test
+      status: not_started
+      details: |
+        app.use(`${apiPrefix}/business/statements`, businessStatementRoutes)
+        Integration test: seed a business workspace + tagged txns, POST
+        generate → 201 with remittanceTotal matching the fixture; GET list/by-id;
+        confirm a personal-workspace token gets 403/404.
+
+# =============================================================================
+# PHASE 7: Frontend — Statement UI + PDF/CSV
+# =============================================================================
+phase_7_statement_ui:
+  status: not_started
+  description: |
+    Business Statements page: pick month → preview → finalize (persist) →
+    history list → export PDF + CSV. Split across components to stay under
+    the 600-LOC page budget.
+
+  tasks:
+    - id: "7.1"
+      task: Add @react-pdf/renderer dependency (D9)
+      status: not_started
+      details: |
+        Frontend dep. Confirm bundle impact is acceptable (lazy-load the PDF
+        module so it doesn't bloat the main chunk for the personal app).
+
+    - id: "7.2"
+      task: API client module (lib/api/businessStatements.ts) + register
+      status: not_started
+      details: |
+        createBusinessStatementsApi(client):
+          generateStatement({ periodMonth, paymentNumber?, paymentDate? })
+          getStatements()
+          getStatement(id)
+        Spread into api.ts.
+
+    - id: "7.3"
+      task: Statement components (components/business/)
+      status: not_started
+      details: |
+        StatementGenerator.tsx — month picker + optional payment#/date,
+          calls generate, shows the computed preview before/after persist.
+        StatementPreview.tsx — renders the on-screen statement (the page-1
+          layout: header, royalty rows, subtotal, other-fees, remittance).
+        StatementHistoryTable.tsx — past statements (payment#, period,
+          remittance, actions: view, export PDF, export CSV).
+        StatementPdf.tsx — @react-pdf/renderer <Document> mirroring page 1
+          (business + client header, royalty table, subtotal, fees, total).
+        statementCsv.ts — mirror transactionExport.ts: rows for each deposit
+          + a totals block; download as .csv.
+        Reuse the PURE computeStatement (5.1) for live preview math if it
+        lives in shared/utils.
+
+    - id: "7.4"
+      task: Page + route (pages/BusinessStatements.tsx, App.tsx)
+      status: not_started
+      details: |
+        Route /business/statements wrapped in RouteErrorBoundary, guarded to
+        the business workspace (Phase 2.3). Page composes generator + history;
+        keep page file thin (<200 LOC).
+
+    - id: "7.5"
+      task: Static header config (client + business identity)
+      status: not_started
+      details: |
+        Where the StatementHeader values come from (BRD REQ-020): store on
+        the Family record (business workspace settings) or a small
+        business_settings_{familyId}. Provide a minimal settings form
+        (business name/address, client name/company/address). Snapshot into
+        each statement at generation time.
+
+    - id: "7.6"
+      task: Frontend tests
+      status: not_started
+      details: |
+        - preview math matches fixture via the shared pure fn
+        - generate flow calls api with the right payload + refetches history
+        - PDF document renders without throwing for a fixture statement
+        - CSV contents include each deposit row + correct remittance total
+
+# =============================================================================
+# PHASE 8: Isolation Fixes (BRD REQ-007)
+# =============================================================================
+phase_8_isolation:
+  status: not_started
+  tasks:
+    - id: "8.1"
+      task: Per-workspace chatbot cost cap (chatbotCostTracker.ts) (D11)
+      status: not_started
+      details: |
+        Key cost file per familyId: chatbot_costs_{familyId}_{month}. Cap
+        enforced per workspace so business usage never consumes the family
+        cap. Migrate/initialize gracefully (missing file → fresh counter).
+
+    - id: "8.2"
+      task: Confirm auth rate-limit scope (rateLimit.ts)
+      status: not_started
+      details: |
+        Verify business-account login failures cannot lock out the family
+        account (and vice versa). If lockout is keyed purely globally or by
+        IP in a way that conflates the two, key by username/userId. Add a
+        test for the isolation property.
+
+# =============================================================================
+# PHASE 9: Docs & Manual Validation
+# =============================================================================
+phase_9_docs:
+  status: not_started
+  tasks:
+    - id: "9.1"
+      task: CLAUDE.md index + ADR
+      status: not_started
+      details: |
+        Already added at the BRD commit (BRD table row + Architecture
+        Decisions row). Update the ADR if any decision here supersedes it.
+
+    - id: "9.2"
+      task: Manual test checklist
+      status: not_started
+      details: |
+        Workspace switching:
+        - [ ] Single-workspace user sees no switcher
+        - [ ] Create business workspace (Admin) → appears in switcher
+        - [ ] Switch family↔business: data, nav, and routes swap cleanly
+        - [ ] No personal data visible in business and vice versa (query
+              cache cleared on switch)
+        - [ ] Deep-link to /budgets while in business → redirected
+        Business workflow:
+        - [ ] Connect Chase business account via Plaid in business workspace
+        - [ ] Amazon deposits auto-tag as trust inflow (or tag manually)
+        - [ ] Tag a $19 charge as Book Report (billable)
+        - [ ] Tag a bank fee / subscription as overhead
+        - [ ] Generate statement for the month → remittance matches a
+              hand-check; zero-charge subtypes show $0.00
+        - [ ] Export PDF → looks like page 1, sendable to client
+        - [ ] Export CSV → imports into the existing Google template
+        - [ ] Re-tag a source transaction → past statement unchanged
+        - [ ] Payment number increments on the next statement
+        Isolation:
+        - [ ] Business chatbot use does not reduce family chatbot cap
+        - [ ] A failed business login does not lock the family account
+
+    - id: "9.3"
+      task: Provisioning runbook
+      status: not_started
+      details: |
+        Document the one-time creation of the OoT business workspace
+        (Admin action or seed script per D10), and entering the static
+        client/business header.
+
+# =============================================================================
+# IMPLEMENTATION ORDER
+# =============================================================================
+implementation_order:
+  description: |
+    Layered: ship and verify the switcher (empty business workspace) before
+    any statement logic exists. Each phase is independently demoable.
+  sequence:
+    - phase: 0 — Shared Types
+      reason: Imported everywhere
+    - phase: 1 — Workspace backend
+      reason: Membership/switch/create; verifiable via API + tests
+    - phase: 2 — Workspace frontend
+      reason: Switch into an empty business workspace end-to-end
+    - phase: 3 — Business seed
+      reason: Business workspace now has its trust-ledger categories
+    - phase: 4 — Plaid + transactions (reuse)
+      reason: Real Chase data flowing + tagged in the business workspace
+    - phase: 5 — Statement service
+      reason: The new domain logic; golden-fixture tested in isolation
+    - phase: 6 — Statement routes
+      reason: HTTP surface + workspace gating
+    - phase: 7 — Statement UI + PDF/CSV
+      reason: The user-facing deliverable; depends on all above
+    - phase: 8 — Isolation fixes
+      reason: Can land anytime after Phase 1; grouped here to close REQ-007
+    - phase: 9 — Docs & manual validation
+      reason: Index + real-data money validation against payment 068
+
+# =============================================================================
+# RELEASE GROUPING (PRs)
+# =============================================================================
+release_grouping:
+  principle: |
+    Every push to main auto-releases. This feature is DARK-LAUNCHABLE: the
+    only thing that makes any of it user-visible is a business workspace
+    EXISTING. Until one is created (the deliberate Activation step), the
+    switcher auto-hides (REQ-004 ≤1 workspace), the create-workspace endpoint
+    stays admin-only and unsurfaced, and all business code is dormant and
+    unreachable. So each PR below is independently releasable to production
+    with zero half-exposed UI and no behavior change for the personal app.
+    "Go live" is a DATA operation (create the OoT workspace), not a deploy.
+
+  prs:
+    - id: PR1
+      title: Workspace foundation (backend, dark)
+      phases: [0, 1, 3]
+      releasable_because: |
+        Backend-only and behavior-preserving. The backfill keeps existing
+        auth identical (workspaceIds=[familyId]); new endpoints exist but the
+        create-workspace endpoint is admin-only and unsurfaced, so no second
+        workspace appears. Fully dormant.
+      intra_pr_ordering: |
+        3.1/3.2 (business seed fn) MUST precede 1.4 (createWorkspace calls it).
+        Backfill (1.1) MUST land atomically with the membership-check change
+        (1.2) — they cannot deploy separately or auth breaks for all users.
+      risk: HIGHEST — modifies authMiddleware/JWT for every existing user.
+        Give it its own deploy + verification window; do not stack with PR2.
+
+    - id: PR2
+      title: Switcher + nav/route gating (frontend, dark)
+      phases: [2]
+      releasable_because: |
+        Switcher is hidden at ≤1 workspace; personal nav/routes unchanged.
+        Dormant until a business workspace exists. Requires PR1 deployed
+        (calls /workspaces and /auth/switch-workspace).
+
+    - id: PR3
+      title: Business Plaid + transactions (reuse)
+      phases: [4]
+      releasable_because: |
+        Mostly verification; only net code is an optional auto-cat rule seed.
+        Nothing new exposed. Could fold into PR1 if trivially small.
+
+    - id: PR4
+      title: Statement engine + API (backend, dark)
+      phases: [5, 6]
+      releasable_because: |
+        Routes are gated to business workspaces and no UI calls them yet.
+        Pure generator is golden-fixture tested. Dormant.
+
+    - id: PR5
+      title: Statement UI + PDF/CSV (frontend)
+      phases: [7]
+      releasable_because: |
+        Only reachable inside a business workspace, which has not been
+        activated. Adds @react-pdf/renderer (lazy-loaded). The deliverable.
+
+    - id: PR6
+      title: Isolation fixes (REQ-007)
+      phases: [8]
+      releasable_because: |
+        Independent; can land any time after PR1.
+      behavior_change_to_call_out: |
+        8.1 changes the chatbot cost key (chatbot_costs_{month} →
+        chatbot_costs_{familyId}_{month}), orphaning the current global
+        counter so the family's running monthly chatbot total resets to $0
+        once on deploy. Harmless for a 2-user app but do it intentionally.
+
+    - id: ACTIVATION
+      title: Go live (data operation, NOT a code PR)
+      phases: [9]
+      action: |
+        After PR5 is in production: create the OoT business workspace
+        (Admin action per D10 or the seed script), enter the static
+        client/business header, connect the Chase business account, and
+        validate a generated statement against the real payment 068 numbers.
+        This is the only step that makes the feature visible.
+
+  release_sequence: [PR1, PR2, PR3, PR4, PR5, PR6, ACTIVATION]
+  notes: |
+    PR6 may be slotted anywhere after PR1. PR3 is optional-merge into PR1.
+    Hold ACTIVATION until PR5 ships — creating the workspace before the
+    statement UI exists would expose a business workspace that can tag
+    transactions but cannot produce its one deliverable.
+
+# =============================================================================
+# NOTES & FOLLOW-UPS
+# =============================================================================
+notes:
+  brd_open_questions_resolved_in_plan:
+    - PDF fidelity → D9 + 7.3: @react-pdf/renderer document mirroring page 1
+    - Billable sub-types fixed vs configurable → fixed set in the seed (3.1);
+      revisit if a second charge family appears
+    - Workspace switcher mechanics → D2: active workspace in JWT, re-issued
+      on switch (no server session)
+    - Provisioning UX → D10: backend endpoint surfaced on Admin (or script)
+  still_open_for_implementation:
+    - Disbursement date vs. bank-posted date — confirm Plaid transaction date
+      is an acceptable "KDP Disbursement Date"; if not, capture a separate
+      field during tagging
+    - Plaid item billing — confirm incremental cost of the second item before
+      connecting in production
+    - Statement editing/voiding — none in v1 (immutable); revisit if a
+      correction is ever needed (would consume/skip a payment number)
+  explicitly_excluded_carried_from_brd:
+    - Payment automation (Stripe/ACH origination) — fiduciary risk; not built
+    - Multi-client sub-ledgers — single optional clientId tag seam only
+    - Manual transactions, revenue-sweep redesign, tax/accountant export —
+      Phase 2 of the product, specced separately
