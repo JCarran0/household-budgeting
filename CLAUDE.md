@@ -34,6 +34,7 @@ Family-scale app for 2 users: personal budgeting (with Plaid), shared tasks, tri
 | Task Leaderboard v2.0 | [TASK-LEADERBOARD-BRD.md](docs/features/TASK-LEADERBOARD-BRD.md) | — |
 | Stale Data Mitigation | [STALE-DATA-MITIGATION-BRD.md](docs/features/STALE-DATA-MITIGATION-BRD.md) | [STALE-DATA-MITIGATION-PLAN.yaml](docs/features/STALE-DATA-MITIGATION-PLAN.yaml) |
 | Wishlist | [WISHLIST-BRD.md](docs/features/WISHLIST-BRD.md) | [WISHLIST-PLAN.yaml](docs/features/WISHLIST-PLAN.yaml) |
+| Business Workspace | [BUSINESS-WORKSPACE-BRD.md](docs/features/BUSINESS-WORKSPACE-BRD.md) | [BUSINESS-WORKSPACE-PLAN.yaml](docs/features/BUSINESS-WORKSPACE-PLAN.yaml) |
 
 ## 🤖 Critical Rules — Never Violate
 
@@ -106,6 +107,7 @@ Entries link the BRD for full context. Older decisions live in git history.
 
 | Date | Decision | BRD |
 |------|----------|-----|
+| 2026-06-05 | Business Workspace — second isolated workspace (= second `familyId`) reached by in-app switcher; trust-ledger category seed (NOT family INCOME/EXPENSES/SAVINGS); Amazon royalties are held-in-trust pass-through, never OoT income/expense; tag-driven monthly client statement (5% per-row commission, billable-charge tags, persisted/numbered) → PDF+CSV; payment automation explicitly excluded (fiduciary risk; Stripe is wrong tool); manual txns / sweep redesign / tax export deferred to Phase 2 | [BUSINESS-WORKSPACE-BRD.md](docs/features/BUSINESS-WORKSPACE-BRD.md) |
 | 2026-05-27 | Wishlist v1 — standalone shared list (PENDING/AGREED/REJECTED); spending categories only; per-family JSON (`wishlist_{familyId}`); no budget/BvA/transaction integration; hard delete; sort: status-group → month asc → createdAt asc | [WISHLIST-BRD.md](docs/features/WISHLIST-BRD.md) |
 | 2026-05-04 | Auto-cat rule suggestions — deterministic merchant clustering on the user's own categorized transactions; 3 / 80% / 180-day bar; per-user localStorage dismissals (NOT a shared flag); BRD-listed match fields corrected to `userDescription` / `merchantName` / `name` per dce0615 | [AUTO-CAT-SUGGESTIONS-BRD.md](docs/features/AUTO-CAT-SUGGESTIONS-BRD.md) |
 | 2026-04-25 | Net terminology — **Pre-Savings Net** (`Income − Spending`) and **Net Cashflow** (`Income − Spending − Savings`) are the two canonical labels. "Net Income" is retired from new work; surfaces showing a net must label it with one of these two and show the formula in a tooltip | [SAVINGS-CATEGORY-BRD.md](docs/features/SAVINGS-CATEGORY-BRD.md) §2.6 REQ-017/018 |
