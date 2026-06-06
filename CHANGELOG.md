@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.77.0](https://github.com/JCarran0/household-budgeting/compare/v5.76.5...v5.77.0) (2026-06-06)
+
+
+### Features
+
+* **workspaces:** frontend workspace switcher and nav gating ([4ae7f77](https://github.com/JCarran0/household-budgeting/commit/4ae7f7739d7521598bc5eea2550e2b714499b504))
+* **workspaces:** multi-workspace membership, switching, and business seed ([847dca4](https://github.com/JCarran0/household-budgeting/commit/847dca43794b7e2e1705796bb4ca2c7b798a865f))
+
 ### [5.76.5](https://github.com/JCarran0/household-budgeting/compare/v5.76.4...v5.76.5) (2026-06-05)
 
 
