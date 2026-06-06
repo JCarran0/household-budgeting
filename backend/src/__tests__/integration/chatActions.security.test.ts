@@ -560,18 +560,29 @@ function makeTextBuffer(): Buffer {
   return Buffer.from('This is plain text content, not a JPEG image.');
 }
 
-/** Current month key as used by ChatbotCostTracker. */
-function currentMonthKey(): string {
+/**
+ * Build the per-workspace monthly cost key as used by ChatbotCostTracker
+ * after the D11 isolation fix (PR6).
+ *
+ * Key format: `chatbot_costs_{familyId}_{YYYY-MM}`
+ * The previous global key `chatbot_costs_{YYYY-MM}` is orphaned on deploy —
+ * documented in D11 and noted in ChatbotCostTracker.getMonthKey().
+ */
+function currentMonthKeyForFamily(familyId: string): string {
   const now = new Date();
-  return `chatbot_costs_${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  return `chatbot_costs_${familyId}_${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
 }
 
 /**
- * Seed the cost tracker's monthly data to put monthly spend at or above the cap.
- * The singleton's monthlyLimit is 20 (from config default in test env).
+ * Seed the cost tracker's monthly data for a specific workspace to put its
+ * monthly spend at or above the cap. The singleton's monthlyLimit is 20
+ * (from config default in test env).
+ *
+ * @param familyId - The workspace whose cap to exhaust. Each workspace has its
+ *   own independent bucket so exhausting one does not affect another (REQ-007 / D11).
  */
-async function seedCostCapReached(): Promise<void> {
-  const key = currentMonthKey();
+async function seedCostCapReached(familyId: string): Promise<void> {
+  const key = currentMonthKeyForFamily(familyId);
   const now = new Date();
   const month = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
   await dataService.saveData(key, {
@@ -952,8 +963,8 @@ describe('10.10 — Cost cap blocks attachment requests when monthly spend is at
     const user = await createUser('cap10');
     const fields = chatFormFields();
 
-    // Pre-seed the monthly cost data at the cap ($20.00)
-    await seedCostCapReached();
+    // Pre-seed the monthly cost data at the cap ($20.00) for this workspace.
+    await seedCostCapReached(user.familyId);
 
     const createSpy = spyOnAnthropicMessages(makeEndTurnMessage('Should not be called'));
 
@@ -988,7 +999,7 @@ describe('10.10 — Cost cap blocks attachment requests when monthly spend is at
 
   it('text-only request (no attachment) when cap is reached is also blocked — verifying uniform enforcement', async () => {
     const user = await createUser('cap10b');
-    await seedCostCapReached();
+    await seedCostCapReached(user.familyId);
 
     const createSpy = spyOnAnthropicMessages(makeEndTurnMessage('Should not be called'));
 
@@ -1031,8 +1042,8 @@ describe('10.10 — Cost cap blocks attachment requests when monthly spend is at
       },
     });
 
-    // Now hit the cap
-    await seedCostCapReached();
+    // Now hit the cap for this workspace.
+    await seedCostCapReached(user.familyId);
 
     // Confirmation does NOT call the LLM — should still work
     const res = await request(app)

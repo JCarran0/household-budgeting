@@ -113,8 +113,8 @@ export class ChatbotService {
     userId: string,
     attachment?: ChatAttachment,
   ): Promise<ChatResponse> {
-    // 1. Check monthly spend against cap (SEC-A019, SEC-A020)
-    const budget = await this.costTracker.checkBudget();
+    // 1. Check monthly spend against cap — scoped to this workspace (REQ-007 / D11).
+    const budget = await this.costTracker.checkBudget(familyId);
     if (!budget.allowed) {
       return this.capReachedResponse(budget.monthlySpend, budget.monthlyLimit);
     }
@@ -220,10 +220,12 @@ export class ChatbotService {
   }
 
   /**
-   * Get current usage stats.
+   * Get current usage stats for the given workspace.
+   *
+   * @param familyId - The active workspace's familyId (from JWT claim).
    */
-  async getUsage(): Promise<{ monthlySpend: number; monthlyLimit: number; remainingBudget: number }> {
-    return this.costTracker.getUsage();
+  async getUsage(familyId: string): Promise<{ monthlySpend: number; monthlyLimit: number; remainingBudget: number }> {
+    return this.costTracker.getUsage(familyId);
   }
 
   // ==========================================================================

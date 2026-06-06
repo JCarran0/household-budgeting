@@ -53,13 +53,18 @@ export class ChatbotCostTracker {
   ) {}
 
   /**
-   * Check if the current monthly spend allows another request.
+   * Check if the current monthly spend allows another request for the given
+   * workspace. Each workspace has an independent monthly cap so business
+   * chatbot usage cannot consume the family workspace's $20/mo budget (REQ-007 / D11).
+   *
    * Acquires the mutex to ensure atomic read.
+   *
+   * @param familyId - The active workspace's familyId (from JWT claim).
    */
-  async checkBudget(): Promise<CostCheckResult> {
+  async checkBudget(familyId: string): Promise<CostCheckResult> {
     const release = await this.mutex.acquire();
     try {
-      const data = await this.getMonthData();
+      const data = await this.getMonthData(familyId);
       const spend = data.totalEstimatedCost;
       return {
         allowed: spend < this.monthlyLimit,
@@ -76,9 +81,13 @@ export class ChatbotCostTracker {
    * Record usage after a Claude API call completes.
    * Acquires the mutex to ensure atomic read-modify-write.
    * Returns whether the cap has been exceeded after this request.
+   *
+   * @param familyId - The active workspace's familyId (from JWT claim). Cost is
+   *   accumulated in a per-workspace monthly bucket so workspaces cannot steal
+   *   budget from each other (REQ-007 / D11).
    */
   async recordUsage(
-    userId: string,
+    familyId: string,
     model: ChatModel,
     inputTokens: number,
     outputTokens: number,
@@ -90,11 +99,11 @@ export class ChatbotCostTracker {
         (inputTokens / 1_000_000) * pricing.input +
         (outputTokens / 1_000_000) * pricing.output;
 
-      const data = await this.getMonthData();
+      const data = await this.getMonthData(familyId);
 
       const record: CostRecord = {
         timestamp: new Date().toISOString(),
-        userId,
+        userId: familyId,
         model,
         inputTokens,
         outputTokens,
@@ -106,7 +115,7 @@ export class ChatbotCostTracker {
       data.totalEstimatedCost += estimatedCost;
       data.requests.push(record);
 
-      await this.saveMonthData(data);
+      await this.saveMonthData(familyId, data);
 
       const monthlySpend = Math.round(data.totalEstimatedCost * 100) / 100;
 
@@ -121,10 +130,13 @@ export class ChatbotCostTracker {
   }
 
   /**
-   * Get current usage stats (no mutex needed — point-in-time read).
+   * Get current usage stats for the given workspace (no mutex needed —
+   * point-in-time read).
+   *
+   * @param familyId - The active workspace's familyId (from JWT claim).
    */
-  async getUsage(): Promise<{ monthlySpend: number; monthlyLimit: number; remainingBudget: number }> {
-    const data = await this.getMonthData();
+  async getUsage(familyId: string): Promise<{ monthlySpend: number; monthlyLimit: number; remainingBudget: number }> {
+    const data = await this.getMonthData(familyId);
     const spend = Math.round(data.totalEstimatedCost * 100) / 100;
     return {
       monthlySpend: spend,
@@ -140,14 +152,24 @@ export class ChatbotCostTracker {
 
   // --- Private helpers ---
 
-  private getCurrentMonthKey(): string {
+  /**
+   * Build the storage key for a given workspace and month.
+   *
+   * Key format: `chatbot_costs_{familyId}_{YYYY-MM}`
+   *
+   * DEPLOY NOTE (D11): The previous global key `chatbot_costs_{YYYY-MM}` is
+   * orphaned on first deploy of this change. The family workspace's running
+   * monthly total resets to $0 once — intentional and documented in D11.
+   * This is acceptable for a 2-user app; the old key simply stops accumulating.
+   */
+  private getMonthKey(familyId: string): string {
     const now = new Date();
     const month = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-    return `chatbot_costs_${month}`;
+    return `chatbot_costs_${familyId}_${month}`;
   }
 
-  private async getMonthData(): Promise<MonthlyCostData> {
-    const key = this.getCurrentMonthKey();
+  private async getMonthData(familyId: string): Promise<MonthlyCostData> {
+    const key = this.getMonthKey(familyId);
     const data = await this.dataService.getData<MonthlyCostData>(key);
     if (data) return data;
 
@@ -161,8 +183,8 @@ export class ChatbotCostTracker {
     };
   }
 
-  private async saveMonthData(data: MonthlyCostData): Promise<void> {
-    const key = this.getCurrentMonthKey();
+  private async saveMonthData(familyId: string, data: MonthlyCostData): Promise<void> {
+    const key = this.getMonthKey(familyId);
     await this.dataService.saveData(key, data);
   }
 }

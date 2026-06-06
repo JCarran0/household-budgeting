@@ -113,7 +113,7 @@ export class AmazonReceiptService {
     familyId: string,
     files: ReceiptUploadFile[],
   ): Promise<AmazonReceiptUploadResponse> {
-    const budget = await this.costTracker.checkBudget();
+    const budget = await this.costTracker.checkBudget(familyId);
     if (!budget.allowed) {
       throw new ValidationError(
         'Monthly AI budget cap reached. Try again next month.',
@@ -430,7 +430,7 @@ export class AmazonReceiptService {
     sessionId: string,
     matchIds: string[],
   ): Promise<AmazonCategorizationResponse> {
-    const budget = await this.costTracker.checkBudget();
+    const budget = await this.costTracker.checkBudget(familyId);
     if (!budget.allowed) {
       throw new ValidationError('Monthly AI budget cap reached. Try again next month.');
     }

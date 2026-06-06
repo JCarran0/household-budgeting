@@ -170,14 +170,16 @@ router.post(
 );
 
 // =============================================================================
-// GET /usage — Get current monthly cost usage
+// GET /usage — Get current monthly cost usage for this workspace
 // =============================================================================
 router.get(
   '/usage',
   authenticate,
-  async (_req: Request, res: Response, next: NextFunction): Promise<void> => {
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
-      const usage = await chatbotService.getUsage();
+      const { familyId } = req.user!;
+      // familyId scopes the usage bucket — each workspace has its own cap (REQ-007 / D11).
+      const usage = await chatbotService.getUsage(familyId);
       res.json({ success: true, ...usage });
     } catch (error) {
       next(error);

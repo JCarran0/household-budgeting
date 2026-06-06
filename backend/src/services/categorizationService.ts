@@ -61,8 +61,8 @@ export class CategorizationService {
     familyId: string,
     transactionIds?: string[],
   ): Promise<ClassifyTransactionsResponse> {
-    // Check cost cap
-    const budget = await this.costTracker.checkBudget();
+    // Check cost cap — scoped to this workspace (REQ-007 / D11).
+    const budget = await this.costTracker.checkBudget(familyId);
     if (!budget.allowed) {
       throw new Error('Monthly AI budget cap reached. Try again next month.');
     }
@@ -139,7 +139,7 @@ export class CategorizationService {
     familyId: string,
     categorizations: { transactionId: string; categoryId: string }[],
   ): Promise<SuggestRulesResponse> {
-    const budget = await this.costTracker.checkBudget();
+    const budget = await this.costTracker.checkBudget(familyId);
     if (!budget.allowed) {
       return { suggestions: [] };
     }
