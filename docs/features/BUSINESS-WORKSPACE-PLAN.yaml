@@ -130,16 +130,34 @@ decisions:
       reusing existing parent-rollup helpers.
 
   - id: D7
-    date: 2026-06-05
-    decision: Commission = 5% per deposit, rounded to cents per row; royalty = remainder.
+    date: 2026-06-05  # rounding rule corrected 2026-06-06 from the authoritative CSV
+    decision: 5% commission; per-row figures rounded for DISPLAY; subtotal from full-precision aggregate.
     rationale: |
-      Matches the current Google Sheet exactly. Golden fixture from the
-      real statement (payment 068):
-        deposit 70220.83 → commission 3511.04 → royalty 66709.79
-        Σ deposits 96665.49 → royalty subtotal 91832.22
-        minus other-fees 19.00 → remittance 91813.22
-      `commissionRate` (0.05) is workspace/client config, not hard-coded.
-      The fixture is the authoritative test for rounding behavior.
+      Matches the current Google Sheet EXACTLY — including a subtle rounding
+      rule discovered from the authoritative CSV export (not the rendered PDF):
+
+        Per-row (DISPLAY only):
+          commission_i = round(payout_i * 0.05)
+          royalty_i    = round(payout_i * 0.95)   (== payout_i - commission_i here)
+
+        Subtotal (AUTHORITATIVE for remittance):
+          royaltySubtotal = round( Σ payout_i * (1 - rate) )
+          i.e. sum at FULL precision, round ONCE — NOT Σ(round(royalty_i)).
+
+      Golden fixture (payment 068, from CSV):
+        Σ payouts            = 96665.49
+        royaltySubtotal      = round(96665.49 * 0.95) = round(91832.2155) = 91832.22
+        Σ of 16 displayed royalties = 91832.23  ← one cent higher; EXPECTED
+        other fees           = 19.00 (Book Report) + 0 + 0
+        remittance           = 91832.22 - 19.00 = 91813.22
+      anchor row: payout 70220.83 → commission 3511.04 → royalty 66709.79
+
+      Summing per-row rounded royalties (the naive method) would overpay the
+      client by a penny and NOT match the statement they receive today. The
+      column-vs-subtotal one-cent gap is a pre-existing, accepted quirk of the
+      legacy statement; we reproduce it rather than "fix" it. `commissionRate`
+      (0.05) is workspace/client config, not hard-coded. Use a float-safe
+      round-half-up on integer cents.
 
   - id: D8
     date: 2026-06-05

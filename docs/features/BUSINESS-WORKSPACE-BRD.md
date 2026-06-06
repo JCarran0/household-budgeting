@@ -64,11 +64,11 @@ Critically, the Amazon money is **held in trust** — it is a liability passing 
 
 **REQ-013:** A statement is generated for a chosen calendar month and includes the trust-royalty-inflow transactions dated within that month.
 
-**REQ-014:** For each included deposit, the statement computes:
-- **Commission** = `commissionRate × depositAmount`, rounded to cents (v1 `commissionRate` = 5%).
-- **Client royalty** = `depositAmount − commission`.
+**REQ-014:** For each included deposit, the statement **displays** per row:
+- **Commission** = `commissionRate × depositAmount`, rounded to cents for display (v1 `commissionRate` = 5%).
+- **Client royalty** = `depositAmount − commission`, for display.
 
-**REQ-015:** **Royalty Subtotal** = the sum of per-row client royalties.
+**REQ-015:** **Royalty Subtotal** = `round( Σ(depositAmount) × (1 − commissionRate) )` — computed from the **full-precision aggregate and rounded once**, NOT the sum of the per-row *rounded* royalties. This matches the legacy Google-Sheet statement (payment 068: `round(96,665.49 × 0.95) = 91,832.22`), where summing the 16 displayed royalties instead yields `91,832.23`. The per-row figures are presentation-only; the subtotal is authoritative for the remittance, and the column may differ from the subtotal by accumulated rounding (an accepted, pre-existing quirk of the client's statements).
 
 **REQ-016:** **Other fees & charges** = transactions tagged *billable to client* within the period, grouped and summed by billable sub-type. Each configured sub-type line appears on the statement even when its total is `$0.00`.
 
