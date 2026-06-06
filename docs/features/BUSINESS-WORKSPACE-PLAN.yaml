@@ -183,6 +183,21 @@ decisions:
       Confirm auth rate-limit/lockout state cannot let business-login
       attempts lock out the family account; adjust keying if it can.
 
+  - id: D12
+    date: 2026-06-06
+    decision: Do NOT auto-seed an Amazon auto-categorize rule; the user creates it manually.
+    rationale: |
+      (PR3 finding.) autoCategorizeService.applyRules matches description only
+      (userDescription/merchantName/name, lowercased `contains`) with no amount
+      or direction awareness. Amazon KDP *deposits* (trust inflow) and Amazon
+      retail *purchases* (billable/overhead) are indistinguishable by
+      description, so a seeded 'AMAZON' → BIZ_TRUST_INFLOW rule would mis-tag.
+      Auto-seeding is therefore unsafe; the user crafts a precise rule once via
+      the existing auto-cat UI after seeing real bank strings (KDP deposits
+      carry distinctive markers like "AMAZON MEDIA" / "ORIG CO NAME:Amazon").
+      Less code, more correct. Reuse itself is proven by an automated test
+      (4.4) rather than by shipping a risky convenience seed.
+
 # =============================================================================
 # PHASE 0: Shared Types
 # =============================================================================
@@ -463,39 +478,61 @@ phase_3_business_seed:
 # PHASE 4: Business Plaid + Transactions (reuse)
 # =============================================================================
 phase_4_plaid_txns:
-  status: not_started
+  status: done   # PR3 — verified by automated test; no production code change (see D12)
   description: |
     Connect the Chase business account inside the business workspace and
     confirm transactions/tagging/auto-cat all work scoped to it. Almost
-    entirely reuse — the work is verification + an auto-cat rule for Amazon.
+    entirely reuse. PR3 delivered the automated reuse proof + recorded the
+    decision NOT to auto-seed an Amazon auto-cat rule (D12). The remaining
+    items (4.1, 4.3) are manual smoke checks folded into the Activation step
+    (Phase 9), since they require a running app + a real Plaid connection.
 
   tasks:
     - id: "4.1"
       task: Verify Plaid connect works in business workspace
-      status: not_started
+      status: deferred_to_activation
       details: |
         With the active workspace = business, the existing PlaidLinkProvider
         flow (createLinkToken → Link → connectAccount) stores the item under
         accounts_{businessFamilyId}. No code change expected; confirm token
         + cursor land in the business partition and never the personal one.
+        Requires a running app + real/sandbox Plaid — performed at Activation.
 
     - id: "4.2"
-      task: Auto-cat rule seed for Amazon deposits (optional convenience)
-      status: not_started
+      task: Auto-cat rule seed for Amazon deposits — DROPPED (see D12)
+      status: done
       details: |
-        Seed (or document) an auto-categorize rule in the business workspace:
-        description contains 'AMAZON' → BIZ_TRUST_INFLOW. Reuses existing
-        autocategorize_rules_{familyId}. Manual tagging remains the
-        fallback. Overhead subs (e.g. known SaaS) → BIZ_OVERHEAD.
+        DECISION (D12): do NOT auto-seed an Amazon → BIZ_TRUST_INFLOW rule.
+        Rule matching is description-only (userDescription/merchantName/name,
+        lowercased `contains` — autoCategorizeService.applyRules, no amount or
+        direction awareness). Amazon KDP *deposits* (trust inflow) and Amazon
+        retail *purchases* (billable/overhead) are indistinguishable by
+        description, so a naive 'AMAZON' rule would mis-tag. The user creates
+        a precise rule once via the existing auto-cat UI after seeing real
+        bank descriptions (the KDP deposits carry distinctive strings such as
+        "AMAZON MEDIA" / "ORIG CO NAME:Amazon.com Ser"). Captured in the
+        Activation runbook (9.3).
 
     - id: "4.3"
       task: Confirm transaction list + tagging UI render in business workspace
-      status: not_started
+      status: deferred_to_activation
       details: |
         EnhancedTransactions / TransactionTable / TransactionEditModal are
         category-agnostic (they take categories as props). Confirm they show
         the business categories and write to the business partition. No new
-        UI; this is a gating + smoke check.
+        UI; this is a gating + smoke check performed at Activation.
+
+    - id: "4.4"
+      task: Automated reuse proof (PR3 deliverable)
+      status: done
+      details: |
+        backend/src/services/__tests__/businessWorkspaceReuse.test.ts — a dry
+        run of PR4 partitioning: stores transactions under a business familyId,
+        reads them via getActiveTransactions (excludes removed), and buckets
+        each by resolveStatementRole / billableSubTypeOf. Asserts uncategorized
+        rows are excluded and that another familyId sees none of the rows
+        (isolation). Proves the transaction/reader/role-resolution chain works
+        scoped to a business workspace, and de-risks PR4.
 
 # =============================================================================
 # PHASE 5: Backend — Statement Generator
@@ -715,7 +752,8 @@ phase_9_docs:
         - [ ] Deep-link to /budgets while in business → redirected
         Business workflow:
         - [ ] Connect Chase business account via Plaid in business workspace
-        - [ ] Amazon deposits auto-tag as trust inflow (or tag manually)
+        - [ ] Create a precise Amazon-KDP-deposit auto-cat rule → trust inflow
+              (manual, per D12 — verify it does NOT catch Amazon purchases)
         - [ ] Tag a $19 charge as Book Report (billable)
         - [ ] Tag a bank fee / subscription as overhead
         - [ ] Generate statement for the month → remittance matches a
@@ -733,8 +771,9 @@ phase_9_docs:
       status: not_started
       details: |
         Document the one-time creation of the OoT business workspace
-        (Admin action or seed script per D10), and entering the static
-        client/business header.
+        (Admin action or seed script per D10), entering the static
+        client/business header, and creating the precise Amazon-KDP-deposit
+        auto-cat rule by hand (D12) after inspecting real bank descriptions.
 
 # =============================================================================
 # IMPLEMENTATION ORDER
@@ -806,9 +845,12 @@ release_grouping:
     - id: PR3
       title: Business Plaid + transactions (reuse)
       phases: [4]
+      status: done
       releasable_because: |
-        Mostly verification; only net code is an optional auto-cat rule seed.
-        Nothing new exposed. Could fold into PR1 if trivially small.
+        No production code change — a test + plan/decision update only. The
+        auto-cat rule seed was DROPPED as unsafe (D12); reuse is proven by an
+        automated partitioning test (4.4). Manual Plaid/UI smoke checks (4.1,
+        4.3) move to the Activation step. Trivially releasable.
 
     - id: PR4
       title: Statement engine + API (backend, dark)
