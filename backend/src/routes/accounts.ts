@@ -16,7 +16,7 @@ const router = Router();
 
 // Extended Request with user
 interface AuthRequest extends Request {
-  user?: { userId: string; username: string; familyId: string };
+  user?: { userId: string; username: string; familyId: string; workspaceIds: string[] };
 }
 
 // Input validation schemas

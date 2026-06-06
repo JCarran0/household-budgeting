@@ -46,6 +46,8 @@ describe('AuthService', () => {
         username: validRegistrationData.username,
         displayName: 'Test User',
         familyId: userId,
+        workspaceIds: [userId],
+        activeWorkspaceId: userId,
         passwordHash: hashedPassword,
         createdAt: new Date(),
       });
@@ -63,6 +65,8 @@ describe('AuthService', () => {
           username: validRegistrationData.username,
           displayName: 'Test User',
           familyId: userId,
+          workspaceIds: [userId],
+          activeWorkspaceId: userId,
         },
       });
       expect(bcrypt.hash).toHaveBeenCalledWith(validRegistrationData.password, 10);
@@ -156,6 +160,8 @@ describe('AuthService', () => {
       username: 'testuser',
       displayName: 'Test User',
       familyId: 'family-123',
+      workspaceIds: ['family-123'],
+      activeWorkspaceId: 'family-123',
       passwordHash: 'hashed_password',
       createdAt: new Date(),
     };
@@ -166,6 +172,7 @@ describe('AuthService', () => {
       mockDataService.getUserByUsername.mockResolvedValue(mockUser);
       (bcrypt.compare as jest.Mock).mockResolvedValue(true);
       (jwt.sign as jest.Mock).mockReturnValue(mockToken);
+      mockDataService.updateUser.mockResolvedValue(mockUser);
 
       const result = await authService.login(
         validLoginData.username,
@@ -180,6 +187,8 @@ describe('AuthService', () => {
           username: mockUser.username,
           displayName: mockUser.displayName,
           familyId: mockUser.familyId,
+          workspaceIds: mockUser.workspaceIds,
+          activeWorkspaceId: mockUser.activeWorkspaceId,
         },
       });
       expect(bcrypt.compare).toHaveBeenCalledWith(

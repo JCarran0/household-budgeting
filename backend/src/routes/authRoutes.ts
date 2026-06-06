@@ -1,4 +1,5 @@
 import { Router, Request, Response, NextFunction } from 'express';
+import { z } from 'zod';
 import { authService, familyService } from '../services';
 import {
   authenticate,
@@ -15,6 +16,10 @@ import {
   resetPasswordSchema,
   updateProfileSchema,
 } from '../validators/authValidators';
+
+const switchWorkspaceSchema = z.object({
+  familyId: z.string().min(1, 'familyId is required'),
+});
 
 const router = Router();
 
@@ -326,6 +331,34 @@ router.get(
       next(error);
     }
   }
+);
+
+/**
+ * @route POST /api/v1/auth/switch-workspace
+ * @desc Switch the active workspace; re-issues a JWT with the new familyId claim.
+ * @access Private
+ */
+router.post(
+  '/switch-workspace',
+  authenticate,
+  validateBody(switchWorkspaceSchema),
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      if (!req.user) throw new AuthorizationError();
+
+      const { familyId } = req.body as z.infer<typeof switchWorkspaceSchema>;
+      const result = await authService.switchWorkspace(req.user.userId, familyId);
+
+      if (result.success) {
+        res.json(result);
+      } else {
+        // "Workspace not found or access denied" maps to 403
+        res.status(403).json(result);
+      }
+    } catch (error) {
+      next(error);
+    }
+  },
 );
 
 export default router;

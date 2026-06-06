@@ -24,6 +24,8 @@ function seedUser(partial: Partial<User> = {}) {
     username: 'alice',
     displayName: 'Alice',
     familyId: 'fam-1',
+    workspaceIds: ['fam-1'],
+    activeWorkspaceId: 'fam-1',
     color: 'blue',
     createdAt: '2026-01-01T00:00:00Z',
     ...partial,

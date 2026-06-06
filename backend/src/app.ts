@@ -32,6 +32,7 @@ import taskRoutes from './routes/tasks';
 import taskTemplateRoutes from './routes/taskTemplates';
 import notificationRoutes from './routes/notifications';
 import wishlistRoutes from './routes/wishlist';
+import workspaceRoutes from './routes/workspaces';
 
 // Load environment variables (skip in test mode as it's loaded in setup.ts)
 if (process.env.NODE_ENV !== 'test') {
@@ -155,6 +156,7 @@ app.use(`${apiPrefix}/tasks`, taskRoutes);
 app.use(`${apiPrefix}/task-templates`, taskTemplateRoutes);
 app.use(`${apiPrefix}/notifications`, notificationRoutes);
 app.use(`${apiPrefix}/wishlist`, wishlistRoutes);
+app.use(`${apiPrefix}/workspaces`, workspaceRoutes);
 
 // Version endpoint under API prefix
 app.get(`${apiPrefix}/version`, (_req: Request, res: Response) => {

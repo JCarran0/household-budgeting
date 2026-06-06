@@ -60,12 +60,16 @@ export const USER_COLOR_PALETTE = [
 
 export type UserColor = (typeof USER_COLOR_PALETTE)[number];
 
+export type WorkspaceType = 'personal' | 'business';
+
 export interface Family {
   id: string;              // UUID
   name: string;            // e.g., "Carrano Family"
   members: FamilyMember[];
   createdAt: string;       // ISO string
   updatedAt: string;       // ISO string
+  /** D4: drives nav/route gating; default 'personal' for all existing families */
+  workspaceType?: WorkspaceType;
 }
 
 export interface AccountOwnerMapping {
@@ -134,7 +138,12 @@ export interface User {
   id: string;
   username: string;
   displayName: string;     // Separate from username, shown in UI
-  familyId: string;        // The family this user belongs to
+  /** D2/D3: active workspace; kept as the primary key for all existing routes */
+  familyId: string;
+  /** D2: full membership list — superset of familyId once multi-workspace goes live */
+  workspaceIds: string[];
+  /** D2: last-active workspace (convenience for restoring session; NOT access authority) */
+  activeWorkspaceId: string;
   createdAt: string;
   color?: UserColor;       // Visual identity color chosen by the user
 }
@@ -1716,4 +1725,48 @@ export interface UpdateManualAccountDto {
   isAsset?: boolean;
   currentBalance?: number;
   notes?: string | null;
+}
+
+// =============================================================================
+// Business Statement Types (Phase 0.2 — types only; no logic yet)
+// =============================================================================
+
+/** One Amazon KDP deposit row in a client royalty statement */
+export interface StatementLineItem {
+  disbursementDate: string;   // YYYY-MM-DD
+  payout: number;             // Amazon gross deposit
+  commission: number;         // Per-row commission, rounded to cents
+  royalty: number;            // payout - commission
+  transactionId: string;      // Source transaction provenance
+}
+
+/** An "other fees & charges" line (billable sub-type) */
+export interface StatementCharge {
+  subType: string;            // e.g. 'BIZ_BILLABLE_BOOK_REPORT'
+  label: string;              // 'Book Report - data analytics'
+  amount: number;             // Subtracted from royaltySubtotal for remittance
+}
+
+/** Snapshot of the business + client identity (static workspace config) */
+export interface StatementHeader {
+  businessName: string;
+  businessAddress: string;
+  clientName: string;
+  clientCompany: string;
+  clientAddress: string;
+}
+
+/** An immutable persisted royalty statement record */
+export interface BusinessStatement {
+  id: string;
+  paymentNumber: number;        // e.g. 68, 69, …
+  paymentDate: string;          // YYYY-MM-DD
+  periodMonth: string;          // YYYY-MM
+  commissionRate: number;       // Snapshot of rate at generation time (e.g. 0.05)
+  lineItems: StatementLineItem[];
+  royaltySubtotal: number;      // Sum of per-row royalties
+  charges: StatementCharge[];   // All configured sub-types, including $0 lines
+  remittanceTotal: number;      // royaltySubtotal - Σ charges
+  clientHeader: StatementHeader;
+  createdAt: string;            // ISO timestamp
 }

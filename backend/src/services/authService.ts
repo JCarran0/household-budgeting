@@ -3,7 +3,7 @@ import jwt from 'jsonwebtoken';
 import { v4 as uuidv4 } from 'uuid';
 import crypto from 'crypto';
 import { DataService, User } from './dataService';
-import type { Family, FamilyMember, UserColor } from '../shared/types';
+import type { Family, FamilyMember, UserColor, WorkspaceType } from '../shared/types';
 
 import { childLogger } from '../utils/logger';
 
@@ -17,9 +17,18 @@ interface AuthResult {
     username: string;
     displayName: string;
     familyId: string;
+    workspaceIds: string[];
+    activeWorkspaceId: string;
+    color?: UserColor;
   };
   token?: string;
   message?: string;
+}
+
+interface WorkspaceSummary {
+  id: string;
+  name: string;
+  workspaceType: WorkspaceType;
 }
 
 // JWT payload structure
@@ -162,6 +171,8 @@ export class AuthService {
         username,
         displayName,
         familyId,
+        workspaceIds: [familyId],
+        activeWorkspaceId: familyId,
         passwordHash,
         createdAt: new Date(),
       };
@@ -195,6 +206,9 @@ export class AuthService {
         details: { userId: createdUser.id },
       });
 
+      const effectiveWorkspaceIds = createdUser.workspaceIds ?? [createdUser.familyId];
+      const effectiveActiveWorkspaceId = createdUser.activeWorkspaceId ?? createdUser.familyId;
+
       return {
         success: true,
         token,
@@ -203,6 +217,8 @@ export class AuthService {
           username: createdUser.username,
           displayName: createdUser.displayName,
           familyId: createdUser.familyId,
+          workspaceIds: effectiveWorkspaceIds,
+          activeWorkspaceId: effectiveActiveWorkspaceId,
           ...(createdUser.color !== undefined ? { color: createdUser.color } : {}),
         },
       };
@@ -286,8 +302,25 @@ export class AuthService {
         log.info({ username: user.username, familyId }, 'migrated user to family');
       }
 
-      // Generate JWT token with familyId
-      const token = this.generateToken(user.id, user.username, user.familyId);
+      // D3 lazy backfill: seed workspaceIds for legacy users that predate multi-workspace
+      if (!user.workspaceIds || user.workspaceIds.length === 0) {
+        user.workspaceIds = [user.familyId];
+        user.activeWorkspaceId = user.familyId;
+        await this.dataService.updateUser(user.id, {
+          workspaceIds: user.workspaceIds,
+          activeWorkspaceId: user.activeWorkspaceId,
+        });
+        log.info({ userId: user.id }, 'backfilled workspaceIds on login');
+      }
+
+      // Restore last-active workspace: use activeWorkspaceId if it is in workspaceIds,
+      // otherwise fall back to the first workspace (safety net).
+      const activeId = user.activeWorkspaceId && user.workspaceIds.includes(user.activeWorkspaceId)
+        ? user.activeWorkspaceId
+        : user.workspaceIds[0] ?? user.familyId;
+
+      // Generate JWT token with the active workspace as familyId claim
+      const token = this.generateToken(user.id, user.username, activeId);
 
       // Update last login
       await this.dataService.updateUser(user.id, {
@@ -309,7 +342,9 @@ export class AuthService {
           id: user.id,
           username: user.username,
           displayName: user.displayName,
-          familyId: user.familyId,
+          familyId: activeId,
+          workspaceIds: user.workspaceIds,
+          activeWorkspaceId: activeId,
           ...(user.color !== undefined ? { color: user.color } : {}),
         },
       };
@@ -426,6 +461,8 @@ export class AuthService {
       }
 
       const resolvedColor = color ?? user.color;
+      const effectiveWorkspaceIds = user.workspaceIds ?? [user.familyId];
+      const effectiveActiveWorkspaceId = user.activeWorkspaceId ?? user.familyId;
       return {
         success: true,
         user: {
@@ -433,6 +470,8 @@ export class AuthService {
           username: user.username,
           displayName,
           familyId: user.familyId,
+          workspaceIds: effectiveWorkspaceIds,
+          activeWorkspaceId: effectiveActiveWorkspaceId,
           ...(resolvedColor !== undefined ? { color: resolvedColor } : {}),
         },
       };
@@ -707,6 +746,89 @@ export class AuthService {
         error: 'Password reset failed. Please try again.',
       };
     }
+  }
+
+  /**
+   * Switch the active workspace for a user.
+   * Asserts that targetFamilyId is in the user's workspaceIds (else 403).
+   * Persists activeWorkspaceId and re-issues a JWT with the new familyId claim.
+   * D2/D3.
+   */
+  async switchWorkspace(userId: string, targetFamilyId: string): Promise<AuthResult> {
+    try {
+      const user = await this.dataService.getUser(userId);
+      if (!user) {
+        return { success: false, error: 'User not found' };
+      }
+
+      // Ensure workspaceIds are populated (backfill guard)
+      const workspaceIds = user.workspaceIds && user.workspaceIds.length > 0
+        ? user.workspaceIds
+        : [user.familyId];
+
+      if (!workspaceIds.includes(targetFamilyId)) {
+        return { success: false, error: 'Workspace not found or access denied' };
+      }
+
+      // Persist the new active workspace
+      await this.dataService.updateUser(userId, {
+        activeWorkspaceId: targetFamilyId,
+        familyId: targetFamilyId,
+      });
+
+      const token = this.generateToken(userId, user.username, targetFamilyId);
+
+      this.logSecurityEvent({
+        event: 'WORKSPACE_SWITCHED',
+        userId,
+        username: user.username,
+        timestamp: new Date(),
+        details: { userId },
+      });
+
+      return {
+        success: true,
+        token,
+        user: {
+          id: user.id,
+          username: user.username,
+          displayName: user.displayName,
+          familyId: targetFamilyId,
+          workspaceIds,
+          activeWorkspaceId: targetFamilyId,
+          ...(user.color !== undefined ? { color: user.color } : {}),
+        },
+      };
+    } catch (error) {
+      log.error({ err: error }, 'workspace switch error');
+      return { success: false, error: 'Workspace switch failed. Please try again.' };
+    }
+  }
+
+  /**
+   * List all workspaces the user belongs to, returning summary info for each.
+   * D2/D3.
+   */
+  async listWorkspaces(userId: string): Promise<WorkspaceSummary[]> {
+    const user = await this.dataService.getUser(userId);
+    if (!user) return [];
+
+    const workspaceIds = user.workspaceIds && user.workspaceIds.length > 0
+      ? user.workspaceIds
+      : [user.familyId];
+
+    const summaries: WorkspaceSummary[] = [];
+    for (const wsId of workspaceIds) {
+      const family = await this.dataService.getFamily(wsId);
+      if (family) {
+        summaries.push({
+          id: family.id,
+          name: family.name,
+          workspaceType: family.workspaceType ?? 'personal',
+        });
+      }
+    }
+    return summaries;
   }
 
   validatePasswordStrength(password: string): PasswordStrengthResult {

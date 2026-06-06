@@ -13,22 +13,44 @@ declare global {
       user?: {
         userId: string;
         username: string;
+        /** Active workspace (from JWT claim — authoritative for this request) */
         familyId: string;
+        /** Full membership list (for informational use; access authority = JWT) */
+        workspaceIds: string[];
       };
     }
   }
 }
 
-// Cache for family membership verification (userId -> { familyId, cachedAt })
-// Prevents removed users from accessing family data with stale JWT tokens.
+// Cache for workspace membership verification (userId -> { workspaceIds, cachedAt })
+// Prevents removed users from accessing workspace data with stale JWT tokens.
 // TTL: 60 seconds — acceptable propagation delay for a 2-user app.
-const membershipCache = new Map<string, { familyId: string; cachedAt: Date }>();
+const membershipCache = new Map<string, { workspaceIds: string[]; cachedAt: Date }>();
 const MEMBERSHIP_CACHE_TTL = 60 * 1000; // 60 seconds
 
 /**
- * Verify the user's current familyId in storage matches the JWT claim.
- * Returns true if the membership is valid, false if the user has been removed.
+ * Lazy backfill: if the user record lacks workspaceIds, seed it from familyId.
+ * This is the D3 migration path — runs once per user after deploy.
+ */
+async function backfillWorkspaceIds(userId: string): Promise<void> {
+  const user = await dataService.getUser(userId);
+  if (!user) return;
+  if (user.workspaceIds && user.workspaceIds.length > 0) return;
+
+  await dataService.updateUser(userId, {
+    workspaceIds: [user.familyId],
+    activeWorkspaceId: user.familyId,
+  });
+}
+
+/**
+ * Verify that the JWT-claimed familyId is in the user's workspaceIds.
+ * Returns true if the membership is valid, false if the user has been removed
+ * or the claimed workspace is not one they belong to.
  * Cached for 60 seconds to avoid a DB read on every request.
+ *
+ * D2/D3: membership check changed from single-familyId equality to
+ * workspaceIds.includes(claimedFamilyId).
  */
 async function verifyFamilyMembership(userId: string, claimedFamilyId: string): Promise<boolean> {
   // Skip verification in test environment unless explicitly testing this
@@ -40,7 +62,7 @@ async function verifyFamilyMembership(userId: string, claimedFamilyId: string): 
   const now = new Date();
 
   if (cached && (now.getTime() - cached.cachedAt.getTime()) < MEMBERSHIP_CACHE_TTL) {
-    return cached.familyId === claimedFamilyId;
+    return cached.workspaceIds.includes(claimedFamilyId);
   }
 
   // Cache miss or expired — check storage
@@ -50,12 +72,21 @@ async function verifyFamilyMembership(userId: string, claimedFamilyId: string): 
     return false;
   }
 
+  // Lazy backfill: users without workspaceIds get seeded on first auth
+  if (!user.workspaceIds || user.workspaceIds.length === 0) {
+    await backfillWorkspaceIds(userId);
+    // Use familyId as the effective workspaceIds for this request
+    const effectiveIds = [user.familyId];
+    membershipCache.set(userId, { workspaceIds: effectiveIds, cachedAt: now });
+    return effectiveIds.includes(claimedFamilyId);
+  }
+
   membershipCache.set(userId, {
-    familyId: user.familyId,
+    workspaceIds: user.workspaceIds,
     cachedAt: now,
   });
 
-  return user.familyId === claimedFamilyId;
+  return user.workspaceIds.includes(claimedFamilyId);
 }
 
 /**
@@ -124,11 +155,30 @@ export const authenticate = async (req: Request, res: Response, next: NextFuncti
       return;
     }
 
+    // Load workspaceIds from storage for the request context.
+    // In the normal hot path the membershipCache already has a fresh entry from
+    // verifyFamilyMembership above, so this is an in-memory read, not storage I/O.
+    let workspaceIds: string[] = [validation.decoded.familyId];
+    try {
+      const cached = membershipCache.get(validation.decoded.userId);
+      if (cached) {
+        workspaceIds = cached.workspaceIds;
+      } else {
+        const u = await dataService.getUser(validation.decoded.userId);
+        if (u?.workspaceIds && u.workspaceIds.length > 0) {
+          workspaceIds = u.workspaceIds;
+        }
+      }
+    } catch {
+      // Non-fatal: fallback to single-workspace list derived from JWT
+    }
+
     // Attach user info to request
     req.user = {
       userId: validation.decoded.userId,
       username: validation.decoded.username,
       familyId: validation.decoded.familyId,
+      workspaceIds,
     };
 
     // Log successful authentication
@@ -179,6 +229,7 @@ export const optionalAuthenticate = (req: Request, _res: Response, next: NextFun
         userId: validation.decoded.userId,
         username: validation.decoded.username,
         familyId: validation.decoded.familyId,
+        workspaceIds: [validation.decoded.familyId],
       };
     }
 

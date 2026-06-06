@@ -1,8 +1,15 @@
-import { Category } from '../shared/types';
+import { Category, WorkspaceType } from '../shared/types';
 import { isBudgetableCategory } from '../shared/utils/categoryHelpers';
 import { DataService } from './dataService';
 import { RolloverSubtreeConflictError, RolloverNotBudgetableError } from '../errors';
 import { ImportService } from './importService';
+import {
+  BUSINESS_CATEGORY_SEED,
+  shouldSeedCategories,
+  resolveStatementRole as _resolveStatementRole,
+  billableSubTypeOf as _billableSubTypeOf,
+  type StatementRole,
+} from '../constants/categoryTemplates';
 
 /**
  * Interface for checking if a category has dependencies that prevent deletion.
@@ -366,6 +373,48 @@ export class CategoryService {
     // Users must create their own category taxonomy
     // This method is kept for backward compatibility but does nothing
     return;
+  }
+
+  /**
+   * Seed categories for a newly created workspace, based on its type.
+   * Personal workspaces are seed-free (D5); business workspaces get the
+   * trust-ledger taxonomy (REQ-008, Phase 3.2).
+   *
+   * Idempotent: if the workspace already has categories, this is a no-op.
+   */
+  async seedCategoriesForWorkspaceType(familyId: string, type: WorkspaceType): Promise<void> {
+    if (!shouldSeedCategories(type)) return;
+
+    const existing = await this.dataService.getCategories(familyId);
+    if (existing.length > 0) {
+      // Already seeded — idempotent no-op
+      return;
+    }
+
+    // Cast from ReadonlyArray to mutable Category[] for saveCategories
+    const seed: Category[] = BUSINESS_CATEGORY_SEED.map(cat => ({ ...cat }));
+    await this.dataService.saveCategories(seed, familyId);
+  }
+
+  /**
+   * Resolve which statement role (trust inflow, remittance, etc.) a category
+   * belongs to by walking its parentId chain to a reserved root.
+   * Returns null if the category is not under any reserved root.
+   * Phase 3.3.
+   */
+  async resolveStatementRole(categoryId: string, familyId: string): Promise<StatementRole | null> {
+    const categories = await this.dataService.getCategories(familyId);
+    return _resolveStatementRole(categoryId, categories);
+  }
+
+  /**
+   * If the category is under BIZ_BILLABLE, return the nearest billable
+   * sub-type ancestor ID. Returns null if not billable.
+   * Phase 3.3.
+   */
+  async billableSubTypeOf(categoryId: string, familyId: string): Promise<string | null> {
+    const categories = await this.dataService.getCategories(familyId);
+    return _billableSubTypeOf(categoryId, categories);
   }
 
   /**

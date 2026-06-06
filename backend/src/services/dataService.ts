@@ -11,6 +11,10 @@ export interface User {
   username: string;
   displayName: string;
   familyId: string;
+  /** D2: full workspace membership list; backfilled lazily on first auth */
+  workspaceIds?: string[];
+  /** D2: last-active workspace; convenience only (JWT claim is authoritative) */
+  activeWorkspaceId?: string;
   passwordHash: string;
   createdAt: Date;
   updatedAt?: Date;

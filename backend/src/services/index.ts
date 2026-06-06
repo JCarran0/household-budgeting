@@ -117,6 +117,9 @@ export const amazonReceiptService = new AmazonReceiptService(
 );
 
 export const familyService = new FamilyService(dataService);
+// Wire category seeder after categoryService is constructed (breaks the cycle:
+// familyService.createWorkspace needs the seeder; categoryService needs dataService).
+familyService.setCategorySeeder(categoryService);
 export const accountOwnerMappingService = new AccountOwnerMappingService(dataService);
 export const taskService = new TaskService(dataService, familyService);
 export const taskTemplateService = new TaskTemplateService(dataService);
