@@ -9,7 +9,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { MantineProvider } from '@mantine/core';
 import type { Family, User } from '../../../../shared/types';
@@ -146,7 +146,7 @@ describe('Workspace switcher visibility', () => {
     });
   });
 
-  it('is hidden when user has a single workspace', () => {
+  it('shows no Workspaces section in the account menu with a single workspace', async () => {
     const family = makeFamily(PERSONAL_FAMILY_ID, 'Personal');
     seedStore({
       user: makeUser(PERSONAL_FAMILY_ID, [PERSONAL_FAMILY_ID]),
@@ -156,12 +156,14 @@ describe('Workspace switcher visibility', () => {
 
     renderLayout();
 
-    // The Select for switching should not be in the document when ≤1 workspace
-    const switcher = screen.queryByLabelText(/switch workspace/i);
-    expect(switcher).toBeNull();
+    // Open the account menu (the switcher now lives here, Chrome-profile style)
+    fireEvent.click(screen.getByLabelText('Account menu'));
+    // Menu is open (Settings is present) but there is no Workspaces section (REQ-004)
+    expect(await screen.findByText('Settings')).toBeInTheDocument();
+    expect(screen.queryByText('Workspaces')).toBeNull();
   });
 
-  it('is visible when user has multiple workspaces', () => {
+  it('lists workspaces in the account menu when the user has multiple', async () => {
     const personal = makeFamily(PERSONAL_FAMILY_ID, 'Personal');
     const business = makeFamily(BUSINESS_FAMILY_ID, 'Business', 'business');
     seedStore({
@@ -172,9 +174,10 @@ describe('Workspace switcher visibility', () => {
 
     renderLayout();
 
-    // Mantine Select renders elements with aria-label; at least one should exist
-    const switchers = screen.queryAllByLabelText(/switch workspace/i);
-    expect(switchers.length).toBeGreaterThan(0);
+    fireEvent.click(screen.getByLabelText('Account menu'));
+    expect(await screen.findByText('Workspaces')).toBeInTheDocument();
+    expect(screen.getByText('Personal')).toBeInTheDocument();
+    expect(screen.getByText('Business')).toBeInTheDocument();
   });
 });
 

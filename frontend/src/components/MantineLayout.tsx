@@ -1,4 +1,4 @@
-import { AppShell, Burger, Group, NavLink, Text, ActionIcon, Avatar, Menu, rem, Tooltip, Kbd, Select } from '@mantine/core';
+import { AppShell, Burger, Group, NavLink, Text, ActionIcon, Avatar, Menu, rem, Tooltip, Kbd } from '@mantine/core';
 import { useDisclosure, useHotkeys } from '@mantine/hooks';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import {
@@ -18,7 +18,8 @@ import {
   IconChecklist,
   IconShoppingBag,
   IconFileInvoice,
-  IconSwitchHorizontal,
+  IconBriefcase,
+  IconCheck,
 } from '@tabler/icons-react';
 import { useAuthStore } from '../stores/authStore';
 import { api } from '../lib/api';
@@ -179,28 +180,9 @@ export function MantineLayout() {
             </Group>
           </Group>
 
-          {/* Workspace switcher — hidden when user has ≤1 workspace (REQ-004) */}
-          {showSwitcher && (
-            <Group gap="xs">
-              <IconSwitchHorizontal size="1rem" color="gray" />
-              <Select
-                size="xs"
-                value={activeWorkspaceId}
-                onChange={(val) => { if (val) void handleSwitchWorkspace(val); }}
-                data={workspaces.map(ws => ({
-                  value: ws.id,
-                  label: `${ws.name}${ws.workspaceType === 'business' ? ' (Business)' : ''}`,
-                }))}
-                disabled={isSwitching}
-                style={{ minWidth: 180 }}
-                aria-label="Switch workspace"
-              />
-            </Group>
-          )}
-
-          <Menu shadow="md" width={200}>
+          <Menu shadow="md" width={220}>
             <Menu.Target>
-              <ActionIcon variant="subtle" size="lg">
+              <ActionIcon variant="subtle" size="lg" aria-label="Account menu">
                 <Avatar variant="filled" color={userColor(user)} radius="xl" size="md" style={userAvatarStyle(user)}>
                   {user?.username?.charAt(0).toUpperCase()}
                 </Avatar>
@@ -221,6 +203,35 @@ export function MantineLayout() {
               >
                 Settings
               </Menu.Item>
+
+              {/* Workspace switcher — Chrome-profile style; hidden when ≤1 workspace (REQ-004) */}
+              {showSwitcher && (
+                <>
+                  <Menu.Divider />
+                  <Menu.Label>Workspaces</Menu.Label>
+                  {workspaces.map((ws) => {
+                    const isActive = ws.id === activeWorkspaceId;
+                    return (
+                      <Menu.Item
+                        key={ws.id}
+                        leftSection={
+                          ws.workspaceType === 'business'
+                            ? <IconBriefcase style={{ width: rem(14), height: rem(14) }} />
+                            : <IconHome style={{ width: rem(14), height: rem(14) }} />
+                        }
+                        rightSection={
+                          isActive ? <IconCheck style={{ width: rem(14), height: rem(14) }} /> : undefined
+                        }
+                        disabled={isSwitching}
+                        onClick={() => { if (!isActive) void handleSwitchWorkspace(ws.id); }}
+                        style={{ fontWeight: isActive ? 600 : undefined }}
+                      >
+                        {ws.name}
+                      </Menu.Item>
+                    );
+                  })}
+                </>
+              )}
 
               <Menu.Divider />
 
