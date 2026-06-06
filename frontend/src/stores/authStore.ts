@@ -52,23 +52,27 @@ export const useAuthStore = create<AuthState>()(
           const response = await api.login(credentials);
           // Backend returns {success, token, user}
           if (response.token && response.user) {
-            // Fetch workspace list after successful login
-            let workspaces: Family[] = [];
-            try {
-              workspaces = await api.listWorkspaces();
-            } catch {
-              // Non-fatal: workspace list is a convenience; auth still succeeds
-            }
-
+            // Commit auth state FIRST so the new token is persisted to
+            // localStorage before any authenticated request goes out. If we
+            // fetch the workspace list before this set(), that request carries
+            // the stale (just-cleared) token, 401s, and the response
+            // interceptor force-redirects to /login — the double-login bug.
             set({
               user: response.user,
               token: response.token,
               isAuthenticated: true,
               isLoading: false,
               error: null,
-              workspaces,
               activeWorkspaceId: response.user.activeWorkspaceId ?? response.user.familyId,
             });
+
+            // Now safe to fetch the workspace list with the committed token.
+            try {
+              const workspaces = await api.listWorkspaces();
+              set({ workspaces });
+            } catch {
+              // Non-fatal: workspace list is a convenience; auth still succeeds
+            }
           } else {
             throw new Error('Invalid response from server');
           }
@@ -91,23 +95,23 @@ export const useAuthStore = create<AuthState>()(
           const response = await api.register(credentials);
           // Backend returns {success, token, user}
           if (response.token && response.user) {
-            // Fetch workspace list after successful registration
-            let workspaces: Family[] = [];
-            try {
-              workspaces = await api.listWorkspaces();
-            } catch {
-              // Non-fatal
-            }
-
+            // Commit auth state FIRST (see login() — fetching workspaces before
+            // the token is persisted causes a 401 + redirect to /login).
             set({
               user: response.user,
               token: response.token,
               isAuthenticated: true,
               isLoading: false,
               error: null,
-              workspaces,
               activeWorkspaceId: response.user.activeWorkspaceId ?? response.user.familyId,
             });
+
+            try {
+              const workspaces = await api.listWorkspaces();
+              set({ workspaces });
+            } catch {
+              // Non-fatal
+            }
           } else {
             throw new Error('Invalid response from server');
           }
