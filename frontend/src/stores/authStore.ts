@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import type { User, LoginCredentials, RegisterCredentials, UserColor } from '../../../shared/types';
+import type { User, LoginCredentials, RegisterCredentials, UserColor, Family } from '../../../shared/types';
 import { api } from '../lib/api';
 import { getApiErrorMessage } from '../lib/api/errors';
 import { queryClient } from '../lib/queryClient';
@@ -12,23 +12,35 @@ interface AuthState {
   isAuthenticated: boolean;
   isLoading: boolean;
   error: string | null;
-  
+  /** Full list of workspaces the user belongs to (populated on login) */
+  workspaces: Family[];
+  /** The currently-active workspace ID (mirrors user.familyId / JWT claim) */
+  activeWorkspaceId: string | null;
+
   login: (credentials: LoginCredentials) => Promise<void>;
   register: (credentials: RegisterCredentials) => Promise<void>;
   logout: () => void;
   clearError: () => void;
   updateDisplayName: (displayName: string) => void;
   updateColor: (color: UserColor) => void;
+  /**
+   * Switch the active workspace.
+   * Calls POST /auth/switch-workspace, replaces token + user, clears all React
+   * Query caches so no cross-workspace data leaks (D2, Phase 2.1).
+   */
+  switchWorkspace: (familyId: string) => Promise<void>;
 }
 
 export const useAuthStore = create<AuthState>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       user: null,
       token: null,
       isAuthenticated: false,
       isLoading: false,
       error: null,
+      workspaces: [],
+      activeWorkspaceId: null,
 
       login: async (credentials) => {
         set({ isLoading: true, error: null });
@@ -36,16 +48,26 @@ export const useAuthStore = create<AuthState>()(
           // Clear all cached data when logging in
           await queryClient.cancelQueries();
           queryClient.clear();
-          
+
           const response = await api.login(credentials);
           // Backend returns {success, token, user}
           if (response.token && response.user) {
+            // Fetch workspace list after successful login
+            let workspaces: Family[] = [];
+            try {
+              workspaces = await api.listWorkspaces();
+            } catch {
+              // Non-fatal: workspace list is a convenience; auth still succeeds
+            }
+
             set({
               user: response.user,
               token: response.token,
               isAuthenticated: true,
               isLoading: false,
               error: null,
+              workspaces,
+              activeWorkspaceId: response.user.activeWorkspaceId ?? response.user.familyId,
             });
           } else {
             throw new Error('Invalid response from server');
@@ -65,16 +87,26 @@ export const useAuthStore = create<AuthState>()(
           // Clear all cached data when registering a new user
           await queryClient.cancelQueries();
           queryClient.clear();
-          
+
           const response = await api.register(credentials);
           // Backend returns {success, token, user}
           if (response.token && response.user) {
+            // Fetch workspace list after successful registration
+            let workspaces: Family[] = [];
+            try {
+              workspaces = await api.listWorkspaces();
+            } catch {
+              // Non-fatal
+            }
+
             set({
               user: response.user,
               token: response.token,
               isAuthenticated: true,
               isLoading: false,
               error: null,
+              workspaces,
+              activeWorkspaceId: response.user.activeWorkspaceId ?? response.user.familyId,
             });
           } else {
             throw new Error('Invalid response from server');
@@ -105,6 +137,8 @@ export const useAuthStore = create<AuthState>()(
           token: null,
           isAuthenticated: false,
           error: null,
+          workspaces: [],
+          activeWorkspaceId: null,
         });
       },
 
@@ -123,6 +157,36 @@ export const useAuthStore = create<AuthState>()(
           user: state.user ? { ...state.user, color } : null,
         }));
       },
+
+      switchWorkspace: async (familyId: string) => {
+        const { user } = get();
+        if (!user) throw new Error('Not authenticated');
+
+        const response = await api.switchWorkspace(familyId);
+        if (!response.token || !response.user) {
+          throw new Error('Invalid switch-workspace response from server');
+        }
+
+        // Clear ALL cached data before switching so no personal data leaks into
+        // the business view and vice versa (REQ-003, Phase 2.1).
+        await queryClient.cancelQueries();
+        queryClient.clear();
+
+        // Refresh workspace list after the switch
+        let workspaces: Family[] = get().workspaces;
+        try {
+          workspaces = await api.listWorkspaces();
+        } catch {
+          // Non-fatal
+        }
+
+        set({
+          user: response.user,
+          token: response.token,
+          activeWorkspaceId: response.user.activeWorkspaceId ?? response.user.familyId,
+          workspaces,
+        });
+      },
     }),
     {
       name: 'auth-storage',
@@ -130,6 +194,7 @@ export const useAuthStore = create<AuthState>()(
         user: state.user,
         token: state.token,
         isAuthenticated: state.isAuthenticated,
+        activeWorkspaceId: state.activeWorkspaceId,
       }),
     }
   )

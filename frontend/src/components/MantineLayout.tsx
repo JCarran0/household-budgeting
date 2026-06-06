@@ -1,4 +1,4 @@
-import { AppShell, Burger, Group, NavLink, Text, ActionIcon, Avatar, Menu, rem, Tooltip, Kbd } from '@mantine/core';
+import { AppShell, Burger, Group, NavLink, Text, ActionIcon, Avatar, Menu, rem, Tooltip, Kbd, Select } from '@mantine/core';
 import { useDisclosure, useHotkeys } from '@mantine/hooks';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import {
@@ -17,10 +17,13 @@ import {
   IconHammer,
   IconChecklist,
   IconShoppingBag,
+  IconFileInvoice,
+  IconSwitchHorizontal,
 } from '@tabler/icons-react';
 import { useAuthStore } from '../stores/authStore';
 import { api } from '../lib/api';
 import { useState, useEffect } from 'react';
+import { notifications } from '@mantine/notifications';
 import { ChangelogModal } from './ChangelogModal';
 import { FeedbackModal } from './feedback/FeedbackModal';
 import { ChatFAB } from './chat/ChatFAB';
@@ -31,6 +34,30 @@ import { userColor, userAvatarStyle } from '../utils/userColor';
 import { useDailyInspiration } from '../hooks/useDailyInspiration';
 import { useSharedAttachment } from '../hooks/useSharedAttachment';
 
+// Nav items for the personal workspace (unchanged list — REQ-030: no Statements)
+const PERSONAL_NAV = [
+  { label: 'Dashboard', icon: IconHome, path: '/dashboard' },
+  { label: 'Transactions', icon: IconReceipt, path: '/transactions' },
+  { label: 'Accounts', icon: IconCreditCard, path: '/accounts' },
+  { label: 'Categories', icon: IconCategory, path: '/categories' },
+  { label: 'Budgets', icon: IconPigMoney, path: '/budgets' },
+  { label: 'Reports', icon: IconChartBar, path: '/reports' },
+  { label: 'Trips', icon: IconMapPin, path: '/trips' },
+  { label: 'Projects', icon: IconHammer, path: '/projects' },
+  { label: 'Wishlist', icon: IconShoppingBag, path: '/wishlist' },
+  { label: 'Tasks', icon: IconChecklist, path: '/tasks' },
+  { label: 'Admin', icon: IconSettings, path: '/admin' },
+];
+
+// Nav items for the business workspace (REQ-029: no family-only surfaces)
+const BUSINESS_NAV = [
+  { label: 'Transactions', icon: IconReceipt, path: '/transactions' },
+  { label: 'Accounts', icon: IconCreditCard, path: '/accounts' },
+  { label: 'Categories', icon: IconCategory, path: '/categories' },
+  { label: 'Statements', icon: IconFileInvoice, path: '/business/statements' },
+  { label: 'Admin', icon: IconSettings, path: '/admin' },
+];
+
 export function MantineLayout() {
   const [mobileOpened, { toggle: toggleMobile }] = useDisclosure();
   const [desktopOpened, { toggle: toggleDesktop }] = useDisclosure(true);
@@ -39,6 +66,7 @@ export function MantineLayout() {
   const [chatOpened, { toggle: toggleChat, close: closeChat, open: openChat }] = useDisclosure(false);
   const sharedAttachment = useSharedAttachment();
   const [pendingSharedAttachment, setPendingSharedAttachment] = useState<File | null>(null);
+  const [isSwitching, setIsSwitching] = useState(false);
 
   useEffect(() => {
     if (sharedAttachment) {
@@ -50,7 +78,7 @@ export function MantineLayout() {
   const [version, setVersion] = useState<string | null>(null);
   const navigate = useNavigate();
   const location = useLocation();
-  const { user, logout } = useAuthStore();
+  const { user, logout, workspaces, activeWorkspaceId, switchWorkspace } = useAuthStore();
 
   const handleLogout = () => {
     logout();
@@ -77,19 +105,33 @@ export function MantineLayout() {
     ['mod+b', () => toggleDesktop()],
   ]);
 
-  const navItems = [
-    { label: 'Dashboard', icon: IconHome, path: '/dashboard' },
-    { label: 'Transactions', icon: IconReceipt, path: '/transactions' },
-    { label: 'Accounts', icon: IconCreditCard, path: '/accounts' },
-    { label: 'Categories', icon: IconCategory, path: '/categories' },
-    { label: 'Budgets', icon: IconPigMoney, path: '/budgets' },
-    { label: 'Reports', icon: IconChartBar, path: '/reports' },
-    { label: 'Trips', icon: IconMapPin, path: '/trips' },
-    { label: 'Projects', icon: IconHammer, path: '/projects' },
-    { label: 'Wishlist', icon: IconShoppingBag, path: '/wishlist' },
-    { label: 'Tasks', icon: IconChecklist, path: '/tasks' },
-    { label: 'Admin', icon: IconSettings, path: '/admin' },
-  ];
+  // Derive active workspace type for nav gating (REQ-029/030)
+  const activeWorkspace = workspaces.find(ws => ws.id === activeWorkspaceId);
+  const activeWorkspaceType = activeWorkspace?.workspaceType ?? 'personal';
+  const navItems = activeWorkspaceType === 'business' ? BUSINESS_NAV : PERSONAL_NAV;
+
+  // Workspace switcher: hidden when the user has ≤1 workspace (REQ-004)
+  const showSwitcher = workspaces.length > 1;
+
+  const handleSwitchWorkspace = async (familyId: string) => {
+    if (familyId === activeWorkspaceId || isSwitching) return;
+    setIsSwitching(true);
+    try {
+      await switchWorkspace(familyId);
+      // Navigate to the sensible default for the new workspace type
+      const targetWs = workspaces.find(ws => ws.id === familyId);
+      const defaultRoute = targetWs?.workspaceType === 'business' ? '/business/statements' : '/dashboard';
+      navigate(defaultRoute);
+    } catch {
+      notifications.show({
+        color: 'red',
+        title: 'Workspace switch failed',
+        message: 'Could not switch workspace. Please try again.',
+      });
+    } finally {
+      setIsSwitching(false);
+    }
+  };
 
   return (
     <AppShell
@@ -113,13 +155,13 @@ export function MantineLayout() {
               size="sm"
             />
             {/* Desktop burger - only shows on desktop */}
-            <Tooltip 
+            <Tooltip
               label={
                 <Group gap={4}>
                   <Text size="sm">{desktopOpened ? "Collapse sidebar" : "Expand sidebar"}</Text>
                   <Kbd size="xs">⌘B</Kbd>
                 </Group>
-              } 
+              }
               openDelay={500}
             >
               <Burger
@@ -136,7 +178,26 @@ export function MantineLayout() {
               </Text>
             </Group>
           </Group>
-          
+
+          {/* Workspace switcher — hidden when user has ≤1 workspace (REQ-004) */}
+          {showSwitcher && (
+            <Group gap="xs">
+              <IconSwitchHorizontal size="1rem" color="gray" />
+              <Select
+                size="xs"
+                value={activeWorkspaceId}
+                onChange={(val) => { if (val) void handleSwitchWorkspace(val); }}
+                data={workspaces.map(ws => ({
+                  value: ws.id,
+                  label: `${ws.name}${ws.workspaceType === 'business' ? ' (Business)' : ''}`,
+                }))}
+                disabled={isSwitching}
+                style={{ minWidth: 180 }}
+                aria-label="Switch workspace"
+              />
+            </Group>
+          )}
+
           <Menu shadow="md" width={200}>
             <Menu.Target>
               <ActionIcon variant="subtle" size="lg">

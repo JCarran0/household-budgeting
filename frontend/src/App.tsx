@@ -29,6 +29,7 @@ import { Projects } from './pages/Projects';
 import { Settings } from './pages/Settings';
 import { Tasks } from './pages/Tasks';
 import { Wishlist } from './pages/Wishlist';
+import { BusinessStatementsPlaceholder } from './pages/BusinessStatementsPlaceholder';
 import { PlaidLinkProvider } from './providers/PlaidLinkProvider';
 import { queryClient } from './lib/queryClient';
 import { ErrorBoundary } from './components/ErrorBoundary';
@@ -120,6 +121,14 @@ function App() {
                     <Route path="/settings" element={
                       <RouteErrorBoundary routeName="Settings">
                         <Settings />
+                      </RouteErrorBoundary>
+                    } />
+                    {/* Business workspace routes — dark-launched; only reachable when
+                        a business workspace exists and the user has switched to it.
+                        Phase 2.3: nav gating hides this link in the personal workspace. */}
+                    <Route path="/business/statements" element={
+                      <RouteErrorBoundary routeName="Business Statements">
+                        <BusinessStatementsPlaceholder />
                       </RouteErrorBoundary>
                     } />
                   </Route>
