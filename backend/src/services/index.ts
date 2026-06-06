@@ -34,6 +34,7 @@ import { TaskTemplateService } from './taskTemplateService';
 import { PushNotificationService } from './pushNotificationService';
 import { AdminService } from './adminService';
 import { StatementService } from './statementService';
+import { BusinessSettingsService } from './businessSettingsService';
 // Bootstrap chat action registry — must be imported before any chat request
 // is processed. Side-effect: registers all V1 actions and logs the list.
 import './chatActions';
@@ -130,6 +131,9 @@ export const adminService = new AdminService(dataService);
 // statementService depends on categoryService — wire after both are initialized
 export const statementService = new StatementService(dataService, categoryService);
 
+// businessSettingsService — per-workspace header config (PR5 support)
+export const businessSettingsService = new BusinessSettingsService(dataService);
+
 // Export dataService for other services that need it
 export { dataService };
 
@@ -161,4 +165,5 @@ export {
   PushNotificationService,
   AdminService,
   StatementService,
+  BusinessSettingsService,
 };

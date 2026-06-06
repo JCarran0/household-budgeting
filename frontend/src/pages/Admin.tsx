@@ -19,8 +19,11 @@ import { notifications } from '@mantine/notifications';
 import { IconAlertTriangle, IconCheck, IconInfoCircle, IconSettings, IconPalette, IconTool, IconUsers, IconTrash } from '@tabler/icons-react';
 import { api } from '../lib/api';
 import { ThemeCustomizer } from '../components/admin/ThemeCustomizer';
+import { CreateBusinessWorkspaceCard } from '../components/admin/CreateBusinessWorkspaceCard';
+import { useAuthStore } from '../stores/authStore';
 
 export function Admin() {
+  const { workspaces } = useAuthStore();
   const [confirmationOpen, setConfirmationOpen] = useState(false);
   const [locationConfirmationOpen, setLocationConfirmationOpen] = useState(false);
   const [familyMigrationConfirmationOpen, setFamilyMigrationConfirmationOpen] = useState(false);
@@ -363,6 +366,12 @@ export function Admin() {
                   )}
                 </Stack>
               </Card>
+              {/* Business Workspace Provisioning — D10 */}
+              <CreateBusinessWorkspaceCard
+                workspaces={workspaces}
+                onCreated={() => queryClient.invalidateQueries({ queryKey: ['workspaces'] })}
+              />
+
               {/* Family Data Migration Section */}
               <Card withBorder padding="lg" radius="md">
                 <Stack gap="md">

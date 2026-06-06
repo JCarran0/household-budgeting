@@ -14,7 +14,7 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
 import { authMiddleware } from '../middleware/authMiddleware';
-import { statementService, familyService } from '../services';
+import { statementService, familyService, businessSettingsService } from '../services';
 import { AuthorizationError, NotFoundError } from '../errors';
 
 const router = Router();
@@ -111,6 +111,12 @@ router.post('/', async (req: Request, res: Response, next: NextFunction): Promis
     }
 
     const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+
+    // Load the stored header so it is snapshotted into the generated statement.
+    // Falls back to blank strings if no settings have been saved yet (preserves
+    // the prior behaviour when no header was configured).
+    const settings = await businessSettingsService.getSettings(familyId);
+
     const statement = await statementService.generateStatement(
       familyId,
       body.periodMonth,
@@ -118,6 +124,7 @@ router.post('/', async (req: Request, res: Response, next: NextFunction): Promis
       {
         paymentNumber: body.paymentNumber,
         paymentDate: body.paymentDate,
+        clientHeader: settings.header,
       },
     );
 
@@ -174,3 +181,8 @@ router.get('/:id', async (req: Request, res: Response, next: NextFunction): Prom
 });
 
 export default router;
+
+// ---------------------------------------------------------------------------
+// Re-export the business-workspace guard for use in the sibling settings router
+// ---------------------------------------------------------------------------
+export { requireBusinessWorkspace };

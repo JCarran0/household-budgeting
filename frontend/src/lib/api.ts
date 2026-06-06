@@ -22,6 +22,8 @@ import { createTaskTemplatesApi } from './api/taskTemplates';
 import { createNotificationsApi } from './api/notifications';
 import { createWishlistApi } from './api/wishlist';
 import { createWorkspacesApi } from './api/workspaces';
+import { createBusinessStatementsApi } from './api/businessStatements';
+import { createBusinessSettingsApi } from './api/businessSettings';
 
 // Re-export all types so existing imports don't break
 export type { ExtendedPlaidAccount } from './api/accounts';
@@ -63,5 +65,7 @@ export const api = {
   ...createNotificationsApi(client),
   ...createWishlistApi(client),
   ...createWorkspacesApi(client),
+  ...createBusinessStatementsApi(client),
+  ...createBusinessSettingsApi(client),
   ...createMiscApi(client),
 };

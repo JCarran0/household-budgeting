@@ -29,7 +29,7 @@ import { Projects } from './pages/Projects';
 import { Settings } from './pages/Settings';
 import { Tasks } from './pages/Tasks';
 import { Wishlist } from './pages/Wishlist';
-import { BusinessStatementsPlaceholder } from './pages/BusinessStatementsPlaceholder';
+import { BusinessStatements } from './pages/BusinessStatements';
 import { PlaidLinkProvider } from './providers/PlaidLinkProvider';
 import { queryClient } from './lib/queryClient';
 import { ErrorBoundary } from './components/ErrorBoundary';
@@ -128,7 +128,7 @@ function App() {
                         Phase 2.3: nav gating hides this link in the personal workspace. */}
                     <Route path="/business/statements" element={
                       <RouteErrorBoundary routeName="Business Statements">
-                        <BusinessStatementsPlaceholder />
+                        <BusinessStatements />
                       </RouteErrorBoundary>
                     } />
                   </Route>
