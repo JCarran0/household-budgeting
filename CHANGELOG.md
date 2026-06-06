@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.78.0](https://github.com/JCarran0/household-budgeting/compare/v5.77.1...v5.78.0) (2026-06-06)
+
+
+### Features
+
+* **workspaces:** client royalty statement generator + routes (PR4) ([c0615f8](https://github.com/JCarran0/household-budgeting/commit/c0615f8e7ea96cd29c409c09282574ecb263289d))
+* **workspaces:** client royalty statement UI + header config + provisioning (PR5) ([7a1a063](https://github.com/JCarran0/household-budgeting/commit/7a1a063a8a5011d590be69e6c3915c68c690f40b))
+* **workspaces:** scope chatbot cost cap per workspace (PR6) ([1c647b5](https://github.com/JCarran0/household-budgeting/commit/1c647b5525b768986b4296addf776f9de90a0900))
+
+
+### Bug Fixes
+
+* **auth:** commit token before fetching workspaces on login (double-login) ([0205fd0](https://github.com/JCarran0/household-budgeting/commit/0205fd0cae5639b3b83d280080952ad9080442f3))
+
+
+### Code Refactoring
+
+* **workspaces:** move workspace switcher into the profile menu ([ac5b00f](https://github.com/JCarran0/household-budgeting/commit/ac5b00fc808a29ad15a156e61b83611cb79d4152))
+
 ### [5.77.1](https://github.com/JCarran0/household-budgeting/compare/v5.77.0...v5.77.1) (2026-06-06)
 
 
