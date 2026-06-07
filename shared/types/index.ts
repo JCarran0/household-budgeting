@@ -1754,6 +1754,8 @@ export interface StatementHeader {
   clientName: string;
   clientCompany: string;
   clientAddress: string;
+  /** Optional footer notes shown at the bottom of the statement (e.g. ACH timing). */
+  notes?: string;
 }
 
 /** An immutable persisted royalty statement record */

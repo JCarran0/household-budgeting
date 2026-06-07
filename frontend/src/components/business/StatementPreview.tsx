@@ -128,6 +128,16 @@ export function StatementPreview({ statement }: StatementPreviewProps) {
           Remittance Total: {formatMoney(remittanceTotal)}
         </Text>
       </Group>
+
+      {/* Footer notes */}
+      {clientHeader.notes && (
+        <>
+          <Divider />
+          <Text size="xs" c="dimmed" style={{ whiteSpace: 'pre-line' }}>
+            {clientHeader.notes}
+          </Text>
+        </>
+      )}
     </Stack>
   );
 }

@@ -25,6 +25,16 @@ import { useEffect } from 'react';
 import { api } from '../../lib/api';
 import type { StatementHeader } from '../../../../shared/types';
 
+/**
+ * Default footer notes, pre-filled for a new workspace so the statement matches
+ * the legacy template out of the box. Fully editable — saving an empty value
+ * keeps it empty (the default only applies when notes were never saved).
+ */
+const DEFAULT_NOTES =
+  'The KDP Disbursement Date is the date funds were transferred from KDP to OoT Media. ' +
+  'The Payment Date above is the date the funds were transferred from OoT Media to Dream Big Publishing.\n\n' +
+  'Transactions over $100,000 will arrive in two separate ACH transactions over 2 business days.';
+
 export function StatementHeaderConfigForm() {
   const queryClient = useQueryClient();
 
@@ -35,6 +45,7 @@ export function StatementHeaderConfigForm() {
       clientName: '',
       clientCompany: '',
       clientAddress: '',
+      notes: DEFAULT_NOTES,
     },
   });
 
@@ -43,10 +54,11 @@ export function StatementHeaderConfigForm() {
     queryFn: () => api.getBusinessSettings(),
   });
 
-  // Populate form once data arrives
+  // Populate form once data arrives. When notes were never saved (undefined),
+  // fall back to the default so a fresh workspace shows the standard footer.
   useEffect(() => {
     if (data?.header) {
-      form.setValues(data.header);
+      form.setValues({ ...data.header, notes: data.header.notes ?? DEFAULT_NOTES });
     }
     // Only run when data changes; suppressing the form dep is intentional
     // (form.setValues is stable, but form object changes on each render)
@@ -125,6 +137,15 @@ export function StatementHeaderConfigForm() {
             placeholder="456 Client Ave&#10;City, State 00000"
             rows={2}
             {...form.getInputProps('clientAddress')}
+          />
+
+          <Textarea
+            label="Statement Notes"
+            description="Footer shown at the bottom of every statement. Edit freely; leave blank to omit."
+            autosize
+            minRows={3}
+            maxRows={8}
+            {...form.getInputProps('notes')}
           />
 
           <Group justify="flex-end">

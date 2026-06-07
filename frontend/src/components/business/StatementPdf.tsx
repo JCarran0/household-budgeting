@@ -126,6 +126,17 @@ const styles = StyleSheet.create({
     fontFamily: 'Helvetica-Bold',
     color: '#1a6b5a',
   },
+  notes: {
+    marginTop: 24,
+    paddingTop: 8,
+    borderTopWidth: 0.5,
+    borderTopColor: '#ddd',
+  },
+  notesText: {
+    fontSize: 8,
+    color: '#666',
+    lineHeight: 1.4,
+  },
 });
 
 export function StatementPdf({ statement }: StatementPdfProps) {
@@ -218,6 +229,13 @@ export function StatementPdf({ statement }: StatementPdfProps) {
             Remittance Total: {formatMoney(remittanceTotal)}
           </Text>
         </View>
+
+        {/* Footer notes */}
+        {clientHeader.notes ? (
+          <View style={styles.notes}>
+            <Text style={styles.notesText}>{clientHeader.notes}</Text>
+          </View>
+        ) : null}
       </Page>
     </Document>
   );

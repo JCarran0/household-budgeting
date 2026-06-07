@@ -32,6 +32,7 @@ const statementHeaderSchema = z.object({
   clientName: z.string(),
   clientCompany: z.string(),
   clientAddress: z.string(),
+  notes: z.string().optional(),
 });
 
 const settingsSchema = z.object({
