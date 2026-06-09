@@ -180,6 +180,32 @@ router.get('/:id', async (req: Request, res: Response, next: NextFunction): Prom
   }
 });
 
+// ---------------------------------------------------------------------------
+// DELETE /:id — Delete a statement (frees its number via max+1 numbering)
+// ---------------------------------------------------------------------------
+
+/**
+ * @route DELETE /api/v1/business/statements/:id
+ * @desc  Permanently delete a statement. Its payment number becomes available
+ *        again if no higher-numbered statement remains.
+ * @returns 204 (no content) | 404
+ */
+router.delete('/:id', async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const familyId = req.user?.familyId;
+    if (!familyId) throw new AuthorizationError();
+
+    await statementService.deleteStatement(familyId, req.params.id);
+    res.status(204).send();
+  } catch (error) {
+    if (error instanceof NotFoundError) {
+      res.status(404).json({ success: false, error: error.message });
+      return;
+    }
+    next(error);
+  }
+});
+
 export default router;
 
 // ---------------------------------------------------------------------------

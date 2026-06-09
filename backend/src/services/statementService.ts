@@ -236,4 +236,26 @@ export class StatementService {
     }
     return statement;
   }
+
+  /**
+   * Delete a statement. Throws NotFoundError if it does not exist.
+   *
+   * Deleting frees its payment number for re-use only if no higher-numbered
+   * statement remains, because the next number is always max(existing) + 1
+   * (see generateStatement). This intentionally avoids re-issuing a number
+   * below one that may already have been sent to the client.
+   *
+   * Runs under withLock so it can't race a concurrent generate's read of the
+   * payment-number counter.
+   */
+  async deleteStatement(familyId: string, id: string): Promise<void> {
+    await this.repository.withLock(familyId, async () => {
+      const all = await this.repository.getAll(familyId);
+      if (!all.some((s) => s.id === id)) {
+        throw new NotFoundError(`Statement ${id} not found`);
+      }
+      await this.repository.saveAll(familyId, all.filter((s) => s.id !== id));
+      log.info({ familyId, id }, 'statement deleted');
+    });
+  }
 }

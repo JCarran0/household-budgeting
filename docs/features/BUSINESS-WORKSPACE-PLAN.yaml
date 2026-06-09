@@ -160,13 +160,30 @@ decisions:
       round-half-up on integer cents.
 
   - id: D8
-    date: 2026-06-05
-    decision: Statements are persisted, immutable records; payment number auto-increments.
+    date: 2026-06-05  # delete allowed 2026-06-07 (D13)
+    decision: Statements are persisted records; content is immutable but a statement may be deleted.
     rationale: |
       BRD REQ-024/025/026. New entity `statements_{familyId}`. A generated
       statement snapshots its line items + totals so it renders identically
       later even if source transactions are re-tagged. Payment number
       derives from `max(existing) + 1`, editable before finalize.
+      Content immutability stands (no in-place edit/update path), but whole-
+      statement DELETE is allowed (D13) — "no delete" was too rigid for
+      cleaning up test/draft runs.
+
+  - id: D13
+    date: 2026-06-07
+    decision: Allow deleting a statement (hard delete + confirm); numbers reclaim via max+1.
+    rationale: |
+      Immutability protects a statement you have *sent* the client; it should
+      not trap test/draft statements forever. DELETE /business/statements/:id
+      hard-deletes under withLock. The next payment number is still
+      `max(existing) + 1`, so deleting the latest statement(s) frees those
+      numbers, while a lower number is NOT reused while a higher one remains
+      (avoids re-issuing #068 after #069 went out — an intentional gap).
+      A pointed confirm warns about already-sent statements. Deferred (not
+      built): a draft/"sent-lock" state machine — revisit only if a real need
+      to hard-protect sent statements appears post-launch.
 
   - id: D9
     date: 2026-06-05

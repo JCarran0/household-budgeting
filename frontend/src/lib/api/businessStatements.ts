@@ -83,5 +83,13 @@ export function createBusinessStatementsApi(client: AxiosInstance) {
       }
       return data.statement;
     },
+
+    /**
+     * Delete a statement. Its payment number frees up if nothing higher remains.
+     * DELETE /business/statements/:id → 204
+     */
+    async deleteStatement(id: string): Promise<void> {
+      await client.delete(`/business/statements/${id}`);
+    },
   };
 }

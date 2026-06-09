@@ -474,3 +474,73 @@ describe('empty period', () => {
     expect(stmt.charges).toHaveLength(BILLABLE_SUBTYPES.length);
   });
 });
+
+// ---------------------------------------------------------------------------
+// 11. Delete + payment-number reclaim
+// ---------------------------------------------------------------------------
+
+describe('deleteStatement', () => {
+  let ds: InMemoryDataService;
+  let service: StatementService;
+
+  beforeEach(async () => {
+    ds = new InMemoryDataService();
+    service = new StatementService(ds, makeCategoryService(ds));
+    await seedTransactions(ds, BIZ_FAMILY, [
+      makeTxn({ id: 't1', categoryId: STATEMENT_ROLES.trustInflow, amount: -100.0 }),
+    ]);
+  });
+
+  it('removes the statement (gone from list and getStatement throws)', async () => {
+    const stmt = await service.generateStatement(BIZ_FAMILY, PERIOD_MONTH, TODAY);
+    await service.deleteStatement(BIZ_FAMILY, stmt.id);
+
+    expect(await service.listStatements(BIZ_FAMILY)).toHaveLength(0);
+    await expect(service.getStatement(BIZ_FAMILY, stmt.id)).rejects.toThrow(
+      `Statement ${stmt.id} not found`,
+    );
+  });
+
+  it('frees the payment number after deleting the only statement', async () => {
+    const first = await service.generateStatement(BIZ_FAMILY, PERIOD_MONTH, TODAY);
+    expect(first.paymentNumber).toBe(DEFAULT_FIRST_PAYMENT_NUMBER); // 68
+    await service.deleteStatement(BIZ_FAMILY, first.id);
+
+    const regenerated = await service.generateStatement(BIZ_FAMILY, PERIOD_MONTH, TODAY);
+    expect(regenerated.paymentNumber).toBe(DEFAULT_FIRST_PAYMENT_NUMBER); // 68 reclaimed
+  });
+
+  it('reclaims the latest number when the top statement is deleted', async () => {
+    const s68 = await service.generateStatement(BIZ_FAMILY, PERIOD_MONTH, TODAY); // 68
+    const s69 = await service.generateStatement(BIZ_FAMILY, PERIOD_MONTH, TODAY); // 69
+    expect(s69.paymentNumber).toBe(s68.paymentNumber + 1);
+
+    await service.deleteStatement(BIZ_FAMILY, s69.id);
+    const next = await service.generateStatement(BIZ_FAMILY, PERIOD_MONTH, TODAY);
+    expect(next.paymentNumber).toBe(69); // 69 reclaimed
+  });
+
+  it('does NOT reuse a lower number while a higher one remains (gap is intentional)', async () => {
+    const s68 = await service.generateStatement(BIZ_FAMILY, PERIOD_MONTH, TODAY); // 68
+    await service.generateStatement(BIZ_FAMILY, PERIOD_MONTH, TODAY); // 69
+
+    await service.deleteStatement(BIZ_FAMILY, s68.id); // delete the lower one
+    const next = await service.generateStatement(BIZ_FAMILY, PERIOD_MONTH, TODAY);
+    expect(next.paymentNumber).toBe(70); // max(remaining {69}) + 1 — 68 not reused
+  });
+
+  it('throws NotFoundError for an unknown id', async () => {
+    await expect(service.deleteStatement(BIZ_FAMILY, 'nope')).rejects.toThrow(
+      'Statement nope not found',
+    );
+  });
+
+  it('cannot delete a statement from another workspace', async () => {
+    const stmt = await service.generateStatement(BIZ_FAMILY, PERIOD_MONTH, TODAY);
+    await expect(service.deleteStatement(OTHER_FAMILY, stmt.id)).rejects.toThrow(
+      `Statement ${stmt.id} not found`,
+    );
+    // Original is untouched
+    expect(await service.listStatements(BIZ_FAMILY)).toHaveLength(1);
+  });
+});

@@ -21,9 +21,9 @@ import {
   Title,
 } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { notifications } from '@mantine/notifications';
-import { IconAlertTriangle, IconEye, IconFileTypeCsv, IconFileTypePdf } from '@tabler/icons-react';
+import { IconAlertTriangle, IconEye, IconFileTypeCsv, IconFileTypePdf, IconTrash } from '@tabler/icons-react';
 import { api } from '../../lib/api';
 import { exportStatementToCSV } from '../../utils/statementCsv';
 import { StatementPreview } from './StatementPreview';
@@ -37,8 +37,11 @@ function formatMoney(amount: number): string {
 }
 
 export function StatementHistoryTable() {
+  const queryClient = useQueryClient();
   const [viewTarget, setViewTarget] = useState<BusinessStatement | null>(null);
   const [viewOpened, { open: openView, close: closeView }] = useDisclosure(false);
+  const [deleteTarget, setDeleteTarget] = useState<BusinessStatement | null>(null);
+  const [deleteOpened, { open: openDelete, close: closeDelete }] = useDisclosure(false);
   const [pdfLoading, setPdfLoading] = useState<string | null>(null); // id of statement being exported
 
   const { data: statements, isLoading, error } = useQuery({
@@ -46,9 +49,35 @@ export function StatementHistoryTable() {
     queryFn: () => api.getStatements(),
   });
 
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => api.deleteStatement(id),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['businessStatements'] });
+      notifications.show({
+        title: 'Statement Deleted',
+        message: 'The statement was removed; its number is free again if nothing higher remains.',
+        color: 'green',
+      });
+      closeDelete();
+      setDeleteTarget(null);
+    },
+    onError: (err: unknown) => {
+      notifications.show({
+        title: 'Delete Failed',
+        message: err instanceof Error ? err.message : 'Could not delete statement',
+        color: 'red',
+      });
+    },
+  });
+
   const handleView = (statement: BusinessStatement) => {
     setViewTarget(statement);
     openView();
+  };
+
+  const handleDelete = (statement: BusinessStatement) => {
+    setDeleteTarget(statement);
+    openDelete();
   };
 
   const handleCSV = (statement: BusinessStatement) => {
@@ -175,6 +204,15 @@ export function StatementHistoryTable() {
                     >
                       PDF
                     </Button>
+                    <Button
+                      size="xs"
+                      variant="subtle"
+                      color="red"
+                      leftSection={<IconTrash size={14} />}
+                      onClick={() => handleDelete(s)}
+                    >
+                      Delete
+                    </Button>
                   </Group>
                 </Table.Td>
               </Table.Tr>
@@ -192,6 +230,38 @@ export function StatementHistoryTable() {
         scrollAreaComponent={ScrollArea.Autosize}
       >
         {viewTarget && <StatementPreview statement={viewTarget} />}
+      </Modal>
+
+      {/* Delete confirmation */}
+      <Modal
+        opened={deleteOpened}
+        onClose={closeDelete}
+        title="Delete statement?"
+        size="md"
+      >
+        <Stack gap="md">
+          <Text size="sm">
+            Permanently delete statement{' '}
+            <Text span fw={600}>
+              #{deleteTarget ? String(deleteTarget.paymentNumber).padStart(3, '0') : ''}
+            </Text>{' '}
+            ({deleteTarget?.periodMonth})? If you have already sent it to the client, your
+            records will no longer match theirs. Its payment number becomes available again
+            only if no higher-numbered statement remains.
+          </Text>
+          <Group justify="flex-end">
+            <Button variant="default" onClick={closeDelete}>
+              Cancel
+            </Button>
+            <Button
+              color="red"
+              loading={deleteMutation.isPending}
+              onClick={() => deleteTarget && deleteMutation.mutate(deleteTarget.id)}
+            >
+              Delete
+            </Button>
+          </Group>
+        </Stack>
       </Modal>
     </>
   );

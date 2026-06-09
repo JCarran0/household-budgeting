@@ -339,6 +339,8 @@ vi.mock('../../../lib/api', () => ({
   api: {
     createWorkspace: vi.fn(),
     listWorkspaces: vi.fn().mockResolvedValue([]),
+    getStatements: vi.fn().mockResolvedValue([]),
+    deleteStatement: vi.fn().mockResolvedValue(undefined),
   },
 }));
 
@@ -351,6 +353,7 @@ vi.mock('../../../stores/authStore', () => ({
 
 import { api } from '../../../lib/api';
 import { CreateBusinessWorkspaceCard } from '../../admin/CreateBusinessWorkspaceCard';
+import { StatementHistoryTable } from '../StatementHistoryTable';
 import userEvent from '@testing-library/user-event';
 import type { Family } from '../../../../../shared/types';
 
@@ -398,5 +401,50 @@ describe('CreateBusinessWorkspaceCard', () => {
 
     expect(screen.getByText('Provisioned')).toBeDefined();
     expect(screen.queryByRole('button', { name: /create business workspace/i })).toBeNull();
+  });
+});
+
+describe('StatementHistoryTable — delete', () => {
+  const sample: BusinessStatement = {
+    id: 's1',
+    paymentNumber: 68,
+    paymentDate: '2026-06-05',
+    periodMonth: '2026-05',
+    commissionRate: 0.05,
+    lineItems: [],
+    royaltySubtotal: 91832.22,
+    charges: [],
+    remittanceTotal: 91813.22,
+    clientHeader: {
+      businessName: '',
+      businessAddress: '',
+      clientName: '',
+      clientCompany: '',
+      clientAddress: '',
+    },
+    createdAt: '2026-06-05T00:00:00Z',
+  };
+
+  beforeEach(() => {
+    vi.mocked(api.getStatements).mockResolvedValue([sample]);
+    vi.mocked(api.deleteStatement).mockResolvedValue(undefined);
+  });
+
+  it('requires confirmation, then calls deleteStatement with the id', async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<StatementHistoryTable />);
+
+    await screen.findByText('#068');
+
+    // Clicking the row Delete opens a confirm modal — nothing deleted yet
+    await user.click(screen.getByRole('button', { name: 'Delete' }));
+    await screen.findByText('Delete statement?');
+    expect(api.deleteStatement).not.toHaveBeenCalled();
+
+    // Confirm in the modal (the last "Delete" button is the confirm)
+    const deleteButtons = screen.getAllByRole('button', { name: 'Delete' });
+    await user.click(deleteButtons[deleteButtons.length - 1]);
+
+    expect(api.deleteStatement).toHaveBeenCalledWith('s1');
   });
 });
