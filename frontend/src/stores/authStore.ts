@@ -29,6 +29,13 @@ interface AuthState {
    * Query caches so no cross-workspace data leaks (D2, Phase 2.1).
    */
   switchWorkspace: (familyId: string) => Promise<void>;
+  /**
+   * Re-fetch the workspace list for the current session. `workspaces` is not
+   * persisted (see partialize), so it resets to [] on every page refresh; call
+   * this on app bootstrap to repopulate it. Without it the workspace switcher
+   * disappears and nav gating falls back to 'personal' after a reload.
+   */
+  refreshWorkspaces: () => Promise<void>;
 }
 
 export const useAuthStore = create<AuthState>()(
@@ -190,6 +197,16 @@ export const useAuthStore = create<AuthState>()(
           activeWorkspaceId: response.user.activeWorkspaceId ?? response.user.familyId,
           workspaces,
         });
+      },
+
+      refreshWorkspaces: async () => {
+        if (!get().token) return;
+        try {
+          const workspaces = await api.listWorkspaces();
+          set({ workspaces });
+        } catch {
+          // Non-fatal: workspace list is a convenience; leave existing state intact
+        }
       },
     }),
     {

@@ -113,6 +113,10 @@ function seedStore(opts: {
   workspaces: Family[];
   activeWorkspaceId: string;
 }) {
+  // MantineLayout refetches the workspace list on mount (it's not persisted, so
+  // it resets to [] on every reload). Keep the mock in sync with the seeded
+  // state so the refetch is a no-op rather than wiping the list.
+  vi.mocked(api.listWorkspaces).mockResolvedValue(opts.workspaces);
   useAuthStore.setState({
     user: opts.user,
     token: 'tok',

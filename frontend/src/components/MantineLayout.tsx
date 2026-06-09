@@ -79,7 +79,14 @@ export function MantineLayout() {
   const [version, setVersion] = useState<string | null>(null);
   const navigate = useNavigate();
   const location = useLocation();
-  const { user, logout, workspaces, activeWorkspaceId, switchWorkspace } = useAuthStore();
+  const { user, logout, workspaces, activeWorkspaceId, switchWorkspace, refreshWorkspaces } = useAuthStore();
+
+  // `workspaces` is not persisted, so it resets to [] on every page refresh.
+  // Repopulate it on mount so the workspace switcher and nav gating survive a
+  // reload (they otherwise vanish / fall back to 'personal').
+  useEffect(() => {
+    void refreshWorkspaces();
+  }, [refreshWorkspaces]);
 
   const handleLogout = () => {
     logout();
