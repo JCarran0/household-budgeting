@@ -18,6 +18,7 @@ import {
   BUSINESS_CATEGORY_SEED,
   STATEMENT_ROLES,
 } from '../../constants/categoryTemplates';
+import { DEFAULT_STATEMENT_NOTES } from '../../shared/utils/businessStatementCalc';
 import type { Category, StatementHeader } from '../../shared/types';
 
 // ---------------------------------------------------------------------------
@@ -44,8 +45,10 @@ const FULL_HEADER: StatementHeader = {
   clientName: 'Jane Doe',
   clientCompany: 'Client Corp',
   clientAddress: '456 Oak Ave, Chicago, IL 60601',
+  notes: 'Net 30. Wire transfer only.',
 };
 
+// A legacy header with no notes key (as stored before footer notes existed).
 const BLANK_HEADER: StatementHeader = {
   businessName: '',
   businessAddress: '',
@@ -54,18 +57,24 @@ const BLANK_HEADER: StatementHeader = {
   clientAddress: '',
 };
 
+// What getSettings returns when notes were never saved: blanks + default footer.
+const DEFAULTED_BLANK_HEADER: StatementHeader = {
+  ...BLANK_HEADER,
+  notes: DEFAULT_STATEMENT_NOTES,
+};
+
 // ---------------------------------------------------------------------------
 // 1. Default blank header
 // ---------------------------------------------------------------------------
 
 describe('getSettings — default when nothing stored', () => {
-  it('returns a record with all five header fields as empty strings', async () => {
+  it('returns blank header fields plus the default footer notes', async () => {
     const ds = new InMemoryDataService();
     const service = makeSettingsService(ds);
 
     const settings = await service.getSettings(BIZ_FAMILY);
 
-    expect(settings.header).toEqual(BLANK_HEADER);
+    expect(settings.header).toEqual(DEFAULTED_BLANK_HEADER);
   });
 });
 
@@ -85,15 +94,18 @@ describe('saveSettings + getSettings — round-trip', () => {
     expect(loaded.header).toEqual(FULL_HEADER);
   });
 
-  it('allows empty string values for all fields', async () => {
+  it('allows empty string values for all fields, and an explicitly-cleared footer stays empty', async () => {
     const ds = new InMemoryDataService();
     const service = makeSettingsService(ds);
 
-    const saved = await service.saveSettings(BIZ_FAMILY, { header: BLANK_HEADER });
-    expect(saved.header).toEqual(BLANK_HEADER);
+    // notes: '' is the user explicitly clearing the footer — it must NOT be
+    // replaced by the default (the default only fills an absent/undefined value).
+    const cleared: StatementHeader = { ...BLANK_HEADER, notes: '' };
+    const saved = await service.saveSettings(BIZ_FAMILY, { header: cleared });
+    expect(saved.header).toEqual(cleared);
 
     const loaded = await service.getSettings(BIZ_FAMILY);
-    expect(loaded.header).toEqual(BLANK_HEADER);
+    expect(loaded.header).toEqual(cleared);
   });
 });
 
@@ -135,9 +147,9 @@ describe('familyId isolation', () => {
 
     await service.saveSettings(BIZ_FAMILY, { header: FULL_HEADER });
 
-    // The OTHER family sees blanks — not BIZ_FAMILY's header
+    // The OTHER family sees the unconfigured default — not BIZ_FAMILY's header
     const other = await service.getSettings(OTHER_FAMILY);
-    expect(other.header).toEqual(BLANK_HEADER);
+    expect(other.header).toEqual(DEFAULTED_BLANK_HEADER);
   });
 });
 
@@ -177,7 +189,7 @@ describe('generateStatement — snapshots the stored header', () => {
     expect(stmt.clientHeader).toEqual(FULL_HEADER);
   });
 
-  it('statement.clientHeader is blank when no header has been configured', async () => {
+  it('statement.clientHeader carries the default footer when no header has been configured', async () => {
     const ds = new InMemoryDataService();
     const settingsService = makeSettingsService(ds);
     const statementService = new StatementService(ds, makeCategoryService(ds));
@@ -201,6 +213,6 @@ describe('generateStatement — snapshots the stored header', () => {
       { clientHeader: settings.header },
     );
 
-    expect(stmt.clientHeader).toEqual(BLANK_HEADER);
+    expect(stmt.clientHeader).toEqual(DEFAULTED_BLANK_HEADER);
   });
 });

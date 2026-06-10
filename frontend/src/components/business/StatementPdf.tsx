@@ -16,6 +16,7 @@ import {
   StyleSheet,
 } from '@react-pdf/renderer';
 import type { BusinessStatement } from '../../../../shared/types';
+import { DEFAULT_STATEMENT_NOTES } from '../../../../shared/utils/businessStatementCalc';
 
 interface StatementPdfProps {
   statement: BusinessStatement;
@@ -141,6 +142,9 @@ const styles = StyleSheet.create({
 
 export function StatementPdf({ statement }: StatementPdfProps) {
   const { clientHeader, lineItems, royaltySubtotal, charges, remittanceTotal } = statement;
+  // Legacy statements snapshotted before footer notes existed have no notes;
+  // fall back to the standard footer. An explicit '' (cleared) stays omitted.
+  const notes = clientHeader.notes ?? DEFAULT_STATEMENT_NOTES;
 
   return (
     <Document
@@ -231,9 +235,9 @@ export function StatementPdf({ statement }: StatementPdfProps) {
         </View>
 
         {/* Footer notes */}
-        {clientHeader.notes ? (
+        {notes ? (
           <View style={styles.notes}>
-            <Text style={styles.notesText}>{clientHeader.notes}</Text>
+            <Text style={styles.notesText}>{notes}</Text>
           </View>
         ) : null}
       </Page>

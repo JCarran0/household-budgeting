@@ -9,6 +9,7 @@
  */
 import { Stack, Group, Text, Table, Divider, Box, Title } from '@mantine/core';
 import type { BusinessStatement } from '../../../../shared/types';
+import { DEFAULT_STATEMENT_NOTES } from '../../../../shared/utils/businessStatementCalc';
 
 interface StatementPreviewProps {
   statement: BusinessStatement;
@@ -32,6 +33,9 @@ function formatDate(dateStr: string): string {
 
 export function StatementPreview({ statement }: StatementPreviewProps) {
   const { clientHeader, lineItems, royaltySubtotal, charges, remittanceTotal } = statement;
+  // Legacy statements snapshotted before footer notes existed have no notes;
+  // fall back to the standard footer. An explicit '' (cleared) stays omitted.
+  const notes = clientHeader.notes ?? DEFAULT_STATEMENT_NOTES;
 
   return (
     <Stack gap="lg" p="md" style={{ fontFamily: 'serif', maxWidth: 760 }}>
@@ -130,11 +134,11 @@ export function StatementPreview({ statement }: StatementPreviewProps) {
       </Group>
 
       {/* Footer notes */}
-      {clientHeader.notes && (
+      {notes && (
         <>
           <Divider />
           <Text size="xs" c="dimmed" style={{ whiteSpace: 'pre-line' }}>
-            {clientHeader.notes}
+            {notes}
           </Text>
         </>
       )}

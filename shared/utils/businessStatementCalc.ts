@@ -52,6 +52,25 @@ import type {
 } from '../types/index';
 
 // ---------------------------------------------------------------------------
+// Default footer notes
+// ---------------------------------------------------------------------------
+
+/**
+ * Default statement footer notes — the standard OoT legacy template text.
+ *
+ * Single source of truth shared by: the settings form (pre-fills it for a new
+ * workspace), the backend settings service (defaults it at GET so generation
+ * snapshots it), and the renderers (fall back to it for statements generated
+ * before footer notes existed). An explicitly-saved empty string means "omit"
+ * and is preserved everywhere — the default only applies when notes are absent
+ * (undefined), never when they were saved blank.
+ */
+export const DEFAULT_STATEMENT_NOTES =
+  'The KDP Disbursement Date is the date funds were transferred from KDP to OoT Media. ' +
+  'The Payment Date above is the date the funds were transferred from OoT Media to Dream Big Publishing.\n\n' +
+  'Transactions over $100,000 will arrive in two separate ACH transactions over 2 business days.';
+
+// ---------------------------------------------------------------------------
 // Types for the pure compute function's input
 // ---------------------------------------------------------------------------
 
