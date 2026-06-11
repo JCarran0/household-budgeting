@@ -551,9 +551,11 @@ The gap:
 ---
 
 ## Reports Page: Excessive Parallel API Requests
-**Status**: Open (carried from previous tracker)
+**Status**: Resolved (2026-04-08, commit `5ed0bb9`)
 **Created**: 2025-10-14
 **Impact**: High - Causes 503 errors on Reports page load
 **Effort**: Medium
 
-See [completed/AI-TECHNICAL-DEBT.md](completed/AI-TECHNICAL-DEBT.md) for full details. The root cause (12 parallel monthly budget requests) remains — a `GET /api/v1/budgets/year/:year` batch endpoint is the proper fix.
+See [completed/AI-TECHNICAL-DEBT.md](completed/AI-TECHNICAL-DEBT.md) for full details. The root cause was 12 parallel monthly budget requests. The `GET /api/v1/budgets/year/:year` batch endpoint (route `backend/src/routes/budgets.ts`, service `budgetService.getYearlyBudgets`) had existed since 2025-09-20 (`c127fce`); `5ed0bb9` switched `Reports.tsx` to consume it, looping over *years* (1–2 requests) instead of months (`Reports.tsx:142-186`). Reconciled 2026-06-10 — the item had in fact shipped before the [TECH-DEBT-EXECUTION-PLAN-2026-04](TECH-DEBT-EXECUTION-PLAN-2026-04.md) was drafted, but was carried into Sprint 6 as open by mistake.
+
+Reports page load now fires ~6 independent queries (cashflow, trends, breakdown, projections, categories, yearly-budget), down from 12+. The plan's "≤ 3 requests" target was intentionally **not** pursued: closing the 6→3 gap requires a combined reports endpoint that collapses four independently-cached section queries into one cache entry — a poor trade (loss of per-section cache granularity, more refetch churn on filter changes) for a 2-user app. The nginx rate-limit "increase" (`terraform/user_data.sh`: `rate=10r/s`, `burst=10 nodelay`) was reviewed and **kept** — it is the looser outer envelope behind the app-layer limiter (`rateLimitGlobalApi`, 100/min/IP, added in Sprint 3); reverting it downward would only re-introduce 503 risk for no benefit.
