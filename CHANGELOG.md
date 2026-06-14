@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+### [5.80.3](https://github.com/JCarran0/household-budgeting/compare/v5.80.2...v5.80.3) (2026-06-14)
+
+
+### Bug Fixes
+
+* **workspaces:** make react import static in StatementHistoryTable ([9c42ecf](https://github.com/JCarran0/household-budgeting/commit/9c42ecfb56717d4eedafc8b04bee8728c7f4074c))
+
 ### [5.80.2](https://github.com/JCarran0/household-budgeting/compare/v5.80.1...v5.80.2) (2026-06-11)
 
 
