@@ -6,7 +6,7 @@
  * lazy-loaded (dynamic import) so @react-pdf/renderer does not bloat the
  * main bundle for the personal app.
  */
-import { useState } from 'react';
+import { createElement, useState } from 'react';
 import {
   Stack,
   Table,
@@ -96,7 +96,6 @@ export function StatementHistoryTable() {
       // ReactElement<DocumentProps> but our component wraps it with own props).
       // Using Parameters<typeof pdf>[0] as the cast target avoids importing the
       // private DocumentProps type directly.
-      const { createElement } = await import('react');
       type PdfInput = Parameters<typeof pdf>[0];
       const element = createElement(StatementPdf, { statement }) as unknown as PdfInput;
       const blob = await pdf(element).toBlob();
