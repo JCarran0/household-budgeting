@@ -23,6 +23,7 @@
     "test:ci:full": "npm run test:all",
     "lint": "tsc --noEmit",
     "clean": "rm -rf dist coverage",
+    "anonymize:data": "ts-node src/scripts/anonymize-data.ts",
     "reset:dev": "ts-node src/scripts/reset-app.ts",
     "reset:dev:force": "ts-node src/scripts/reset-app.ts --force",
     "reset": "node scripts/reset-app.js",

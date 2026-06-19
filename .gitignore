@@ -16,6 +16,7 @@ lerna-debug.log*
 
 # Data and backups
 backend/data/
+backend/data-anonymized/
 frontend/data/
 **/data-backups/
 **/*-backup-*/
