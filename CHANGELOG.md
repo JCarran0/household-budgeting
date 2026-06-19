@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.81.0](https://github.com/JCarran0/household-budgeting/compare/v5.80.3...v5.81.0) (2026-06-19)
+
+
+### Features
+
+* **scripts:** add data anonymizer for shareable dev builds ([72e711c](https://github.com/JCarran0/household-budgeting/commit/72e711cd73496cc07d57a6ff133f32b1db1ee011))
+
 ### [5.80.3](https://github.com/JCarran0/household-budgeting/compare/v5.80.2...v5.80.3) (2026-06-14)
 
 
