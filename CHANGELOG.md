@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+### [5.81.1](https://github.com/JCarran0/household-budgeting/compare/v5.81.0...v5.81.1) (2026-07-23)
+
+
+### Bug Fixes
+
+* **dev:** correct stale local dev ports and Plaid products example ([a3f170d](https://github.com/JCarran0/household-budgeting/commit/a3f170dbe2ae9a2333967d959e5e1f8fbd5a1013))
+
 ## [5.81.0](https://github.com/JCarran0/household-budgeting/compare/v5.80.3...v5.81.0) (2026-06-19)
 
 
