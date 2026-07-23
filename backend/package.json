@@ -5,9 +5,9 @@
   "main": "index.js",
   "scripts": {
     "dev": "nodemon --watch src --ext ts --exec ts-node src/index.ts",
-    "dev:check": "lsof -i :3000 -i :3001 || echo 'No servers running'",
+    "dev:check": "lsof -i :3021 || echo 'No servers running'",
     "dev:restart": "npm run dev:stop && npm run dev",
-    "dev:stop": "kill $(lsof -t -i:3001) 2>/dev/null || true",
+    "dev:stop": "kill $(lsof -t -i:3021) 2>/dev/null || true",
     "prebuild": "rm -rf src/shared && cp -r ../shared src/",
     "build": "tsc -p tsconfig.build.json && npm run postbuild",
     "postbuild": "rm -rf src/shared && ln -sf ../../shared src/shared && if [ -d dist/backend/src ]; then cp -r dist/backend/src/* dist/ && rm -rf dist/backend; fi",

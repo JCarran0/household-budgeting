@@ -156,7 +156,7 @@ household-budgeting/
 Create `backend/.env` with:
 ```env
 # Server
-PORT=3001
+PORT=3021
 NODE_ENV=development
 
 # Plaid API (get from dashboard.plaid.com)
@@ -179,17 +179,17 @@ DATA_DIR=./data
    cd backend
    npm run dev
    ```
-   Backend runs on http://localhost:3001
+   Backend runs on http://localhost:3021
 
 2. **Start the frontend** (Terminal 2):
    ```bash
    cd frontend
    npm run dev
    ```
-   Frontend runs on http://localhost:5173
+   Frontend runs on http://localhost:5183
 
 3. **Access the app**:
-   - Open http://localhost:5173
+   - Open http://localhost:5183
    - Register a new account
    - Connect bank accounts using Plaid Link
    - View accounts and transactions
