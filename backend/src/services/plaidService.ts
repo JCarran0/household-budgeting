@@ -55,6 +55,12 @@ export interface AccountsResult {
   error?: string;
   errorCode?: string;
   requiresReauth?: boolean;
+  /**
+   * Item-level failure the user cannot clear by re-authenticating. Distinct
+   * from `requiresReauth` so the UI can warn without falsely instructing the
+   * user to sign in again.
+   */
+  degraded?: boolean;
 }
 
 export interface Transaction {
@@ -106,6 +112,17 @@ export interface SyncTransactionsResult {
   error?: string;
   errorCode?: string;
   requiresReauth?: boolean;
+}
+
+export interface ItemStatusResult {
+  success: boolean;
+  /** Plaid `item.status.transactions.last_successful_update` (ISO 8601). */
+  lastSuccessfulUpdate?: string | null;
+  lastFailedUpdate?: string | null;
+  consentExpirationTime?: string | null;
+  /** Item-level error code Plaid currently reports, if any. */
+  errorCode?: string | null;
+  error?: string;
 }
 
 export interface Institution {
@@ -340,17 +357,24 @@ export class PlaidService {
       };
     } catch (error) {
       const result = this.handleError(error);
-      
+      const errorCode = this.getErrorCode(error);
+
       // Check if error requires reauthentication
       if (result.error && this.isReauthError(error)) {
         return {
           ...result,
           requiresReauth: true,
-          errorCode: this.getErrorCode(error),
+          errorCode,
         };
       }
-      
-      return result;
+
+      // Not fixable by re-auth, but still an Item-level failure — surface it
+      // rather than letting the caller treat the account as healthy.
+      if (result.error && this.isDegradedItemError(this.getErrorType(error), errorCode)) {
+        return { ...result, degraded: true, errorCode };
+      }
+
+      return { ...result, errorCode };
     }
   }
 
@@ -506,6 +530,29 @@ export class PlaidService {
   }
 
   /**
+   * Item health as Plaid sees it.
+   *
+   * `lastSuccessfulUpdate` is the field that distinguishes "our sync ran" from
+   * "the institution actually delivered transactions" — the two diverge in the
+   * silent-stall failure mode, where balances keep updating from a separate
+   * pipeline while transaction extraction is dead and no error is ever raised.
+   */
+  async getItemStatus(accessToken: string): Promise<ItemStatusResult> {
+    try {
+      const { data } = await this.client.itemGet({ access_token: accessToken });
+      return {
+        success: true,
+        lastSuccessfulUpdate: data.status?.transactions?.last_successful_update ?? null,
+        lastFailedUpdate: data.status?.transactions?.last_failed_update ?? null,
+        consentExpirationTime: data.item.consent_expiration_time ?? null,
+        errorCode: data.item.error?.error_code ?? null,
+      };
+    } catch (error) {
+      return this.handleError(error);
+    }
+  }
+
+  /**
    * Get institution information by ID
    */
   async getInstitution(institutionId: string): Promise<InstitutionResult> {
@@ -586,17 +633,47 @@ export class PlaidService {
   }
 
   /**
+   * Error codes a user can clear themselves by re-running Plaid Link in update
+   * mode ("Sign in to Bank").
+   *
+   * `ACCESS_NOT_GRANTED` matters as much as the credential codes: institutions
+   * let users revoke sharing per data type, which yields a working
+   * /accounts/get alongside a dead transactions feed. Re-granting in update
+   * mode is the fix, so it belongs here rather than in the degraded bucket.
+   */
+  private static readonly REAUTH_ERROR_CODES: ReadonlySet<string> = new Set([
+    'ITEM_LOGIN_REQUIRED',
+    'ITEM_LOCKED',
+    'USER_PERMISSION_REVOKED',
+    'INVALID_CREDENTIALS',
+    'INVALID_MFA',
+    'INVALID_UPDATED_USERNAME',
+    'INSUFFICIENT_CREDENTIALS',
+    'ITEM_NOT_ACCESSIBLE',
+    'ACCESS_NOT_GRANTED',
+    'PENDING_DISCONNECT',
+  ]);
+
+  /**
    * Check if error code requires reauthentication
    */
   requiresReauthentication(errorCode: string): boolean {
-    const reauthCodes = [
-      'ITEM_LOGIN_REQUIRED',
-      'ITEM_LOCKED',
-      'USER_PERMISSION_REVOKED',
-      'INVALID_CREDENTIALS',
-      'ITEM_NOT_ACCESSIBLE',
-    ];
-    return reauthCodes.includes(errorCode);
+    return PlaidService.REAUTH_ERROR_CODES.has(errorCode);
+  }
+
+  /**
+   * Is this an Item-level failure the user cannot fix by re-authenticating?
+   *
+   * Allowlisting known-bad codes leaves every unlisted code silently marking an
+   * account healthy — which is how a broken connection keeps presenting as
+   * `active` in the UI. Invert it: any `ITEM_ERROR` that is not a reauth code is
+   * degraded until proven otherwise. Callers should surface it as a warning,
+   * not as "you need to sign in again."
+   */
+  isDegradedItemError(errorType: string | undefined, errorCode: string | undefined): boolean {
+    if (errorType !== 'ITEM_ERROR') return false;
+    if (!errorCode) return true;
+    return !this.requiresReauthentication(errorCode);
   }
 
   /**
@@ -731,15 +808,31 @@ export class PlaidService {
    */
   private getErrorCode(error: unknown): string | undefined {
     if (
-      error && 
-      typeof error === 'object' && 
-      'response' in error && 
+      error &&
+      typeof error === 'object' &&
+      'response' in error &&
       error.response &&
       typeof error.response === 'object' &&
       'data' in error.response
     ) {
       const plaidError = error.response.data as PlaidError;
       return plaidError.error_code;
+    }
+    return undefined;
+  }
+
+  /** Plaid `error_type` from a thrown API error, if present. */
+  getErrorType(error: unknown): string | undefined {
+    if (
+      error &&
+      typeof error === 'object' &&
+      'response' in error &&
+      error.response &&
+      typeof error.response === 'object' &&
+      'data' in error.response
+    ) {
+      const plaidError = error.response.data as PlaidError;
+      return plaidError.error_type;
     }
     return undefined;
   }

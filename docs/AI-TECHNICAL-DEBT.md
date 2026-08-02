@@ -374,8 +374,9 @@ Remaining broad `['transactions']` invalidations are intentional — they fire o
 ---
 
 ### TD-014: Frontend Has Zero Tests
-**Status**: Open
+**Status**: **Largely resolved** — the title is now historical. Frontend has 31 test files / 272 passing tests as of 2026-08-02 (was zero when filed). Remaining gap is coverage of specific invariants, not absence of a harness.
 **Created**: 2026-04-22
+**Updated**: 2026-08-02
 **Impact**: High - Financial math (rollover, BvA II, dismissed-parents) is in the frontend with no regression detection
 **Effort**: Medium
 
@@ -604,8 +605,9 @@ Compounding it: dedupe is strictly by `plaidTransactionId` (`:292`). A reissued 
 ---
 
 ### TD-021: No Plaid Webhooks Configured; No Sync-Staleness Surface
-**Status**: Open
+**Status**: **Staleness indicator resolved (2026-08-02)** — fix step 1 shipped. Webhook work (steps 2-4) remains open.
 **Created**: 2026-08-02
+**Updated**: 2026-08-02
 **Impact**: **High** — no failure is detectable without manual inspection; a 19-day outage went unnoticed
 **Effort**: Medium (staleness indicator alone: Low)
 
@@ -627,17 +629,31 @@ Separately, nothing compares an account's most recent transaction date against i
 3. Add a webhook receiver route with proper JWT verification — note `plaidService.ts:565-571` currently returns `true` unconditionally with a "In production, implement proper JWT verification" comment. That must be closed before the endpoint is exposed.
 4. Handle `SYNC_UPDATES_AVAILABLE` (trigger sync), `PENDING_EXPIRATION` (prompt re-link — the "Sign in to Bank" action is now always available per `4ccd51d`), and `ERROR`.
 
+**Step 1 as shipped** (2026-08-02) — the half that needs no webhook infrastructure:
+- `plaidService.getItemStatus()` reads `item.status.transactions.last_successful_update`, `last_failed_update`, and `consent_expiration_time`.
+- `syncAccountBalances` calls it once per Item and persists `lastTransactionUpdate` + `consentExpirationTime` onto each account (mirrored across the Item like `plaidCursor`). A failure here is logged and ignored — the values are advisory and must not fail a balance sync.
+- `frontend/src/components/accounts/accountHealth.ts` holds the pure predicates: `hasStaleTransactions` (≥5 days, tolerating a weekend plus a holiday) and `hasExpiringConsent` (≤14 days, wider than Plaid's 7-day `PENDING_EXPIRATION` since we are polling rather than receiving). Both return false when the field is absent — warning on every card would train the user to ignore the warning.
+- `ConnectedAccountCard` renders each as an inline orange line.
+
+The critical distinction, worth preserving in any rework: **`lastSynced` records when *we* called Plaid; `lastTransactionUpdate` records when the *institution* last delivered.** Only the second one goes stale in the silent-stall failure mode, which is why the existing "Last synced" line could never have caught it.
+
+**Tests**: 10 cases in `accountHealth.test.ts`, including the real incident shape (2026-07-15 stall observed 2026-08-02 → warns) and the real consent value (2026-09-06 seen on 2026-08-02 → correctly does not warn).
+
 **Files**:
-- `backend/src/services/plaidService.ts` (`:236` webhook attach, `:565-571` verification stub)
-- `backend/src/routes/plaid.ts` (new webhook route)
-- `.github/workflows/release-and-deploy.yml`, `backend/.env.example`
-- `frontend/src/components/accounts/ConnectedAccountCard.tsx` (staleness display)
+- `backend/src/services/plaidService.ts` ✅ (`getItemStatus`), and `:236` webhook attach + the `:565-571` verification stub for the remaining work
+- `backend/src/services/accountService.ts` ✅ (persist staleness fields)
+- `shared/types/index.ts` ✅
+- `frontend/src/components/accounts/accountHealth.ts` ✅ (new, + tests)
+- `frontend/src/components/accounts/ConnectedAccountCard.tsx` ✅
+- `backend/src/routes/plaid.ts` (new webhook route — remaining)
+- `.github/workflows/release-and-deploy.yml`, `backend/.env.example` (remaining)
 
 ---
 
 ### TD-022: Sync Error Paths Fail Silently
-**Status**: Open
+**Status**: **Resolved (2026-08-02)**
 **Created**: 2026-08-02
+**Updated**: 2026-08-02
 **Impact**: Medium — failures are invisible in the UI and, in one path, invisible in logs too
 **Effort**: Low
 
@@ -654,10 +670,21 @@ Note these are *detection* gaps, not the cause of the 2026-08-02 incident (that 
 2. Add a log line to the `accountService.ts:222` branch with `plaidItemId` + error code. No silent `continue`s on a data path.
 3. Distinguish "needs re-auth" from "degraded" in `AccountStatus` so the UI can warn without falsely claiming a sign-in is required.
 
+**Fix as shipped** (2026-08-02):
+1. `REAUTH_ERROR_CODES` widened from 5 to 10 codes. `ACCESS_NOT_GRANTED` is the consequential addition — institutions let users revoke sharing per data type, producing a working `/accounts/get` alongside a dead transaction feed, and re-granting in update mode is the fix. Also added `INVALID_MFA`, `INVALID_UPDATED_USERNAME`, `INSUFFICIENT_CREDENTIALS`, `PENDING_DISCONNECT`.
+2. New `isDegradedItemError(errorType, errorCode)` inverts the allowlist as the item proposed: any `ITEM_ERROR` that is not a reauth code is degraded until proven otherwise. Unknown future codes now surface instead of silently reading as healthy.
+3. `AccountsResult.degraded` carries it to `accountService`, which marks such accounts `status: 'error'` and returns them as `degradedAccounts`.
+4. The bare `continue` at the old `:222` now logs unconditionally — `{plaidItemId, accountCount, errorCode, requiresReauth, degraded}` — so no balance-sync failure can leave zero trace.
+5. `PlaidAccount.status` in `shared/types` gained `'error'`. The backend `AccountStatus` already had it; the shared type did not, so the state was literally unrepresentable client-side.
+6. `ConnectedAccountCard` renders a yellow **Connection Issue** badge for `error`, distinct from the orange **Sign-in Required**. Telling someone to re-authenticate when that will not help is worse than saying nothing.
+
+**Tests**: 3 cases in `ConnectedAccountCard.test.tsx` — degraded shows the right badge and *not* the sign-in prompt, still offers the re-link action, and a healthy account shows neither badge.
+
 **Files**:
-- `backend/src/services/plaidService.ts` (`:591`)
-- `backend/src/services/accountService.ts` (`:222`)
-- `frontend/src/components/accounts/ConnectedAccountCard.tsx`
+- `backend/src/services/plaidService.ts` ✅
+- `backend/src/services/accountService.ts` ✅
+- `shared/types/index.ts` ✅
+- `frontend/src/components/accounts/ConnectedAccountCard.tsx` ✅
 
 ---
 

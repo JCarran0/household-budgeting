@@ -265,3 +265,51 @@ describe('ConnectedAccountCard — handler dispatch', () => {
     expect(within(footer).getByText(/Never/)).toBeInTheDocument();
   });
 });
+
+describe('ConnectedAccountCard — degraded (non-reauth) connection', () => {
+  it('shows a Connection Issue badge for status=error, not a sign-in prompt', () => {
+    renderCard(
+      <ConnectedAccountCard
+        account={makeAccount({ status: 'error' })}
+        isSyncing={false}
+        onSync={() => {}}
+        onReauth={() => {}}
+        onEditNickname={() => {}}
+        onDisconnect={() => {}}
+      />,
+    );
+    // Warns, but must not instruct the user to do something that won't help.
+    expect(screen.getByText('Connection Issue')).toBeInTheDocument();
+    expect(screen.queryByText('Sign-in Required')).not.toBeInTheDocument();
+  });
+
+  it('still offers Sign in to Bank for a degraded account', async () => {
+    renderCard(
+      <ConnectedAccountCard
+        account={makeAccount({ status: 'error' })}
+        isSyncing={false}
+        onSync={() => {}}
+        onReauth={() => {}}
+        onEditNickname={() => {}}
+        onDisconnect={() => {}}
+      />,
+    );
+    await openAccountMenu();
+    expect(await screen.findByRole('menuitem', { name: /sign in to bank/i })).toBeInTheDocument();
+  });
+
+  it('shows neither badge for a healthy account', () => {
+    renderCard(
+      <ConnectedAccountCard
+        account={makeAccount({ status: 'active' })}
+        isSyncing={false}
+        onSync={() => {}}
+        onReauth={() => {}}
+        onEditNickname={() => {}}
+        onDisconnect={() => {}}
+      />,
+    );
+    expect(screen.queryByText('Connection Issue')).not.toBeInTheDocument();
+    expect(screen.queryByText('Sign-in Required')).not.toBeInTheDocument();
+  });
+});

@@ -20,6 +20,7 @@ import {
 } from '@tabler/icons-react';
 import { formatDistanceToNow } from 'date-fns';
 import { formatCurrency } from '../../utils/formatters';
+import { hasExpiringConsent, hasStaleTransactions } from './accountHealth';
 import type { ExtendedPlaidAccount } from '../../lib/api';
 
 export interface ConnectedAccountCardProps {
@@ -40,22 +41,33 @@ export function ConnectedAccountCard({
   onDisconnect,
 }: ConnectedAccountCardProps) {
   const requiresReauth = account.status === 'requires_reauth';
+  // An Item-level failure the user cannot clear by signing in again. Kept
+  // distinct from requiresReauth so we warn without giving a false instruction
+  // — telling someone to re-authenticate when that won't help is worse than
+  // saying nothing (TD-022).
+  const isDegraded = account.status === 'error';
+  const needsAttention = requiresReauth || isDegraded;
+  const attentionColor = requiresReauth ? 'orange' : 'yellow';
 
   return (
     <Card
       padding="lg"
       radius="md"
       withBorder
-      style={requiresReauth ? { borderColor: 'var(--mantine-color-orange-6)', borderWidth: 2 } : undefined}
+      style={
+        needsAttention
+          ? { borderColor: `var(--mantine-color-${attentionColor}-6)`, borderWidth: 2 }
+          : undefined
+      }
     >
-      {requiresReauth && (
-        <Badge color="orange" variant="filled" size="sm" mb="sm" leftSection={<IconAlertCircle size={12} />}>
-          Sign-in Required
+      {needsAttention && (
+        <Badge color={attentionColor} variant="filled" size="sm" mb="sm" leftSection={<IconAlertCircle size={12} />}>
+          {requiresReauth ? 'Sign-in Required' : 'Connection Issue'}
         </Badge>
       )}
       <Group justify="space-between" mb="md">
         <Group>
-          <ThemeIcon color={requiresReauth ? 'orange' : 'blue'} variant="light" size="xl" radius="md">
+          <ThemeIcon color={needsAttention ? attentionColor : 'blue'} variant="light" size="xl" radius="md">
             <IconCreditCard size={24} />
           </ThemeIcon>
           <div>
@@ -165,6 +177,28 @@ export function ConnectedAccountCard({
           </div>
         </Group>
       </Paper>
+
+      {/*
+        Plaid's own transaction-pull recency, shown only when it has gone stale.
+        "Last synced" below cannot surface this: it records when we called
+        Plaid, which keeps succeeding even while the institution has stopped
+        delivering. That gap is what hid a 19-day outage (TD-021).
+      */}
+      {hasStaleTransactions(account) && (
+        <Text size="xs" c="orange" fw={500} mt="md">
+          No new transactions from the bank since{' '}
+          {formatDistanceToNow(new Date(account.lastTransactionUpdate!), { addSuffix: true })} — try
+          "Sign in to Bank" if this looks wrong.
+        </Text>
+      )}
+
+      {hasExpiringConsent(account) && (
+        <Text size="xs" c="orange" fw={500} mt={hasStaleTransactions(account) ? 4 : 'md'}>
+          Bank access expires{' '}
+          {formatDistanceToNow(new Date(account.consentExpirationTime!), { addSuffix: true })} — sign
+          in again to keep syncing.
+        </Text>
+      )}
 
       <Text size="xs" c="dimmed" mt="md">
         Last synced:{' '}

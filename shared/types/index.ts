@@ -179,8 +179,21 @@ export interface PlaidAccount {
   currentBalance: number;
   availableBalance: number | null;
   isActive: boolean;
-  status: 'active' | 'inactive' | 'requires_reauth';
+  /**
+   * Mirrors the backend `AccountStatus` union. `error` means an Item-level
+   * failure that re-authenticating will not fix — it was missing here, so the
+   * state the backend could already produce was unrepresentable on the client.
+   */
+  status: 'active' | 'inactive' | 'requires_reauth' | 'error';
   lastSynced: string | null;
+  /**
+   * When Plaid last successfully pulled transactions from the institution
+   * (ISO 8601), as opposed to `lastSynced`, which is when we last called
+   * Plaid. Divergence between the two is the signal that a feed has stalled.
+   */
+  lastTransactionUpdate?: string | null;
+  /** Plaid consent expiry (ISO 8601); null when the institution has none. */
+  consentExpirationTime?: string | null;
   createdAt: string;
   updatedAt: string;
 }

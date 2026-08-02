@@ -45,6 +45,25 @@ export interface StoredAccount {
    * `cursor` and Plaid will return the full available history.
    */
   plaidCursor: string | null;
+  /**
+   * Plaid's own `item.status.transactions.last_successful_update` for this
+   * account's Item (ISO 8601), mirrored across the Item's accounts like
+   * `plaidCursor`.
+   *
+   * This is NOT the same as `lastSynced`. `lastSynced` records when *we* last
+   * called Plaid; this records when *Plaid* last succeeded in pulling
+   * transactions from the institution. The two diverge exactly in the failure
+   * mode that matters: our sync keeps succeeding, balances keep updating, and
+   * transaction extraction has been dead for weeks. `null` when Plaid has not
+   * reported one (TD-021).
+   */
+  lastTransactionUpdate?: string | null;
+  /**
+   * Plaid `item.consent_expiration_time` (ISO 8601) or null when the
+   * institution does not expire consent. Stands in for the PENDING_EXPIRATION
+   * webhook we do not receive.
+   */
+  consentExpirationTime?: string | null;
   createdAt: Date;              // When account was connected
   updatedAt: Date;              // Last update
 }
@@ -68,6 +87,8 @@ export interface SyncResult {
   error?: string;
   /** Accounts that were marked requires_reauth during this sync */
   reauthRequiredAccounts?: Array<{ id: string; institutionName: string }>;
+  /** Accounts marked `error` — Item-level failure not fixable by re-auth */
+  degradedAccounts?: Array<{ id: string; institutionName: string; errorCode?: string }>;
 }
 
 export class AccountService {
@@ -212,6 +233,7 @@ export class AccountService {
 
       let accountsUpdated = 0;
       const reauthRequiredAccounts: Array<{ id: string; institutionName: string }> = [];
+      const degradedAccounts: Array<{ id: string; institutionName: string; errorCode?: string }> = [];
 
       // Sync each item's accounts
       for (const [encryptedToken, accounts] of itemGroups) {
@@ -220,6 +242,8 @@ export class AccountService {
         const plaidResult = await this.plaidService.getAccounts(accessToken);
 
         if (!plaidResult.success || !plaidResult.accounts) {
+          const plaidItemId = accounts[0]?.plaidItemId;
+
           // Mark accounts as requiring reauth if needed
           if (plaidResult.requiresReauth) {
             for (const account of accounts) {
@@ -228,8 +252,47 @@ export class AccountService {
               await this.saveAccount(familyId, account);
               reauthRequiredAccounts.push({ id: account.id, institutionName: account.institutionName });
             }
+          } else if (plaidResult.degraded) {
+            // Item-level failure the user cannot clear by signing in again.
+            // Mark it so the UI can warn instead of showing a healthy account.
+            for (const account of accounts) {
+              account.status = 'error';
+              account.updatedAt = new Date();
+              await this.saveAccount(familyId, account);
+              degradedAccounts.push({
+                id: account.id,
+                institutionName: account.institutionName,
+                errorCode: plaidResult.errorCode,
+              });
+            }
           }
+
+          // Every failure gets a log line. This branch previously fell through
+          // to a bare `continue`, so a non-reauth balance failure left no trace
+          // anywhere — not in the UI, not in the logs (TD-022).
+          log.warn(
+            {
+              plaidItemId,
+              accountCount: accounts.length,
+              errorCode: plaidResult.errorCode,
+              requiresReauth: plaidResult.requiresReauth ?? false,
+              degraded: plaidResult.degraded ?? false,
+            },
+            'balance sync failed for item',
+          );
           continue;
+        }
+
+        // Plaid's view of when transactions last actually landed. One extra
+        // call per Item per balance sync; without it a stalled transaction
+        // feed is indistinguishable from a healthy one (TD-021). A failure
+        // here must not fail the balance sync — the values are advisory.
+        const itemStatus = await this.plaidService.getItemStatus(accessToken);
+        if (!itemStatus.success) {
+          log.warn(
+            { plaidItemId: accounts[0]?.plaidItemId, error: itemStatus.error },
+            'could not read item status; staleness indicators left unchanged',
+          );
         }
 
         // Update balances
@@ -245,6 +308,10 @@ export class AccountService {
             storedAccount.lastSynced = new Date();
             storedAccount.updatedAt = new Date();
             storedAccount.status = 'active';
+            if (itemStatus.success) {
+              storedAccount.lastTransactionUpdate = itemStatus.lastSuccessfulUpdate ?? null;
+              storedAccount.consentExpirationTime = itemStatus.consentExpirationTime ?? null;
+            }
 
             await this.saveAccount(familyId, storedAccount);
             accountsUpdated++;
@@ -256,6 +323,7 @@ export class AccountService {
         success: true,
         accountsUpdated,
         reauthRequiredAccounts,
+        degradedAccounts,
       };
     } catch (error) {
       log.error({ err: error }, 'error syncing account balances');
