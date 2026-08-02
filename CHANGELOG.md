@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+### [6.0.1](https://github.com/JCarran0/household-budgeting/compare/v6.0.0...v6.0.1) (2026-08-02)
+
+
+### Bug Fixes
+
+* **security:** stop returning Plaid credentials to the browser (SA-19) ([3e15bbf](https://github.com/JCarran0/household-budgeting/commit/3e15bbf0ef09220213855111eef8f4b86422d208))
+
 ## [6.0.0](https://github.com/JCarran0/household-budgeting/compare/v5.84.0...v6.0.0) (2026-08-02)
 
 
