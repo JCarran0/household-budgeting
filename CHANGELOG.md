@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+### [5.81.4](https://github.com/JCarran0/household-budgeting/compare/v5.81.3...v5.81.4) (2026-08-02)
+
+
+### Documentation
+
+* track Capital One incident findings as TD-020..TD-022, reopen TD-017 ([7ceb8d4](https://github.com/JCarran0/household-budgeting/commit/7ceb8d42ccce6e61fa12e512436b622ff6c40996))
+
 ### [5.81.3](https://github.com/JCarran0/household-budgeting/compare/v5.81.2...v5.81.3) (2026-08-02)
 
 
