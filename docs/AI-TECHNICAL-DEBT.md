@@ -1,7 +1,54 @@
 # Technical Debt Tracker
 
 ## Overview
-This document tracks technical debt items identified during the April 2026 architecture audits. Items are prioritized by severity and linked to relevant code locations.
+This document tracks technical debt identified during the April 2026 architecture audits and in later production incidents. Items are prioritized by severity and linked to relevant code locations.
+
+---
+
+## Start Here (orientation for someone picking this up cold)
+
+**What this file is.** One entry per debt item, `TD-0NN`, appended in discovery order — *not* priority order. Resolved items stay in place with their fix recorded, because the reasoning is usually more valuable than the diff. Fully historical items move to [completed/AI-TECHNICAL-DEBT.md](completed/AI-TECHNICAL-DEBT.md).
+
+**Read `Status` carefully.** Several items are *partially* resolved, and at least two have been found materially misstating reality (TD-017 claimed Resolved while its payoff was never delivered; TD-014 claimed zero frontend tests when 31 files existed). Verify before trusting — `git log` and a quick `grep` beat the prose here.
+
+**Line numbers rot.** References like `plaidService.ts:591` were accurate when written. Anchor on the symbol name, not the number.
+
+### Currently open, by value ÷ effort
+
+| Item | Impact | Effort | Blocked on |
+|------|--------|--------|-----------|
+| TD-021 (webhooks half) | High | Medium | needs a public endpoint + closing a security stub first |
+| TD-020 (auto re-keying) | High | Medium | nothing — deliberately deferred, see entry |
+| TD-017 (CloudWatch agent) | Medium | Low | **prod access** (SSM + IAM) |
+| TD-019 (schedule the backup) | Low-Med | Low | **prod access** (SSM + IAM) |
+| TD-023 (dead rollover code) | Medium | Low | nothing |
+| TD-024 (type-detection sprawl) | Medium | Med | nothing |
+| TD-025 (single-copy secrets) | Med-High | Low | needs the owner, not an agent |
+| TD-018 / TD-011p3 / TD-010 | varies | High | nothing, but large |
+
+The remaining *Low-effort* items are mostly blocked on production infrastructure access rather than code. If you cannot run `aws ssm send-command` against the EC2 instance, skip TD-017 and TD-019's scheduling and pick up TD-023/TD-024 instead.
+
+### Environment you will need
+
+```bash
+# Personal AWS account holding the app. NOT the default profile — the default
+# is a work account, and looking for app resources there returns nothing.
+export AWS_PROFILE=budget-app-prod        # account 903733335979
+# EC2 instance: i-05cd17258cce207a3   data bucket: budget-app-data-f5b52f89
+```
+
+Production data is JSON blobs in S3, not a database. `cd backend && npm run backup:local && npm run sync:production` pulls a local copy — but see the encryption caveat in [AWS-LOCAL-SETUP.md](AWS-LOCAL-SETUP.md): synced Plaid tokens are encrypted with production's key and will not decrypt locally.
+
+### Landmines that have already bitten
+
+- **Advancing a Plaid cursor is irreversible.** It is a delivery receipt; once moved, those transactions are never re-sent. Never advance it on a partial or failed apply (TD-020).
+- **`PLAID_ENCRYPTION_SECRET` cannot be rotated casually.** Every stored Plaid token is derived from it; changing it orphans every linked bank (TD-025).
+- **Category type flags are frequently absent in stored data.** `isIncome`/`isSavings` are optional and usually missing; resolve type from the subtree root, never the flat field (TD-024).
+- **Frontend and backend share `shared/` via a symlink** (`backend/src/shared -> ../../shared`), so backend Jest tests exercise the real frontend-facing code. That is why BvA math is tested from the backend suite.
+
+### Conventions when you update this file
+
+Bump `**Last Updated**`, add an `## Audits` line for anything incident-driven, and record *what was deliberately not done and why* — several entries below are more useful for their rejected options than their accepted ones.
 
 **Last Updated**: 2026-08-02
 **Previous (archived)**: [docs/completed/AI-TECHNICAL-DEBT.md](completed/AI-TECHNICAL-DEBT.md)
@@ -11,7 +58,7 @@ This document tracks technical debt items identified during the April 2026 archi
 - **2026-04-08** — initial audit, TD-001 through TD-010
 - **2026-04-22** — architect review, TD-011 through TD-017 (also updated TD-010)
 - **2026-06-02** — trip-photo corruption incident: updated TD-011 (`tripService` unprotected RMW surface), added TD-019 (backup posture)
-- **2026-08-02** — Capital One card-reissue incident: added TD-020 (`account_id` change → silent data loss), TD-021 (no Plaid webhooks / no staleness surface), TD-022 (silent sync error paths); reopened TD-017 (CloudWatch forwarding never enabled, so the logging payoff is unrealized)
+- **2026-08-02** — Capital One card-reissue incident + rollover sign bug. Added TD-020 (`account_id` change → silent data loss), TD-021 (no Plaid webhooks / no staleness surface), TD-022 (silent sync error paths). Reopened TD-017 (CloudWatch forwarding never enabled, so the logging payoff is unrealized). Corrected TD-014 (claimed zero frontend tests; 31 files / 272 tests exist). Resolved TD-019 (off-bucket snapshots + drilled restore) and TD-022. Added TD-023/024/025 from findings surfaced while fixing the above.
 
 ---
 
@@ -595,16 +642,16 @@ Plaid's mechanism for exactly this is `persistent_account_id`, a stable identifi
 **Effort**: Medium
 
 **Problem**:
-`transactionService.ts:290` skips any transaction whose `account_id` is not in the Item's known accounts:
+`applyPlaidSyncDelta` in `transactionService.ts` skipped any transaction whose `account_id` was not in the Item's known accounts (the `added` loop, plus the same branch in the `modified` loop):
 
 ```ts
 const account = accountLookup.get(plaidTxn.accountId);
 if (!account) continue;
 ```
 
-The cursor is then persisted anyway at `:211`. Plaid's cursor is a delivery receipt — once advanced, those rows are never re-sent. So when an institution reissues a card mid-Item, every transaction on the new account is consumed and discarded, with no error, no log line, and no way to get it back short of a cursor reset (which then re-delivers everything and duplicates by `plaidTransactionId`).
+The cursor was then persisted anyway further down `syncTransactions`. Plaid's cursor is a delivery receipt — once advanced, those rows are never re-sent. So when an institution reissues a card mid-Item, every transaction on the new account is consumed and discarded, with no error, no log line, and no way to get it back short of a cursor reset (which then re-delivers everything and duplicates by `plaidTransactionId`).
 
-Compounding it: dedupe is strictly by `plaidTransactionId` (`:292`). A reissued account's rows all carry new ids, so any naive fix that only repoints the account would insert months of already-held history as new. The two failure modes push in opposite directions, which is why this needs deliberate handling rather than a one-line guard.
+Compounding it: dedupe is strictly by `plaidTransactionId`. A reissued account's rows all carry new ids, so any naive fix that only repoints the account would insert months of already-held history as new. The two failure modes push in opposite directions, which is why this needs deliberate handling rather than a one-line guard.
 
 **Fix**:
 1. Detect the condition explicitly: before applying a delta, compare the Item's live `account_id`s against stored ones. A stored account that has vanished is a reissue signal, not a no-op.
@@ -639,7 +686,7 @@ Compounding it: dedupe is strictly by `plaidTransactionId` (`:292`). A reissued 
 **Effort**: Medium (staleness indicator alone: Low)
 
 **Problem**:
-`PLAID_WEBHOOK_URL` is set nowhere — not in `.env.example`, not in the deploy workflow's generated `.env` (`release-and-deploy.yml:291-320`). `plaidService.ts:236` only attaches a webhook when that variable exists, so no Item has ever registered one. Confirmed against production: `last_webhook: none` on **all nine** Items.
+`PLAID_WEBHOOK_URL` is set nowhere — not in `.env.example`, not in the deploy workflow's generated `.env` (the `Create deployment package` step in `release-and-deploy.yml`). `createLinkToken`/`createUpdateLinkToken` in `plaidService.ts` only attach a webhook when that variable exists, so no Item has ever registered one. Confirmed against production: `last_webhook: none` on **all nine** Items.
 
 Consequences:
 - No `SYNC_UPDATES_AVAILABLE` — nothing tells the app new transactions exist.
@@ -653,7 +700,7 @@ Separately, nothing compares an account's most recent transaction date against i
 **Fix**:
 1. **Staleness indicator first** (cheap, no webhook infrastructure): read `item.status.transactions.last_successful_update` during sync, persist per Item, and surface an "last updated N days ago" warning on the account card past a threshold. This alone converts the incident from invisible to obvious.
 2. Set `PLAID_WEBHOOK_URL` as a repo variable and add it to the deploy workflow's `.env` generation.
-3. Add a webhook receiver route with proper JWT verification — note `plaidService.ts:565-571` currently returns `true` unconditionally with a "In production, implement proper JWT verification" comment. That must be closed before the endpoint is exposed.
+3. **BLOCKER — do not expose an endpoint before fixing this.** `verifyWebhook` in `plaidService.ts` currently `return true`s unconditionally, under a literal `// In production, implement proper JWT verification` comment. A receiver route wired to it would accept forged webhooks from anyone on the internet. Implement [Plaid's webhook JWT verification](https://plaid.com/docs/api/webhooks/webhook-verification/) *in the same change* that adds the route — never as a follow-up.
 4. Handle `SYNC_UPDATES_AVAILABLE` (trigger sync), `PENDING_EXPIRATION` (prompt re-link — the "Sign in to Bank" action is now always available per `4ccd51d`), and `ERROR`.
 
 **Step 1 as shipped** (2026-08-02) — the half that needs no webhook infrastructure:
@@ -687,14 +734,14 @@ The critical distinction, worth preserving in any rework: **`lastSynced` records
 **Problem**:
 Two related gaps let a broken connection keep presenting as healthy:
 
-1. **`plaidService.ts:591`** — `requiresReauthentication` allowlists five codes (`ITEM_LOGIN_REQUIRED`, `ITEM_LOCKED`, `USER_PERMISSION_REVOKED`, `INVALID_CREDENTIALS`, `ITEM_NOT_ACCESSIBLE`). Anything outside it — `ACCESS_NOT_GRANTED` being the realistic one, since institutions let users revoke per-data-type sharing — is logged and skipped while the account stays `active`. The UI then shows a working connection that silently delivers nothing.
-2. **`accountService.ts:222`** — when balance sync fails for a non-reauth reason, the loop hits a bare `continue` with **no log statement at all**. That failure leaves no trace anywhere.
+1. **`requiresReauthentication` in `plaidService.ts`** — allowlisted five codes (`ITEM_LOGIN_REQUIRED`, `ITEM_LOCKED`, `USER_PERMISSION_REVOKED`, `INVALID_CREDENTIALS`, `ITEM_NOT_ACCESSIBLE`). Anything outside it — `ACCESS_NOT_GRANTED` being the realistic one, since institutions let users revoke per-data-type sharing — is logged and skipped while the account stays `active`. The UI then shows a working connection that silently delivers nothing.
+2. **The item-group loop in `accountService.syncAccountBalances`** — when balance sync failed for a non-reauth reason, it hit a bare `continue` with **no log statement at all**. That failure left no trace anywhere.
 
 Note these are *detection* gaps, not the cause of the 2026-08-02 incident (that was TD-020). They are on the same path and would hide the same class of problem.
 
 **Fix**:
 1. Widen the reauth code list, or invert it: treat any `ITEM_ERROR`-type response as degraded-until-proven-otherwise rather than allowlisting known-bad codes.
-2. Add a log line to the `accountService.ts:222` branch with `plaidItemId` + error code. No silent `continue`s on a data path.
+2. Add a log line to that branch with `plaidItemId` + error code. No silent `continue`s on a data path.
 3. Distinguish "needs re-auth" from "degraded" in `AccountStatus` so the UI can warn without falsely claiming a sign-in is required.
 
 **Fix as shipped** (2026-08-02):
@@ -712,6 +759,102 @@ Note these are *detection* gaps, not the cause of the 2026-08-02 incident (that 
 - `backend/src/services/accountService.ts` ✅
 - `shared/types/index.ts` ✅
 - `frontend/src/components/accounts/ConnectedAccountCard.tsx` ✅
+
+---
+
+## 2026-08-02 Session Findings (adjacent to the incident, not caused by it)
+
+Surfaced while fixing the Capital One incident and a separate rollover sign bug. Filed here because each was verified against real code or production data during that work, not inferred.
+
+---
+
+### TD-023: Two Dead Rollover Code Paths, Both With Tests
+**Status**: Open
+**Created**: 2026-08-02
+**Impact**: Medium — dead code that *looks* live because it is tested; one implementation actively contradicts the BRD
+**Effort**: Low
+
+**Problem**:
+Surfaced while fixing the rollover sign bug (2026-08-02). Two rollover implementations exist that nothing in production calls, and both carry test suites, which is worse than being untested — coverage reads as evidence that the code is used and correct.
+
+1. **`buildEffectiveBudgetsMap` / `computeEffectiveBudget`** (`shared/utils/budgetCalculations.ts`) — **zero production callers.** The only references are ~40 assertions in `backend/src/__tests__/unit/budgetCalculations.test.ts` and one internal call from `buildEffectiveBudgetsMap` itself. CLAUDE.md names this file as the single source of truth for rollover math, so a reader reasonably assumes these are the live path. They are not; the live path is `composeBva` → `computeRolloverBalance` → `toneSignedRollover`.
+
+2. **`budgetService.calculateRollover` / `applyRollover`** (`backend/src/services/budgetService.ts`) — not referenced by any route or service, only by tests. Worse, `calculateRollover` returns `Math.max(0, unused)` — positive-only carry — which **directly contradicts** [ROLLOVER-BUDGETS-BRD](features/ROLLOVER-BUDGETS-BRD.md)'s symmetric signed carry. Anyone who finds it and wires it up reintroduces a spec violation with green tests.
+
+This is not hypothetical drag: during the 2026-08-02 rollover fix, `computeEffectiveBudget`'s existence was the reason `computeRolloverBalance` was left type-agnostic rather than returning signed values. A dead function constrained a live design decision.
+
+**Fix**:
+1. Confirm the analysis still holds (`grep -rn "buildEffectiveBudgetsMap\|computeEffectiveBudget\|calculateRollover\|applyRollover" frontend/src backend/src shared | grep -v __tests__`).
+2. Delete both implementations and their tests, or — if either is genuinely wanted for a planned feature — mark them clearly and fix `calculateRollover`'s sign so it cannot be adopted in a broken state. Deleting is preferred; git remembers.
+3. If `computeEffectiveBudget` goes, revisit whether `computeRolloverBalance` should return tone-signed values directly, which would collapse one more sign decision (see TD-024).
+
+**Files**:
+- `shared/utils/budgetCalculations.ts`
+- `backend/src/services/budgetService.ts`
+- `backend/src/__tests__/unit/budgetCalculations.test.ts`, `backend/src/services/__tests__/budgetService.test.ts`, `backend/src/__tests__/critical/financial-calc.stories.test.ts`
+
+---
+
+### TD-024: Category Type Detection Has Three Competing Implementations
+**Status**: Open
+**Created**: 2026-08-02
+**Impact**: Medium — already caused one production sign bug that compounded monthly and went unnoticed
+**Effort**: Medium
+
+**Problem**:
+"Is this category income?" is answerable three different ways, and they disagree on real data:
+
+| Approach | Behaviour on a stored income child |
+|---|---|
+| `category.isIncome` (flat field) | **`undefined`** — the field is absent from stored categories |
+| `isIncomeCategory(id)` | root-id prefix check (`id.startsWith('INCOME')`) |
+| `isIncomeCategoryHierarchical(id, lookup)` | flat field if defined, else walks ancestors |
+
+Production data confirms the hazard is the norm, not an edge case: **118 of 139 stored categories (85%) have no `isIncome` key at all.** `CUSTOM_JOJ_CONSULTANT_FEE` persists as `{id, isCustom, isHidden, isRollover, name, parentId}`, and its `INCOME` parent has none either. Anything reading the flat field silently gets `undefined` → falsy → "not income".
+
+That is exactly how the 2026-08-02 rollover sign bug happened: the Available column resolved section hierarchically and was right, while the Rollover accumulator read `c.isIncome` and inverted the carry for every income category. The error compounded monthly rather than being a fixed offset, and nothing caught it — the same latent shape existed in `ensureTreeForCategory`, which built trees from `parentCat.isIncome ?? false`.
+
+Fixed at the BvA layer by consolidating on `getSectionTypeForCategory` (commit `cfd5ac0`), but the underlying sprawl remains: **67 references across 16 production files** still choose among the three, including `transactionCalculations.ts`, `transactionExport.ts`, `AnnualCashflowDashboard.tsx`, and `wishlistService.ts`.
+
+**Fix**:
+1. Make the flat `isIncome`/`isSavings` fields non-optional in `Category`, or delete them. An optional boolean that is usually absent is a trap: `!category.isIncome` is *true* for income categories.
+2. If they stay, backfill stored categories so the field is always present, and make the hierarchical helper the only public reader.
+3. Deprecate direct `.isIncome` access in favour of one exported classifier per concern (`getSectionTypeForCategory` for BvA; the hierarchical helper elsewhere). Note the 85% figure means a naive "just read the flag" migration would flip most categories to non-income — backfill first, or resolve hierarchically and never read the flag.
+4. Add a lint rule or a test asserting no production file outside `categoryHelpers.ts` reads `.isIncome` directly.
+
+**Files**:
+- `shared/types/index.ts` (the optional flags)
+- `shared/utils/categoryHelpers.ts` (`isIncomeCategory`, `isIncomeCategoryHierarchical`)
+- `shared/utils/bvaDisplay.ts` (`getSectionTypeForCategory` — the consolidated BvA classifier)
+- ~10 consumer files; enumerate with `grep -rn "\.isIncome" frontend/src backend/src shared | grep -v __tests__`
+
+---
+
+### TD-025: Production Secrets Exist in Exactly One Readable Place
+**Status**: Open — needs the account owner, not an agent
+**Created**: 2026-08-02
+**Impact**: **Medium-High** — losing one file forces re-linking every bank; unrecoverable by any automated means
+**Effort**: Low (minutes) — but only the owner can do it
+
+**Problem**:
+Established while investigating the Capital One incident (2026-08-02). Every production secret lives in exactly two places, and only one of them can be read:
+
+1. **GitHub Actions secrets** — write-only by design. GitHub will overwrite but never reveal. Not a recovery source.
+2. **`/home/appuser/app/backend/.env` on the EC2 instance** — `chmod 600`, written at deploy time. **The only readable copy.**
+
+Neither AWS Secrets Manager nor SSM Parameter Store contains anything — both were verified empty in account `903733335979`.
+
+The consequence is asymmetric. `backend/src/utils/encryption.ts` derives the AES key from `PLAID_ENCRYPTION_SECRET` via PBKDF2, so **every stored Plaid access token is bound to that exact string**. Lose that one file — instance termination without a snapshot, a bad `deploy-server.sh` run, disk failure — and every linked institution becomes permanently undecryptable. Recovery is re-linking all of them by hand through Plaid Link. TD-019's snapshots protect the *data*; they do not contain the *secrets* that make the data usable.
+
+**Fix**:
+1. Copy the live `.env` into a password manager **today**. This is the whole mitigation for 95% of the risk and takes two minutes. Retrieval one-liner: [AI-DEPLOYMENTS.md](AI-DEPLOYMENTS.md) §"Where production secrets actually live".
+2. Optionally move the secrets into AWS Secrets Manager and have deploys read from there, making the EC2 file a cache rather than the master copy. Adds an IAM dependency to every boot — weigh against the two-user scale.
+3. Record in the runbook that `PLAID_ENCRYPTION_SECRET` is **not rotatable** without re-linking every institution, so nobody "cleans up" by regenerating it.
+
+**Files**:
+- [docs/AI-DEPLOYMENTS.md](AI-DEPLOYMENTS.md) §"Where production secrets actually live" (already documents retrieval + the rotation warning)
+- `.github/workflows/release-and-deploy.yml` (the only writer)
+- `scripts/deploy-server.sh` (places the file on the host)
 
 ---
 
