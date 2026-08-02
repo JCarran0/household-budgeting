@@ -7,6 +7,19 @@ This document tracks technical debt identified during the April 2026 architectur
 
 ## Start Here (orientation for someone picking this up cold)
 
+> ### ⚠️ Priority: security audit burn-down is open
+>
+> A full security audit ran on **2026-08-02** — dependencies, auth/authz, input validation, the AI boundary, and secrets/infrastructure. **30 findings, 3 rated High.** They are tracked separately in **[SECURITY-AUDIT-2026-08-02.md](SECURITY-AUDIT-2026-08-02.md)** under `SA-NN` IDs, with their own burn-down table.
+>
+> **Security findings take precedence over everything in this file.** They touch things this tracker cannot: money leaving the account without a ceiling, Plaid credentials reaching places they shouldn't, and a privilege-escalation chain through open registration.
+>
+> **Status as of 2026-08-02: 5 of 30 closed**, including 2 of 3 High (`SA-01` dependencies, `SA-03` cost-cap attribution, `SA-11` trust proxy, `SA-12` lockout casing, `SA-24` admin gate). Remaining High: **`SA-19`** (encrypted Plaid tokens returned to the browser) and **`SA-25`** (deploy tarballs in S3 contain the full production `.env`). The trivial tier is done — what's left is small-to-medium work.
+>
+> Two SA findings overlap entries here — do not work them twice:
+> - `SA-27` (no SPA-layer CSP) is the unshipped follow-up half of **TD-004**.
+> - `SA-31` is the same issue as **TD-025**, whose primary risk is already closed.
+> - `SA-06` (unvalidated LLM output producing category IDs) is a plausible upstream source of the orphan-`categoryId` landmine noted under **TD-024**.
+
 **What this file is.** One entry per debt item, `TD-0NN`, appended in discovery order — *not* priority order. Resolved items stay in place with their fix recorded, because the reasoning is usually more valuable than the diff. Fully historical items move to [completed/AI-TECHNICAL-DEBT.md](completed/AI-TECHNICAL-DEBT.md).
 
 **Read `Status` carefully.** Several items are *partially* resolved, and at least two have been found materially misstating reality (TD-017 claimed Resolved while its payoff was never delivered; TD-014 claimed zero frontend tests when 31 files existed). Verify before trusting — `git log` and a quick `grep` beat the prose here.
@@ -25,6 +38,8 @@ This document tracks technical debt identified during the April 2026 architectur
 | TD-024 (type-detection sprawl) | Medium | Med | nothing |
 | TD-025 (optional hardening) | Low | Low | primary risk already closed 2026-08-02 |
 | TD-018 / TD-011p3 / TD-010 | varies | High | nothing, but large |
+
+This table covers *this file only*. The open security findings are ranked separately in [SECURITY-AUDIT-2026-08-02.md](SECURITY-AUDIT-2026-08-02.md#burn-down) and outrank everything here.
 
 The remaining *Low-effort* items are mostly blocked on production infrastructure access rather than code. If you cannot run `aws ssm send-command` against the EC2 instance, skip TD-017 and TD-019's scheduling and pick up TD-023/TD-024 instead.
 
@@ -53,11 +68,13 @@ Bump `**Last Updated**`, add an `## Audits` line for anything incident-driven, a
 **Last Updated**: 2026-08-02
 **Previous (archived)**: [docs/completed/AI-TECHNICAL-DEBT.md](completed/AI-TECHNICAL-DEBT.md)
 **Execution sequencing**: [TECH-DEBT-EXECUTION-PLAN-2026-04.md](TECH-DEBT-EXECUTION-PLAN-2026-04.md)
+**Security findings (higher priority)**: [SECURITY-AUDIT-2026-08-02.md](SECURITY-AUDIT-2026-08-02.md)
 
 ## Audits
 - **2026-04-08** — initial audit, TD-001 through TD-010
 - **2026-04-22** — architect review, TD-011 through TD-017 (also updated TD-010)
 - **2026-06-02** — trip-photo corruption incident: updated TD-011 (`tripService` unprotected RMW surface), added TD-019 (backup posture)
+- **2026-08-02** — full security audit (dependencies, auth/authz, input validation, AI boundary, secrets/infra). 30 findings, 3 High, tracked as `SA-NN` in [SECURITY-AUDIT-2026-08-02.md](SECURITY-AUDIT-2026-08-02.md) rather than as TD entries — the burn-down is its own workstream and outranks this file. Surfaced that TD-004's SPA-CSP follow-up is still unshipped (now also `SA-27`) and independently re-derived TD-025 (now also `SA-31`, closed).
 - **2026-08-02** — Capital One card-reissue incident + rollover sign bug. Added TD-020 (`account_id` change → silent data loss), TD-021 (no Plaid webhooks / no staleness surface), TD-022 (silent sync error paths). Reopened TD-017 (CloudWatch forwarding never enabled, so the logging payoff is unrealized). Corrected TD-014 (claimed zero frontend tests; 31 files / 272 tests exist). Resolved TD-019 (off-bucket snapshots + drilled restore) and TD-022. Added TD-023/024/025 from findings surfaced while fixing the above.
 
 ---
