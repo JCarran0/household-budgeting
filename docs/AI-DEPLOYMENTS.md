@@ -217,48 +217,44 @@ with `[Redacted]`. Add new paths there rather than relying on every call site.
 
 ### Forwarding logs to CloudWatch
 
-The CloudWatch agent install lives on the EC2 instance, not in the repo. One-time setup:
+The agent install is scripted at [`scripts/setup-cloudwatch-agent.sh`](../scripts/setup-cloudwatch-agent.sh),
+with its config alongside at `scripts/cloudwatch-agent-config.json`. The script runs
+**on the instance** and is idempotent — re-running it is also how you verify the agent
+survived an instance replacement.
 
 ```bash
-# 1. Install the agent
-sudo yum install -y amazon-cloudwatch-agent
+export AWS_PROFILE=budget-app-prod
 
-# 2. Attach an IAM role to the EC2 instance with `CloudWatchAgentServerPolicy`
+# 1. One-time: grant the instance role permission to write logs.
+aws iam attach-role-policy \
+  --role-name budget-app-ec2-s3-role \
+  --policy-arn arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy
 
-# 3. Drop this config at /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json
-{
-  "logs": {
-    "logs_collected": {
-      "files": {
-        "collect_list": [
-          {
-            "file_path": "/home/appuser/logs/output.log",
-            "log_group_name": "budget-backend",
-            "log_stream_name": "{instance_id}-stdout",
-            "timezone": "UTC"
-          },
-          {
-            "file_path": "/home/appuser/logs/error.log",
-            "log_group_name": "budget-backend",
-            "log_stream_name": "{instance_id}-stderr",
-            "timezone": "UTC"
-          }
-        ]
-      }
-    }
-  }
-}
+# 2. Install + start the agent (deploys the repo to the instance first).
+aws ssm send-command --instance-ids i-05cd17258cce207a3 \
+  --document-name AWS-RunShellScript \
+  --parameters 'commands=["sudo bash /home/appuser/app/scripts/setup-cloudwatch-agent.sh"]'
 
-# 4. Start the agent
-sudo /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl \
-  -a fetch-config -m ec2 -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json -s
-
-# 5. Verify ingestion
-aws logs tail budget-backend --follow
+# 3. Verify ingestion (~60s for the first flush).
+aws logs tail /aws/ec2/budget-app --follow
 ```
 
-CloudWatch Insights queries against `budget-backend` work directly because each line
-is JSON — for example, find decryption failures across the last day:
+Three details that are easy to get wrong, and were wrong in this doc until 2026-08-02:
+
+- **The instance runs Ubuntu, not Amazon Linux.** `yum install amazon-cloudwatch-agent`
+  cannot work here; the script fetches the `.deb` and detects the architecture.
+- **The log group is `/aws/ec2/budget-app`**, which already existed. This doc previously
+  named a `budget-backend` group that was never created, so any `aws logs tail` following
+  these instructions would have failed with a missing-group error rather than an empty one.
+- **The agent must `run_as_user: root`** to tail files owned by `appuser`. Under the
+  default user it starts cleanly and forwards nothing, which looks like success.
+
+Retention is set to **90 days**. It is set explicitly rather than left to default:
+an unset retention means *never expire*, which is how this account accumulated a
+1.7 GB Lambda log group nobody reads.
+
+CloudWatch Insights queries work directly because each line is JSON — for example,
+find decryption failures across the last day:
 
 ```
 fields @timestamp, plaidItemId, accountCount

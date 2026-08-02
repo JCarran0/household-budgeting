@@ -19,7 +19,7 @@ This document tracks technical debt identified during the April 2026 architectur
 |------|--------|--------|-----------|
 | TD-021 (webhooks half) | High | Medium | needs a public endpoint + closing a security stub first |
 | TD-020 (auto re-keying) | High | Medium | nothing — deliberately deferred, see entry |
-| TD-017 (CloudWatch agent) | Medium | Low | **prod access** (SSM + IAM) |
+| TD-017 (CloudWatch agent) | Medium | Low | **prod access** — scripted, needs 2 commands run |
 | TD-019 (schedule the backup) | Low-Med | Low | **prod access** (SSM + IAM) |
 | TD-023 (dead rollover code) | Medium | Low | nothing |
 | TD-024 (type-detection sprawl) | Medium | Med | nothing |
@@ -519,7 +519,15 @@ Paired with TD-004 (Sprint 3) — CSP outer envelope + sanitization inner envelo
 >
 > So the Insights query documented in [AI-DEPLOYMENTS.md](AI-DEPLOYMENTS.md) §Logging has nothing to run against, and incident response is still `aws ssm send-command` + `pm2 logs | grep`. That directly blocked the first question asked during the 2026-08-02 incident ("do we have logs showing what happened on 7/15?") — the answer had to come from Plaid's API instead.
 >
-> **Remaining work**: perform the agent install already documented in AI-DEPLOYMENTS.md §Logging (yum install, IAM `CloudWatchAgentServerPolicy` on the instance role, drop the `collect_list` config, start the agent), then verify with `aws logs tail budget-backend`. Set a retention policy on the log group so it stays cost-bounded. Until this is done, treat PM2's rotation window as the real limit on how far back any investigation can reach.
+> **2026-08-02 update — install scripted, execution pending.** The remaining work is now [`scripts/setup-cloudwatch-agent.sh`](../scripts/setup-cloudwatch-agent.sh) + `scripts/cloudwatch-agent-config.json`, so it is a run rather than a write. Auditing the account first turned up three reasons the previously-documented procedure would have failed even if someone had followed it:
+>
+> - **The instance runs Ubuntu**, so the documented `yum install amazon-cloudwatch-agent` could never have worked. The script fetches the `.deb` and detects architecture.
+> - **The documented log group `budget-backend` does not exist.** `/aws/ec2/budget-app` does (created, 7d retention, never written to). Everything now targets the group that exists, at 90d retention.
+> - **The agent must run as root** to tail `appuser`-owned files. Under the default user it starts cleanly and forwards nothing — a failure that reads as success.
+>
+> IAM turned out to be *nearly* done: the instance role `budget-app-ec2-s3-role` already carries an inline `ssm-session-logging` policy granting `logs:CreateLogGroup/CreateLogStream/PutLogEvents/DescribeLogStreams` on all groups. Attaching `CloudWatchAgentServerPolicy` is still the right move (it is the documented contract and adds `DescribeLogGroups`), but the forwarding path would function without it. Do not *remove* the inline policy assuming the managed one supersedes it — it also grants the S3 session-log write.
+>
+> **Remaining work**: two commands, both requiring prod credentials — `aws iam attach-role-policy` for `CloudWatchAgentServerPolicy`, then `aws ssm send-command` to run the script. Both are in [AI-DEPLOYMENTS.md](AI-DEPLOYMENTS.md) §Forwarding logs to CloudWatch. Verify with `aws logs tail /aws/ec2/budget-app --follow`. Until this is run, treat PM2's rotation window as the real limit on how far back any investigation can reach.
 
 **Problem**:
 The backend uses `console.log` / `console.error` directly throughout. In production these go to PM2 stdout/stderr. There is no structured JSON output, no log-level discipline, no centralized PII redaction, and no integration with monitoring. When something breaks in prod, debugging is `pm2 logs | grep` and hoping you remember the right substring.
@@ -617,6 +625,15 @@ The gap:
 - **MFA-delete / Object Lock.** Real operational friction (MFA-delete is root-user only) for a threat model that does not justify it at this scale, exactly as the original item predicted.
 
 **Remaining**: snapshots are manual. Automating needs an IAM grant of `s3:PutObject`/`s3:ListBucket` on the backup bucket to the EC2 instance role, `BACKUP_S3_BUCKET_NAME` in the deployed `.env`, and a weekly cron — all three written up in [AI-DEPLOYMENTS.md](AI-DEPLOYMENTS.md) §Backups → "Remaining: automate it".
+
+> ⚠️ **Two near-identically-named buckets exist. Read this before writing the IAM grant.**
+>
+> | Bucket | Role |
+> |--------|------|
+> | `budget-app-backup-f5b52f89` (**singular**) | TD-019 snapshots. Created 2026-08-02. **Not** in any IAM policy. |
+> | `budget-app-backups-f5b52f89` (**plural**) | Pre-existing. Deploy tarballs + SSM session logs, 278 objects. Already granted to the instance role via the `budget-app-s3-policy` inline policy. |
+>
+> Discovered 2026-08-02 while auditing IAM for TD-017. The hazard is that the instance role *looks* like it already has backup-bucket write access — it does, to the wrong bucket. The grant this item needs is for the **singular** name. Consolidating the two is tempting but was not done: the plural bucket's contents have a different lifecycle and a different retention rationale, and merging them would put deploy artifacts under the snapshot lifecycle's Deep Archive transition.
 
 **Files**:
 - `scripts/setup-backup-bucket.sh` ✅ (new)

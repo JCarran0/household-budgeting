@@ -1,0 +1,25 @@
+{
+  "agent": {
+    "run_as_user": "root"
+  },
+  "logs": {
+    "logs_collected": {
+      "files": {
+        "collect_list": [
+          {
+            "file_path": "/home/appuser/logs/output.log",
+            "log_group_name": "/aws/ec2/budget-app",
+            "log_stream_name": "{instance_id}/output",
+            "timezone": "UTC"
+          },
+          {
+            "file_path": "/home/appuser/logs/error.log",
+            "log_group_name": "/aws/ec2/budget-app",
+            "log_stream_name": "{instance_id}/error",
+            "timezone": "UTC"
+          }
+        ]
+      }
+    }
+  }
+}
