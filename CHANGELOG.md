@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+### [5.81.2](https://github.com/JCarran0/household-budgeting/compare/v5.81.1...v5.81.2) (2026-08-02)
+
+
+### Bug Fixes
+
+* **accounts:** always offer "Sign in to Bank", not only on requires_reauth ([4ccd51d](https://github.com/JCarran0/household-budgeting/commit/4ccd51d5ad31ded3e90dd88f55a4557ad86448da))
+
+
+### Chores
+
+* **scripts:** add read-only Plaid item diagnostic ([434f73b](https://github.com/JCarran0/household-budgeting/commit/434f73b646e7728249772f04b5f2a846c52db004))
+
 ### [5.81.1](https://github.com/JCarran0/household-budgeting/compare/v5.81.0...v5.81.1) (2026-07-23)
 
 
