@@ -4,6 +4,7 @@
 
 import { Router, Request, Response, NextFunction } from 'express';
 import { accountService, transactionService, pushNotificationService } from '../services';
+import { toClientAccount } from '../services/accountService';
 import { authMiddleware } from '../middleware/authMiddleware';
 import { AuthorizationError } from '../errors';
 import { z } from 'zod';
@@ -68,7 +69,7 @@ router.post('/connect', authMiddleware, async (req: AuthRequest, res: Response, 
 
     res.json({
       success: true,
-      account: result.account,
+      account: result.account ? toClientAccount(result.account) : undefined,
     });
   } catch (error) {
     next(error);
@@ -90,9 +91,10 @@ router.get('/', authMiddleware, async (req: AuthRequest, res: Response, next: Ne
       return;
     }
 
-    // Map institutionName to institution to match PlaidAccount interface
+    // Strip Plaid-internal fields (SA-19), then map institutionName to
+    // institution to match the PlaidAccount interface.
     const mappedAccounts = result.accounts?.map(account => ({
-      ...account,
+      ...toClientAccount(account),
       institution: account.institutionName, // Map institutionName to institution
     })) || [];
 

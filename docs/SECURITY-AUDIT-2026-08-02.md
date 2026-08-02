@@ -9,7 +9,7 @@
 
 ## Change log
 
-- **2026-08-02** — Audit performed; 30 findings filed. Same day: SA-01 (dependencies), SA-03, SA-11, SA-12, and SA-24 resolved. Backend suite 957 → **966 tests**, all passing; typecheck and lint clean.
+- **2026-08-02** — Audit performed; 30 findings filed. Same day: SA-01 (dependencies), SA-03, SA-11, SA-12, SA-19, and SA-24 resolved. Backend suite 957 → **971 tests**, frontend 279, all passing; both packages typecheck clean.
 
 ---
 
@@ -41,7 +41,6 @@ Open items, ordered by value ÷ effort. The top four are one-line changes.
 
 | ID | Finding | Severity | Effort | Status |
 |----|---------|----------|--------|--------|
-| SA-19 | Encrypted Plaid tokens shipped to the browser | High | Low | Open |
 | SA-10 | Open registration chains into admin escalation | High | Low | Open |
 | SA-20 | Dead Plaid routes with placeholder access token | Medium | Low | Open |
 | SA-15 | Any family member can remove any other member | Medium | Low | Open |
@@ -66,16 +65,18 @@ Open items, ordered by value ÷ effort. The top four are one-line changes.
 | SA-17 | Membership verification disabled by default under test | Low | Low | Open |
 | SA-18 | Username enumeration by login timing | Low | Low | Open |
 
-**Resolved 2026-08-02**: SA-01 (dependencies), SA-03 (cost-cap attribution), SA-11 (`trust proxy`), SA-12 (lockout casing), SA-24 (`/feedback/test` admin gate).
+**Resolved 2026-08-02**: SA-01 (dependencies), SA-03 (cost-cap attribution), SA-11 (`trust proxy`), SA-12 (lockout casing), SA-19 (Plaid tokens off the wire), SA-24 (`/feedback/test` admin gate).
 **Accepted**: SA-02. **Duplicate**: SA-31 (→ TD-025).
 
-**Progress**: 5 of 30 closed, including 2 of 3 High. Remaining High: SA-19, SA-25.
+**Progress**: 6 of 30 closed, including 2 of 3 High. The one remaining High is **SA-25** (deploy tarballs in S3 contain the full production `.env`) — infrastructure work, not code.
 
 ### If you only have an hour
 
-Start with **SA-19** — a single mapper function that removes bank credentials from every account API response. Then **SA-20** (delete three dead routes) and **SA-15** (three guard clauses on member removal), both small and both closing destructive-action gaps. **SA-10** is the last open High-severity code change and is a contained pair of edits.
+Start with **SA-10**, the last open High-severity *code* change: close registration and harden the `ADMIN_USERNAMES` bootstrap. Then **SA-20** (delete three dead placeholder routes) and **SA-15** (three guard clauses on member removal), both small and both closing destructive-action gaps.
 
-The trivial tier from the original list is done; what remains is genuinely small-to-medium work rather than one-liners.
+**SA-25** is the highest-severity item left overall but needs production credentials and an SSM migration, so it does not fit in an hour. If you have prod access and only a few minutes, the interim mitigation — an S3 lifecycle rule expiring old deployment tarballs — meaningfully shrinks the exposure window on its own.
+
+The trivial tier is done; what remains is small-to-medium work rather than one-liners.
 
 ### Cross-references into the tech-debt tracker
 
@@ -485,7 +486,7 @@ Require the caller to be the family creator/admin; reject `targetUserId === req.
 ## Input validation & data handling
 
 ### SA-19: Encrypted Plaid access tokens are returned to the browser
-**Status**: Open
+**Status**: **Resolved (2026-08-02)**
 **Severity**: **High**
 **Effort**: Low
 
@@ -496,11 +497,25 @@ Require the caller to be the family creator/admin; reject `targetUserId === req.
 Not directly exploitable today — the encryption is strong (see "Verified sound" below). The problem is that it collapses two independent defenses into one. Anyone who obtains `PLAID_ENCRYPTION_SECRET` by any route — env leak, a deploy tarball per SA-25, a laptop — plus a captured API response now holds a live Plaid access token. The response should never have carried it. It also leaks Plaid item internals with no client-side purpose.
 
 **Fix**:
-Add a `toClientAccount()` mapper in `accountService` (or at the route boundary) that omits `plaidAccessToken`, `plaidCursor`, and `plaidItemId`, and apply it everywhere `StoredAccount` is serialized. Roughly a 30-minute change with the largest payoff-to-effort ratio on this list after SA-03.
+✅ Added `toClientAccount()` plus an exported `ClientAccount` type in `accountService.ts`, driven by a single `CLIENT_OMITTED_ACCOUNT_FIELDS` list so the omission set is stated once and the type is derived from it (`Omit<StoredAccount, ...>`) rather than hand-maintained alongside it. The mapper copies before deleting — it runs against objects that may still be written back to storage, and stripping in place would destroy the real token.
+
+✅ Applied at both serialization sites in `routes/accounts.ts`: GET `/` (which was spreading `...account`) and POST `/connect`.
+
+**Scope check before changing anything**: those two are the *only* places a `StoredAccount` is serialized. `routes/plaid.ts:125` also returns accounts, but they are raw Plaid API objects from a dead placeholder handler slated for deletion under SA-20, not stored accounts.
+
+**Four fields stripped, not three.** The original triage listed `plaidAccessToken`, `plaidCursor`, and `plaidItemId`; `plaidAccountId` is the same class of opaque Plaid identifier and is equally unread by the SPA, so it goes too. Only the first two are actually sensitive — the token is the live credential, and the cursor is a delivery receipt whose advancement is irreversible (TD-020). The two IDs are defense in depth.
+
+**Contract updated to match.** `plaidAccountId` and `plaidItemId` were declared **required** on `PlaidAccount` in `shared/types/index.ts`. They are now optional with a docblock pointing here, because a type that promises a field the API no longer sends is worse than either sending it or removing it outright. Optional rather than deleted so existing fixtures still typecheck. Verified first that nothing outside test fixtures reads either field, and that the backend never consumes `PlaidAccount` at all — it is purely a wire type.
+
+✅ Five regression cases in `backend/src/__tests__/critical/accountTokenLeak.test.ts`, filed under `critical/` because this guards a bank credential. They assert on the **serialized JSON**, not the mapper's return type — TypeScript's structural typing would happily let an extra field ride along at runtime, so the wire is the boundary worth testing. Cases: the four keys are absent; a sentinel token value appears nowhere in the serialized payload (catches a nested or renamed copy that a key-name check would miss); every field the UI renders survives; the input object is not mutated; and the leak stays closed through the spread-plus-alias shape GET `/` actually uses.
+
+**Validated by reintroducing the leak**: reverting the mapper to a plain spread fails three of the five.
 
 **Files**:
-- `backend/src/routes/accounts.ts`
-- `backend/src/services/accountService.ts`
+- `backend/src/services/accountService.ts` ✅
+- `backend/src/routes/accounts.ts` ✅
+- `shared/types/index.ts` ✅
+- `backend/src/__tests__/critical/accountTokenLeak.test.ts` ✅ (new, 5 cases)
 
 ---
 

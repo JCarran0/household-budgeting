@@ -75,6 +75,48 @@ export interface StoredAccount {
   updatedAt: Date;              // Last update
 }
 
+/**
+ * Plaid-internal fields that must never reach the browser.
+ *
+ * `plaidAccessToken` is the live bank credential (encrypted at rest, but the
+ * ciphertext still has no business leaving the server — shipping it collapses
+ * encryption-at-rest and transport into a single layer, so anyone holding
+ * PLAID_ENCRYPTION_SECRET plus a captured response has a usable token).
+ *
+ * `plaidCursor` is a delivery receipt: advancing it is irreversible and drops
+ * transactions permanently (TD-020). It has no client-side purpose.
+ *
+ * `plaidItemId` / `plaidAccountId` are opaque Plaid identifiers the SPA does
+ * not read. Stripped as defense in depth, not because they are secret.
+ */
+const CLIENT_OMITTED_ACCOUNT_FIELDS = [
+  'plaidAccessToken',
+  'plaidCursor',
+  'plaidItemId',
+  'plaidAccountId',
+] as const;
+
+/** A StoredAccount safe to serialize to the browser. */
+export type ClientAccount = Omit<
+  StoredAccount,
+  (typeof CLIENT_OMITTED_ACCOUNT_FIELDS)[number]
+>;
+
+/**
+ * Strip Plaid-internal fields from a stored account before it crosses the wire.
+ *
+ * Every route that serializes a StoredAccount must pass it through here. The
+ * previous code spread `...account` directly, which shipped the encrypted
+ * access token to the client on every account listing (SA-19).
+ */
+export function toClientAccount(account: StoredAccount): ClientAccount {
+  const safe = { ...account } as Partial<StoredAccount>;
+  for (const field of CLIENT_OMITTED_ACCOUNT_FIELDS) {
+    delete safe[field];
+  }
+  return safe as ClientAccount;
+}
+
 // Result types
 export interface ConnectAccountResult {
   success: boolean;

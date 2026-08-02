@@ -168,8 +168,15 @@ export interface RegisterCredentials {
 
 export interface PlaidAccount {
   id: string;
-  plaidAccountId: string;
-  plaidItemId: string;
+  /**
+   * Plaid-internal identifiers. **No longer sent to the client** — the API
+   * strips them via `toClientAccount()` alongside the access token and sync
+   * cursor (SA-19). Kept optional rather than deleted so existing consumers and
+   * fixtures still typecheck; nothing in the SPA reads them. Correlate accounts
+   * by `id` (our internal UUID) instead.
+   */
+  plaidAccountId?: string;
+  plaidItemId?: string;
   name: string;
   nickname?: string | null;
   type: 'checking' | 'savings' | 'credit' | 'investment' | 'loan' | 'other';
