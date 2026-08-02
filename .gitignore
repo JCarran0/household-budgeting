@@ -19,6 +19,9 @@ lerna-debug.log*
 .env*.bak
 .env.backup
 
+# Reconciliation plans contain real transaction rows (dates, amounts, merchants)
+reconcile-plan-*.json
+
 # Data and backups
 backend/data/
 backend/data-anonymized/
