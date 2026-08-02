@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.84.0](https://github.com/JCarran0/household-budgeting/compare/v5.83.0...v5.84.0) (2026-08-02)
+
+
+### Features
+
+* **ops:** script the CloudWatch agent install (TD-017) ([e5d27e6](https://github.com/JCarran0/household-budgeting/commit/e5d27e6c8abd9d22da1436b697060cf7fafe5d98))
+
 ## [5.83.0](https://github.com/JCarran0/household-budgeting/compare/v5.82.2...v5.83.0) (2026-08-02)
 
 
