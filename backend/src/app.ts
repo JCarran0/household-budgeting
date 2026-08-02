@@ -44,6 +44,12 @@ if (process.env.NODE_ENV !== 'test') {
 // Create Express app
 const app: Express = express();
 
+// Exactly one proxy hop (nginx on the same host, which sets X-Forwarded-For).
+// Without this, req.ip is the loopback address for every client and all per-IP
+// rate limiters collapse into a single global bucket (SA-11). Do not use `true`
+// — that would trust a client-supplied X-Forwarded-For chain.
+app.set('trust proxy', 1);
+
 // CORS configuration
 const corsOptions = {
   origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {

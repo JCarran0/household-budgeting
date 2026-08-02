@@ -112,7 +112,7 @@ export class CategorizationService {
       const batchNum = Math.floor(i / BATCH_SIZE) + 1;
       const batch = uncategorized.slice(i, i + BATCH_SIZE);
       log.info({ batchNum, totalBatches, batchSize: batch.length }, 'classifying batch');
-      const { results, cost } = await this.classifyBatch(batch, categoryContext, examples, existingRules);
+      const { results, cost } = await this.classifyBatch(familyId, batch, categoryContext, examples, existingRules);
       log.info({ batchNum, totalBatches, results: results.length, cost: Number(cost.toFixed(4)) }, 'batch complete');
       allResults.push(...results);
       totalCost += cost;
@@ -273,6 +273,7 @@ export class CategorizationService {
   }
 
   private async classifyBatch(
+    familyId: string,
     transactions: Transaction[],
     categoryContext: string,
     examples: string,
@@ -310,9 +311,10 @@ ${examples}`;
         'sonnet', response.usage.input_tokens, response.usage.output_tokens,
       );
 
-      // Record cost
+      // Record cost against the workspace that incurred it, so classification
+      // spend counts toward the same cap `classifyTransactions` checks (SA-03).
       await this.costTracker.recordUsage(
-        'system', 'sonnet', response.usage.input_tokens, response.usage.output_tokens,
+        familyId, 'sonnet', response.usage.input_tokens, response.usage.output_tokens,
       );
 
       const toolUse = response.content.find(

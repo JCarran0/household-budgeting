@@ -874,12 +874,22 @@ export class AuthService {
     return sanitized.trim();
   }
 
+  /**
+   * User lookup is case-insensitive, so lockout state must be keyed
+   * case-insensitively too. Keying off the raw string lets an attacker reset the
+   * attempt budget just by changing capitalization (SA-12).
+   */
+  private lockoutKey(username: string): string {
+    return username.toLowerCase();
+  }
+
   private recordFailedAttempt(username: string): void {
-    const attempts = this.failedAttempts.get(username) || 0;
-    this.failedAttempts.set(username, attempts + 1);
+    const key = this.lockoutKey(username);
+    const attempts = this.failedAttempts.get(key) || 0;
+    this.failedAttempts.set(key, attempts + 1);
 
     if (attempts + 1 >= this.maxFailedAttempts) {
-      this.lockoutTime.set(username, new Date(Date.now() + this.lockoutDuration));
+      this.lockoutTime.set(key, new Date(Date.now() + this.lockoutDuration));
       this.logSecurityEvent({
         event: 'ACCOUNT_LOCKED',
         username,
@@ -890,19 +900,21 @@ export class AuthService {
   }
 
   private resetFailedAttempts(username: string): void {
-    this.failedAttempts.delete(username);
-    this.lockoutTime.delete(username);
+    const key = this.lockoutKey(username);
+    this.failedAttempts.delete(key);
+    this.lockoutTime.delete(key);
   }
 
   private isAccountLocked(username: string): boolean {
-    const lockoutEnd = this.lockoutTime.get(username);
+    const key = this.lockoutKey(username);
+    const lockoutEnd = this.lockoutTime.get(key);
     if (!lockoutEnd) {
       return false;
     }
 
     if (new Date() > lockoutEnd) {
-      this.lockoutTime.delete(username);
-      this.failedAttempts.delete(username);
+      this.lockoutTime.delete(key);
+      this.failedAttempts.delete(key);
       return false;
     }
 
@@ -910,7 +922,7 @@ export class AuthService {
   }
 
   getFailedAttempts(username: string): number {
-    return this.failedAttempts.get(username) || 0;
+    return this.failedAttempts.get(this.lockoutKey(username)) || 0;
   }
 
   /**

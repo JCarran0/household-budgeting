@@ -40,7 +40,10 @@ export const registrationSchema = z.object({
 
 // Login schema
 export const loginSchema = z.object({
-  username: z.string().min(1, 'Username is required'),
+  // Lowercased to match registration. User lookup is case-insensitive, but the
+  // lockout counter keys off this raw string — without normalizing, each casing
+  // variant gets its own fresh attempt budget against the same account (SA-12).
+  username: z.string().min(1, 'Username is required').transform(val => val.toLowerCase()),
   password: z.string().min(1, 'Password is required'),
 });
 

@@ -1,6 +1,7 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { feedbackService } from '../services/feedbackService';
 import { authenticate, validateBody, rateLimitAuth } from '../middleware/authMiddleware';
+import { adminMiddleware } from '../middleware/adminMiddleware';
 import { feedbackSchema } from '../validators/feedbackValidators';
 import type { FeedbackSubmission } from '../shared/types';
 
@@ -49,11 +50,12 @@ router.post(
 /**
  * @route GET /api/v1/feedback/test
  * @desc Test GitHub API connection (admin only)
- * @access Private
+ * @access Private (admin)
  */
 router.get(
   '/test',
   authenticate,
+  adminMiddleware, // The docblock claimed admin-only; the gate was missing (SA-24).
   async (_req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       const result = await feedbackService.testConnection();
