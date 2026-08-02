@@ -5,6 +5,32 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [6.0.0](https://github.com/JCarran0/household-budgeting/compare/v5.84.0...v6.0.0) (2026-08-02)
+
+
+### ⚠ BREAKING CHANGES
+
+* **deps:** across 24 minor versions.
+
+Verified after upgrade: backend typecheck clean, 957/957 tests pass;
+frontend typecheck clean, 279/279 tests pass.
+
+Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>
+
+### Bug Fixes
+
+* **security:** close four findings from the 2026-08-02 audit ([94ca897](https://github.com/JCarran0/household-budgeting/commit/94ca897dff6d0af82252543466934456c9bdd839))
+
+
+### Chores
+
+* **deps:** resolve npm audit vulnerabilities in both packages ([fe46abd](https://github.com/JCarran0/household-budgeting/commit/fe46abde937323ef02dbccbb6e85e7ebb7d18b1c))
+
+
+### Documentation
+
+* **security:** add 2026-08-02 audit findings tracker ([c3323cc](https://github.com/JCarran0/household-budgeting/commit/c3323cc0658eb55d444480627539f4040fb1f02c))
+
 ## [5.84.0](https://github.com/JCarran0/household-budgeting/compare/v5.83.0...v5.84.0) (2026-08-02)
 
 
