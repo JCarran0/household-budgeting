@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+### [5.81.5](https://github.com/JCarran0/household-budgeting/compare/v5.81.4...v5.81.5) (2026-08-02)
+
+
+### Bug Fixes
+
+* **budgets:** correct Rollover column sign for income categories ([cfd5ac0](https://github.com/JCarran0/household-budgeting/commit/cfd5ac070ebf077a1cb0da84e6a25a63a98f03fd))
+
 ### [5.81.4](https://github.com/JCarran0/household-budgeting/compare/v5.81.3...v5.81.4) (2026-08-02)
 
 
