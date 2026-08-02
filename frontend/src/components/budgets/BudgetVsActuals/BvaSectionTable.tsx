@@ -1,4 +1,4 @@
-import { Fragment, useMemo, useRef, type KeyboardEvent } from 'react';
+import { Fragment, useMemo, type KeyboardEvent } from 'react';
 import { ActionIcon, Box, Group, Paper, Stack, Table, Text, Title, Tooltip } from '@mantine/core';
 import { IconChevronRight, IconEdit, IconX } from '@tabler/icons-react';
 import { TransactionPreviewTrigger } from '../../transactions/TransactionPreviewTrigger';
@@ -27,12 +27,6 @@ export interface BvaSectionTableProps {
   isExpanded: (parentId: string) => boolean;
   onToggleExpanded: (parentId: string, currentlyExpanded: boolean) => void;
   onEditBudget: (categoryId: string) => void;
-  /**
-   * Session-stable sort identity passed down from BvA. While this stays the
-   * same, child rows preserve their slot under each parent so amount edits
-   * don't reshuffle the expanded view.
-   */
-  sortKey: string;
 }
 
 export function BvaSectionTable({
@@ -48,13 +42,9 @@ export function BvaSectionTable({
   isExpanded,
   onToggleExpanded,
   onEditBudget,
-  sortKey,
 }: BvaSectionTableProps) {
-  // Per-parent child sort cache. Mirrors the parent cache in BudgetVsActuals.
-  const childOrderCache = useRef<{ key: string; orders: Map<string, string[]> }>({
-    key: '',
-    orders: new Map(),
-  });
+  // Both parent and child row order arrive pre-sorted from useBvaStableOrder —
+  // this component renders the order it is given and never re-sorts.
   const visible = parents.filter(
     fp => showDismissed || !dismissedIds.has(fp.parent.parentId),
   );
@@ -207,75 +197,46 @@ export function BvaSectionTable({
                         </Group>
                       </Table.Td>
                     </Table.Tr>
-                    {expanded && (() => {
-                      // Reset all parent-level child caches when sortKey changes.
-                      if (childOrderCache.current.key !== sortKey) {
-                        childOrderCache.current = { key: sortKey, orders: new Map() };
-                      }
-                      const cached = childOrderCache.current.orders.get(parent.parentId);
-                      const sortFresh = (a: typeof parent.children[number], b: typeof parent.children[number]) => {
-                        const aMag = Math.abs(a.available);
-                        const bMag = Math.abs(b.available);
-                        if (aMag !== bMag) return bMag - aMag;
-                        return a.categoryName.localeCompare(b.categoryName);
-                      };
-                      const children = [...parent.children];
-                      if (cached) {
-                        const slot = new Map(cached.map((id, i) => [id, i]));
-                        children.sort((a, b) => {
-                          const aSlot = slot.get(a.categoryId);
-                          const bSlot = slot.get(b.categoryId);
-                          if (aSlot !== undefined && bSlot !== undefined) return aSlot - bSlot;
-                          if (aSlot !== undefined) return -1;
-                          if (bSlot !== undefined) return 1;
-                          return sortFresh(a, b);
-                        });
-                      } else {
-                        children.sort(sortFresh);
-                      }
-                      childOrderCache.current.orders.set(parent.parentId, children.map(c => c.categoryId));
-                      return children;
-                    })()
-                      .map(child => {
-                        const dim = parentDim || deEmphasizedChildIds.has(child.categoryId);
-                        return (
-                          <Table.Tr
-                            key={`${parent.parentId}-${child.categoryId}`}
-                            style={{ opacity: dim ? 0.5 : 1 }}
-                          >
-                            <Table.Td pl="xl">
-                              <Text size="sm" pl="lg">↳ {child.categoryName}</Text>
-                            </Table.Td>
-                            <Table.Td style={{ textAlign: 'right' }}>
-                              <TransactionPreviewTrigger
-                                categoryId={child.categoryId}
-                                categoryName={child.categoryName}
-                                dateRange={monthDateRange}
-                                tooltipText="Click to preview transactions"
+                    {expanded && parent.children.map(child => {
+                      const dim = parentDim || deEmphasizedChildIds.has(child.categoryId);
+                      return (
+                        <Table.Tr
+                          key={`${parent.parentId}-${child.categoryId}`}
+                          style={{ opacity: dim ? 0.5 : 1 }}
+                        >
+                          <Table.Td pl="xl">
+                            <Text size="sm" pl="lg">↳ {child.categoryName}</Text>
+                          </Table.Td>
+                          <Table.Td style={{ textAlign: 'right' }}>
+                            <TransactionPreviewTrigger
+                              categoryId={child.categoryId}
+                              categoryName={child.categoryName}
+                              dateRange={monthDateRange}
+                              tooltipText="Click to preview transactions"
+                            >
+                              <Text size="sm" style={{ cursor: 'pointer', textAlign: 'right' }}>
+                                {formatCurrency(child.actual)}
+                              </Text>
+                            </TransactionPreviewTrigger>
+                          </Table.Td>
+                          <Table.Td style={{ textAlign: 'right' }}>{formatCurrency(child.budgeted)}</Table.Td>
+                          <Table.Td style={{ textAlign: 'right' }}>{renderRolloverCell(child.rollover, rolloverOn, dim)}</Table.Td>
+                          <Table.Td style={{ textAlign: 'right' }}>{renderAvailableCell(child.available, dim)}</Table.Td>
+                          <Table.Td style={{ textAlign: 'right' }}>
+                            {isBudgetableCategory(child.categoryId, categories) && (
+                              <ActionIcon
+                                variant="subtle"
+                                size="sm"
+                                aria-label="Edit budget"
+                                onClick={() => onEditBudget(child.categoryId)}
                               >
-                                <Text size="sm" style={{ cursor: 'pointer', textAlign: 'right' }}>
-                                  {formatCurrency(child.actual)}
-                                </Text>
-                              </TransactionPreviewTrigger>
-                            </Table.Td>
-                            <Table.Td style={{ textAlign: 'right' }}>{formatCurrency(child.budgeted)}</Table.Td>
-                            <Table.Td style={{ textAlign: 'right' }}>{renderRolloverCell(child.rollover, rolloverOn, dim)}</Table.Td>
-                            <Table.Td style={{ textAlign: 'right' }}>{renderAvailableCell(child.available, dim)}</Table.Td>
-                            <Table.Td style={{ textAlign: 'right' }}>
-                              {isBudgetableCategory(child.categoryId, categories) && (
-                                <ActionIcon
-                                  variant="subtle"
-                                  size="sm"
-                                  aria-label="Edit budget"
-                                  onClick={() => onEditBudget(child.categoryId)}
-                                >
-                                  <IconEdit size={14} />
-                                </ActionIcon>
-                              )}
-                            </Table.Td>
-                          </Table.Tr>
-                        );
-                      })}
+                                <IconEdit size={14} />
+                              </ActionIcon>
+                            )}
+                          </Table.Td>
+                        </Table.Tr>
+                      );
+                    })}
                   </Fragment>
                 );
               })}

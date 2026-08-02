@@ -85,6 +85,18 @@ This BRD is **additive**:
 
 **REQ-008:** Rows of type Spending, Income, and Savings are grouped into three visually distinct sections in the order **Income → Spending → Savings**, with section headers. (This matches the Cash Flow three-line convention established by the Savings Category BRD.)
 
+#### Row Ordering (Revision 3)
+
+**REQ-008a:** Within each section, rows are ordered by a user-chosen **sort field** and **direction**, both URL-persisted (REQ-046). Fields: `absoluteGap` (|Available| — labeled "Available (absolute gap)"; the default), `actual`, `budgeted`, `rollover`, `available`, `name`. Direction defaults to descending. The same field and direction order child rows within an expanded parent, so the whole table reads on one axis.
+
+**REQ-008b:** Rows with no value for the sort field — today only non-rollover categories under a Rollover sort — sink to the bottom in **both** directions. Absent is not "smallest": burying them keeps the head of an ascending Rollover sort meaningful.
+
+**REQ-008c:** The order is **frozen** once computed. Advancing the month, editing an amount, and changing a filter all leave every visible row in the slot it already occupied. Only three things re-sort: changing the sort field, changing the direction, and pressing Re-sort (or the page's Refresh button). Rationale: BvA is read by paging month to month, and a list that reshuffles under the reader on each step destroys the positional memory that makes the comparison fast.
+
+**REQ-008d:** Rows that appear after the freeze — a category that just gained a budget, or one revealed by relaxing a filter — are **appended at the end** in fresh-sort order rather than woven into their sorted position, since weaving would move existing rows. Rows that disappear are simply dropped; the survivors keep their relative order.
+
+**REQ-008e:** A **Re-sort** control appears in the control row *only when a fresh sort would actually move at least one row* (parent or child). When the frozen order already matches the current numbers there is nothing to apply, and a permanently-visible no-op button is indistinguishable from a broken one.
+
 ### 2.3 Column Semantics
 
 **REQ-009:** The Actual column is always raw: it does not change based on the rollover toggle. Actuals are computed via the canonical `transactionReader.ts` filter (excludes removed transactions) and respect transfer exclusion via `transactionCalculations.ts`.
@@ -300,6 +312,8 @@ The per-section goodness mapping happens implicitly inside the Available calcula
 | `rollover` | `1` | off |
 | `types` | comma-joined subset of `spending,income,savings` | all three selected |
 | `variance` | `under`, `over`, `serious` | `all` |
+| `sort` | `actual`, `budgeted`, `rollover`, `available`, `name` | `absoluteGap` |
+| `dir` | `asc` | `desc` |
 
 **REQ-047:** URL state is the source of truth when present. Defaults apply when a param is omitted. Invalid values fall back to the default silently.
 

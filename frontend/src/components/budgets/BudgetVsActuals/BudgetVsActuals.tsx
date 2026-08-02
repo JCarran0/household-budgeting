@@ -1,5 +1,7 @@
-import { useMemo, useRef, useState, type ReactNode } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import {
+  ActionIcon,
+  Button,
   Center,
   Chip,
   Group,
@@ -11,7 +13,13 @@ import {
   Text,
   Tooltip,
 } from '@mantine/core';
-import { IconAlertTriangle, IconInfoCircle } from '@tabler/icons-react';
+import {
+  IconAlertTriangle,
+  IconArrowsSort,
+  IconInfoCircle,
+  IconSortAscending,
+  IconSortDescending,
+} from '@tabler/icons-react';
 import { useQuery } from '@tanstack/react-query';
 import { endOfMonth, format, parse, startOfMonth } from 'date-fns';
 import { api } from '../../../lib/api';
@@ -26,7 +34,14 @@ import {
   classifyAvailable,
   type VarianceFilter,
 } from '../../../../../shared/utils/bvaFilters';
+import {
+  BVA_SORT_FIELDS,
+  BVA_SORT_LABEL,
+  DEFAULT_BVA_SORT_FIELD,
+  type BvaSortField,
+} from '../../../../../shared/utils/bvaSort';
 import { CATEGORY_TYPES, useBvaUrlState, type CategoryTypeFilter } from './useBvaUrlState';
+import { useBvaStableOrder } from './useBvaStableOrder';
 import { useDismissedParentIds } from './useDismissedParentIds';
 import { BudgetEditModal } from './BudgetEditModal';
 import { availableColor, directionIcon, formatSigned } from './bvaFormatHelpers';
@@ -149,23 +164,15 @@ export function BudgetVsActuals({ selectedMonth, active, refreshNonce }: BudgetV
     });
   }, [categories, yearlyBudgetData, ytdTransactionData, selectedMonth, urlState.rollover]);
 
-  // Sort-order cache so amount edits don't reshuffle parent rows mid-session.
-  // Recomputes on filter/month/refresh changes; preserves prior order otherwise,
-  // appending any newly-visible parents at the end (sorted by |available|).
-  const sortKey = `${selectedMonth}|${[...urlState.types].sort().join(',')}|${urlState.variance}|${urlState.rollover ? '1' : '0'}|${refreshNonce}`;
-  const orderCache = useRef<{ key: string; orders: Record<SectionType, string[]> }>({
-    key: '',
-    orders: { income: [], spending: [], savings: [] },
-  });
-
-  const sections = useMemo<FilteredSection[]>(() => {
-    if (!composition) return [];
-
-    const buckets: Record<SectionType, FilteredParent[]> = {
+  // Filter-passing parents, bucketed by section but not yet ordered — ordering
+  // is frozen state owned by useBvaStableOrder, not a function of the filters.
+  const buckets = useMemo<Record<SectionType, FilteredParent[]>>(() => {
+    const next: Record<SectionType, FilteredParent[]> = {
       income: [],
       spending: [],
       savings: [],
     };
+    if (!composition) return next;
 
     for (const parent of composition.parents) {
       if (!urlState.types.has(parent.section)) continue;
@@ -182,48 +189,32 @@ export function BudgetVsActuals({ selectedMonth, active, refreshNonce }: BudgetV
       });
       if (!decision.include) continue;
 
-      buckets[parent.section].push({
+      next[parent.section].push({
         parent,
         deEmphasizedChildIds: decision.deEmphasizedChildIds,
       });
     }
+    return next;
+  }, [composition, urlState.types, urlState.variance]);
 
-    const sortFreshByAvailable = (a: FilteredParent, b: FilteredParent) => {
-      const aMag = Math.abs(a.parent.available);
-      const bMag = Math.abs(b.parent.available);
-      if (aMag !== bMag) return bMag - aMag;
-      return a.parent.parentName.localeCompare(b.parent.parentName);
-    };
+  // Re-sort is deliberate: the page's Refresh button and the tab's own Re-sort
+  // button both thaw the frozen order. Nothing else does — not the month, not
+  // an amount edit, not a filter change.
+  const [resortNonce, setResortNonce] = useState(0);
+  const { buckets: orderedBuckets, stale: sortStale } = useBvaStableOrder({
+    buckets,
+    field: urlState.sort,
+    direction: urlState.direction,
+    orderNonce: refreshNonce + resortNonce,
+  });
 
-    const sortKeyChanged = orderCache.current.key !== sortKey;
-
-    for (const key of Object.keys(buckets) as SectionType[]) {
-      if (sortKeyChanged) {
-        // Filter/month/refresh changed — sort fresh by |available| desc.
-        buckets[key].sort(sortFreshByAvailable);
-      } else {
-        // Stable session order: existing parents keep their slot; brand-new
-        // parents (e.g., a category just gained a budget) get appended,
-        // sorted among themselves by |available|.
-        const order = orderCache.current.orders[key];
-        const slot = new Map(order.map((id, i) => [id, i]));
-        buckets[key].sort((a, b) => {
-          const aSlot = slot.get(a.parent.parentId);
-          const bSlot = slot.get(b.parent.parentId);
-          if (aSlot !== undefined && bSlot !== undefined) return aSlot - bSlot;
-          if (aSlot !== undefined) return -1;
-          if (bSlot !== undefined) return 1;
-          return sortFreshByAvailable(a, b);
-        });
-      }
-      orderCache.current.orders[key] = buckets[key].map(p => p.parent.parentId);
-    }
-    orderCache.current.key = sortKey;
-
-    return SECTION_ORDER
-      .filter(section => urlState.types.has(section))
-      .map(section => ({ section, parents: buckets[section] }));
-  }, [composition, urlState.types, urlState.variance, sortKey]);
+  const sections = useMemo<FilteredSection[]>(
+    () =>
+      SECTION_ORDER
+        .filter(section => urlState.types.has(section))
+        .map(section => ({ section, parents: orderedBuckets[section] })),
+    [orderedBuckets, urlState.types],
+  );
 
   const visibleParents = useMemo<FilteredParent[]>(() => {
     return sections.flatMap(({ parents }) =>
@@ -433,6 +424,53 @@ export function BudgetVsActuals({ selectedMonth, active, refreshNonce }: BudgetV
               w={200}
             />
 
+            <Group gap="xs" align="flex-end" wrap="nowrap">
+              <Select
+                label="Sort by"
+                value={urlState.sort}
+                onChange={(v) => urlState.setSort((v as BvaSortField) ?? DEFAULT_BVA_SORT_FIELD)}
+                data={BVA_SORT_FIELDS.map(f => ({ value: f, label: BVA_SORT_LABEL[f] }))}
+                allowDeselect={false}
+                w={200}
+              />
+              <Tooltip
+                label={urlState.direction === 'desc' ? 'Highest first' : 'Lowest first'}
+                withArrow
+              >
+                <ActionIcon
+                  variant="default"
+                  size="lg"
+                  aria-label={`Sort direction: ${urlState.direction === 'desc' ? 'descending' : 'ascending'}`}
+                  onClick={() => urlState.setDirection(urlState.direction === 'desc' ? 'asc' : 'desc')}
+                >
+                  {urlState.direction === 'desc' ? (
+                    <IconSortDescending size={16} />
+                  ) : (
+                    <IconSortAscending size={16} />
+                  )}
+                </ActionIcon>
+              </Tooltip>
+              {/* Only rendered when a fresh sort would actually move a row —
+                  otherwise the button is a no-op the user can't distinguish
+                  from a broken one. */}
+              {sortStale && (
+                <Tooltip
+                  label="Rows are still in the order you last sorted them. Re-sort to apply the current numbers."
+                  withArrow
+                  multiline
+                  w={260}
+                >
+                  <Button
+                    variant="light"
+                    leftSection={<IconArrowsSort size={14} />}
+                    onClick={() => setResortNonce(n => n + 1)}
+                  >
+                    Re-sort
+                  </Button>
+                </Tooltip>
+              )}
+            </Group>
+
             <Switch
               label="Show dismissed"
               checked={dismissed.showDismissed}
@@ -497,7 +535,6 @@ export function BudgetVsActuals({ selectedMonth, active, refreshNonce }: BudgetV
             isExpanded={isExpanded}
             onToggleExpanded={toggleExpanded}
             onEditBudget={(categoryId) => setEditTarget({ categoryId })}
-            sortKey={sortKey}
           />
         ))
       )}

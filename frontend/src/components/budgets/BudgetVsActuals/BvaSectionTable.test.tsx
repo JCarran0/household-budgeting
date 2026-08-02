@@ -61,7 +61,6 @@ function baseProps(overrides: Partial<React.ComponentProps<typeof BvaSectionTabl
     isExpanded: () => false,
     onToggleExpanded: vi.fn(),
     onEditBudget: vi.fn(),
-    sortKey: 'test',
     ...overrides,
   };
 }
@@ -178,7 +177,10 @@ describe('BvaSectionTable', () => {
     expect(row.getAttribute('aria-expanded')).toBeNull();
   });
 
-  it('renders children in |available|-descending order when expanded', () => {
+  it('renders children in the order given, without re-sorting them', () => {
+    // Ordering is owned by useBvaStableOrder so it can be frozen across month
+    // changes — this component must render whatever order it receives, even
+    // one that no comparator would have produced.
     const parent = makeParent({
       parentId: 'food',
       parentName: 'Food',
@@ -197,11 +199,10 @@ describe('BvaSectionTable', () => {
       />,
     );
     const childCells = screen.getAllByText(/↳/);
-    // Expected order by |available|: groceries (200), dining (100), snacks (50).
     expect(childCells.map(c => c.textContent)).toEqual([
+      '↳ Snacks',
       '↳ Groceries',
       '↳ Dining',
-      '↳ Snacks',
     ]);
   });
 
