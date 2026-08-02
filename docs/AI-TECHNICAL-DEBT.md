@@ -3,7 +3,7 @@
 ## Overview
 This document tracks technical debt items identified during the April 2026 architecture audits. Items are prioritized by severity and linked to relevant code locations.
 
-**Last Updated**: 2026-06-02
+**Last Updated**: 2026-08-02
 **Previous (archived)**: [docs/completed/AI-TECHNICAL-DEBT.md](completed/AI-TECHNICAL-DEBT.md)
 **Execution sequencing**: [TECH-DEBT-EXECUTION-PLAN-2026-04.md](TECH-DEBT-EXECUTION-PLAN-2026-04.md)
 
@@ -11,6 +11,7 @@ This document tracks technical debt items identified during the April 2026 archi
 - **2026-04-08** — initial audit, TD-001 through TD-010
 - **2026-04-22** — architect review, TD-011 through TD-017 (also updated TD-010)
 - **2026-06-02** — trip-photo corruption incident: updated TD-011 (`tripService` unprotected RMW surface), added TD-019 (backup posture)
+- **2026-08-02** — Capital One card-reissue incident: added TD-020 (`account_id` change → silent data loss), TD-021 (no Plaid webhooks / no staleness surface), TD-022 (silent sync error paths); reopened TD-017 (CloudWatch forwarding never enabled, so the logging payoff is unrealized)
 
 ---
 
@@ -455,10 +456,22 @@ Paired with TD-004 (Sprint 3) — CSP outer envelope + sanitization inner envelo
 ---
 
 ### TD-017: Console Logging Throughout — No Structured Logger
-**Status**: Resolved (2026-05-01, Sprint 6)
+**Status**: **Partially resolved** — code half landed 2026-05-01 (Sprint 6); CloudWatch forwarding was never enabled (reopened 2026-08-02)
 **Created**: 2026-04-22
+**Updated**: 2026-08-02
 **Impact**: Medium - Incident response is grep-archaeology; PII redaction is per-call-site
-**Effort**: Medium
+**Effort**: Medium (remaining: Low — one EC2-side install)
+
+> **2026-08-02 reopen.** The Pino migration and redaction work below all shipped and is real. The *outcome* TD-017 existed to deliver — being able to answer "what happened last month?" without SSH — did not. The CloudWatch agent install was written up as a one-time EC2-side step (it lives on the instance, not in the repo) and was never performed. Verified during the Capital One incident:
+>
+> ```
+> /aws/ec2/budget-app    0 bytes stored
+> budget-backend         log group does not exist
+> ```
+>
+> So the Insights query documented in [AI-DEPLOYMENTS.md](AI-DEPLOYMENTS.md) §Logging has nothing to run against, and incident response is still `aws ssm send-command` + `pm2 logs | grep`. That directly blocked the first question asked during the 2026-08-02 incident ("do we have logs showing what happened on 7/15?") — the answer had to come from Plaid's API instead.
+>
+> **Remaining work**: perform the agent install already documented in AI-DEPLOYMENTS.md §Logging (yum install, IAM `CloudWatchAgentServerPolicy` on the instance role, drop the `collect_list` config, start the agent), then verify with `aws logs tail budget-backend`. Set a retention policy on the log group so it stays cost-bounded. Until this is done, treat PM2's rotation window as the real limit on how far back any investigation can reach.
 
 **Problem**:
 The backend uses `console.log` / `console.error` directly throughout. In production these go to PM2 stdout/stderr. There is no structured JSON output, no log-level discipline, no centralized PII redaction, and no integration with monitoring. When something breaks in prod, debugging is `pm2 logs | grep` and hoping you remember the right substring.
@@ -547,6 +560,104 @@ The gap:
 **Files**:
 - New: a sync script (e.g. `backend/scripts/backup-prod-snapshot.ts` or a shell cron) + schedule
 - [docs/AI-DEPLOYMENTS.md](AI-DEPLOYMENTS.md) — restore runbook
+
+---
+
+## 2026-08-02 Capital One Card-Reissue Incident
+
+Context for TD-020 through TD-022. On 2026-07-15 Capital One reissued a card (mask `7008` → `7245`). Plaid retired the old `account_id`, minted a new one **inside the same Item**, and re-keyed 90 days of history under it with all-new `transaction_id`s. The Item itself stayed healthy the whole time — no Item error, valid consent, `/accounts/get` working, balances updating — so nothing surfaced. Transactions silently stopped for **19 days** and were noticed only by eye.
+
+Plaid's mechanism for exactly this is `persistent_account_id`, a stable identifier that survives reissues. Capital One populates it for **none** of the accounts on this Item, so old and new cannot be linked programmatically by identifier. Repair was done by content matching (`backend/src/scripts/reconcile-plaid-account-change.ts`, commit `7fe1a17`): 1 account repointed, 333 transactions re-keyed, 55 recovered.
+
+---
+
+### TD-020: Plaid `account_id` Change Causes Silent, Unrecoverable Transaction Loss
+**Status**: Open — manual mitigation exists, app-level handling does not
+**Created**: 2026-08-02
+**Impact**: **High** — silent permanent data loss; the cursor advances past dropped rows
+**Effort**: Medium
+
+**Problem**:
+`transactionService.ts:290` skips any transaction whose `account_id` is not in the Item's known accounts:
+
+```ts
+const account = accountLookup.get(plaidTxn.accountId);
+if (!account) continue;
+```
+
+The cursor is then persisted anyway at `:211`. Plaid's cursor is a delivery receipt — once advanced, those rows are never re-sent. So when an institution reissues a card mid-Item, every transaction on the new account is consumed and discarded, with no error, no log line, and no way to get it back short of a cursor reset (which then re-delivers everything and duplicates by `plaidTransactionId`).
+
+Compounding it: dedupe is strictly by `plaidTransactionId` (`:292`). A reissued account's rows all carry new ids, so any naive fix that only repoints the account would insert months of already-held history as new. The two failure modes push in opposite directions, which is why this needs deliberate handling rather than a one-line guard.
+
+**Fix**:
+1. Detect the condition explicitly: before applying a delta, compare the Item's live `account_id`s against stored ones. A stored account that has vanished is a reissue signal, not a no-op.
+2. **Do not advance the cursor** when the delta contains rows for unknown accounts. Failing closed keeps the data recoverable; failing open loses it.
+3. Surface it — an account-level state (e.g. `needs_reconciliation`) plus a dashboard alert, so it is visible without reading logs.
+4. Reuse the content-matching strategy already proven in `reconcile-plaid-account-change.ts` (pair on `type` + `subtype` + `official_name`; re-key on `date` + `amount` with a ±2-day pass for posted-date jitter; refuse ambiguous matches).
+5. Store `persistent_account_id` on `StoredAccount` when the institution provides it. It will not help Capital One, but it makes this automatic for institutions that do populate it.
+
+**Files**:
+- `backend/src/services/transactionService.ts` (`:266-320` delta application, `:205-215` cursor persistence)
+- `backend/src/services/accountService.ts` (account state)
+- `backend/src/scripts/reconcile-plaid-account-change.ts` (existing manual mitigation — keep as the break-glass path)
+
+---
+
+### TD-021: No Plaid Webhooks Configured; No Sync-Staleness Surface
+**Status**: Open
+**Created**: 2026-08-02
+**Impact**: **High** — no failure is detectable without manual inspection; a 19-day outage went unnoticed
+**Effort**: Medium (staleness indicator alone: Low)
+
+**Problem**:
+`PLAID_WEBHOOK_URL` is set nowhere — not in `.env.example`, not in the deploy workflow's generated `.env` (`release-and-deploy.yml:291-320`). `plaidService.ts:236` only attaches a webhook when that variable exists, so no Item has ever registered one. Confirmed against production: `last_webhook: none` on **all nine** Items.
+
+Consequences:
+- No `SYNC_UPDATES_AVAILABLE` — nothing tells the app new transactions exist.
+- No `PENDING_EXPIRATION` — the 7-day warning before an OAuth consent lapses never arrives. Two Items were within 36 days of expiry and nothing surfaced.
+- No `ERROR` webhook — Item errors are discovered only when a user happens to sync.
+
+There is also no cron (`grep` for `cron`/`setInterval` finds only `chatActions/proposalStore.ts`), so syncs happen only when a user clicks. With two users and no alerting, "nobody complained" is not evidence of health.
+
+Separately, nothing compares an account's most recent transaction date against its expected cadence. Plaid already reports `item.status.transactions.last_successful_update` on every `/item/get` — during the incident it read 18 days stale while the UI showed a healthy connection.
+
+**Fix**:
+1. **Staleness indicator first** (cheap, no webhook infrastructure): read `item.status.transactions.last_successful_update` during sync, persist per Item, and surface an "last updated N days ago" warning on the account card past a threshold. This alone converts the incident from invisible to obvious.
+2. Set `PLAID_WEBHOOK_URL` as a repo variable and add it to the deploy workflow's `.env` generation.
+3. Add a webhook receiver route with proper JWT verification — note `plaidService.ts:565-571` currently returns `true` unconditionally with a "In production, implement proper JWT verification" comment. That must be closed before the endpoint is exposed.
+4. Handle `SYNC_UPDATES_AVAILABLE` (trigger sync), `PENDING_EXPIRATION` (prompt re-link — the "Sign in to Bank" action is now always available per `4ccd51d`), and `ERROR`.
+
+**Files**:
+- `backend/src/services/plaidService.ts` (`:236` webhook attach, `:565-571` verification stub)
+- `backend/src/routes/plaid.ts` (new webhook route)
+- `.github/workflows/release-and-deploy.yml`, `backend/.env.example`
+- `frontend/src/components/accounts/ConnectedAccountCard.tsx` (staleness display)
+
+---
+
+### TD-022: Sync Error Paths Fail Silently
+**Status**: Open
+**Created**: 2026-08-02
+**Impact**: Medium — failures are invisible in the UI and, in one path, invisible in logs too
+**Effort**: Low
+
+**Problem**:
+Two related gaps let a broken connection keep presenting as healthy:
+
+1. **`plaidService.ts:591`** — `requiresReauthentication` allowlists five codes (`ITEM_LOGIN_REQUIRED`, `ITEM_LOCKED`, `USER_PERMISSION_REVOKED`, `INVALID_CREDENTIALS`, `ITEM_NOT_ACCESSIBLE`). Anything outside it — `ACCESS_NOT_GRANTED` being the realistic one, since institutions let users revoke per-data-type sharing — is logged and skipped while the account stays `active`. The UI then shows a working connection that silently delivers nothing.
+2. **`accountService.ts:222`** — when balance sync fails for a non-reauth reason, the loop hits a bare `continue` with **no log statement at all**. That failure leaves no trace anywhere.
+
+Note these are *detection* gaps, not the cause of the 2026-08-02 incident (that was TD-020). They are on the same path and would hide the same class of problem.
+
+**Fix**:
+1. Widen the reauth code list, or invert it: treat any `ITEM_ERROR`-type response as degraded-until-proven-otherwise rather than allowlisting known-bad codes.
+2. Add a log line to the `accountService.ts:222` branch with `plaidItemId` + error code. No silent `continue`s on a data path.
+3. Distinguish "needs re-auth" from "degraded" in `AccountStatus` so the UI can warn without falsely claiming a sign-in is required.
+
+**Files**:
+- `backend/src/services/plaidService.ts` (`:591`)
+- `backend/src/services/accountService.ts` (`:222`)
+- `frontend/src/components/accounts/ConnectedAccountCard.tsx`
 
 ---
 

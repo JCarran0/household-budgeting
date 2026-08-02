@@ -150,6 +150,26 @@ npm run sync:production:user -- --user-id="specific-user-id"
 npm run backup:local
 ```
 
+### ⚠️ Synced Plaid tokens will not decrypt with a local `PLAID_ENCRYPTION_SECRET`
+
+`sync:production` copies the S3 JSON files **verbatim** — it does not re-encrypt anything (token scrubbing happens only under the explicit `--anonymize` flag, see `anonymize-data.ts`). Every `plaidAccessToken` in the synced data is therefore encrypted with **production's** `PLAID_ENCRYPTION_SECRET`.
+
+If your local `.env` has a different value, anything touching a Plaid token fails with:
+
+```
+Failed to decrypt data - token may be corrupted or tampered with
+```
+
+The data itself is fine — the key is wrong. Normal local UI work is unaffected, because the synced transactions and balances are already materialized in the JSON. This only bites when you need to *call Plaid* about production accounts (diagnostics, reconciliation, debugging a sync).
+
+To do that, temporarily put the production secret in your local `.env` — retrieve it via the SSM one-liner in [AI-DEPLOYMENTS.md](AI-DEPLOYMENTS.md) §"Where production secrets actually live". Also set `PLAID_ENV=production` so the SDK talks to the same environment the tokens belong to.
+
+Afterwards:
+- Restore your original `.env` (keep a `.env.bak` — gitignored) or delete the production value.
+- Remember that any Plaid Items you linked locally under the *old* key will no longer decrypt.
+
+Because local and production then share the same Item and access token, actions taken through Plaid Link locally (e.g. update mode) affect the **real** production Item — the token is not environment-scoped. Useful, but easy to do by accident.
+
 ## Data Security & Privacy
 
 ### Handling Production Data Locally

@@ -47,8 +47,34 @@ Configure in: Settings → Secrets and variables → Actions → Secrets
 - `PRODUCTION_PLAID_CLIENT_ID` - Plaid API client ID
 - `PRODUCTION_PLAID_SECRET` - Plaid API secret
 - `PRODUCTION_ENCRYPTION_KEY` - Data encryption key (32-byte hex string)
+- `PLAID_ENCRYPTION_SECRET` - **Derives the AES key that encrypts every stored Plaid access token.** See the recovery note below before touching this one.
 - `PRODUCTION_ANTHROPIC_API_KEY` - Anthropic API key for AI chatbot and categorization ([console.anthropic.com/settings/keys](https://console.anthropic.com/settings/keys))
 - `PRODUCTION_GITHUB_ISSUES_PAT` - Fine-grained GitHub PAT with `issues:write` scope on JCarran0/household-budgeting (for chatbot issue filing)
+- `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` / `VAPID_SUBJECT` - Web push credentials
+
+### Where production secrets actually live (and how to recover one)
+
+There is **no AWS Secrets Manager or SSM Parameter Store entry for this app** — both are empty in the `budget-app-prod` account (verified 2026-08-02). Every secret above exists in exactly two places:
+
+1. **GitHub Actions secrets** — write-only. GitHub will let you overwrite a secret but never read it back. Not a recovery source.
+2. **`/home/appuser/app/backend/.env` on the EC2 instance** — written at deploy time by `scripts/deploy-server.sh` (`chmod 600`, owned by `appuser`). **This is the only readable copy.**
+
+To read one without printing it into a terminal transcript, pipe it straight to its destination:
+
+```bash
+export AWS_PROFILE=budget-app-prod
+CMD=$(aws ssm send-command --instance-ids <EC2_INSTANCE_ID> \
+  --document-name AWS-RunShellScript \
+  --parameters 'commands=["grep ^PLAID_ENCRYPTION_SECRET= /home/appuser/app/backend/.env | cut -d= -f2-"]' \
+  --query Command.CommandId --output text)
+sleep 6
+aws ssm get-command-invocation --command-id "$CMD" --instance-id <EC2_INSTANCE_ID> \
+  --query StandardOutputContent --output text
+```
+
+> ⚠️ **Never rotate `PLAID_ENCRYPTION_SECRET` casually.** `backend/src/utils/encryption.ts:29` derives the AES key from it via PBKDF2, so every stored `plaidAccessToken` is bound to that exact value. Changing it makes **all** linked institutions undecryptable simultaneously, and the only recovery is re-linking every bank through Plaid Link. Because the EC2 `.env` is the single readable copy, treat that file as critical state — keep a copy in a password manager.
+
+Local `.env` backups created while swapping keys (`.env.bak`, `.env*.bak`) hold live secrets and are gitignored. Delete them when done.
 
 ### GitHub Variables (Non-Sensitive)
 Configure in: Settings → Secrets and variables → Actions → Variables
