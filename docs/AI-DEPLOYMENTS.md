@@ -266,6 +266,82 @@ fields @timestamp, plaidItemId, accountCount
 | sort @timestamp desc
 ```
 
+## Backups — Off-Bucket Snapshots (TD-019)
+
+Two independent layers protect production data. They cover different failures
+and neither substitutes for the other.
+
+**Layer 1 — versioning on the primary bucket** (`budget-app-data-f5b52f89`).
+Every `PutObject` retains the prior version, so a bad write is recoverable by
+restoring an earlier version. This covers the overwhelmingly most likely
+failure. Noncurrent versions expire at 90 days.
+
+**Layer 2 — dated snapshots in a separate bucket** (`budget-app-backup-f5b52f89`).
+Versioning cannot survive loss of the bucket itself — deletion, a destructive
+lifecycle or policy change, account compromise — and its 90-day expiry leaves no
+point-in-time recovery older than a quarter. Snapshots use dated prefixes rather
+than a mirror, because a mirror of corrupted data is corrupted data.
+
+The backup bucket blocks all public access, has versioning and SSE-S3 enabled,
+transitions to Glacier Deep Archive at 30 days, and expires objects at 730 days.
+At ~11 MB per snapshot the storage cost is a rounding error.
+
+### Taking a snapshot
+
+```bash
+export AWS_PROFILE=budget-app-prod
+export PRODUCTION_S3_BUCKET_NAME=budget-app-data-f5b52f89
+export BACKUP_S3_BUCKET_NAME=budget-app-backup-f5b52f89
+
+./scripts/backup-prod-snapshot.sh              # take today's snapshot
+./scripts/backup-prod-snapshot.sh --dry-run    # preview
+./scripts/backup-prod-snapshot.sh --list       # list snapshots
+```
+
+The script verifies source and destination object counts and exits non-zero on a
+mismatch. A silent partial copy looks like a backup right up until it matters.
+
+### Restoring from a snapshot
+
+Restore is deliberately two steps: the script only ever downloads **locally**, and
+pushing back to production is a separate, explicit act. A one-command restore is
+exactly the convenience that eventually overwrites good data with old data.
+
+```bash
+# 1. Download the snapshot locally (never touches production)
+./scripts/backup-prod-snapshot.sh --restore-to /tmp/restore --snapshot 2026-08-02
+
+# 2. Inspect what you are about to push — confirm it is the data you expect
+ls -la /tmp/restore && python3 -m json.tool /tmp/restore/<file>.json | head
+
+# 3. Push a single file back, deliberately, one at a time
+aws s3 cp /tmp/restore/<file>.json s3://budget-app-data-f5b52f89/data/<file>.json
+```
+
+Restore only what is actually broken. Wholesale-syncing an old snapshot over
+`data/` reverts every unrelated change made since it was taken.
+
+### Restore drill
+
+Verified 2026-08-02: snapshot taken (36/36 objects), downloaded to a scratch
+directory, and `transactions_*.json` compared byte-for-byte against the live
+object — SHA-256 identical, JSON parsed to 3,864 rows. Re-run the drill after any
+change to the backup scripts. An untested backup is a hope, not a backup.
+
+### Remaining: automate it
+
+Snapshots are currently manual. To schedule on the EC2 host:
+
+1. Grant the instance role `s3:PutObject` + `s3:ListBucket` on
+   `arn:aws:s3:::budget-app-backup-f5b52f89` (and `/*`).
+2. Set `BACKUP_S3_BUCKET_NAME` in the backend `.env` (add
+   `PRODUCTION_BACKUP_S3_BUCKET_NAME` as a GitHub repo variable so deploys
+   preserve it).
+3. `crontab -e` as `appuser`:
+   `0 4 * * 0 cd /home/appuser/app && ./scripts/backup-prod-snapshot.sh >> /home/appuser/logs/backup.log 2>&1`
+
+---
+
 ## Troubleshooting Deployment Issues
 
 ### Issue: Health check fails after deployment

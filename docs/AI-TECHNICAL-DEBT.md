@@ -532,8 +532,9 @@ After 2+3, drop `maximumFileSizeToCacheInBytes` back to (or near) the workbox de
 ---
 
 ### TD-019: No Off-Bucket / Long-Term Backup of Production Data
-**Status**: Open — partially mitigated by existing S3 versioning (see below)
+**Status**: **Resolved (2026-08-02)** for the mechanism — bucket created, snapshot taken and verified, restore drilled. Scheduling on EC2 is the one remaining manual step (needs an IAM grant + cron).
 **Created**: 2026-06-02
+**Updated**: 2026-08-02
 **Impact**: Low-Medium — single-bucket dependence; no recovery from bucket-level loss or edits older than 90 days
 **Effort**: Low
 
@@ -558,9 +559,23 @@ The gap:
 
 **Why not urgent**: versioning already covers the overwhelmingly most-likely failure (a bad write — exactly what TD-011 produces). The remaining gap is whole-bucket loss, which for a 2-person app on a personal AWS account is low-probability. Schedule (1)+(3) when convenient; they're an afternoon and a few cents/month.
 
+**Fix as shipped** (2026-08-02):
+- `scripts/setup-backup-bucket.sh` — idempotent one-time creation of `budget-app-backup-f5b52f89`: public access blocked, versioning on, SSE-S3 default encryption, lifecycle to Glacier Deep Archive at 30 days and expiry at 730 days. Re-running it doubles as a configuration check.
+- `scripts/backup-prod-snapshot.sh` — copies `data/` into `snapshots/YYYY-MM-DD/`. Dated prefixes rather than a mirror, because a mirror of corrupted data is corrupted data. Read-only against production; verifies source vs destination object counts and exits non-zero on mismatch, since a silent partial copy looks like a backup until the day it matters.
+- Restore is deliberately two-step: `--restore-to` only ever downloads **locally**, and pushing back to production is a separate manual `aws s3 cp` documented in [AI-DEPLOYMENTS.md](AI-DEPLOYMENTS.md) §Backups. A one-command restore is the convenience that eventually overwrites good data with old data.
+- **Restore drill completed** (fix step 3): snapshot taken (36/36 objects verified), downloaded to scratch, and `transactions_*.json` compared byte-for-byte against the live object — SHA-256 identical, parsed to 3,864 rows.
+
+**Deliberately not done**, with reasons rather than silence:
+- **Cross-account replication.** The item suggested "ideally a different account". The only other account available is a work account, and putting personal financial data there is worse than the risk it mitigates. Same-account/second-bucket is the honest trade; it leaves **account compromise uncovered**, which is the residual risk.
+- **MFA-delete / Object Lock.** Real operational friction (MFA-delete is root-user only) for a threat model that does not justify it at this scale, exactly as the original item predicted.
+
+**Remaining**: snapshots are manual. Automating needs an IAM grant of `s3:PutObject`/`s3:ListBucket` on the backup bucket to the EC2 instance role, `BACKUP_S3_BUCKET_NAME` in the deployed `.env`, and a weekly cron — all three written up in [AI-DEPLOYMENTS.md](AI-DEPLOYMENTS.md) §Backups → "Remaining: automate it".
+
 **Files**:
-- New: a sync script (e.g. `backend/scripts/backup-prod-snapshot.ts` or a shell cron) + schedule
-- [docs/AI-DEPLOYMENTS.md](AI-DEPLOYMENTS.md) — restore runbook
+- `scripts/setup-backup-bucket.sh` ✅ (new)
+- `scripts/backup-prod-snapshot.sh` ✅ (new)
+- `backend/.env.example` ✅ (`BACKUP_S3_BUCKET_NAME`)
+- [docs/AI-DEPLOYMENTS.md](AI-DEPLOYMENTS.md) ✅ (§Backups — snapshot, restore runbook, drill record, automation steps)
 
 ---
 
