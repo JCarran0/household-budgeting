@@ -64,6 +64,13 @@ export interface StoredAccount {
    * webhook we do not receive.
    */
   consentExpirationTime?: string | null;
+  /**
+   * Plaid `persistent_account_id` — stable across card reissues where the
+   * institution supplies it. Stored so a future account_id change can be
+   * resolved automatically instead of by content matching. Null/absent for
+   * institutions that do not provide it, e.g. Capital One (TD-020).
+   */
+  persistentAccountId?: string | null;
   createdAt: Date;              // When account was connected
   updatedAt: Date;              // Last update
 }
@@ -311,6 +318,9 @@ export class AccountService {
             if (itemStatus.success) {
               storedAccount.lastTransactionUpdate = itemStatus.lastSuccessfulUpdate ?? null;
               storedAccount.consentExpirationTime = itemStatus.consentExpirationTime ?? null;
+            }
+            if (plaidAccount.persistentAccountId) {
+              storedAccount.persistentAccountId = plaidAccount.persistentAccountId;
             }
 
             await this.saveAccount(familyId, storedAccount);

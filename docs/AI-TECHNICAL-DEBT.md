@@ -573,8 +573,9 @@ Plaid's mechanism for exactly this is `persistent_account_id`, a stable identifi
 ---
 
 ### TD-020: Plaid `account_id` Change Causes Silent, Unrecoverable Transaction Loss
-**Status**: Open — manual mitigation exists, app-level handling does not
+**Status**: **Fail-closed guard shipped (2026-08-02)** — loss is prevented and reported. Automatic re-keying still requires the reconciler script.
 **Created**: 2026-08-02
+**Updated**: 2026-08-02
 **Impact**: **High** — silent permanent data loss; the cursor advances past dropped rows
 **Effort**: Medium
 
@@ -597,10 +598,21 @@ Compounding it: dedupe is strictly by `plaidTransactionId` (`:292`). A reissued 
 4. Reuse the content-matching strategy already proven in `reconcile-plaid-account-change.ts` (pair on `type` + `subtype` + `official_name`; re-key on `date` + `amount` with a ±2-day pass for posted-date jitter; refuse ambiguous matches).
 5. Store `persistent_account_id` on `StoredAccount` when the institution provides it. It will not help Capital One, but it makes this automatic for institutions that do populate it.
 
+**Fix as shipped** (2026-08-02) — steps 1, 2, 3 (partial) and 5:
+- `applyPlaidSyncDelta` now returns `unplaceableAccountIds` + `unplaceableRowCount`. The `continue`s are unchanged — we still cannot file a transaction against an account we do not have — but the drop is counted instead of invisible. Both drop sites are covered: the `added` loop and the `modified` loop's treat-as-add branch.
+- **The cursor is not advanced when any row is unplaceable.** This is the whole fix. Plaid's cursor is a delivery receipt; holding it costs one re-fetched delta on the next sync, while advancing it loses the data permanently. Rows we *can* file are still filed — writes are idempotent by `plaidTransactionId`, so re-delivery is harmless.
+- `SyncResult.reconciliationNeeded` carries `{plaidItemId, institutionName, droppedRows}`, and the user-facing `warning` (already surfaced as a notification via `MantineAccounts.tsx:100`) says plainly that transactions are *held*, not lost.
+- `persistent_account_id` is now mapped from Plaid and stored on `StoredAccount` when the institution supplies it (step 5). It will not help Capital One, which returns null for every account, but it makes the same event automatically resolvable for institutions that do populate it.
+
+**Tests**: 7 cases in `backend/src/__tests__/critical/account-id-change.stories.test.ts` — cursor held on unknown `account_id`, condition reported, `modified`-branch rows counted, healthy deltas still advance the cursor (fail-closed must not stall normal syncs), mixed deltas still store what they can, re-running a held delta does not duplicate, and `setItemCursor` is never called while reconciliation is pending. Verified as real regression tests by disabling only the guard: 5 of 7 fail.
+
+**Still open**: automatic re-keying. Detection and prevention are done; repair remains the reconciler script, which needs an operator. Wiring `getSectionTypeForCategory`-style content matching into the app would close it, but the script's `--dry-run`-then-`--apply` shape is a reasonable place for a two-user app to leave a rare, destructive-if-wrong operation.
+
 **Files**:
-- `backend/src/services/transactionService.ts` (`:266-320` delta application, `:205-215` cursor persistence)
-- `backend/src/services/accountService.ts` (account state)
-- `backend/src/scripts/reconcile-plaid-account-change.ts` (existing manual mitigation — keep as the break-glass path)
+- `backend/src/services/transactionService.ts` ✅ (delta application, cursor persistence, `SyncResult`)
+- `backend/src/services/plaidService.ts` ✅ (`persistentAccountId` mapping)
+- `backend/src/services/accountService.ts` ✅ (persist `persistentAccountId`)
+- `backend/src/scripts/reconcile-plaid-account-change.ts` (manual repair — the break-glass path)
 
 ---
 

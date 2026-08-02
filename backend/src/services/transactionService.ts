@@ -101,6 +101,17 @@ export interface SyncResult {
   warning?: string;  // For partial success when some accounts fail
   /** Newly added transactions from this sync (for notification triggers) */
   newTransactions?: StoredTransaction[];
+  /**
+   * Items whose delta referenced a Plaid account_id we do not know — the
+   * institution replaced an account underneath us. The cursor was deliberately
+   * NOT advanced for these, so the transactions remain retrievable until
+   * reconciled with `scripts/reconcile-plaid-account-change.ts` (TD-020).
+   */
+  reconciliationNeeded?: Array<{
+    plaidItemId: string;
+    institutionName: string;
+    droppedRows: number;
+  }>;
 }
 
 export class TransactionService {
@@ -148,6 +159,12 @@ export class TransactionService {
       let totalRemoved = 0;
       const allNewTransactions: StoredTransaction[] = [];
       const failedAccounts: string[] = [];
+      /** Items whose delta referenced an account we do not know (TD-020). */
+      const reconciliationNeeded: Array<{
+        plaidItemId: string;
+        institutionName: string;
+        droppedRows: number;
+      }> = [];
 
       // Group accounts by Plaid Item (cursor is per-Item).
       const itemGroups = new Map<string, StoredAccount[]>();
@@ -202,6 +219,33 @@ export class TransactionService {
         totalRemoved += result.removed;
         allNewTransactions.push(...result.newTransactions);
 
+        // FAIL CLOSED on an account_id we do not recognise (TD-020).
+        //
+        // Plaid's cursor is a delivery receipt: once advanced, those rows are
+        // never sent again. If the institution reissued a card, the Item keeps
+        // reporting healthy while every transaction on the new account_id is
+        // unplaceable — advancing here would consume and discard them
+        // permanently. Holding the cursor keeps the data retrievable, at the
+        // cost of re-fetching this delta on the next sync. Re-fetching is
+        // cheap; the data is not recoverable.
+        if (result.unplaceableAccountIds.length > 0) {
+          log.error(
+            {
+              plaidItemId,
+              unplaceableAccountIds: result.unplaceableAccountIds,
+              unplaceableRowCount: result.unplaceableRowCount,
+              knownAccountIds: itemAccounts.map(a => a.plaidAccountId),
+            },
+            'unrecognised account_id in delta — holding cursor to avoid permanent data loss',
+          );
+          reconciliationNeeded.push({
+            plaidItemId,
+            institutionName: itemAccounts[0]?.institutionName ?? 'Unknown',
+            droppedRows: result.unplaceableRowCount,
+          });
+          continue;
+        }
+
         // Persist cursor for the next call. We do this after applying the
         // delta so a crash mid-write doesn't advance the cursor past data we
         // failed to store. `nextCursor` may be empty string if the initial
@@ -233,6 +277,25 @@ export class TransactionService {
         };
       }
 
+      // Held cursors mean data is waiting, not lost. Say so plainly — this
+      // state does not clear itself and needs an operator to reconcile.
+      if (reconciliationNeeded.length > 0) {
+        const names = [...new Set(reconciliationNeeded.map(r => r.institutionName))].join(', ');
+        const rows = reconciliationNeeded.reduce((sum, r) => sum + r.droppedRows, 0);
+        return {
+          success: true,
+          added: totalAdded,
+          modified: totalModified,
+          removed: totalRemoved,
+          newTransactions: allNewTransactions,
+          warning:
+            `${names}: an account appears to have been replaced by your bank (likely a reissued card). ` +
+            `${rows} transaction${rows === 1 ? '' : 's'} are being held until it is reconciled — ` +
+            `nothing has been lost. Use "Sign in to Bank", then run the reconciler.`,
+          reconciliationNeeded,
+        };
+      }
+
       return {
         success: true,
         added: totalAdded,
@@ -261,7 +324,21 @@ export class TransactionService {
     added: PlaidTransaction[],
     modified: PlaidTransaction[],
     removedIds: string[]
-  ): Promise<{ added: number; modified: number; removed: number; newTransactions: StoredTransaction[] }> {
+  ): Promise<{
+    added: number;
+    modified: number;
+    removed: number;
+    newTransactions: StoredTransaction[];
+    /**
+     * Plaid account_ids in this delta that belong to no account we know about.
+     * Non-empty means the institution re-provisioned an account (typically a
+     * card reissue) and rows are being dropped — the caller MUST NOT advance
+     * the cursor, or Plaid will never re-send them (TD-020).
+     */
+    unplaceableAccountIds: string[];
+    /** How many rows were dropped for those accounts. */
+    unplaceableRowCount: number;
+  }> {
     return this.repo.withLock(familyId, async () => {
       const existingTransactions = await this.repo.getAll(familyId);
 
@@ -281,13 +358,24 @@ export class TransactionService {
       let modifiedCount = 0;
       let removedCount = 0;
       const newTransactions: StoredTransaction[] = [];
+      // Track rows we cannot place instead of dropping them silently. The
+      // `continue`s below are unchanged — we still cannot store a transaction
+      // for an account we do not have — but the caller now learns it happened
+      // and holds the cursor so the data stays retrievable.
+      const unplaceable = new Map<string, number>();
+      const noteUnplaceable = (plaidAccountId: string): void => {
+        unplaceable.set(plaidAccountId, (unplaceable.get(plaidAccountId) ?? 0) + 1);
+      };
 
       // Plaid sometimes returns a row in `added` that we already have
       // (e.g., re-pulls on the historical update). Guard against that by
       // upgrading to a modify when the ID is already present.
       for (const plaidTxn of added) {
         const account = accountLookup.get(plaidTxn.accountId);
-        if (!account) continue;
+        if (!account) {
+          noteUnplaceable(plaidTxn.accountId);
+          continue;
+        }
 
         const existing = existingByPlaidId.get(plaidTxn.plaidTransactionId);
         if (existing) {
@@ -307,7 +395,10 @@ export class TransactionService {
         if (!existing) {
           // Plaid sent a modify for a row we never saw — treat as add.
           const account = accountLookup.get(plaidTxn.accountId);
-          if (!account) continue;
+          if (!account) {
+            noteUnplaceable(plaidTxn.accountId);
+            continue;
+          }
           const newTxn = this.createTransaction(familyId, account.id, plaidTxn);
           existingTransactions.push(newTxn);
           existingByPlaidId.set(newTxn.plaidTransactionId!, newTxn);
@@ -335,6 +426,8 @@ export class TransactionService {
         modified: modifiedCount,
         removed: removedCount,
         newTransactions,
+        unplaceableAccountIds: [...unplaceable.keys()],
+        unplaceableRowCount: [...unplaceable.values()].reduce((a, b) => a + b, 0),
       };
     });
   }

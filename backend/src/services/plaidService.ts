@@ -46,6 +46,13 @@ export interface Account {
   availableBalance: number | null;
   creditLimit?: number | null;
   currency: string | null;
+  /**
+   * Plaid's reissue-stable account identifier, when the institution provides
+   * one. `account_id` changes if a card is reissued; this does not, so it is
+   * the only automatic way to link an old account to its replacement. Null for
+   * institutions that decline to supply it (TD-020).
+   */
+  persistentAccountId?: string | null;
 }
 
 export interface AccountsResult {
@@ -348,6 +355,10 @@ export class PlaidService {
         availableBalance: account.balances.available,
         creditLimit: account.balances.limit || undefined,
         currency: account.balances.iso_currency_code,
+        // Stable across card reissues where the institution supplies it, which
+        // is exactly what makes an account_id change automatically resolvable.
+        // Many institutions (Capital One among them) return null (TD-020).
+        persistentAccountId: account.persistent_account_id ?? null,
       }));
 
       return {
