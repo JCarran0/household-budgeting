@@ -13,6 +13,11 @@ lerna-debug.log*
 .env.test
 .env.production
 .env*.local
+# Backups made while swapping keys (e.g. pulling the prod encryption secret
+# locally to run diagnostics) hold live secrets just like .env itself.
+.env.bak
+.env*.bak
+.env.backup
 
 # Data and backups
 backend/data/
