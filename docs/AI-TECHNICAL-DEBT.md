@@ -23,7 +23,7 @@ This document tracks technical debt identified during the April 2026 architectur
 | TD-019 (schedule the backup) | Low-Med | Low | **prod access** (SSM + IAM) |
 | TD-023 (dead rollover code) | Medium | Low | nothing |
 | TD-024 (type-detection sprawl) | Medium | Med | nothing |
-| TD-025 (single-copy secrets) | Med-High | Low | needs the owner, not an agent |
+| TD-025 (optional hardening) | Low | Low | primary risk already closed 2026-08-02 |
 | TD-018 / TD-011p3 / TD-010 | varies | High | nothing, but large |
 
 The remaining *Low-effort* items are mostly blocked on production infrastructure access rather than code. If you cannot run `aws ssm send-command` against the EC2 instance, skip TD-017 and TD-019's scheduling and pick up TD-023/TD-024 instead.
@@ -831,8 +831,9 @@ Fixed at the BvA layer by consolidating on `getSectionTypeForCategory` (commit `
 ---
 
 ### TD-025: Production Secrets Exist in Exactly One Readable Place
-**Status**: Open — needs the account owner, not an agent
+**Status**: **Primary mitigation complete (2026-08-02)** — the live `.env` is stored in a password manager, so the single-copy risk is closed. Optional hardening (steps 2-3) remains open.
 **Created**: 2026-08-02
+**Updated**: 2026-08-02
 **Impact**: **Medium-High** — losing one file forces re-linking every bank; unrecoverable by any automated means
 **Effort**: Low (minutes) — but only the owner can do it
 
@@ -847,9 +848,13 @@ Neither AWS Secrets Manager nor SSM Parameter Store contains anything — both w
 The consequence is asymmetric. `backend/src/utils/encryption.ts` derives the AES key from `PLAID_ENCRYPTION_SECRET` via PBKDF2, so **every stored Plaid access token is bound to that exact string**. Lose that one file — instance termination without a snapshot, a bad `deploy-server.sh` run, disk failure — and every linked institution becomes permanently undecryptable. Recovery is re-linking all of them by hand through Plaid Link. TD-019's snapshots protect the *data*; they do not contain the *secrets* that make the data usable.
 
 **Fix**:
-1. Copy the live `.env` into a password manager **today**. This is the whole mitigation for 95% of the risk and takes two minutes. Retrieval one-liner: [AI-DEPLOYMENTS.md](AI-DEPLOYMENTS.md) §"Where production secrets actually live".
+1. ✅ **Done 2026-08-02** — the live `.env` is stored in a password manager. Losing the EC2 instance no longer orphans the Plaid tokens. Retrieval one-liner: [AI-DEPLOYMENTS.md](AI-DEPLOYMENTS.md) §"Where production secrets actually live".
 2. Optionally move the secrets into AWS Secrets Manager and have deploys read from there, making the EC2 file a cache rather than the master copy. Adds an IAM dependency to every boot — weigh against the two-user scale.
 3. Record in the runbook that `PLAID_ENCRYPTION_SECRET` is **not rotatable** without re-linking every institution, so nobody "cleans up" by regenerating it.
+
+**Two retrieval hazards worth knowing before you do this again:**
+- **`aws ssm send-command` output is retained in SSM command history for ~30 days** and is readable by anyone with SSM read access on the account. Retrieving the whole `.env` that way puts every secret there. There is no delete API; it ages out. `aws ssm start-session` avoids this entirely — nothing is persisted server-side — at the cost of the values appearing in terminal scrollback.
+- **Do not verify a clipboard copy by running another command.** Attempted on 2026-08-02 and it destroyed the copy: the shell integration placed the typed command on the clipboard, overwriting the secrets before they could be pasted. Either paste into the password manager with no intervening commands, or write to a `chmod 600` file, verify with `cut -d= -f1` (names only, no values), and delete it.
 
 **Files**:
 - [docs/AI-DEPLOYMENTS.md](AI-DEPLOYMENTS.md) §"Where production secrets actually live" (already documents retrieval + the rotation warning)
