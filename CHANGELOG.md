@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+### [5.81.3](https://github.com/JCarran0/household-budgeting/compare/v5.81.2...v5.81.3) (2026-08-02)
+
+
+### Chores
+
+* **scripts:** add Plaid account_id change reconciler ([7fe1a17](https://github.com/JCarran0/household-budgeting/commit/7fe1a179681702c01cb05e2a47f21b7554ba1da5))
+
 ### [5.81.2](https://github.com/JCarran0/household-budgeting/compare/v5.81.1...v5.81.2) (2026-08-02)
 
 
