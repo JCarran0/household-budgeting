@@ -111,15 +111,23 @@ export function ConnectedAccountCard({
               </ActionIcon>
             </Menu.Target>
             <Menu.Dropdown>
-              {requiresReauth && (
-                <Menu.Item
-                  color="orange"
-                  leftSection={<IconLogin size={16} />}
-                  onClick={() => onReauth(account.id)}
-                >
-                  Sign in to Bank
-                </Menu.Item>
-              )}
+              {/*
+                Always available, not just when status === 'requires_reauth'.
+                An Item can stop delivering transactions while Plaid still reports
+                it healthy (no Item error, valid consent), which leaves the account
+                'active' and used to hide this action — the one remedy — exactly
+                when it was needed. The orange badge/border stay gated on
+                requiresReauth so the alert keeps its meaning; only the action is
+                ungated. Re-linking on demand is also how you refresh a consent
+                window before it lapses.
+              */}
+              <Menu.Item
+                color={requiresReauth ? 'orange' : undefined}
+                leftSection={<IconLogin size={16} />}
+                onClick={() => onReauth(account.id)}
+              >
+                Sign in to Bank
+              </Menu.Item>
               <Menu.Item
                 color="red"
                 leftSection={<IconTrash size={16} />}

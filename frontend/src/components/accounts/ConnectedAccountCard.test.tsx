@@ -39,7 +39,10 @@ async function openAccountMenu() {
 }
 
 describe('ConnectedAccountCard — reauth branch', () => {
-  it('shows Sign-in Required badge and Sign in to Bank menu item when status=requires_reauth', async () => {
+  // The badge and the action are deliberately decoupled: the badge signals a
+  // Plaid-reported auth failure, while the action must stay reachable even when
+  // Plaid reports the Item healthy but it has silently stopped syncing.
+  it('shows Sign-in Required badge when status=requires_reauth', () => {
     renderCard(
       <ConnectedAccountCard
         account={makeAccount({ status: 'requires_reauth' })}
@@ -51,12 +54,9 @@ describe('ConnectedAccountCard — reauth branch', () => {
       />,
     );
     expect(screen.getByText('Sign-in Required')).toBeInTheDocument();
-
-    await openAccountMenu();
-    expect(await screen.findByRole('menuitem', { name: /sign in to bank/i })).toBeInTheDocument();
   });
 
-  it('omits Sign-in Required badge and Sign in to Bank menu item when status=active', async () => {
+  it('omits Sign-in Required badge when status=active', () => {
     renderCard(
       <ConnectedAccountCard
         account={makeAccount({ status: 'active' })}
@@ -68,11 +68,25 @@ describe('ConnectedAccountCard — reauth branch', () => {
       />,
     );
     expect(screen.queryByText('Sign-in Required')).not.toBeInTheDocument();
-
-    await openAccountMenu();
-    expect(await screen.findByRole('menuitem', { name: /disconnect account/i })).toBeInTheDocument();
-    expect(screen.queryByRole('menuitem', { name: /sign in to bank/i })).not.toBeInTheDocument();
   });
+
+  it.each(['requires_reauth', 'active'] as const)(
+    'offers the Sign in to Bank menu item when status=%s',
+    async status => {
+      renderCard(
+        <ConnectedAccountCard
+          account={makeAccount({ status })}
+          isSyncing={false}
+          onSync={() => {}}
+          onReauth={() => {}}
+          onEditNickname={() => {}}
+          onDisconnect={() => {}}
+        />,
+      );
+      await openAccountMenu();
+      expect(await screen.findByRole('menuitem', { name: /sign in to bank/i })).toBeInTheDocument();
+    },
+  );
 
   it('fires onReauth with accountId when Sign in to Bank is clicked', async () => {
     const onReauth = vi.fn();
