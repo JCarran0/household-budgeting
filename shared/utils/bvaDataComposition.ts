@@ -3,10 +3,16 @@ import {
   buildCategoryTreeAggregation,
   computeRolloverBalance,
 } from './budgetCalculations';
-import { createCategoryLookup, isBudgetableCategory, isIncomeCategoryHierarchical } from './categoryHelpers';
+import {
+  createCategoryLookup,
+  isBudgetableCategory,
+  isIncomeCategory,
+  isIncomeCategoryHierarchical,
+} from './categoryHelpers';
 import {
   computeAvailable,
   getSectionType,
+  getSectionTypeForCategory,
   toneSignedRollover,
   type SectionType,
 } from './bvaDisplay';
@@ -184,11 +190,12 @@ export function composeBva({
         }
       : undefined;
     const raw = computeRolloverBalance(c, selectedMonth, budgets, actuals, subtree);
-    const section: SectionType = c.isIncome
-      ? 'income'
-      : (c.isSavings ? 'savings' : (c.parentId
-          ? (categoryById.get(c.parentId)?.isSavings ? 'savings' : 'spending')
-          : 'spending'));
+    // Section MUST resolve through the same classifier the Available column
+    // uses. Reading `c.isIncome` here instead was the rollover sign bug: the
+    // field is absent on stored income categories, so income rows fell through
+    // to 'spending' and carried `budgeted − actual` forward — the expense
+    // convention, which inverts for income and compounds every month.
+    const section: SectionType = getSectionTypeForCategory(c, categoryById);
     rolloverByCategoryId.set(c.id, toneSignedRollover(section, raw));
   }
 
@@ -207,7 +214,12 @@ export function composeBva({
       tree = {
         parentId,
         parentName: parentCat.name,
-        isIncome: parentCat.isIncome ?? false,
+        // Match buildCategoryTreeAggregation, which sets this from
+        // isIncomeCategory(parentId). Reading `parentCat.isIncome ?? false`
+        // here would mark an income subtree as non-income whenever the flag is
+        // absent (it usually is), flipping Available for any rollover category
+        // seeded through this path — same defect class as the rollover bug.
+        isIncome: isIncomeCategory(parentId),
         directBudget: 0,
         childBudgetSum: 0,
         effectiveBudget: 0,

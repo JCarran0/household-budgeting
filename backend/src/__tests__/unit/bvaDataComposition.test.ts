@@ -273,3 +273,173 @@ describe('composeBva — BRD Revision 2 rich row shape', () => {
     expect(food.children[0].actual).toBe(225);
   });
 });
+
+/**
+ * Rollover sign correctness across category types.
+ *
+ * Regression for the income rollover sign bug: the Rollover accumulator
+ * resolved its section from the category's own optional `isIncome` field, while
+ * the Available column resolved it hierarchically from the subtree root. Stored
+ * income categories omit `isIncome` entirely (real example:
+ * `CUSTOM_JOJ_CONSULTANT_FEE` carries only `parentId: 'INCOME'`), so income rows
+ * fell through to 'spending' and carried `budgeted − actual` forward. That is
+ * the expense convention; for income it inverts, and because the accumulator
+ * runs every month the error compounds rather than staying a fixed offset.
+ *
+ * These fixtures deliberately do NOT set `isIncome` — setting it would mask the
+ * defect, since the buggy path reads exactly that field.
+ */
+describe('composeBva — rollover sign by section', () => {
+  // No isIncome / isSavings keys: mirrors what is actually persisted.
+  function bareCat(id: string, parentId: string | null, isRollover = false): Category {
+    return { id, name: id, parentId, isCustom: false, isHidden: false, isRollover } as Category;
+  }
+
+  const categories: Category[] = [
+    bareCat('INCOME', null),
+    bareCat('CUSTOM_CONSULTING_FEE', 'INCOME', true),
+    bareCat('FOOD_AND_DRINK', null),
+    bareCat('CUSTOM_GROCERIES', 'FOOD_AND_DRINK', true),
+  ];
+
+  // Identical plan/outcome for both: budget 1000/mo, "1000 planned, 600 realised".
+  const yearlyBudgets: MonthlyBudget[] = ['2026-01', '2026-02', '2026-03', '2026-04'].flatMap(
+    (month, i) => [
+      { id: `i${i}`, categoryId: 'CUSTOM_CONSULTING_FEE', month, amount: 1000 },
+      { id: `e${i}`, categoryId: 'CUSTOM_GROCERIES', month, amount: 1000 },
+    ],
+  );
+
+  // Plaid stores income as negative; composeBva flips it so income reads +600.
+  const yearlyTransactions: Transaction[] = ['2026-01', '2026-02', '2026-03', '2026-04'].flatMap(
+    month => [
+      tx(`${month}-10`, 'CUSTOM_CONSULTING_FEE', -600),
+      tx(`${month}-10`, 'CUSTOM_GROCERIES', 600),
+    ],
+  );
+
+  function rowsFor(month: string) {
+    const out = composeBva({
+      categories,
+      yearlyBudgets,
+      yearlyTransactions,
+      selectedMonth: month,
+      useRollover: false,
+    });
+    const income = out.parents
+      .find(p => p.parentId === 'INCOME')!
+      .children.find(ch => ch.categoryId === 'CUSTOM_CONSULTING_FEE')!;
+    const expense = out.parents
+      .find(p => p.parentId === 'FOOD_AND_DRINK')!
+      .children.find(ch => ch.categoryId === 'CUSTOM_GROCERIES')!;
+    return { income, expense };
+  }
+
+  test('both types read the same underlying figures', () => {
+    const { income, expense } = rowsFor('2026-03');
+    expect(income.actual).toBe(600);
+    expect(income.budgeted).toBe(1000);
+    expect(expense.actual).toBe(600);
+    expect(expense.budgeted).toBe(1000);
+  });
+
+  test('Available flips by section and is unchanged by this fix', () => {
+    const { income, expense } = rowsFor('2026-03');
+    expect(income.available).toBe(-400); // earned 600 against a 1000 target
+    expect(expense.available).toBe(400); // spent 600 of a 1000 allowance
+  });
+
+  test('January resets to zero for both types (calendar-year reset)', () => {
+    const { income, expense } = rowsFor('2026-01');
+    expect(income.rollover).toBe(0);
+    expect(expense.rollover).toBe(0);
+  });
+
+  test('running totals move in OPPOSITE directions for identical figures', () => {
+    // One prior month in Feb, two in Mar, three in Apr.
+    expect(rowsFor('2026-02').expense.rollover).toBe(400);
+    expect(rowsFor('2026-03').expense.rollover).toBe(800);
+    expect(rowsFor('2026-04').expense.rollover).toBe(1200);
+
+    expect(rowsFor('2026-02').income.rollover).toBe(-400);
+    expect(rowsFor('2026-03').income.rollover).toBe(-800);
+    expect(rowsFor('2026-04').income.rollover).toBe(-1200);
+  });
+
+  test('rollover is the running sum of prior availables — the stated contract', () => {
+    // Rollover(n) === Rollover(n-1) + Available(n-1), for BOTH sections.
+    for (const [prev, next] of [['2026-01', '2026-02'], ['2026-02', '2026-03'], ['2026-03', '2026-04']]) {
+      const a = rowsFor(prev);
+      const b = rowsFor(next);
+      expect(b.income.rollover).toBe(a.income.rollover! + a.income.available);
+      expect(b.expense.rollover).toBe(a.expense.rollover! + a.expense.available);
+    }
+  });
+
+  test('the error compounds: income rollover must not track the expense sign', () => {
+    // Under the bug income mirrored expense exactly (+400/+800/+1200), and the
+    // gap from truth doubled each month rather than holding constant.
+    const months = ['2026-02', '2026-03', '2026-04'];
+    for (const m of months) {
+      const { income, expense } = rowsFor(m);
+      expect(income.rollover).toBe(-expense.rollover!);
+      expect(income.rollover).not.toBe(expense.rollover);
+    }
+  });
+
+  test('income classification survives an absent isIncome field', () => {
+    // The root cause: `c.isIncome` is undefined on stored income categories, so
+    // reading it directly yields 'spending'. Resolution must use the subtree root.
+    const cats: Category[] = [bareCat('INCOME', null), bareCat('CUSTOM_SIDE_GIG', 'INCOME', true)];
+    expect((cats[1] as Partial<Category>).isIncome).toBeUndefined();
+    const out = composeBva({
+      categories: cats,
+      yearlyBudgets: [
+        { id: 'b1', categoryId: 'CUSTOM_SIDE_GIG', month: '2026-01', amount: 500 },
+        { id: 'b2', categoryId: 'CUSTOM_SIDE_GIG', month: '2026-02', amount: 500 },
+      ],
+      yearlyTransactions: [tx('2026-01-05', 'CUSTOM_SIDE_GIG', -200)],
+      selectedMonth: '2026-02',
+      useRollover: false,
+    });
+    const row = out.parents
+      .find(p => p.parentId === 'INCOME')!
+      .children.find(ch => ch.categoryId === 'CUSTOM_SIDE_GIG')!;
+    expect(row.rollover).toBe(-300); // earned 200 of 500 → carried shortfall
+  });
+
+  test('income rollover row seeded with no current-month activity keeps income sign', () => {
+    // Exercises ensureTreeForCategory, which built its tree from
+    // `parentCat.isIncome ?? false` and so marked income subtrees as spending.
+    const cats: Category[] = [bareCat('INCOME', null), bareCat('CUSTOM_BONUS', 'INCOME', true)];
+    const out = composeBva({
+      categories: cats,
+      yearlyBudgets: [{ id: 'b1', categoryId: 'CUSTOM_BONUS', month: '2026-01', amount: 900 }],
+      yearlyTransactions: [tx('2026-01-05', 'CUSTOM_BONUS', -100)],
+      selectedMonth: '2026-03', // no budget, no transactions this month
+      useRollover: false,
+    });
+    const parent = out.parents.find(p => p.parentId === 'INCOME')!;
+    const row = parent.children.find(ch => ch.categoryId === 'CUSTOM_BONUS')!;
+    expect(row.rollover).toBe(-800); // earned 100 of 900
+    expect(row.available).toBe(0); // no activity, toggle off
+  });
+
+  test('toggling rollover into Available preserves section sign', () => {
+    const on = composeBva({
+      categories,
+      yearlyBudgets,
+      yearlyTransactions,
+      selectedMonth: '2026-03',
+      useRollover: true,
+    });
+    const income = on.parents
+      .find(p => p.parentId === 'INCOME')!
+      .children.find(ch => ch.categoryId === 'CUSTOM_CONSULTING_FEE')!;
+    const expense = on.parents
+      .find(p => p.parentId === 'FOOD_AND_DRINK')!
+      .children.find(ch => ch.categoryId === 'CUSTOM_GROCERIES')!;
+    expect(income.available).toBe(-1200); // -400 current + -800 carried
+    expect(expense.available).toBe(1200); // 400 current + 800 carried
+  });
+});

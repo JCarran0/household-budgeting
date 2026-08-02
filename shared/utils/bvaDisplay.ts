@@ -1,5 +1,6 @@
 import type { Category } from '../types';
 import type { TreeAggregation } from './budgetCalculations';
+import { isIncomeCategory } from './categoryHelpers';
 
 /**
  * BvA display helpers — type-aware tone/section classification.
@@ -16,24 +17,52 @@ export type SectionType = 'income' | 'spending' | 'savings';
 export type VarianceTone = 'favorable' | 'unfavorable' | 'neutral';
 
 /**
- * Classify a tree into one of the three accordion sections.
+ * THE canonical section classifier. Every sign decision in BvA — the Available
+ * column, the Rollover column, tone — must resolve section through this one
+ * function.
  *
  * Precedence:
- *   1. isIncome (from the tree aggregation's own flag) → income.
- *   2. Top-level category flagged isSavings → savings.
+ *   1. Subtree root under INCOME → income.
+ *   2. Subtree root flagged isSavings → savings.
  *   3. Otherwise → spending.
  *
- * The category hierarchy is type-consistent (REQ-034) — a subtree inherits
- * the parent's type — so checking the parent record is sufficient.
+ * Resolution is by the *subtree root*, never by the category's own optional
+ * `isIncome` field. That field is absent on most stored categories (custom
+ * income categories such as `CUSTOM_JOJ_CONSULTANT_FEE` carry only
+ * `parentId: 'INCOME'`), so reading it directly silently yields `undefined` →
+ * 'spending' for genuine income rows. The category hierarchy is type-consistent
+ * (REQ-034), so the root is the authoritative source.
+ *
+ * Deriving section two different ways is precisely the defect this consolidates:
+ * the Available column resolved it hierarchically and was correct, while the
+ * Rollover accumulator read the flat field and inverted its sign for income.
+ */
+export function getSectionTypeForCategory(
+  category: Pick<Category, 'id' | 'parentId'>,
+  categoryById: Map<string, Category>,
+): SectionType {
+  const rootId = category.parentId ?? category.id;
+  if (isIncomeCategory(rootId)) return 'income';
+  const root = categoryById.get(rootId);
+  if (root?.isSavings) return 'savings';
+  return 'spending';
+}
+
+/**
+ * Classify a tree into one of the three accordion sections.
+ *
+ * Delegates to {@link getSectionTypeForCategory} so tree-derived and
+ * category-derived section resolution cannot drift apart. `tree.isIncome` is
+ * still honoured first: it is set from `isIncomeCategory(parentId)` by
+ * `buildCategoryTreeAggregation`, so it agrees with the canonical rule, and
+ * keeping it preserves behaviour for callers that construct a tree directly.
  */
 export function getSectionType(
   tree: TreeAggregation,
   categoryById: Map<string, Category>,
 ): SectionType {
   if (tree.isIncome) return 'income';
-  const parent = categoryById.get(tree.parentId);
-  if (parent?.isSavings) return 'savings';
-  return 'spending';
+  return getSectionTypeForCategory({ id: tree.parentId, parentId: null }, categoryById);
 }
 
 /**
