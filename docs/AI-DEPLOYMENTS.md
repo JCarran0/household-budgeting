@@ -239,6 +239,24 @@ aws ssm send-command --instance-ids i-05cd17258cce207a3 \
 aws logs tail /aws/ec2/budget-app --follow
 ```
 
+> ⚠️ **Known gap as of 2026-08-03: JSON fields are not queryable yet.** The
+> *deployed* `ecosystem.config.js` still sets `log_date_format`, so PM2 prepends
+> `2026-08-03 18:21:05: ` to every Pino line. CloudWatch only auto-parses an event
+> that is pure JSON, so the Insights queries below match **zero** records
+> (verified: `filter ispresent(module)` → 0 of 0). Forwarding works; field
+> extraction does not. The repo dropped `log_date_format` when TD-017 shipped, but
+> that change never reached production. Fixing it needs a deploy plus a PM2
+> **re-create** — `pm2 restart` reuses the saved process definition and will not
+> pick up the config change:
+>
+> ```bash
+> sudo -u appuser pm2 delete budget-backend
+> sudo -u appuser pm2 start /home/appuser/app/ecosystem.config.js
+> sudo -u appuser pm2 save
+> ```
+>
+> Until then, query with an explicit strip: `parse @message "*: {*" as _ts, _rest | ...`.
+
 Three details that are easy to get wrong, and were wrong in this doc until 2026-08-02:
 
 - **The instance runs Ubuntu, not Amazon Linux.** `yum install amazon-cloudwatch-agent`
@@ -248,6 +266,12 @@ Three details that are easy to get wrong, and were wrong in this doc until 2026-
   these instructions would have failed with a missing-group error rather than an empty one.
 - **The agent must `run_as_user: root`** to tail files owned by `appuser`. Under the
   default user it starts cleanly and forwards nothing, which looks like success.
+- **The real log files are `output-0.log` / `error-0.log`**, not the `output.log` in
+  `ecosystem.config.js` — PM2 appends its instance index when a process is started
+  outside that config file, which is how the running process was started. The agent
+  config globs `output*.log` so it matches either naming, and deliberately does not
+  match rotated siblings (`output-0.log.1`, `.2.gz`) — those would be re-ingested
+  as new events on every rotation.
 
 Retention is set to **90 days**. It is set explicitly rather than left to default:
 an unset retention means *never expire*, which is how this account accumulated a

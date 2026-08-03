@@ -32,7 +32,7 @@ This document tracks technical debt identified during the April 2026 architectur
 |------|--------|--------|-----------|
 | TD-021 (webhooks half) | High | Medium | needs a public endpoint + closing a security stub first |
 | TD-020 (auto re-keying) | High | Medium | nothing — deliberately deferred, see entry |
-| TD-017 (CloudWatch agent) | Medium | Low | **prod access** — scripted, needs 2 commands run |
+| TD-017 (deployed ecosystem.config drift) | Medium | Low | nothing — needs a deploy + PM2 re-create |
 | TD-019 (schedule the backup) | Low-Med | Low | **prod access** (SSM + IAM) |
 | TD-023 (dead rollover code) | Medium | Low | nothing |
 | TD-024 (type-detection sprawl) | Medium | Med | nothing |
@@ -65,7 +65,7 @@ Production data is JSON blobs in S3, not a database. `cd backend && npm run back
 
 Bump `**Last Updated**`, add an `## Audits` line for anything incident-driven, and record *what was deliberately not done and why* — several entries below are more useful for their rejected options than their accepted ones.
 
-**Last Updated**: 2026-08-02
+**Last Updated**: 2026-08-03
 **Previous (archived)**: [docs/completed/AI-TECHNICAL-DEBT.md](completed/AI-TECHNICAL-DEBT.md)
 **Execution sequencing**: [TECH-DEBT-EXECUTION-PLAN-2026-04.md](TECH-DEBT-EXECUTION-PLAN-2026-04.md)
 **Security findings (higher priority)**: [SECURITY-AUDIT-2026-08-02.md](SECURITY-AUDIT-2026-08-02.md)
@@ -76,6 +76,7 @@ Bump `**Last Updated**`, add an `## Audits` line for anything incident-driven, a
 - **2026-06-02** — trip-photo corruption incident: updated TD-011 (`tripService` unprotected RMW surface), added TD-019 (backup posture)
 - **2026-08-02** — full security audit (dependencies, auth/authz, input validation, AI boundary, secrets/infra). 30 findings, 3 High, tracked as `SA-NN` in [SECURITY-AUDIT-2026-08-02.md](SECURITY-AUDIT-2026-08-02.md) rather than as TD entries — the burn-down is its own workstream and outranks this file. Surfaced that TD-004's SPA-CSP follow-up is still unshipped (now also `SA-27`) and independently re-derived TD-025 (now also `SA-31`, closed).
 - **2026-08-02** — Capital One card-reissue incident + rollover sign bug. Added TD-020 (`account_id` change → silent data loss), TD-021 (no Plaid webhooks / no staleness surface), TD-022 (silent sync error paths). Reopened TD-017 (CloudWatch forwarding never enabled, so the logging payoff is unrealized). Corrected TD-014 (claimed zero frontend tests; 31 files / 272 tests exist). Resolved TD-019 (off-bucket snapshots + drilled restore) and TD-022. Added TD-023/024/025 from findings surfaced while fixing the above.
+- **2026-08-03** — TD-017 executed: CloudWatch agent installed, forwarding verified into `/aws/ec2/budget-app` (90d retention). Found production drifted from the repo in two places (PM2 log-file naming, and a stale deployed `ecosystem.config.js` whose `log_date_format` breaks JSON field extraction). Recorded the `budget-app-backup` vs `budget-app-backups` naming hazard under TD-019.
 
 ---
 
@@ -521,7 +522,7 @@ Paired with TD-004 (Sprint 3) — CSP outer envelope + sanitization inner envelo
 ---
 
 ### TD-017: Console Logging Throughout — No Structured Logger
-**Status**: **Partially resolved** — code half landed 2026-05-01 (Sprint 6); CloudWatch forwarding was never enabled (reopened 2026-08-02)
+**Status**: **Forwarding live 2026-08-03** — agent installed, logs reaching `/aws/ec2/budget-app` at 90d retention. One gap remains: JSON field extraction is broken by a stale deployed `ecosystem.config.js` (see 2026-08-03 note)
 **Created**: 2026-04-22
 **Updated**: 2026-08-02
 **Impact**: Medium - Incident response is grep-archaeology; PII redaction is per-call-site
@@ -544,7 +545,16 @@ Paired with TD-004 (Sprint 3) — CSP outer envelope + sanitization inner envelo
 >
 > IAM turned out to be *nearly* done: the instance role `budget-app-ec2-s3-role` already carries an inline `ssm-session-logging` policy granting `logs:CreateLogGroup/CreateLogStream/PutLogEvents/DescribeLogStreams` on all groups. Attaching `CloudWatchAgentServerPolicy` is still the right move (it is the documented contract and adds `DescribeLogGroups`), but the forwarding path would function without it. Do not *remove* the inline policy assuming the managed one supersedes it — it also grants the S3 session-log write.
 >
-> **Remaining work**: two commands, both requiring prod credentials — `aws iam attach-role-policy` for `CloudWatchAgentServerPolicy`, then `aws ssm send-command` to run the script. Both are in [AI-DEPLOYMENTS.md](AI-DEPLOYMENTS.md) §Forwarding logs to CloudWatch. Verify with `aws logs tail /aws/ec2/budget-app --follow`. Until this is run, treat PM2's rotation window as the real limit on how far back any investigation can reach.
+> **2026-08-03 — executed. Logs now forward.** `CloudWatchAgentServerPolicy` attached to `budget-app-ec2-s3-role`, agent v1.300069.0 installed and enabled, 90d retention set, and ingestion verified end-to-end into stream `i-05cd17258cce207a3/output`. The rotation-window limit on investigations is lifted.
+>
+> Two things the install surfaced that the plan had wrong, both instances of the same root cause — **production drifted from the repo and nobody noticed, because nothing reads back**:
+>
+> - **PM2 writes `output-0.log`, not `output.log`.** The instance-index suffix appears when a process is started outside `ecosystem.config.js`, which is how the running process was started. The prerequisite check in the script caught this on the first run (it reported both files missing) — the agent would otherwise have run healthy and forwarded nothing forever. Config now globs `output*.log`, which matches either naming and excludes rotated siblings.
+> - **The deployed `ecosystem.config.js` still sets `log_date_format`.** TD-017's original work removed it *in the repo* precisely because a PM2-prepended wall-clock string breaks CloudWatch's JSON parsing — but that change never shipped to the instance. So every Pino line arrives as `2026-08-03 18:21:05: {...}`, and CloudWatch declines to auto-parse it. Measured, not assumed: an Insights `filter ispresent(module)` over the last hour matched **0 records**. Forwarding works; querying by field does not.
+>
+> **Remaining work (small):** deploy current `main`, then **re-create** the PM2 process — `pm2 delete budget-backend && pm2 start ecosystem.config.js && pm2 save`. A plain `pm2 restart` reuses the saved definition and will not pick up the change; that is why the original fix appeared done for three months. Re-verify with the `ispresent(module)` query returning non-zero. Interim workaround for queries: `parse @message "*: {*" as _ts, _rest`.
+>
+> **Lesson worth generalizing:** both halves of this item failed the same way — a repo-side change was treated as complete without any check that production reflected it. The prerequisite check that caught the log-path bug is the cheap version of the fix; consider extending the post-deploy validation in [AI-DEPLOYMENTS.md](AI-DEPLOYMENTS.md) to assert log ingestion is live and parseable.
 
 **Problem**:
 The backend uses `console.log` / `console.error` directly throughout. In production these go to PM2 stdout/stderr. There is no structured JSON output, no log-level discipline, no centralized PII redaction, and no integration with monitoring. When something breaks in prod, debugging is `pm2 logs | grep` and hoping you remember the right substring.

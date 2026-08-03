@@ -46,13 +46,24 @@ echo "🔎 Checking prerequisites"
 # The agent tails files owned by appuser, so it must run as root — that is set
 # in the config's `agent.run_as_user`. Verify the files it will tail exist, or
 # the agent starts happily and forwards nothing.
-for f in /home/appuser/logs/output.log /home/appuser/logs/error.log; do
-  if [[ -f "$f" ]]; then
-    echo "   ✓ $f ($(stat -c%s "$f") bytes)"
+#
+# Globs, not literal names, because PM2 writes `output-0.log` (its instance-index
+# naming) even though ecosystem.config.js specifies `output.log` — the running
+# process was not started from that file. The glob matches both, and deliberately
+# does not match rotated siblings (`output-0.log.1`, `.2.gz`), which would
+# re-ingest old data on every rotation.
+shopt -s nullglob
+for pattern in '/home/appuser/logs/output*.log' '/home/appuser/logs/error*.log'; do
+  matches=( $pattern )
+  if (( ${#matches[@]} == 0 )); then
+    echo "   ⚠️  no file matches $pattern — agent will wait for one to appear"
   else
-    echo "   ⚠️  $f missing — agent will wait for it to appear"
+    for f in "${matches[@]}"; do
+      echo "   ✓ $f ($(stat -c%s "$f") bytes)"
+    done
   fi
 done
+shopt -u nullglob
 
 if ! command -v amazon-cloudwatch-agent-ctl >/dev/null 2>&1 && [[ ! -x "$AGENT_CTL" ]]; then
   echo "📦 Installing amazon-cloudwatch-agent"
