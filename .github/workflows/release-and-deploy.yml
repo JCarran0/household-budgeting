@@ -290,20 +290,29 @@ jobs:
           # Copy frontend
           cp -r frontend/dist/* deployment/frontend/
           
-          # Generate .env file with secrets and variables
-          cat > deployment/backend/.env << EOF
+          # Generate NON-SECRET configuration only (SA-25).
+          #
+          # Secrets are NOT written here and never enter the deployment package.
+          # They live in SSM Parameter Store under /budget-app/prod/* and are
+          # fetched by scripts/deploy-server.sh at deploy time, so the tarballs
+          # retained in S3 are no longer credential bundles at rest.
+          #
+          # To change a secret: update the GitHub Secret, then run the
+          # "Sync Secrets to SSM Parameter Store" workflow.
+          # To change anything below: update the GitHub Variable and redeploy.
+          #
+          # ENCRYPTION_KEY is deliberately gone (SA-30) — no code ever read it,
+          # and having two similarly-named "encryption key" secrets invited
+          # rotating PLAID_ENCRYPTION_SECRET by mistake, which would orphan
+          # every linked bank.
+          cat > deployment/backend/.env.config << EOF
           NODE_ENV=${{ vars.PRODUCTION_NODE_ENV }}
           PORT=${{ vars.PRODUCTION_PORT }}
-          JWT_SECRET=${{ secrets.PRODUCTION_JWT_SECRET }}
           JWT_EXPIRES_IN=${{ vars.PRODUCTION_JWT_EXPIRES_IN }}
-          PLAID_CLIENT_ID=${{ secrets.PRODUCTION_PLAID_CLIENT_ID }}
-          PLAID_SECRET=${{ secrets.PRODUCTION_PLAID_SECRET }}
           PLAID_ENV=${{ vars.PRODUCTION_PLAID_ENV }}
           PLAID_PRODUCTS=${{ vars.PRODUCTION_PLAID_PRODUCTS }}
           PLAID_COUNTRY_CODES=${{ vars.PRODUCTION_PLAID_COUNTRY_CODES }}
           DATA_DIR=${{ vars.PRODUCTION_DATA_DIR }}
-          ENCRYPTION_KEY=${{ secrets.PRODUCTION_ENCRYPTION_KEY }}
-          PLAID_ENCRYPTION_SECRET=${{ secrets.PLAID_ENCRYPTION_SECRET }}
           STORAGE_TYPE=${{ vars.PRODUCTION_STORAGE_TYPE }}
           S3_BUCKET_NAME=${{ vars.PRODUCTION_S3_BUCKET_NAME }}
           S3_PREFIX=${{ vars.PRODUCTION_S3_PREFIX }}
@@ -311,16 +320,11 @@ jobs:
           FRONTEND_URL=${{ vars.PRODUCTION_FRONTEND_URL }}
           API_PREFIX=${{ vars.PRODUCTION_API_PREFIX }}
           LOG_LEVEL=${{ vars.PRODUCTION_LOG_LEVEL }}
-          ANTHROPIC_API_KEY=${{ secrets.PRODUCTION_ANTHROPIC_API_KEY }}
-          GITHUB_ISSUES_PAT=${{ secrets.PRODUCTION_GITHUB_ISSUES_PAT }}
           CHATBOT_MONTHLY_LIMIT=${{ vars.PRODUCTION_CHATBOT_MONTHLY_LIMIT }}
-          VAPID_PUBLIC_KEY=${{ secrets.VAPID_PUBLIC_KEY }}
-          VAPID_PRIVATE_KEY=${{ secrets.VAPID_PRIVATE_KEY }}
-          VAPID_SUBJECT=${{ secrets.VAPID_SUBJECT }}
           ADMIN_USERNAMES=${{ vars.PRODUCTION_ADMIN_USERNAMES }}
           DEPLOYMENT_VERSION=${{ steps.deploy_version.outputs.version }}
           EOF
-          
+
           # Add metadata
           echo "$GITHUB_SHA" > deployment/REVISION
           echo "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > deployment/TIMESTAMP
@@ -332,6 +336,20 @@ jobs:
           test -d deployment/shared/utils || (echo "❌ Shared utilities directory missing" && exit 1)
           test -f deployment/shared/utils/categoryHelpers.js || (echo "❌ CategoryHelpers missing from shared utilities" && exit 1)
           test -f deployment/CHANGELOG.md || (echo "❌ CHANGELOG.md missing from deployment package" && exit 1)
+          test -f deployment/backend/.env.config || (echo "❌ .env.config missing from deployment package" && exit 1)
+
+          # SA-25 regression guard: fail the build if a secret ever finds its
+          # way back into the package. Checks for the variable NAMES, so it
+          # cannot itself leak a value. If this trips, something re-added a
+          # secret to the .env.config heredoc above — put it in SSM instead.
+          echo "  Checking package contains no secrets..."
+          for FORBIDDEN in JWT_SECRET PLAID_SECRET PLAID_CLIENT_ID PLAID_ENCRYPTION_SECRET ANTHROPIC_API_KEY GITHUB_ISSUES_PAT VAPID_PRIVATE_KEY ENCRYPTION_KEY; do
+            if grep -rq "^${FORBIDDEN}=" deployment/backend/.env.config 2>/dev/null; then
+              echo "❌ $FORBIDDEN is present in the deployment package — secrets must come from SSM (SA-25)"
+              exit 1
+            fi
+          done
+          test ! -f deployment/backend/.env || (echo "❌ A full .env is present in the package — secrets must come from SSM (SA-25)" && exit 1)
           
           # Validate all required category helper functions are present
           echo "  Checking for required functions in categoryHelpers.js..."
@@ -353,6 +371,41 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ vars.PRODUCTION_AWS_REGION }}
           
+      - name: Verify secrets exist in SSM
+        run: |
+          set -euo pipefail
+          SSM_PATH="/budget-app/prod"
+
+          # Pre-flight: the host renders .env from these at deploy time, so a
+          # missing parameter would abort the deploy mid-flight. Checking here —
+          # before the package is uploaded and before SSM send-command runs —
+          # means a first-time or mis-synced setup fails with the running app
+          # completely untouched.
+          #
+          # Deliberately NOT --with-decryption: existence is all we need, and
+          # pulling plaintext into a CI job log's blast radius would undo the
+          # point of the exercise.
+          REQUIRED="JWT_SECRET PLAID_CLIENT_ID PLAID_SECRET PLAID_ENCRYPTION_SECRET ANTHROPIC_API_KEY GITHUB_ISSUES_PAT VAPID_PUBLIC_KEY VAPID_PRIVATE_KEY VAPID_SUBJECT"
+
+          PRESENT=$(aws ssm describe-parameters \
+            --parameter-filters "Key=Path,Option=Recursive,Values=$SSM_PATH" \
+            --query "Parameters[].Name" --output text 2>/dev/null || echo "")
+
+          MISSING=""
+          for NAME in $REQUIRED; do
+            echo "$PRESENT" | tr '\t' '\n' | grep -qx "$SSM_PATH/$NAME" || MISSING="$MISSING $NAME"
+          done
+
+          if [ -n "$MISSING" ]; then
+            echo "❌ Missing SSM parameters:$MISSING"
+            echo ""
+            echo "Run the 'Sync Secrets to SSM Parameter Store' workflow, then re-run this deploy."
+            echo "Nothing has been uploaded or deployed; production is untouched."
+            exit 1
+          fi
+
+          echo "✅ All $(echo $REQUIRED | wc -w) required secrets present in $SSM_PATH"
+
       - name: Upload to S3
         id: upload
         run: |

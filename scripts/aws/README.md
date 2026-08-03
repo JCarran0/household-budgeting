@@ -51,6 +51,53 @@ use the AWS-managed `alias/aws/ssm` key whose ID is account-specific and can be
 recreated. The condition is the real constraint: the role can only use KMS
 *through SSM*, so this grant cannot be repurposed to decrypt anything else.
 
+---
+
+## `gh-actions-deployment-policy.json`
+
+The **complete** managed policy for the CI deploy user
+(`budget-app-gh-actions-user` → `BudgetAppGitHubActionsDeployment`). It is the
+existing policy plus three statements that let the *Sync Secrets to SSM*
+workflow write parameters and let the deploy workflow run its pre-flight check.
+
+This is a full document, not a patch — updating a managed policy means creating
+a new version containing everything.
+
+**Apply:**
+
+```bash
+aws iam create-policy-version \
+  --policy-arn arn:aws:iam::903733335979:policy/BudgetAppGitHubActionsDeployment \
+  --policy-document file://scripts/aws/gh-actions-deployment-policy.json \
+  --set-as-default
+```
+
+**Verify:**
+
+```bash
+ARN=arn:aws:iam::903733335979:policy/BudgetAppGitHubActionsDeployment
+aws iam get-policy-version --policy-arn "$ARN" \
+  --version-id "$(aws iam get-policy --policy-arn "$ARN" --query Policy.DefaultVersionId --output text)" \
+  --query 'PolicyVersion.Document.Statement[].Sid' --output text
+# expect WriteDeploymentSecrets, ListParametersForPreflight, EncryptSecureStringsViaSsmOnly
+```
+
+A managed policy keeps at most 5 versions. If `create-policy-version` fails with
+`LimitExceeded`, delete the oldest non-default version first
+(`aws iam list-policy-versions` → `aws iam delete-policy-version`).
+
+### What was added and why
+
+| Sid | Why |
+|-----|-----|
+| `WriteDeploymentSecrets` | `ssm:PutParameter` so the sync workflow can write `/budget-app/prod/*`. Scoped to that path — CI cannot touch other parameters. |
+| `ListParametersForPreflight` | `ssm:DescribeParameters` for the deploy's pre-flight existence check. Must be `Resource: "*"` — the API does not support resource-level permissions. It returns metadata only, never values. |
+| `EncryptSecureStringsViaSsmOnly` | SecureString writes need KMS. Constrained by `kms:ViaService` so it cannot be used outside SSM. |
+
+Note this user is **not** an admin. It has a narrow, purpose-built policy —
+worth preserving. Do not "fix" a permissions error here by attaching
+`AdministratorAccess`; add the specific action to this document instead.
+
 ### Do not remove the existing inline policies
 
 `ssm-session-logging` also grants the S3 session-log write, and

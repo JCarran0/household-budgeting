@@ -33,15 +33,78 @@ cd "$TEMP_DIR"
 tar -xzf deployment.tar.gz
 cp -r deployment/* "$DEPLOYMENT_DIR/"
 
-# Copy .env file from deployment package (contains GitHub Secrets)
-if [ -f "$TEMP_DIR/deployment/backend/.env" ]; then
-    echo "📋 Installing environment configuration from deployment..."
-    cp "$TEMP_DIR/deployment/backend/.env" "$DEPLOYMENT_DIR/backend/.env"
-    chmod 600 "$DEPLOYMENT_DIR/backend/.env"
-    echo "✅ Environment variables configured from GitHub Secrets"
-else
-    echo "⚠️  Warning: No .env file found in deployment package"
+# ---------------------------------------------------------------------------
+# Render .env  =  non-secret config (from package)  +  secrets (from SSM)
+#
+# SA-25: deployment tarballs used to carry a complete .env — JWT secret, Plaid
+# secret, PLAID_ENCRYPTION_SECRET, Anthropic key, GitHub PATs, VAPID private
+# key. Those tarballs are retained in S3 indefinitely for rollback, so every
+# historical package was a readable credential bundle at rest, and rotating a
+# secret did not invalidate the copies already sitting in the bucket.
+#
+# Secrets now come from SSM Parameter Store at deploy time and exist only in
+# this file on this host. The package carries non-secret config only.
+#
+# This block runs BEFORE `pm2 stop` on purpose. If SSM is unreachable, the IAM
+# grant is missing, or a parameter is absent, the deploy aborts here with the
+# old version still serving traffic. Do not move it later in the script.
+# ---------------------------------------------------------------------------
+SSM_PATH="/budget-app/prod"
+ENV_FILE="$DEPLOYMENT_DIR/backend/.env"
+CONFIG_FILE="$TEMP_DIR/deployment/backend/.env.config"
+
+# Every secret the backend needs at boot. Keep in sync with the SECRETS list in
+# .github/workflows/sync-secrets-to-ssm.yml — that workflow is the only writer.
+REQUIRED_SECRETS="JWT_SECRET PLAID_CLIENT_ID PLAID_SECRET PLAID_ENCRYPTION_SECRET ANTHROPIC_API_KEY GITHUB_ISSUES_PAT VAPID_PUBLIC_KEY VAPID_PRIVATE_KEY VAPID_SUBJECT"
+
+echo "📋 Installing non-secret configuration from deployment package..."
+if [ ! -f "$CONFIG_FILE" ]; then
+    echo "❌ No .env.config in deployment package — cannot build environment"
+    exit 1
 fi
+install -m 600 /dev/null "$ENV_FILE"
+cat "$CONFIG_FILE" >> "$ENV_FILE"
+
+echo "🔐 Fetching secrets from SSM ($SSM_PATH)..."
+# --with-decryption is required for SecureString. Output is piped straight to
+# jq and into the 0600 file; it is never echoed. Note the CLI paginates
+# get-parameters-by-path automatically (the API caps at 10 per call).
+SSM_JSON=$(aws ssm get-parameters-by-path \
+    --path "$SSM_PATH" \
+    --with-decryption \
+    --recursive \
+    --output json 2>&1) || {
+    echo "❌ Could not read $SSM_PATH from SSM."
+    echo "   Most likely the instance role is missing budget-app-ssm-secrets-read."
+    echo "   Apply scripts/aws/ec2-ssm-secrets-read-policy.json — see scripts/aws/README.md"
+    echo "   Aborting; the running version is untouched."
+    exit 1
+}
+
+# Reject values containing newlines — they would silently corrupt every
+# subsequent line of .env and surface as a baffling boot failure.
+if echo "$SSM_JSON" | jq -e '.Parameters[] | select(.Value | test("\n"))' > /dev/null 2>&1; then
+    echo "❌ An SSM parameter value contains a newline, which .env cannot represent."
+    exit 1
+fi
+
+echo "$SSM_JSON" | jq -r '.Parameters[] | "\(.Name | split("/") | last)=\(.Value)"' >> "$ENV_FILE"
+
+# Verify every required secret actually landed. Checks key names only — values
+# are never printed.
+MISSING=""
+for NAME in $REQUIRED_SECRETS; do
+    grep -q "^${NAME}=." "$ENV_FILE" || MISSING="$MISSING $NAME"
+done
+if [ -n "$MISSING" ]; then
+    echo "❌ Missing or empty secrets in SSM:$MISSING"
+    echo "   Run the 'Sync Secrets to SSM Parameter Store' workflow, then redeploy."
+    echo "   Aborting; the running version is untouched."
+    exit 1
+fi
+
+chmod 600 "$ENV_FILE"
+echo "✅ Environment configured — $(grep -c '=' "$ENV_FILE") variables, secrets from SSM"
 
 # Backup current deployment (excluding data directory)
 if [ -d "$APP_DIR/backend" ]; then
@@ -63,9 +126,12 @@ npm ci --omit=dev
 echo "⏸️  Stopping application..."
 pm2 stop budget-backend || true
 
-# Clean up old data if switching to S3
-if [ -f "$DEPLOYMENT_DIR/backend/.env" ]; then
-    source "$DEPLOYMENT_DIR/backend/.env"
+# Clean up old data if switching to S3.
+# Reads STORAGE_TYPE from the non-secret config only — `source`ing the full
+# .env would pull every secret into this shell's environment, where it would be
+# inherited by npm, pm2, and everything else the script runs.
+if [ -f "$CONFIG_FILE" ]; then
+    STORAGE_TYPE=$(grep '^STORAGE_TYPE=' "$CONFIG_FILE" | cut -d= -f2-)
     if [ "$STORAGE_TYPE" = "s3" ] && [ -d "$APP_DIR/backend/data" ]; then
         echo "🧹 Cleaning up local data directory (using S3 storage now)..."
         rm -rf "$APP_DIR/backend/data"
