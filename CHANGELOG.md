@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+### [6.0.2](https://github.com/JCarran0/household-budgeting/compare/v6.0.1...v6.0.2) (2026-08-03)
+
+
+### Bug Fixes
+
+* **ops:** correct CloudWatch log paths; record prod/repo drift (TD-017) ([e581f96](https://github.com/JCarran0/household-budgeting/commit/e581f961f1d231f8c29051850293b0946a8530bf))
+
+
+### CI/CD
+
+* **security:** add SSM secret sync workflow and EC2 read policy (SA-25) ([b2f5b48](https://github.com/JCarran0/household-budgeting/commit/b2f5b4873410f60b7b976f5b6d23a9ca72728ab6))
+
+
+### Documentation
+
+* **ops:** replace untested Insights workaround with a verified query ([f0d2884](https://github.com/JCarran0/household-budgeting/commit/f0d28845895e48a7c73908095bd73a139228755a))
+
 ### [6.0.1](https://github.com/JCarran0/household-budgeting/compare/v6.0.0...v6.0.1) (2026-08-02)
 
 
