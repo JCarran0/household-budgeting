@@ -54,10 +54,15 @@ Configure in: Settings → Secrets and variables → Actions → Secrets
 
 ### Where production secrets actually live (and how to recover one)
 
-There is **no AWS Secrets Manager or SSM Parameter Store entry for this app** — both are empty in the `budget-app-prod` account (verified 2026-08-02). Every secret above exists in exactly two places:
+> **Changed 2026-08-03 (SA-25).** Secrets now live in **SSM Parameter Store** under `/budget-app/prod/*` as SecureStrings. They are **no longer written into deployment packages**. See "Secret flow" below for the current model; the recovery procedure in this section still applies to the on-host `.env`, which is now a *render* of SSM rather than a copy of the tarball.
 
-1. **GitHub Actions secrets** — write-only. GitHub will let you overwrite a secret but never read it back. Not a recovery source.
-2. **`/home/appuser/app/backend/.env` on the EC2 instance** — written at deploy time by `scripts/deploy-server.sh` (`chmod 600`, owned by `appuser`). **This is the only readable copy.**
+Every secret exists in three places:
+
+1. **GitHub Actions secrets** — write-only. GitHub will let you overwrite a secret but never read it back. Not a recovery source. Still the source of truth you edit.
+2. **SSM Parameter Store**, `/budget-app/prod/*` — SecureString, readable with `--with-decryption` given the right IAM. Written only by the *Sync Secrets to SSM Parameter Store* workflow.
+3. **`/home/appuser/app/backend/.env` on the EC2 instance** — rendered at deploy time by `scripts/deploy-server.sh` from (2) plus the non-secret `.env.config` shipped in the package (`chmod 600`, owned by `appuser`).
+
+Since SSM is now a durable readable copy, losing the EC2 instance no longer risks orphaning the Plaid tokens — the concern that made TD-025 urgent.
 
 To read one without printing it into a terminal transcript, pipe it straight to its destination:
 
@@ -75,6 +80,38 @@ aws ssm get-command-invocation --command-id "$CMD" --instance-id <EC2_INSTANCE_I
 > ⚠️ **Never rotate `PLAID_ENCRYPTION_SECRET` casually.** `backend/src/utils/encryption.ts:29` derives the AES key from it via PBKDF2, so every stored `plaidAccessToken` is bound to that exact value. Changing it makes **all** linked institutions undecryptable simultaneously, and the only recovery is re-linking every bank through Plaid Link. Because the EC2 `.env` is the single readable copy, treat that file as critical state — keep a copy in a password manager.
 
 Local `.env` backups created while swapping keys (`.env.bak`, `.env*.bak`) hold live secrets and are gitignored. Delete them when done.
+
+### Secret flow (SA-25)
+
+```
+GitHub Secrets  ──(Sync Secrets to SSM workflow, manual)──▶  SSM /budget-app/prod/*  (SecureString)
+                                                                       │
+GitHub Variables ──(release-and-deploy)──▶ .env.config in tarball ─────┤
+                                                                       ▼
+                                            deploy-server.sh renders /home/appuser/app/backend/.env (0600)
+```
+
+**The deployment tarball contains no secrets.** It carries `backend/.env.config` — non-secret configuration only (`PORT`, `LOG_LEVEL`, `FRONTEND_URL`, `STORAGE_TYPE`, …). The deploy workflow fails the build if a secret name reappears in that file, and fails *before uploading anything* if a required SSM parameter is missing.
+
+#### Changing a secret
+
+1. Update the value in **Settings → Secrets and variables → Actions → Secrets**.
+2. Run the **Sync Secrets to SSM Parameter Store** workflow (type `SYNC` to confirm).
+3. Redeploy — or wait for the next deploy, since the host re-reads SSM every time.
+
+⚠️ Step 1 is the dangerous one for `PLAID_ENCRYPTION_SECRET`. See the rotation warning above: changing that value orphans every linked bank. Re-running the sync with the *same* value is always safe.
+
+#### Changing non-secret config
+
+Update the **GitHub Variable** and redeploy. No SSM involvement.
+
+#### First-time setup / disaster recovery
+
+The instance role needs `budget-app-ssm-secrets-read` or the deploy aborts (safely — before the running app is touched). Apply it from `scripts/aws/ec2-ssm-secrets-read-policy.json`; see [scripts/aws/README.md](../scripts/aws/README.md).
+
+#### Why the deploy script fetches secrets *before* stopping the app
+
+`deploy-server.sh` renders `.env` immediately after extracting the package and exits non-zero if SSM is unreachable, the IAM grant is missing, or any required parameter is absent — all of which happen while the previous version is still serving traffic. Keep that block where it is; moving it below `pm2 stop` converts a clean abort into an outage.
 
 ### GitHub Variables (Non-Sensitive)
 Configure in: Settings → Secrets and variables → Actions → Variables
@@ -255,7 +292,18 @@ aws logs tail /aws/ec2/budget-app --follow
 > sudo -u appuser pm2 save
 > ```
 >
-> Until then, query with an explicit strip: `parse @message "*: {*" as _ts, _rest | ...`.
+> Until then, strip the prefix explicitly. This form is verified working
+> (6/6 records on 2026-08-03) and recovers the JSON as a string you can
+> substring-match, though not as indexed fields:
+>
+> ```
+> parse @message /^\S+ \S+: (?<payload>\{.*\})$/
+> | filter ispresent(payload) and payload like /transactionService/
+> | sort @timestamp desc
+> ```
+>
+> Name the capture something other than an existing field — Insights rejects the
+> query with `Ephemeral field is already defined` if you reuse e.g. `json`.
 
 Three details that are easy to get wrong, and were wrong in this doc until 2026-08-02:
 
