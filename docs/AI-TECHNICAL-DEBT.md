@@ -13,7 +13,11 @@ This document tracks technical debt identified during the April 2026 architectur
 >
 > **Security findings take precedence over everything in this file.** They touch things this tracker cannot: money leaving the account without a ceiling, Plaid credentials reaching places they shouldn't, and a privilege-escalation chain through open registration.
 >
-> **Status as of 2026-08-02: 6 of 30 closed**, including 2 of 3 High (`SA-01` dependencies, `SA-03` cost-cap attribution, `SA-11` trust proxy, `SA-12` lockout casing, `SA-19` Plaid tokens off the wire, `SA-24` admin gate). The one remaining High is **`SA-25`** — deploy tarballs in S3 contain the full production `.env`, which is infrastructure work needing prod credentials, not code. The largest open *code* item is **`SA-10`** (open registration chaining into admin escalation). The trivial tier is done.
+> **Status as of 2026-08-03: 7 of 30 closed** (`SA-01` dependencies, `SA-03` cost-cap attribution, `SA-11` trust proxy, `SA-12` lockout casing, `SA-19` Plaid tokens off the wire, `SA-24` admin gate, `SA-30` vestigial encryption key).
+>
+> **`SA-25` — the last High — is code complete but ⛔ blocked on two IAM grants** that need production credentials. Secrets move to SSM Parameter Store; the switch commit is held unpushed until the grants land, because pushing it triggers a deploy that fails its own pre-flight. Ready-to-run commands are in the [SA-25 burn-down section](SECURITY-AUDIT-2026-08-02.md#-needs-production-credentials--sa-25-is-blocked-here). This also supersedes **TD-025**: SSM becomes a durable readable copy of `PLAID_ENCRYPTION_SECRET`, so losing the EC2 instance no longer orphans the Plaid tokens.
+>
+> The largest open *code* item is **`SA-10`** (open registration chaining into admin escalation). The trivial tier is done.
 >
 > Two SA findings overlap entries here — do not work them twice:
 > - `SA-27` (no SPA-layer CSP) is the unshipped follow-up half of **TD-004**.

@@ -10,6 +10,7 @@
 ## Change log
 
 - **2026-08-02** — Audit performed; 30 findings filed. Same day: SA-01 (dependencies), SA-03, SA-11, SA-12, SA-19, and SA-24 resolved. Backend suite 957 → **971 tests**, frontend 279, all passing; both packages typecheck clean.
+- **2026-08-03** — SA-25 built (secrets → SSM Parameter Store) and SA-30 closed with it. Blocked on two IAM grants; switch commit held unpushed. Two triage errors corrected against live AWS state: rollback does **not** consume S3 deployment tarballs (so they can be expired freely), and the CI IAM user is **not** an admin — SA-26 stays Medium. Measured the actual exposure at 280 tarballs / 410 MB / 11 months.
 
 ---
 
@@ -45,7 +46,7 @@ Open items, ordered by value ÷ effort. The top four are one-line changes.
 | SA-20 | Dead Plaid routes with placeholder access token | Medium | Low | Open |
 | SA-15 | Any family member can remove any other member | Medium | Low | Open |
 | SA-05 | Action-card display can diverge from executed params | Medium | Medium | Open |
-| SA-25 | Deploy tarballs in S3 contain the full production `.env` | High | Medium | Open |
+| SA-25 | Deploy tarballs in S3 contain the full production `.env` | High | Medium | **Blocked** — 2 IAM grants |
 | SA-06 | Three LLM tool outputs not Zod-validated | Medium | Low | Open |
 | SA-04 | Chatbot timeout doesn't abort the tool loop; spend unrecorded | Medium | Low | Open |
 | SA-13 | Password change doesn't invalidate existing JWTs | Medium | Medium | Open |
@@ -55,7 +56,6 @@ Open items, ordered by value ÷ effort. The top four are one-line changes.
 | SA-22 | Storage adapters don't sanitize keys | Low | Trivial | Open |
 | SA-21 | `photoAlbumUrl` accepts `javascript:` server-side | Low | Trivial | Open |
 | SA-28 | Plain-HTTP origin in production CORS allowlist | Low | Trivial | Open |
-| SA-30 | Vestigial `ENCRYPTION_KEY` env var invites wrong-key rotation | Low | Trivial | Open |
 | SA-07 | Action confirm doesn't check the proposal's workspace | Low | Trivial | Open |
 | SA-16 | `optionalAuthenticate` skips the membership check | Low | Trivial | Open |
 | SA-23 | Zod gaps, led by an unbounded `csvContent` body | Low | Low | Open |
@@ -66,15 +66,38 @@ Open items, ordered by value ÷ effort. The top four are one-line changes.
 | SA-18 | Username enumeration by login timing | Low | Low | Open |
 
 **Resolved 2026-08-02**: SA-01 (dependencies), SA-03 (cost-cap attribution), SA-11 (`trust proxy`), SA-12 (lockout casing), SA-19 (Plaid tokens off the wire), SA-24 (`/feedback/test` admin gate).
+**Resolved 2026-08-03**: SA-30 (vestigial `ENCRYPTION_KEY`).
+**Code complete, blocked**: SA-25 — see below.
 **Accepted**: SA-02. **Duplicate**: SA-31 (→ TD-025).
 
-**Progress**: 6 of 30 closed, including 2 of 3 High. The one remaining High is **SA-25** (deploy tarballs in S3 contain the full production `.env`) — infrastructure work, not code.
+**Progress**: 7 of 30 closed. SA-25, the last High, is written and tested but held.
+
+### ⛔ Needs production credentials — SA-25 is blocked here
+
+Two IAM grants, both captured as reviewable JSON in [`scripts/aws/`](../scripts/aws/README.md). Until both land, the SA-25 switch commit stays unpushed, because pushing it triggers a deploy that fails its own pre-flight — safe, but pointlessly red.
+
+```bash
+export AWS_PROFILE=budget-app-prod
+
+# 1. Let CI write secrets to SSM (confirmed needed: the first sync run
+#    failed with AccessDeniedException on PutParameter)
+aws iam create-policy-version \
+  --policy-arn arn:aws:iam::903733335979:policy/BudgetAppGitHubActionsDeployment \
+  --policy-document file://scripts/aws/gh-actions-deployment-policy.json \
+  --set-as-default
+
+# 2. Let the EC2 instance read them back at deploy time
+aws iam put-role-policy \
+  --role-name budget-app-ec2-s3-role \
+  --policy-name budget-app-ssm-secrets-read \
+  --policy-document file://scripts/aws/ec2-ssm-secrets-read-policy.json
+```
+
+Then: run the **Sync Secrets to SSM Parameter Store** workflow (confirm with `SYNC`), push the held switch commit, and confirm the deploy log shows `✅ Environment configured — N variables, secrets from SSM`.
 
 ### If you only have an hour
 
 Start with **SA-10**, the last open High-severity *code* change: close registration and harden the `ADMIN_USERNAMES` bootstrap. Then **SA-20** (delete three dead placeholder routes) and **SA-15** (three guard clauses on member removal), both small and both closing destructive-action gaps.
-
-**SA-25** is the highest-severity item left overall but needs production credentials and an SSM migration, so it does not fit in an hour. If you have prod access and only a few minutes, the interim mitigation — an S3 lifecycle rule expiring old deployment tarballs — meaningfully shrinks the exposure window on its own.
 
 The trivial tier is done; what remains is small-to-medium work rather than one-liners.
 
@@ -624,7 +647,7 @@ Zod coverage is broad — transactions, reports, tasks, trips, notifications, th
 ## Secrets & infrastructure
 
 ### SA-25: Deploy tarballs in S3 contain the full production `.env`
-**Status**: Open
+**Status**: **Code complete, blocked on two IAM grants** (2026-08-03)
 **Severity**: **High**
 **Effort**: Medium
 
@@ -634,13 +657,42 @@ Zod coverage is broad — transactions, reports, tasks, trips, notifications, th
 **Exploit scenario**:
 Every historical deployment package is a complete, readable credential bundle at rest. Anyone who gains read access to the backup bucket — a leaked AWS key, an over-broad IAM policy, a bucket-policy mistake — obtains every production secret in one fetch, including the key that decrypts all Plaid access tokens. The retention makes it worse in a non-obvious way: **rotated secrets survive their own rotation** in old tarballs, so rotation stops being a remediation.
 
-**Fix**:
-Stop embedding `.env` in the artifact. Have `scripts/deploy-server.sh` pull secrets from SSM Parameter Store (SecureString) at deploy time — already sketched as a planned improvement in [AI-DEPLOYMENTS.md](AI-DEPLOYMENTS.md):697-702. Interim mitigation while that is built: an S3 lifecycle rule expiring old deployment tarballs, and re-verify the bucket is private and encrypted.
+**Measured exposure** (2026-08-03): **280 tarballs**, 410 MB, oldest dated **2025-09-02** — roughly 11 months of credential bundles. The bucket lifecycle expires objects at 365 days, so the earliest will not age out until September 2026.
+
+**Correction to the original triage**: it claimed `scripts/server-rollback.sh` reuses these tarballs. **It does not.** Rollback restores the on-host `backend.old` / `frontend.old` directories and never touches S3. Nothing operational consumes an old deployment tarball, which means retention is buying nothing and the whole archive can be expired aggressively without affecting recoverability.
+
+**Verified good**: the bucket is fully private (all four public-access blocks on) and encrypted at rest (SSE-S3, with SSE-C blocked). The exposure needs credentials to realize — it is not an open bucket.
+
+**Fix — code complete, not yet live:**
+
+✅ **Secrets moved to SSM Parameter Store** under `/budget-app/prod/*` as SecureStrings. New `sync-secrets-to-ssm.yml` workflow is the only writer: it reads GitHub Secrets and writes them straight to SSM, so values never leave the ephemeral runner. It is idempotent, so it doubles as "push my rotated secret to prod", and it rejects empty secrets rather than writing empty parameters that would fail confusingly at boot. Its verify step uses `describe-parameters` (metadata only), deliberately not `--with-decryption`.
+
+✅ **The deployment package no longer carries secrets.** `release-and-deploy.yml` now writes `backend/.env.config` with non-secret configuration only. Non-secret config deliberately stays in the package and in GitHub Variables — it is not sensitive, and keeping it there means changing `LOG_LEVEL` does not require an SSM write.
+
+✅ **`deploy-server.sh` renders `.env` on the host** from `.env.config` plus SSM, at `chmod 600`. Two deliberate details: the block sits **before `pm2 stop`**, so a missing IAM grant or absent parameter aborts the deploy with the old version still serving traffic rather than mid-outage; and the STORAGE_TYPE lookup no longer `source`s the full `.env`, which had been pulling every secret into a shell environment inherited by `npm`, `pm2`, and everything else the script ran.
+
+✅ **Two regression guards.** The build fails if any secret *name* reappears in the package (name-only, so the guard cannot itself leak a value), and the deploy fails **before uploading anything** if a required SSM parameter is missing.
+
+✅ **`ENCRYPTION_KEY` removed** and `scripts/generate-env.sh` deleted — see SA-30.
+
+⛔ **Blocked on two IAM changes** (both captured as reviewable JSON in `scripts/aws/`, both requiring production credentials):
+
+1. `budget-app-gh-actions-user` needs `ssm:PutParameter` / `DescribeParameters` / `kms:Encrypt`. Confirmed empirically — the first sync run failed with `AccessDeniedException` on `PutParameter`. Apply `scripts/aws/gh-actions-deployment-policy.json`.
+2. The EC2 instance role needs `ssm:GetParametersByPath` + `kms:Decrypt`. `AmazonSSMManagedInstanceCore` is already attached but covers only `GetParameter`/`GetParameters`. Apply `scripts/aws/ec2-ssm-secrets-read-policy.json`.
+
+Until both land, the switch commit is **held unpushed** — pushing it would trigger a deploy that fails its pre-flight. Safe (production untouched) but pointlessly red.
+
+**Historical tarballs are a separate decision.** The code fix stops *new* leakage; it does nothing about the 280 existing bundles. Because `PLAID_ENCRYPTION_SECRET` cannot be rotated (TD-025 landmine), deleting them is the only available mitigation for the historical exposure — and since nothing consumes them, deletion is operationally safe. Not done here: bulk-deleting 280 objects is destructive and is the owner's call.
 
 **Files**:
-- `.github/workflows/release-and-deploy.yml`
-- `scripts/deploy-server.sh`
-- `scripts/server-rollback.sh`
+- `.github/workflows/sync-secrets-to-ssm.yml` ✅ (new)
+- `.github/workflows/release-and-deploy.yml` ✅
+- `scripts/deploy-server.sh` ✅
+- `scripts/aws/ec2-ssm-secrets-read-policy.json` ✅ (new)
+- `scripts/aws/gh-actions-deployment-policy.json` ✅ (new)
+- `scripts/aws/README.md` ✅ (new — apply/verify runbook)
+- `scripts/generate-env.sh` ✅ (deleted)
+- `docs/AI-DEPLOYMENTS.md` ✅ (secret-flow diagram, rotation procedure)
 
 ---
 
@@ -654,6 +706,12 @@ Stop embedding `.env` in the artifact. Have `scripts/deploy-server.sh` pull secr
 
 **Exploit scenario**:
 A GitHub org or repo compromise yields durable AWS access that outlives the incident. Note what that access reaches: `ssm send-command` against the EC2 instance is remote code execution as root, via the `sudo -u appuser` wrapper at `release-and-deploy.yml:374-377`.
+
+**Blast radius verified 2026-08-03 — smaller than feared, severity stays Medium.** The credentials belong to `budget-app-gh-actions-user`, whose only policy is `BudgetAppGitHubActionsDeployment`: `ssm:SendCommand` pinned to the single instance ARN and the `AWS-RunShellScript` document, read-only SSM command tracking, `ec2:DescribeInstances`, and S3 access scoped to the deployment bucket. **No wildcard admin.** That is a genuinely well-built policy and is worth preserving deliberately.
+
+A separate account user, `personal-budget-app`, *does* hold `AdministratorAccess` via an `Admin` group — but that is the human/local profile (`AWS_PROFILE=budget-app-prod`), not the CI identity. An earlier draft of this entry conflated the two and wrongly escalated this finding to High; that was wrong and is corrected here.
+
+The residual risk is therefore what the scoped policy allows — still meaningful, since RCE on the instance reaches the rendered `.env`, but it is not account takeover.
 
 **Fix**:
 Switch `aws-actions/configure-aws-credentials` to GitHub OIDC federation with a role scoped to the deploy bucket plus SSM on that one instance. Credentials become short-lived and repo-scoped, and there is nothing durable left to steal.
@@ -718,7 +776,7 @@ Two stages, both worth doing.
 ---
 
 ### SA-30: Vestigial `ENCRYPTION_KEY` invites rotating the wrong secret
-**Status**: Open
+**Status**: **Resolved (2026-08-03)** — closed alongside SA-25, which rewrote the same code
 **Severity**: Low (hygiene — but see the landmine)
 **Effort**: Trivial
 
@@ -727,11 +785,18 @@ Two stages, both worth doing.
 
 **Why it is worth the five minutes**: two similarly-named "encryption key" secrets in GitHub is exactly the setup where someone rotates the wrong one during cleanup. Per TD-025's landmine, rotating the *real* one orphans every linked bank and requires re-linking every institution. The failure mode is disproportionate to the tidiness of the fix.
 
-**Fix**: Remove `ENCRYPTION_KEY` from the workflow, from `scripts/generate-env.sh`, and from GitHub secrets.
+**Fix**:
+✅ Removed from `release-and-deploy.yml` — the rewritten `.env.config` heredoc omits it, and the new package guard actively fails the build if it ever comes back.
+
+✅ `scripts/generate-env.sh` **deleted** rather than edited. Grep confirmed zero callers: nothing in the repo, the workflows, or the deploy scripts invoked it. Under the SSM model a script whose whole job is writing secrets to disk is doubly obsolete, so removing it beats maintaining a corrected copy.
+
+**Verified unused before removing**: `grep -rn "ENCRYPTION_KEY" backend/src shared` returns nothing — `config.ts` reads only `PLAID_ENCRYPTION_SECRET`. Removing a still-live variable would have broken production boot, so this was checked rather than assumed.
+
+**Still to do (not code)**: delete the `PRODUCTION_ENCRYPTION_KEY` GitHub Secret. Harmless where it sits, but leaving it preserves exactly the two-similar-names confusion this finding is about.
 
 **Files**:
-- `.github/workflows/release-and-deploy.yml`
-- `scripts/generate-env.sh`
+- `.github/workflows/release-and-deploy.yml` ✅
+- `scripts/generate-env.sh` ✅ (deleted)
 
 ---
 
