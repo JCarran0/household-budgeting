@@ -217,6 +217,35 @@ describe('GET /api/v1/wrapped/archive', () => {
     expect(res.body.items).toHaveLength(1);
     expect(res.body.items[0].weekStart).toBe('2026-04-06');
   });
+
+  // Bake-period regression guard: weekly records are FAMILY-scoped, so a family
+  // member who has NOT been enabled must not receive an enabled member's
+  // archive. See wrappedService.listArchive.
+  it('200 with empty items when wrappedEnabled is false but family has records', async () => {
+    await dataService.saveWeeklyWrappeds(
+      [
+        {
+          id: '2026-04-06',
+          familyId,
+          weekStart: '2026-04-06',
+          weekEnd: '2026-04-12',
+          tz: 'America/New_York',
+          suppressed: false,
+          cards: null,
+          usedCopyIds: [],
+          createdAt: new Date().toISOString(),
+        },
+      ],
+      familyId,
+    );
+
+    const res = await request(app)
+      .get('/api/v1/wrapped/archive')
+      .set('Authorization', `Bearer ${token}`)
+      .expect(200);
+
+    expect(res.body.items).toEqual([]);
+  });
 });
 
 describe('GET /api/v1/wrapped/archive/:weekStart', () => {
@@ -233,6 +262,32 @@ describe('GET /api/v1/wrapped/archive/:weekStart', () => {
     token = user.token;
     userId = user.userId;
     familyId = user.familyId;
+  });
+
+  // Bake-period regression guard: a disabled member must not be able to fetch a
+  // specific week from the family's archive by guessing the weekStart key.
+  it('404 when wrappedEnabled is false even though the record exists', async () => {
+    await dataService.saveWeeklyWrappeds(
+      [
+        {
+          id: '2026-04-06',
+          familyId,
+          weekStart: '2026-04-06',
+          weekEnd: '2026-04-12',
+          tz: 'America/New_York',
+          suppressed: false,
+          cards: null,
+          usedCopyIds: [],
+          createdAt: new Date().toISOString(),
+        },
+      ],
+      familyId,
+    );
+
+    await request(app)
+      .get('/api/v1/wrapped/archive/2026-04-06')
+      .set('Authorization', `Bearer ${token}`)
+      .expect(404);
   });
 
   it('404 for unknown weekStart', async () => {

@@ -128,7 +128,7 @@ export class WrappedService {
     const windowEnd = `${dateKey}T23:59:59.999Z`;
 
     const recentRaw = await this.dataService.getRecentCopyIds(user.familyId);
-    const recentCopyIds = new Set(this.pruneOldCopyIds(recentRaw).map((e) => e.copyId));
+    const recentCopyIds = new Set(this.pruneOldCopyIds(recentRaw, now).map((e) => e.copyId));
 
     const members = await this.getFamilyMembers(user.familyId);
     const input = await this.buildWrappedInput(
@@ -196,7 +196,11 @@ export class WrappedService {
     cursor?: string,
   ): Promise<{ items: WrappedWeeklyRecord[]; nextCursor?: string }> {
     const user = await this.userService.getUser(userId);
-    if (!user) return { items: [] };
+    // Gate on wrappedEnabled like every other read path. Weekly records are
+    // FAMILY-scoped (`weekly_wrappeds_{familyId}`), so without this check a
+    // family member who has not been enabled would receive an enabled member's
+    // Wrapped archive — which breaks the per-user bake rollout.
+    if (!user || !user.wrappedEnabled) return { items: [] };
 
     const records = await this.dataService.getWeeklyWrappeds(user.familyId);
     const sorted = [...records].sort((a, b) => b.weekStart.localeCompare(a.weekStart));
@@ -247,7 +251,7 @@ export class WrappedService {
     const windowEnd = `${dateKey}T23:59:59.999Z`;
 
     const recentRaw = await this.dataService.getRecentCopyIds(user.familyId);
-    const pruned = this.pruneOldCopyIds(recentRaw);
+    const pruned = this.pruneOldCopyIds(recentRaw, now);
     const recentCopyIds = new Set(pruned.map((e) => e.copyId));
 
     const members = await this.getFamilyMembers(user.familyId);
@@ -418,7 +422,7 @@ export class WrappedService {
     const suppressed = forceSuppress ?? (await this.doesWeekContainTrip(familyId, weekStart, weekEnd));
 
     const recentRaw = await this.dataService.getRecentCopyIds(familyId);
-    const pruned = this.pruneOldCopyIds(recentRaw);
+    const pruned = this.pruneOldCopyIds(recentRaw, now);
     const recentCopyIds = new Set(pruned.map((e) => e.copyId));
 
     let cards: WrappedWeeklyCards | null = null;
@@ -812,8 +816,12 @@ export class WrappedService {
   /** Prune copy-variant cache entries older than RECENT_COPY_TTL_DAYS days. */
   private pruneOldCopyIds(
     entries: Array<{ copyId: string; usedAt: string }>,
+    now: Date,
   ): Array<{ copyId: string; usedAt: string }> {
-    const cutoff = new Date();
+    // Must use the INJECTED clock, not `new Date()`. Every fire path threads a
+    // `now` for deterministic tests and correct replay/backfill behaviour; a
+    // wall-clock cutoff here silently prunes everything when `now` is not today.
+    const cutoff = new Date(now);
     cutoff.setDate(cutoff.getDate() - RECENT_COPY_TTL_DAYS);
     const cutoffISO = cutoff.toISOString();
     return entries.filter((e) => e.usedAt >= cutoffISO);
@@ -826,7 +834,7 @@ export class WrappedService {
     now: Date,
   ): Promise<void> {
     const existing = await this.dataService.getRecentCopyIds(familyId);
-    const pruned = this.pruneOldCopyIds(existing);
+    const pruned = this.pruneOldCopyIds(existing, now);
     const nowISO = now.toISOString();
     const newEntries = newIds.map((copyId) => ({ copyId, usedAt: nowISO }));
     await this.dataService.saveRecentCopyIds([...pruned, ...newEntries], familyId);
