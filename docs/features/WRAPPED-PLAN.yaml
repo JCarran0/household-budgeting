@@ -104,7 +104,7 @@ decisions:
 
   - id: D2
     date: 2026-04-24
-    decision: Two new User fields — `wrappedEnabled: boolean` and `timezone: string` (IANA)
+    decision: "Two new User fields — `wrappedEnabled: boolean` and `timezone: string` (IANA)"
     rationale: |
       `wrappedEnabled` is required by §9.1. `timezone` is required by §2.2
       and §7.1 — the scheduler must know each user's local time to fire at
@@ -606,7 +606,7 @@ phase_2_backend:
         20 years is under 6 MB. Fine.
 
     - id: "2.2"
-      task: `wrappedService.ts` — core orchestrator
+      task: "`wrappedService.ts` — core orchestrator"
       details: |
         File: `backend/src/services/wrappedService.ts`
 
@@ -775,7 +775,7 @@ phase_3_scheduler:
 
   tasks:
     - id: "3.1"
-      task: `backend/src/jobs/wrappedScheduler.ts`
+      task: "`backend/src/jobs/wrappedScheduler.ts`"
       details: |
         Export a class or factory:
           ```ts
@@ -862,7 +862,7 @@ phase_4_frontend_wrapped_ui:
         Shape the API response — 204 returns `null` to callers.
 
     - id: "4.2"
-      task: `WrappedToday` page
+      task: "`WrappedToday` page"
       details: |
         File: `frontend/src/pages/WrappedToday.tsx`
 
@@ -881,7 +881,7 @@ phase_4_frontend_wrapped_ui:
         Keep to ≤ 1 viewport on mobile for the common case (1-2 highlights).
 
     - id: "4.3"
-      task: `WrappedWeek` page — swipe deck
+      task: "`WrappedWeek` page — swipe deck"
       details: |
         File: `frontend/src/pages/WrappedWeek.tsx`
 
@@ -905,7 +905,7 @@ phase_4_frontend_wrapped_ui:
         motion` disables card-transition animation but keeps swipe.
 
     - id: "4.4"
-      task: `WrappedArchive` + detail route
+      task: "`WrappedArchive` + detail route"
       details: |
         Files:
           - `frontend/src/pages/WrappedArchive.tsx` — list
@@ -993,45 +993,133 @@ phase_5_settings:
 phase_6_rollout:
   status: not_started
   description: |
-    Ship behind the per-user flag (dark for both users at deploy time),
-    dogfood path for ~1–2 weeks, then enable spouse.
+    Ship dark, bake solo, then enable the second user. Three independent
+    gates make this possible; understand all three before touching prod.
+
+  # ---------------------------------------------------------------------------
+  # THE THREE GATES  (verified against code 2026-08-29)
+  # ---------------------------------------------------------------------------
+  gates:
+    - name: WRAPPED_SCHEDULER_ENABLED
+      kind: env var (process-wide)
+      default: unset -> OFF
+      controls: |
+        Whether the 15-min scheduler loop starts at all (backend/src/index.ts).
+        Controls PUSH ONLY. Does not affect in-app read paths.
+      note: |
+        Checked as === 'true'. Anything else (unset, '1', 'yes') is OFF.
+
+    - name: User.wrappedEnabled
+      kind: per-user field on the User record
+      default: false
+      controls: |
+        The real feature gate. Every read path returns empty/204 when false
+        (getDailyPayload, getWeeklyRecord, listArchive), and the scheduler
+        skips the user (jobs/wrappedScheduler.ts).
+      toggle: POST /api/v1/wrapped/admin/enable  {userId, enabled}  [isAdmin only]
+
+    - name: NotificationPreferences.wrappedEnabled
+      kind: per-user push preference
+      default: true
+      controls: |
+        Push opt-out only. NAME COLLISION with the gate above -- this one does
+        NOT gate feature access. Only consulted inside sendWrapped().
+
+  # ---------------------------------------------------------------------------
+  # WHY THE PER-USER GATE IS LOAD-BEARING
+  # ---------------------------------------------------------------------------
+  data_scoping_warning: |
+    Weekly records are FAMILY-scoped (`weekly_wrappeds_{familyId}`), and card
+    content aggregates BOTH members' tasks/trips/transactions. The per-user flag
+    controls WHO SEES the Wrapped, not WHOSE DATA is in it. A solo bake still
+    computes and persists family-level records.
+
+    This is why listArchive must gate on wrappedEnabled -- without it a
+    not-yet-enabled member receives the enabled member's archive. Regression
+    tests: wrappedRoutes.test.ts, "wrappedEnabled is false but family has
+    records" and "404 when wrappedEnabled is false even though the record
+    exists". Do not delete them.
 
   tasks:
+    - id: "6.0"
+      task: PREREQUISITE -- phase 4 frontend must ship first
+      details: |
+        Wrapped pushes deep-link to /wrapped/today and /wrapped/week. Those SPA
+        routes do not exist until phase 4. Enabling the scheduler before then
+        sends a notification that lands on a 404. Do not start the bake until
+        phase 4 is deployed.
+
     - id: "6.1"
-      task: Structured logs — minimal, per BRD §9.3
+      task: Structured logs -- minimal, per BRD 9.3
       details: |
         Log on:
-          - Push fired: `wrapped.push.fired` — `{ userId, cadence, tier, highlightCount, delivered }`.
-          - Wrapped opened: `wrapped.opened` — `{ userId, cadence, source: 'push' | 'in-app' }`.
-          - Window expired without open: `wrapped.window_expired_unopened`
-            — `{ userId, cadence, dateKey }`. (Detect by comparing
-            dispatch log to open events at the next scheduler tick
-            after midnight.)
-        No dashboards; log to stdout with structured JSON. Tail on the
-        server when needed.
+          - Push fired: `wrapped.push.fired` -- {userId, cadence, tier, highlightCount, delivered}
+          - Wrapped opened: `wrapped.opened` -- {userId, cadence, source: 'push'|'in-app'}
+          - Window expired unopened: `wrapped.window_expired_unopened` -- {userId, cadence, dateKey}
+        No dashboards; structured JSON to stdout. Tail on the server when needed.
 
     - id: "6.2"
-      task: Deploy + dogfood
+      task: BAKE SEQUENCE -- five stages, each independently verifiable
       details: |
-        - Deploy with both users `wrappedEnabled: false`. Verify feature
-          is invisible (routes 404, no banner, no nav item).
-        - Enable author via admin panel on deploy evening.
-        - Author receives 9 PM push same night. Dogfood for 1–2 weeks.
-        - Tune copy pools + rule thresholds via PR as needed; no code
-          change required to adjust text. Weekly archive remains
-          immutable per D6 — old records untouched.
-        - Launch: admin enables spouse during dinner; spouse's first push
-          lands at 9 PM that night.
+        Do not collapse stages. Each one is reversible on its own.
+
+        --- STAGE 1: deploy dark ----------------------------------------------
+        State:  WRAPPED_SCHEDULER_ENABLED unset; both users wrappedEnabled=false
+        Action: merge to main, let CI deploy.
+        Verify (as EITHER user, any time of day):
+          GET /api/v1/wrapped/today          -> 204
+          GET /api/v1/wrapped/week           -> 204
+          GET /api/v1/wrapped/archive        -> 200 {"items":[]}
+          pm2 logs: no `wrapped.` lines at any :00/:15/:30/:45 tick
+        NOTE: routes are MOUNTED, not 404. 204/empty is the correct dark state.
+        Rollback: none needed -- this state is already inert.
+
+        --- STAGE 2: enable author, in-app only -------------------------------
+        State:  scheduler still OFF; author wrappedEnabled=true; spouse false
+        Action: POST /api/v1/wrapped/admin/enable {userId: <author>, enabled: true}
+                (requires isAdmin; seed via ADMIN_USERNAMES env)
+        Verify:
+          - As AUTHOR, between 9 PM and midnight local: /today returns a payload
+          - As AUTHOR, outside that window: /today returns 204
+          - As SPOUSE: /today, /week -> 204 and /archive -> {"items":[]}
+            ^ this is the bake guarantee. Check it explicitly, do not assume.
+          - Still no push (scheduler off) -- expected.
+        Rollback: same call with enabled:false.
+
+        --- STAGE 3: turn on push for the author ------------------------------
+        State:  WRAPPED_SCHEDULER_ENABLED=true; author true; spouse false
+        Action: set the env var in SSM, redeploy/restart backend.
+        Verify:
+          - pm2 logs show a scheduler tick every 15 min
+          - At 9 PM local the author receives exactly ONE push
+          - Log line `wrapped.push.fired` with the author's userId ONLY
+          - Spouse receives nothing
+        Rollback: unset the env var and restart -- kills all push, keeps in-app.
+
+        --- STAGE 4: bake, 1-2 weeks ------------------------------------------
+        Watch for:
+          - duplicate or missed 9 PM pushes (idempotency via dispatch log)
+          - copy repeating night to night (repetition avoidance working?)
+          - vacation suppression firing correctly during any trip
+          - at least one Sunday, to exercise the weekly path + archive
+        Tune copy pools and rule thresholds by PR; no schema change needed.
+        Weekly archive records are IMMUTABLE (D6) -- old records stay as written.
+
+        --- STAGE 5: enable spouse --------------------------------------------
+        Action: POST /api/v1/wrapped/admin/enable {userId: <spouse>, enabled: true}
+        Verify: spouse's first push lands at 9 PM local that night.
+        Rollback: enabled:false -- takes effect on the next tick, no redeploy.
 
     - id: "6.3"
       task: Release notes + CLAUDE.md
       details: |
-        - Conventional commit `feat(wrapped): ...` — triggers MINOR bump.
-        - Add entry to the "Architecture Decisions (recent)" table in
-          CLAUDE.md:
-            `| 2026-04 | Wrapped — ... | WRAPPED-BRD.md |`
-          (Already added to the Feature BRDs & Plans table; update the
-          decision table in the same PR.)
+        - Conventional commit `feat(wrapped): ...` -> MINOR bump.
+        - Add to the "Architecture Decisions (recent)" table in CLAUDE.md:
+            | 2026-08 | Wrapped -- family-scoped daily/weekly recap; three-gate
+              rollout (env scheduler flag + per-user wrappedEnabled + push pref);
+              archive is family-scoped so every read path gates on the per-user
+              flag | WRAPPED-BRD.md |
+        - Document WRAPPED_SCHEDULER_ENABLED in backend/.env.example.
 
 # =============================================================================
 # TEST PLAN SUMMARY
