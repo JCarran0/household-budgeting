@@ -25,6 +25,10 @@ const DEFAULT_PREFERENCES: NotificationPreferences = {
   largeTransactions: false,
   largeTransactionThreshold: 500,
   billReminders: false,
+  // Push opt-out for Wrapped. Mirrors the backend default (true) so the two
+  // stay consistent. NOTE: this is the PUSH preference, not the feature gate —
+  // feature access is `User.wrappedEnabled`, which defaults to false.
+  wrappedEnabled: true,
 };
 
 export function NotificationsSection() {
