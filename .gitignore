@@ -134,3 +134,6 @@ $RECYCLE.BIN/
 
 # Temporary files
 /tmp
+# Claude Code worktrees — local scratch checkouts of this same repo.
+# Scoped to worktrees/ only; .claude/commands/ is tracked and must stay so.
+.claude/worktrees/
