@@ -75,6 +75,7 @@ interface StoredAccount {
   type?: string;
   subtype?: string;
   status?: string;
+  persistentAccountId?: string | null;
   plaidCursor?: string | null;
   updatedAt?: Date | string;
 }
@@ -143,8 +144,32 @@ function matchKey(date: string, amount: number): string {
   return `${date}|${amount.toFixed(2)}`;
 }
 
+/**
+ * Stored accounts carry the app's *simplified* type, not Plaid's raw one:
+ * `plaidService.mapAccountType` collapses `depository` to `checking` before
+ * anything is persisted. Comparing a stored type against a raw `AccountBase.type`
+ * therefore never matches for any depository account, which made every pairing
+ * attempt abort with "0 candidates". Normalise both sides through the same map.
+ * Keep this in step with `plaidService.mapAccountType`.
+ */
+function simplifyType(type?: string | null): string {
+  if (!type) return 'unknown';
+  switch (type) {
+    case 'depository':
+      return 'checking';
+    case 'credit':
+      return 'credit';
+    case 'loan':
+      return 'loan';
+    case 'investment':
+      return 'investment';
+    default:
+      return type;
+  }
+}
+
 function accountIdentity(a: { type?: string | null; subtype?: string | null; officialName?: string | null }): string {
-  return `${a.type ?? ''}|${a.subtype ?? ''}|${a.officialName ?? ''}`.toLowerCase();
+  return `${simplifyType(a.type)}|${a.subtype ?? ''}|${a.officialName ?? ''}`.toLowerCase();
 }
 
 async function main(): Promise<void> {
@@ -193,21 +218,53 @@ async function main(): Promise<void> {
   console.log(`  new live accounts:     ${appeared.length}`);
 
   const pairs: Array<{ stored: StoredAccount; live: AccountBase }> = [];
+  const claimed = new Set<string>();
   for (const s of stale) {
-    const identity = accountIdentity({ type: s.type, subtype: s.subtype, officialName: s.officialName });
-    const candidates = appeared.filter(
-      a => accountIdentity({ type: a.type, subtype: a.subtype, officialName: a.official_name }) === identity
-    );
+    // Plaid's own stable identifier wins when the institution supplies it on
+    // both sides — it is designed to survive exactly this event, so it beats
+    // any inference from type/name.
+    let candidates: AccountBase[] = [];
+    let via = 'identity';
+    if (s.persistentAccountId) {
+      candidates = appeared.filter(
+        a => !claimed.has(a.account_id) && a.persistent_account_id === s.persistentAccountId
+      );
+      if (candidates.length === 1) via = 'persistent_account_id';
+      else candidates = [];
+    }
+
+    if (!candidates.length) {
+      const identity = accountIdentity({ type: s.type, subtype: s.subtype, officialName: s.officialName });
+      candidates = appeared.filter(
+        a =>
+          !claimed.has(a.account_id) &&
+          accountIdentity({ type: a.type, subtype: a.subtype, officialName: a.official_name }) === identity
+      );
+    }
+
     if (candidates.length !== 1) {
+      // A bare count gives an operator nothing to act on. Print both sides so
+      // the mismatching field is visible without instrumenting the script.
       console.log(
         `  ${c.red}ambiguous pairing for ${s.accountName} ••${s.mask}: ${candidates.length} candidates — aborting${c.reset}`
       );
+      console.log(
+        `    ${c.dim}stored identity: ${accountIdentity({ type: s.type, subtype: s.subtype, officialName: s.officialName })}` +
+          ` (persistent=${s.persistentAccountId ?? 'none'})${c.reset}`
+      );
+      for (const a of appeared) {
+        console.log(
+          `    ${c.dim}live   identity: ${accountIdentity({ type: a.type, subtype: a.subtype, officialName: a.official_name })}` +
+            ` (persistent=${a.persistent_account_id ?? 'none'}, ••${a.mask})${c.reset}`
+        );
+      }
       process.exit(1);
     }
+    claimed.add(candidates[0].account_id);
     pairs.push({ stored: s, live: candidates[0] });
     console.log(
       `  ${c.green}pair${c.reset} ${s.accountName} ••${s.mask} → ${candidates[0].name} ••${candidates[0].mask}` +
-        `  ${c.dim}(${s.type}/${s.subtype}, official="${s.officialName}")${c.reset}`
+        `  ${c.dim}(via ${via}; ${s.type}/${s.subtype}, official="${s.officialName}")${c.reset}`
     );
   }
 
