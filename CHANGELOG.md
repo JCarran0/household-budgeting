@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+### [6.0.7](https://github.com/JCarran0/household-budgeting/compare/v6.0.6...v6.0.7) (2026-09-08)
+
+
+### Documentation
+
+* correct a false safety claim and record what tonight actually proved ([36c8793](https://github.com/JCarran0/household-budgeting/commit/36c879300f8d4cbb7dcdedbd397c36eb64ea0b3d))
+* **security:** SA-25 partially resolved — new leakage stopped, archive open ([c902928](https://github.com/JCarran0/household-budgeting/commit/c9029281df1bc3a1584f26d5df2236c0e0f129f4))
+
 ### [6.0.6](https://github.com/JCarran0/household-budgeting/compare/v6.0.5...v6.0.6) (2026-09-08)
 
 
