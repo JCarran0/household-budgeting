@@ -69,7 +69,7 @@ Production data is JSON blobs in S3, not a database. `cd backend && npm run back
 
 Bump `**Last Updated**`, add an `## Audits` line for anything incident-driven, and record *what was deliberately not done and why* — several entries below are more useful for their rejected options than their accepted ones.
 
-**Last Updated**: 2026-08-03
+**Last Updated**: 2026-09-08
 **Previous (archived)**: [docs/completed/AI-TECHNICAL-DEBT.md](completed/AI-TECHNICAL-DEBT.md)
 **Execution sequencing**: [TECH-DEBT-EXECUTION-PLAN-2026-04.md](TECH-DEBT-EXECUTION-PLAN-2026-04.md)
 **Security findings (higher priority)**: [SECURITY-AUDIT-2026-08-02.md](SECURITY-AUDIT-2026-08-02.md)
@@ -81,6 +81,7 @@ Bump `**Last Updated**`, add an `## Audits` line for anything incident-driven, a
 - **2026-08-02** — full security audit (dependencies, auth/authz, input validation, AI boundary, secrets/infra). 30 findings, 3 High, tracked as `SA-NN` in [SECURITY-AUDIT-2026-08-02.md](SECURITY-AUDIT-2026-08-02.md) rather than as TD entries — the burn-down is its own workstream and outranks this file. Surfaced that TD-004's SPA-CSP follow-up is still unshipped (now also `SA-27`) and independently re-derived TD-025 (now also `SA-31`, closed).
 - **2026-08-02** — Capital One card-reissue incident + rollover sign bug. Added TD-020 (`account_id` change → silent data loss), TD-021 (no Plaid webhooks / no staleness surface), TD-022 (silent sync error paths). Reopened TD-017 (CloudWatch forwarding never enabled, so the logging payoff is unrealized). Corrected TD-014 (claimed zero frontend tests; 31 files / 272 tests exist). Resolved TD-019 (off-bucket snapshots + drilled restore) and TD-022. Added TD-023/024/025 from findings surfaced while fixing the above.
 - **2026-08-03** — TD-017 executed: CloudWatch agent installed, forwarding verified into `/aws/ec2/budget-app` (90d retention). Found production drifted from the repo in two places (PM2 log-file naming, and a stale deployed `ecosystem.config.js` whose `log_date_format` breaks JSON field extraction). Recorded the `budget-app-backup` vs `budget-app-backups` naming hazard under TD-019.
+- **2026-09-08** — Bank of America `account_id` change: TD-020 recurred, 900 transactions held. Reconciled with the script (886 re-keyed, 12 inserted, 2 historic transfers skipped; masks unchanged on both accounts). Three separate defects surfaced on the same path: the account-level resync endpoint rejected its own body-less request (Express 5 leaves `req.body` undefined — same bug previously fixed in `routes/transactions.ts` only), that endpoint passed a single account into an Item-scoped sync (which would itself trip the TD-020 hold), and the reconciler's account pairing compared a normalised stored `type` against a raw Plaid one so it aborted on every depository account. Corrected TD-020 step 4, which specified that broken comparison. Unblocked SA-25 (both IAM grants applied, secrets synced to SSM).
 
 ---
 
@@ -683,9 +684,9 @@ Plaid's mechanism for exactly this is `persistent_account_id`, a stable identifi
 ---
 
 ### TD-020: Plaid `account_id` Change Causes Silent, Unrecoverable Transaction Loss
-**Status**: **Fail-closed guard shipped (2026-08-02)** — loss is prevented and reported. Automatic re-keying still requires the reconciler script.
+**Status**: **Fail-closed guard shipped (2026-08-02)** — loss is prevented and reported. Automatic re-keying still requires the reconciler script. **Recurred 2026-09-07 (Bank of America); the deferral below is now contested — see "Still open".**
 **Created**: 2026-08-02
-**Updated**: 2026-08-02
+**Updated**: 2026-09-08
 **Impact**: **High** — silent permanent data loss; the cursor advances past dropped rows
 **Effort**: Medium
 
@@ -705,7 +706,7 @@ Compounding it: dedupe is strictly by `plaidTransactionId`. A reissued account's
 1. Detect the condition explicitly: before applying a delta, compare the Item's live `account_id`s against stored ones. A stored account that has vanished is a reissue signal, not a no-op.
 2. **Do not advance the cursor** when the delta contains rows for unknown accounts. Failing closed keeps the data recoverable; failing open loses it.
 3. Surface it — an account-level state (e.g. `needs_reconciliation`) plus a dashboard alert, so it is visible without reading logs.
-4. Reuse the content-matching strategy already proven in `reconcile-plaid-account-change.ts` (pair on `type` + `subtype` + `official_name`; re-key on `date` + `amount` with a ±2-day pass for posted-date jitter; refuse ambiguous matches).
+4. Reuse the content-matching strategy in `reconcile-plaid-account-change.ts` (pair on `persistent_account_id` when present, else `type` + `subtype` + `official_name`; re-key on `date` + `amount` with a ±2-day pass for posted-date jitter; refuse ambiguous matches). ⚠️ **Normalise `type` on both sides before comparing.** Stored accounts carry the app's *simplified* type — `plaidService.mapAccountType` collapses `depository` to `checking` before anything is persisted — while `accountsGet` returns the raw Plaid value. Comparing the two directly never matches for a depository account. This exact bug shipped in the reconciler and made it abort with "0 candidates" on every checking account until 2026-09-08; an implementation written from the earlier wording of this step would have reproduced it.
 5. Store `persistent_account_id` on `StoredAccount` when the institution provides it. It will not help Capital One, but it makes this automatic for institutions that do populate it.
 
 **Fix as shipped** (2026-08-02) — steps 1, 2, 3 (partial) and 5:
@@ -716,7 +717,15 @@ Compounding it: dedupe is strictly by `plaidTransactionId`. A reissued account's
 
 **Tests**: 7 cases in `backend/src/__tests__/critical/account-id-change.stories.test.ts` — cursor held on unknown `account_id`, condition reported, `modified`-branch rows counted, healthy deltas still advance the cursor (fail-closed must not stall normal syncs), mixed deltas still store what they can, re-running a held delta does not duplicate, and `setItemCursor` is never called while reconciliation is pending. Verified as real regression tests by disabling only the guard: 5 of 7 fail.
 
-**Still open**: automatic re-keying. Detection and prevention are done; repair remains the reconciler script, which needs an operator. Wiring `getSectionTypeForCategory`-style content matching into the app would close it, but the script's `--dry-run`-then-`--apply` shape is a reasonable place for a two-user app to leave a rare, destructive-if-wrong operation.
+**Still open**: automatic re-keying. Detection and prevention are done; repair remains the reconciler script, which needs an operator.
+
+The original rationale for deferring was that this is *a rare, destructive-if-wrong operation* and the script's `--dry-run`-then-`--apply` shape is a reasonable place to leave it for a two-user app. The 2026-09-07 recurrence undercuts all three premises and the deferral should be re-argued rather than inherited:
+
+- **Not rare.** Capital One 2026-07-15, Bank of America 2026-09-07 — twice in eight weeks.
+- **The break-glass path was itself broken.** The reconciler aborted on every depository account (see step 4 above). The deferral rested on an escape hatch that had evidently never been exercised against a checking account, so "we have a manual path" was not true when it was relied upon.
+- **Not bank-initiated.** Both BoA masks were *unchanged* (`4404`→`4404`, `9670`→`9670`); a reissued card gets a new mask. The Item was re-provisioned with new `account_id`s during a user-initiated Plaid Link re-auth. That makes the condition reachable from a button the app itself tells the user to press — and the resulting toast then instructs them to press it again.
+
+The narrow fix that would close the common case: `accountService.syncAccountBalances` already fetches the Item's full live account list and already persists `persistentAccountId`, but ignores any account it does not recognise (`if (storedAccount)`, no `else`). Teaching the re-auth completion path to pair-and-repoint there would make the re-auth-triggered variant self-healing without giving the app a general re-keying engine.
 
 **Files**:
 - `backend/src/services/transactionService.ts` ✅ (delta application, cursor persistence, `SyncResult`)
