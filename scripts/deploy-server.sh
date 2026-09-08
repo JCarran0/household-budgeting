@@ -14,6 +14,28 @@ fi
 
 echo "🚀 Starting deployment from: $S3_PACKAGE"
 
+# Resolve the region before any AWS call that needs one.
+#
+# The instance has no region in `aws configure` and none in the environment.
+# `aws s3 cp` survives that because S3 resolves a region through its global
+# endpoint, but `aws ssm` does not — it fails with "You must specify a region",
+# which is what broke the first SSM-rendered deploy (2026-09-08). Take the
+# region from IMDSv2 rather than hardcoding it, so this still works if the
+# instance is ever rebuilt elsewhere.
+if [ -z "$AWS_DEFAULT_REGION" ]; then
+    IMDS_TOKEN=$(curl -sf -X PUT http://169.254.169.254/latest/api/token \
+        -H "X-aws-ec2-metadata-token-ttl-seconds: 300" 2>/dev/null || true)
+    AWS_DEFAULT_REGION=$(curl -sf -H "X-aws-ec2-metadata-token: $IMDS_TOKEN" \
+        http://169.254.169.254/latest/meta-data/placement/region 2>/dev/null || true)
+fi
+if [ -z "$AWS_DEFAULT_REGION" ]; then
+    echo "❌ Could not determine the AWS region from the environment or IMDSv2."
+    echo "   Aborting; the running version is untouched."
+    exit 1
+fi
+export AWS_DEFAULT_REGION
+echo "🌎 Region: $AWS_DEFAULT_REGION"
+
 # Configuration
 DEPLOYMENT_DIR="/home/appuser/deployments/$(date +%Y%m%d-%H%M%S)"
 APP_DIR="/home/appuser/app"
@@ -74,9 +96,15 @@ SSM_JSON=$(aws ssm get-parameters-by-path \
     --with-decryption \
     --recursive \
     --output json 2>&1) || {
-    echo "❌ Could not read $SSM_PATH from SSM."
-    echo "   Most likely the instance role is missing budget-app-ssm-secrets-read."
-    echo "   Apply scripts/aws/ec2-ssm-secrets-read-policy.json — see scripts/aws/README.md"
+    # Print what AWS actually said. This branch used to capture stderr into
+    # $SSM_JSON and then discard it in favour of a guess, which sent the first
+    # failure investigation after the wrong cause (2026-09-08). The command
+    # failed, so $SSM_JSON holds an error message, not parameter values.
+    echo "❌ Could not read $SSM_PATH from SSM:"
+    echo "$SSM_JSON" | head -5
+    echo "   If this is an authorization error, the instance role is probably"
+    echo "   missing budget-app-ssm-secrets-read — apply"
+    echo "   scripts/aws/ec2-ssm-secrets-read-policy.json (see scripts/aws/README.md)."
     echo "   Aborting; the running version is untouched."
     exit 1
 }
