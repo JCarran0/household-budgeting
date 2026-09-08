@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+### [6.1.3](https://github.com/JCarran0/household-budgeting/compare/v6.1.2...v6.1.3) (2026-09-08)
+
+
+### Bug Fixes
+
+* **security:** delete dead Plaid routes and gate family member removal (SA-20, SA-15) ([fd15116](https://github.com/JCarran0/household-budgeting/commit/fd15116d78b89d40098acea8f8a71d04ca52dacc))
+* **security:** make registration invitation-only and remove admin auto-promotion (SA-10) ([b642f59](https://github.com/JCarran0/household-budgeting/commit/b642f597020903dba6a39cf7a3de26ec4c681e3e))
+
 ### [6.1.2](https://github.com/JCarran0/household-budgeting/compare/v6.1.1...v6.1.2) (2026-09-08)
 
 
