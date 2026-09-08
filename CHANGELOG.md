@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+### [6.0.5](https://github.com/JCarran0/household-budgeting/compare/v6.0.4...v6.0.5) (2026-09-08)
+
+
+### Bug Fixes
+
+* **aws:** grant GetParametersByPath on the path node, not just its children ([c57ae88](https://github.com/JCarran0/household-budgeting/commit/c57ae8800719707195902eb06a3c9773f43b7bcd))
+
 ### [6.0.4](https://github.com/JCarran0/household-budgeting/compare/v6.0.3...v6.0.4) (2026-09-08)
 
 
