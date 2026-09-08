@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+### [6.0.6](https://github.com/JCarran0/household-budgeting/compare/v6.0.5...v6.0.6) (2026-09-08)
+
+
+### Bug Fixes
+
+* **deploy:** render .env from SSM without jq ([6f124e1](https://github.com/JCarran0/household-budgeting/commit/6f124e12af929c33fd8176355f37372b91417e31))
+
 ### [6.0.5](https://github.com/JCarran0/household-budgeting/compare/v6.0.4...v6.0.5) (2026-09-08)
 
 
