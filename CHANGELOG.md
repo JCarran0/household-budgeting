@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+### [6.0.9](https://github.com/JCarran0/household-budgeting/compare/v6.0.8...v6.0.9) (2026-09-08)
+
+
+### Documentation
+
+* **security:** SA-25 resolved — historical tarball archive purged ([9c26f82](https://github.com/JCarran0/household-budgeting/commit/9c26f82d5fa1f47fbd93a8e66ea42971d18ef1bc))
+
 ### [6.0.8](https://github.com/JCarran0/household-budgeting/compare/v6.0.7...v6.0.8) (2026-09-08)
 
 
