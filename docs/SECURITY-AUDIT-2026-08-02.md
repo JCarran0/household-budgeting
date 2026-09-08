@@ -736,7 +736,7 @@ Nothing consumes these objects: `scripts/server-rollback.sh` contains no AWS cal
 **Effort**: Medium
 
 **Problem**:
-`release-and-deploy.yml:352-353`, `rollback.yml:31-32`, and `update-server-scripts.yml:27-28` all authenticate with `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` IAM user credentials.
+`release-and-deploy.yml:352-353` and `rollback.yml:31-32` authenticate with `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` IAM user credentials. (`update-server-scripts.yml` was a third such caller; it was deleted on 2026-09-08 under TD-027.)
 
 **Exploit scenario**:
 A GitHub org or repo compromise yields durable AWS access that outlives the incident. Note what that access reaches: `ssm send-command` against the EC2 instance is remote code execution as root, via the `sudo -u appuser` wrapper at `release-and-deploy.yml:374-377`.
@@ -751,7 +751,7 @@ The residual risk is therefore what the scoped policy allows — still meaningfu
 Switch `aws-actions/configure-aws-credentials` to GitHub OIDC federation with a role scoped to the deploy bucket plus SSM on that one instance. Credentials become short-lived and repo-scoped, and there is nothing durable left to steal.
 
 **Files**:
-- `.github/workflows/release-and-deploy.yml`, `rollback.yml`, `update-server-scripts.yml`
+- `.github/workflows/release-and-deploy.yml`, `rollback.yml`
 
 ---
 

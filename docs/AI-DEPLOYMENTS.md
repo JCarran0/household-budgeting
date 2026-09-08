@@ -133,7 +133,15 @@ aws ssm get-command-invocation --command-id "$CMD" --instance-id i-05cd17258cce2
   --query StandardOutputContent --output text
 ```
 
-It prints parameter **names** only — never values. CI's own pre-flight uses `ssm:DescribeParameters` as the *GitHub Actions user*, which tests neither the action nor the principal that actually matters, and passed on every one of the failed attempts.
+It prints parameter **names** only — never values.
+
+`release-and-deploy.yml` now runs exactly this probe as its pre-flight (step
+"Verify the instance can actually read the secrets"), before the package is
+uploaded and before the deploy command runs, so a failure leaves production
+untouched. It replaced a check that called `ssm:DescribeParameters` as the
+*GitHub Actions user from the runner* — a different principal, a different
+action, in a different place — which tested nothing that mattered and passed
+cleanly on every one of the four failed attempts (TD-026).
 
 #### Why the deploy script fetches secrets *before* stopping the app
 
@@ -217,12 +225,6 @@ This script:
 3. Uploads to EC2 via SSM
 4. Restarts services
 5. Performs health check
-
-#### Direct Server Update
-```bash
-# Update server scripts only (no build)
-./scripts/update-server-scripts.sh
-```
 
 #### Rollback Deployment
 ```bash
@@ -569,13 +571,10 @@ The application uses [Semantic Versioning](https://semver.org/) with automated c
 ### Release Process
 
 #### 1. Automatic Changelog Updates
-After each push to main:
-```yaml
-# .github/workflows/update-changelog.yml
-- Parses conventional commits
-- Updates CHANGELOG.md Unreleased section
-- Commits changes back with [skip ci]
-```
+Handled by `standard-version` inside `release-and-deploy.yml` on every push to
+`main` — it parses conventional commits, rewrites `CHANGELOG.md`, bumps the
+version, tags, and pushes a `chore(release)` commit back. There is no separate
+changelog workflow.
 
 #### 2. Creating a Release
 ```bash
@@ -600,15 +599,14 @@ git push && git push --tags
 #### 3. Version Information in Deployment
 The deployment process includes version metadata:
 - Version injected into deployment package
-- Available at `/health` and `/version` endpoints
+- Reported by the `/health` endpoint
 - Stored in deployment artifacts on S3
 
-### GitHub Workflows
+There is **no `/version` endpoint**. This document claimed one for a long time;
+requesting it returns the SPA's `index.html`, because the frontend catch-all
+serves any unmatched path. Verify a deploy with `/health` or the git tag.
 
-#### update-changelog.yml
-- **Trigger**: Push to main branch
-- **Purpose**: Parse commits and update CHANGELOG.md
-- **Frequency**: Every commit to main
+### GitHub Workflows
 
 #### release-and-deploy.yml (with versioning)
 - **Trigger**: Auto on push to `main`, or manual dispatch
@@ -619,18 +617,9 @@ The deployment process includes version metadata:
 ### Version Endpoints
 
 ```bash
-# Health check with version
+# Health check with version — the only version endpoint that exists
 curl https://budget.jaredcarrano.com/health
-# Response: {"status":"ok","version":"1.0.0-alpha.1",...}
-
-# Detailed version info
-curl https://budget.jaredcarrano.com/version
-# Response: {
-#   "current": "1.0.0-alpha.1",
-#   "unreleased": "...",
-#   "deployedAt": "2025-01-15T10:00:00Z",
-#   "commitHash": "abc123"
-# }
+# Response: {"status":"ok","timestamp":"...","environment":"production","version":"6.1.0"}
 ```
 
 ## Monitoring and Logs

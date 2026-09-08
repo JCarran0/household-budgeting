@@ -127,7 +127,14 @@ if (config.server.nodeEnv === 'development') {
 
 // Health check endpoint
 app.get('/health', (_req: Request, res: Response) => {
-  const pkg = require('../../package.json');
+  // Backend's own package.json, not the repo root's. The deployment package
+  // ships `backend/package.json` beside `backend/dist/`, but nothing writes a
+  // package.json at the app root — so `../../package.json` resolved to a stale
+  // file no deploy has ever touched, and production reported "1.0.0" for every
+  // release. That made the one automated post-deploy check unable to tell a
+  // successful deploy from one that installed nothing. This path resolves to
+  // the same version-accurate file from src, dist, and the deployed tree.
+  const pkg = require('../package.json');
   res.json({
     status: 'ok',
     timestamp: new Date().toISOString(),

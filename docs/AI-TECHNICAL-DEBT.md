@@ -70,7 +70,7 @@ Production data is JSON blobs in S3, not a database. `cd backend && npm run back
 Bump `**Last Updated**`, add an `## Audits` line for anything incident-driven, and record *what was deliberately not done and why* — several entries below are more useful for their rejected options than their accepted ones.
 
 ### TD-026: No Instance-Side Deploy Pre-Flight
-**Status**: Open
+**Status**: **Resolved 2026-09-08**
 **Created**: 2026-09-08
 **Impact**: Medium — turns a 10-second check into a cycle of failed production deploys
 **Effort**: Low
@@ -81,14 +81,41 @@ Bump `**Last Updated**`, add an `## Audits` line for anything incident-driven, a
 **Fix**:
 Replace it with an `ssm send-command` probe that runs `get-parameters-by-path --with-decryption --query 'Parameters[].Name'` on the target instance and fails the deploy if it errors. Names only — never values. This catches missing region, insufficient IAM, KMS problems, and absent host tooling in one call, before anything is uploaded.
 
+**Resolution**:
+Done as specified. The step is now "Verify the instance can actually read the
+secrets": it sends the probe to the instance, waits, and on failure prints the
+instance's own stderr rather than an opaque exit code. It still runs before the
+package is uploaded, so a failure leaves the running app untouched. The name
+matching uses `grep -qx`, so `PLAID_SECRET_OLD` cannot satisfy `PLAID_SECRET`.
+
+**Verified by execution, not by reading** (2026-09-08), which is the point of the
+entry: the probe was run against the live instance — `Success`, all 9 names
+returned, no values — and then against two known-bad states to confirm it
+*fails*. Wrong path → `Failed`. No region resolvable → `Failed`, printing "You
+must specify a region", which is 2026-09-08 deploy failure #1 reproduced
+exactly, the one the old pre-flight passed clean.
+
+Fixing this surfaced its post-deploy twin, also fixed here: `/health` reported
+`"version":"1.0.0"` for every release, because `require('../../package.json')`
+resolved in the deployed tree to a file at the app root that no deploy writes.
+The one automated post-deploy check could not distinguish a successful deploy
+from one that installed nothing. It now reads `backend/package.json`, which the
+deployment package ships and which resolves identically from `src`, `dist`, and
+the deployed tree. A test asserts it never reports `1.0.0` again.
+
+`docs/AI-DEPLOYMENTS.md` also documented a `/version` endpoint that does not
+exist (the frontend catch-all serves the SPA for it) and an
+`update-changelog.yml` workflow that does not exist. Both corrected.
+
 **Files**:
 - `.github/workflows/release-and-deploy.yml`
+- `backend/src/app.ts`, `backend/src/__tests__/unit/health-version.test.ts`
 - `docs/AI-DEPLOYMENTS.md` (the manual form of this probe is already documented there)
 
 ---
 
 ### TD-027: `update-server-scripts.yml` Ships a Stale Inlined Copy of the Deploy Script
-**Status**: Open
+**Status**: **Resolved 2026-09-08**
 **Created**: 2026-09-08
 **Impact**: Medium — running it installs a pre-SA-25 deploy script that knows nothing about SSM
 **Effort**: Low
@@ -101,12 +128,20 @@ This is the same class as TD-017's deployed-`ecosystem.config.js` drift: a secon
 **Fix**:
 Delete the workflow, or make it `cat` the repo file rather than embedding a copy. Deleting is preferred — the release workflow already installs the script it needs.
 
+**Resolution**:
+Deleted, the preferred option. `release-and-deploy.yml` base64-ships the repo's
+own `scripts/deploy-server.sh` on every deploy, so nothing needed the workflow's
+inlined copy or the `/home/appuser/deploy.sh` path it wrote to. Audit references
+updated. Note the workflow also referenced a `scripts/update-server-scripts.sh`
+that has never existed in the repo.
+
 **Files**:
-- `.github/workflows/update-server-scripts.yml`
+- `.github/workflows/update-server-scripts.yml` (deleted)
+- `docs/SECURITY-AUDIT-2026-08-02.md`, `docs/AI-DEPLOYMENTS.md`
 
 ---
 
-**Last Updated**: 2026-09-08
+**Last Updated**: 2026-09-08 (TD-026, TD-027 resolved)
 **Previous (archived)**: [docs/completed/AI-TECHNICAL-DEBT.md](completed/AI-TECHNICAL-DEBT.md)
 **Execution sequencing**: [TECH-DEBT-EXECUTION-PLAN-2026-04.md](TECH-DEBT-EXECUTION-PLAN-2026-04.md)
 **Security findings (higher priority)**: [SECURITY-AUDIT-2026-08-02.md](SECURITY-AUDIT-2026-08-02.md)
@@ -119,6 +154,7 @@ Delete the workflow, or make it `cat` the repo file rather than embedding a copy
 - **2026-08-02** — Capital One card-reissue incident + rollover sign bug. Added TD-020 (`account_id` change → silent data loss), TD-021 (no Plaid webhooks / no staleness surface), TD-022 (silent sync error paths). Reopened TD-017 (CloudWatch forwarding never enabled, so the logging payoff is unrealized). Corrected TD-014 (claimed zero frontend tests; 31 files / 272 tests exist). Resolved TD-019 (off-bucket snapshots + drilled restore) and TD-022. Added TD-023/024/025 from findings surfaced while fixing the above.
 - **2026-08-03** — TD-017 executed: CloudWatch agent installed, forwarding verified into `/aws/ec2/budget-app` (90d retention). Found production drifted from the repo in two places (PM2 log-file naming, and a stale deployed `ecosystem.config.js` whose `log_date_format` breaks JSON field extraction). Recorded the `budget-app-backup` vs `budget-app-backups` naming hazard under TD-019.
 - **2026-09-08** — Bank of America `account_id` change: TD-020 recurred, 900 transactions held. Reconciled with the script (886 re-keyed, 12 inserted, 2 historic transfers skipped; masks unchanged on both accounts). Three separate defects surfaced on the same path: the account-level resync endpoint rejected its own body-less request (Express 5 leaves `req.body` undefined — same bug previously fixed in `routes/transactions.ts` only), that endpoint passed a single account into an Item-scoped sync (which would itself trip the TD-020 hold), and the reconciler's account pairing compared a normalised stored `type` against a raw Plaid one so it aborted on every depository account. Corrected TD-020 step 4, which specified that broken comparison. Unblocked SA-25 (both IAM grants applied, secrets synced to SSM). Unblocking SA-25 then took four more deploy attempts, each failing on a different cause none of which was visible in code review: no AWS region resolvable on the instance (`aws s3 cp` masks it, `aws ssm` does not), `GetParametersByPath` denied because the grant covered `.../prod/*` but not the path node `.../prod`, IAM propagation delay, and `jq` not installed on the host. Added TD-026 (no instance-side deploy pre-flight) and TD-027 (`update-server-scripts.yml` ships its own stale copy of the deploy script). Common thread across the whole night: **five separate things were documented as done that had never been executed once** — the reconciler against a depository account, the SSM secret sync, the SSM-rendered deploy, SA-25's "written and tested", and AI-DEPLOYMENTS' claim that SSM was already a durable readable copy of `PLAID_ENCRYPTION_SECRET` (it was empty for five weeks).
+- **2026-09-08 (later)** — Closed TD-026 and TD-027 and shipped the re-auth account adoption that would have prevented the incident above. Fixing TD-026 exposed a sixth instance of the same theme: `/health` had reported `"version":"1.0.0"` for every release ever deployed, because it read a `package.json` at the app root that no deploy writes. The one automated post-deploy check would have reported success for a deploy that installed nothing — the documented `/version` endpoint that might have caught it does not exist either. **The pattern is not "we forgot to test"; it is that verification steps were themselves never verified.** When adding a check, run it once against a known-bad state and confirm it fails.
 
 ---
 
