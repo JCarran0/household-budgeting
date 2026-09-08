@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+### [6.0.3](https://github.com/JCarran0/household-budgeting/compare/v6.0.2...v6.0.3) (2026-09-08)
+
+
+### Bug Fixes
+
+* **accounts:** repair per-account resync and surface its sync warnings ([5919de1](https://github.com/JCarran0/household-budgeting/commit/5919de19748f9300296367b261778df7037057c4))
+* **ops:** pair accounts correctly in the Plaid reconciler ([7fce515](https://github.com/JCarran0/household-budgeting/commit/7fce5157495b041da7bc4d3b2f4566b786008ff8))
+* **security:** render .env from SSM instead of shipping it in the tarball (SA-25) ([8110d16](https://github.com/JCarran0/household-budgeting/commit/8110d165effff063af14d86dbcd7426e6fc225ba))
+
+
+### Chores
+
+* ignore .claude/worktrees/ ([a00d14e](https://github.com/JCarran0/household-budgeting/commit/a00d14e9fda56ffa5acc8996a72eed6bac0cbad3))
+
 ### [6.0.2](https://github.com/JCarran0/household-budgeting/compare/v6.0.1...v6.0.2) (2026-08-03)
 
 
