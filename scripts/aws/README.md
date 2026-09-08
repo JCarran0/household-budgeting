@@ -42,8 +42,15 @@ grants `ssm:GetParameter` / `ssm:GetParameters`, but **not**
 `ssm:GetParametersByPath` — which is what the deploy script uses to fetch the
 whole set in one call. Hence the explicit grant.
 
-The resource is pinned to `parameter/budget-app/prod/*` rather than `*` so the
-instance cannot read unrelated parameters if the account ever holds any.
+The resource lists **both** `parameter/budget-app/prod` and
+`parameter/budget-app/prod/*`. The path node without the wildcard is not
+redundant: `GetParametersByPath` authorizes against the path being queried, not
+against the parameters it returns, so a policy carrying only the `/*` form fails
+with `AccessDeniedException ... on resource: .../parameter/budget-app/prod`.
+That is exactly how the first SSM-rendered deploy failed (2026-09-08).
+
+Both are pinned to the app's own path rather than `*` so the instance cannot
+read unrelated parameters if the account ever holds any.
 
 `kms:Decrypt` is required to read SecureStrings. It uses `Resource: "*"` with a
 `kms:ViaService` condition rather than naming the key, because the parameters
