@@ -163,7 +163,10 @@ router.post('/:accountId/sync-transactions', authMiddleware, async (req: AuthReq
   try {
     if (!req.user) throw new AuthorizationError();
 
-    const validation = syncTransactionsSchema.safeParse(req.body);
+    // Express 5 leaves req.body undefined when the client sends no body at all,
+    // which this endpoint's callers do. `safeParse(undefined)` fails an object
+    // schema, so normalise before validating.
+    const validation = syncTransactionsSchema.safeParse(req.body ?? {});
     if (!validation.success) {
       res.status(400).json({ 
         success: false, 
@@ -183,10 +186,20 @@ router.post('/:accountId/sync-transactions', authMiddleware, async (req: AuthReq
       return;
     }
 
+    // Plaid's transactions/sync cursor is per-Item, not per-account: the delta
+    // contains rows for every account under this Item. Passing only the clicked
+    // account would make its siblings' rows unplaceable, which trips the
+    // fail-closed reconciliation hold in transactionService (TD-020) and stalls
+    // the Item's cursor. Sync the whole Item and report the delta.
+    const accountsResult = await accountService.getUserAccounts(req.user.familyId);
+    const itemAccounts = (accountsResult.accounts ?? []).filter(
+      a => a.plaidItemId === account.plaidItemId
+    );
+
     // Sync transactions
     const result = await transactionService.syncTransactions(
       req.user.familyId,
-      [account],
+      itemAccounts.length > 0 ? itemAccounts : [account],
       startDate
     );
 
@@ -200,6 +213,7 @@ router.post('/:accountId/sync-transactions', authMiddleware, async (req: AuthReq
       added: result.added,
       modified: result.modified,
       removed: result.removed,
+      warning: result.warning,
     });
   } catch (error) {
     next(error);

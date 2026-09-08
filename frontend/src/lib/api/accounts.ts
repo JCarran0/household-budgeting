@@ -69,6 +69,7 @@ export function createAccountsApi(client: AxiosInstance) {
       added: number;
       modified: number;
       removed: number;
+      warning?: string;
     }> {
       const { data } = await client.post(`/accounts/${accountId}/sync-transactions`);
       if (!data.success) {

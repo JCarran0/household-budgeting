@@ -68,10 +68,22 @@ export function MantineAccounts() {
 
   const syncAccountMutation = useMutation({
     mutationFn: (accountId: string) => api.syncAccountTransactions(accountId),
-    onSuccess: () => {
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['accounts'] });
       queryClient.invalidateQueries({ queryKey: ['transactions'] });
       setSyncingAccount(null);
+
+      if (data.warning) {
+        notifications.show({
+          title: 'Sync Partially Completed',
+          message: data.warning,
+          color: 'yellow',
+          icon: <IconAlertCircle size={16} />,
+          autoClose: 10000,
+        });
+        return;
+      }
+
       notifications.show({
         title: 'Success',
         message: 'Account synced successfully',

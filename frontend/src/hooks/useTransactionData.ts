@@ -167,11 +167,20 @@ export function useTransactionData(filters: TransactionFilters) {
       ? api.syncTransactions()
       : api.syncAccountTransactions(selectedAccount),
     onSuccess: (data) => {
-      notifications.show({
-        title: 'Sync Complete',
-        message: `Added ${data.added}, modified ${data.modified}, removed ${data.removed} transactions`,
-        color: 'green',
-      });
+      notifications.show(
+        data.warning
+          ? {
+              title: 'Sync Partially Completed',
+              message: data.warning,
+              color: 'yellow',
+              autoClose: 10000,
+            }
+          : {
+              title: 'Sync Complete',
+              message: `Added ${data.added}, modified ${data.modified}, removed ${data.removed} transactions`,
+              color: 'green',
+            }
+      );
       queryClient.invalidateQueries({ queryKey: ['transactions'] });
       queryClient.invalidateQueries({ queryKey: ['transactions', 'uncategorized', 'count'] });
       queryClient.invalidateQueries({ queryKey: ['amazon-receipts', 'eligible-count'] });
