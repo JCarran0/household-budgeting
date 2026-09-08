@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+### [6.0.4](https://github.com/JCarran0/household-budgeting/compare/v6.0.3...v6.0.4) (2026-09-08)
+
+
+### Bug Fixes
+
+* **deploy:** resolve the AWS region before fetching secrets from SSM ([1b39ffd](https://github.com/JCarran0/household-budgeting/commit/1b39ffd5ccf8b61d14a14e502ab076d61b487a30))
+
+
+### Documentation
+
+* **debt:** correct TD-020's pairing spec and contest its deferral ([7e29e7f](https://github.com/JCarran0/household-budgeting/commit/7e29e7f43dfa53a02eb20833e31f19f872aacffb))
+
 ### [6.0.3](https://github.com/JCarran0/household-budgeting/compare/v6.0.2...v6.0.3) (2026-09-08)
 
 
