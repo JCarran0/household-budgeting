@@ -69,6 +69,43 @@ Production data is JSON blobs in S3, not a database. `cd backend && npm run back
 
 Bump `**Last Updated**`, add an `## Audits` line for anything incident-driven, and record *what was deliberately not done and why* — several entries below are more useful for their rejected options than their accepted ones.
 
+### TD-026: No Instance-Side Deploy Pre-Flight
+**Status**: Open
+**Created**: 2026-09-08
+**Impact**: Medium — turns a 10-second check into a cycle of failed production deploys
+**Effort**: Low
+
+**Problem**:
+`release-and-deploy.yml` pre-flights the secret store with `ssm:DescribeParameters` executed as the **GitHub Actions user, from the runner**. The thing that actually has to work is `ssm:GetParametersByPath --with-decryption` executed as the **instance role, on the instance**. Those differ in principal, action, and host, so the pre-flight passed on every one of the four failed deploys on 2026-09-08 while the real call was failing for three unrelated reasons.
+
+**Fix**:
+Replace it with an `ssm send-command` probe that runs `get-parameters-by-path --with-decryption --query 'Parameters[].Name'` on the target instance and fails the deploy if it errors. Names only — never values. This catches missing region, insufficient IAM, KMS problems, and absent host tooling in one call, before anything is uploaded.
+
+**Files**:
+- `.github/workflows/release-and-deploy.yml`
+- `docs/AI-DEPLOYMENTS.md` (the manual form of this probe is already documented there)
+
+---
+
+### TD-027: `update-server-scripts.yml` Ships a Stale Inlined Copy of the Deploy Script
+**Status**: Open
+**Created**: 2026-09-08
+**Impact**: Medium — running it installs a pre-SA-25 deploy script that knows nothing about SSM
+**Effort**: Low
+
+**Problem**:
+The workflow does not deploy `scripts/deploy-server.sh`. It carries its **own 65-line copy inlined in a heredoc**, against the repo's 273-line SA-25-aware version, and writes it to `/home/appuser/deploy.sh`. Since SA-25, `release-and-deploy.yml` base64-ships the repo script to `/tmp` on every deploy and runs it from there, so `/home/appuser/deploy.sh` is no longer the deploy path — but the workflow is still present and runnable, and its copy would render no `.env` from SSM at all.
+
+This is the same class as TD-017's deployed-`ecosystem.config.js` drift: a second copy of a file that the repo believes it owns.
+
+**Fix**:
+Delete the workflow, or make it `cat` the repo file rather than embedding a copy. Deleting is preferred — the release workflow already installs the script it needs.
+
+**Files**:
+- `.github/workflows/update-server-scripts.yml`
+
+---
+
 **Last Updated**: 2026-09-08
 **Previous (archived)**: [docs/completed/AI-TECHNICAL-DEBT.md](completed/AI-TECHNICAL-DEBT.md)
 **Execution sequencing**: [TECH-DEBT-EXECUTION-PLAN-2026-04.md](TECH-DEBT-EXECUTION-PLAN-2026-04.md)
@@ -81,7 +118,7 @@ Bump `**Last Updated**`, add an `## Audits` line for anything incident-driven, a
 - **2026-08-02** — full security audit (dependencies, auth/authz, input validation, AI boundary, secrets/infra). 30 findings, 3 High, tracked as `SA-NN` in [SECURITY-AUDIT-2026-08-02.md](SECURITY-AUDIT-2026-08-02.md) rather than as TD entries — the burn-down is its own workstream and outranks this file. Surfaced that TD-004's SPA-CSP follow-up is still unshipped (now also `SA-27`) and independently re-derived TD-025 (now also `SA-31`, closed).
 - **2026-08-02** — Capital One card-reissue incident + rollover sign bug. Added TD-020 (`account_id` change → silent data loss), TD-021 (no Plaid webhooks / no staleness surface), TD-022 (silent sync error paths). Reopened TD-017 (CloudWatch forwarding never enabled, so the logging payoff is unrealized). Corrected TD-014 (claimed zero frontend tests; 31 files / 272 tests exist). Resolved TD-019 (off-bucket snapshots + drilled restore) and TD-022. Added TD-023/024/025 from findings surfaced while fixing the above.
 - **2026-08-03** — TD-017 executed: CloudWatch agent installed, forwarding verified into `/aws/ec2/budget-app` (90d retention). Found production drifted from the repo in two places (PM2 log-file naming, and a stale deployed `ecosystem.config.js` whose `log_date_format` breaks JSON field extraction). Recorded the `budget-app-backup` vs `budget-app-backups` naming hazard under TD-019.
-- **2026-09-08** — Bank of America `account_id` change: TD-020 recurred, 900 transactions held. Reconciled with the script (886 re-keyed, 12 inserted, 2 historic transfers skipped; masks unchanged on both accounts). Three separate defects surfaced on the same path: the account-level resync endpoint rejected its own body-less request (Express 5 leaves `req.body` undefined — same bug previously fixed in `routes/transactions.ts` only), that endpoint passed a single account into an Item-scoped sync (which would itself trip the TD-020 hold), and the reconciler's account pairing compared a normalised stored `type` against a raw Plaid one so it aborted on every depository account. Corrected TD-020 step 4, which specified that broken comparison. Unblocked SA-25 (both IAM grants applied, secrets synced to SSM).
+- **2026-09-08** — Bank of America `account_id` change: TD-020 recurred, 900 transactions held. Reconciled with the script (886 re-keyed, 12 inserted, 2 historic transfers skipped; masks unchanged on both accounts). Three separate defects surfaced on the same path: the account-level resync endpoint rejected its own body-less request (Express 5 leaves `req.body` undefined — same bug previously fixed in `routes/transactions.ts` only), that endpoint passed a single account into an Item-scoped sync (which would itself trip the TD-020 hold), and the reconciler's account pairing compared a normalised stored `type` against a raw Plaid one so it aborted on every depository account. Corrected TD-020 step 4, which specified that broken comparison. Unblocked SA-25 (both IAM grants applied, secrets synced to SSM). Unblocking SA-25 then took four more deploy attempts, each failing on a different cause none of which was visible in code review: no AWS region resolvable on the instance (`aws s3 cp` masks it, `aws ssm` does not), `GetParametersByPath` denied because the grant covered `.../prod/*` but not the path node `.../prod`, IAM propagation delay, and `jq` not installed on the host. Added TD-026 (no instance-side deploy pre-flight) and TD-027 (`update-server-scripts.yml` ships its own stale copy of the deploy script). Common thread across the whole night: **five separate things were documented as done that had never been executed once** — the reconciler against a depository account, the SSM secret sync, the SSM-rendered deploy, SA-25's "written and tested", and AI-DEPLOYMENTS' claim that SSM was already a durable readable copy of `PLAID_ENCRYPTION_SECRET` (it was empty for five weeks).
 
 ---
 

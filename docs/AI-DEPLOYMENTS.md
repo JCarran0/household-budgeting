@@ -62,7 +62,9 @@ Every secret exists in three places:
 2. **SSM Parameter Store**, `/budget-app/prod/*` — SecureString, readable with `--with-decryption` given the right IAM. Written only by the *Sync Secrets to SSM Parameter Store* workflow.
 3. **`/home/appuser/app/backend/.env` on the EC2 instance** — rendered at deploy time by `scripts/deploy-server.sh` from (2) plus the non-secret `.env.config` shipped in the package (`chmod 600`, owned by `appuser`).
 
-Since SSM is now a durable readable copy, losing the EC2 instance no longer risks orphaning the Plaid tokens — the concern that made TD-025 urgent.
+Since SSM is a durable readable copy, losing the EC2 instance no longer risks orphaning the Plaid tokens — the concern that made TD-025 urgent.
+
+> ⚠️ **This became true on 2026-09-08, not 2026-08-03.** The paragraph above was written when the SSM design shipped, in the present tense, describing the intended end state. In reality the *Sync Secrets to SSM* workflow had run exactly once, on 2026-08-03, and **failed** with `AccessDeniedException` on `ssm:PutParameter`; `/budget-app/prod/*` stayed empty for five weeks. Throughout that window the on-host `.env` was the **only** copy of `PLAID_ENCRYPTION_SECRET`, which cannot be rotated — losing the instance would have orphaned every linked bank, exactly the risk this section claimed was retired. Parameters were first written 2026-09-08T00:40Z. Record when a safety property is *verified*, not when its code lands.
 
 To read one without printing it into a terminal transcript, pipe it straight to its destination:
 
@@ -108,6 +110,30 @@ Update the **GitHub Variable** and redeploy. No SSM involvement.
 #### First-time setup / disaster recovery
 
 The instance role needs `budget-app-ssm-secrets-read` or the deploy aborts (safely — before the running app is touched). Apply it from `scripts/aws/ec2-ssm-secrets-read-policy.json`; see [scripts/aws/README.md](../scripts/aws/README.md).
+
+**Verify from the instance before deploying, not by reading policy JSON.** The first four SSM-rendered deploys failed on four different causes, none visible in the code or in CI's pre-flight:
+
+| Cause | Why reading the policy did not reveal it |
+|---|---|
+| No AWS region resolvable on the host | `aws s3 cp` works without one (S3 has a global endpoint); `aws ssm` does not. The script now resolves the region from IMDSv2. |
+| `GetParametersByPath` denied | It authorizes against the **path node** `parameter/budget-app/prod`, not just `.../prod/*`. The grant looked correct and was not. |
+| IAM propagation | The corrected policy took ~1 minute to take effect; a probe 12s after the write still returned `AccessDenied`. |
+| `jq` not installed | The script depended on a host package nobody had checked for. It no longer does. |
+
+The check that would have caught the first, second and fourth in one shot, run **as the instance, on the instance**:
+
+```bash
+export AWS_PROFILE=budget-app-prod AWS_REGION=us-east-1
+CMD=$(aws ssm send-command --instance-ids i-05cd17258cce207a3 \
+  --document-name AWS-RunShellScript \
+  --parameters 'commands=["aws ssm get-parameters-by-path --path /budget-app/prod --recursive --with-decryption --region us-east-1 --query Parameters[].Name --output text 2>&1 | head -3"]' \
+  --query Command.CommandId --output text)
+sleep 10
+aws ssm get-command-invocation --command-id "$CMD" --instance-id i-05cd17258cce207a3 \
+  --query StandardOutputContent --output text
+```
+
+It prints parameter **names** only — never values. CI's own pre-flight uses `ssm:DescribeParameters` as the *GitHub Actions user*, which tests neither the action nor the principal that actually matters, and passed on every one of the failed attempts.
 
 #### Why the deploy script fetches secrets *before* stopping the app
 

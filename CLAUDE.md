@@ -73,6 +73,8 @@ Family-scale app for 2 users: personal budgeting (with Plaid), shared tasks, tri
 | Budget calculation inconsistencies | Use `shared/utils/budgetCalculations.ts`, never duplicate |
 | Transfer double-counting | Use `shared/utils/transactionCalculations.ts` — excludes transfers |
 | TypeScript `any` errors | `unknown` + type guards; see [AI-APPLICATION-ARCHITECTURE.md](docs/AI-APPLICATION-ARCHITECTURE.md) |
+| Body-less POST returns `Invalid request data` | Express 5 leaves `req.body` **undefined** when the request has no body (Express 4 left `{}`), so `schema.safeParse(req.body)` fails an all-optional object schema. Use `safeParse(req.body ?? {})`. Has bitten twice (`/transactions/sync`, then `/accounts/:id/sync-transactions`); ~23 routes still use the bare form and are safe only while every caller sends a body |
+| Deploy aborts fetching secrets from SSM | Read the error the script now prints — it is the AWS message, not a guess. Verify from the instance before redeploying; see [AI-DEPLOYMENTS.md](docs/AI-DEPLOYMENTS.md) "First-time setup / disaster recovery" |
 
 ## Development
 
