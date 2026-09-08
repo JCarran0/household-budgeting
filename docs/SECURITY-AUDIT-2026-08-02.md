@@ -47,7 +47,7 @@ Open items, ordered by value ÷ effort. The top four are one-line changes.
 | SA-20 | Dead Plaid routes with placeholder access token | Medium | Low | Open |
 | SA-15 | Any family member can remove any other member | Medium | Low | Open |
 | SA-05 | Action-card display can diverge from executed params | Medium | Medium | Open |
-| SA-25 | Deploy tarballs in S3 contain the full production `.env` | High | Medium | **Partially resolved** — new leakage stopped & verified; 242 historical bundles remain |
+| SA-25 | Deploy tarballs in S3 contain the full production `.env` | High | Medium | **Resolved 2026-09-08** |
 | SA-06 | Three LLM tool outputs not Zod-validated | Medium | Low | Open |
 | SA-04 | Chatbot timeout doesn't abort the tool loop; spend unrecorded | Medium | Low | Open |
 | SA-13 | Password change doesn't invalidate existing JWTs | Medium | Medium | Open |
@@ -68,10 +68,10 @@ Open items, ordered by value ÷ effort. The top four are one-line changes.
 
 **Resolved 2026-08-02**: SA-01 (dependencies), SA-03 (cost-cap attribution), SA-11 (`trust proxy`), SA-12 (lockout casing), SA-19 (Plaid tokens off the wire), SA-24 (`/feedback/test` admin gate).
 **Resolved 2026-08-03**: SA-30 (vestigial `ENCRYPTION_KEY`).
-**Partially resolved 2026-09-08**: SA-25 — new leakage stopped and verified in production; the historical archive is still there, so it stays open. See below.
+**Resolved 2026-09-08**: SA-25 — new leakage stopped and verified in production, and the historical archive purged with version-aware deletion.
 **Accepted**: SA-02. **Duplicate**: SA-31 (→ TD-025).
 
-**Progress**: 7 of 30 closed. SA-25, the last High, is now live in production — but only half of it. Note the previous wording here said "written and tested"; it had never been executed once, and when it finally ran it failed four times on four distinct causes. Reserve "tested" for things that have actually run.
+**Progress**: 8 of 30 closed. SA-25, the last High, is closed — code live in production *and* the historical archive purged. Note the wording here previously said "written and tested"; it had never been executed once, and when it finally ran it failed four times on four distinct causes. Reserve "tested" for things that have actually run.
 
 ### ✅ Applied 2026-09-08 — SA-25's IAM grants
 
@@ -650,7 +650,7 @@ Zod coverage is broad — transactions, reports, tasks, trips, notifications, th
 ## Secrets & infrastructure
 
 ### SA-25: Deploy tarballs in S3 contain the full production `.env`
-**Status**: **Partially resolved (2026-09-08)** — new leakage stopped and the SSM-rendered `.env` verified running in production. **242 historical credential bundles are still in S3, so the finding stays open at High.**
+**Status**: **Resolved (2026-09-08)** — new leakage stopped and verified live in production, and the historical archive purged: 320 entries (281 secret-bearing object versions + 39 delete markers, 394.2 MB) permanently deleted, leaving only the 5 secret-free packages. Verified by re-listing: 0 secret-bearing versions remain.
 **Severity**: **High**
 **Effort**: Medium
 
@@ -704,6 +704,8 @@ Tracked as **TD-026** — CI's pre-flight uses `ssm:DescribeParameters` as the G
 > ⚠️ **A plain `aws s3 rm` will not remediate this, and will look like it did.** The bucket is versioned, so `rm` writes delete markers and retains every byte as a noncurrent version. The bucket would list empty while all 394 MB of credentials remained retrievable. Deletion must be **version-aware**: enumerate with `list-object-versions` and delete each `{Key, VersionId}` pair (including existing delete markers), or add a `NoncurrentVersionExpiration` lifecycle rule and wait for it to run.
 >
 > Keep the five packages from `v6.0.3` onward (2026-09-08T00:47:46 and later) — those were built by the fixed workflow and carry no secrets. Deleting through `v6.0.5` as well is harmless if a simpler cutoff is preferred; only `v6.0.6` (running) and `v6.0.7` need to survive.
+
+**Purged 2026-09-08.** Version-aware `delete-objects` removed **320 entries — 281 object versions (394.2 MB) plus all 39 delete markers** — keeping the 5 post-fix packages. Reported 320 deleted / 0 errors, and *verified by re-listing rather than by exit code*: 5 versions remain (15 MB), 0 delete markers, 0 secret-bearing objects. The `budget-app-backup-f5b52f89` snapshot bucket was confirmed untouched at 36 versions. Manifest of every deleted `{Key, VersionId}` was written locally before deleting.
 
 > ⚠️ **Pin the bucket name and the prefix before deleting anything.** The account holds two buckets whose names differ by one character:
 >
