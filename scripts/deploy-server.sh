@@ -88,20 +88,26 @@ install -m 600 /dev/null "$ENV_FILE"
 cat "$CONFIG_FILE" >> "$ENV_FILE"
 
 echo "🔐 Fetching secrets from SSM ($SSM_PATH)..."
-# --with-decryption is required for SecureString. Output is piped straight to
-# jq and into the 0600 file; it is never echoed. Note the CLI paginates
-# get-parameters-by-path automatically (the API caps at 10 per call).
-SSM_JSON=$(aws ssm get-parameters-by-path \
+# --with-decryption is required for SecureString. Output goes straight into the
+# 0600 file; it is never echoed. Note the CLI paginates get-parameters-by-path
+# automatically (the API caps at 10 per call).
+#
+# Rendered with --query/--output text rather than jq: jq is not installed on the
+# instance and this script must not depend on host packages it cannot guarantee.
+# That dependency broke the third SSM-rendered deploy attempt (2026-09-08) after
+# the SSM call itself had already started working. Each line is NAME<TAB>VALUE.
+SSM_TEXT=$(aws ssm get-parameters-by-path \
     --path "$SSM_PATH" \
     --with-decryption \
     --recursive \
-    --output json 2>&1) || {
+    --query 'Parameters[].[Name,Value]' \
+    --output text 2>&1) || {
     # Print what AWS actually said. This branch used to capture stderr into
     # $SSM_JSON and then discard it in favour of a guess, which sent the first
     # failure investigation after the wrong cause (2026-09-08). The command
     # failed, so $SSM_JSON holds an error message, not parameter values.
     echo "❌ Could not read $SSM_PATH from SSM:"
-    echo "$SSM_JSON" | head -5
+    echo "$SSM_TEXT" | head -5
     echo "   If this is an authorization error, the instance role is probably"
     echo "   missing budget-app-ssm-secrets-read — apply"
     echo "   scripts/aws/ec2-ssm-secrets-read-policy.json (see scripts/aws/README.md)."
@@ -110,13 +116,30 @@ SSM_JSON=$(aws ssm get-parameters-by-path \
 }
 
 # Reject values containing newlines — they would silently corrupt every
-# subsequent line of .env and surface as a baffling boot failure.
-if echo "$SSM_JSON" | jq -e '.Parameters[] | select(.Value | test("\n"))' > /dev/null 2>&1; then
-    echo "❌ An SSM parameter value contains a newline, which .env cannot represent."
-    exit 1
-fi
+# subsequent line of .env and surface as a baffling boot failure. A newline in a
+# value makes `--output text` emit a continuation line with no tab, so "every
+# line has a tab" is the same check expressed against this output shape.
+while IFS= read -r LINE; do
+    [ -z "$LINE" ] && continue
+    case "$LINE" in
+        *"$(printf '\t')"*) ;;
+        *)
+            echo "❌ An SSM parameter value contains a newline, which .env cannot represent."
+            exit 1
+            ;;
+    esac
+done <<EOF
+$SSM_TEXT
+EOF
 
-echo "$SSM_JSON" | jq -r '.Parameters[] | "\(.Name | split("/") | last)=\(.Value)"' >> "$ENV_FILE"
+# NAME<TAB>VALUE -> BASENAME=VALUE. `read -r name value` splits on the first tab
+# only, so a value containing tabs survives intact.
+while IFS="$(printf '\t')" read -r SSM_NAME SSM_VALUE; do
+    [ -z "$SSM_NAME" ] && continue
+    printf '%s=%s\n' "${SSM_NAME##*/}" "$SSM_VALUE" >> "$ENV_FILE"
+done <<EOF
+$SSM_TEXT
+EOF
 
 # Verify every required secret actually landed. Checks key names only — values
 # are never printed.
