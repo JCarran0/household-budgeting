@@ -5,12 +5,13 @@
 **Scope**: Full application — dependencies, authentication/authorization, input validation and data handling, the AI/LLM boundary, and secrets/infrastructure.
 **Method**: Dependency scan (`npm audit`, both packages) plus four parallel code reviews. Every finding below was confirmed by reading the code at the cited location. Nothing here is pattern-matched or inferred.
 
-**Last Updated**: 2026-08-02
+**Last Updated**: 2026-09-08
 
 ## Change log
 
 - **2026-08-02** — Audit performed; 30 findings filed. Same day: SA-01 (dependencies), SA-03, SA-11, SA-12, SA-19, and SA-24 resolved. Backend suite 957 → **971 tests**, frontend 279, all passing; both packages typecheck clean.
 - **2026-08-03** — SA-25 built (secrets → SSM Parameter Store) and SA-30 closed with it. Blocked on two IAM grants; switch commit held unpushed. Two triage errors corrected against live AWS state: rollback does **not** consume S3 deployment tarballs (so they can be expired freely), and the CI IAM user is **not** an admin — SA-26 stays Medium. Measured the actual exposure at 280 tarballs / 410 MB / 11 months.
+- **2026-09-08** — SA-25 unblocked and **verified live in production**. Both IAM grants applied; the sync workflow wrote 9 SecureStrings to `/budget-app/prod/*`; `PLAID_ENCRYPTION_SECRET` confirmed byte-identical to the on-host value by SHA-256 comparison before pushing. Four deploys then failed on four causes none of which was visible in code review — no AWS region resolvable on the instance, `GetParametersByPath` denied because the grant covered `.../prod/*` but not the path node `.../prod`, IAM propagation, and `jq` absent from the host. Fifth deploy green: v6.0.6 online, 0 restarts, `.env` rendered from SSM at 0600 with all 9 secrets present. **The 242 historical tarballs remain — SA-25 stays High until they are purged.**
 
 ---
 
@@ -46,7 +47,7 @@ Open items, ordered by value ÷ effort. The top four are one-line changes.
 | SA-20 | Dead Plaid routes with placeholder access token | Medium | Low | Open |
 | SA-15 | Any family member can remove any other member | Medium | Low | Open |
 | SA-05 | Action-card display can diverge from executed params | Medium | Medium | Open |
-| SA-25 | Deploy tarballs in S3 contain the full production `.env` | High | Medium | **Blocked** — 2 IAM grants |
+| SA-25 | Deploy tarballs in S3 contain the full production `.env` | High | Medium | **Partially resolved** — new leakage stopped & verified; 242 historical bundles remain |
 | SA-06 | Three LLM tool outputs not Zod-validated | Medium | Low | Open |
 | SA-04 | Chatbot timeout doesn't abort the tool loop; spend unrecorded | Medium | Low | Open |
 | SA-13 | Password change doesn't invalidate existing JWTs | Medium | Medium | Open |
@@ -67,14 +68,16 @@ Open items, ordered by value ÷ effort. The top four are one-line changes.
 
 **Resolved 2026-08-02**: SA-01 (dependencies), SA-03 (cost-cap attribution), SA-11 (`trust proxy`), SA-12 (lockout casing), SA-19 (Plaid tokens off the wire), SA-24 (`/feedback/test` admin gate).
 **Resolved 2026-08-03**: SA-30 (vestigial `ENCRYPTION_KEY`).
-**Code complete, blocked**: SA-25 — see below.
+**Partially resolved 2026-09-08**: SA-25 — new leakage stopped and verified in production; the historical archive is still there, so it stays open. See below.
 **Accepted**: SA-02. **Duplicate**: SA-31 (→ TD-025).
 
-**Progress**: 7 of 30 closed. SA-25, the last High, is written and tested but held.
+**Progress**: 7 of 30 closed. SA-25, the last High, is now live in production — but only half of it. Note the previous wording here said "written and tested"; it had never been executed once, and when it finally ran it failed four times on four distinct causes. Reserve "tested" for things that have actually run.
 
-### ⛔ Needs production credentials — SA-25 is blocked here
+### ✅ Applied 2026-09-08 — SA-25's IAM grants
 
-Two IAM grants, both captured as reviewable JSON in [`scripts/aws/`](../scripts/aws/README.md). Until both land, the SA-25 switch commit stays unpushed, because pushing it triggers a deploy that fails its own pre-flight — safe, but pointlessly red.
+Two IAM grants, both captured as reviewable JSON in [`scripts/aws/`](../scripts/aws/README.md). **Both applied and verified 2026-09-08**; the commands below are retained as the runbook for a rebuilt account or instance.
+
+Note the second grant needed correcting after it was applied: `GetParametersByPath` authorizes against the **path node** `parameter/budget-app/prod`, not only `parameter/budget-app/prod/*`, so the original document was denied at deploy time. Also allow ~1 minute for IAM propagation — a probe 12 seconds after the write still returned `AccessDenied`.
 
 ```bash
 export AWS_PROFILE=budget-app-prod
@@ -647,7 +650,7 @@ Zod coverage is broad — transactions, reports, tasks, trips, notifications, th
 ## Secrets & infrastructure
 
 ### SA-25: Deploy tarballs in S3 contain the full production `.env`
-**Status**: **Code complete, blocked on two IAM grants** (2026-08-03)
+**Status**: **Partially resolved (2026-09-08)** — new leakage stopped and the SSM-rendered `.env` verified running in production. **242 historical credential bundles are still in S3, so the finding stays open at High.**
 **Severity**: **High**
 **Effort**: Medium
 
@@ -663,7 +666,7 @@ Every historical deployment package is a complete, readable credential bundle at
 
 **Verified good**: the bucket is fully private (all four public-access blocks on) and encrypted at rest (SSE-S3, with SSE-C blocked). The exposure needs credentials to realize — it is not an open bucket.
 
-**Fix — code complete, not yet live:**
+**Fix — live in production since 2026-09-08 (v6.0.6):**
 
 ✅ **Secrets moved to SSM Parameter Store** under `/budget-app/prod/*` as SecureStrings. New `sync-secrets-to-ssm.yml` workflow is the only writer: it reads GitHub Secrets and writes them straight to SSM, so values never leave the ephemeral runner. It is idempotent, so it doubles as "push my rotated secret to prod", and it rejects empty secrets rather than writing empty parameters that would fail confusingly at boot. Its verify step uses `describe-parameters` (metadata only), deliberately not `--with-decryption`.
 
@@ -675,14 +678,35 @@ Every historical deployment package is a complete, readable credential bundle at
 
 ✅ **`ENCRYPTION_KEY` removed** and `scripts/generate-env.sh` deleted — see SA-30.
 
-⛔ **Blocked on two IAM changes** (both captured as reviewable JSON in `scripts/aws/`, both requiring production credentials):
+✅ **Both IAM grants applied 2026-09-08** and verified against live AWS state.
 
-1. `budget-app-gh-actions-user` needs `ssm:PutParameter` / `DescribeParameters` / `kms:Encrypt`. Confirmed empirically — the first sync run failed with `AccessDeniedException` on `PutParameter`. Apply `scripts/aws/gh-actions-deployment-policy.json`.
-2. The EC2 instance role needs `ssm:GetParametersByPath` + `kms:Decrypt`. `AmazonSSMManagedInstanceCore` is already attached but covers only `GetParameter`/`GetParameters`. Apply `scripts/aws/ec2-ssm-secrets-read-policy.json`.
+**What it actually took to go live, after being recorded as "written and tested".** The switch had never been executed once. Five deploy attempts were needed, four of them failing on causes invisible to code review:
 
-Until both land, the switch commit is **held unpushed** — pushing it would trigger a deploy that fails its pre-flight. Safe (production untouched) but pointlessly red.
+| # | Cause | Note |
+|---|---|---|
+| 1 | No AWS region resolvable on the instance | `aws s3 cp` masks this via S3's global endpoint; `aws ssm` has no such fallback. Script now reads the region from IMDSv2. |
+| 2 | `GetParametersByPath` denied | The grant covered `.../prod/*` but the call authorizes against the path node `.../prod`. The policy document looked correct and was not. |
+| 3 | IAM propagation | ~1 minute; a probe at 12s still returned `AccessDenied`. |
+| 4 | `jq: command not found` | The SA-25 rewrite introduced a host-package dependency nobody had checked. Removed in favour of `--query`/`--output text`. |
 
-**Historical tarballs are a separate decision.** The code fix stops *new* leakage; it does nothing about the 280 existing bundles. Because `PLAID_ENCRYPTION_SECRET` cannot be rotated (TD-025 landmine), deleting them is the only available mitigation for the historical exposure — and since nothing consumes them, deletion is operationally safe. Not done here: bulk-deleting 280 objects is destructive and is the owner's call.
+Cause 2 was only findable because the error handler was changed first: it had been capturing AWS's stderr and discarding it in favour of a hardcoded guess ("most likely the instance role is missing"), which was wrong and cost an investigation into IAM that was already correct.
+
+Tracked as **TD-026** — CI's pre-flight uses `ssm:DescribeParameters` as the GitHub Actions user from the runner, testing neither the action, the principal, nor the host that matter. It passed on all four failed deploys.
+
+**Verified in production 2026-09-08**: health `200`, `budget-backend` v6.0.6 online under `appuser` with 0 restarts, `.env` at mode `0600` carrying all 9 secrets, each present exactly once.
+
+**Historical tarballs are the open half of this finding.** The code fix stops *new* leakage; it does nothing about the existing bundles — **242 objects, 373.9 MB, 2025-09-07 → 2026-08-03** (re-measured 2026-09-08; down from 280 as the 365-day lifecycle expires the oldest). Every one contains a `PLAID_ENCRYPTION_SECRET` that cannot be rotated, which is why this is the half that matters.
+
+> ⚠️ **Pin the bucket name and the prefix before deleting anything.** The account holds two buckets whose names differ by one character:
+>
+> | Bucket | Holds |
+> |---|---|
+> | `budget-app-backups-f5b52f89` (**plural**) | the 242 deployment tarballs — the delete target |
+> | `budget-app-backup-f5b52f89` (**singular**) | 36 objects under `snapshots/` — the TD-019 off-host **data** backups |
+>
+> A delete aimed at the singular name destroys the only off-host copy of the application data. Scope every command to `s3://budget-app-backups-f5b52f89/deployments/` and confirm the object count is 242 before deleting. This is the naming hazard recorded under TD-019, and it is live.
+
+Nothing consumes these objects: `scripts/server-rollback.sh` contains no AWS calls at all — it restores the on-host `backend.old` / `frontend.old` directories — and the only documented manual re-deploy uploads a fresh tarball rather than reusing an old one. Verified 2026-09-08. Because `PLAID_ENCRYPTION_SECRET` cannot be rotated (TD-025 landmine), deleting them is the only available mitigation for the historical exposure — and since nothing consumes them, deletion is operationally safe. Not done here: bulk-deleting 280 objects is destructive and is the owner's call.
 
 **Files**:
 - `.github/workflows/sync-secrets-to-ssm.yml` ✅ (new)
