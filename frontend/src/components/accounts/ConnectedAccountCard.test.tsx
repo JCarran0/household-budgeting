@@ -38,6 +38,40 @@ async function openAccountMenu() {
   return user;
 }
 
+describe('ConnectedAccountCard — reconciliation branch', () => {
+  // The bank re-provisioned this account's Plaid id (TD-020). Signing in again
+  // neither causes nor clears it, so this must stay its own signal rather than
+  // reusing the Sign-in Required badge.
+  it('shows Needs Reconciliation when the flag is set', () => {
+    renderCard(
+      <ConnectedAccountCard
+        account={makeAccount({ needsReconciliation: true })}
+        isSyncing={false}
+        onSync={() => {}}
+        onReauth={() => {}}
+        onEditNickname={() => {}}
+        onDisconnect={() => {}}
+      />,
+    );
+    expect(screen.getByText('Needs Reconciliation')).toBeInTheDocument();
+    expect(screen.queryByText('Sign-in Required')).not.toBeInTheDocument();
+  });
+
+  it('omits Needs Reconciliation for a healthy account', () => {
+    renderCard(
+      <ConnectedAccountCard
+        account={makeAccount()}
+        isSyncing={false}
+        onSync={() => {}}
+        onReauth={() => {}}
+        onEditNickname={() => {}}
+        onDisconnect={() => {}}
+      />,
+    );
+    expect(screen.queryByText('Needs Reconciliation')).not.toBeInTheDocument();
+  });
+});
+
 describe('ConnectedAccountCard — reauth branch', () => {
   // The badge and the action are deliberately decoupled: the badge signals a
   // Plaid-reported auth failure, while the action must stay reachable even when

@@ -1,11 +1,33 @@
 import type { AxiosInstance } from 'axios';
 import type { PlaidAccount, LinkTokenResponse, ExchangeTokenRequest } from '../../../../shared/types';
 
+/** What a re-auth discovered about the Item's accounts (TD-020). */
+export interface ReauthAccountRef {
+  id: string;
+  accountName: string;
+  mask: string | null;
+}
+
+export interface ReauthCompleteResult {
+  /** Genuinely new accounts now tracked. */
+  adopted: ReauthAccountRef[];
+  /** Accounts the bank replaced with a new ID — need reconciliation. */
+  pendingReconciliation: Array<ReauthAccountRef & { matchedVia: string }>;
+  /** Accounts that vanished with no identifiable replacement. */
+  unpaired: ReauthAccountRef[];
+}
+
 // Extended PlaidAccount with backend fields
 export interface ExtendedPlaidAccount extends PlaidAccount {
   accountName?: string;
   officialName?: string | null;
   institutionName?: string;
+  /**
+   * The bank replaced this account's Plaid id and the app has recorded the
+   * replacement but cannot re-key its history automatically (TD-020). Derived
+   * server-side; the id itself is never sent to the client.
+   */
+  needsReconciliation?: boolean;
 }
 
 export function createAccountsApi(client: AxiosInstance) {
@@ -58,11 +80,16 @@ export function createAccountsApi(client: AxiosInstance) {
       return { link_token: data.link_token, expiration: data.expiration };
     },
 
-    async completeReauth(accountId: string): Promise<void> {
+    async completeReauth(accountId: string): Promise<ReauthCompleteResult> {
       const { data } = await client.post(`/accounts/${accountId}/reauth-complete`);
       if (!data.success) {
         throw new Error(data.error || 'Failed to complete re-authentication');
       }
+      return {
+        adopted: data.adopted ?? [],
+        pendingReconciliation: data.pendingReconciliation ?? [],
+        unpaired: data.unpaired ?? [],
+      };
     },
 
     async syncAccountTransactions(accountId: string): Promise<{

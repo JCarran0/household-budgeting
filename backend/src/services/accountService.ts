@@ -8,6 +8,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { PlaidService } from './plaidService';
 import { DataService } from './dataService';
 import { encryptionService } from '../utils/encryption';
+import { pairItemAccounts } from './accountPairing';
 
 import { childLogger } from '../utils/logger';
 
@@ -71,6 +72,20 @@ export interface StoredAccount {
    * institutions that do not provide it, e.g. Capital One (TD-020).
    */
   persistentAccountId?: string | null;
+  /**
+   * Set when this account's `plaidAccountId` has vanished from Plaid and a
+   * replacement was confidently identified (TD-020). The account is NOT
+   * repointed — doing so without re-keying transactions would duplicate months
+   * of history, because dedupe is strictly by `plaidTransactionId` and the
+   * replacement's rows all carry new ids. This records the finding so the sync
+   * hold can be explained accurately and the reconciler pointed at it.
+   * Cleared once reconciled.
+   */
+  pendingAccountIdChange?: {
+    newPlaidAccountId: string;
+    detectedAt: string;
+    matchedVia: 'persistent_account_id' | 'identity';
+  } | null;
   createdAt: Date;              // When account was connected
   updatedAt: Date;              // Last update
 }
@@ -94,13 +109,21 @@ const CLIENT_OMITTED_ACCOUNT_FIELDS = [
   'plaidCursor',
   'plaidItemId',
   'plaidAccountId',
+  'pendingAccountIdChange',
 ] as const;
 
 /** A StoredAccount safe to serialize to the browser. */
 export type ClientAccount = Omit<
   StoredAccount,
   (typeof CLIENT_OMITTED_ACCOUNT_FIELDS)[number]
->;
+> & {
+  /**
+   * Whether this account is waiting on reconciliation after a Plaid
+   * `account_id` change. Derived from `pendingAccountIdChange`, which is itself
+   * withheld because it carries a raw Plaid account id (SA-19).
+   */
+  needsReconciliation: boolean;
+};
 
 /**
  * Strip Plaid-internal fields from a stored account before it crosses the wire.
@@ -114,7 +137,10 @@ export function toClientAccount(account: StoredAccount): ClientAccount {
   for (const field of CLIENT_OMITTED_ACCOUNT_FIELDS) {
     delete safe[field];
   }
-  return safe as ClientAccount;
+  return {
+    ...(safe as Omit<StoredAccount, (typeof CLIENT_OMITTED_ACCOUNT_FIELDS)[number]>),
+    needsReconciliation: Boolean(account.pendingAccountIdChange),
+  };
 }
 
 // Result types
@@ -128,6 +154,26 @@ export interface AccountsResult {
   success: boolean;
   accounts?: StoredAccount[];
   error?: string;
+}
+
+/** Outcome of reconciling an Item's accounts against Plaid after a re-auth. */
+export interface AccountAdoptionResult {
+  success: boolean;
+  error?: string;
+  /** Genuinely new accounts we started tracking. Safe: no history to duplicate. */
+  adopted: Array<{ id: string; accountName: string; mask: string | null }>;
+  /**
+   * Accounts Plaid replaced with a new `account_id`. Recorded, deliberately not
+   * repointed — see `accountPairing` for why repointing alone corrupts history.
+   */
+  pendingReconciliation: Array<{
+    id: string;
+    accountName: string;
+    mask: string | null;
+    matchedVia: 'persistent_account_id' | 'identity';
+  }>;
+  /** Stale accounts with no confident replacement — reported, never guessed. */
+  unpaired: Array<{ id: string; accountName: string; mask: string | null }>;
 }
 
 export interface SyncResult {
@@ -558,6 +604,146 @@ export class AccountService {
       return {
         success: false,
         error: error instanceof Error ? error.message : 'Failed to update account status',
+      };
+    }
+  }
+
+  /**
+   * Reconcile an Item's stored accounts against Plaid's live list.
+   *
+   * Called after a successful re-auth. Two outcomes matter:
+   *
+   * - An account appeared with no stale counterpart — the user added a card, or
+   *   granted access to an account they previously withheld. We adopt it. There
+   *   is no stored history under that id, so nothing can be duplicated.
+   *
+   * - A stored account went stale and a replacement was identified — the Item
+   *   was re-provisioned (2026-09-07: a re-auth minted new `account_id`s for
+   *   both BoA accounts, masks unchanged, which is *not* a card reissue). We
+   *   record the pairing and stop. Repointing here would make the held backlog
+   *   placeable and re-insert months of history under new transaction ids,
+   *   because dedupe is strictly by `plaidTransactionId`. Repair needs content
+   *   re-keying, which lives in `scripts/reconcile-plaid-account-change.ts`.
+   *
+   * Best-effort: a Plaid failure returns `success: false` and changes nothing.
+   * The caller must not fail the re-auth over it — the re-auth itself worked.
+   */
+  async adoptItemAccountChanges(
+    familyId: string,
+    accountId: string
+  ): Promise<AccountAdoptionResult> {
+    const empty = { adopted: [], pendingReconciliation: [], unpaired: [] };
+    try {
+      const account = await this.getAccount(familyId, accountId);
+      if (!account) {
+        return { success: false, error: 'Account not found', ...empty };
+      }
+
+      const accountsResult = await this.getUserAccounts(familyId);
+      const itemAccounts = (accountsResult.accounts ?? []).filter(
+        a => a.plaidItemId === account.plaidItemId
+      );
+      if (itemAccounts.length === 0) {
+        return { success: false, error: 'No accounts for item', ...empty };
+      }
+
+      const accessToken = this.decryptToken(itemAccounts[0].plaidAccessToken);
+      const live = await this.plaidService.getAccounts(accessToken);
+      if (!live.success || !live.accounts) {
+        log.warn(
+          { plaidItemId: account.plaidItemId, error: live.error },
+          'could not read live accounts; skipping adoption check',
+        );
+        return { success: false, error: live.error || 'Could not read accounts', ...empty };
+      }
+
+      const outcome = pairItemAccounts(itemAccounts, live.accounts);
+
+      const result: AccountAdoptionResult = {
+        success: true,
+        adopted: [],
+        pendingReconciliation: [],
+        unpaired: [],
+      };
+
+      for (const a of outcome.adoptable) {
+        const adopted: StoredAccount = {
+          id: uuidv4(),
+          userId: familyId,
+          plaidItemId: account.plaidItemId,
+          plaidAccountId: a.plaidAccountId,
+          plaidAccessToken: itemAccounts[0].plaidAccessToken,
+          institutionId: account.institutionId,
+          institutionName: account.institutionName,
+          accountName: a.name,
+          officialName: a.officialName,
+          nickname: null,
+          type: a.type,
+          subtype: a.subtype,
+          mask: a.mask,
+          currentBalance: a.currentBalance,
+          availableBalance: a.availableBalance,
+          creditLimit: a.creditLimit ?? null,
+          currency: a.currency || 'USD',
+          status: 'active',
+          lastSynced: null,
+          // Inherit the Item's cursor: it is per-Item, and starting this account
+          // at null would re-request the Item's entire history on the next sync.
+          plaidCursor: itemAccounts[0].plaidCursor,
+          persistentAccountId: a.persistentAccountId ?? null,
+          pendingAccountIdChange: null,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        };
+        await this.saveAccount(familyId, adopted);
+        result.adopted.push({ id: adopted.id, accountName: adopted.accountName, mask: adopted.mask });
+        log.info(
+          { plaidItemId: account.plaidItemId, accountId: adopted.id },
+          'adopted new account discovered at re-auth',
+        );
+      }
+
+      for (const pair of outcome.pairs) {
+        const stored = itemAccounts.find(a => a.id === pair.stored.id);
+        if (!stored) continue;
+        stored.pendingAccountIdChange = {
+          newPlaidAccountId: pair.live.plaidAccountId,
+          detectedAt: new Date().toISOString(),
+          matchedVia: pair.matchedVia,
+        };
+        stored.updatedAt = new Date();
+        await this.saveAccount(familyId, stored);
+        result.pendingReconciliation.push({
+          id: stored.id,
+          accountName: stored.accountName,
+          mask: stored.mask,
+          matchedVia: pair.matchedVia,
+        });
+        log.error(
+          {
+            plaidItemId: account.plaidItemId,
+            storedAccountId: stored.id,
+            matchedVia: pair.matchedVia,
+          },
+          'plaid account_id changed — recorded, awaiting reconciliation (TD-020)',
+        );
+      }
+
+      for (const s of outcome.unpaired) {
+        result.unpaired.push({ id: s.id, accountName: s.accountName, mask: s.mask });
+        log.error(
+          { plaidItemId: account.plaidItemId, storedAccountId: s.id },
+          'stored account vanished from Plaid with no confident replacement (TD-020)',
+        );
+      }
+
+      return result;
+    } catch (error) {
+      log.error({ err: error }, 'error adopting item account changes');
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Adoption check failed',
+        ...empty,
       };
     }
   }

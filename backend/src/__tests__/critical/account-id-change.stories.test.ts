@@ -130,7 +130,13 @@ describe('User Story: my bank replaces a card mid-Item', () => {
       droppedRows: 2,
     });
     expect(result.warning).toMatch(/Capital One/);
-    expect(result.warning).toMatch(/nothing has been lost/i);
+    expect(result.warning).toMatch(/nothing is lost/i);
+    // The old copy blamed a card reissue and told the user to press "Sign in to
+    // Bank". On 2026-09-07 that was exactly backwards: a re-auth *caused* the
+    // re-provisioning, and repeating it cannot repair the history. Assert we
+    // never hand back that instruction again.
+    expect(result.warning).not.toMatch(/sign in to bank/i);
+    expect(result.warning).not.toMatch(/reissued/i);
   });
 
   test('counts modified rows for unknown accounts too', async () => {

@@ -288,10 +288,17 @@ export class TransactionService {
           modified: totalModified,
           removed: totalRemoved,
           newTransactions: allNewTransactions,
+          // Copy deliberately claims no cause. The first version of this said
+          // "likely a reissued card" and told the user to press "Sign in to
+          // Bank" — but on 2026-09-07 both masks were unchanged (so not a
+          // reissue) and re-authenticating is what *caused* the condition.
+          // Naming a wrong cause and prescribing a step that cannot work is
+          // worse than saying plainly that this needs a maintainer.
           warning:
-            `${names}: an account appears to have been replaced by your bank (likely a reissued card). ` +
-            `${rows} transaction${rows === 1 ? '' : 's'} are being held until it is reconciled — ` +
-            `nothing has been lost. Use "Sign in to Bank", then run the reconciler.`,
+            `${names}: one of your accounts was replaced with a new ID by the bank, ` +
+            `so ${rows} transaction${rows === 1 ? '' : 's'} can't be filed yet. ` +
+            `Nothing is lost — they stay queued at your bank until this is reconciled, ` +
+            `and syncing again is safe. This one needs a maintainer to finish.`,
           reconciliationNeeded,
         };
       }

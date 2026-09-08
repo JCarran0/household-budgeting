@@ -65,6 +65,22 @@ export function ConnectedAccountCard({
           {requiresReauth ? 'Sign-in Required' : 'Connection Issue'}
         </Badge>
       )}
+      {/*
+        Deliberately not folded into needsAttention: signing in again neither
+        causes nor clears this, and offering that as the remedy is the mistake
+        TD-022 warns about. Only a maintainer can finish the re-key.
+      */}
+      {account.needsReconciliation && (
+        <Tooltip
+          multiline
+          w={260}
+          label="Your bank issued a new ID for this account. New transactions can't be filed against it yet — nothing is lost, and syncing again is safe. A maintainer needs to finish this."
+        >
+          <Badge color="grape" variant="light" size="sm" mb="sm" leftSection={<IconAlertCircle size={12} />}>
+            Needs Reconciliation
+          </Badge>
+        </Tooltip>
+      )}
       <Group justify="space-between" mb="md">
         <Group>
           <ThemeIcon color={needsAttention ? attentionColor : 'blue'} variant="light" size="xl" radius="md">

@@ -268,7 +268,24 @@ router.post('/:accountId/reauth-complete', authMiddleware, async (req: AuthReque
       return;
     }
 
-    res.json({ success: true });
+    // Re-auth is where an Item's account_ids change (TD-020), so this is the
+    // moment to look. Adopts genuinely new accounts; for a replaced account it
+    // records the pairing without repointing — repointing before the stored
+    // transactions are re-keyed would duplicate months of history.
+    //
+    // Best-effort: the re-auth itself succeeded, so a Plaid failure here must
+    // not turn a working re-auth into an error the user cannot act on.
+    const adoption = await accountService.adoptItemAccountChanges(
+      req.user.familyId,
+      accountId,
+    );
+
+    res.json({
+      success: true,
+      adopted: adoption.adopted,
+      pendingReconciliation: adoption.pendingReconciliation,
+      unpaired: adoption.unpaired,
+    });
   } catch (error) {
     next(error);
   }

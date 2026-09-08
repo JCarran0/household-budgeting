@@ -2,6 +2,7 @@ import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { usePlaidLink } from 'react-plaid-link';
 import type { PlaidLinkOnSuccess, PlaidLinkOnExit } from 'react-plaid-link';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { notifications } from '@mantine/notifications';
 import { api } from '../lib/api';
 import { PlaidLinkContext } from '../contexts/PlaidLinkContext';
 
@@ -62,7 +63,34 @@ export function PlaidLinkProvider({ children }: { children: React.ReactNode }) {
   // Complete reauth mutation (for existing accounts)
   const completeReauthMutation = useMutation({
     mutationFn: api.completeReauth,
-    onSuccess: () => {
+    onSuccess: (result) => {
+      // A re-auth can re-provision the Item's accounts (TD-020). New accounts are
+      // adopted silently-safely; replacements and disappearances can't be repaired
+      // here, so say so rather than reporting a clean success.
+      const nameList = (refs: { accountName: string; mask: string | null }[]) =>
+        refs.map(r => (r.mask ? `${r.accountName} ••${r.mask}` : r.accountName)).join(', ');
+
+      if (result.adopted.length > 0) {
+        notifications.show({
+          color: 'green',
+          title: 'New accounts added',
+          message: `Now tracking ${nameList(result.adopted)}.`,
+        });
+      }
+
+      const needsHelp = [...result.pendingReconciliation, ...result.unpaired];
+      if (needsHelp.length > 0) {
+        notifications.show({
+          color: 'yellow',
+          autoClose: false,
+          title: 'Reconnected, but one account needs attention',
+          message:
+            `Your bank issued a new ID for ${nameList(needsHelp)}. New transactions ` +
+            `can't be filed against it yet — nothing is lost, and syncing again is safe. ` +
+            `This one needs a maintainer to finish.`,
+        });
+      }
+
       queryClient.invalidateQueries({ queryKey: ['accounts'] });
       queryClient.invalidateQueries({ queryKey: ['transactions'] });
       setIsLoading(false);
