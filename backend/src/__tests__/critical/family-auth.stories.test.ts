@@ -165,8 +165,12 @@ describe('Family Auth & Management', () => {
         user.token,
       );
 
-      expect(response.status).toBe(500);
-      expect(response.body).toBeDefined();
+      // Was asserting 500 — it pinned a defect rather than a requirement.
+      // Refusing to remove the last member is a caller mistake, not a server
+      // fault, and reporting it as 500 hid the guard from anything watching
+      // error rates. Now a 400 with a message that says why (SA-15).
+      expect(response.status).toBe(400);
+      expect(response.body.error).toMatch(/last member/i);
     });
 
     test('can remove a non-last family member', async () => {

@@ -21,27 +21,18 @@ describe('Plaid Routes - Basic Integration', () => {
       });
     });
 
-    it('should require authentication for accounts endpoint', async () => {
-      const response = await request(app)
-        .get('/api/v1/plaid/accounts')
-        .query({ itemId: 'test-item' })
-        .expect(401);
-
-      expect(response.body).toMatchObject({
-        success: false,
-        error: expect.any(String),
-      });
-    });
-
-    it('should require authentication for transactions endpoint', async () => {
-      const response = await request(app)
-        .get('/api/v1/plaid/transactions')
-        .expect(401);
-
-      expect(response.body).toMatchObject({
-        success: false,
-        error: expect.any(String),
-      });
+    // GET /plaid/accounts, GET /plaid/transactions and POST /plaid/item/remove
+    // were deleted on 2026-09-08 (SA-20). Assert they are gone rather than
+    // dropping the coverage: an auth-only smoke test would pass again the moment
+    // someone reinstated them, and the reason they were dangerous is that
+    // reinstating them looks like a fix.
+    it.each([
+      ['get', '/api/v1/plaid/accounts'],
+      ['get', '/api/v1/plaid/transactions'],
+      ['post', '/api/v1/plaid/item/remove'],
+    ] as const)('no longer routes %s %s (SA-20)', async (method, path) => {
+      const response = await request(app)[method](path);
+      expect(response.status).toBe(404);
     });
 
     it('should require authentication for exchange endpoint', async () => {

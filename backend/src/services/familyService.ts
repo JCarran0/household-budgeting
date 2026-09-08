@@ -2,6 +2,7 @@ import crypto from 'crypto';
 import { v4 as uuidv4 } from 'uuid';
 import { DataService, User } from './dataService';
 import type { Family, FamilyMember, WorkspaceType } from '../shared/types';
+import { ForbiddenError, NotFoundError, ValidationError } from '../errors';
 
 /**
  * Minimal interface for the category-seeding dependency.
@@ -73,21 +74,74 @@ export class FamilyService {
     return updated;
   }
 
-  async removeMember(familyId: string, targetUserId: string): Promise<Family> {
+  /**
+   * Who is allowed to remove members (SA-15).
+   *
+   * `ownerId` is set at creation on every path. Families created before
+   * 2026-09-08 predate the field; for those, fall back to the earliest-joined
+   * member, who is the creator — both creation paths start the family with
+   * `members: [creator]`. Ties are broken by array order for determinism, so
+   * this never resolves to "whoever happens to be first today".
+   */
+  resolveOwnerId(family: Family): string | undefined {
+    if (family.ownerId) return family.ownerId;
+    if (family.members.length === 0) return undefined;
+    return family.members.reduce((earliest, m) =>
+      m.joinedAt < earliest.joinedAt ? m : earliest
+    ).userId;
+  }
+
+  /**
+   * @param actorUserId the user making the request. Required — the guards below
+   *   are meaningless without it.
+   *
+   * Guarded here rather than in the route so the checks cannot be skipped by a
+   * future caller. SA-12 records the cost of the opposite arrangement: a control
+   * that depends on which door the request came through is one a new door
+   * silently bypasses.
+   */
+  async removeMember(familyId: string, targetUserId: string, actorUserId: string): Promise<Family> {
+    // These were plain Errors, which the handler maps to 500. A caller mistake
+    // and an authorization denial are not server faults, and reporting them as
+    // such hides the control from anything watching error rates.
     const family = await this.dataService.getFamily(familyId);
     if (!family) {
-      throw new Error('Family not found');
+      throw new NotFoundError('Family not found');
     }
 
     // Cannot remove the last member
     if (family.members.length <= 1) {
-      throw new Error('Cannot remove the last member of a family');
+      throw new ValidationError('Cannot remove the last member of a family');
     }
 
     // Verify target is actually a member
     const memberIndex = family.members.findIndex(m => m.userId === targetUserId);
     if (memberIndex === -1) {
-      throw new Error('User is not a member of this family');
+      throw new ValidationError('User is not a member of this family');
+    }
+
+    // The actor must belong to the family they are acting on. familyId comes
+    // from the caller's own token today, so this is belt-and-braces — but it is
+    // the assumption every check below rests on, so it is asserted rather than
+    // assumed.
+    if (!family.members.some(m => m.userId === actorUserId)) {
+      throw new ForbiddenError('Only a member of this family can remove members');
+    }
+
+    // Self-removal is rejected. It is indistinguishable from the destructive
+    // case and strictly worse for the user: removing your own last workspace
+    // blanks your familyId, and the next login provisions a brand-new empty
+    // family, so it presents as total data loss rather than as leaving.
+    if (targetUserId === actorUserId) {
+      throw new ForbiddenError('You cannot remove yourself from a family');
+    }
+
+    // Only the owner may remove someone else. Without this, a single
+    // compromised token — or one mis-aimed API call — orphans the other member
+    // from every budget, transaction and linked account.
+    const ownerId = this.resolveOwnerId(family);
+    if (ownerId && actorUserId !== ownerId) {
+      throw new ForbiddenError('Only the family owner can remove members');
     }
 
     // Remove from family members array
@@ -271,6 +325,7 @@ export class FamilyService {
       workspaceType,
       createdAt: now,
       updatedAt: now,
+      ownerId: userId,
     };
 
     await this.dataService.createFamily(family);

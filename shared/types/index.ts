@@ -68,6 +68,13 @@ export interface Family {
   members: FamilyMember[];
   createdAt: string;       // ISO string
   updatedAt: string;       // ISO string
+  /**
+   * SA-15: who may remove members. Set at creation. Optional because families
+   * created before 2026-09-08 predate the field — for those,
+   * `familyService.resolveOwnerId` falls back to the earliest-joined member,
+   * who is the creator on every creation path.
+   */
+  ownerId?: string;
   /** D4: drives nav/route gating; default 'personal' for all existing families */
   workspaceType?: WorkspaceType;
 }

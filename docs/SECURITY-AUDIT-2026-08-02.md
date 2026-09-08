@@ -44,8 +44,8 @@ Open items, ordered by value ÷ effort. The top four are one-line changes.
 | ID | Finding | Severity | Effort | Status |
 |----|---------|----------|--------|--------|
 | SA-10 | Open registration chains into admin escalation | High | Low | **Resolved 2026-09-08** |
-| SA-20 | Dead Plaid routes with placeholder access token | Medium | Low | Open |
-| SA-15 | Any family member can remove any other member | Medium | Low | Open |
+| SA-20 | Dead Plaid routes with placeholder access token | Medium | Low | **Resolved 2026-09-08** |
+| SA-15 | Any family member can remove any other member | Medium | Low | **Resolved 2026-09-08** |
 | SA-05 | Action-card display can diverge from executed params | Medium | Medium | Open |
 | SA-25 | Deploy tarballs in S3 contain the full production `.env` | High | Medium | **Resolved 2026-09-08** |
 | SA-06 | Three LLM tool outputs not Zod-validated | Medium | Low | Open |
@@ -100,7 +100,7 @@ Then: run the **Sync Secrets to SSM Parameter Store** workflow (confirm with `SY
 
 ### If you only have an hour
 
-~~Start with **SA-10**~~ — resolved 2026-09-08; registration is invitation-only and the `ADMIN_USERNAMES` auto-promotion path is removed. Next: **SA-20** (delete three dead placeholder routes) and **SA-15** (three guard clauses on member removal), both small and both closing destructive-action gaps.
+~~Start with **SA-10**~~, ~~**SA-20**~~, ~~**SA-15**~~ — all resolved 2026-09-08. Registration is invitation-only, the `ADMIN_USERNAMES` auto-promotion path is gone, the dead Plaid handlers are deleted, and member removal is owner-only. **No High-severity finding remains open.**
 
 The trivial tier is done; what remains is small-to-medium work rather than one-liners.
 
@@ -462,7 +462,7 @@ Stamp an original-issue timestamp into the token and refuse to refresh past an a
 ---
 
 ### SA-15: Any family member can remove any other member
-**Status**: Open
+**Status**: **Resolved (2026-09-08)**
 **Severity**: Medium
 **Effort**: Low
 
@@ -475,9 +475,25 @@ A single compromised token — or one mis-aimed API call — removes the spouse,
 **Fix**:
 Require the caller to be the family creator/admin; reject `targetUserId === req.user.userId`; reject removing the final member.
 
+**Fix as shipped (2026-09-08)**: all three, plus the actor's own membership. The last-member guard already existed; the other three are new.
+
+The guards live in `familyService.removeMember`, not in the route. `removeMember` now takes `actorUserId` as a required argument, so a future caller cannot reach it without supplying one. SA-12 records the cost of the alternative: a control that depends on which door the request came through is one a new door silently bypasses.
+
+⚠️ **This introduced an owner concept the app did not have.** Neither `Family` nor `FamilyMember` carried a role, so "creator/admin" had nothing to check. `Family.ownerId` is now set on both creation paths. It is optional, because families created before this date predate it — `familyService.resolveOwnerId` falls back to the **earliest-joined member**, who is the creator on every path (both start the family with `members: [creator]`). Deliberately not `members[0]`: array order is not a guarantee, and a test asserts the fallback picks the earliest `joinedAt` even when they are second in the array. **This is a product change as much as a security one** — one member is now privileged over the other for removal. For a two-person family that is the intended asymmetry, but it is a decision, not a detail.
+
+**Status codes corrected as part of this.** Every guard threw a bare `Error`, which the handler maps to **500**. A caller mistake and an authorization denial are not server faults, and reporting them as such hid the controls from anything watching error rates. Now `ForbiddenError` (403) for the authorization guards and `ValidationError` (400) for caller mistakes. An existing test in `family-auth.stories.test.ts` **asserted the 500** — it pinned the defect rather than a requirement, and was corrected rather than deleted.
+
+✅ **Tests**: 9 cases in `backend/src/__tests__/critical/family-member-removal.test.ts` — the owner's legitimate removal still works, a non-owner cannot remove the owner (the orphaning scenario), self-removal is refused for both roles, the target's stored `familyId`/`workspaceIds` survive a refused attempt (the orphaning happens in storage, not the response), last-member and non-member cases, and the three owner-resolution branches.
+
+**Verified as real regression tests** by neutralizing the three new guards: 3 of 9 fail — exactly the three covering new behaviour. The other 6 exercise pre-existing guards and pure owner resolution, and correctly still pass.
+
 **Files**:
-- `backend/src/routes/family.ts`
-- `backend/src/services/familyService.ts`
+- `backend/src/services/familyService.ts` ✅
+- `backend/src/routes/family.ts` ✅
+- `backend/src/services/authService.ts` ✅ (`ownerId` on the registration path)
+- `shared/types/index.ts` ✅ (`Family.ownerId`)
+- `backend/src/__tests__/critical/family-member-removal.test.ts` ✅ (new, 9 cases)
+- `backend/src/__tests__/critical/family-auth.stories.test.ts` ✅ (corrected the assertion that pinned the 500)
 
 ---
 
@@ -568,7 +584,7 @@ Not directly exploitable today — the encryption is strong (see "Verified sound
 ---
 
 ### SA-20: Dead Plaid routes with a placeholder access token
-**Status**: Open
+**Status**: **Resolved (2026-09-08)**
 **Severity**: Medium
 **Effort**: Low
 
@@ -581,8 +597,13 @@ Not exploitable as written. The risk is the shape they invite: they take `itemId
 **Fix**:
 Delete all three handlers. The real flows already run through `routes/accounts.ts` → `accountService`.
 
+**Fix as shipped (2026-09-08)**: all three handlers deleted (115 lines), along with the three now-orphaned query schemas. Confirmed no caller in `frontend/src` or `backend/src` first. A comment at the deletion site records *why* they were removed rather than fixed, because the tempting repair is the dangerous one.
+
+The route-configuration smoke test previously asserted these endpoints returned 401 unauthenticated. Rather than dropping that coverage, it now asserts they **404** — an auth-only assertion would start passing again the moment someone reinstated them, and reinstating them is exactly the mistake this finding is about.
+
 **Files**:
-- `backend/src/routes/plaid.ts`
+- `backend/src/routes/plaid.ts` ✅
+- `backend/src/routes/__tests__/plaid.integration.test.ts` ✅
 
 ---
 

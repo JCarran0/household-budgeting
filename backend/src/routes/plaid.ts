@@ -11,23 +11,6 @@ const exchangeTokenSchema = z.object({
   publicToken: z.string().min(1, 'Public token is required'),
 });
 
-const transactionQuerySchema = z.object({
-  itemId: z.string().min(1),
-  startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-  endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-  includePending: z.string().optional(),
-  offset: z.string().optional(),
-  count: z.string().optional(),
-});
-
-const accountQuerySchema = z.object({
-  itemId: z.string().min(1),
-});
-
-const removeItemSchema = z.object({
-  itemId: z.string().min(1, 'itemId is required'),
-});
-
 // Extended Request type with user (matching auth middleware)
 interface AuthenticatedRequest extends Request {
   user?: { userId: string; username: string; familyId: string; workspaceIds: string[] };
@@ -89,119 +72,23 @@ router.post('/exchange-token', authMiddleware, async (req: AuthenticatedRequest,
   }
 });
 
-/**
- * GET /api/v1/plaid/accounts
- * Get all accounts for a connected item
+/*
+ * Removed 2026-09-08 (SA-20): GET /plaid/accounts, GET /plaid/transactions and
+ * POST /plaid/item/remove.
+ *
+ * All three were scaffolding that called plaidService with
+ * `const accessToken = 'access-token-placeholder'`. They were authenticated but
+ * functionally broken, and not exploitable as written.
+ *
+ * They were deleted rather than fixed because of the shape they invited: each
+ * took `itemId` from the request rather than from the caller's own stored
+ * accounts, so wiring in a real token lookup — the obvious next step for whoever
+ * found them — would have produced an unscoped cross-family Plaid operation, and
+ * `item/remove` is destructive. Dead code that looks live is worse than dead code
+ * that looks dead.
+ *
+ * The real flows live in `routes/accounts.ts` → `accountService`, which scopes
+ * every lookup by the caller's familyId.
  */
-router.get('/accounts', authMiddleware, async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
-  try {
-    // Validate query parameters
-    const validation = accountQuerySchema.safeParse(req.query);
-    if (!validation.success) {
-      res.status(400).json({ error: 'itemId is required' });
-      return;
-    }
-
-    // In a real app, we'd fetch the access token from secure storage using itemId and userId
-    // For now, we'll use a placeholder
-    const accessToken = 'access-token-placeholder';
-
-    const result = await plaidService.getAccounts(accessToken);
-
-    if (!result.success) {
-      // Handle reauthentication requirement
-      if (result.requiresReauth) {
-        res.status(401).json({
-          error: result.error,
-          requiresReauth: true,
-        });
-        return;
-      }
-      res.status(500).json({ error: result.error });
-      return;
-    }
-
-    res.json({
-      accounts: result.accounts,
-      itemId: result.itemId,
-    });
-  } catch (error) {
-    next(error);
-  }
-});
-
-/**
- * GET /api/v1/plaid/transactions
- * Get transactions for a date range
- */
-router.get('/transactions', authMiddleware, async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
-  try {
-    // Validate query parameters
-    const validation = transactionQuerySchema.safeParse(req.query);
-    if (!validation.success) {
-      res.status(400).json({ error: 'itemId, startDate, and endDate are required' });
-      return;
-    }
-
-    const { startDate, endDate, includePending, offset, count } = validation.data;
-
-    // In a real app, we'd fetch the access token from secure storage
-    const accessToken = 'access-token-placeholder';
-
-    const options = {
-      includePending: includePending === 'true',
-      offset: offset ? parseInt(offset, 10) : undefined,
-      count: count ? parseInt(count, 10) : undefined,
-    };
-
-    const result = await plaidService.getTransactions(accessToken, startDate, endDate, options);
-
-    if (!result.success) {
-      res.status(500).json({ error: result.error });
-      return;
-    }
-
-    res.json({
-      transactions: result.transactions,
-      totalTransactions: result.totalTransactions,
-      hasMore: result.hasMore,
-    });
-  } catch (error) {
-    next(error);
-  }
-});
-
-/**
- * POST /api/v1/plaid/item/remove
- * Remove an item (disconnect bank account)
- */
-router.post('/item/remove', authMiddleware, async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
-  try {
-    // Validate input
-    const validation = removeItemSchema.safeParse(req.body);
-    if (!validation.success) {
-      res.status(400).json({ error: 'itemId is required' });
-      return;
-    }
-
-    // const { itemId } = validation.data;
-    // In a real app, we'd fetch the access token from secure storage using itemId
-    const accessToken = 'access-token-placeholder';
-
-    const result = await plaidService.removeItem(accessToken);
-
-    if (!result.success) {
-      res.status(500).json({ error: result.error });
-      return;
-    }
-
-    res.json({
-      success: true,
-      message: result.message,
-    });
-  } catch (error) {
-    next(error);
-  }
-});
 
 export default router;

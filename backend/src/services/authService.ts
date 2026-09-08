@@ -160,6 +160,7 @@ export class AuthService {
           members: [member],
           createdAt: now,
           updatedAt: now,
+          ownerId: userId,
         };
 
         await this.dataService.createFamily(family);

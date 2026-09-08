@@ -108,10 +108,10 @@ router.delete(
     try {
       if (!req.user) throw new AuthorizationError();
 
-      const { familyId } = req.user;
+      const { familyId, userId } = req.user;
       const targetUserId = req.params.id;
 
-      const family = await familyService.removeMember(familyId, targetUserId);
+      const family = await familyService.removeMember(familyId, targetUserId, userId);
 
       res.json({
         success: true,
