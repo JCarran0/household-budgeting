@@ -35,7 +35,7 @@ This document tracks technical debt identified during the April 2026 architectur
 | Item | Impact | Effort | Blocked on |
 |------|--------|--------|-----------|
 | TD-021 (webhooks half) | High | Medium | needs a public endpoint + closing a security stub first |
-| TD-020 (auto re-keying) | High | Medium | nothing — deliberately deferred, see entry |
+| TD-020 (re-key a *replaced* account) | High | Medium | nothing — deferral re-argued and upheld 2026-09-08; new accounts now adopted automatically |
 | TD-017 (deployed ecosystem.config drift) | Medium | Low | nothing — needs a deploy + PM2 re-create |
 | TD-019 (schedule the backup) | Low-Med | Low | **prod access** (SSM + IAM) |
 | TD-023 (dead rollover code) | Medium | Low | nothing |
@@ -757,7 +757,7 @@ Plaid's mechanism for exactly this is `persistent_account_id`, a stable identifi
 ---
 
 ### TD-020: Plaid `account_id` Change Causes Silent, Unrecoverable Transaction Loss
-**Status**: **Fail-closed guard shipped (2026-08-02)** — loss is prevented and reported. Automatic re-keying still requires the reconciler script. **Recurred 2026-09-07 (Bank of America); the deferral below is now contested — see "Still open".**
+**Status**: **Fail-closed guard shipped (2026-08-02); adoption of new accounts shipped (2026-09-08).** Loss is prevented and reported, genuinely new accounts are adopted automatically, and re-keying an account the bank *replaced* remains a deliberate operator step — decided 2026-09-08, see "Deferral decision".
 **Created**: 2026-08-02
 **Updated**: 2026-09-08
 **Impact**: **High** — silent permanent data loss; the cursor advances past dropped rows
@@ -790,20 +790,46 @@ Compounding it: dedupe is strictly by `plaidTransactionId`. A reissued account's
 
 **Tests**: 7 cases in `backend/src/__tests__/critical/account-id-change.stories.test.ts` — cursor held on unknown `account_id`, condition reported, `modified`-branch rows counted, healthy deltas still advance the cursor (fail-closed must not stall normal syncs), mixed deltas still store what they can, re-running a held delta does not duplicate, and `setItemCursor` is never called while reconciliation is pending. Verified as real regression tests by disabling only the guard: 5 of 7 fail.
 
-**Still open**: automatic re-keying. Detection and prevention are done; repair remains the reconciler script, which needs an operator.
+**Still open**: automatic re-keying of a *replaced* account. Detection, prevention, and adoption of genuinely new accounts are done; re-keying remains the reconciler script, which needs an operator.
 
-The original rationale for deferring was that this is *a rare, destructive-if-wrong operation* and the script's `--dry-run`-then-`--apply` shape is a reasonable place to leave it for a two-user app. The 2026-09-07 recurrence undercuts all three premises and the deferral should be re-argued rather than inherited:
+The original rationale for deferring was that this is *a rare, destructive-if-wrong operation* and the script's `--dry-run`-then-`--apply` shape is a reasonable place to leave it for a two-user app. The 2026-09-07 recurrence undercut all three premises, so the deferral was re-argued rather than inherited:
 
 - **Not rare.** Capital One 2026-07-15, Bank of America 2026-09-07 — twice in eight weeks.
 - **The break-glass path was itself broken.** The reconciler aborted on every depository account (see step 4 above). The deferral rested on an escape hatch that had evidently never been exercised against a checking account, so "we have a manual path" was not true when it was relied upon.
 - **Not bank-initiated.** Both BoA masks were *unchanged* (`4404`→`4404`, `9670`→`9670`); a reissued card gets a new mask. The Item was re-provisioned with new `account_id`s during a user-initiated Plaid Link re-auth. That makes the condition reachable from a button the app itself tells the user to press — and the resulting toast then instructs them to press it again.
 
-The narrow fix that would close the common case: `accountService.syncAccountBalances` already fetches the Item's full live account list and already persists `persistentAccountId`, but ignores any account it does not recognise (`if (storedAccount)`, no `else`). Teaching the re-auth completion path to pair-and-repoint there would make the re-auth-triggered variant self-healing without giving the app a general re-keying engine.
+**Deferral decision (2026-09-08): keep re-keying manual — on new reasoning.**
+
+The "it's rare" premise is dead and must not be cited again. The justification that survives is different and narrower:
+
+- Re-keying is a **heuristic mutation of financial history with no undo**. Pairing on `date` + `amount` with a ±2-day window is a good heuristic, not a proof; a wrong match silently mis-files a transaction, and the wrongness is invisible afterward. That is a different risk class from adoption, which cannot be wrong because there is nothing stored to collide with.
+- A **two-user app can afford an operator in the loop**. The argument for automation is convenience for one person; the argument against is unrecoverable corruption of the ledger the app exists to keep. Automation would be the right call at a scale where nobody can be in the loop. That is not this app.
+- **Adoption already removes the common case.** The 2026-09-07 trigger was a user-initiated re-auth, now handled automatically. What remains behind the operator gate is the genuine bank-side replacement — rarer, and the case where care matters most.
+
+**The price of this decision, which is now owed rather than assumed.** The deferral is only honest if the manual path actually works, and on 2026-09-07 it did not. Two obligations follow:
+
+1. ✅ The reconciler's operator-facing output must be legible. Fixed 2026-09-08 — the sample table truncated ids to 10 characters while Plaid's ids for one Item share a 17-character prefix, so every row rendered identically and the operator's only visual check on an irreversible operation showed nothing.
+2. ✅ **The script must be exercised deliberately, not first discovered during an incident.** Both times it was needed it was broken in a way nobody could have known, because nobody had run it. It is read-only without `--apply` and prints its plan, so there is no excuse.
+
+   **Exercised 2026-09-08** against production for Bank of America, Capital One and Chase — all three reported "No account_id change detected", which is correct post-reconciliation. That covers the whole path up to pairing: SSM key retrieval, token decryption, prod S3 reads, live Plaid production calls, and account classification. It does **not** cover the re-key path itself, which has no stale account to work on; that remains exercised only by real incidents and by the unit tests.
+
+   Re-run it after any change to account pairing or transaction storage, and periodically otherwise. Command in the script's header docblock; fetch `PLAID_ENCRYPTION_SECRET` from SSM rather than trusting the local `.env`, which does not match production.
+
+Revisit if a third occurrence lands, if an institution starts re-provisioning routinely, or if the reconciler is ever run and found broken again — the third strike should move this to automation with a mandatory backup-and-diff step.
+
+**What shipped instead (2026-09-08)** — `backend/src/services/accountPairing.ts` + `accountService.adoptItemAccountChanges`, wired into `reauth-complete`:
+
+- Live accounts with **no stale counterpart** are adopted automatically. Nothing is stored under them, so there is no history to duplicate.
+- Stale↔new pairs are **detected and recorded** (`pendingAccountIdChange`, surfaced to the client as `needsReconciliation`) but ⚠️ **deliberately not repointed.**
+
+⚠️ **Do not "finish" this by repointing the stale account.** It reads as the obvious completion and it destroys data. Dedupe is strictly by `plaidTransactionId`, and a re-provisioned account's rows all carry new ids — so repointing alone makes the entire backlog placeable and inserts months of already-stored history a second time, alongside the originals. Re-keying the existing rows by content must come first, which is what the reconciler does behind its dry-run gate. An earlier draft of this entry said "pair-and-repoint" here; that wording was wrong, and this file has already shipped one bug by being followed literally (see step 4).
 
 **Files**:
 - `backend/src/services/transactionService.ts` ✅ (delta application, cursor persistence, `SyncResult`)
 - `backend/src/services/plaidService.ts` ✅ (`persistentAccountId` mapping)
 - `backend/src/services/accountService.ts` ✅ (persist `persistentAccountId`)
+- `backend/src/services/accountPairing.ts` ✅ (classification only — deliberately does not repair)
+- `backend/src/routes/accounts.ts` ✅ (`reauth-complete` adopts and reports)
 - `backend/src/scripts/reconcile-plaid-account-change.ts` (manual repair — the break-glass path)
 
 ---
