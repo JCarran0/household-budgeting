@@ -11,7 +11,7 @@
 
 - **2026-08-02** — Audit performed; 30 findings filed. Same day: SA-01 (dependencies), SA-03, SA-11, SA-12, SA-19, and SA-24 resolved. Backend suite 957 → **971 tests**, frontend 279, all passing; both packages typecheck clean.
 - **2026-08-03** — SA-25 built (secrets → SSM Parameter Store) and SA-30 closed with it. Blocked on two IAM grants; switch commit held unpushed. Two triage errors corrected against live AWS state: rollback does **not** consume S3 deployment tarballs (so they can be expired freely), and the CI IAM user is **not** an admin — SA-26 stays Medium. Measured the actual exposure at 280 tarballs / 410 MB / 11 months.
-- **2026-09-08** — SA-25 unblocked and **verified live in production**. Both IAM grants applied; the sync workflow wrote 9 SecureStrings to `/budget-app/prod/*`; `PLAID_ENCRYPTION_SECRET` confirmed byte-identical to the on-host value by SHA-256 comparison before pushing. Four deploys then failed on four causes none of which was visible in code review — no AWS region resolvable on the instance, `GetParametersByPath` denied because the grant covered `.../prod/*` but not the path node `.../prod`, IAM propagation, and `jq` absent from the host. Fifth deploy green: v6.0.6 online, 0 restarts, `.env` rendered from SSM at 0600 with all 9 secrets present. **The 242 historical tarballs remain — SA-25 stays High until they are purged.**
+- **2026-09-08** — SA-25 unblocked and **verified live in production**. Both IAM grants applied; the sync workflow wrote 9 SecureStrings to `/budget-app/prod/*`; `PLAID_ENCRYPTION_SECRET` confirmed byte-identical to the on-host value by SHA-256 comparison before pushing. Four deploys then failed on four causes none of which was visible in code review — no AWS region resolvable on the instance, `GetParametersByPath` denied because the grant covered `.../prod/*` but not the path node `.../prod`, IAM propagation, and `jq` absent from the host. Fifth deploy green: v6.0.6 online, 0 restarts, `.env` rendered from SSM at 0600 with all 9 secrets present. **The historical archive remains — SA-25 stays High until it is purged.** Re-measuring it that evening showed the original count was an undercount: versioning hides 39 noncurrent versions from a default listing, and the lifecycle rule expires nothing (no `NoncurrentVersionExpiration`), so the archive never shrinks on its own. Real figure: **281 secret-bearing versions / 394.2 MB**, and removing them requires version-aware deletion — a plain `s3 rm` would report success while retaining every byte.
 
 ---
 
@@ -660,7 +660,11 @@ Zod coverage is broad — transactions, reports, tasks, trips, notifications, th
 **Exploit scenario**:
 Every historical deployment package is a complete, readable credential bundle at rest. Anyone who gains read access to the backup bucket — a leaked AWS key, an over-broad IAM policy, a bucket-policy mistake — obtains every production secret in one fetch, including the key that decrypts all Plaid access tokens. The retention makes it worse in a non-obvious way: **rotated secrets survive their own rotation** in old tarballs, so rotation stops being a remediation.
 
-**Measured exposure** (2026-08-03): **280 tarballs**, 410 MB, oldest dated **2025-09-02** — roughly 11 months of credential bundles. The bucket lifecycle expires objects at 365 days, so the earliest will not age out until September 2026.
+**Measured exposure** (2026-08-03): **280 tarballs**, 410 MB, oldest dated **2025-09-02** — roughly 11 months of credential bundles.
+
+> **Re-measured 2026-09-08, and the original figure was an undercount.** The bucket has **versioning enabled**, so a default `ListObjectsV2` shows only current versions. Counting every version under `deployments/`: **286 object versions / 409.3 MB, plus 39 delete markers** — of which **281 versions / 394.2 MB predate the secret-free packaging** and therefore still contain credentials. **39 of those are noncurrent versions that do not appear in a normal listing at all.**
+>
+> The lifecycle claim above was also wrong. The rule is `Expiration: {Days: 365}` with **no `NoncurrentVersionExpiration`**. On a versioned bucket that does not delete data — it writes a delete marker over the current version and retains the bytes as a noncurrent version indefinitely. The 39 tarballs believed to have "aged out" are still fully retrievable. **Nothing in this archive expires on its own.**
 
 **Correction to the original triage**: it claimed `scripts/server-rollback.sh` reuses these tarballs. **It does not.** Rollback restores the on-host `backend.old` / `frontend.old` directories and never touches S3. Nothing operational consumes an old deployment tarball, which means retention is buying nothing and the whole archive can be expired aggressively without affecting recoverability.
 
@@ -695,16 +699,20 @@ Tracked as **TD-026** — CI's pre-flight uses `ssm:DescribeParameters` as the G
 
 **Verified in production 2026-09-08**: health `200`, `budget-backend` v6.0.6 online under `appuser` with 0 restarts, `.env` at mode `0600` carrying all 9 secrets, each present exactly once.
 
-**Historical tarballs are the open half of this finding.** The code fix stops *new* leakage; it does nothing about the existing bundles — **242 objects, 373.9 MB, 2025-09-07 → 2026-08-03** (re-measured 2026-09-08; down from 280 as the 365-day lifecycle expires the oldest). Every one contains a `PLAID_ENCRYPTION_SECRET` that cannot be rotated, which is why this is the half that matters.
+**Historical tarballs are the open half of this finding.** The code fix stops *new* leakage; it does nothing about the existing bundles — **281 object versions, 394.2 MB**, everything written before `v6.0.3-20260908-004745.tar.gz` (2026-09-08T00:47:46), the first package built by the secret-free workflow. Every one contains a `PLAID_ENCRYPTION_SECRET` that cannot be rotated, which is why this is the half that matters.
+
+> ⚠️ **A plain `aws s3 rm` will not remediate this, and will look like it did.** The bucket is versioned, so `rm` writes delete markers and retains every byte as a noncurrent version. The bucket would list empty while all 394 MB of credentials remained retrievable. Deletion must be **version-aware**: enumerate with `list-object-versions` and delete each `{Key, VersionId}` pair (including existing delete markers), or add a `NoncurrentVersionExpiration` lifecycle rule and wait for it to run.
+>
+> Keep the five packages from `v6.0.3` onward (2026-09-08T00:47:46 and later) — those were built by the fixed workflow and carry no secrets. Deleting through `v6.0.5` as well is harmless if a simpler cutoff is preferred; only `v6.0.6` (running) and `v6.0.7` need to survive.
 
 > ⚠️ **Pin the bucket name and the prefix before deleting anything.** The account holds two buckets whose names differ by one character:
 >
 > | Bucket | Holds |
 > |---|---|
-> | `budget-app-backups-f5b52f89` (**plural**) | the 242 deployment tarballs — the delete target |
+> | `budget-app-backups-f5b52f89` (**plural**) | the deployment tarballs (286 versions incl. 39 noncurrent) — the delete target |
 > | `budget-app-backup-f5b52f89` (**singular**) | 36 objects under `snapshots/` — the TD-019 off-host **data** backups |
 >
-> A delete aimed at the singular name destroys the only off-host copy of the application data. Scope every command to `s3://budget-app-backups-f5b52f89/deployments/` and confirm the object count is 242 before deleting. This is the naming hazard recorded under TD-019, and it is live.
+> A delete aimed at the singular name destroys the only off-host copy of the application data. Scope every command to `s3://budget-app-backups-f5b52f89/deployments/` and confirm the version count against a fresh `list-object-versions` before deleting. Both buckets are versioned, so an accidental `rm` is recoverable by removing the delete markers — but an accidental *version-aware* delete is not. This is the naming hazard recorded under TD-019, and it is live.
 
 Nothing consumes these objects: `scripts/server-rollback.sh` contains no AWS calls at all — it restores the on-host `backend.old` / `frontend.old` directories — and the only documented manual re-deploy uploads a fresh tarball rather than reusing an old one. Verified 2026-09-08. Because `PLAID_ENCRYPTION_SECRET` cannot be rotated (TD-025 landmine), deleting them is the only available mitigation for the historical exposure — and since nothing consumes them, deletion is operationally safe. Not done here: bulk-deleting 280 objects is destructive and is the owner's call.
 
