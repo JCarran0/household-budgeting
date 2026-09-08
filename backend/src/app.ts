@@ -112,7 +112,21 @@ app.use(
 
 // Middleware
 app.use(cors(corsOptions));
-app.use(express.json({ limit: '10mb' }));
+// Plaid signs a SHA-256 of the *raw* request body, so the webhook route needs
+// the exact bytes received — `JSON.stringify(req.body)` is a re-encoding and
+// will not match (TD-021). Captured only for that one path; retaining a 10mb
+// buffer on every request would be a memory cost for no reason.
+const PLAID_WEBHOOK_PATH = `${config.server.apiPrefix}/plaid/webhook`;
+app.use(
+  express.json({
+    limit: '10mb',
+    verify: (req, _res, buf) => {
+      if (req.url && req.url.split('?')[0] === PLAID_WEBHOOK_PATH) {
+        (req as express.Request & { rawBody?: Buffer }).rawBody = Buffer.from(buf);
+      }
+    },
+  }),
+);
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 // Opens a per-request async scope so the data layer can memoize reads (TD-011).
 app.use(requestScopeMiddleware);

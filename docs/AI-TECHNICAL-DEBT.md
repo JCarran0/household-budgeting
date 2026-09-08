@@ -34,7 +34,7 @@ This document tracks technical debt identified during the April 2026 architectur
 
 | Item | Impact | Effort | Blocked on |
 |------|--------|--------|-----------|
-| TD-021 (webhooks half) | High | Medium | needs a public endpoint + closing a security stub first |
+| TD-021 (webhooks) | High | Medium | **code done 2026-09-08**; needs the `PRODUCTION_PLAID_WEBHOOK_URL` variable set, then the backfill script run |
 | TD-020 (re-key a *replaced* account) | High | Medium | nothing — deferral re-argued and upheld 2026-09-08; new accounts now adopted automatically |
 | TD-017 (deployed ecosystem.config drift) | Medium | Low | nothing — needs a deploy + PM2 re-create |
 | TD-019 (schedule the backup) | Low-Med | Low | **prod access** (SSM + IAM) |
@@ -835,7 +835,7 @@ Revisit if a third occurrence lands, if an institution starts re-provisioning ro
 ---
 
 ### TD-021: No Plaid Webhooks Configured; No Sync-Staleness Surface
-**Status**: **Staleness indicator resolved (2026-08-02)** — fix step 1 shipped. Webhook work (steps 2-4) remains open.
+**Status**: **Resolved (2026-09-08)** — step 1 shipped 2026-08-02; steps 2-4 shipped 2026-09-08. ⬜ Two operational steps remain and are *yours*, not code: set the `PRODUCTION_PLAID_WEBHOOK_URL` variable, then run the backfill script. Until both are done the receiver is live but no Item points at it.
 **Created**: 2026-08-02
 **Updated**: 2026-08-02
 **Impact**: **High** — no failure is detectable without manual inspection; a 19-day outage went unnoticed
@@ -869,14 +869,40 @@ The critical distinction, worth preserving in any rework: **`lastSynced` records
 
 **Tests**: 10 cases in `accountHealth.test.ts`, including the real incident shape (2026-07-15 stall observed 2026-08-02 → warns) and the real consent value (2026-09-06 seen on 2026-08-02 → correctly does not warn).
 
+**Steps 2-4 as shipped** (2026-09-08):
+
+✅ **Step 3 first, because it is the blocker.** `verifyWebhookSignature` read the header, ignored it, and `return true`d. Real verification now lives in `services/plaidWebhookVerification.ts` — pure, injectable key fetcher, no network — and checks all four things Plaid's scheme requires:
+
+1. **`alg` is pinned to ES256 before the key is fetched.** Trusting the token's own `alg` is the classic algorithm-confusion hole. Two tests forge exactly that: `alg: none`, and `HS256` signed with the public key as the HMAC secret. **Both are accepted if the pin is removed** — verified by removing it, which fails precisely those two cases.
+2. Signature verified against the JWK Plaid publishes for the token's `kid`, with `algorithms` passed again to `jwt.verify` so the library cannot be talked into something else.
+3. **`iat` within 5 minutes.** Without it one captured webhook replays forever.
+4. **`request_body_sha256` against the SHA-256 of the raw bytes**, compared with `timingSafeEqual`. This is what binds the signature to *this* payload; without it a valid envelope wraps attacker-chosen contents.
+
+⚠️ **The raw body is load-bearing.** `JSON.stringify(req.body)` is a re-encoding, not the received bytes, and will not match. `app.ts` captures it via `express.json({ verify })` **for the webhook path only** — retaining a 10mb buffer for every request would be a pointless memory cost.
+
+✅ **Step 2**: `PLAID_WEBHOOK_URL` added to `config`, `.env.example`, and the deploy workflow's non-secret block. The attach no longer requires `NODE_ENV=production` — that made the receiver impossible to exercise anywhere but production, and TD-021 is a list of things never exercised. Production behaviour is unchanged: **an unset variable renders an empty string, which is falsy, so no webhook is attached.** Verified, because it is what makes deploying before configuring safe.
+
+⚠️ **Existing Items do not pick this up.** An Item's webhook is fixed at link time, so setting the variable only affects Items linked afterwards — without a backfill the fix silently does nothing for the accounts that exist. `scripts/backfill-plaid-webhooks.ts` calls `/item/webhook/update` per Item, dry-run by default. **Run against production 2026-09-08 (dry)**: decrypted and grouped **8 Items** — note the audit above says nine; one has been disconnected since August.
+
+✅ **Step 4**: `services/plaidWebhookService.ts` dispatches. `SYNC_UPDATES_AVAILABLE` (plus the three legacy update codes, since syncing is idempotent and dropping an update we were told about is the failure this item exists to remove) triggers a sync scoped to that Item's accounts. `PENDING_EXPIRATION` persists `consentExpirationTime`, which the step-1 UI already surfaces — it never had a signal that did not depend on someone opening the page. `ERROR` marks `requires_reauth` **only** for `ITEM_LOGIN_REQUIRED`; anything else becomes `error`, because telling the user to sign in again when that cannot help is the TD-022 mistake. Unrecognised codes are logged and acknowledged, never silently dropped.
+
+**Route properties, each deliberate**: verification and dispatch ship in one handler so no window exists where the route is live and verification is still a stub; 401 discloses nothing about which check failed; 200 is returned for codes we ignore *and* when handling throws, because Plaid retries non-2xx and a webhook is a notification, not a request for work.
+
+**Resolution scans.** A webhook carries an `item_id` and no user context, but accounts live under `accounts_{familyId}`. There is no Item→family index, so it scans — O(families) reads, nothing at two users, and stated rather than hidden.
+
+**Tests**: 36 across three files — 15 on verification (every forgery), 6 on the route (a forged webhook must never reach the handler), 15 on dispatch.
+
 **Files**:
-- `backend/src/services/plaidService.ts` ✅ (`getItemStatus`), and `:236` webhook attach + the `:565-571` verification stub for the remaining work
+- `backend/src/services/plaidWebhookVerification.ts` ✅ (new)
+- `backend/src/services/plaidWebhookService.ts` ✅ (new)
+- `backend/src/scripts/backfill-plaid-webhooks.ts` ✅ (new)
+- `backend/src/routes/plaid.ts` ✅ (receiver), `backend/src/app.ts` ✅ (raw body)
+- `backend/src/services/plaidService.ts` ✅ (`getItemStatus`), verification replaced, `updateItemWebhook` added
 - `backend/src/services/accountService.ts` ✅ (persist staleness fields)
 - `shared/types/index.ts` ✅
 - `frontend/src/components/accounts/accountHealth.ts` ✅ (new, + tests)
 - `frontend/src/components/accounts/ConnectedAccountCard.tsx` ✅
-- `backend/src/routes/plaid.ts` (new webhook route — remaining)
-- `.github/workflows/release-and-deploy.yml`, `backend/.env.example` (remaining)
+- `.github/workflows/release-and-deploy.yml` ✅, `backend/.env.example` ✅
 
 ---
 

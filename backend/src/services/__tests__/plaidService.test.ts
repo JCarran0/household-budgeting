@@ -818,17 +818,31 @@ describe('PlaidService', () => {
   });
 
   describe('Webhook Signature Verification', () => {
-    it('should verify valid webhook signatures', () => {
-      const body = JSON.stringify({ webhook_type: 'TRANSACTIONS', webhook_code: 'DEFAULT_UPDATE' });
-      const headers = {
-        'plaid-verification': 'valid-signature-here',
-      };
+    // This previously called the stub and asserted `typeof isValid === 'boolean'`,
+    // which passes for a function that unconditionally returns true — it pinned
+    // nothing. The real cases live in
+    // `__tests__/critical/plaid-webhook-verification.test.ts`, which exercises
+    // the forgeries against generated ES256 keys. What belongs here is that the
+    // service refuses rather than defaults open (TD-021).
+    const body = Buffer.from(JSON.stringify({ webhook_type: 'TRANSACTIONS', webhook_code: 'DEFAULT_UPDATE' }));
 
-      // Mock the signature verification
-      const isValid = plaidService.verifyWebhookSignature(body, headers);
-      
-      // Note: In real implementation, this would use Plaid's JWT verification
-      expect(typeof isValid).toBe('boolean');
+    it('rejects a webhook with no verification header', async () => {
+      const result = await plaidService.verifyWebhook(body, {});
+      expect(result).toEqual({ valid: false, reason: 'missing_header' });
+    });
+
+    it('rejects an arbitrary string presented as a signature', async () => {
+      const result = await plaidService.verifyWebhook(body, {
+        'plaid-verification': 'valid-signature-here',
+      });
+      expect(result.valid).toBe(false);
+    });
+
+    it('rejects when the raw body was not captured', async () => {
+      const result = await plaidService.verifyWebhook(undefined, {
+        'plaid-verification': 'anything',
+      });
+      expect(result.valid).toBe(false);
     });
   });
 });

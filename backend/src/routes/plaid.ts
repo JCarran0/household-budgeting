@@ -1,8 +1,11 @@
 import { Router, Request, Response, NextFunction } from 'express';
-import { plaidService } from '../services';
+import { plaidService, plaidWebhookService } from '../services';
 import { authMiddleware } from '../middleware/authMiddleware';
 import { AuthorizationError } from '../errors';
 import { z } from 'zod';
+import { childLogger } from '../utils/logger';
+
+const log = childLogger('plaidRoutes');
 
 const router = Router();
 
@@ -90,5 +93,46 @@ router.post('/exchange-token', authMiddleware, async (req: AuthenticatedRequest,
  * The real flows live in `routes/accounts.ts` → `accountService`, which scopes
  * every lookup by the caller's familyId.
  */
+
+/**
+ * POST /api/v1/plaid/webhook
+ * Receive webhooks from Plaid. Public by necessity — Plaid has no credentials
+ * of ours — so the JWT signature is the *only* authentication (TD-021).
+ *
+ * Three deliberate properties:
+ *
+ *  - Verification and dispatch are in one handler. TD-021 marks this as a
+ *    single change precisely so no window exists where the route is live and
+ *    the verification is still a stub returning true.
+ *  - It answers 200 to anything it accepts, including codes it does not act on.
+ *    Plaid retries non-2xx, so returning an error for an unhandled code turns a
+ *    harmless message into a retry loop.
+ *  - It answers 200 even when handling *throws*, after logging. A webhook is a
+ *    notification, not a request for work; the sync it triggers can fail without
+ *    that being Plaid's problem to retry. A failed sync is already surfaced by
+ *    the staleness indicator.
+ */
+router.post('/webhook', async (req: Request, res: Response): Promise<void> => {
+  const rawBody = (req as Request & { rawBody?: Buffer }).rawBody;
+
+  const verification = await plaidService.verifyWebhook(rawBody, req.headers);
+  if (!verification.valid) {
+    // 401 without detail. Telling a forger which check failed helps them.
+    log.warn({ reason: verification.reason, ip: req.ip }, 'rejected unverified plaid webhook');
+    res.status(401).json({ success: false, error: 'Webhook verification failed' });
+    return;
+  }
+
+  // Acknowledge before doing the work: Plaid's delivery timeout is short, and a
+  // slow sync must not be read as a failed delivery and retried.
+  res.status(200).json({ success: true });
+
+  try {
+    const outcome = await plaidWebhookService.handle(req.body);
+    log.info({ webhookCode: req.body?.webhook_code, outcome }, 'processed plaid webhook');
+  } catch (error) {
+    log.error({ err: error, webhookCode: req.body?.webhook_code }, 'plaid webhook handling failed');
+  }
+});
 
 export default router;

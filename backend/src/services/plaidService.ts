@@ -1,4 +1,11 @@
 import { childLogger } from '../utils/logger';
+import { config } from '../config';
+import {
+  verifyPlaidWebhook,
+  VerificationKeyCache,
+  type PlaidJwk,
+  type WebhookVerificationResult,
+} from './plaidWebhookVerification';
 
 const log = childLogger('plaidService');
 import {
@@ -257,9 +264,13 @@ export class PlaidService {
         request.redirect_uri = this.redirectUri;
       }
 
-      // Add webhook URL in production
-      if (process.env.NODE_ENV === 'production' && process.env.PLAID_WEBHOOK_URL) {
-        request.webhook = process.env.PLAID_WEBHOOK_URL;
+      // Attach the webhook whenever one is configured. Previously this also
+      // required NODE_ENV=production, which meant the receiver could never be
+      // exercised outside production even with a tunnel pointed at it — and
+      // TD-021 is a list of things that were never exercised. Behaviour in
+      // production is unchanged: no URL configured, no webhook attached.
+      if (config.plaid.webhookUrl) {
+        request.webhook = config.plaid.webhookUrl;
       }
 
       const response = await this.client.linkTokenCreate(request);
@@ -616,17 +627,67 @@ export class PlaidService {
   /**
    * Verify webhook signature (for security)
    */
-  verifyWebhookSignature(_body: string, headers: Record<string, string | undefined>): boolean {
-    // Note: Plaid webhook verification requires the JWT library
-    // This is a placeholder - implement actual verification based on Plaid docs
-    const signature = headers['plaid-verification'];
-    if (!signature) {
-      return false;
+  private readonly webhookKeyCache = new VerificationKeyCache();
+
+  /**
+   * Fetch Plaid's public verification key for a `kid`, cached.
+   *
+   * Returns null on any failure rather than throwing: the caller treats an
+   * unresolvable key as a failed verification, so a Plaid outage rejects
+   * webhooks instead of admitting them.
+   */
+  private async getWebhookVerificationKey(keyId: string): Promise<PlaidJwk | null> {
+    const cached = this.webhookKeyCache.get(keyId);
+    if (cached) return cached;
+
+    try {
+      const response = await this.client.webhookVerificationKeyGet({ key_id: keyId });
+      const jwk = response.data.key as unknown as PlaidJwk;
+      if (!jwk) return null;
+      this.webhookKeyCache.set(keyId, jwk);
+      return jwk;
+    } catch (error) {
+      log.error({ err: error, keyId }, 'failed to fetch webhook verification key');
+      return null;
     }
-    
-    // In production, implement proper JWT verification
-    // See: https://plaid.com/docs/api/webhooks/webhook-verification/
-    return true;
+  }
+
+  /**
+   * Verify a webhook actually came from Plaid.
+   *
+   * Was a stub that read the header, ignored it, and returned true (TD-021).
+   * The real checks live in `plaidWebhookVerification.ts`, which is pure and
+   * separately tested against forged tokens; this method only supplies the key
+   * lookup.
+   *
+   * `rawBody` must be the exact bytes received. Re-encoding the parsed body
+   * with JSON.stringify produces a different byte sequence and will not match
+   * the signed hash.
+   */
+  async verifyWebhook(
+    rawBody: Buffer | undefined,
+    headers: Record<string, string | string[] | undefined>,
+  ): Promise<WebhookVerificationResult> {
+    const raw = headers['plaid-verification'];
+    const token = Array.isArray(raw) ? raw[0] : raw;
+    return verifyPlaidWebhook(token, rawBody, keyId => this.getWebhookVerificationKey(keyId));
+  }
+
+  /**
+   * Point an existing Item at our webhook URL.
+   *
+   * Items linked before `PLAID_WEBHOOK_URL` existed carry no webhook and will
+   * never receive one otherwise — the URL is set at link time. This is how the
+   * nine already-linked Items get backfilled.
+   */
+  async updateItemWebhook(accessToken: string, webhookUrl: string): Promise<{ success: boolean; error?: string }> {
+    try {
+      await this.client.itemWebhookUpdate({ access_token: accessToken, webhook: webhookUrl });
+      return { success: true };
+    } catch (error) {
+      const formatted = this.handleError(error);
+      return { success: false, error: formatted.error };
+    }
   }
 
   /**

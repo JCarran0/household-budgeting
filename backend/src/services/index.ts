@@ -8,6 +8,7 @@ import { config } from '../config';
 import { AuthService } from './authService';
 import { DataService, UnifiedDataService, InMemoryDataService } from './dataService';
 import { PlaidService } from './plaidService';
+import { PlaidWebhookService } from './plaidWebhookService';
 import { AccountService } from './accountService';
 import { TransactionService } from './transactionService';
 import { CategoryService, CategoryDependencyChecker } from './categoryService';
@@ -50,6 +51,7 @@ export const authService = new AuthService(dataService);
 export const plaidService = new PlaidService();
 export const accountService = new AccountService(dataService, plaidService);
 export const transactionService = new TransactionService(dataService, plaidService, accountService);
+export const plaidWebhookService = new PlaidWebhookService(dataService, transactionService);
 export const budgetService = new BudgetService(dataService);
 
 // Build the dependency checker before CategoryService is created. The checker
