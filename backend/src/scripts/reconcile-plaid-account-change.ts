@@ -172,6 +172,39 @@ function accountIdentity(a: { type?: string | null; subtype?: string | null; off
   return `${simplifyType(a.type)}|${a.subtype ?? ''}|${a.officialName ?? ''}`.toLowerCase();
 }
 
+/**
+ * Render transaction ids so they can actually be told apart.
+ *
+ * Plaid's ids for a single Item share a long constant prefix — 17 characters in
+ * the 2026-09-07 Bank of America data. Truncating to a fixed 10 characters, as
+ * this script used to, rendered every id identically, so unrelated rows appeared
+ * to chain into one another and the sample table silently stopped being a check
+ * on anything. This is the operator's only visual confirmation before an
+ * irreversible re-key, so it has to show the part that differs.
+ *
+ * Elide the prefix the given ids actually share rather than assuming a width:
+ * the shared length varies by institution, and a hardcoded guess would reproduce
+ * the same bug against a different bank.
+ */
+export function elideSharedPrefix(ids: string[]): (id: string) => string {
+  const usable = ids.filter(Boolean);
+  let shared = 0;
+  if (usable.length > 1) {
+    const [first] = usable;
+    outer: for (; shared < first.length; shared++) {
+      for (const id of usable) {
+        if (id[shared] !== first[shared]) break outer;
+      }
+    }
+    // Never elide so much that nothing distinguishing is left, and don't bother
+    // for a prefix too short to be worth hiding.
+    const shortest = Math.min(...usable.map(id => id.length));
+    if (shared > shortest - 4) shared = Math.max(0, shortest - 4);
+    if (shared < 6) shared = 0;
+  }
+  return (id: string) => (shared > 0 ? `…${id.slice(shared)}` : id);
+}
+
 async function main(): Promise<void> {
   const institution = parseArg('institution');
   if (!institution) {
@@ -401,13 +434,20 @@ async function main(): Promise<void> {
   }
 
   if (rekeys.length) {
+    const sample = rekeys.slice(0, 5);
+    // Compute the shared prefix over exactly the ids being printed, so what the
+    // operator sees is guaranteed to distinguish the rows in front of them.
+    const shortId = elideSharedPrefix(sample.flatMap(r => [String(r.from), r.to]));
     console.log(`\n  ${c.bold}sample re-keys${c.reset}`);
-    rekeys.slice(0, 5).forEach(r =>
+    sample.forEach(r =>
       console.log(
         `    ${r.stored.date}  ${String(r.stored.amount).padStart(9)}  ${(r.stored.name || '').slice(0, 28).padEnd(30)}` +
-          ` ${c.dim}${String(r.from).slice(0, 10)}… → ${r.to.slice(0, 10)}…${c.reset}`
+          ` ${c.dim}${shortId(String(r.from))} → ${shortId(r.to)}${c.reset}`
       )
     );
+    if (rekeys.length > sample.length) {
+      console.log(`    ${c.dim}... ${rekeys.length - sample.length} more${c.reset}`);
+    }
   }
 
   const planPath = path.join(process.cwd(), `reconcile-plan-${familyId.slice(0, 8)}.json`);
@@ -505,7 +545,11 @@ async function main(): Promise<void> {
   console.log(`${c.dim}cursor advanced; next in-app sync will be a normal no-op delta.${c.reset}`);
 }
 
-main().catch(e => {
-  console.error(`${c.red}reconcile failed:${c.reset}`, e);
-  process.exit(1);
-});
+// Only run when invoked directly, so the pure helpers above can be unit-tested
+// without executing a script that mutates production financial records.
+if (require.main === module) {
+  main().catch(e => {
+    console.error(`${c.red}reconcile failed:${c.reset}`, e);
+    process.exit(1);
+  });
+}
