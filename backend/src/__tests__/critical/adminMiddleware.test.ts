@@ -64,33 +64,39 @@ describe('adminMiddleware', () => {
     expect(response.body).toHaveProperty('migrationNeeded');
   });
 
-  it('auto-promotes a user listed in ADMIN_USERNAMES and persists isAdmin to storage', async () => {
+  // Inverted on 2026-09-08 (SA-10). This used to assert that ADMIN_USERNAMES
+  // auto-promoted a matching user. That behaviour is removed: combined with open
+  // registration it let anyone claim an unregistered allowlisted username and
+  // become admin. The escalation path staying gone is what needs pinning now.
+  it('never promotes from ADMIN_USERNAMES, even for an exact case-insensitive match', async () => {
     const username = `seeded${Math.random().toString(36).slice(2, 8)}`;
     const user = await registerUser(username, 'secure-test-passphrase-long-enough');
 
-    // Before the env var is set the user is rejected.
+    process.env.ADMIN_USERNAMES = `other,${username.toUpperCase()},extra`;
+
     await request(app)
       .get(MIGRATION_STATUS_ENDPOINT)
       .set('Authorization', `Bearer ${user.token}`)
       .expect(403);
 
-    // Seed the env var with the same username (case-insensitive).
-    process.env.ADMIN_USERNAMES = `other,${username.toUpperCase()},extra`;
+    // And nothing was written to storage as a side effect of the attempt.
+    const persisted = await dataService.getUser(user.userId);
+    expect(persisted?.isAdmin).toBeFalsy();
+  });
 
-    const response = await request(app)
+  it('allows a user whose isAdmin flag is already persisted in storage', async () => {
+    // The supported grant path after SA-10: an explicit act on an existing
+    // account. This is how the production admin retains access.
+    const username = `realadmin${Math.random().toString(36).slice(2, 8)}`;
+    const user = await registerUser(username, 'secure-test-passphrase-long-enough');
+
+    await request(app)
       .get(MIGRATION_STATUS_ENDPOINT)
       .set('Authorization', `Bearer ${user.token}`)
-      .expect(200);
+      .expect(403);
 
-    expect(response.body).toHaveProperty('totalCategories');
+    await dataService.updateUser(user.userId, { isAdmin: true });
 
-    // The bootstrap path must persist isAdmin so later calls don't depend on
-    // the env var staying set.
-    const persisted = await dataService.getUser(user.userId);
-    expect(persisted?.isAdmin).toBe(true);
-
-    // Clearing the env var must NOT revoke the now-persisted flag.
-    delete process.env.ADMIN_USERNAMES;
     await request(app)
       .get(MIGRATION_STATUS_ENDPOINT)
       .set('Authorization', `Bearer ${user.token}`)

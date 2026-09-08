@@ -113,8 +113,8 @@ export function RegisterForm() {
 
             <TextInput
               label="Join Code"
-              placeholder="Have an invitation? Enter the code here"
-              description="Optional — leave blank to create a new family"
+              placeholder="Enter the code you were invited with"
+              description="Registration is invitation-only. Leave blank only when setting up a brand-new installation (SA-10)"
               value={joinCode}
               onChange={(e) => setJoinCode(e.currentTarget.value)}
             />
@@ -123,7 +123,7 @@ export function RegisterForm() {
               <TextInput
                 label="Family Name"
                 placeholder={username ? `${username}'s Family` : 'My Family'}
-                description="Optional — defaults to your username's Family"
+                description="Only used when creating the first account on a new installation"
                 value={familyName}
                 onChange={(e) => setFamilyName(e.currentTarget.value)}
               />

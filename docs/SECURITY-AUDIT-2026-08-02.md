@@ -43,7 +43,7 @@ Open items, ordered by value ÷ effort. The top four are one-line changes.
 
 | ID | Finding | Severity | Effort | Status |
 |----|---------|----------|--------|--------|
-| SA-10 | Open registration chains into admin escalation | High | Low | Open |
+| SA-10 | Open registration chains into admin escalation | High | Low | **Resolved 2026-09-08** |
 | SA-20 | Dead Plaid routes with placeholder access token | Medium | Low | Open |
 | SA-15 | Any family member can remove any other member | Medium | Low | Open |
 | SA-05 | Action-card display can diverge from executed params | Medium | Medium | Open |
@@ -100,7 +100,7 @@ Then: run the **Sync Secrets to SSM Parameter Store** workflow (confirm with `SY
 
 ### If you only have an hour
 
-Start with **SA-10**, the last open High-severity *code* change: close registration and harden the `ADMIN_USERNAMES` bootstrap. Then **SA-20** (delete three dead placeholder routes) and **SA-15** (three guard clauses on member removal), both small and both closing destructive-action gaps.
+~~Start with **SA-10**~~ — resolved 2026-09-08; registration is invitation-only and the `ADMIN_USERNAMES` auto-promotion path is removed. Next: **SA-20** (delete three dead placeholder routes) and **SA-15** (three guard clauses on member removal), both small and both closing destructive-action gaps.
 
 The trivial tier is done; what remains is small-to-medium work rather than one-liners.
 
@@ -314,7 +314,7 @@ Server-issue the conversation ID, or cap concurrent live proposals per user.
 ## Authentication & authorization
 
 ### SA-10: Open registration chains into admin privilege escalation
-**Status**: Open
+**Status**: **Resolved (2026-09-08)**
 **Severity**: **High**
 **Effort**: Low
 
@@ -335,9 +335,31 @@ Two independent changes, either of which breaks the chain — do both.
 1. Gate `/register` behind a required `joinCode`, or an env flag defaulting to closed. The family is fully provisioned; open signup no longer serves a purpose.
 2. Make the `ADMIN_USERNAMES` bootstrap require that the user already existed before promotion, or retire the auto-promotion path entirely now that `isAdmin` is persisted for the real admin.
 
+**Fix as shipped (2026-09-08)** — both, deliberately. Either alone breaks the chain; a single mistake in either control should not be sufficient.
+
+✅ **1. Registration is invitation-only.** New `backend/src/services/registrationPolicy.ts` allows registration only when a valid `joinCode` was supplied, **or** no users exist yet, **or** `ALLOW_OPEN_REGISTRATION` is exactly `"true"`.
+
+The zero-users clause is what makes this safe to default closed: a fresh install or a restore into an empty store can still create its first account, and it needs no configuration to get right, so there is nothing to forget. It closes by itself the instant that account exists. The env flag is an explicit opt-in for development — `"1"`, `"yes"` and `""` all leave registration closed, which is asserted.
+
+The rejection is a flat 403 with one message. It does not say which condition failed, whether users exist, or whether the username was taken — verified by a test comparing the response for a taken username against a novel one. An invalid `joinCode` still reports *invalid*, so an invited user is not told the door is shut.
+
+✅ **2. The `ADMIN_USERNAMES` auto-promotion path is removed entirely**, not merely constrained. It was no longer load-bearing: TD-006 always described it as a one-time bootstrap ("the env can be unset without revoking access"), and production was confirmed before the change — user `jared` has `isAdmin: true` persisted in storage, and the allowlist contained no unregistered name. Admin is now granted only by setting the flag on an existing stored user. The dead `ADMIN_USERNAMES` line was also dropped from the deploy workflow rather than left as drifting config; the `PRODUCTION_ADMIN_USERNAMES` GitHub Variable is now unread and can be deleted.
+
+✅ **Tests**: 13 new cases in `backend/src/__tests__/critical/registration-policy.test.ts` — the policy decision in isolation, the route's behaviour, the non-disclosure properties, and the audit's escalation scenario end to end (an allowlisted username nobody has registered cannot be claimed, and confers nothing even if an account is granted). The existing `adminMiddleware` test that asserted auto-promotion was **inverted** rather than deleted, so the removed path staying removed is now pinned.
+
+**Verified as real regression tests** by restoring the pre-fix behaviour and re-running: **10 of 19 fail**, including both halves of the chain. The 9 that still pass are the ones that should hold either way — bootstrap, valid join code, invalid join code, non-allowlisted user.
+
+⚠️ **Note on the test opt-in.** `src/__tests__/setup.ts` sets `ALLOW_OPEN_REGISTRATION=true` so fixture-building suites can register several users. That is an opt-in, not a bypass: the production default is closed and every test of the closed path deletes the variable first. This is deliberately unlike SA-11, where the rate limiters are short-circuited whenever `NODE_ENV=test` — a control that cannot be tested is a control nobody has run.
+
 **Files**:
-- `backend/src/routes/authRoutes.ts`
-- `backend/src/middleware/adminMiddleware.ts`
+- `backend/src/services/registrationPolicy.ts` ✅ (new)
+- `backend/src/routes/authRoutes.ts` ✅
+- `backend/src/middleware/adminMiddleware.ts` ✅
+- `backend/src/__tests__/critical/registration-policy.test.ts` ✅ (new, 13 cases)
+- `backend/src/__tests__/critical/adminMiddleware.test.ts` ✅ (auto-promotion assertion inverted)
+- `backend/src/__tests__/setup.ts` ✅, `backend/.env.example` ✅
+- `.github/workflows/release-and-deploy.yml` ✅ (dead `ADMIN_USERNAMES` removed)
+- `frontend/src/components/auth/RegisterForm.tsx` ✅ (copy no longer advertises the now-rejected path)
 
 ---
 

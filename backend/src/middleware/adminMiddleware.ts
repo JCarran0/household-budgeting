@@ -4,26 +4,30 @@ import { childLogger } from '../utils/logger';
 
 const log = childLogger('adminMiddleware');
 
-// Case-insensitive allowlist of usernames that auto-promote to admin on first
-// hit. Empty array when the env var is unset — then adminMiddleware only
-// recognizes users who already have User.isAdmin === true in storage.
-function readAdminUsernames(): string[] {
-  const raw = process.env.ADMIN_USERNAMES;
-  if (!raw) return [];
-  return raw
-    .split(',')
-    .map(s => s.trim().toLowerCase())
-    .filter(s => s.length > 0);
-}
-
 // Gates the admin router. Must be mounted AFTER authMiddleware so req.user is
 // populated. Behavior:
 //   - If the stored User.isAdmin === true  → allow
-//   - Else if username is in ADMIN_USERNAMES → persist isAdmin=true, allow
 //   - Else → 403
-// The env-var path is a one-time bootstrap: the first successful admin request
-// by a seeded user persists the flag, so subsequent calls don't depend on the
-// env being set. Fail-closed when neither condition holds.
+//
+// The ADMIN_USERNAMES auto-promotion path was removed on 2026-09-08 (SA-10).
+// It promoted any user whose username appeared in that env var to admin on
+// their first admin request and persisted the flag. TD-006 designed it assuming
+// the named user already existed — but registration was open, so a username in
+// the allowlist that had *not* been registered (a typo, a rename, a planned
+// second account) was claimable by anyone, and the claimant became admin with
+// access to cross-family data migrations.
+//
+// Registration is now invitation-only (see `services/registrationPolicy.ts`),
+// which breaks that chain from the other end. This path is removed as well
+// because defence in depth is the point: a single mistake in either control
+// should not be sufficient. It is also no longer load-bearing — TD-006 always
+// intended it as a one-time bootstrap ("the env can be unset without revoking
+// access"), and the production admin has had `isAdmin: true` persisted in
+// storage since that bootstrap ran.
+//
+// To grant admin now, set `isAdmin: true` on the stored user — an explicit,
+// audited act on an account that already exists, rather than a side effect of
+// choosing a username. Fail-closed when the flag is absent.
 export const adminMiddleware = (req: Request, res: Response, next: NextFunction): void => {
   void requireAdmin(req, res, next);
 };
@@ -42,13 +46,6 @@ async function requireAdmin(req: Request, res: Response, next: NextFunction): Pr
     }
 
     if (user.isAdmin === true) {
-      next();
-      return;
-    }
-
-    const allowlist = readAdminUsernames();
-    if (allowlist.includes(user.username.toLowerCase())) {
-      await dataService.updateUser(user.id, { isAdmin: true });
       next();
       return;
     }

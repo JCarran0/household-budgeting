@@ -321,7 +321,6 @@ jobs:
           API_PREFIX=${{ vars.PRODUCTION_API_PREFIX }}
           LOG_LEVEL=${{ vars.PRODUCTION_LOG_LEVEL }}
           CHATBOT_MONTHLY_LIMIT=${{ vars.PRODUCTION_CHATBOT_MONTHLY_LIMIT }}
-          ADMIN_USERNAMES=${{ vars.PRODUCTION_ADMIN_USERNAMES }}
           DEPLOYMENT_VERSION=${{ steps.deploy_version.outputs.version }}
           EOF
 

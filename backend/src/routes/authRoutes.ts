@@ -1,6 +1,10 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
-import { authService, familyService } from '../services';
+import { authService, familyService, dataService } from '../services';
+import {
+  decideRegistration,
+  REGISTRATION_CLOSED_MESSAGE,
+} from '../services/registrationPolicy';
 import {
   authenticate,
   rateLimitAuth,
@@ -48,6 +52,15 @@ router.post(
           return;
         }
         existingFamily = { familyId: validation.familyId };
+      }
+
+      // Registration is invitation-only unless this is a first-run bootstrap or
+      // open registration is explicitly enabled (SA-10). Checked after the join
+      // code so a supplied-but-invalid code still reports why it was rejected.
+      const decision = decideRegistration(existingFamily !== undefined, await dataService.getAllUsers());
+      if (!decision.allowed) {
+        res.status(403).json({ success: false, error: REGISTRATION_CLOSED_MESSAGE });
+        return;
       }
 
       const result = await authService.register(username, password, displayName, familyName, existingFamily);
