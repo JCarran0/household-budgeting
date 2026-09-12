@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [6.2.0](https://github.com/JCarran0/household-budgeting/compare/v6.1.3...v6.2.0) (2026-09-12)
+
+
+### Features
+
+* **plaid:** receive and act on Plaid webhooks (TD-021) ([3fabb51](https://github.com/JCarran0/household-budgeting/commit/3fabb51b3d7ec4650cfb3648be5e9681a8e84cec))
+
+
+### Bug Fixes
+
+* **plaid:** add duplicate-Item dedupe tool and record TD-028 ([2102c41](https://github.com/JCarran0/household-budgeting/commit/2102c4148e4bb12eb8eebf6bbd6f1f0b2f5ef6a8))
+* **plaid:** stop a re-auth click from linking an institution twice (TD-028) ([44d559f](https://github.com/JCarran0/household-budgeting/commit/44d559f63792376a9decf1a8c04ee569447a6169))
+
 ### [6.1.3](https://github.com/JCarran0/household-budgeting/compare/v6.1.2...v6.1.3) (2026-09-08)
 
 
