@@ -148,6 +148,13 @@ export interface ConnectAccountResult {
   success: boolean;
   account?: StoredAccount;
   error?: string;
+  /**
+   * Set when the failure is the caller's to correct rather than a server fault,
+   * so the route can answer 409 instead of 500 and the message survives to the
+   * user. Without it every refusal reads as "Request failed with status code
+   * 500", which tells them nothing about what to do next.
+   */
+  code?: 'DUPLICATE_INSTITUTION';
 }
 
 export interface AccountsResult {
@@ -220,6 +227,59 @@ export class AccountService {
           success: false,
           error: accountsResult.error || 'Failed to fetch accounts',
         };
+      }
+
+      // Refuse a second link of an institution already connected (TD-028).
+      //
+      // Plaid mints fresh account_ids and transaction_ids for a new Item, so the
+      // id-based dedupe in transactionService has nothing to match on and the
+      // entire history re-imports as new uncategorized rows — 892 of them on
+      // 2026-09-12, when a create-mode Link ran where update mode was intended.
+      // Re-authentication is "Sign in to Bank", which never reaches this path.
+      //
+      // Only masked accounts are checked. A null mask (Venmo, some investment
+      // profiles) carries nothing to distinguish two genuinely different
+      // accounts at the same institution, so it cannot support the conclusion.
+      const existing = (await this.dataService.getData<StoredAccount[]>(`accounts_${familyId}`)) || [];
+      const liveIdentities = new Map(
+        existing
+          .filter(a => a.status !== 'inactive' && a.mask)
+          .map(a => [`${a.institutionId ?? ''}|${a.mask}|${a.type ?? ''}|${a.subtype ?? ''}`, a])
+      );
+
+      for (const plaidAccount of accountsResult.accounts) {
+        if (!plaidAccount.mask) continue;
+        const key = `${institutionId}|${plaidAccount.mask}|${plaidAccount.type ?? ''}|${plaidAccount.subtype ?? ''}`;
+        const clash = liveIdentities.get(key);
+        if (clash) {
+          log.warn(
+            {
+              familyId,
+              institutionId,
+              existingAccountId: clash.id,
+              existingItemId: clash.plaidItemId,
+              incomingItemId: tokenResult.itemId,
+            },
+            'refusing duplicate link — institution already connected under another Item'
+          );
+          // Release the Item we just exchanged. Leaving it is how 2026-09-12
+          // ended with a live orphan Item whose only access token survived in a
+          // backup key after the account records were cleaned up.
+          const removed = await this.plaidService.removeItem(tokenResult.accessToken);
+          if (!removed.success) {
+            log.error(
+              { plaidItemId: tokenResult.itemId, error: removed.error },
+              'could not release the refused Item — it remains live at Plaid'
+            );
+          }
+          return {
+            success: false,
+            code: 'DUPLICATE_INSTITUTION',
+            error:
+              `${clash.accountName} ••${clash.mask} at ${institutionName} is already connected. ` +
+              `To reconnect it, use "Sign in to Bank" on that account instead of adding it again.`,
+          };
+        }
       }
 
       // Store each account

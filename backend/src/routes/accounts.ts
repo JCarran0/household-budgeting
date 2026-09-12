@@ -59,7 +59,11 @@ router.post('/connect', authMiddleware, async (req: AuthRequest, res: Response, 
     );
 
     if (!result.success) {
-      res.status(500).json({ success: false, error: result.error });
+      // A refused duplicate is a conflict the user can act on, not a server
+      // fault — 500 here is what turned a specific, actionable message into
+      // "Connection Error" in the UI.
+      const status = result.code === 'DUPLICATE_INSTITUTION' ? 409 : 500;
+      res.status(status).json({ success: false, error: result.error });
       return;
     }
 

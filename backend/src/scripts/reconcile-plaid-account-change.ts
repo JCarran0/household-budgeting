@@ -323,7 +323,14 @@ async function main(): Promise<void> {
     transactions.map(t => t.plaidTransactionId).filter((v): v is string => Boolean(v))
   );
 
-  const rekeys: Array<{ stored: StoredTransaction; from: string | null | undefined; to: string; newAcct: string }> = [];
+  const rekeys: Array<{
+    stored: StoredTransaction;
+    from: string | null | undefined;
+    to: string;
+    newAcct: string;
+    /** The live Plaid row, so apply can refresh mutable fields and not just ids. */
+    txn: PlaidTxn;
+  }> = [];
   const inserts: Array<{ txn: PlaidTxn; accountId: string }> = [];
   const historicUnmatched: PlaidTxn[] = [];
 
@@ -352,7 +359,7 @@ async function main(): Promise<void> {
       const mate = list && list.length ? list.shift() : undefined;
 
       if (mate) {
-        rekeys.push({ stored: mate, from: mate.plaidTransactionId, to: p.transaction_id, newAcct: newAcct.account_id });
+        rekeys.push({ stored: mate, from: mate.plaidTransactionId, to: p.transaction_id, newAcct: newAcct.account_id, txn: p });
       } else {
         leftover.push(p);
       }
@@ -377,7 +384,7 @@ async function main(): Promise<void> {
         const k = matchKey(mate.date, mate.amount);
         const list = bag.get(k) || [];
         bag.set(k, list.filter(t => t.id !== mate.id));
-        rekeys.push({ stored: mate, from: mate.plaidTransactionId, to: p.transaction_id, newAcct: newAcct.account_id });
+        rekeys.push({ stored: mate, from: mate.plaidTransactionId, to: p.transaction_id, newAcct: newAcct.account_id, txn: p });
         console.log(
           `  ${c.dim}date-shift match: ours ${mate.date} → Plaid ${p.date}  ${p.amount}  ${(p.name || '').slice(0, 28)}${c.reset}`
         );
@@ -450,6 +457,24 @@ async function main(): Promise<void> {
     }
   }
 
+  // A re-key that also flips status is the case that used to be invisible: the
+  // row stays put in the UI while quietly entering or leaving every budget.
+  const statusChanges = rekeys.filter(r => {
+    const live = r.txn.pending ? 'pending' : 'posted';
+    return (r.stored.status ?? 'posted') !== live;
+  });
+  if (statusChanges.length) {
+    console.log(
+      `\n  ${c.bold}status changes${c.reset} ${c.dim}(re-keyed rows whose pending/posted state also moves)${c.reset}`
+    );
+    statusChanges.forEach(r =>
+      console.log(
+        `    ${r.stored.date} ${String(r.stored.amount).padStart(9)}  ${(r.stored.name || '').slice(0, 30).padEnd(32)}` +
+          ` ${c.dim}${r.stored.status} → ${r.txn.pending ? 'pending' : 'posted'}${c.reset}`
+      )
+    );
+  }
+
   const planPath = path.join(process.cwd(), `reconcile-plan-${familyId.slice(0, 8)}.json`);
   fs.writeFileSync(
     planPath,
@@ -462,6 +487,14 @@ async function main(): Promise<void> {
           to: { plaidAccountId: p.live.account_id, mask: p.live.mask, name: p.live.name },
         })),
         rekeys: rekeys.map(r => ({ id: r.stored.id, date: r.stored.date, amount: r.stored.amount, from: r.from, to: r.to })),
+        statusChanges: statusChanges.map(r => ({
+          id: r.stored.id,
+          date: r.stored.date,
+          amount: r.stored.amount,
+          name: r.stored.name,
+          from: r.stored.status,
+          to: r.txn.pending ? 'pending' : 'posted',
+        })),
         inserts: inserts.map(i => ({ date: i.txn.date, amount: i.txn.amount, name: i.txn.name })),
         historicUnmatched: historicUnmatched.map(t => ({ date: t.date, amount: t.amount, name: t.name })),
         nextCursor: next,
@@ -495,6 +528,20 @@ async function main(): Promise<void> {
   for (const r of rekeys) {
     r.stored.plaidTransactionId = r.to;
     r.stored.plaidAccountId = r.newAcct;
+    // Refresh what Plaid may have changed since we last saw this row, not just
+    // its ids. A row that was `pending` when the gap opened is matched here
+    // against its *posted* live counterpart; keeping the stored status would
+    // freeze it as pending forever, because advancing the cursor consumes the
+    // pending→posted update and Plaid never re-sends it. `isSkippable` in
+    // transactionCalculations drops pending rows, so such a row silently
+    // vanishes from every budget and report — that is exactly what happened to
+    // a 2026-08-31 paycheck, found two weeks later (TD-028).
+    r.stored.status = r.txn.pending ? 'pending' : 'posted';
+    r.stored.pending = r.txn.pending;
+    r.stored.date = r.txn.date;
+    r.stored.amount = r.txn.amount;
+    r.stored.name = r.txn.name;
+    r.stored.merchantName = r.txn.merchant_name ?? r.stored.merchantName;
     r.stored.updatedAt = new Date();
   }
 

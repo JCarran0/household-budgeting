@@ -4,6 +4,7 @@ import type { PlaidLinkOnSuccess, PlaidLinkOnExit } from 'react-plaid-link';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { notifications } from '@mantine/notifications';
 import { api } from '../lib/api';
+import { getApiErrorMessage } from '../lib/api/errors';
 import { PlaidLinkContext } from '../contexts/PlaidLinkContext';
 
 // Component that actually uses usePlaidLink - only rendered when token exists
@@ -35,13 +36,33 @@ function PlaidLinkComponent({
   return null;
 }
 
+/**
+ * What the currently-loaded Link token was minted for.
+ *
+ * A Link token is bound to one mode at creation: a create-mode token adds a new
+ * Item, an update-mode token re-authenticates one specific existing Item. The
+ * two are not interchangeable, and Plaid Link looks identical to the user in
+ * both — same bank login, no cue as to which one they are in.
+ *
+ * This is tracked in a ref rather than state because it must be authoritative at
+ * the moment Plaid calls back, not at the moment React last rendered (TD-028).
+ */
+type LoadedLink = { mode: 'create' } | { mode: 'update'; accountId: string };
+
 export function PlaidLinkProvider({ children }: { children: React.ReactNode }) {
   const queryClient = useQueryClient();
   const [token, setToken] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [updateAccountId, setUpdateAccountId] = useState<string | null>(null);
   const openRef = useRef<(() => void) | null>(null);
+  const loadedRef = useRef<LoadedLink | null>(null);
+
+  /** Drop the loaded Link instance so the next open has to mint its own token. */
+  const resetLink = useCallback(() => {
+    setToken(null);
+    openRef.current = null;
+    loadedRef.current = null;
+  }, []);
 
   // Connect account mutation (for new accounts)
   const connectAccountMutation = useMutation({
@@ -50,13 +71,19 @@ export function PlaidLinkProvider({ children }: { children: React.ReactNode }) {
       queryClient.invalidateQueries({ queryKey: ['accounts'] });
       queryClient.invalidateQueries({ queryKey: ['transactions'] });
       setIsLoading(false);
-      setToken(null);
-      openRef.current = null;
+      resetLink();
     },
     onError: (error) => {
       console.error('Failed to connect account:', error);
       setIsLoading(false);
-      setError(error instanceof Error ? error.message : 'Failed to connect account');
+      // `error.message` on an axios failure is "Request failed with status code
+      // NNN" — the server's own explanation lives in the response body, which
+      // is what the user needs to read.
+      setError(getApiErrorMessage(error, 'Failed to connect account'));
+      // Drop the Link instance. A failed mutation used to leave it loaded and
+      // ready, which is how a create-mode instance outlived the click that
+      // made it and captured the next "Sign in to Bank" (TD-028).
+      resetLink();
     },
   });
 
@@ -94,22 +121,25 @@ export function PlaidLinkProvider({ children }: { children: React.ReactNode }) {
       queryClient.invalidateQueries({ queryKey: ['accounts'] });
       queryClient.invalidateQueries({ queryKey: ['transactions'] });
       setIsLoading(false);
-      setToken(null);
-      setUpdateAccountId(null);
-      openRef.current = null;
+      resetLink();
     },
     onError: (error) => {
       console.error('Failed to complete re-authentication:', error);
       setIsLoading(false);
-      setError(error instanceof Error ? error.message : 'Failed to complete re-authentication');
+      setError(getApiErrorMessage(error, 'Failed to complete re-authentication'));
+      resetLink();
     },
   });
 
   const handleSuccess = useCallback<PlaidLinkOnSuccess>((public_token, metadata) => {
     setIsLoading(true);
-    if (updateAccountId) {
+    // Branch on what the token was minted for, never on render state. Reading a
+    // stale `null` here is what linked Bank of America a second time on
+    // 2026-09-12 and re-imported 892 transactions (TD-028).
+    const loaded = loadedRef.current;
+    if (loaded?.mode === 'update') {
       // Update mode - just mark the account as active
-      completeReauthMutation.mutate(updateAccountId);
+      completeReauthMutation.mutate(loaded.accountId);
     } else {
       // New account mode
       connectAccountMutation.mutate({
@@ -118,7 +148,7 @@ export function PlaidLinkProvider({ children }: { children: React.ReactNode }) {
         institutionName: metadata.institution?.name || '',
       });
     }
-  }, [connectAccountMutation, completeReauthMutation, updateAccountId]);
+  }, [connectAccountMutation, completeReauthMutation]);
 
   const handleExit = useCallback<PlaidLinkOnExit>((error) => {
     if (error) {
@@ -126,64 +156,84 @@ export function PlaidLinkProvider({ children }: { children: React.ReactNode }) {
       setError(error.error_message || 'Plaid Link error');
     }
     setIsLoading(false);
-    setToken(null);
-    setUpdateAccountId(null);
-    openRef.current = null;
-  }, []);
+    resetLink();
+  }, [resetLink]);
 
   const handleReady = useCallback((open: (() => void) | null) => {
     openRef.current = open;
     setIsLoading(false);
   }, []);
 
+  /**
+   * Reuse the loaded Link instance only when it was minted for exactly what is
+   * being asked for now.
+   *
+   * `openRef.current` survives from whenever a token last became ready until a
+   * success, exit or error clears it — so it routinely outlives the click that
+   * created it. Reusing it unconditionally meant whichever mode loaded first won
+   * every subsequent click: a create-mode token left ready by the "Connect
+   * Account" button turned the next "Sign in to Bank" into a second link of an
+   * institution already connected.
+   */
+  const canReuse = useCallback((want: LoadedLink): boolean => {
+    const loaded = loadedRef.current;
+    if (!openRef.current || !loaded) return false;
+    if (loaded.mode === 'create') return want.mode === 'create';
+    return want.mode === 'update' && want.accountId === loaded.accountId;
+  }, []);
+
   const openPlaid = useCallback(async () => {
-    if (openRef.current) {
-      openRef.current();
-      return;
-    }
-
-    if (!token) {
-      setIsLoading(true);
-      setError(null);
-      setUpdateAccountId(null);
-
-      try {
-        const result = await api.createLinkToken();
-        setToken(result.link_token);
-      } catch (err) {
-        console.error('Failed to fetch link token:', err);
-        setError(err instanceof Error ? err.message : 'Failed to fetch link token');
-        setIsLoading(false);
-      }
-    }
-  }, [token]);
-
-  const openPlaidUpdate = useCallback(async (accountId: string) => {
-    if (openRef.current) {
-      openRef.current();
+    if (canReuse({ mode: 'create' })) {
+      openRef.current?.();
       return;
     }
 
     setIsLoading(true);
     setError(null);
-    setUpdateAccountId(accountId);
+    resetLink();
+
+    try {
+      const result = await api.createLinkToken();
+      loadedRef.current = { mode: 'create' };
+      setToken(result.link_token);
+    } catch (err) {
+      console.error('Failed to fetch link token:', err);
+      setError(err instanceof Error ? err.message : 'Failed to fetch link token');
+      setIsLoading(false);
+      loadedRef.current = null;
+    }
+  }, [canReuse, resetLink]);
+
+  const openPlaidUpdate = useCallback(async (accountId: string) => {
+    if (canReuse({ mode: 'update', accountId })) {
+      openRef.current?.();
+      return;
+    }
+
+    setIsLoading(true);
+    setError(null);
+    resetLink();
 
     try {
       const result = await api.createUpdateLinkToken(accountId);
+      loadedRef.current = { mode: 'update', accountId };
       setToken(result.link_token);
     } catch (err) {
       console.error('Failed to fetch update link token:', err);
       setError(err instanceof Error ? err.message : 'Failed to fetch link token');
       setIsLoading(false);
-      setUpdateAccountId(null);
+      loadedRef.current = null;
     }
-  }, []);
+  }, [canReuse, resetLink]);
 
   return (
     <PlaidLinkContext.Provider value={{ openPlaid, openPlaidUpdate, isLoading, error }}>
       {children}
       {token && (
+        // Keyed on the token so a new one always mounts a fresh Link instance
+        // rather than re-using the previous mode's handlers.
         <PlaidLinkComponent
+          key={token}
           token={token}
           onSuccess={handleSuccess}
           onExit={handleExit}
