@@ -34,6 +34,7 @@ This document tracks technical debt identified during the April 2026 architectur
 
 | Item | Impact | Effort | Blocked on |
 |------|--------|--------|-----------|
+| TD-028 (duplicate-Item link) | High | Low | nothing — two one-line-ish guards, frontend + backend |
 | TD-021 (webhooks) | High | Medium | **code done 2026-09-08**; needs the `PRODUCTION_PLAID_WEBHOOK_URL` variable set, then the backfill script run |
 | TD-020 (re-key a *replaced* account) | High | Medium | nothing — deferral re-argued and upheld 2026-09-08; new accounts now adopted automatically |
 | TD-017 (deployed ecosystem.config drift) | Medium | Low | nothing — needs a deploy + PM2 re-create |
@@ -141,7 +142,62 @@ that has never existed in the repo.
 
 ---
 
-**Last Updated**: 2026-09-08 (TD-026, TD-027 resolved)
+### TD-028: "Sign in to Bank" Can Silently Run Plaid Link in *Create* Mode, Duplicating an Entire Institution
+**Status**: **Open** — data cleaned up 2026-09-12, neither defect fixed
+**Created**: 2026-09-12
+**Impact**: High — re-importing a full institution history as uncategorized rows; two defects on one path, either of which alone would have prevented it
+**Effort**: Low (frontend guard), Low (backend guard)
+
+**Problem**:
+
+On 2026-09-12 a "Sign in to Bank" click on Bank of America linked the institution a **second time** — a new Item (`RpZrPQQYKKto…`) alongside the live one (`Ae5qOjg64Msm…`), with new `account_id`s and new `transaction_id`s for the entire history. 892 rows imported, 887 of them twins of rows already stored. Uncategorized went from 9 to 899 and the dashboard double-counted both BofA balances.
+
+Two independent defects had to both fire. They are worth fixing separately, because either one alone stops this.
+
+**1. Frontend — `openPlaidUpdate` short-circuits into whatever mode is already loaded.**
+
+`PlaidLinkProvider.openPlaidUpdate` opens an existing Link instance *before* it establishes update mode:
+
+```ts
+const openPlaidUpdate = useCallback(async (accountId: string) => {
+  if (openRef.current) {
+    openRef.current();     // ← opens the ALREADY-LOADED token, whatever mode it is
+    return;                //   never sets updateAccountId, never fetches an update token
+  }
+  setUpdateAccountId(accountId);
+  const result = await api.createUpdateLinkToken(accountId);
+  ...
+```
+
+`openRef.current` is set when any token becomes ready and is cleared only on success, exit, or error — so it survives across clicks. If a create-mode token is loaded first (the `PlaidButton` on the accounts page is enough), the next "Sign in to Bank" click reuses it. Link then runs in create mode, `updateAccountId` is still `null`, and `handleSuccess` takes the `else` branch — `connectAccount`, a brand new Item. The user sees a normal bank login and has no way to tell which mode they were in.
+
+`openPlaid` (line ~140) has the mirrored bug: after an update token is loaded, "Connect Account" re-opens update mode for the *previous* account.
+
+**2. Backend — `connectAccount` stores a new Item's accounts without checking for one it already has.**
+
+`accountService.connectAccount` loops over every account Plaid returns and calls `saveAccount` unconditionally. There is no check that an active account with the same institution + mask + type + subtype already exists under a different Item. Nothing about a second link of the same institution is distinguishable from a legitimate first link.
+
+Note the 2026-09-08 adoption work (`adoptItemAccountChanges`) does not cover this. It reconciles accounts appearing *within* an Item. A whole duplicate Item goes around it.
+
+**Fix**:
+1. In `openPlaidUpdate`, do not reuse `openRef.current` unless the loaded token is an update token for *this* account. Track the loaded token's mode and target alongside the ref, and fall through to fetching a fresh token when it does not match. Same for `openPlaid` — reuse only a create-mode token.
+2. In `connectAccount`, before saving, compare each incoming account against stored active accounts on `institutionId + mask + simplifyType(type) + subtype`. On a collision, refuse the link and return a message naming the already-connected account, rather than storing a second copy. A duplicate link is never what the user meant.
+3. Consider surfacing Item identity in the accounts UI; there is currently no way to see that two cards are the same real account on different Items.
+
+**Cleanup already done** (2026-09-12, prod): `backend/src/scripts/deduplicate-plaid-item.ts` retired the duplicate Item — 887 duplicates deleted, 3 unique rows merged into the stale `pending` rows they were the posted version of, 2 adopted, 2 account records removed. Transactions 5029 → 4139, uncategorized 899 → 9. Twin matching is deliberately one-for-one, because this family's data contains real same-day repeats (four $818.39 flights on 2026-01-12) that a collapse-by-key dedupe would have eaten.
+
+**Two things the cleanup surfaced, still open:**
+- **`--remove-item` could not run from a local checkout.** `encryptionService.decrypt` failed on the retiring Item's token — the AWS-LOCAL-SETUP caveat, tokens are encrypted with production's key. The writes had already committed (the Plaid call is last), so the cleanup is intact, but Item `RpZrPQQYKKto…` is still live at Plaid. The account records that held the token are deleted, so the only remaining copy is in `backup_accounts_64a86709-…_2026-09-12T…`. Nothing will re-import from it — the app finds Items via account records — but it is still a connection at Plaid.
+- **5 stale `pending` rows** across April–August, carrying categories, invisible to every budget and report because `transactionCalculations.isSkippable` drops `pending`. A pending row that never receives its posted twin silently disappears from all app math with no surface anywhere. That is its own gap and probably its own entry.
+
+**Files**:
+- `frontend/src/providers/PlaidLinkProvider.tsx` (`openPlaidUpdate`, `openPlaid`, `handleSuccess`)
+- `backend/src/services/accountService.ts` (`connectAccount`)
+- `backend/src/scripts/deduplicate-plaid-item.ts` (cleanup tool, added)
+
+---
+
+**Last Updated**: 2026-09-12 (TD-028 added)
 **Previous (archived)**: [docs/completed/AI-TECHNICAL-DEBT.md](completed/AI-TECHNICAL-DEBT.md)
 **Execution sequencing**: [TECH-DEBT-EXECUTION-PLAN-2026-04.md](TECH-DEBT-EXECUTION-PLAN-2026-04.md)
 **Security findings (higher priority)**: [SECURITY-AUDIT-2026-08-02.md](SECURITY-AUDIT-2026-08-02.md)
@@ -155,6 +211,7 @@ that has never existed in the repo.
 - **2026-08-03** — TD-017 executed: CloudWatch agent installed, forwarding verified into `/aws/ec2/budget-app` (90d retention). Found production drifted from the repo in two places (PM2 log-file naming, and a stale deployed `ecosystem.config.js` whose `log_date_format` breaks JSON field extraction). Recorded the `budget-app-backup` vs `budget-app-backups` naming hazard under TD-019.
 - **2026-09-08** — Bank of America `account_id` change: TD-020 recurred, 900 transactions held. Reconciled with the script (886 re-keyed, 12 inserted, 2 historic transfers skipped; masks unchanged on both accounts). Three separate defects surfaced on the same path: the account-level resync endpoint rejected its own body-less request (Express 5 leaves `req.body` undefined — same bug previously fixed in `routes/transactions.ts` only), that endpoint passed a single account into an Item-scoped sync (which would itself trip the TD-020 hold), and the reconciler's account pairing compared a normalised stored `type` against a raw Plaid one so it aborted on every depository account. Corrected TD-020 step 4, which specified that broken comparison. Unblocked SA-25 (both IAM grants applied, secrets synced to SSM). Unblocking SA-25 then took four more deploy attempts, each failing on a different cause none of which was visible in code review: no AWS region resolvable on the instance (`aws s3 cp` masks it, `aws ssm` does not), `GetParametersByPath` denied because the grant covered `.../prod/*` but not the path node `.../prod`, IAM propagation delay, and `jq` not installed on the host. Added TD-026 (no instance-side deploy pre-flight) and TD-027 (`update-server-scripts.yml` ships its own stale copy of the deploy script). Common thread across the whole night: **five separate things were documented as done that had never been executed once** — the reconciler against a depository account, the SSM secret sync, the SSM-rendered deploy, SA-25's "written and tested", and AI-DEPLOYMENTS' claim that SSM was already a durable readable copy of `PLAID_ENCRYPTION_SECRET` (it was empty for five weeks).
 - **2026-09-08 (later)** — Closed TD-026 and TD-027 and shipped the re-auth account adoption that would have prevented the incident above. Fixing TD-026 exposed a sixth instance of the same theme: `/health` had reported `"version":"1.0.0"` for every release ever deployed, because it read a `package.json` at the app root that no deploy writes. The one automated post-deploy check would have reported success for a deploy that installed nothing — the documented `/version` endpoint that might have caught it does not exist either. **The pattern is not "we forgot to test"; it is that verification steps were themselves never verified.** When adding a check, run it once against a known-bad state and confirm it fails.
+- **2026-09-12** — Bank of America linked twice by a "Sign in to Bank" click: 892 rows re-imported, 887 duplicates. Added TD-028. Root cause is a frontend short-circuit (`openPlaidUpdate` opens an already-loaded Link instance without establishing update mode) plus a backend blind spot (`connectAccount` never checks whether the institution is already linked under another Item) — either guard alone prevents it. Cleaned up with a new `deduplicate-plaid-item.ts` (5029 → 4139 rows, uncategorized 899 → 9). The cleanup recovered the 2026-08-31 paycheck that TD-020's 2026-09-08 reconcile had left frozen as `pending`: the reconciler re-keys ids but never refreshes `status`/`pending`, so a row pending at gap time stays pending forever and is dropped from all app math. Also confirmed the off-bucket snapshot (TD-019) had run exactly once, on 2026-08-02 — it is still not scheduled — and that both `budget-app-backup-f5b52f89` (holds the snapshots) and the empty `budget-app-backups-f5b52f89` exist, the naming hazard TD-019 flagged.
 
 ---
 
