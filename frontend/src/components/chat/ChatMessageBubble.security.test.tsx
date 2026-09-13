@@ -173,6 +173,79 @@ describe('ChatMessageBubble — rendering invariant (SEC-P025)', () => {
     });
   });
 
+  /**
+   * SEC-P024, as amended: external links are clickable, but the destination
+   * host is always disclosed.
+   *
+   * The original rule banned external links. That was reversed deliberately —
+   * citing a restaurant page is most of the value of trip conversations, and an
+   * anchor needs a deliberate click, unlike the remote image that fetches on
+   * render. What actually made an anchor dangerous was the MASQUERADE: injected
+   * content rendering friendly text over a hostile URL, giving the reader
+   * nothing to be suspicious of. These tests lock the disclosure, which is the
+   * entire basis on which the amendment was accepted. If they are deleted, the
+   * amendment is no longer justified.
+   */
+  describe('external links disclose their destination (SEC-P024, amended)', () => {
+    it('appends the host when the link text does not reveal it', () => {
+      const { container } = renderContent(
+        '[your OpenTable reservation](https://attacker.example/collect?d=balance)',
+      );
+
+      const anchor = container.querySelector('a');
+      expect(anchor?.getAttribute('href')).toBe('https://attacker.example/collect?d=balance');
+      // The load-bearing assertion: the reader can see where this actually goes.
+      expect(container.textContent).toContain('attacker.example');
+    });
+
+    it('discloses the host even when the text names a DIFFERENT, trusted-looking site', () => {
+      const { container } = renderContent(
+        '[opentable.com — confirm your booking](https://attacker.example/x)',
+      );
+
+      expect(container.textContent).toContain('attacker.example');
+    });
+
+    it('does not stutter when the link text already contains the host', () => {
+      const { container } = renderContent('[example.com](https://example.com/menu)');
+
+      expect(container.textContent?.match(/example\.com/g)).toHaveLength(1);
+    });
+
+    it('opens external links without handing over the window or a Referer', () => {
+      const { container } = renderContent('[menu](https://example.com/menu)');
+
+      const rel = container.querySelector('a')?.getAttribute('rel') ?? '';
+      expect(rel).toContain('noopener');
+      expect(rel).toContain('noreferrer');
+    });
+
+    it('discloses a mailto address the text hides', () => {
+      const { container } = renderContent('[email support](mailto:steal@attacker.example)');
+
+      expect(container.textContent).toContain('steal@attacker.example');
+    });
+
+    it('does not append a host for an internal link, which has none to disclose', () => {
+      const { container } = renderContent('[your task](/tasks?taskId=abc)');
+
+      // Scoped to the anchor's own paragraph — `container` also carries
+      // Mantine's injected stylesheet.
+      const anchor = container.querySelector('a');
+      expect(anchor?.parentElement?.textContent).toBe('your task');
+    });
+
+    it('renders a stripped javascript: link as inert text, not a live anchor', () => {
+      // urlTransform removes the href; the anchor renderer must not then emit a
+      // dead <a> that looks clickable.
+      const { container } = renderContent('[click](javascript:alert(1))');
+
+      expect(container.textContent).toContain('click');
+      const hrefs = [...container.querySelectorAll('a')].map(a => a.getAttribute('href'));
+      expect(hrefs.some(h => h?.startsWith('javascript:'))).toBe(false);
+    });
+  });
+
   describe('learning notices are rendered as untrusted text (SEC-L002)', () => {
     // The notice title is model-authored. It must never reach the markdown
     // renderer, or a recorded "gap" becomes a second injection surface — one

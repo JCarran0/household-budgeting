@@ -1,4 +1,5 @@
-import { Paper, Table, Text, Group, Stack } from '@mantine/core';
+import { Paper, Table, Text, Group, Stack, Anchor } from '@mantine/core';
+import { isValidElement, type ReactNode } from 'react';
 import ReactMarkdown, { type Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeSanitize, { defaultSchema } from 'rehype-sanitize';
@@ -39,12 +40,87 @@ const markdownComponents: Components = {
       </Table>
     </div>
   ),
+  a: ({ href, children }) => {
+    // No href survived the sanitizer — render the text, not a dead anchor.
+    if (!href) return <>{children}</>;
+
+    const host = hostForDisclosure(href, textOf(children));
+    return (
+      <>
+        <Anchor
+          href={href}
+          target="_blank"
+          // noopener/noreferrer: the destination gets no handle on this window
+          // and no Referer header. nofollow because the URL is model-authored.
+          rel="noopener noreferrer nofollow"
+          underline="always"
+        >
+          {children}
+        </Anchor>
+        {host && (
+          <Text span size="xs" c="dimmed">
+            {' '}({host})
+          </Text>
+        )}
+      </>
+    );
+  },
   thead: ({ children }) => <Table.Thead>{children}</Table.Thead>,
   tbody: ({ children }) => <Table.Tbody>{children}</Table.Tbody>,
   tr: ({ children }) => <Table.Tr>{children}</Table.Tr>,
   th: ({ children }) => <Table.Th>{children}</Table.Th>,
   td: ({ children }) => <Table.Td>{children}</Table.Td>,
 };
+
+
+/**
+ * SEC-P024 (amended) — links are clickable, but never anonymous.
+ *
+ * The original rule forbade external links outright. That costs the ability to
+ * cite a restaurant page or a bank's support URL, which is most of the value of
+ * trip and budget conversations, in exchange for closing a vector that already
+ * requires a deliberate click. Remote images were the severe case (they fetch on
+ * render, with no interaction) and those stay blocked.
+ *
+ * What made an anchor genuinely dangerous was not the click — it was the
+ * masquerade. Injected content could render `[your OpenTable reservation]` over
+ * a URL to an attacker's host with your balances in the query string, and the
+ * visible text gave the reader nothing to be suspicious of. So the amended rule
+ * is: show the host. A link whose destination is disclosed in plain sight is a
+ * decision the reader can actually make.
+ *
+ * The host is appended only when the link text does not already reveal it, so
+ * ordinary output ("see https://example.com/x") does not get stuttered.
+ */
+function hostForDisclosure(href: string, linkText: string): string | null {
+  let url: URL;
+  try {
+    url = new URL(href);
+  } catch {
+    return null; // Relative or malformed; nothing to disclose.
+  }
+
+  if (url.protocol === 'mailto:') {
+    const address = href.replace(/^mailto:/i, '');
+    return linkText.includes(address) ? null : address;
+  }
+
+  // The sanitizer's protocol allowlist is the gate; this is a second read of the
+  // same fact, so a schema widened by accident does not silently gain a
+  // disclosure-exempt scheme here.
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') return null;
+
+  return linkText.includes(url.hostname) ? null : url.hostname;
+}
+
+function textOf(children: ReactNode): string {
+  if (typeof children === 'string' || typeof children === 'number') return String(children);
+  if (Array.isArray(children)) return children.map(textOf).join('');
+  if (isValidElement(children)) {
+    return textOf((children.props as { children?: ReactNode }).children);
+  }
+  return '';
+}
 
 const chatbotMarkdownSchema: SanitizeSchema = {
   ...defaultSchema,
