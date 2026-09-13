@@ -1,0 +1,594 @@
+# =============================================================================
+# AI Capability Platform — Implementation Plan
+# =============================================================================
+# BRD: docs/features/AI-CAPABILITY-PLATFORM-BRD.md
+# Status: Phases 0-1 complete; Phase 2 not started
+# Last Updated: 2026-09-13
+# =============================================================================
+
+overview:
+  description: |
+    How the capability platform described in the BRD is being built, and what
+    has landed so far.
+
+    The BRD states the governing model: the LLM is a planner, never an
+    executor; every capability declares a trust tier in the registry; a human
+    sees every field a write will change before it happens. This plan records
+    the mechanism chosen for each of those requirements, the order the work
+    ships in, and the implementation-level decisions that are not obvious from
+    the requirement text.
+
+    Phase 0 (correctness) and Phase 1 (foundations) are complete and deployed.
+    Phase 1 also absorbed the whole of Agent Learnings Phase 1 — see
+    AI-AGENT-LEARNINGS-PLAN.yaml.
+
+  key_files:
+    brd: docs/features/AI-CAPABILITY-PLATFORM-BRD.md
+    learnings_brd: docs/features/AI-AGENT-LEARNINGS-BRD.md
+    learnings_plan: docs/features/AI-AGENT-LEARNINGS-PLAN.yaml
+    shared_types: shared/types/index.ts
+    action_registry: backend/src/services/chatActions/registry.ts
+    tiers: backend/src/services/chatActions/tiers.ts
+    proposal_store: backend/src/services/chatActions/proposalStore.ts
+    proposal_rows: backend/src/services/chatActions/proposalRows.ts
+    execution_grant: backend/src/services/chatActions/executionGrant.ts
+    audit_log: backend/src/services/chatActions/auditLog.ts
+    read_capabilities: backend/src/services/capabilities/readCapabilities.ts
+    platform_tools: backend/src/services/capabilities/platformTools.ts
+    tool_intercepts: backend/src/services/capabilities/toolIntercepts.ts
+    chatbot_service: backend/src/services/chatbotService.ts
+    cost_tracker: backend/src/services/chatbotCostTracker.ts
+    trace_store: backend/src/services/agentTraceStore.ts
+    chatbot_routes: backend/src/routes/chatbot.ts
+    action_card: frontend/src/components/chat/ActionCard.tsx
+    action_card_row: frontend/src/components/chat/ActionCardRow.tsx
+    message_bubble: frontend/src/components/chat/ChatMessageBubble.tsx
+
+  pre_existing_foundation: |
+    The platform was not greenfield. What already worked before Phase 0, and
+    what it cost to keep working:
+
+      - services/chatbotDataService.ts — ReadOnlyDataService injected;
+        structurally cannot write (SEC-018). Unchanged.
+      - services/chatActions/registry.ts — Map-based allowlist
+        (prototype-pollution safe), Zod schema per action, JWT-derived context.
+        Extended with tier / dataClass / describeCurrent.
+      - services/chatActions/proposalStore.ts — single-use expiring nonces.
+        Mechanism solid; storage is in-memory (TD-030, REQ-P028).
+      - services/chatActions/auditLog.ts — structured success/rejection logging
+        to CloudWatch. Not yet surfaced in UI (Phase 4).
+      - createTaskAction.ts, submitGithubIssueAction.ts — the two registered
+        actions. create_task re-uses createTaskSchema from routes/tasks.ts.
+      - chatbotCostTracker.ts — mutex-guarded monthly cap, segmented per
+        workspace. Extended with workload classes and cache pricing.
+      - frontend ChatMessageBubble.tsx — react-markdown + remark-gfm behind a
+        narrowed rehype-sanitize allowlist (TD-015). `img` was already absent,
+        which is why SEC-P023 needed locking rather than building.
+
+decisions:
+  - id: D1
+    date: 2026-09-13
+    decision: |
+      Tool definitions are built lazily and memoized (chatbotService.chatbotTools()),
+      not as a module-level const.
+    rationale: |
+      The original CACHED_CHATBOT_TOOLS const evaluated during the chat-action
+      registration import cycle
+      (chatActions/index -> createTaskAction -> routes/tasks -> services/index ->
+      chatbotService -> readCapabilities -> chatActions/index), so the registry
+      was empty at evaluation time and the tool enum came out blank. Lazy
+      memoization defers the read until after registration while keeping the
+      cached prefix byte-identical across requests (REQ-P017).
+
+  - id: D2
+    date: 2026-09-13
+    decision: |
+      readCapabilities.ts imports listChatActionIds from ../chatActions/registry
+      directly, never from the chatActions barrel; the startup assertion
+      buildChatbotTools() lives in app.ts, not services/index.ts.
+    rationale: |
+      Same cycle as D1. Importing the barrel re-enters it; asserting from
+      services/index.ts runs mid-cycle and fails for a reason that has nothing
+      to do with the assertion. app.ts is the first module outside the cycle.
+
+  - id: D3
+    date: 2026-09-13
+    decision: |
+      SEC-P010 is enforced as display *coverage*: buildProposalRows rejects any
+      row whose server-parsed params contain a key with no matching
+      displayField.
+    rationale: |
+      An adversarial review found the shape check was not the control. The
+      dangerous proposal is a well-formed row showing a plausible title while
+      params.body carries 64 KB the user never sees — a one-click exfiltration
+      primitive for submit_github_issue, which POSTs with a server-held token,
+      and authorable by injected text in an uploaded receipt. Coverage closes
+      it; presence does not.
+
+  - id: D4
+    date: 2026-09-13
+    decision: |
+      Execution grants are branded values only proposalStore mints, one per
+      row, keyed by rowId; a source scan test fails if anything else mints one
+      or calls a handler directly.
+    rationale: |
+      JS has no module-private constructor, so the brand alone is convention.
+      The call-site scan is what turns "greppable" into "enforced" (REQ-P002).
+      Mutation-verified: adding a mintConfirmationGrant(...) call and a bare
+      DEF.execute(...) call both fail the test.
+
+  - id: D5
+    date: 2026-09-13
+    decision: |
+      The interactive cost cap keeps its original storage key
+      (chatbot_costs_{familyId}_{month}); only the background class gets a new key.
+    rationale: |
+      Suffixing the interactive key would have orphaned the current month's
+      accrued spend and silently reset the running total — repeating the
+      one-time reset D11 already paid for.
+
+  - id: D6
+    date: 2026-09-13
+    decision: |
+      Trace tool results above 64 KB are dropped and flagged resultTruncated
+      rather than shortened.
+    rationale: |
+      REQ-P061 asks for verbatim results, but an uncapped ledger persists every
+      transaction the model ever read. Dropping-with-a-flag keeps "this is what
+      the model saw" distinguishable from "this is a fragment of it"; silent
+      truncation destroys that distinction, which is the whole diagnostic value.
+
+  - id: D7
+    date: 2026-09-13
+    decision: |
+      Trace pinning (REQ-P063) is set at trace-write time from whether the turn
+      recorded a learning. AgentTraceStore.pin() is retained only for pinning an
+      older trace.
+    rationale: |
+      pin() shipped with unit tests and zero production callers — a feature
+      reachable by nothing, so every learning older than 30 days would have lost
+      its evidence. Calling pin() from inside the chat loop would also be a
+      no-op, because the trace does not exist yet at that point.
+
+  - id: D8
+    date: 2026-09-13
+    decision: |
+      Plan-card rows group by actionId, not by label.
+    rationale: |
+      Labels come from the registry per action, so grouping on them is
+      equivalent-but-indirect for real data and wrong for anything that varies
+      label within an action. Found via a test fixture that gave 30 rows one
+      actionId with alternating labels and saw them merge.
+
+  - id: D9
+    date: 2026-09-13
+    decision: |
+      REQ-P023 ships as all-or-nothing *validation*, not all-or-nothing
+      execution. Full rollback waits for Phase 4.
+    rationale: |
+      Every checked row is validated before any row executes, so a batch that
+      would fail validation writes nothing. A storage failure partway through
+      still leaves earlier rows applied — there is no rollback to perform until
+      REQ-P025 durable undo handles record prior state.
+
+phase_0_correctness:
+  status: completed
+  description: |
+    Close the known-wrong tool behavior that produced the Subaru incident, and
+    lock the rendering invariant before building anything on top of it.
+  tasks:
+    - id: "0.1"
+      task: Fix get_budgets — return category names, an explicit hasBudget flag, and a truthful description
+      status: completed
+      details: |
+        Shipped in d313041. The tool returned {id, categoryId, month, amount}
+        with no names (forcing a join against get_categories) and omitted
+        categories with no budget entirely (making "unbudgeted" indistinguishable
+        from "not looked up"). Its description also claimed it returned "budget
+        amounts and actuals" when it returned none. Description in
+        capabilities/readCapabilities.ts now states plainly that it does NOT
+        return actual spending. Satisfies SEC-P032, SEC-P033, REQ-P019.
+        Regression coverage: chatbotDataService.getBudgetsForTool.test.ts —
+        also the seed eval case, REQ-L062.
+
+    - id: "0.2"
+      task: Lock the §7.3 output-rendering invariant with a test
+      status: completed
+      details: |
+        frontend/src/components/chat/ChatMessageBubble.security.test.tsx,
+        mutation-verified. Asserts the sanitizer is present, the allowlist is
+        not widened, and `img` stays absent (SEC-P023, SEC-P025).
+
+phase_1_foundations:
+  status: completed
+  description: |
+    Tier and dataClass in the registry; tool definitions derived from it; plan
+    cards with per-row toggles; split cost caps; structured trace.
+
+    Exit criterion met: the two pre-existing actions run unchanged on the new
+    machinery, proven by the pre-existing chatActions.security.test.ts suite
+    passing against the rewritten confirm path.
+
+    Phase 1 also delivered work beyond its original scope — the Business
+    Workspace route guard, execution grants, the SEC-P010 coverage rule, the
+    SEC-P024 link amendment, the 5-series model move, cost-accounting
+    completeness, and all of Agent Learnings Phase 1.
+  tasks:
+    - id: "1.1"
+      task: Add tier and dataClass to the capability registry with fail-fast registration
+      status: completed
+      details: |
+        chatActions/tiers.ts holds T2_PERMITTED_DATA_CLASSES. Registration throws
+        on duplicate actionId, missing tier, missing dataClass, or a T2
+        declaration whose dataClass is not permitted (REQ-P001, REQ-P014,
+        SEC-P003). REQ-P015's hardcoded-T2-list test asserts the set is empty
+        today, so the first T2 promotion must edit it.
+
+    - id: "1.2"
+      task: Derive tool definitions from the registry
+      status: completed
+      details: |
+        capabilities/readCapabilities.ts pairs each read tool's definition with
+        its executor; buildChatbotTools() derives the array (REQ-P010). Write
+        actions stay in the chat action registry and are never exposed as tools —
+        they reach the model only via propose_action, whose actionId enum is
+        derived from listChatActionIds by buildProposeActionTool(). Boot
+        assertion in app.ts (D1, D2).
+
+    - id: "1.3"
+      task: Plan cards — 1..N rows under one proposal
+      status: completed
+      details: |
+        shared/types: ProposalRow {rowId, actionId, label, params,
+        displaySummary, displayFields, currentValues?}; ActionProposal carries
+        rows[]; ActionConfirmRequest carries the selected rows; ActionRowResult
+        and ActionConfirmResponse report per-row outcomes.
+        Server-side row construction in chatActions/proposalRows.ts, capped at
+        MAX_PROPOSAL_ROWS = 100. Row labels always come from the registry
+        definition, never from model input. describeCurrent is wrapped in
+        try/catch so a hook failure degrades to "no comparison" rather than
+        failing the proposal.
+        SEC-A007 preserved: one proposal per conversation, single-use nonce,
+        15-minute TTL, atomic supersession all unchanged.
+
+    - id: "1.4"
+      task: Enforce SEC-P010 as display coverage
+      status: completed
+      details: |
+        findUndisplayedParams in proposalRows.ts rejects any defined param with
+        no matching displayField. Also rejects non-array displayFields,
+        empty/whitespace values (they render as nothing), duplicate keys (one
+        silently disappears), and an empty field list. See D3.
+        Coverage: proposalRows.test.ts, planCards.security.test.ts.
+
+    - id: "1.5"
+      task: Execution grants and the call-site scan
+      status: completed
+      details: |
+        proposalStore's consume result returns one ExecutionGrant per row, keyed
+        by rowId. executionGrantCallSites.test.ts scans production source and
+        fails if anything outside proposalStore mints a grant or calls an action
+        handler directly (REQ-P002). See D4.
+
+    - id: "1.6"
+      task: Rewrite the confirm path for batches
+      status: completed
+      details: |
+        routes/chatbot.ts: resolve selection -> rejectBatch helper -> validate
+        ALL rows into a plan[] -> execute in order. Every row is re-validated by
+        its own Zod schema at confirm time, as edited (REQ-P024). The audit log
+        records step.grant.familyId, not the JWT's, so the logged scope is the
+        one execution actually ran under. Partial-failure semantics per D9; the
+        response names the failing row and the count applied, and the frontend
+        surfaces that body verbatim instead of axios's "Request failed with
+        status code 500". The card then withdraws Confirm and Edit, because the
+        nonce is spent whether or not execution succeeded.
+
+    - id: "1.7"
+      task: Plan-card UI — per-row checkboxes, grouping, confirm count
+      status: completed
+      details: |
+        ActionCard.tsx (~502 LOC) with ActionCardRow.tsx extracted as a
+        collaborator before the budget bit. Per-row checkboxes (REQ-P021);
+        countByType / groupByType keyed on actionId with per-group select-all
+        past PROPOSAL_ROW_GROUPING_THRESHOLD = 25 (SEC-P012, D8); "Apply N
+        changes" derived from checked rows at click time (SEC-P013).
+        currentFor() pairs a proposed value with the current value it replaces,
+        struck through (SEC-P011) — both shipped actions are creates and
+        populate nothing, so the first real implementers are the Phase 3 update
+        actions.
+        Coverage: ActionCard.plan.test.tsx.
+
+    - id: "1.8"
+      task: Split cost caps by workload class
+      status: completed
+      details: |
+        chatbotCostTracker.ts: interactive $20/mo + background $5/mo, mutex-
+        guarded, per workspace x class (REQ-P050-P053). canAffordBatch
+        implements the REQ-P055 pre-flight so a sweep that cannot finish never
+        starts. Storage key decision in D5. Confirming a pending card performs
+        no LLM call, so an exhausted cap never strands a valid card (SEC-A020).
+
+    - id: "1.9"
+      task: Structured trace, always on
+      status: completed
+      details: |
+        agentTraceStore.ts, wired into ChatbotService. Per-family JSON at
+        ai_traces_{familyId} — a narrow appender over one namespace, not a
+        general write capability handed to the chatbot. Retention applied on
+        each write rather than by a sweep: 30 days, hard cap of 1000 traces per
+        family, pinned traces evicted last (REQ-P063). Result truncation per D6.
+        Attachments recorded as MIME type and byte count only (SEC-P041).
+
+    - id: "1.10"
+      task: Business Workspace AI refusal
+      status: completed
+      details: |
+        refuseBusinessWorkspace in routes/chatbot.ts 403s all five AI routes
+        when the JWT's active family is a business workspace (REQ-P016, §11).
+        The frontend also hides the chat surface and buildChatbotTools takes an
+        aiEnabled flag, but the route guard is the enforcement point — a flag
+        nobody passes protects nothing.
+        This closed a live exposure, not just a policy gap: a business-workspace
+        token could read client royalty transactions through
+        get_spending_by_category.
+        Coverage: businessWorkspaceAi.security.test.ts, mutation-verified.
+
+    - id: "1.11"
+      task: Amend SEC-P024 — external links clickable with host disclosure
+      status: completed
+      details: |
+        ChatMessageBubble.tsx: hostForDisclosure(href, linkText) and
+        textOf(children); the anchor renderer emits rel="noopener noreferrer
+        nofollow" plus a dimmed (host) when the link text does not already
+        contain the host. Locked by ChatMessageBubble.security.test.tsx —
+        deleting those tests removes the basis on which the amendment was
+        accepted.
+
+    - id: "1.12"
+      task: Move to the 5-series models
+      status: completed
+      details: |
+        claude-sonnet-5 and claude-opus-5 across chatbotService,
+        categorizationService, amazonCategorizerAdapter and amazonPdfParser;
+        Haiku 4.5 is still current and stays pinned to its dated build
+        (REQ-P056). All three verified against the Messages API, including a
+        multi-turn tool loop on Opus 5 — whose responses now lead with a
+        thinking block, which the loop tolerates because it selects blocks by
+        type rather than by position.
+
+    - id: "1.13"
+      task: Close the two cost undercounts
+      status: completed
+      details: |
+        Both were the "quietly too small" kind a cap cannot survive.
+        (1) usage.input_tokens excludes cache reads AND writes, so the
+        deliberately-cached prefix (REQ-P017) was billed by Anthropic and
+        recorded here as zero — worst on the short-burst pattern this family
+        actually uses, since a cache write costs 1.25x uncached input. Added
+        CACHE_WRITE_5M_MULTIPLIER = 1.25, CACHE_READ_MULTIPLIER = 0.1,
+        CacheTokenUsage and cacheCost(); recordUsage and estimateCost take an
+        optional trailing cache argument; the loop threads
+        totalCacheWriteTokens / totalCacheReadTokens.
+        (2) Usage was recorded only on the success path, so a tool loop that ran
+        to its 10-iteration limit or a request that timed out after several
+        Claude calls moved the monthly total by $0. The catch block now records
+        tokens spent before the failure.
+        Rates verified 2026-09-13: Opus 5 $5/$25, Sonnet 5 $2/$10, Haiku 4.5
+        $1/$5 — MODEL_PRICING updated (Sonnet had moved).
+        Coverage: costTrackerCachePricing.test.ts. Postscript added to TD-012.
+      note: |
+        Opus 5 and Sonnet 5 use a newer tokenizer producing ~30% more tokens for
+        the same text, so a $20 cap buys roughly 30% fewer Opus conversations
+        than before even though the per-token price is unchanged.
+
+    - id: "1.14"
+      task: Keep chatbotService.ts under its size budget
+      status: completed
+      details: |
+        handleProposeAction and handleRecordLearning extracted into
+        services/capabilities/toolIntercepts.ts when chatbotService.ts reached
+        779 of its 800-LOC budget. Types: ToolMessageResult (tool_error |
+        tool_ok) and InterceptResult (ToolMessageResult | {kind: 'proposal'}).
+        chatbotService.ts now ~740 LOC.
+
+phase_2_read_coverage:
+  status: not_started
+  description: |
+    Task, trip, and project read tools. Read coverage is the larger near-term
+    win: the assistant currently cannot see two-thirds of the app, and a
+    planner that cannot see the board cannot propose good moves.
+    Exit: the assistant can answer "what's on our plate this weekend?"
+  tasks:
+    - id: "2.1"
+      task: Task read tools — open, assigned, overdue, snoozed
+      status: pending
+      details: |
+        Highest-value missing read in the app; create_task currently writes
+        blind. Must return resolved assignee names alongside IDs (SEC-P032) and
+        distinguish "no value set" from "no data returned" (SEC-P033).
+
+    - id: "2.2"
+      task: Trip read tools — trips, itineraries, stops
+      status: pending
+
+    - id: "2.3"
+      task: Project read tools — projects, line items, spending attribution
+      status: pending
+      details: |
+        Line-item actuals are non-additive: a transaction carrying two line-item
+        tags counts fully toward both, so the sum can exceed totalSpent. The
+        tool result must omit a total for that column and return the
+        Unattributed remainder instead, so the model is never in a position to
+        sum it (§9.4, PROJECTS-BRD §5.5.5).
+
+    - id: "2.4"
+      task: Re-validate the prompt-cache breakpoint against the grown tool list
+      status: pending
+      details: |
+        Phase 2 takes the tool count from 10 toward ~20. REQ-P018's progressive
+        disclosure triggers on observed misselection, not on the count alone —
+        measure before optimizing.
+
+phase_3_confirmed_writes:
+  status: not_started
+  description: |
+    The T1 action set per BRD §9. Exit: multi-step plan cards work end to end.
+  tasks:
+    - id: "3.1"
+      task: Task write actions — update fields, subtasks, complete
+      status: pending
+      details: |
+        Complete is T1 and never T2: completion credits the leaderboard, and an
+        unattended completion silently awards points in a shared competitive
+        record. Subtasks must model "both of us" as a parent plus per-person
+        subtasks — assigneeId is deliberately single-valued.
+
+    - id: "3.2"
+      task: Trip and project write actions — add/move a stop, create a line item
+      status: pending
+      details: |
+        Stay-overlap validation runs server-side via tripHelpers.ts, never in
+        the tool.
+
+    - id: "3.3"
+      task: Transaction write actions — split, hide/unhide, rules, budget amounts
+      status: pending
+      details: |
+        All T1. Auto-categorization rules are forward-acting (one write changes
+        all future categorization) and are never T2. Budget amounts are excluded
+        from T2 by SEC-P003.
+
+    - id: "3.4"
+      task: First describeCurrent implementations
+      status: pending
+      details: |
+        SEC-P011's before/after display has no populated implementers yet —
+        both shipped actions are creates. The Phase 3 update actions are the
+        first.
+
+    - id: "3.5"
+      task: Semantic validation at confirm time
+      status: pending
+      details: |
+        SEC-P030: resolve every model-supplied identifier against live data —
+        category exists and is not orphaned (stored categoryIds are known to go
+        orphaned in this codebase), assignee is a family member, trip/project
+        belongs to the family, transaction is not removed.
+
+    - id: "3.6"
+      task: Answer Q-P03 with a real 40-row card
+      status: pending
+      details: |
+        Does the 25-row legibility threshold hold on mobile? Unanswerable until
+        a real recategorization card exists to look at.
+
+phase_4_activity_log_and_undo:
+  status: not_started
+  description: |
+    Durable undo handles, user-facing activity log, bulk undo. Exit: every AI
+    write is visible and reversible.
+
+    This phase gates Phase 5 deliberately — SEC-P001 (one-click reversibility)
+    is unenforceable until undo exists, so unattended writes cannot ship before
+    the thing that makes them survivable.
+  tasks:
+    - id: "4.1"
+      task: Durable undo handles recording prior state per affected record
+      status: pending
+      details: |
+        REQ-P025-P027. Undo must be idempotent and degrade safely: a record
+        modified after the batch is skipped and reported, never clobbered.
+        This is also what closes D9's remaining REQ-P023 gap — there is no
+        rollback to perform until prior state is recorded.
+
+    - id: "4.2"
+      task: User-facing activity log with bulk undo
+      status: pending
+      details: |
+        REQ-P037-P039. Shows when, which automation or conversation, what
+        changed (before -> after), and an undo control; supports bulk undo
+        across a batch and a time range. The existing auditLog.ts writes to
+        CloudWatch and is not surfaced in UI — this is where that changes.
+        Supersedes D-14 of the Chat Actions BRD.
+
+    - id: "4.3"
+      task: Persist the proposal store
+      status: pending
+      details: |
+        REQ-P028 / TD-030. The in-memory Map is acceptable for
+        conversation-scoped cards on a single PM2 process; it is not acceptable
+        for a queue a background agent writes to and a human reviews hours
+        later. Must land before Phase 5.
+
+phase_5_unattended_tier:
+  status: not_started
+  description: |
+    Standing-consent settings, caps, kill switch. First T2 automation is
+    transaction categorization. Exit: an automation can be enabled, produces
+    marked writes, and is bulk-undoable.
+  tasks:
+    - id: "5.1"
+      task: Per-automation standing consent
+      status: pending
+      details: |
+        REQ-P030-P033. Off by default, plain-language copy, attributed enable/
+        disable, a single global kill switch independent of per-automation
+        toggles, and no queued work executing after a toggle flips off.
+        There is deliberately no global "let the AI act" switch.
+
+    - id: "5.2"
+      task: Rate and batch caps per automation
+      status: pending
+      details: |
+        REQ-P034-P036. Exceeding a cap disables the automation and notifies
+        rather than truncating or continuing. Runs must be idempotent with
+        respect to their trigger.
+
+    - id: "5.3"
+      task: First T2 automation — transaction categorization on data arrival
+      status: pending
+      details: |
+        Triggered post-Plaid-sync rather than on a schedule (Q-P04): it bounds
+        volume to what actually changed and makes idempotency natural. Builds on
+        AI-CATEGORIZATION-BRD. Adding it requires editing the REQ-P015 hardcoded
+        T2 list, which is the point.
+
+    - id: "5.4"
+      task: Per-capability model selection in the registry
+      status: pending
+      details: |
+        REQ-P054. Neither ReadCapability nor ChatActionDefinition carries a
+        model field today; every model is hardcoded at its call site
+        (chatbotService, categorizationService, both Amazon adapters). Nothing
+        depends on it until a background workload exists, which is why it lands
+        here rather than in Phase 1.
+
+phase_6_proactive_reads:
+  status: not_started
+  description: |
+    Scheduled digests and insight generation. May queue proposals for later
+    approval; never writes. Exit: the background budget holds and chat is never
+    starved.
+  tasks:
+    - id: "6.1"
+      task: Scheduled digest and insight generation
+      status: pending
+
+    - id: "6.2"
+      task: Queued proposals reviewable hours later
+      status: pending
+      details: |
+        Depends on 4.3 — an in-memory nonce store cannot hold a proposal across
+        a restart, let alone across a review delay.
+
+open_questions:
+  - id: Q-P03
+    question: Does the plan-card legibility threshold (25 rows) hold in practice on mobile?
+    status: open
+    plan: Validate during Phase 3 with a real 40-row recategorization (task 3.6).
+
+deferred_and_tracked_elsewhere:
+  - TD-029 — agent learnings have no redaction pass
+  - TD-030 — the proposal store is in-memory (REQ-P028, task 4.3)
+  - TD-012 — carries a postscript on the caching-caused cost undercount (task 1.13)

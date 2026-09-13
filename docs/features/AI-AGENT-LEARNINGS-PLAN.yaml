@@ -1,0 +1,281 @@
+# =============================================================================
+# Agent Learnings — Implementation Plan
+# =============================================================================
+# BRD: docs/features/AI-AGENT-LEARNINGS-BRD.md
+# Parent plan: docs/features/AI-CAPABILITY-PLATFORM-PLAN.yaml
+# Status: Phase 1 complete; Phase 2 not started
+# Last Updated: 2026-09-13
+# =============================================================================
+
+overview:
+  description: |
+    How the learnings collection described in the BRD is being built.
+
+    The BRD states the split that makes the feature honest: the agent writes
+    capability gaps (it knows its own tool list with certainty), and users flag
+    quality incidents (an agent asked why it was wrong produces a confident
+    account of a computation it cannot observe). This plan records the
+    mechanisms chosen to enforce that split and the order the work ships in.
+
+    Phase 1 shipped as part of AI Capability Platform Phase 1 and is deployed.
+
+  key_files:
+    brd: docs/features/AI-AGENT-LEARNINGS-BRD.md
+    platform_brd: docs/features/AI-CAPABILITY-PLATFORM-BRD.md
+    platform_plan: docs/features/AI-CAPABILITY-PLATFORM-PLAN.yaml
+    store: backend/src/services/agentLearningsStore.ts
+    tool: backend/src/services/capabilities/platformTools.ts
+    intercept: backend/src/services/capabilities/toolIntercepts.ts
+    trace_store: backend/src/services/agentTraceStore.ts
+    notice_ui: frontend/src/components/chat/ChatMessageBubble.tsx
+    shared_types: shared/types/index.ts
+
+decisions:
+  - id: D1
+    date: 2026-09-13
+    decision: |
+      REQ-L003 is enforced by omitting `kind` from the record_learning tool
+      schema entirely, and by the store exposing recordCapabilityGap rather
+      than a generic record(kind, ...).
+    rationale: |
+      D-L01 says the agent must not be able to express a quality incident. A
+      schema that accepts kind and validates it to one value is a runtime check
+      on a field the model can still reason about; a schema with no such field
+      gives it nothing to set. Both are asserted in
+      agentLearningsToolSurface.test.ts.
+
+  - id: D2
+    date: 2026-09-13
+    decision: |
+      Rate caps apply to NEW records only. A dedupe into an existing open gap is
+      free.
+    rationale: |
+      Found while building. Charging dedupes against the cap would stop a
+      genuinely recurring gap from counting exactly when demand for it is
+      highest — and occurrenceCount is the entire demand signal the feature
+      exists to produce.
+
+  - id: D3
+    date: 2026-09-13
+    decision: |
+      ChatMessage carries learningNotices (plural), not a single notice.
+    rationale: |
+      A turn can record more than one gap within the iteration limit. A
+      singular field silently dropped all but the last, which is the same
+      class of bug as an unpinned trace: a record written and then lost.
+
+  - id: D4
+    date: 2026-09-13
+    decision: |
+      Evidence pinning is set at trace-write time from whether the turn recorded
+      a learning (platform plan D7), not by a pin() call from inside the loop.
+    rationale: |
+      The trace does not exist yet when the learning is written, so a pin() call
+      there is a no-op. Without this, every learning older than the 30-day trace
+      window would lose its evidence.
+
+phase_1_capture:
+  status: completed
+  description: |
+    Store, record_learning tool with enumerated capabilityKey, inline notice,
+    dedup, rate caps. Delivered alongside AI Capability Platform Phase 1, which
+    it depends on — traceIds is what makes a learning actionable, so the
+    structured trace (platform §10.1) had to exist first.
+
+    Phase 1 also delivered more than its original scope: REQ-L032 retention,
+    REQ-L040/L041 dispositioning, REQ-L024 occurrence ordering, and REQ-P063
+    evidence pinning.
+  tasks:
+    - id: "1.1"
+      task: Learnings store
+      status: completed
+      details: |
+        backend/src/services/agentLearningsStore.ts, persisting to
+        agent_learnings_{familyId} in the existing JSON storage model
+        (REQ-L030). Never written into the repo (REQ-L031, D-L05) — the repo
+        pushes to GitHub, which is the same reason SEC-L003 rules out
+        submit_github_issue. Retention per REQ-L032: open and accepted kept
+        indefinitely; rejected and shipped kept 180 days, then pruned with their
+        evidence bundles.
+
+    - id: "1.2"
+      task: record_learning tool and intercept
+      status: completed
+      details: |
+        RECORD_LEARNING_TOOL in services/capabilities/platformTools.ts;
+        handleRecordLearning in services/capabilities/toolIntercepts.ts —
+        extracted out of chatbotService.ts when that file neared its 800-LOC
+        budget. Autonomous: no confirmation card, no click (REQ-L001, D-L02).
+        capabilityKey is validated against a server-side enumerated list; an
+        unknown key returns a tool error so the model can self-correct within
+        the existing iteration limit (REQ-L004, REQ-L005, D-L06).
+        Schema-level enforcement of the gap-only rule per D1.
+
+    - id: "1.3"
+      task: Inline notice in the conversation
+      status: completed
+      details: |
+        Rendered in frontend/src/components/chat/ChatMessageBubble.tsx from
+        ChatMessage.learningNotices (REQ-L002, D3). Nothing is written
+        invisibly, and the notice doubles as an explanation of why the answer
+        was thin.
+
+    - id: "1.4"
+      task: Deduplication by fingerprint
+      status: completed
+      details: |
+        Fingerprint from kind + capabilityKey + a normalized summary (REQ-L020).
+        Match against an open learning increments occurrenceCount and updates
+        lastSeenAt; match against a rejected one is dropped silently; match
+        against a shipped one creates a new record, because the same gap
+        recurring after a fix is a regression and should be loud
+        (REQ-L021-L023, D-L04).
+
+    - id: "1.5"
+      task: Rate caps
+      status: completed
+      details: |
+        2 per conversation, 20 per day (Q-L01). Exceeding a cap drops the write
+        silently and logs it; it never fails the user's turn (SEC-L005,
+        SEC-L008). New records only, per D2. Revisit after a week of real use.
+
+    - id: "1.6"
+      task: Occurrence ordering and dispositioning
+      status: completed
+      details: |
+        listOpen orders by occurrenceCount (REQ-L024). Status transitions are
+        maintainer-only and not exposed in the family-facing app (REQ-L040);
+        accepting or rejecting requires a resolution note, because a rejected
+        learning with no reason is indistinguishable from an unreviewed one six
+        months later (REQ-L041).
+
+    - id: "1.7"
+      task: Evidence pinning
+      status: completed
+      details: |
+        The trace behind a learning now survives the 30-day trace window
+        (REQ-P063). See D4. Covered end-to-end by
+        learningEvidence.security.test.ts, mutation-verified.
+
+    - id: "1.8"
+      task: No-read guard
+      status: completed
+      details: |
+        SEC-L006 / D-L03: a learning shaped by injected content, fed back into
+        the agent's context, is persistent injection — a payload with durable
+        storage. The write path is append-only from the agent's side and there
+        is no read tool. Guarded by a test asserting record_learning is the only
+        learning-related tool in the surface.
+
+phase_2_user_flags:
+  status: not_started
+  description: |
+    User flag control, evidence bundle capture, flagged-turn marking. Depends on
+    incident bundles (platform §10.2), which do not exist yet.
+  tasks:
+    - id: "2.1"
+      task: Per-turn "this is wrong" control
+      status: pending
+      details: |
+        REQ-L010, REQ-L013. Must never invoke the LLM — it is a capture action,
+        not a conversation, so it costs nothing and cannot fail on a spent
+        budget.
+
+    - id: "2.2"
+      task: Incident bundle capture
+      status: pending
+      details: |
+        REQ-L011: the verbatim transcript turn, the full tool-call ledger with
+        raw results, model, token counts, stop reason. Must go to a dedicated
+        store, not the general CloudWatch stream (SEC-P040), and must exclude
+        credentials, Plaid tokens, the encryption key, and attachment bytes or
+        extracted text (SEC-L004, SEC-P041).
+
+    - id: "2.3"
+      task: Optional user note, stored distinctly
+      status: pending
+      details: |
+        REQ-L012. userNote is the user's; it must never be merged into or
+        confused with model-authored `detail` (SEC-L002).
+
+    - id: "2.4"
+      task: Visible flagged-turn marking
+      status: pending
+      details: REQ-L014 — the user needs to see that the flag registered.
+
+phase_3_evaluate_learnings_skill:
+  status: not_started
+  description: |
+    The /evaluate-learnings skill, with provenance rendering and tool-ledger
+    display. Reads local app data directly, consistent with the existing
+    local-data workflow in AWS-LOCAL-SETUP.md (Q-L03).
+  tasks:
+    - id: "3.1"
+      task: Read open learnings grouped by capabilityKey, ordered by occurrenceCount
+      status: pending
+      details: REQ-L050. Open is the only status the skill operates on.
+
+    - id: "3.2"
+      task: Provenance rendering
+      status: pending
+      details: |
+        REQ-L051, SEC-L002, SEC-P051: agent-written vs user-flagged, which
+        conversation, which traces, occurrence count, first and last seen.
+        Content is rendered as data — a maintainer must always know whether a
+        human or a model wrote what they are reading.
+
+    - id: "3.3"
+      task: Tool-ledger display for quality incidents
+      status: pending
+      details: |
+        REQ-L052. The ledger — what the model was actually handed — is where
+        causes are found; the prose is where narratives are.
+
+    - id: "3.4"
+      task: Propose disposition and implementation, never apply
+      status: pending
+      details: |
+        REQ-L053, SEC-L001 / SEC-P050. A learning is model-authored text a human
+        later acts on, which makes it an injection path through the maintainer.
+        The review step is the control and only works if nothing bypasses it.
+
+phase_4_eval_corpus:
+  status: not_started
+  description: |
+    Conventions for turning dispositioned incidents into permanent eval cases,
+    and backfill. This is the durable value of the feature: each real failure
+    becomes a test that keeps it fixed.
+  tasks:
+    - id: "4.1"
+      task: Eval case conventions
+      status: pending
+      details: |
+        REQ-L060: each case is the tool results that were returned plus the
+        assertion distinguishing a correct answer from the observed wrong one.
+        REQ-L061: scrub real financial values, since tests do live in the repo —
+        preserve the shape that caused the failure, not the amounts.
+
+    - id: "4.2"
+      task: Backfill from dispositioned incidents
+      status: pending
+      details: |
+        The Subaru incident is the seed case; its coverage already exists in
+        chatbotDataService.getBudgetsForTool.test.ts (REQ-L062).
+
+open_questions:
+  - id: Q-L02
+    question: Should the family see a list of open learnings, or only the inline notices?
+    status: open
+    plan: |
+      Inline notices only in v1. A visible backlog invites the users to manage
+      it, which is the maintainer's job.
+
+  - id: Q-L04
+    question: Should a user flag be possible on an action card outcome, not just a message?
+    status: open
+    plan: |
+      Deferred to Phase 2. Cards are lower-volume and their audit log already
+      records params.
+
+deferred_and_tracked_elsewhere:
+  - TD-029 — learnings have no redaction pass (relates to SEC-L004)

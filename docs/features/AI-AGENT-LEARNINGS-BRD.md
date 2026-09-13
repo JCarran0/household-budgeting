@@ -1,10 +1,13 @@
 # Agent Learnings — Business Requirements Document
 
-**Status:** Phase 1 delivered
 **Author:** Jared Carrano
 **Date:** 2026-09-13
-**Version:** 1.1
+**Version:** 2.0
 **Parent:** [AI-CAPABILITY-PLATFORM-BRD.md](AI-CAPABILITY-PLATFORM-BRD.md) §15
+**Plan:** [AI-AGENT-LEARNINGS-PLAN.yaml](AI-AGENT-LEARNINGS-PLAN.yaml)
+
+> This document states what the system must do and why. How it is built, what
+> has shipped, and in what order lives in the plan.
 
 ---
 
@@ -61,7 +64,7 @@ The agent records a gap through a `record_learning` tool when it cannot do somet
 |----|-------------|
 | REQ-L001 | The agent may write a learning autonomously — no confirmation card, no click. |
 | REQ-L002 | Every autonomous write must surface an inline notice in the conversation ("Noted — I can't see your tasks yet"). Nothing is written invisibly, and the notice doubles as an explanation of why the answer was thin. |
-| REQ-L003 | The `record_learning` tool schema must accept **only** `kind: 'capability_gap'`. The tool is structurally incapable of expressing a quality incident, so D-L01 is enforced by the schema rather than by prompt instruction. **Implemented** by omitting `kind` from the tool schema entirely — the model has no field to set — and by the store exposing `recordCapabilityGap` rather than a generic `record(kind, …)`. Both are asserted in `agentLearningsToolSurface.test.ts`. |
+| REQ-L003 | The `record_learning` tool schema must accept **only** `kind: 'capability_gap'`. The tool must be structurally incapable of expressing a quality incident, so D-L01 is enforced by the schema rather than by prompt instruction — the model is given no field to set, rather than given one and validated. A runtime check on a field the model can see is a weaker control than a schema in which the concept does not exist. |
 | REQ-L004 | A learning must carry a `capabilityKey` — a coarse, enumerated slug (`tasks.read`, `trips.read`, `budgets.write`) — chosen from a server-side list. Free-text-only records cannot be clustered or counted. |
 | REQ-L005 | A `capabilityKey` not in the enumerated list must be rejected at the edge and returned to the model as a tool error so it can self-correct within the existing iteration limit. |
 | REQ-L006 | The agent must not record a gap for a capability it possesses but failed to use. That is a quality incident, and the user path handles it. |
@@ -163,7 +166,7 @@ The durable value of this feature is not the backlog — it is that each real fa
 |----|-------------|
 | REQ-L060 | Each dispositioned quality incident should yield a reproducible case: the tool results that were returned, and the assertion that distinguishes a correct answer from the observed wrong one. |
 | REQ-L061 | Cases derived from incidents must be scrubbed of real financial values before entering the test suite, since tests do live in the repository (REQ-L031). Preserve the *shape* that caused the failure, not the amounts. |
-| REQ-L062 | The Subaru incident is the seed case; its coverage already exists in `chatbotDataService.getBudgetsForTool.test.ts`. |
+| REQ-L062 | The Subaru incident is the seed case; its coverage already exists as a regression test on the budget read tool. |
 
 ---
 
@@ -176,24 +179,22 @@ The durable value of this feature is not the backlog — it is that each real fa
 | SEC-L003 | Learnings and evidence bundles must never be routed to GitHub or any external service, despite `submit_github_issue` already existing as a convenient path. Evidence contains family financial transcripts. |
 | SEC-L004 | Learnings must never contain credentials, Plaid tokens, the encryption key, attachment bytes, or extracted attachment text (preserves SEC-A014, SEC-A016). |
 | SEC-L005 | Agent-written learnings are rate-capped per conversation and per day. Exceeding a cap drops the write silently and logs it; it must never fail the user's turn. |
-| SEC-L006 | **The agent must never read the learnings collection.** A learning shaped by injected content, if later fed back into the agent's context, becomes persistent injection — a prompt-injection payload with durable storage. The write path is append-only from the agent's side and there is no corresponding read tool. **Guarded by a test** asserting `record_learning` is the only learning-related tool in the surface. |
+| SEC-L006 | **The agent must never read the learnings collection.** A learning shaped by injected content, if later fed back into the agent's context, becomes persistent injection — a prompt-injection payload with durable storage. The write path is append-only from the agent's side and there is no corresponding read tool. A test must assert that the learning write tool is the only learning-related tool in the surface, so a read tool cannot be added without that assertion failing. |
 | SEC-L007 | Learnings are family-scoped and subject to the same authorization as the underlying data. Maintainer review happens through local tooling against local data, not through a privileged in-app role. |
 | SEC-L008 | Recording a learning must never block, delay, or fail a user's turn. A failed write is logged and dropped. |
 
 ---
 
-## 7. Phasing
+## 7. Delivery Constraints
 
-| Phase | Scope |
-|-------|-------|
-| ~~**1**~~ | ~~Store, `record_learning` tool with enumerated `capabilityKey`, inline notice, dedup, rate caps.~~ **Done** — store in `backend/src/services/agentLearningsStore.ts`; tool `RECORD_LEARNING_TOOL` in `services/capabilities/platformTools.ts`; intercept `handleRecordLearning` in `services/capabilities/toolIntercepts.ts` (extracted out of `chatbotService.ts` when that file neared its size budget); notice in `frontend/src/components/chat/ChatMessageBubble.tsx`. Phase 1 also delivered more than listed: REQ-L032 resolved-item retention, REQ-L040/L041 dispositioning with a mandatory resolution note, REQ-L024 occurrence ordering in `listOpen`, and REQ-P063 evidence pinning (the trace behind a learning now survives the 30-day trace window). |
-| **2** | User flag control, evidence bundle capture, flagged-turn marking. |
-| **3** | `/evaluate-learnings` skill with provenance rendering and tool-ledger display. |
-| **4** | Eval corpus conventions; backfill from dispositioned incidents. |
+The schedule — which phase is where and what has shipped — lives in
+[AI-AGENT-LEARNINGS-PLAN.yaml](AI-AGENT-LEARNINGS-PLAN.yaml). Two ordering
+dependencies are normative:
 
-Phase 1 depends on the structured trace (platform §10.1) already existing, since `traceIds` is what makes a learning actionable. Phase 2 depends on incident bundles (platform §10.2).
-
----
+| ID | Constraint |
+|----|------------|
+| REQ-L070 | Agent-written capability gaps depend on the structured trace (platform §10.1) already existing. `traceIds` is what makes a learning actionable; a learning with no evidence behind it is a sentence, not a report. |
+| REQ-L071 | User-flagged quality incidents depend on incident bundles (platform §10.2). The flag path captures evidence and nothing else, so it cannot ship before the thing it captures. |
 
 ## 8. Decisions
 
@@ -210,14 +211,12 @@ Phase 1 depends on the structured trace (platform §10.1) already existing, sinc
 
 ## 9. Open Questions
 
-| ID | Question | Proposed default |
-|----|----------|------------------|
-| ~~Q-L01~~ | ~~Rate cap values for agent-written learnings.~~ | **Implemented** at 2 per conversation, 20 per day. Revisit after a week of real use. One refinement found while building: caps apply to **new** records only. A dedupe into an existing gap is free, because otherwise a genuinely recurring gap would stop counting exactly when demand for it is highest — and `occurrenceCount` is the whole demand signal. |
+| ID | Question | Resolution |
+|----|----------|------------|
+| ~~Q-L01~~ | ~~Rate cap values for agent-written learnings.~~ | **Decided.** 2 per conversation, 20 per day; revisit after real use. One refinement is normative rather than incidental: caps apply to **new** records only. A dedupe into an existing open gap is free, because charging it would stop a genuinely recurring gap from counting exactly when demand for it is highest — and `occurrenceCount` is the entire demand signal this feature exists to produce. |
 | Q-L02 | Should the family see a list of open learnings, or only the inline notices? | Inline notices only in v1. A visible backlog invites the users to manage it, which is the maintainer's job. |
 | Q-L03 | Does `/evaluate-learnings` read app storage directly, or through a maintainer-only endpoint? | Directly against local data, consistent with the existing local-data workflow in AWS-LOCAL-SETUP.md. |
-| Q-L04 | Should a user flag also be possible on an action card outcome, not just a message? | Defer to Phase 2; cards are lower-volume and their audit log already records params. |
-
----
+| Q-L04 | Should a user flag also be possible on an action card outcome, not just a message? | Deferred. Cards are lower-volume and their audit log already records params. |
 
 ## 10. References
 

