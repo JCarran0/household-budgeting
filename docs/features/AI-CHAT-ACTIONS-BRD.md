@@ -5,6 +5,12 @@
 **Date:** 2026-04-17
 **Version:** 1.0
 
+> **Partially superseded** by [AI-CAPABILITY-PLATFORM-BRD.md](AI-CAPABILITY-PLATFORM-BRD.md),
+> which generalizes this mechanism into a tiered capability platform. SEC-A007 is
+> **narrowed, not removed** (see below); D-14 is superseded by its §6.3. Every
+> other SEC-A requirement is unchanged and remains binding — SEC-A004, SEC-A008,
+> A009, A012, A014, A016 and A020 are all extended rather than replaced.
+
 ---
 
 ## 1. Overview
@@ -202,7 +208,7 @@ These requirements **extend** the existing chatbot security requirements (AI-CHA
 |---|-------------|
 | SEC-A005 | Every proposal must include a single-use cryptographically random nonce. Confirmation requests without a valid, unexpired, unused nonce must be rejected. |
 | SEC-A006 | Nonces must expire within 15 minutes of issuance. |
-| SEC-A007 | Only one action proposal may be active per conversation at a time. When a new proposal is issued, any prior unused nonce must be invalidated. |
+| SEC-A007 | Only one action proposal may be active per conversation at a time. When a new proposal is issued, any prior unused nonce must be invalidated. **Narrowed by AI-CAPABILITY-PLATFORM-BRD §5.3:** a single proposal may now carry 1..N individually de-selectable rows (a "plan card"). The one-active-*proposal* invariant, the single-use nonce, the 15-minute TTL and atomic supersession all continue to hold unchanged — which is the main reason plan cards were chosen over issuing multiple concurrent cards. |
 | SEC-A008 | The frontend must display every field that the action will write. The confirmation UI must not hide or truncate writable fields. If a field is unrenderable, the action must be rejected. |
 
 ### 5.3 Prompt Injection Mitigation
@@ -411,7 +417,7 @@ Comfortable within the $20/month cap. Vision is the primary cost driver; refinem
 | D-11 | **Edit mode scope** — Edit opens the full action form (all fields for the action's schema are editable/addable), not just fields the LLM proposed. Collapsed card preview still shows only LLM-filled fields to avoid empty-row clutter. Rationale: constrained edit would force users to cancel and navigate to the full page for common cases like adding an assignee, which defeats the purpose of the card. Server-side Zod validation is the same regardless of edit surface. | Resolved |
 | D-12 | **Reasoning disclosure** — The `reasoning` field is rendered as a collapsed "Why?" link on the action card, expanding to a muted one-liner on click. Not visible by default. Rationale: keeps cards uncluttered when proposals are obvious, while preserving the value at Dismiss decision-time. Also keeps the LLM honest — if reasoning were always visible, the LLM might learn to write persuasive pitches rather than plain justifications. | Resolved |
 | D-13 | **Pending-card acknowledgment** — When a card is pending and the user's next message is not a clear refinement, the LLM's system prompt instructs it to explicitly acknowledge the pending card's state in its response (e.g., "Your pending task proposal still reads: *Title, due Date*. Confirm, edit, or tell me to change it."). No backend timers, drift detection, or auto-expire logic beyond the existing 15-minute nonce TTL. Rationale: the real failure mode is user confusion, not security; a system-prompt instruction is cheap and self-documenting. | Resolved |
-| D-14 | **Cross-session receipts** — Action outcomes are not persisted across chat sessions. Confirmed cards remain visible in the current conversation as receipts; on page refresh they disappear along with chat history. The Tasks page is the authoritative record for created tasks. Audit-log entries (SEC-A017) record `source: chatbot_action_card` for forensic needs but are not surfaced in UI. Rationale: preserves the chatbot's stateless-conversation mental model; double-create risk is caught by the Tasks page showing the existing task. Revisit (e.g., "created via chat" badge on task rows) when V2 adds less-visible action types like budget edits. | Resolved |
+| D-14 | **Cross-session receipts** — Action outcomes are not persisted across chat sessions. Confirmed cards remain visible in the current conversation as receipts; on page refresh they disappear along with chat history. The Tasks page is the authoritative record for created tasks. Audit-log entries (SEC-A017) record `source: chatbot_action_card` for forensic needs but are not surfaced in UI. Rationale: preserves the chatbot's stateless-conversation mental model; double-create risk is caught by the Tasks page showing the existing task. Revisit (e.g., "created via chat" badge on task rows) when V2 adds less-visible action types like budget edits. **Superseded by AI-CAPABILITY-PLATFORM-BRD §6.3 (REQ-P037–P040):** every AI-originated write must appear in a durable, user-facing activity log with before/after values and an undo control. This decision was correct while every write required a click and stayed visible in-conversation; it does not survive unattended writes. | Superseded |
 | D-15 | **GitHub-issue flow refactor** — ~~Do not refactor the existing `submit_github_issue` / `issue_confirmation` path in V1.~~ **Migrated in commit `b3ab071` (2026-04-19).** `submit_github_issue` now lives in the action registry with its own Zod schema; the bespoke `issue_confirmation` response variant, `POST /confirm-issue` route, and dedicated frontend UI are gone. Issue submissions now carry `source: chatbot_action_card` in the audit log. Original rationale preserved below for history: touching the one working intercept-and-confirm path while building a new one invites regression for no V1 benefit; explicit "migrate later" commitment avoids the two-paths-forever trap. | Resolved + Migrated |
 
 ---

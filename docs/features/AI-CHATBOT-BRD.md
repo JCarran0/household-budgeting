@@ -5,6 +5,11 @@
 **Date:** 2026-04-05
 **Version:** 1.0
 
+> **Partially superseded** by [AI-CAPABILITY-PLATFORM-BRD.md](AI-CAPABILITY-PLATFORM-BRD.md),
+> which governs the trust model across every AI surface. SEC-010's single cap is
+> superseded by its §8 (split caps by workload class). SEC-001–009 and SEC-018
+> are unchanged and remain binding.
+
 ---
 
 ## 1. Overview
@@ -82,7 +87,7 @@ These are the highest-priority requirements for this feature. Financial data acc
 
 | # | Requirement |
 |---|-------------|
-| SEC-010 | The system must enforce a **$20/month spending cap** on LLM API usage. |
+| SEC-010 | ~~The system must enforce a **$20/month spending cap** on LLM API usage.~~ **Superseded** by AI-CAPABILITY-PLATFORM-BRD §8 (REQ-P050–P056): spend is capped per *workload class*, not as a single pool — $20/month `interactive` plus a separate $5/month `background`, each with its own kill switch, so a background job can never starve interactive chat. The cap must also price cached and failed-request tokens, which a single-pool reading of this requirement did not. |
 | SEC-011 | When the spending cap is reached, the chatbot must inform the user and stop processing new messages until the next billing period. |
 | SEC-012 | The system must track token usage and estimated cost per request. |
 | SEC-013 | The system must set a `max_tokens` limit on each Claude API call (e.g., 4096) to bound per-request cost. |
