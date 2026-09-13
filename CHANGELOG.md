@@ -5,6 +5,40 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [6.3.0](https://github.com/JCarran0/household-budgeting/compare/v6.2.0...v6.3.0) (2026-09-13)
+
+
+### Features
+
+* **ai:** capture structured traces for every chatbot request ([f4fb0a2](https://github.com/JCarran0/household-budgeting/commit/f4fb0a26eb7a8c19eb63fbceb868b67731211d56))
+* **ai:** declare capability tiers in the chat action registry ([99d9e64](https://github.com/JCarran0/household-budgeting/commit/99d9e64cdaf938c57b87292e5e4919b4f21ac8b1))
+* **ai:** let the agent record its own capability gaps ([c60ef4e](https://github.com/JCarran0/household-budgeting/commit/c60ef4ee312f077023dab1a1dc275307584e4994))
+* **ai:** plan cards with per-row toggles ([3d0ddf9](https://github.com/JCarran0/household-budgeting/commit/3d0ddf94f3b0b6f5f6f9e929b3a32de4dfec2e63))
+* **ai:** split the AI spend cap by workload class ([8c2ef52](https://github.com/JCarran0/household-budgeting/commit/8c2ef521147e779d7dc1c2ab1609bef95e6529cc))
+
+
+### Bug Fixes
+
+* **chatbot:** stop get_budgets inviting fabricated budget amounts ([d313041](https://github.com/JCarran0/household-budgeting/commit/d313041f9557df1c021274ca60372e12d2f7e1f9))
+* **test:** make the attachment-logging security test actually able to fail ([250de8f](https://github.com/JCarran0/household-budgeting/commit/250de8f79e2c09c28586ba69b7df5d4d33d8c2f6))
+
+
+### Tests
+
+* **chat:** lock the chat output rendering invariant (SEC-P025) ([317039e](https://github.com/JCarran0/household-budgeting/commit/317039ee2639ba5de611e28247642e3d1aea24d2))
+
+
+### Code Refactoring
+
+* **ai:** derive chatbot tool definitions from a capability registry ([8d5850b](https://github.com/JCarran0/household-budgeting/commit/8d5850b9cc079ddd0e9cd0ce8d326248b53ef29b))
+
+
+### Documentation
+
+* **ai:** add Agent Learnings BRD ([1f79e0c](https://github.com/JCarran0/household-budgeting/commit/1f79e0c5d74a5fad9e2b3fd6f2d2d44ae71a50a4))
+* **ai:** add AI Capability Platform BRD ([9d110d7](https://github.com/JCarran0/household-budgeting/commit/9d110d76ab22913a4bbac54eea03625d93724823))
+* **ai:** record Phase 1 delivery and correct two false claims ([fdfd0d9](https://github.com/JCarran0/household-budgeting/commit/fdfd0d979fae9f9c7778baf1d7324ed4c36403d5))
+
 ## [6.2.0](https://github.com/JCarran0/household-budgeting/compare/v6.1.3...v6.2.0) (2026-09-12)
 
 
