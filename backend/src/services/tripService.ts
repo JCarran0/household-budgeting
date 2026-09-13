@@ -307,9 +307,11 @@ export class TripService {
       throw new Error('Trip not found');
     }
 
+    // Hidden transactions are excluded everywhere else (reports, auto-categorize,
+    // chatbot) and are excluded here too. This also correctly drops split parents,
+    // which are hidden on split while their children inherit the tags.
     const result = await this.transactionService.getTransactions(familyId, {
       tags: [trip.tag],
-      includeHidden: true,
     });
 
     const transactions = result.transactions ?? [];
