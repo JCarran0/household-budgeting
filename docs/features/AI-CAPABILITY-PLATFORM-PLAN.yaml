@@ -2,7 +2,7 @@
 # AI Capability Platform — Implementation Plan
 # =============================================================================
 # BRD: docs/features/AI-CAPABILITY-PLATFORM-BRD.md
-# Status: Phases 0-1 complete; Phase 2 not started
+# Status: Phases 0-2 complete; Phase 3 not started
 # Last Updated: 2026-09-13
 # =============================================================================
 
@@ -18,7 +18,7 @@ overview:
     ships in, and the implementation-level decisions that are not obvious from
     the requirement text.
 
-    Phase 0 (correctness) and Phase 1 (foundations) are complete and deployed.
+    Phases 0 (correctness), 1 (foundations) and 2 (read coverage) are complete.
     Phase 1 also absorbed the whole of Agent Learnings Phase 1 — see
     AI-AGENT-LEARNINGS-PLAN.yaml.
 
@@ -42,6 +42,12 @@ overview:
     chatbot_routes: backend/src/routes/chatbot.ts
     action_card: frontend/src/components/chat/ActionCard.tsx
     action_card_row: frontend/src/components/chat/ActionCardRow.tsx
+    budgeting_capabilities: backend/src/services/capabilities/budgetingCapabilities.ts
+    planning_capabilities: backend/src/services/capabilities/planningCapabilities.ts
+    task_reader: backend/src/services/chatbotReaders/taskReader.ts
+    trip_reader: backend/src/services/chatbotReaders/tripReader.ts
+    project_reader: backend/src/services/chatbotReaders/projectReader.ts
+    family_member_reader: backend/src/services/chatbotReaders/familyMemberReader.ts
     message_bubble: frontend/src/components/chat/ChatMessageBubble.tsx
 
   pre_existing_foundation: |
@@ -170,6 +176,49 @@ decisions:
       would fail validation writes nothing. A storage failure partway through
       still leaves earlier rows applied — there is no rollback to perform until
       REQ-P025 durable undo handles record prior state.
+
+  - id: D10
+    date: 2026-09-13
+    decision: |
+      Domain read logic lives in backend/src/services/chatbotReaders/*, composed
+      into ChatbotDataService as readonly collaborators rather than added as
+      methods.
+    rationale: |
+      Mechanically it keeps chatbotDataService.ts inside the 800-LOC budget
+      ahead of the growth rather than after it. Substantively, each domain
+      carries its own correctness landmine — night-based stays, non-exclusive
+      tags, estimate-only line items — and those are far easier to review as a
+      self-contained file with its own docblock than as three more method
+      clusters in a 700-line class. The readers receive the same
+      ReadOnlyDataService, so SEC-018's compile-time boundary extends unchanged.
+
+  - id: D11
+    date: 2026-09-13
+    decision: |
+      familyMemberReader.ts is the ONLY module AI code may use to touch the
+      `families` blob, and it selects one family by id before returning
+      anything. It exposes userId and displayName only.
+    rationale: |
+      Families are stored in a single GLOBAL blob, not a per-family key — unlike
+      every other entity the AI reads. A read tool that forgot the filter would
+      hand the model every household's roster in the deployment. Concentrating
+      that read in one narrow module with a loud docblock is the control;
+      mutation-verified against a fall-back-to-first-family bug.
+
+  - id: D12
+    date: 2026-09-13
+    decision: |
+      Tools that report tag-derived money carry an explicit boolean flag
+      (crossTripTotalsAreNotAdditive, crossProjectTotalsAreNotAdditive,
+      includesTransactionsOutsideDateRange) in the payload, AND state the same
+      rule in the tool description, AND state it in the system prompt.
+    rationale: |
+      Belt and braces, deliberately. The flag is the contract and survives
+      paraphrase; the prose is what the model actually reads first. Neither
+      alone was judged sufficient for a rule whose violation produces a
+      confident, plausible, wrong dollar figure — the Subaru failure mode.
+      BRD §9.4 was corrected in the same change: it had described non-additive
+      *line-item* actuals, a mechanism that does not exist in this app.
 
 phase_0_correctness:
   status: completed
@@ -393,42 +442,120 @@ phase_1_foundations:
         chatbotService.ts now ~740 LOC.
 
 phase_2_read_coverage:
-  status: not_started
+  status: completed
   description: |
-    Task, trip, and project read tools. Read coverage is the larger near-term
-    win: the assistant currently cannot see two-thirds of the app, and a
-    planner that cannot see the board cannot propose good moves.
-    Exit: the assistant can answer "what's on our plate this weekend?"
+    Task, trip, and project read tools. Read coverage was the larger near-term
+    win: the assistant could see money and nothing else, and a planner that
+    cannot see the board cannot propose good moves.
+
+    Exit criterion met: the assistant can answer "what's on our plate this
+    weekend?" from query_tasks rather than improvising around the gap.
+
+    Tool count went 10 -> 16, still under the REQ-P018 grouping threshold.
   tasks:
     - id: "2.1"
-      task: Task read tools — open, assigned, overdue, snoozed
-      status: pending
+      task: Task read tools — query_tasks and get_family_members
+      status: completed
       details: |
-        Highest-value missing read in the app; create_task currently writes
-        blind. Must return resolved assignee names alongside IDs (SEC-P032) and
-        distinguish "no value set" from "no data returned" (SEC-P033).
+        chatbotReaders/taskReader.ts. Filters: status, scope, assigneeId,
+        unassignedOnly, overdueOnly, dueBefore/dueAfter, includeSnoozed, tags,
+        searchQuery, limit (default 50, hard max 200).
+        Returns count (total matches) separately from the capped sample, a
+        summary computed over the FULL match set, and appliedFilters so an
+        empty result is distinguishable from a narrow filter.
+        isOverdue and isSnoozed are computed server-side so the model never does
+        date math; a done task with a past due date is not overdue.
+        Snoozed tasks are excluded by default, matching the task board — a tool
+        that disagrees with the UI about what is "on the list" is worse than no
+        tool.
+      scope_finding: |
+        TaskScope 'personal' is NOT a privacy boundary. GET /tasks returns
+        getAllTasks(familyId) with no user filter, so both household members
+        already see every personal task in the UI; the distinction governs
+        leaderboard credit only. The tool therefore exposes nothing the
+        requesting user cannot already see. Recorded in the reader's docblock
+        because the opposite reading is the natural one.
 
     - id: "2.2"
-      task: Trip read tools — trips, itineraries, stops
-      status: pending
+      task: Trip read tools — list_trips and get_trip_itinerary
+      status: completed
+      details: |
+        chatbotReaders/tripReader.ts. getItinerary returns a day-by-day agenda
+        keyed by date, each day carrying stayingAt plus that day's stops.
+        Stays are night-based (TRIP-ITINERARIES-BRD D2: endDate is the LAST
+        night), so the agenda expands a stay inclusively across every night it
+        covers and the model is told not to recompute it. An exclusive bound
+        silently loses a night; mutation-verified.
+        Stop lines normalise across the four stop types — fields that do not
+        apply are null rather than absent, and transit stops carry name=null by
+        design since they are described by their endpoints.
 
     - id: "2.3"
-      task: Project read tools — projects, line items, spending attribution
-      status: pending
+      task: Project read tools — list_projects and get_project
+      status: completed
       details: |
-        Line-item actuals are non-additive: a transaction carrying two line-item
-        tags counts fully toward both, so the sum can exceed totalSpent. The
-        tool result must omit a total for that column and return the
-        Unattributed remainder instead, so the model is never in a position to
-        sum it (§9.4, PROJECTS-BRD §5.5.5).
+        chatbotReaders/projectReader.ts. Per-category breakdown with resolved
+        names, budgeted/hasBudget, spent, and line items.
+        Within one project the category rows reconcile to totalSpent (asserted),
+        so that total is safe to state. Across projects they do not — see D12.
+        An orphaned categoryId renders as "Unknown category (<id>)" rather than
+        a bare id; this app is known to produce orphans.
+        Line items are estimate-only: PROJECTS-BRD §5.5.5 puts linking a line
+        item to a transaction out of scope, so no line item ever carries a
+        `spent` field, and a test asserts it stays that way.
 
     - id: "2.4"
-      task: Re-validate the prompt-cache breakpoint against the grown tool list
-      status: pending
+      task: Family-member resolution behind one narrow module
+      status: completed
       details: |
-        Phase 2 takes the tool count from 10 toward ~20. REQ-P018's progressive
-        disclosure triggers on observed misselection, not on the count alone —
-        measure before optimizing.
+        chatbotReaders/familyMemberReader.ts. See D11 — this is the only AI path
+        to the global `families` blob. describeAssignee() returns
+        {userId, name, unresolved} so that "unassigned" and "assigned to someone
+        no longer in the family" cannot collapse into the same output
+        (SEC-P033); both have name=null, and reporting the orphan as "nobody is
+        assigned" would be a confident false statement.
+
+    - id: "2.5"
+      task: Re-validate the prompt-cache breakpoint against the grown tool list
+      status: completed
+      details: |
+        Breakpoint still sits on the final tool and nowhere else; order is
+        stable across calls (read capabilities in registration order, then
+        platform tools). Asserted in capabilityRegistry.test.ts, which also
+        carries a tripwire that fails if the flat list passes 20 tools — when
+        it fires, the answer is REQ-P018 grouping, not a raised number.
+
+    - id: "2.6"
+      task: Teach the system prompt the new domains and the tag rule
+      status: completed
+      details: |
+        chatbotPrompt.ts: the read-access sentence now names all four domains,
+        plus a "Tasks, trips & projects" paragraph and an "Attribution by tag"
+        paragraph. The latter sits alongside the existing savings-vs-spending
+        and rollup paragraphs — same class of cross-cutting rule whose violation
+        produces a plausible wrong number.
+
+    - id: "2.7"
+      task: Security coverage
+      status: completed
+      details: |
+        planningReads.security.test.ts — 24 tests across cross-family
+        isolation, assignee resolution, task filtering, night-based stays, and
+        tag overlap. Four guards mutation-verified:
+          - cross-family scoping (fall-back-to-first-family bug)
+          - SEC-P031 removed-transaction filter in projectReader
+          - inclusive stay expansion
+          - unresolved-vs-unassigned collapse
+        Two further mutations were rejected by the compiler before reaching the
+        suite (unused param, unused import), which is a stronger result than a
+        test failure but not a substitute for one — hence the compiling
+        variants above.
+        capabilityRegistry.test.ts extended with domain coverage, dataClass
+        classification, the REQ-P018 tripwire, and assertions that every
+        tag-money tool states the non-additive rule in prose AND names the flag.
+        That last assertion caught a real weakness: get_project had deferred the
+        caveat by reference ("same caveats as list_projects") instead of stating
+        it, which a model reading that tool alone would not follow.
 
 phase_3_confirmed_writes:
   status: not_started
