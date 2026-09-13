@@ -69,6 +69,40 @@ Production data is JSON blobs in S3, not a database. `cd backend && npm run back
 
 Bump `**Last Updated**`, add an `## Audits` line for anything incident-driven, and record *what was deliberately not done and why* — several entries below are more useful for their rejected options than their accepted ones.
 
+### TD-029: Learnings Have No Redaction Pass; SEC-L004 Rests on Prompt Text Alone
+**Status**: Open
+**Created**: 2026-09-13
+**Impact**: Medium — a maintainer-facing store of model-authored text with no mechanical filter
+**Effort**: Low
+
+**Problem**:
+`agentTraceStore.ts` runs `redactSensitive()` over trace contents, deep-matching credential-shaped keys (tokens, secrets, passwords, cookies). `agentLearningsStore.ts` does none of that. A learning's `title` and `detail` are model-authored free text, `slice()`d to 200/4000 chars and stored verbatim. SEC-L004 — "a learning must not contain family financial data" — is enforced only by a sentence in the `record_learning` tool description.
+
+That is the weaker half of an otherwise careful design. The store is correctly unreadable by any tool (SEC-L006, D-L03), so this is not an injection-persistence hole. The exposure is the human: `/evaluate-learnings` will one day present 4 KB of attacker-influenced text to a maintainer who may paste it into an agent.
+
+**Fix**: run the same `redactSensitive()` pass over `title`/`detail` on write. The function already exists and is already tested; this is wiring, not new machinery.
+
+**Deliberately not done**: filtering for *financial* content specifically. "Never mention a dollar amount" is not mechanically checkable without false positives that would gut the usefulness of a detail field, and the prompt rule plus the human review step is a reasonable place to stop for a two-user app.
+
+---
+
+### TD-030: Proposal Store Is In-Memory and Single-Process
+**Status**: Open — blocks Phase 5 of the capability platform
+**Created**: 2026-09-13
+**Impact**: Medium now, High before unattended writes ship
+**Effort**: Medium
+
+**Problem**:
+`chatActions/proposalStore.ts` holds nonces in a module-level `Map`. Two consequences: a PM2 restart invalidates every pending action card (the user clicks Confirm and gets "Proposal not found"), and a second process would not see the first's nonces at all.
+
+This is acceptable today and deliberately so — cards are conversation-scoped, live 15 minutes, and the deployment is a single PM2 process. It stops being acceptable at REQ-P028: a background agent queuing proposals a human reviews hours later cannot use a store that a deploy clears.
+
+**Fix**: persist proposals through `dataService` like every other entity, keyed per family. The TTL and single-use semantics are already enforced in code rather than by the storage, so the swap is mostly mechanical.
+
+**Deliberately not done now**: there is no unattended workload to serve, and moving it early would add a storage round-trip to the interactive path for no present benefit.
+
+---
+
 ### TD-026: No Instance-Side Deploy Pre-Flight
 **Status**: **Resolved 2026-09-08**
 **Created**: 2026-09-08
@@ -546,6 +580,8 @@ Stopgap shipped (`f8fc1d4`): the caller (`refreshTripPhotos`) now serializes its
 
 ### TD-012: Chatbot Cost — No Prompt Caching, Unbounded Tool Results
 **Status**: Resolved (Part 1: 2026-04-22 Sprint 1; Part 2: 2026-04-23 Sprint 2). Part 3 (push filters into storage) folds into the SQLite migration — see cross-cutting section of the execution plan.
+
+> **Postscript (2026-09-13):** enabling prompt caching quietly broke cost tracking for the whole period it was "resolved." `usage.input_tokens` excludes cache reads and writes, so the cached prefix was billed by Anthropic and recorded by `chatbotCostTracker` as **zero** — and the undercount grew with every tool added to the surface. A cache *write* costs 1.25x uncached input, so the error was largest on short bursts of use, where each lapsed 5-minute window rewrites the prefix. Fixed with the `CacheTokenUsage` parameter and covered by `costTrackerCachePricing.test.ts`. Worth generalising: this entry's own "fix" was verified for latency and hit rate but never for whether the *accounting* still held, which is the same shape as the other verification gaps in this file.
 **Created**: 2026-04-22
 **Impact**: High - Real Anthropic spend on every chatbot turn; latency scales with transaction count
 **Effort**: Trivial (cache_control) / Medium (tool result caps)

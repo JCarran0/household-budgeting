@@ -1,9 +1,9 @@
 # Agent Learnings — Business Requirements Document
 
-**Status:** Draft
+**Status:** Phase 1 delivered
 **Author:** Jared Carrano
 **Date:** 2026-09-13
-**Version:** 1.0
+**Version:** 1.1
 **Parent:** [AI-CAPABILITY-PLATFORM-BRD.md](AI-CAPABILITY-PLATFORM-BRD.md) §15
 
 ---
@@ -186,7 +186,7 @@ The durable value of this feature is not the backlog — it is that each real fa
 
 | Phase | Scope |
 |-------|-------|
-| ~~**1**~~ | ~~Store, `record_learning` tool with enumerated `capabilityKey`, inline notice, dedup, rate caps.~~ **Done** — `backend/src/services/agentLearningsStore.ts`, tool in `chatbotPrompt.ts`, intercept in `chatbotService.ts`, notice in `ChatMessageBubble.tsx`. |
+| ~~**1**~~ | ~~Store, `record_learning` tool with enumerated `capabilityKey`, inline notice, dedup, rate caps.~~ **Done** — store in `backend/src/services/agentLearningsStore.ts`; tool `RECORD_LEARNING_TOOL` in `services/capabilities/platformTools.ts`; intercept `handleRecordLearning` in `services/capabilities/toolIntercepts.ts` (extracted out of `chatbotService.ts` when that file neared its size budget); notice in `frontend/src/components/chat/ChatMessageBubble.tsx`. Phase 1 also delivered more than listed: REQ-L032 resolved-item retention, REQ-L040/L041 dispositioning with a mandatory resolution note, REQ-L024 occurrence ordering in `listOpen`, and REQ-P063 evidence pinning (the trace behind a learning now survives the 30-day trace window). |
 | **2** | User flag control, evidence bundle capture, flagged-turn marking. |
 | **3** | `/evaluate-learnings` skill with provenance rendering and tool-ledger display. |
 | **4** | Eval corpus conventions; backfill from dispositioned incidents. |
