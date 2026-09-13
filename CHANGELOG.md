@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+### [6.4.2](https://github.com/JCarran0/household-budgeting/compare/v6.4.1...v6.4.2) (2026-09-13)
+
+
+### Documentation
+
+* **ai:** split the AI platform and learnings BRDs from their plans ([61eb5ae](https://github.com/JCarran0/household-budgeting/commit/61eb5ae15efd7a5a8c7b0cb73b18b7d36f76a0ea))
+
 ### [6.4.1](https://github.com/JCarran0/household-budgeting/compare/v6.4.0...v6.4.1) (2026-09-13)
 
 
