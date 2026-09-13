@@ -34,12 +34,23 @@ import { TransactionEditModal } from './TransactionEditModal';
 interface TransactionPreviewModalProps {
   opened: boolean;
   onClose: () => void;
-  categoryId: string | null; // null for "Uncategorized"
+  /** null = "Uncategorized"; undefined only when `ignoreCategoryFilter` is set */
+  categoryId: string | null | undefined;
   categoryName: string;
   dateRange?: { startDate: string; endDate: string };
   limit?: number; // default 25
   timeRangeFilter?: string; // Reports page time range filter (e.g., 'thisMonth', 'yearToDate')
   tags?: string[]; // Optional tag filter (e.g., trip tags)
+  /** Require every tag in `tags` rather than any — used for project line items */
+  tagsMatchAll?: boolean;
+  /**
+   * Drill down on tags alone, with no category filter at all.
+   *
+   * Distinct from `categoryId: null`, which means "uncategorized only". Used by
+   * project line items, which are matched purely by tag and deliberately span
+   * whatever categories their transactions happen to carry (BRD §5.5.2).
+   */
+  ignoreCategoryFilter?: boolean;
   /**
    * Additional category IDs to include alongside `categoryId`. Used by rolled-up
    * parent rows in Reports → Budget Performance to show transactions from the
@@ -57,6 +68,8 @@ export function TransactionPreviewModal({
   limit = 25,
   timeRangeFilter,
   tags,
+  tagsMatchAll,
+  ignoreCategoryFilter = false,
   additionalCategoryIds,
 }: TransactionPreviewModalProps) {
   const navigate = useNavigate();
@@ -66,27 +79,31 @@ export function TransactionPreviewModal({
   // Combine the primary category ID with any additional IDs (e.g. children of a
   // rolled-up parent row) into a single de-duplicated, stably-sorted list.
   const effectiveCategoryIds = useMemo<string[] | undefined>(() => {
+    if (ignoreCategoryFilter) return undefined; // Tag-only mode
     if (categoryId === null) return undefined; // Uncategorized mode
     const ids = new Set<string>();
     if (categoryId) ids.add(categoryId);
     if (additionalCategoryIds) for (const id of additionalCategoryIds) ids.add(id);
     if (ids.size === 0) return undefined;
     return Array.from(ids).sort();
-  }, [categoryId, additionalCategoryIds]);
+  }, [categoryId, additionalCategoryIds, ignoreCategoryFilter]);
 
   // Fetch transaction preview data
   const { data: transactionData, isLoading, error } = useQuery({
-    queryKey: ['transaction-preview', categoryId, effectiveCategoryIds, dateRange?.startDate, dateRange?.endDate, limit, tags],
+    queryKey: ['transaction-preview', categoryId, effectiveCategoryIds, dateRange?.startDate, dateRange?.endDate, limit, tags, tagsMatchAll],
     queryFn: () => api.getTransactions({
       categoryIds: effectiveCategoryIds,
-      onlyUncategorized: categoryId === null,
+      onlyUncategorized: !ignoreCategoryFilter && categoryId === null,
       startDate: dateRange?.startDate,
       endDate: dateRange?.endDate,
       limit: limit,
       offset: 0,
       tags,
+      tagsMatchAll,
     }),
-    enabled: opened && categoryId !== undefined, // Only fetch when modal is open and categoryId is defined
+    // Fetch when the modal is open and we have something to filter on: either a
+    // resolved categoryId, or tag-only mode.
+    enabled: opened && (ignoreCategoryFilter || categoryId !== undefined),
     staleTime: 30 * 1000, // hot — transactions
   });
 

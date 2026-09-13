@@ -12,14 +12,23 @@ const lineItemSchema = z.object({
   id: z.string().uuid().optional(), // omitted for new items; server assigns UUID
   name: z.string().min(1, 'Line item name is required').max(200),
   estimatedCost: z.number().min(0, 'Estimated cost must be >= 0'),
+  // Flat, un-namespaced match tag (BRD §5.5.4). Normalized to lowercase by the
+  // service; reject the structured project: prefix so a line item can never
+  // shadow a project tag.
+  tag: z
+    .string()
+    .min(1, 'Line item tag is required')
+    .max(100)
+    .refine((t) => !t.trim().toLowerCase().startsWith('project:'), {
+      message: 'Line item tags may not use the reserved "project:" prefix',
+    }),
   notes: z.string().max(1000).optional(),
 });
 
 const categoryBudgetSchema = z.object({
   categoryId: z.string().min(1),
-  // amount may be 0 when the user is estimating purely via line items
+  // amount may be 0 when the category is present only as a placeholder
   amount: z.number().nonnegative(),
-  lineItems: z.array(lineItemSchema).optional(),
 });
 
 const createProjectSchema = z
@@ -29,6 +38,7 @@ const createProjectSchema = z
     endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Invalid date format. Use YYYY-MM-DD'),
     totalBudget: z.number().positive().nullable().optional(),
     categoryBudgets: z.array(categoryBudgetSchema).optional(),
+    lineItems: z.array(lineItemSchema).optional(),
     notes: z.string().max(2000).optional()
   })
   .refine((data) => data.endDate >= data.startDate, {
@@ -52,6 +62,7 @@ const updateProjectSchema = z
     endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Invalid date format. Use YYYY-MM-DD').optional(),
     totalBudget: z.number().positive().nullable().optional(),
     categoryBudgets: z.array(categoryBudgetSchema).optional(),
+    lineItems: z.array(lineItemSchema).optional(),
     notes: z.string().max(2000).optional()
   })
   .refine(

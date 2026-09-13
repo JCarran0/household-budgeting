@@ -644,10 +644,18 @@ export interface UpdateTripDto {
 
 // Project types
 
+/**
+ * A project-level cost estimate, matched to actual transactions by `tag`.
+ *
+ * Line items are a sibling of `categoryBudgets`, NOT nested inside one — the
+ * budgeting axis (category) and the project-management axis (line item) do not
+ * nest. See PROJECTS-BRD.md §5.5.2. Deliberately has no `categoryId`.
+ */
 export interface ProjectLineItem {
-  id: string;            // UUID, generated server-side on create; required on stored/returned objects
+  id: string;            // UUID, generated server-side on create
   name: string;          // required, max 200 chars
   estimatedCost: number; // required, >= 0
+  tag: string;           // required — matched against transaction tags, flat/un-namespaced
   notes?: string;        // optional, max 1000 chars
 }
 
@@ -656,6 +664,7 @@ export interface ProjectLineItemInput {
   id?: string;
   name: string;
   estimatedCost: number;
+  tag: string;
   notes?: string;
 }
 
@@ -663,7 +672,6 @@ export interface ProjectLineItemInput {
 export interface ProjectCategoryBudgetInput {
   categoryId: string;
   amount: number;
-  lineItems?: ProjectLineItemInput[];
 }
 
 export interface Project {
@@ -674,13 +682,13 @@ export interface Project {
   endDate: string;
   totalBudget: number | null;
   categoryBudgets: ProjectCategoryBudget[];
+  lineItems: ProjectLineItem[];
   notes: string;
 }
 
 export interface ProjectCategoryBudget {
   categoryId: string;
   amount: number;
-  lineItems?: ProjectLineItem[]; // optional — treat undefined and [] as equivalent
 }
 
 export interface StoredProject extends Project {
@@ -694,6 +702,23 @@ export interface ProjectSummary extends Project {
   status: 'planning' | 'active' | 'completed';
   totalSpent: number;
   categorySpending: ProjectCategorySpending[];
+  /** Per-line-item actuals, derived from tag matches. Order matches `lineItems`. */
+  lineItemSpending: ProjectLineItemSpending[];
+  /**
+   * Project spend carrying NONE of this project's line item tags (BRD §5.5.6).
+   * Note: `lineItemSpending` actuals may overlap each other, so they do not sum
+   * with this to `totalSpent`. Never present a summed actuals column.
+   */
+  unattributedSpent: number;
+}
+
+export interface ProjectLineItemSpending {
+  lineItemId: string;
+  tag: string;
+  /** Sum of transactions carrying both the project tag and this line item's tag */
+  actual: number;
+  /** Number of matched transactions — zero means "not yet purchased" */
+  matchCount: number;
 }
 
 export interface ProjectCategorySpending {
@@ -709,6 +734,7 @@ export interface CreateProjectDto {
   endDate: string;
   totalBudget?: number | null;
   categoryBudgets?: ProjectCategoryBudgetInput[];
+  lineItems?: ProjectLineItemInput[];
   notes?: string;
 }
 
@@ -718,6 +744,7 @@ export interface UpdateProjectDto {
   endDate?: string;
   totalBudget?: number | null;
   categoryBudgets?: ProjectCategoryBudgetInput[];
+  lineItems?: ProjectLineItemInput[];
   notes?: string;
 }
 

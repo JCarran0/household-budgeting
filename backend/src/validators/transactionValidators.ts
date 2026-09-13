@@ -30,6 +30,9 @@ export const transactionFilterSchema = z.object({
     if (typeof val === 'string') return [val];
     return val;
   }),
+  tagsMatchAll: z.union([z.boolean(), z.string()]).optional().transform(val =>
+    typeof val === 'string' ? val === 'true' : val
+  ),
   tags: z.union([z.array(z.string()), z.string()]).optional().transform(val => {
     if (typeof val === 'string') return [val];
     return val;

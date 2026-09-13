@@ -34,6 +34,7 @@ import { TransactionPreviewModal } from '../components/transactions/TransactionP
 import { TaskFormModal } from '../components/tasks/TaskFormModal';
 import { TaskDetailModal } from '../components/tasks/TaskDetailModal';
 import { ProjectFormModal } from '../components/projects/ProjectFormModal';
+import type { LineItemDrillDown } from '../components/projects/ProjectLineItems';
 import { ProjectCard, type DrillDownState } from '../components/projects/ProjectCard';
 import type {
   ProjectSummary,
@@ -138,6 +139,12 @@ export function Projects() {
     { open: openPreviewModal, close: closePreviewModal },
   ] = useDisclosure(false);
   const [drillDown, setDrillDown] = useState<DrillDownState | null>(null);
+  const [
+    lineItemModalOpened,
+    { open: openLineItemModal, close: closeLineItemModal },
+  ] = useDisclosure(false);
+  const [lineItemDrillDown, setLineItemDrillDown] =
+    useState<LineItemDrillDown | null>(null);
 
   const [addTaskProject, setAddTaskProject] = useState<ProjectSummary | null>(null);
   const [addTaskOpened, { open: openAddTask, close: closeAddTask }] = useDisclosure(false);
@@ -281,6 +288,11 @@ export function Projects() {
     openPreviewModal();
   };
 
+  const handleLineItemClick = (state: LineItemDrillDown) => {
+    setLineItemDrillDown(state);
+    openLineItemModal();
+  };
+
   const handleFormClose = () => {
     closeFormModal();
     setTimeout(() => setEditingProject(null), 300);
@@ -405,6 +417,7 @@ export function Projects() {
                 key={project.id}
                 project={project}
                 onEdit={handleOpenEdit}
+                onLineItemClick={handleLineItemClick}
                 onDelete={handleOpenDelete}
                 onCategoryClick={handleCategoryClick}
                 tasks={allTasks}
@@ -437,6 +450,21 @@ export function Projects() {
           categoryName={drillDown.categoryName}
           dateRange={WIDE_DATE_RANGE}
           tags={[drillDown.projectTag]}
+        />
+      )}
+
+      {lineItemDrillDown && (
+        <TransactionPreviewModal
+          opened={lineItemModalOpened}
+          onClose={closeLineItemModal}
+          // Line items are matched purely by tag and span whatever categories
+          // their transactions carry, so no category filter applies.
+          categoryId={undefined}
+          ignoreCategoryFilter
+          categoryName={lineItemDrillDown.lineItemName}
+          dateRange={WIDE_DATE_RANGE}
+          tags={[lineItemDrillDown.projectTag, lineItemDrillDown.lineItemTag]}
+          tagsMatchAll
         />
       )}
 

@@ -20,6 +20,7 @@ import { IconCheck, IconX, IconPlus } from '@tabler/icons-react';
 import { format } from 'date-fns';
 import { api } from '../../lib/api';
 import { useCategoryOptions } from '../../hooks/useCategoryOptions';
+import { useTransactionTags } from '../../hooks/useTransactionTags';
 import { formatCurrency } from '../../utils/formatters';
 import { LineItemEditor } from './LineItemEditor';
 import type {
@@ -38,6 +39,7 @@ interface ProjectFormValues {
   totalBudget: number | string;
   notes: string;
   categoryBudgets: ProjectCategoryBudgetInput[];
+  lineItems: ProjectLineItemInput[];
 }
 
 // Mantine 8's DatePickerInput returns YYYY-MM-DD strings on change but our
@@ -63,6 +65,8 @@ export function ProjectFormModal({ opened, onClose, project }: ProjectFormModalP
     enabled: opened,
   });
 
+  const { tags: tagSuggestions } = useTransactionTags({ enabled: opened });
+
   const form = useForm<ProjectFormValues>({
     initialValues: {
       name: '',
@@ -71,6 +75,7 @@ export function ProjectFormModal({ opened, onClose, project }: ProjectFormModalP
       totalBudget: '',
       notes: '',
       categoryBudgets: [],
+      lineItems: [],
     },
     validate: {
       name: (value) => (value.trim().length === 0 ? 'Name is required' : null),
@@ -112,6 +117,7 @@ export function ProjectFormModal({ opened, onClose, project }: ProjectFormModalP
         totalBudget: project.totalBudget ?? '',
         notes: project.notes ?? '',
         categoryBudgets: project.categoryBudgets ?? [],
+        lineItems: project.lineItems ?? [],
       });
     } else {
       form.reset();
@@ -181,18 +187,20 @@ export function ProjectFormModal({ opened, onClose, project }: ProjectFormModalP
       values.totalBudget === '' || values.totalBudget === null
         ? null
         : Number(values.totalBudget);
-    // Strip line items with blank names, then drop category rows that have
-    // neither an amount nor meaningful line items. Rows with amount=0 and
-    // named line items are valid: user is estimating purely via line items
-    // while keeping D2 (amount stays authoritative, zero means "not set").
-    const categoryBudgets = values.categoryBudgets
-      .map((cb) => ({
-        ...cb,
-        lineItems: (cb.lineItems ?? []).filter((li) => li.name.trim() !== ''),
+    const categoryBudgets = values.categoryBudgets.filter(
+      (cb) => cb.categoryId !== '' && cb.amount > 0,
+    );
+
+    // Drop half-typed rows: a line item needs both a name and a match tag to be
+    // meaningful. An item with no tag can never match a transaction, so it would
+    // sit permanently at zero actual.
+    const lineItems = values.lineItems
+      .map((li) => ({
+        ...li,
+        name: li.name.trim(),
+        tag: li.tag.trim().toLowerCase(),
       }))
-      .filter(
-        (cb) => cb.categoryId !== '' && (cb.amount > 0 || cb.lineItems.length > 0),
-      );
+      .filter((li) => li.name !== '' && li.tag !== '');
 
     if (isEdit && project) {
       updateMutation.mutate({
@@ -204,6 +212,7 @@ export function ProjectFormModal({ opened, onClose, project }: ProjectFormModalP
           totalBudget,
           notes: values.notes.trim(),
           categoryBudgets,
+          lineItems,
         },
       });
     } else {
@@ -214,6 +223,7 @@ export function ProjectFormModal({ opened, onClose, project }: ProjectFormModalP
         totalBudget,
         notes: values.notes.trim(),
         categoryBudgets,
+        lineItems,
       });
     }
   };
@@ -239,13 +249,6 @@ export function ProjectFormModal({ opened, onClose, project }: ProjectFormModalP
   ) => {
     const updated = form.values.categoryBudgets.map((cb, i) =>
       i === index ? { ...cb, [field]: value } : cb,
-    );
-    form.setFieldValue('categoryBudgets', updated);
-  };
-
-  const setLineItemsFor = (index: number, items: ProjectLineItemInput[]) => {
-    const updated = form.values.categoryBudgets.map((cb, i) =>
-      i === index ? { ...cb, lineItems: items } : cb,
     );
     form.setFieldValue('categoryBudgets', updated);
   };
@@ -358,14 +361,31 @@ export function ProjectFormModal({ opened, onClose, project }: ProjectFormModalP
                     <IconX size={16} />
                   </ActionIcon>
                 </Group>
-
-                <LineItemEditor
-                  lineItems={cb.lineItems ?? []}
-                  amount={cb.amount}
-                  onChange={(items) => setLineItemsFor(index, items)}
-                />
               </Stack>
             ))}
+          </Stack>
+
+          <Stack gap="xs">
+            <div>
+              <Text size="sm" fw={500}>
+                Line Items
+              </Text>
+              <Text size="xs" c="dimmed">
+                Itemized estimates. Each carries a tag — tag the matching
+                transactions with it and actual spend is tracked per item.
+              </Text>
+            </div>
+
+            <LineItemEditor
+              lineItems={form.values.lineItems}
+              totalBudget={
+                form.values.totalBudget === '' || form.values.totalBudget === null
+                  ? null
+                  : Number(form.values.totalBudget)
+              }
+              tagSuggestions={tagSuggestions}
+              onChange={(items) => form.setFieldValue('lineItems', items)}
+            />
           </Stack>
 
           <Textarea

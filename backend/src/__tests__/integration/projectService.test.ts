@@ -193,7 +193,7 @@ describe('ProjectService — line item persistence', () => {
     authToken = user.token;
   });
 
-  it('creates a project with line items and server assigns UUIDs', async () => {
+  it('creates a project with project-level line items and server assigns UUIDs', async () => {
     const res = await request(app)
       .post('/api/v1/projects')
       .set('Authorization', `Bearer ${authToken}`)
@@ -202,27 +202,37 @@ describe('ProjectService — line item persistence', () => {
         startDate: '2026-01-01',
         endDate: '2026-06-30',
         totalBudget: 5000,
-        categoryBudgets: [
-          {
-            categoryId: 'HOME_IMPROVEMENT_HARDWARE',
-            amount: 2000,
-            lineItems: [
-              { name: 'Sheetrock', estimatedCost: 180 },
-              { name: 'Joint compound', estimatedCost: 45 },
-            ],
-          },
+        lineItems: [
+          { name: 'Sheetrock', estimatedCost: 180, tag: 'sheetrock' },
+          { name: 'Joint compound', estimatedCost: 45, tag: 'joint-compound' },
         ],
       })
       .expect(201);
 
-    const cb = res.body.categoryBudgets[0];
-    expect(cb.lineItems).toHaveLength(2);
-    expect(cb.lineItems[0].id).toBeTruthy();
-    expect(cb.lineItems[0].name).toBe('Sheetrock');
-    expect(cb.lineItems[0].estimatedCost).toBe(180);
-    expect(cb.lineItems[1].id).toBeTruthy();
-    // IDs must be distinct
-    expect(cb.lineItems[0].id).not.toBe(cb.lineItems[1].id);
+    expect(res.body.lineItems).toHaveLength(2);
+    expect(res.body.lineItems[0].id).toBeTruthy();
+    expect(res.body.lineItems[0].name).toBe('Sheetrock');
+    expect(res.body.lineItems[0].estimatedCost).toBe(180);
+    expect(res.body.lineItems[0].tag).toBe('sheetrock');
+    expect(res.body.lineItems[1].id).toBeTruthy();
+    expect(res.body.lineItems[0].id).not.toBe(res.body.lineItems[1].id);
+    // Line items are NOT nested under category budgets (BRD §5.5.2)
+    expect(res.body.categoryBudgets).toEqual([]);
+  });
+
+  it('normalizes line item tags to trimmed lowercase so they match exactly', async () => {
+    const res = await request(app)
+      .post('/api/v1/projects')
+      .set('Authorization', `Bearer ${authToken}`)
+      .send({
+        name: 'Bath Reno',
+        startDate: '2026-01-01',
+        endDate: '2026-06-30',
+        lineItems: [{ name: 'Sheetrock', estimatedCost: 180, tag: '  SheetRock  ' }],
+      })
+      .expect(201);
+
+    expect(res.body.lineItems[0].tag).toBe('sheetrock');
   });
 
   it('preserves existing line item ids on update and assigns UUIDs for new items', async () => {
@@ -234,44 +244,31 @@ describe('ProjectService — line item persistence', () => {
         startDate: '2026-01-01',
         endDate: '2026-06-30',
         totalBudget: 5000,
-        categoryBudgets: [
-          {
-            categoryId: 'HOME_IMPROVEMENT_HARDWARE',
-            amount: 2000,
-            lineItems: [{ name: 'Sheetrock', estimatedCost: 180 }],
-          },
-        ],
+        lineItems: [{ name: 'Sheetrock', estimatedCost: 180, tag: 'sheetrock' }],
       })
       .expect(201);
 
-    const existingId = createRes.body.categoryBudgets[0].lineItems[0].id as string;
+    const existingId = createRes.body.lineItems[0].id as string;
     expect(existingId).toBeTruthy();
 
     const updateRes = await request(app)
       .put(`/api/v1/projects/${createRes.body.id}`)
       .set('Authorization', `Bearer ${authToken}`)
       .send({
-        categoryBudgets: [
-          {
-            categoryId: 'HOME_IMPROVEMENT_HARDWARE',
-            amount: 2000,
-            lineItems: [
-              { id: existingId, name: 'Sheetrock', estimatedCost: 180 }, // preserve id
-              { name: 'Drill', estimatedCost: 120 }, // new item — no id
-            ],
-          },
+        lineItems: [
+          { id: existingId, name: 'Sheetrock', estimatedCost: 180, tag: 'sheetrock' },
+          { name: 'Drill', estimatedCost: 120, tag: 'drill' }, // new item — no id
         ],
       })
       .expect(200);
 
-    const updatedCb = updateRes.body.categoryBudgets[0];
-    expect(updatedCb.lineItems).toHaveLength(2);
+    expect(updateRes.body.lineItems).toHaveLength(2);
 
-    const preserved = updatedCb.lineItems.find((li: { id: string }) => li.id === existingId);
+    const preserved = updateRes.body.lineItems.find((li: { id: string }) => li.id === existingId);
     expect(preserved).toBeDefined();
     expect(preserved.name).toBe('Sheetrock');
 
-    const newItem = updatedCb.lineItems.find((li: { name: string }) => li.name === 'Drill');
+    const newItem = updateRes.body.lineItems.find((li: { name: string }) => li.name === 'Drill');
     expect(newItem).toBeDefined();
     expect(newItem.id).toBeTruthy();
     expect(newItem.id).not.toBe(existingId);
@@ -286,36 +283,43 @@ describe('ProjectService — line item persistence', () => {
         startDate: '2026-01-01',
         endDate: '2026-06-30',
         totalBudget: 5000,
-        categoryBudgets: [
-          {
-            categoryId: 'HOME_IMPROVEMENT_HARDWARE',
-            amount: 2000,
-            lineItems: [
-              { name: 'Sheetrock', estimatedCost: 180 },
-              { name: 'Drill', estimatedCost: 120 },
-            ],
-          },
+        lineItems: [
+          { name: 'Sheetrock', estimatedCost: 180, tag: 'sheetrock' },
+          { name: 'Drill', estimatedCost: 120, tag: 'drill' },
         ],
       })
       .expect(201);
 
-    // Send update with only one line item
     const updateRes = await request(app)
       .put(`/api/v1/projects/${createRes.body.id}`)
       .set('Authorization', `Bearer ${authToken}`)
-      .send({
-        categoryBudgets: [
-          {
-            categoryId: 'HOME_IMPROVEMENT_HARDWARE',
-            amount: 2000,
-            lineItems: [{ name: 'Sheetrock', estimatedCost: 180 }],
-          },
-        ],
-      })
+      .send({ lineItems: [{ name: 'Sheetrock', estimatedCost: 180, tag: 'sheetrock' }] })
       .expect(200);
 
-    expect(updateRes.body.categoryBudgets[0].lineItems).toHaveLength(1);
-    expect(updateRes.body.categoryBudgets[0].lineItems[0].name).toBe('Sheetrock');
+    expect(updateRes.body.lineItems).toHaveLength(1);
+    expect(updateRes.body.lineItems[0].name).toBe('Sheetrock');
+  });
+
+  it('leaves line items untouched when an update omits them entirely', async () => {
+    const createRes = await request(app)
+      .post('/api/v1/projects')
+      .set('Authorization', `Bearer ${authToken}`)
+      .send({
+        name: 'Bath Reno',
+        startDate: '2026-01-01',
+        endDate: '2026-06-30',
+        lineItems: [{ name: 'Sheetrock', estimatedCost: 180, tag: 'sheetrock' }],
+      })
+      .expect(201);
+
+    const updateRes = await request(app)
+      .put(`/api/v1/projects/${createRes.body.id}`)
+      .set('Authorization', `Bearer ${authToken}`)
+      .send({ notes: 'just a note' })
+      .expect(200);
+
+    expect(updateRes.body.lineItems).toHaveLength(1);
+    expect(updateRes.body.lineItems[0].name).toBe('Sheetrock');
   });
 
   it('rejects line items with negative estimatedCost', async () => {
@@ -326,14 +330,7 @@ describe('ProjectService — line item persistence', () => {
         name: 'Bad Project',
         startDate: '2026-01-01',
         endDate: '2026-06-30',
-        totalBudget: 500,
-        categoryBudgets: [
-          {
-            categoryId: 'HOME_IMPROVEMENT_HARDWARE',
-            amount: 500,
-            lineItems: [{ name: 'Bad item', estimatedCost: -10 }],
-          },
-        ],
+        lineItems: [{ name: 'Bad item', estimatedCost: -10, tag: 'bad' }],
       })
       .expect(400);
   });
@@ -346,20 +343,51 @@ describe('ProjectService — line item persistence', () => {
         name: 'Bad Project',
         startDate: '2026-01-01',
         endDate: '2026-06-30',
-        totalBudget: 500,
-        categoryBudgets: [
-          {
-            categoryId: 'HOME_IMPROVEMENT_HARDWARE',
-            amount: 500,
-            lineItems: [{ name: '', estimatedCost: 50 }],
-          },
+        lineItems: [{ name: '', estimatedCost: 50, tag: 'x' }],
+      })
+      .expect(400);
+  });
+
+  it('rejects line items with a missing or empty tag', async () => {
+    await request(app)
+      .post('/api/v1/projects')
+      .set('Authorization', `Bearer ${authToken}`)
+      .send({
+        name: 'Bad Project',
+        startDate: '2026-01-01',
+        endDate: '2026-06-30',
+        lineItems: [{ name: 'Sheetrock', estimatedCost: 50 }],
+      })
+      .expect(400);
+
+    await request(app)
+      .post('/api/v1/projects')
+      .set('Authorization', `Bearer ${authToken}`)
+      .send({
+        name: 'Bad Project',
+        startDate: '2026-01-01',
+        endDate: '2026-06-30',
+        lineItems: [{ name: 'Sheetrock', estimatedCost: 50, tag: '' }],
+      })
+      .expect(400);
+  });
+
+  it('rejects a line item tag using the reserved project: prefix', async () => {
+    await request(app)
+      .post('/api/v1/projects')
+      .set('Authorization', `Bearer ${authToken}`)
+      .send({
+        name: 'Bad Project',
+        startDate: '2026-01-01',
+        endDate: '2026-06-30',
+        lineItems: [
+          { name: 'Shadow', estimatedCost: 50, tag: 'project:bath-reno:2026' },
         ],
       })
       .expect(400);
   });
 
-  it('backward compatibility: existing projects without lineItems load and update correctly', async () => {
-    // Create a project without line items (totalBudget required when categoryBudgets are set)
+  it('backward compatibility: legacy projects with no lineItems load and update correctly', async () => {
     const createRes = await request(app)
       .post('/api/v1/projects')
       .set('Authorization', `Bearer ${authToken}`)
@@ -372,11 +400,8 @@ describe('ProjectService — line item persistence', () => {
       })
       .expect(201);
 
-    // The created project should not have lineItems key (or it's an empty array)
-    const cb = createRes.body.categoryBudgets[0];
-    expect(cb.lineItems === undefined || cb.lineItems.length === 0).toBe(true);
+    expect(createRes.body.lineItems).toEqual([]);
 
-    // Update the same project — should work without error
     const updateRes = await request(app)
       .put(`/api/v1/projects/${createRes.body.id}`)
       .set('Authorization', `Bearer ${authToken}`)
@@ -384,7 +409,6 @@ describe('ProjectService — line item persistence', () => {
       .expect(200);
 
     expect(updateRes.body.notes).toBe('updated notes');
-    const updatedCb = updateRes.body.categoryBudgets[0];
-    expect(updatedCb.lineItems === undefined || updatedCb.lineItems.length === 0).toBe(true);
+    expect(updateRes.body.lineItems).toEqual([]);
   });
 });

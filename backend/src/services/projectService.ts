@@ -11,14 +11,19 @@ import {
   ProjectSummary,
   ProjectCategorySpending,
   ProjectCategoryBudget,
-  ProjectCategoryBudgetInput,
+  ProjectLineItem,
+  ProjectLineItemInput,
   CreateProjectDto,
   UpdateProjectDto,
   StoredTask,
 } from '../shared/types';
 import { DataService } from './dataService';
 import { TransactionService, StoredTransaction } from './transactionService';
-import { generateProjectTag, getProjectStatus } from '../shared/utils/projectHelpers';
+import {
+  generateProjectTag,
+  getProjectStatus,
+  computeLineItemSpending,
+} from '../shared/utils/projectHelpers';
 
 export class ProjectService {
   constructor(
@@ -143,27 +148,19 @@ export class ProjectService {
   }
 
   /**
-   * Ensure every line item in the category budgets has a stable UUID.
-   * New items (no id) get a freshly generated UUID.
-   * Existing items keep their id.
-   * Converts ProjectCategoryBudgetInput[] → ProjectCategoryBudget[].
+   * Ensure every line item has a stable UUID, and normalize its tag.
+   * New items (no id) get a freshly generated UUID; existing items keep theirs.
+   *
+   * Tags are trimmed and lowercased so that a tag typed with stray case or
+   * whitespace still matches transactions — tag matching in the filter engine is
+   * an exact, case-sensitive string compare.
    */
-  private normalizeCategoryBudgetLineItems(
-    categoryBudgets: ProjectCategoryBudgetInput[]
-  ): ProjectCategoryBudget[] {
-    return categoryBudgets.map((cb) => {
-      if (!cb.lineItems || cb.lineItems.length === 0) {
-        return { categoryId: cb.categoryId, amount: cb.amount };
-      }
-      return {
-        categoryId: cb.categoryId,
-        amount: cb.amount,
-        lineItems: cb.lineItems.map((item) => ({
-          ...item,
-          id: item.id ?? uuidv4(),
-        })),
-      };
-    });
+  private normalizeLineItems(lineItems: ProjectLineItemInput[]): ProjectLineItem[] {
+    return lineItems.map((item) => ({
+      ...item,
+      id: item.id ?? uuidv4(),
+      tag: item.tag.trim().toLowerCase(),
+    }));
   }
 
   // ---------------------------------------------------------------------------
@@ -191,7 +188,8 @@ export class ProjectService {
       startDate: data.startDate,
       endDate: data.endDate,
       totalBudget: data.totalBudget ?? null,
-      categoryBudgets: this.normalizeCategoryBudgetLineItems(data.categoryBudgets ?? []),
+      categoryBudgets: (data.categoryBudgets ?? []) as ProjectCategoryBudget[],
+      lineItems: this.normalizeLineItems(data.lineItems ?? []),
       notes: data.notes ?? '',
       createdAt: now,
       updatedAt: now,
@@ -266,10 +264,16 @@ export class ProjectService {
       await this.renameTagOnTasks(oldTag, candidateTag, familyId);
     }
 
-    // Normalize line item UUIDs in the incoming category budgets (if provided)
-    const incomingCategoryBudgets = data.categoryBudgets !== undefined
-      ? this.normalizeCategoryBudgetLineItems(data.categoryBudgets)
-      : existing.categoryBudgets;
+    const incomingCategoryBudgets =
+      data.categoryBudgets !== undefined
+        ? (data.categoryBudgets as ProjectCategoryBudget[])
+        : existing.categoryBudgets;
+
+    // Normalize line item UUIDs and tags (if provided)
+    const incomingLineItems =
+      data.lineItems !== undefined
+        ? this.normalizeLineItems(data.lineItems)
+        : existing.lineItems ?? [];
 
     const now = new Date().toISOString();
     const updatedProject: StoredProject = {
@@ -279,6 +283,7 @@ export class ProjectService {
       endDate: data.endDate ?? existing.endDate,
       totalBudget: data.totalBudget !== undefined ? data.totalBudget : existing.totalBudget,
       categoryBudgets: incomingCategoryBudgets,
+      lineItems: incomingLineItems,
       notes: data.notes !== undefined ? data.notes : existing.notes,
       tag: tagWillChange ? candidateTag : oldTag,
       updatedAt: now,
@@ -328,9 +333,11 @@ export class ProjectService {
       throw new Error('Project not found');
     }
 
+    // Hidden transactions are excluded everywhere else (reports, auto-categorize,
+    // chatbot) and are excluded here too. This also correctly drops split parents,
+    // which are hidden on split while their children inherit the tags (BRD §5.6).
     const result = await this.transactionService.getTransactions(familyId, {
       tags: [project.tag],
-      includeHidden: true,
     });
 
     const transactions = result.transactions ?? [];
@@ -391,11 +398,23 @@ export class ProjectService {
       });
     }
 
+    // Attribute spend to line items by tag (BRD §5.5.5). Deliberately naive:
+    // a transaction carrying two line item tags counts fully toward both, so
+    // these actuals may overlap and must never be summed into a column total.
+    const lineItems = project.lineItems ?? [];
+    const { lineItemSpending, unattributedSpent } = computeLineItemSpending(
+      lineItems,
+      transactions
+    );
+
     return {
       ...project,
+      lineItems,
       status: getProjectStatus(project.startDate, project.endDate),
       totalSpent,
       categorySpending,
+      lineItemSpending,
+      unattributedSpent,
     };
   }
 

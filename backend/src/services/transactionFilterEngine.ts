@@ -69,9 +69,15 @@ export function filterTransactions(
   }
 
   if (filter.tags && filter.tags.length > 0) {
-    filtered = filtered.filter((txn: StoredTransaction) =>
-      filter.tags!.some(tag => txn.tags.includes(tag))
-    );
+    // Default is OR (any tag matches). `tagsMatchAll` switches to AND, which is
+    // what project line item drill-down needs: project tag AND line item tag.
+    filtered = filter.tagsMatchAll
+      ? filtered.filter((txn: StoredTransaction) =>
+          filter.tags!.every(tag => txn.tags.includes(tag))
+        )
+      : filtered.filter((txn: StoredTransaction) =>
+          filter.tags!.some(tag => txn.tags.includes(tag))
+        );
   }
 
   if (!filter.includePending) {

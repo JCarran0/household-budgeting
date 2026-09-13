@@ -1,4 +1,4 @@
-import { Fragment, useMemo } from 'react';
+import { useMemo } from 'react';
 import {
   Accordion,
   Stack,
@@ -24,6 +24,7 @@ import {
   IconTrash,
   IconPlus,
   IconListCheck,
+  IconListDetails,
 } from '@tabler/icons-react';
 import { format } from 'date-fns';
 import { formatCurrency } from '../../utils/formatters';
@@ -32,10 +33,9 @@ import {
   filterTasksForProject,
   computeProjectTaskSummary,
 } from '../../lib/projectTaskFilters';
-import { computeAllocationHint } from '../../../../shared/utils/projectHelpers';
+import { ProjectLineItems, type LineItemDrillDown } from './ProjectLineItems';
 import type {
   ProjectSummary,
-  ProjectLineItem,
   StoredTask,
   FamilyMember,
 } from '../../../../shared/types';
@@ -77,6 +77,7 @@ function formatDateRange(start: string, end: string): string {
 interface ProjectCardProps {
   project: ProjectSummary;
   onEdit: (project: ProjectSummary) => void;
+  onLineItemClick: (drill: LineItemDrillDown) => void;
   onDelete: (project: ProjectSummary) => void;
   onCategoryClick: (state: DrillDownState) => void;
   tasks: StoredTask[];
@@ -88,6 +89,7 @@ interface ProjectCardProps {
 export function ProjectCard({
   project,
   onEdit,
+  onLineItemClick,
   onDelete,
   onCategoryClick,
   tasks,
@@ -105,15 +107,7 @@ export function ProjectCard({
   const overBudget =
     project.totalBudget !== null && project.totalSpent > project.totalBudget;
 
-  const lineItemsByCategoryId = useMemo(() => {
-    const map = new Map<string, ProjectLineItem[]>();
-    for (const cb of project.categoryBudgets) {
-      if (cb.lineItems && cb.lineItems.length > 0) {
-        map.set(cb.categoryId, cb.lineItems);
-      }
-    }
-    return map;
-  }, [project.categoryBudgets]);
+  const lineItemCount = (project.lineItems ?? []).length;
 
   const projectTasks = useMemo(
     () => filterTasksForProject(tasks, project.tag),
@@ -188,6 +182,10 @@ export function ProjectCard({
               <Tabs.Tab value="spending" leftSection={<IconHammer size={14} />}>
                 Spending
               </Tabs.Tab>
+              <Tabs.Tab value="items" leftSection={<IconListDetails size={14} />}>
+                Line Items
+                {lineItemCount > 0 ? ` (${lineItemCount})` : ''}
+              </Tabs.Tab>
               <Tabs.Tab value="tasks" leftSection={<IconListCheck size={14} />}>
                 Tasks
                 {taskSummary.total > 0
@@ -212,15 +210,9 @@ export function ProjectCard({
                       {project.categorySpending.map((row) => {
                         const variance =
                           row.budgeted !== null ? row.budgeted - row.spent : null;
-                        const lineItems = lineItemsByCategoryId.get(row.categoryId) ?? [];
-                        const hint =
-                          row.budgeted !== null
-                            ? computeAllocationHint(row.budgeted, lineItems, formatCurrency)
-                            : null;
-
                         return (
-                          <Fragment key={row.categoryId}>
                             <Table.Tr
+                              key={row.categoryId}
                               style={{ cursor: 'pointer' }}
                               onClick={() =>
                                 onCategoryClick({
@@ -259,38 +251,6 @@ export function ProjectCard({
                                 )}
                               </Table.Td>
                             </Table.Tr>
-
-                            {lineItems.map((li) => (
-                              <Table.Tr key={li.id} style={{ opacity: 0.7 }}>
-                                <Table.Td pl={24}>
-                                  <Tooltip label={li.notes ?? ''} disabled={!li.notes}>
-                                    <Text size="xs" c="dimmed" style={{ fontStyle: 'italic' }}>
-                                      • {li.name}
-                                    </Text>
-                                  </Tooltip>
-                                </Table.Td>
-                                <Table.Td colSpan={2} ta="right">
-                                  <Text size="xs" c="dimmed">
-                                    est. {formatCurrency(li.estimatedCost, true)}
-                                  </Text>
-                                </Table.Td>
-                                <Table.Td />
-                              </Table.Tr>
-                            ))}
-
-                            {hint?.label && (
-                              <Table.Tr>
-                                <Table.Td colSpan={4} pl={24}>
-                                  <Text
-                                    size="xs"
-                                    c={hint.kind === 'over' ? 'orange' : 'dimmed'}
-                                  >
-                                    {hint.label}
-                                  </Text>
-                                </Table.Td>
-                              </Table.Tr>
-                            )}
-                          </Fragment>
                         );
                       })}
                     </Table.Tbody>
@@ -301,6 +261,10 @@ export function ProjectCard({
                   No categorized spending or budgeted items found for this project.
                 </Text>
               )}
+            </Tabs.Panel>
+
+            <Tabs.Panel value="items" pt="sm">
+              <ProjectLineItems project={project} onLineItemClick={onLineItemClick} />
             </Tabs.Panel>
 
             <Tabs.Panel value="tasks" pt="sm">

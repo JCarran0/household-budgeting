@@ -11,6 +11,8 @@ export function createTransactionsApi(client: AxiosInstance) {
       offset?: number;
       categoryIds?: string[];
       tags?: string[];
+      /** When true, require EVERY tag in `tags` (AND) instead of any (OR). */
+      tagsMatchAll?: boolean;
       searchQuery?: string;
       includeHidden?: boolean;
       onlyUncategorized?: boolean;
@@ -67,6 +69,15 @@ export function createTransactionsApi(client: AxiosInstance) {
         failed: response.data.failed || 0,
         errors: response.data.errors,
       };
+    },
+
+    /** Distinct tags in use across the family's transactions, for autocomplete. */
+    async getDistinctTags(): Promise<string[]> {
+      const response = await client.get('/transactions/tags');
+      if (!response.data.success) {
+        throw new Error(response.data.error || 'Failed to fetch tags');
+      }
+      return response.data.tags ?? [];
     },
 
     async addTransactionTags(transactionId: string, tags: string[]): Promise<void> {

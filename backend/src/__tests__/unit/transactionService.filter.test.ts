@@ -489,6 +489,23 @@ describe('TransactionService — getTransactions() filtering', () => {
       expect(ids).toContain(txTagged.id);
     });
 
+    it('tagsMatchAll requires every tag (AND) — project tag AND line item tag', async () => {
+      // txTagged has ['vacation', 'dining']; txSearchable has ['work'].
+      const both = await transactionService.getTransactions(USER, {
+        tags: ['vacation', 'dining'],
+        tagsMatchAll: true,
+      });
+      expect(both.transactions!.map((t) => t.id)).toContain(txTagged.id);
+
+      const onlyOneMatches = await transactionService.getTransactions(USER, {
+        tags: ['vacation', 'work'],
+        tagsMatchAll: true,
+      });
+      const ids = onlyOneMatches.transactions!.map((t) => t.id);
+      expect(ids).not.toContain(txTagged.id);
+      expect(ids).not.toContain(txSearchable.id);
+    });
+
     it('tag filter returns no results when no transactions match', async () => {
       const result = await transactionService.getTransactions(USER, {
         tags: ['nonexistent-tag-xyz'],

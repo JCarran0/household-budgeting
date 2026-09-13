@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useEffect } from 'react';
 import {
   Stack,
   Group,
@@ -23,6 +23,7 @@ import { api } from '../../lib/api';
 import type { Transaction } from '../../../../shared/types';
 import { formatCurrency, formatAccountOwner } from '../../utils/formatters';
 import { useCategoryOptions } from '../../hooks/useCategoryOptions';
+import { useTransactionTags } from '../../hooks/useTransactionTags';
 import { UserColorDot } from '../common/UserColorDot';
 import { patchTransactionsInCache, invalidateTransactionCounts } from '../../lib/transactionCacheSync';
 
@@ -58,7 +59,11 @@ export function TransactionEditModal({
   onRequestSplit,
 }: TransactionEditModalProps) {
   const queryClient = useQueryClient();
-  const [availableTags, setAvailableTags] = useState<string[]>([]);
+  // Server-side distinct tags. Previously derived client-side from the first
+  // 1000 transactions, which silently dropped tags that only appear on older
+  // rows — a missing suggestion invites the typo that orphans project line
+  // item spend (PROJECTS-BRD.md §5.5.5).
+  const { tags: availableTags } = useTransactionTags({ enabled: opened });
 
   // Category options for select
   const { options: categoryOptions, isLoading: categoriesLoading, error: categoriesError } = useCategoryOptions({
@@ -80,24 +85,6 @@ export function TransactionEditModal({
     enabled: opened,
     staleTime: 5 * 60 * 1000,
   });
-
-  // Fetch all transactions to extract unique tags
-  const { data: allTransactionsData } = useQuery({
-    queryKey: ['all-transactions-tags'],
-    queryFn: () => api.getTransactions({ limit: 1000 }),
-    enabled: opened,
-  });
-
-  // Extract unique tags from all transactions
-  useEffect(() => {
-    if (allTransactionsData?.transactions) {
-      const tags = new Set<string>();
-      allTransactionsData.transactions.forEach(t => {
-        t.tags?.forEach(tag => tags.add(tag));
-      });
-      setAvailableTags(Array.from(tags));
-    }
-  }, [allTransactionsData]);
 
   const form = useForm<EditFormValues>({
     initialValues: {
@@ -255,7 +242,7 @@ export function TransactionEditModal({
   });
 
   // Build tag options (existing tags)
-  const tagOptions = availableTags.map(tag => tag);
+  const tagOptions = availableTags;
 
   const isLoading = updateCategoryMutation.isPending || addTagsMutation.isPending || updateDescriptionMutation.isPending || updateNotesMutation.isPending || updateHiddenMutation.isPending || updateFlaggedMutation.isPending;
 

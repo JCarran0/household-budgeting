@@ -147,6 +147,22 @@ interface AuthRequest extends Request {
 // actions can re-use them without importing this route module (REQ-P011,
 // TD-031). transactionImportSchema stays below — it is route-only.
 /**
+ * GET /api/v1/transactions/tags
+ * Distinct tags in use, for autocomplete.
+ */
+router.get('/tags', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    if (!req.user) throw new AuthorizationError();
+
+    const tags = await transactionService.getDistinctTags(req.user.familyId);
+
+    res.json({ success: true, tags });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
  * GET /api/v1/transactions/uncategorized/count
  * Get count of uncategorized transactions
  */
