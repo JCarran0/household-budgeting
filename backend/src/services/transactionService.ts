@@ -71,6 +71,8 @@ export interface TransactionFilter {
   accountIds?: string[];
   categoryIds?: string[];
   tags?: string[];
+  /** When true, a transaction must carry EVERY tag in `tags` (AND). Default: OR. */
+  tagsMatchAll?: boolean;
   searchQuery?: string;
   includePending?: boolean;
   includeHidden?: boolean;
@@ -756,7 +758,10 @@ export class TransactionService {
             isoCurrencyCode: originalTransaction.isoCurrencyCode,
             accountOwner: originalTransaction.accountOwner || null,
             originalDescription: originalTransaction.originalDescription || null,
-            tags: split.tags || [],
+            // Children inherit the parent's tags so project/trip attribution
+            // survives a split; the parent is hidden below and drops out of
+            // those totals. Explicit split.tags override the inheritance.
+            tags: split.tags ?? [...originalTransaction.tags],
             notes: originalTransaction.notes, // Preserve original notes
             isHidden: false,
             isFlagged: false,
@@ -1099,6 +1104,27 @@ export class TransactionService {
 
       return transaction;
     });
+  }
+
+  /**
+   * Distinct set of tags in use across a family's transactions.
+   *
+   * Backs tag autocomplete. Previously the frontend derived this client-side from
+   * a capped page of transactions, so tags on older rows silently disappeared —
+   * which matters now that project line items are matched by tag and a mistyped
+   * tag orphans the spend (PROJECTS-BRD.md §5.5.5).
+   *
+   * Excludes hidden rows (split parents and user-hidden transactions) and removed
+   * transactions, so a tag that only survives on an invisible row is not offered.
+   */
+  async getDistinctTags(familyId: string): Promise<string[]> {
+    const transactions = await this.repo.getAll(familyId);
+    const tags = new Set<string>();
+    for (const txn of transactions) {
+      if (txn.isHidden || txn.status === 'removed') continue;
+      for (const tag of txn.tags) tags.add(tag);
+    }
+    return Array.from(tags).sort((a, b) => a.localeCompare(b));
   }
 
   /**

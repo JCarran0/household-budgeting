@@ -295,6 +295,52 @@ describe('TransactionService — mutations', () => {
       expect(result.error).toBeTruthy();
     });
 
+    it('copies the parent tags onto every split child', async () => {
+      // Without this, splitting a project-tagged transaction silently strips the
+      // attribution from the children while the parent is hidden — the project
+      // then sees the split as either invisible or (once hand-retagged) doubled.
+      const txn = await createTransaction({
+        amount: 412.00,
+        tags: ['project:basement-pantry:2026', 'cement'],
+      });
+
+      const result = await transactionService.splitTransaction(userId, txn.id, [
+        { amount: 180.00 },
+        { amount: 232.00 },
+      ]);
+
+      expect(result.success).toBe(true);
+      for (const child of result.splitTransactions ?? []) {
+        expect(child.tags).toEqual(['project:basement-pantry:2026', 'cement']);
+      }
+    });
+
+    it('gives each child its own tags array, not a shared reference', async () => {
+      const txn = await createTransaction({ amount: 20.00, tags: ['shared'] });
+
+      const result = await transactionService.splitTransaction(userId, txn.id, [
+        { amount: 10.00 },
+        { amount: 10.00 },
+      ]);
+
+      const [a, b] = result.splitTransactions ?? [];
+      a.tags.push('only-a');
+      expect(b.tags).toEqual(['shared']);
+    });
+
+    it('lets explicit split tags override the inherited ones', async () => {
+      const txn = await createTransaction({ amount: 300.00, tags: ['project:x:2026'] });
+
+      const result = await transactionService.splitTransaction(userId, txn.id, [
+        { amount: 100.00, tags: ['project:x:2026', 'cement'] },
+        { amount: 200.00, tags: [] },
+      ]);
+
+      const [a, b] = result.splitTransactions ?? [];
+      expect(a.tags).toEqual(['project:x:2026', 'cement']);
+      expect(b.tags).toEqual([]);
+    });
+
     it('hides the original transaction after a split', async () => {
       const txn = await createTransaction({ amount: 40.00 });
 
