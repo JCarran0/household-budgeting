@@ -84,3 +84,16 @@ export function invalidateTransactionCounts(queryClient: QueryClient): void {
   queryClient.invalidateQueries({ queryKey: ['transactions', 'uncategorized', 'count'] });
   queryClient.invalidateQueries({ queryKey: ['amazon-receipts', 'eligible-count'] });
 }
+
+/**
+ * Invalidate the distinct-tag list that backs tag autocomplete.
+ *
+ * Call after any mutation that may introduce a tag the server has not seen. The
+ * list is served from GET /transactions/tags and cached for 5 minutes, so
+ * without this a tag applied for the first time is not suggestible until that
+ * expires — and an unsuggested tag is the one a user retypes slightly wrong,
+ * which silently orphans project line item spend.
+ */
+export function invalidateTransactionTags(queryClient: QueryClient): void {
+  queryClient.invalidateQueries({ queryKey: ['transaction-tags'] });
+}

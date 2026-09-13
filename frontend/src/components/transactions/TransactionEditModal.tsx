@@ -25,7 +25,7 @@ import { formatCurrency, formatAccountOwner } from '../../utils/formatters';
 import { useCategoryOptions } from '../../hooks/useCategoryOptions';
 import { useTransactionTags } from '../../hooks/useTransactionTags';
 import { UserColorDot } from '../common/UserColorDot';
-import { patchTransactionsInCache, invalidateTransactionCounts } from '../../lib/transactionCacheSync';
+import { patchTransactionsInCache, invalidateTransactionCounts, invalidateTransactionTags } from '../../lib/transactionCacheSync';
 
 interface AccountInfo {
   name: string;
@@ -146,6 +146,7 @@ export function TransactionEditModal({
       });
       // Backend replaces tags with the full list the client sends.
       patchTransactionsInCache(queryClient, [variables.transactionId], { tags: variables.tags });
+      invalidateTransactionTags(queryClient);
     },
     onError: () => {
       notifications.show({

@@ -4,7 +4,7 @@ import { api } from '../lib/api';
 import type { Transaction } from '../../../shared/types';
 import type { BulkEditUpdates } from '../components/transactions/BulkEditModal';
 import { notifications } from '@mantine/notifications';
-import { patchTransactionsInCache, invalidateTransactionCounts } from '../lib/transactionCacheSync';
+import { patchTransactionsInCache, invalidateTransactionCounts, invalidateTransactionTags } from '../lib/transactionCacheSync';
 
 export function useTransactionBulkOps(
   paginatedTransactions: Transaction[],
@@ -164,6 +164,9 @@ export function useTransactionBulkOps(
             return next;
           });
           if (apiUpdates.categoryId !== undefined) invalidateTransactionCounts(queryClient);
+          if (apiUpdates.tagsToAdd || apiUpdates.tagsToRemove) {
+            invalidateTransactionTags(queryClient);
+          }
         }
       } else {
         notifications.update({

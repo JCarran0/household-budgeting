@@ -4,20 +4,44 @@
 # BRD: docs/features/PROJECTS-BRD.md (§4.5 Project Tasks, §5.5 Line Item Estimates)
 # Related BRD: docs/features/TASK-MANAGEMENT-BRD.md (§1.4, REQ-017a/b)
 # Status: Shipped (commit aba0da0 on main, 2026-04-19)
-# Last Updated: 2026-04-19
+#         PARTIALLY SUPERSEDED 2026-09-13 — see the note below.
+# Last Updated: 2026-09-13
 # =============================================================================
+#
+# SUPERSEDED — LINE ITEMS
+# -----------------------
+# The line item half of this plan describes the ORIGINAL nested model and is
+# kept as a record of what shipped in April, not as a description of current
+# behaviour. PROJECTS-BRD.md v2.0 (§5.5-5.6) replaced it:
+#
+#   * Line items moved from ProjectCategoryBudget.lineItems[] to
+#     Project.lineItems[] — project-level, siblings of category budgets rather
+#     than nested inside them.
+#   * Each line item gained a required `tag`, matched against transactions.
+#     Actuals ARE now derived, reversing D1 below.
+#   * Line items have no categoryId, deliberately (BRD §5.5.2).
+#   * The allocation hint is anchored to the project's totalBudget, not a
+#     category's amount (reverses the anchor in D2/D12).
+#
+# Decisions below that no longer hold: D1, D2 (anchor only), D4 (still always
+# displayed, but in their own tab rather than under a category), D5 (tags are
+# explicitly reusable across projects) and D12 (category rows no longer carry
+# line items, so the amount=0 case it existed to serve is gone).
+#
+# The Project Tasks half of this plan (D6-D10) is unchanged and still current.
+# Migration: backend/scripts/migrateProjectLineItems.ts
 
 overview:
   description: |
     Two additive enhancements to the existing Projects feature:
 
-    1. Line Item Estimates — Each ProjectCategoryBudget gains an optional
-       lineItems[] array (name, estimatedCost, notes). Line items are an
-       estimating aid only — they are NOT reconciled against actual
-       transactions and do not affect any spending total, variance, or report.
-       The category's `amount` field remains authoritative. UI surfaces an
-       "unallocated" / "over-allocated" hint when sum(lineItems) differs from
-       amount.
+    1. Line Item Estimates — [SUPERSEDED, see header] Each
+       ProjectCategoryBudget gains an optional lineItems[] array (name,
+       estimatedCost, notes). Line items are an estimating aid only — they are
+       NOT reconciled against actual transactions and do not affect any
+       spending total, variance, or report. The category's `amount` field
+       remains authoritative. UI surfaces an "unallocated" / "over-allocated"
+       hint when sum(lineItems) differs from amount.
 
     2. Project Tasks Tab — The project detail view gains a Tasks tab listing
        tasks whose `tags` array contains the project's tag. Tab header shows
@@ -50,6 +74,7 @@ decisions:
   - id: D1
     date: 2026-04-18
     decision: Line items are estimate-only; no reconciliation against transactions
+    superseded_by: PROJECTS-BRD.md v2.0 §5.5.5 — actuals are now derived by tag match
     rationale: |
       User confirmed. Drops out: link-to-transaction UX, "purchased" checkbox,
       status tracking on line items, and any effect on actual spending totals.
@@ -81,6 +106,7 @@ decisions:
   - id: D5
     date: 2026-04-18
     decision: No cross-project reuse / autocomplete of line items
+    superseded_by: PROJECTS-BRD.md v2.0 §5.5.4 — tags are flat and reusable; autocomplete is backed by GET /transactions/tags
     rationale: |
       Premature. Would require indexing across projects, UX for suggestions,
       and adds noise when most line items are project-specific ("demo Dumpster",
@@ -148,6 +174,7 @@ decisions:
   - id: D12
     date: 2026-04-19
     decision: Allow amount=0 category budgets when line items are present
+    superseded_by: PROJECTS-BRD.md v2.0 §5.5.2 — category budgets no longer carry line items
     rationale: |
       Bug fix. The create/edit form silently filtered out category budget rows
       with `amount === 0` before sending to the backend, and the backend Zod

@@ -5,6 +5,7 @@ import { format, startOfMonth, endOfMonth, startOfYear, subMonths, parseISO } fr
 import type { Category } from '../../../shared/types';
 import { notifications } from '@mantine/notifications';
 import { getDateRange } from '../utils/reportDateRange';
+import { useTransactionTags } from './useTransactionTags';
 
 type DateFilterOption = 'this-month' | 'last-month' | 'ytd' | 'last3' | 'last6' | 'last12' | 'all' | 'custom' | string;
 
@@ -194,14 +195,13 @@ export function useTransactionData(filters: TransactionFilters) {
     },
   });
 
-  // Extract unique tags from all transactions
-  const availableTags = useMemo(() => {
-    const tags = new Set<string>();
-    transactionData?.transactions?.forEach(t => {
-      t.tags?.forEach(tag => tags.add(tag));
-    });
-    return Array.from(tags);
-  }, [transactionData]);
+  // Distinct tags come from the server, not from the loaded page. Deriving them
+  // from `transactionData` meant the filter bar and bulk-edit only ever offered
+  // tags visible under the CURRENT filters — so filtering by one tag shrank the
+  // list of tags you could filter or bulk-apply next. That matters more now that
+  // project line items are matched by tag: a tag missing from the suggestions
+  // invites the typo that silently orphans the spend.
+  const { tags: availableTags } = useTransactionTags();
 
   return {
     transactionData,
