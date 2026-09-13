@@ -25,6 +25,7 @@ import { ReadOnlyDataServiceImpl } from './readOnlyDataService';
 import { ChatbotDataService } from './chatbotDataService';
 import { ChatbotCostTracker } from './chatbotCostTracker';
 import { ChatbotService } from './chatbotService';
+import { AgentTraceStore } from './agentTraceStore';
 import { CategorizationService } from './categorizationService';
 import { ManualAccountService } from './manualAccountService';
 import { AmazonReceiptService } from './amazonReceiptService';
@@ -100,10 +101,16 @@ const chatbotCostTracker = new ChatbotCostTracker(
   dataService,
   config.ai.chatbotMonthlyLimit,
 );
+// NOTE: like ChatbotCostTracker, AgentTraceStore receives the writable
+// DataService because it must persist. It is a narrow appender over the
+// `ai_traces_{familyId}` namespace, not a general write capability — the
+// SEC-018 boundary around ChatbotDataService is unaffected.
+export const agentTraceStore = new AgentTraceStore(dataService);
 export const chatbotService = new ChatbotService(
   chatbotDataService,
   chatbotCostTracker,
   config.ai.anthropicApiKey,
+  agentTraceStore,
 );
 export const categorizationService = new CategorizationService(
   chatbotDataService,

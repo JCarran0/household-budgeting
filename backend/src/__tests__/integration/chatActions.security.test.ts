@@ -72,6 +72,7 @@ describe('10.1 — Action proposal intercepted, never executed by LLM', () => {
       userId: user.userId,
       familyId: user.familyId,
       conversationId: convId,
+      traceId: 'trace_test',
       proposalInput: {
         actionId: 'create_task',
         params: makeValidTaskParams(),
@@ -116,6 +117,7 @@ describe('10.2 — Cross-user nonce confirmation is blocked', () => {
       userId: userA.userId,
       familyId: userA.familyId,
       conversationId: convId,
+      traceId: 'trace_test',
       proposalInput: {
         actionId: 'create_task',
         params: makeValidTaskParams(),
@@ -153,6 +155,7 @@ describe('10.2 — Cross-user nonce confirmation is blocked', () => {
       userId: 'user-a',
       familyId: 'shared-family',
       conversationId: convId,
+      traceId: 'trace_test',
       proposalInput: {
         actionId: 'create_task',
         params: makeValidTaskParams(),
@@ -187,6 +190,7 @@ describe('10.3 — Replay attack on confirm endpoint is blocked', () => {
       userId: user.userId,
       familyId: user.familyId,
       conversationId: convId,
+      traceId: 'trace_test',
       proposalInput: {
         actionId: 'create_task',
         params: makeValidTaskParams(),
@@ -241,6 +245,7 @@ describe('10.4 — Supersession: new proposal invalidates prior nonce', () => {
       userId: user.userId,
       familyId: user.familyId,
       conversationId: convId,
+      traceId: 'trace_test',
       proposalInput: {
         actionId: 'create_task',
         params: { title: 'Task A' },
@@ -255,6 +260,7 @@ describe('10.4 — Supersession: new proposal invalidates prior nonce', () => {
       userId: user.userId,
       familyId: user.familyId,
       conversationId: convId,
+      traceId: 'trace_test',
       proposalInput: {
         actionId: 'create_task',
         params: { title: 'Task B (refined)' },
@@ -303,6 +309,7 @@ describe('10.4 — Supersession: new proposal invalidates prior nonce', () => {
       userId: 'user-x',
       familyId: 'fam-x',
       conversationId: convId,
+      traceId: 'trace_test',
       proposalInput: {
         actionId: 'create_task',
         params: { title: 'Task A' },
@@ -317,6 +324,7 @@ describe('10.4 — Supersession: new proposal invalidates prior nonce', () => {
       userId: 'user-x',
       familyId: 'fam-x',
       conversationId: convId,
+      traceId: 'trace_test',
       proposalInput: {
         actionId: 'create_task',
         params: { title: 'Task B' },
@@ -348,6 +356,7 @@ describe('10.5 — Zod re-validation on confirm rejects tampered params', () => 
       userId: user.userId,
       familyId: user.familyId,
       conversationId: convId,
+      traceId: 'trace_test',
       proposalInput: {
         actionId: 'create_task',
         params: makeValidTaskParams(),
@@ -389,6 +398,7 @@ describe('10.5 — Zod re-validation on confirm rejects tampered params', () => 
       userId: user.userId,
       familyId: user.familyId,
       conversationId: convId,
+      traceId: 'trace_test',
       proposalInput: {
         actionId: 'create_task',
         params: makeValidTaskParams(),
@@ -456,6 +466,7 @@ describe('10.8 — Action handler cannot be called with spoofed userId', () => {
       userId: user.userId,
       familyId: user.familyId,
       conversationId: convId,
+      traceId: 'trace_test',
       proposalInput: {
         actionId: 'create_task',
         params: makeValidTaskParams(),
@@ -1033,6 +1044,7 @@ describe('10.10 — Cost cap blocks attachment requests when monthly spend is at
       userId: user.userId,
       familyId: user.familyId,
       conversationId: convId,
+      traceId: 'trace_test',
       proposalInput: {
         actionId: 'create_task',
         params: makeValidTaskParams(),

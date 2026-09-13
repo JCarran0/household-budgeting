@@ -392,6 +392,8 @@ Diagnosis after the fact is only possible if the evidence was captured at the ti
 | REQ-P062 | Traces must carry a correlation ID shared with the audit log entry and any resulting proposal, so a write can be traced back to the reasoning that produced it. |
 | REQ-P063 | Default trace retention is 30 days. Traces referenced by an open learning (§15) are retained until that learning is closed. |
 
+**Implemented:** `backend/src/services/agentTraceStore.ts`, wired into `ChatbotService`. One deviation worth recording: REQ-P061 asks for results verbatim, but an uncapped ledger would persist every transaction the model ever read. Results above 64 KB are therefore dropped and explicitly flagged `resultTruncated`, rather than silently shortened — a reader can always tell "this is what the model saw" from "this is a fragment of it". Attachments are recorded as mime type and byte count only.
+
 ### 10.2 Full Transcript — On Incident Only
 
 | ID | Requirement |
@@ -422,7 +424,7 @@ Diagnosis after the fact is only possible if the evidence was captured at the ti
 | Phase | Scope | Exit criteria |
 |-------|-------|---------------|
 | **0 — Correctness** | Fix `get_budgets` (returns no actuals despite its description; returns bare IDs; absent budgets indistinguishable from no lookup). Add the §7.3 rendering-invariant test. | **Done.** The Subaru-class failure is covered by regression tests; the rendering invariant is locked and mutation-verified. |
-| **1 — Foundations** | Tier + dataClass in the registry; tool definitions derived from it; plan cards with per-row toggles; split cost caps; structured trace (§10.1). | Existing two actions run unchanged on the new machinery. |
+| **1 — Foundations** | Tier + dataClass in the registry; tool definitions derived from it; plan cards with per-row toggles; split cost caps; ~~structured trace (§10.1)~~ **done**. | Existing two actions run unchanged on the new machinery. |
 | **2 — Read coverage** | Task, trip, and project read tools. | The assistant can answer "what's on our plate this weekend?" |
 | **3 — Confirmed writes** | T1 action set per §9. | Multi-step plan cards work end to end. |
 | **4 — Activity log & undo** | Durable undo handles, user-facing activity log, bulk undo. | Every AI write is visible and reversible. Prerequisite for Phase 5. |
@@ -453,10 +455,10 @@ Phase 4 gates Phase 5 deliberately: SEC-P001 (one-click reversibility) is unenfo
 | ID | Question | Proposed default |
 |----|----------|------------------|
 | Q-P01 | What are the actual cap values for `interactive` vs `background`? | Hold the $20 total; split $15 interactive / $5 background, revisit after one month of real data. |
-| Q-P02 | Trace retention period. | 30 days, extended indefinitely for traces referenced by an open learning. |
+| ~~Q-P02~~ | ~~Trace retention period.~~ | **Decided & implemented.** 30 days, with a `pinned` flag exempting traces referenced by an open learning. A hard cap of 1000 traces per family bounds the file regardless; pinned traces are evicted last, never first. |
 | Q-P03 | Does the plan-card legibility threshold (25 rows) hold in practice on mobile? | Validate during Phase 3 with a real 40-row recategorization. |
 | Q-P04 | Should T2 automations run on a schedule, or on data arrival (post-Plaid-sync)? | On data arrival — it bounds volume to what actually changed and makes idempotency natural. |
-| Q-P05 | Where does the trace/incident store live given the JSON-file storage model? | Per-family JSON alongside existing collections, with its own retention sweep. |
+| ~~Q-P05~~ | ~~Where does the trace/incident store live given the JSON-file storage model?~~ | **Decided & implemented.** Per-family JSON at `ai_traces_{familyId}`, written by `AgentTraceStore` — a narrow appender over that one namespace, not a general write capability handed to the chatbot. Retention is applied on each write rather than by a separate sweep. |
 | Q-P06 | External links are clickable today (`protocols.href` allows http/https), which SEC-P024 forbids. Enforce it, or amend SEC-P024? | Undecided. Enforcing costs the ability to cite a restaurant or bank URL in trip and budget conversations; amending accepts a click-gated exfiltration path. Decide before Trips read tools ship in Phase 2, since that is when external URLs start appearing in output. |
 
 ---

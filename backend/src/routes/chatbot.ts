@@ -289,6 +289,7 @@ router.post(
       const consumed = consumeProposal({ nonce: body.proposalId, userId });
       if (!consumed.ok) {
         logAuditRejection({
+          traceId: null, // nonce unresolved — no trace to correlate with
           userId,
           actionId: 'unknown',
           proposalId: body.proposalId,
@@ -314,6 +315,7 @@ router.post(
       const actionDef = getChatAction(actionId);
       if (!actionDef) {
         logAuditRejection({
+          traceId: stored.traceId,
           userId,
           actionId,
           proposalId: body.proposalId,
@@ -331,6 +333,7 @@ router.post(
       const paramsResult = actionDef.paramsSchema.safeParse(body.confirmedParams);
       if (!paramsResult.success) {
         logAuditRejection({
+          traceId: stored.traceId,
           userId,
           actionId,
           proposalId: body.proposalId,
@@ -349,6 +352,7 @@ router.post(
       const resource = await actionDef.execute(paramsResult.data, { userId, familyId });
 
       logAuditSuccess({
+        traceId: stored.traceId,
         userId,
         familyId,
         actionId,

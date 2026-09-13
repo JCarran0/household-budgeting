@@ -24,6 +24,14 @@ import { childLogger } from '../utils/logger';
 
 const log = childLogger('chatbotService');
 import { CHATBOT_SYSTEM_PROMPT, CHATBOT_TOOLS } from './chatbotPrompt';
+import {
+  AgentTraceStore,
+  buildToolCallEntry,
+  newTraceId,
+  type AgentTrace,
+  type TraceIteration,
+  type TraceToolCall,
+} from './agentTraceStore';
 import { getChatAction, listChatActionIds, issueProposal } from './chatActions';
 import type {
   ChatRequest,
@@ -69,11 +77,28 @@ const CACHED_CHATBOT_TOOLS: Anthropic.Tool[] = CHATBOT_TOOLS.map((tool, i, arr) 
     : tool,
 );
 
+/**
+ * Operational log line only — sizes, never contents. This is what reaches
+ * CloudWatch. Trace contents go to AgentTraceStore instead, which has narrower
+ * access and shorter retention (SEC-P040). The duplication is deliberate: the
+ * two have different audiences and different safety requirements.
+ */
 interface ToolCallLog {
   toolName: string;
   inputParams: Record<string, unknown>;
   resultSize: number;
   latencyMs: number;
+}
+
+/**
+ * Accumulates the structured trace as the tool loop runs (REQ-P060). Mutated in
+ * place by toolLoop, the same way toolCallLogs already is, so the loop's return
+ * shape stays a plain result rather than growing a second channel.
+ */
+interface TraceCollector {
+  iterations: TraceIteration[];
+  toolCalls: TraceToolCall[];
+  proposalActionId: string | null;
 }
 
 /** In-request attachment data — transient, never persisted (SEC-A014). */
@@ -95,6 +120,7 @@ export class ChatbotService {
     private readonly chatbotDataService: ChatbotDataService,
     private readonly costTracker: ChatbotCostTracker,
     anthropicApiKey: string,
+    private readonly traceStore: AgentTraceStore,
   ) {
     this.client = new Anthropic({ apiKey: anthropicApiKey });
   }
@@ -134,9 +160,14 @@ export class ChatbotService {
     // conversationId defaults to a stable fallback if frontend hasn't sent one yet
     const conversationId = request.conversationId ?? `anon_${familyId}`;
 
+    // REQ-P060/P062: one correlation ID per AI request, shared with any proposal
+    // it issues and with the audit entry written when that proposal is confirmed.
+    const traceId = newTraceId();
+    const collector: TraceCollector = { iterations: [], toolCalls: [], proposalActionId: null };
+
     try {
       const result = await this.executeWithTimeout(
-        this.toolLoop(familyId, userId, conversationId, messages, request.model, toolCallLogs, request.userDisplayName),
+        this.toolLoop(familyId, userId, conversationId, messages, request.model, toolCallLogs, collector, traceId, request.userDisplayName),
         REQUEST_TIMEOUT_MS,
       );
 
@@ -156,6 +187,15 @@ export class ChatbotService {
       };
 
       this.logRequest(familyId, request.model, totalInputTokens, totalOutputTokens, costResult.estimatedCost, toolCallLogs, Date.now() - startTime);
+
+      await this.recordTrace({
+        traceId, familyId, userId, conversationId, collector, attachment,
+        model: request.model,
+        latencyMs: Date.now() - startTime,
+        totalInputTokens, totalOutputTokens,
+        outcome: result.type === 'action_proposal' ? 'action_proposal' : 'message',
+        errorMessage: null,
+      });
 
       // 6. Build response by result type
       if (result.type === 'action_proposal') {
@@ -208,6 +248,17 @@ export class ChatbotService {
         message,
       );
 
+      // A failed request is the one most worth having a trace for.
+      await this.recordTrace({
+        traceId, familyId, userId, conversationId, collector, attachment,
+        model: request.model,
+        latencyMs: Date.now() - startTime,
+        totalInputTokens: collector.iterations.reduce((n, i) => n + i.inputTokens, 0),
+        totalOutputTokens: collector.iterations.reduce((n, i) => n + i.outputTokens, 0),
+        outcome: 'error',
+        errorMessage: message,
+      });
+
       if (message === 'CHATBOT_REQUEST_TIMEOUT') {
         return this.errorResponse('That took too long — try a simpler question or a faster model.', budget);
       }
@@ -239,6 +290,8 @@ export class ChatbotService {
     messages: Anthropic.MessageParam[],
     model: ChatModel,
     toolCallLogs: ToolCallLog[],
+    collector: TraceCollector,
+    traceId: string,
     userDisplayName?: string,
   ): Promise<ToolLoopResult> {
     let totalInputTokens = 0;
@@ -268,6 +321,17 @@ export class ChatbotService {
 
       totalInputTokens += response.usage.input_tokens;
       totalOutputTokens += response.usage.output_tokens;
+
+      // REQ-P060: per-call token counts and stop reason, not just the totals.
+      // Cache hit/miss is what explains a surprising bill, so it is captured too.
+      collector.iterations.push({
+        iteration,
+        stopReason: response.stop_reason,
+        inputTokens: response.usage.input_tokens,
+        outputTokens: response.usage.output_tokens,
+        cacheReadTokens: response.usage.cache_read_input_tokens ?? 0,
+        cacheCreationTokens: response.usage.cache_creation_input_tokens ?? 0,
+      });
 
       // If Claude returned a final text response (no more tool calls)
       if (response.stop_reason === 'end_turn') {
@@ -323,7 +387,9 @@ export class ChatbotService {
             // Validation succeeded — issue nonce and return proposal to frontend
             // SECURITY: nonce is NOT sent to Claude (SEC-A009). The LLM only
             // sees the proposal ID via conversation context if it re-proposes.
+            collector.proposalActionId = input.actionId;
             const proposal = issueProposal({
+              traceId,
               userId,
               familyId,
               conversationId,
@@ -362,6 +428,19 @@ export class ChatbotService {
             resultSize: resultStr.length,
             latencyMs: latency,
           });
+
+          // REQ-P061: the result verbatim, exactly as handed to the model. This
+          // is the field that answers "what did it actually see?" — the question
+          // the Subaru incident could not be answered without.
+          collector.toolCalls.push(
+            buildToolCallEntry({
+              sequence: collector.toolCalls.length,
+              toolName: toolUse.name,
+              input: toolInput,
+              result,
+              latencyMs: latency,
+            }),
+          );
 
           toolResults.push({
             type: 'tool_result',
@@ -562,6 +641,61 @@ export class ChatbotService {
         capExceeded: false,
       },
     };
+  }
+
+  /**
+   * Persist the structured trace (REQ-P060).
+   *
+   * Attachments are recorded as metadata only — mime type and byte count, never
+   * the buffer and never extracted text (SEC-P041, preserving SEC-A014/A016).
+   *
+   * Never throws: AgentTraceStore.record swallows its own failures, and this
+   * wrapper guards the assembly step too. Diagnostic exhaust must not be able to
+   * fail a user's request.
+   */
+  private async recordTrace(args: {
+    traceId: string;
+    familyId: string;
+    userId: string;
+    conversationId: string;
+    collector: TraceCollector;
+    attachment?: ChatAttachment;
+    model: ChatModel;
+    latencyMs: number;
+    totalInputTokens: number;
+    totalOutputTokens: number;
+    outcome: AgentTrace['outcome'];
+    errorMessage: string | null;
+  }): Promise<void> {
+    try {
+      const { collector } = args;
+      await this.traceStore.record({
+        traceId: args.traceId,
+        familyId: args.familyId,
+        userId: args.userId,
+        conversationId: args.conversationId,
+        workloadClass: 'interactive',
+        model: MODEL_IDS[args.model],
+        createdAt: new Date().toISOString(),
+        latencyMs: args.latencyMs,
+        iterationCount: collector.iterations.length,
+        finalStopReason: collector.iterations.at(-1)?.stopReason ?? null,
+        iterations: collector.iterations,
+        toolCalls: collector.toolCalls,
+        totalInputTokens: args.totalInputTokens,
+        totalOutputTokens: args.totalOutputTokens,
+        outcome: args.outcome,
+        proposalIssued: collector.proposalActionId !== null,
+        proposalActionId: collector.proposalActionId,
+        attachment: args.attachment
+          ? { mimeType: args.attachment.mimeType, bytes: args.attachment.buffer.length }
+          : null,
+        errorMessage: args.errorMessage,
+        pinned: false,
+      });
+    } catch (error) {
+      log.error({ err: error, traceId: args.traceId }, 'failed to assemble agent trace');
+    }
   }
 
   private logRequest(

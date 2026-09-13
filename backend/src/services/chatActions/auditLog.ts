@@ -18,6 +18,8 @@ import { childLogger } from '../../utils/logger';
 const log = childLogger('chatActionsAudit');
 
 interface AuditSuccessEntry {
+  /** Correlates the write with the AI request that proposed it (REQ-P062). */
+  traceId: string;
   userId: string;
   familyId: string;
   actionId: string;
@@ -27,6 +29,8 @@ interface AuditSuccessEntry {
 }
 
 interface AuditRejectionEntry {
+  /** Null when the nonce could not be resolved, so no trace is known. */
+  traceId: string | null;
   userId: string;
   actionId: string;
   proposalId: string;

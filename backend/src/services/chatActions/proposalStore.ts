@@ -21,11 +21,16 @@ import type { ActionProposal, ActionConfirmErrorCode, ActionConfirmResponse } fr
 
 const TTL_MS = 15 * 60 * 1000; // 15 minutes (SEC-A006)
 
-interface StoredProposal {
+export interface StoredProposal {
   proposal: ActionProposal;
   userId: string;
   familyId: string;
   conversationId: string;  // Scopes "one active card per conversation" (D-2)
+  /**
+   * Correlation ID for the AI request that produced this proposal (REQ-P062).
+   * Lets a confirmed write be traced back to the tool results that motivated it.
+   */
+  traceId: string;
   createdAt: number;
   used: boolean;
   result?: ActionConfirmResponse;
@@ -46,6 +51,7 @@ export function issueProposal(args: {
   userId: string;
   familyId: string;
   conversationId: string;
+  traceId: string;
   proposalInput: Omit<ActionProposal, 'proposalId' | 'expiresAt'>;
 }): ActionProposal {
   // Atomically supersede any prior active proposal for this conversation (SEC-A007)
@@ -75,6 +81,7 @@ export function issueProposal(args: {
     userId: args.userId,
     familyId: args.familyId,
     conversationId: args.conversationId,
+    traceId: args.traceId,
     createdAt: Date.now(),
     used: false,
   });
