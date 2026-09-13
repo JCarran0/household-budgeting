@@ -256,7 +256,7 @@ describe('ChatMessageBubble — rendering invariant (SEC-P025)', () => {
           <ChatMessageBubble
             message={{
               ...assistantMessage('I could not reach that.'),
-              learningNotice: { capabilityKey: 'tasks.read', title },
+              learningNotices: [{ capabilityKey: 'tasks.read', title }],
             }}
           />
         </MantineProvider>,
@@ -301,5 +301,29 @@ describe('ChatMessageBubble — rendering invariant (SEC-P025)', () => {
       expect(container.querySelector('strong')).toBeNull();
       expect(screen.getByText('<img src="x">**bold**')).toBeInTheDocument();
     });
+  });
+});
+
+describe('every autonomous learning write is surfaced (REQ-L002)', () => {
+  // MAX_PER_CONVERSATION is 2, so two notices in one turn is reachable. A
+  // singular field rendered only the first, silently hiding the very write the
+  // requirement exists to make visible.
+  it('renders a notice for each learning recorded this turn, not just the first', () => {
+    render(
+      <MantineProvider>
+        <ChatMessageBubble
+          message={{
+            ...assistantMessage('I could not reach either of those.'),
+            learningNotices: [
+              { capabilityKey: 'tasks.read', title: 'Cannot read tasks' },
+              { capabilityKey: 'trips.read', title: 'Cannot read trips' },
+            ],
+          }}
+        />
+      </MantineProvider>,
+    );
+
+    expect(screen.getByText(/Cannot read tasks/)).toBeInTheDocument();
+    expect(screen.getByText(/Cannot read trips/)).toBeInTheDocument();
   });
 });

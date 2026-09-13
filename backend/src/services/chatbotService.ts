@@ -248,7 +248,7 @@ export class ChatbotService {
               outputTokens: totalOutputTokens,
               estimatedCost: costResult.estimatedCost,
             },
-            learningNotice: collector.learningNotices[0],
+            learningNotices: collector.learningNotices,
           },
           proposal: result.proposal,
           usage,
@@ -268,7 +268,7 @@ export class ChatbotService {
             outputTokens: totalOutputTokens,
             estimatedCost: costResult.estimatedCost,
           },
-          learningNotice: collector.learningNotices[0],
+          learningNotices: collector.learningNotices,
         },
         usage,
       };
@@ -746,7 +746,14 @@ export class ChatbotService {
           ? { mimeType: args.attachment.mimeType, bytes: args.attachment.buffer.length }
           : null,
         errorMessage: args.errorMessage,
-        pinned: false,
+        // REQ-P063: a trace referenced by a learning is the evidence for it, so
+        // it must outlive the 30-day window while that learning is open —
+        // learnings are kept indefinitely, traces are not. Pinned at write time
+        // rather than through traceStore.pin(), because the trace does not
+        // exist yet when record_learning runs inside the loop; a later pin()
+        // call would have been a no-op against a missing row, which is exactly
+        // why the flag was set and never used.
+        pinned: collector.learningNotices.length > 0,
       });
     } catch (error) {
       log.error({ err: error, traceId: args.traceId }, 'failed to assemble agent trace');

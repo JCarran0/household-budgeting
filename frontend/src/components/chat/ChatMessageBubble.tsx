@@ -206,11 +206,11 @@ export function ChatMessageBubble({
             SEC-L002: `title` is model-authored and therefore untrusted. It is
             rendered inside <Text> as a plain string — never through the markdown
             renderer, never as markup. */}
-        {!isUser && message.learningNotice && (
-          <Text size="xs" c="dimmed" fs="italic" pl="xs">
-            Noted for the developer: {message.learningNotice.title}
+        {!isUser && message.learningNotices?.map((notice, i) => (
+          <Text key={`${notice.capabilityKey}-${i}`} size="xs" c="dimmed" fs="italic" pl="xs">
+            Noted for the developer: {notice.title}
           </Text>
-        )}
+        ))}
 
         {/* Action card rendered below the bubble when a proposal is present */}
         {hasProposal && message.proposal && (

@@ -936,7 +936,13 @@ export interface ChatMessage {
    * autonomous write is never invisible to the user. `title` is model-authored
    * and therefore untrusted — render as text, never as markup.
    */
-  learningNotice?: LearningNotice;
+  /**
+   * REQ-L002: EVERY autonomous learning write this turn, not just the first.
+   * Plural because MAX_PER_CONVERSATION is 2 — a singular field silently
+   * dropped the second one, which is precisely the write the requirement
+   * exists to make visible.
+   */
+  learningNotices?: LearningNotice[];
 }
 
 export interface LearningNotice {
