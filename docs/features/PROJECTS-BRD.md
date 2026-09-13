@@ -305,6 +305,28 @@ Line items are **always shown** in the project detail view — not hidden behind
 | Quantity × unit cost fields                          | Single `estimatedCost` per line item keeps input light      |
 | Type/category field (material / tool / service)      | Users may annotate via name or notes; see §5.5.2 on `categoryId` |
 
+#### 5.5.10 Renaming a Line Item's Tag
+
+Renaming a line item's `tag` does **not** rewrite the tag on transactions. The
+transactions keep the old tag, stop matching the line item, and their spend
+moves into *Unattributed* (§5.5.6) — where the Line Items tab reports it.
+
+This is deliberate for now. The behaviour is visible rather than silent, and the
+remedy (retag the transactions) is the same action the user would take anyway.
+
+Two alternatives were considered and rejected for v1:
+
+- **Propagate automatically**, scoped to the project's transactions, mirroring
+  project rename. Rejected because a project tag is system-generated while a
+  line item tag is typed by the user onto their own transactions — silently
+  rewriting the latter is a materially different act from renaming the former.
+  It also misbehaves when two line items in one project share a tag: renaming
+  one would take the other's matches with it.
+- **Detect and offer** — on save, if N transactions in the project still carry
+  the old tag, offer to retag them. This is the likely v2 if the manual remedy
+  proves annoying in practice; it fixes the real gap, which is not that the
+  orphaning is hidden but that nothing names which rename caused it.
+
 ### 5.6 Hidden Transactions and Splits
 
 Project totals **exclude hidden transactions**, consistent with every other consumer of transaction data (reports, auto-categorization, the chatbot). `isHidden` means hidden everywhere.
@@ -429,7 +451,7 @@ The project's start and end dates define the project's timeline for display and 
 | 2 | Is there a max number of projects to support before pagination is needed?   | Open   |
 | 3 | Should project tags be visually distinguished from trip/regular tags?       | Open   |
 | 4 | Should line item tags be suggested from other projects' line items, or only from transaction tags in use? | Open |
-| 5 | Should a line item's tag rename propagate to transactions the way a project rename does? | Open |
+| 5 | Should a line item's tag rename propagate to transactions the way a project rename does? | Deferred 2026-09-13 — see §5.5.10 |
 
 ---
 
