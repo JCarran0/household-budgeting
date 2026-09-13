@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [6.5.0](https://github.com/JCarran0/household-budgeting/compare/v6.4.2...v6.5.0) (2026-09-13)
+
+
+### Features
+
+* **ai:** give the assistant task, trip and project read tools ([be887ae](https://github.com/JCarran0/household-budgeting/commit/be887aed6995e28c885b5b7916208e8ee679556a))
+
+
+### Documentation
+
+* **ai:** make BRD supersession bidirectional ([c0819d4](https://github.com/JCarran0/household-budgeting/commit/c0819d4e0add39b860f9fe87794a739d6a66f046))
+* **ai:** record Phase 2, and correct a BRD landmine that described nothing ([33f92cc](https://github.com/JCarran0/household-budgeting/commit/33f92cc0419480e6fb75133a9b7457c27ee0ceee))
+
 ### [6.4.2](https://github.com/JCarran0/household-budgeting/compare/v6.4.1...v6.4.2) (2026-09-13)
 
 
