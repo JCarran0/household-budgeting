@@ -145,13 +145,13 @@ The existing `chatActions/registry.ts` generalizes into the single place where A
 
 | ID | Requirement |
 |----|-------------|
-| REQ-P010 | Both read tools and write actions must be registered in a single capability registry. Tool definitions sent to the model must be **derived** from the registry, not maintained separately in `chatbotPrompt.ts`. |
+| REQ-P010 | Both read tools and write actions must be registered in a single capability registry. Tool definitions sent to the model must be **derived** from the registry, not maintained separately in `chatbotPrompt.ts`. **Implemented:** `services/capabilities/readCapabilities.ts` pairs each read tool's definition with its executor; `buildChatbotTools()` derives the array. Write actions remain in the chat action registry and are never exposed as tools — they reach the model only via `propose_action`. |
 | REQ-P011 | Every write action must re-use the Zod schema exported by the HTTP route that serves the equivalent human UI flow. Defining a parallel schema for an action is prohibited — it creates two sources of truth for validation. |
 | REQ-P012 | Every write action must execute through the existing service layer, never through direct storage access, so that business rules apply identically to AI-originated and human-originated writes. |
 | REQ-P013 | Handler context remains JWT-derived only (`userId`, `familyId`). No identity, family, or privilege parameter may be accepted from model output. (Restates SEC-A002; now platform-wide.) |
 | REQ-P014 | Registration must fail fast at startup on: duplicate `actionId`, missing tier, missing `dataClass`, or a T2 declaration whose `dataClass` is not in the permitted set. |
 | REQ-P015 | A test must assert that the set of registered T2 actions equals an explicit hardcoded list. Adding a T2 action requires editing that list, making promotion visible in review. |
-| REQ-P016 | The tool definitions exposed to the model must be filtered by workspace. The Business Workspace exposes no AI tools at all (§11). |
+| REQ-P016 | The tool definitions exposed to the model must be filtered by workspace. The Business Workspace exposes no AI tools at all (§11). **Mechanism implemented, policy NOT enforced — see Q-P07.** |
 
 ### 4.1 Tool Surface Growth
 
@@ -426,7 +426,7 @@ Diagnosis after the fact is only possible if the evidence was captured at the ti
 | Phase | Scope | Exit criteria |
 |-------|-------|---------------|
 | **0 — Correctness** | Fix `get_budgets` (returns no actuals despite its description; returns bare IDs; absent budgets indistinguishable from no lookup). Add the §7.3 rendering-invariant test. | **Done.** The Subaru-class failure is covered by regression tests; the rendering invariant is locked and mutation-verified. |
-| **1 — Foundations** | ~~Tier + dataClass in the registry~~ **done**; tool definitions derived from it; plan cards with per-row toggles; ~~split cost caps~~ **done**; ~~structured trace (§10.1)~~ **done**. | Existing two actions run unchanged on the new machinery. |
+| **1 — Foundations** | ~~Tier + dataClass in the registry~~ **done**; ~~tool definitions derived from it~~ **done**; plan cards with per-row toggles; ~~split cost caps~~ **done**; ~~structured trace (§10.1)~~ **done**. | Existing two actions run unchanged on the new machinery. |
 | **2 — Read coverage** | Task, trip, and project read tools. | The assistant can answer "what's on our plate this weekend?" |
 | **3 — Confirmed writes** | T1 action set per §9. | Multi-step plan cards work end to end. |
 | **4 — Activity log & undo** | Durable undo handles, user-facing activity log, bulk undo. | Every AI write is visible and reversible. Prerequisite for Phase 5. |
@@ -461,6 +461,7 @@ Phase 4 gates Phase 5 deliberately: SEC-P001 (one-click reversibility) is unenfo
 | Q-P03 | Does the plan-card legibility threshold (25 rows) hold in practice on mobile? | Validate during Phase 3 with a real 40-row recategorization. |
 | Q-P04 | Should T2 automations run on a schedule, or on data arrival (post-Plaid-sync)? | On data arrival — it bounds volume to what actually changed and makes idempotency natural. |
 | ~~Q-P05~~ | ~~Where does the trace/incident store live given the JSON-file storage model?~~ | **Decided & implemented.** Per-family JSON at `ai_traces_{familyId}`, written by `AgentTraceStore` — a narrow appender over that one namespace, not a general write capability handed to the chatbot. Retention is applied on each write rather than by a separate sweep. |
+| Q-P07 | The BRD excludes the Business Workspace from AI entirely, reads included (§11) — but the chatbot **is reachable there today**, and `chatbotCostTracker` explicitly budgets for it (REQ-007/D11). Enforcing §11 removes a working feature. | **Needs your call.** `buildChatbotTools({ aiEnabled: false })` returns an empty surface, so the mechanism is ready, but nothing calls it with `false`. I did not wire it to `workspaceType`, because silently disabling a feature the family may be using is not a decision to make inside a refactor. Either enforce it (chatbot becomes unavailable in the business workspace) or amend §11 to permit reads there. |
 | Q-P06 | External links are clickable today (`protocols.href` allows http/https), which SEC-P024 forbids. Enforce it, or amend SEC-P024? | Undecided. Enforcing costs the ability to cite a restaurant or bank URL in trip and budget conversations; amending accepts a click-gated exfiltration path. Decide before Trips read tools ship in Phase 2, since that is when external URLs start appearing in output. |
 
 ---

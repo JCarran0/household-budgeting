@@ -17,9 +17,10 @@
  *   injection with durable storage.
  */
 
-import { CHATBOT_TOOLS } from '../../services/chatbotPrompt';
+import { buildChatbotTools } from '../../services/capabilities/readCapabilities';
 import { CAPABILITY_KEYS, AgentLearningsStore } from '../../services/agentLearningsStore';
 
+const CHATBOT_TOOLS = buildChatbotTools();
 const recordLearning = CHATBOT_TOOLS.find(t => t.name === 'record_learning');
 
 describe('record_learning tool surface', () => {

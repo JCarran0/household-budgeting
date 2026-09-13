@@ -23,7 +23,8 @@ import { ChatbotCostTracker } from './chatbotCostTracker';
 import { childLogger } from '../utils/logger';
 
 const log = childLogger('chatbotService');
-import { CHATBOT_SYSTEM_PROMPT, CHATBOT_TOOLS } from './chatbotPrompt';
+import { CHATBOT_SYSTEM_PROMPT } from './chatbotPrompt';
+import { buildChatbotTools, getReadCapability } from './capabilities/readCapabilities';
 import { AgentLearningsStore, isCapabilityKey } from './agentLearningsStore';
 import {
   AgentTraceStore,
@@ -39,11 +40,6 @@ import type {
   ChatResponse,
   ChatMessage,
   ChatModel,
-  QueryTransactionsInput,
-  GetBudgetsInput,
-  GetBudgetSummaryInput,
-  GetSpendingByCategoryInput,
-  GetCashFlowInput,
   ActionProposalInput,
   LearningNotice,
 } from '../shared/types';
@@ -73,11 +69,9 @@ const SYSTEM_PROMPT_BASE: Anthropic.TextBlockParam = {
   cache_control: { type: 'ephemeral' },
 };
 
-const CACHED_CHATBOT_TOOLS: Anthropic.Tool[] = CHATBOT_TOOLS.map((tool, i, arr) =>
-  i === arr.length - 1
-    ? { ...tool, cache_control: { type: 'ephemeral' as const } }
-    : tool,
-);
+// REQ-P010: derived from the capability registry, not maintained alongside it.
+// buildChatbotTools applies the cache breakpoint to the final tool (REQ-P017).
+const CACHED_CHATBOT_TOOLS: Anthropic.Tool[] = buildChatbotTools();
 
 /**
  * Operational log line only — sizes, never contents. This is what reaches
@@ -539,46 +533,23 @@ export class ChatbotService {
   // Private: Tool execution
   // ==========================================================================
 
+  /**
+   * Dispatch a read tool through the capability registry (REQ-P010).
+   *
+   * Replaces a hand-maintained switch that had to be kept in sync with a
+   * separate tool-definition array. A tool the model can see now cannot exist
+   * without an executor, because they are the same object.
+   */
   private async executeTool(
     familyId: string,
     toolName: string,
     input: Record<string, unknown>,
   ): Promise<unknown> {
-    switch (toolName) {
-      case 'query_transactions':
-        // TD-012 Sprint 2: cap rows in context; returns summary when truncated.
-        return this.chatbotDataService.queryTransactionsForTool(familyId, input as unknown as QueryTransactionsInput);
-      case 'get_categories':
-        return this.chatbotDataService.getCategories(familyId);
-      case 'get_budgets': {
-        const budgetsInput = input as unknown as GetBudgetsInput;
-        return this.chatbotDataService.getBudgetsForTool(
-          familyId,
-          budgetsInput.month,
-          budgetsInput.categoryQuery,
-        );
-      }
-      case 'get_budget_summary':
-        return this.chatbotDataService.getBudgetSummary(familyId, (input as unknown as GetBudgetSummaryInput).month);
-      case 'get_accounts':
-        return this.chatbotDataService.getAccounts(familyId);
-      case 'get_spending_by_category':
-        return this.chatbotDataService.getSpendingByCategory(
-          familyId,
-          (input as unknown as GetSpendingByCategoryInput).startDate,
-          (input as unknown as GetSpendingByCategoryInput).endDate,
-        );
-      case 'get_cash_flow':
-        return this.chatbotDataService.getCashFlow(
-          familyId,
-          (input as unknown as GetCashFlowInput).startDate,
-          (input as unknown as GetCashFlowInput).endDate,
-        );
-      case 'get_auto_categorization_rules':
-        return this.chatbotDataService.getAutoCategorizeRules(familyId);
-      default:
-        return { error: `Unknown tool: ${toolName}` };
+    const capability = getReadCapability(toolName);
+    if (!capability) {
+      return { error: `Unknown tool: ${toolName}` };
     }
+    return capability.execute(input, this.chatbotDataService, familyId);
   }
 
   // ==========================================================================
