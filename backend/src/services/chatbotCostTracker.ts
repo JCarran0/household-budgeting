@@ -19,19 +19,62 @@ import type { DataService } from './dataService';
 import type { ChatModel } from '../shared/types';
 import type { WorkloadClass } from './workloadClass';
 
-// Cost per million tokens by model (update when pricing changes).
+// Base cost per million tokens by model.
 //
-// ⚠️ NOT re-verified when the model IDs moved to the 5 series (REQ-P056,
-// 2026-09-13). These figures were set for the previous generation. If real
-// pricing is higher, the $20 cap under-counts and real spend overshoots it;
-// if lower, the cap is stricter than intended. Check current per-token rates
-// and correct this table — it is the only thing standing between the family
-// and an unbounded AI bill.
+// Verified 2026-09-13 against the published API pricing for the 5-series models
+// (Q-P08). Opus 5 ($5/$25) and Haiku 4.5 ($1/$5) were already correct; Sonnet
+// moved from $3/$15 to $2/$10 with Sonnet 5.
+//
+// Note when reasoning about the cap: Opus 5 and Sonnet 5 use a newer tokenizer
+// that produces roughly 30% more tokens for the same text than Sonnet 4.6 and
+// earlier. Per-token prices did not rise for Opus, but the same conversation
+// now costs about 30% more there. That is a real change in what $20 buys, not
+// a bug in this file.
 const MODEL_PRICING: Record<ChatModel, { input: number; output: number }> = {
   haiku: { input: 1, output: 5 },
-  sonnet: { input: 3, output: 15 },
+  sonnet: { input: 2, output: 10 },
   opus: { input: 5, output: 25 },
 };
+
+/**
+ * Prompt-caching multipliers on the base INPUT price.
+ *
+ * Cached tokens were previously invisible to this tracker. `usage.input_tokens`
+ * from the Messages API excludes cache reads and cache writes — the SDK's own
+ * docblock says total input is the sum of all three — so every token of the
+ * cached system prompt and tool definitions was billed by Anthropic and counted
+ * by us as zero. The chatbot caches its entire stable prefix deliberately
+ * (TD-012, REQ-P017), which made the undercount systematic rather than
+ * incidental, and it grew with every tool added to the surface.
+ *
+ * A cache WRITE costs more than uncached input, not less. Short bursts of use
+ * — the family's actual pattern — rewrite the prefix each time the 5-minute
+ * window lapses, so this was understating the expensive case in particular.
+ *
+ * These multipliers are uniform across every model this app uses. (Fable and
+ * Mythos read at 0.025x; neither is reachable from `ChatModel`.)
+ */
+const CACHE_WRITE_5M_MULTIPLIER = 1.25;
+const CACHE_READ_MULTIPLIER = 0.1;
+
+/**
+ * Cached-token counts for one request, from `usage.cache_creation_input_tokens`
+ * and `usage.cache_read_input_tokens`. Optional everywhere: callers that do not
+ * use prompt caching (categorization, Amazon receipts) simply omit it.
+ */
+export interface CacheTokenUsage {
+  writeTokens?: number;
+  readTokens?: number;
+}
+
+function cacheCost(model: ChatModel, cache: CacheTokenUsage | undefined): number {
+  if (!cache) return 0;
+  const inputPrice = MODEL_PRICING[model].input;
+  return (
+    ((cache.writeTokens ?? 0) / 1_000_000) * inputPrice * CACHE_WRITE_5M_MULTIPLIER +
+    ((cache.readTokens ?? 0) / 1_000_000) * inputPrice * CACHE_READ_MULTIPLIER
+  );
+}
 
 interface CostRecord {
   timestamp: string;
@@ -140,13 +183,15 @@ export class ChatbotCostTracker {
     inputTokens: number,
     outputTokens: number,
     workload: WorkloadClass = 'interactive',
+    cache?: CacheTokenUsage,
   ): Promise<{ estimatedCost: number; capExceeded: boolean; monthlySpend: number }> {
     const release = await this.mutex.acquire();
     try {
       const pricing = MODEL_PRICING[model];
       const estimatedCost =
         (inputTokens / 1_000_000) * pricing.input +
-        (outputTokens / 1_000_000) * pricing.output;
+        (outputTokens / 1_000_000) * pricing.output +
+        cacheCost(model, cache);
 
       const data = await this.getMonthData(familyId, workload);
 
@@ -198,9 +243,18 @@ export class ChatbotCostTracker {
     };
   }
 
-  static estimateCost(model: ChatModel, inputTokens: number, outputTokens: number): number {
+  static estimateCost(
+    model: ChatModel,
+    inputTokens: number,
+    outputTokens: number,
+    cache?: CacheTokenUsage,
+  ): number {
     const pricing = MODEL_PRICING[model];
-    return (inputTokens / 1_000_000) * pricing.input + (outputTokens / 1_000_000) * pricing.output;
+    return (
+      (inputTokens / 1_000_000) * pricing.input +
+      (outputTokens / 1_000_000) * pricing.output +
+      cacheCost(model, cache)
+    );
   }
 
   // --- Private helpers ---

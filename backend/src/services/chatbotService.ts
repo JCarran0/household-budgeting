@@ -126,8 +126,22 @@ export interface ChatAttachment {
 
 /** Internal toolLoop result shape — discriminated union for type safety */
 type ToolLoopResult =
-  | { type: 'message'; content: string; totalInputTokens: number; totalOutputTokens: number }
-  | { type: 'action_proposal'; content: string; proposal: ActionProposal; totalInputTokens: number; totalOutputTokens: number };
+  | ({ type: 'message'; content: string } & LoopTokens)
+  | ({ type: 'action_proposal'; content: string; proposal: ActionProposal } & LoopTokens);
+
+/**
+ * Token counts for the whole loop. Cache reads and writes are carried
+ * separately because they are billed at different multipliers of the input
+ * price, and because `usage.input_tokens` excludes both — summing them into
+ * the input total would price the cache at 1x and understate a write while
+ * overstating a read.
+ */
+interface LoopTokens {
+  totalInputTokens: number;
+  totalOutputTokens: number;
+  totalCacheWriteTokens: number;
+  totalCacheReadTokens: number;
+}
 
 export class ChatbotService {
   private client: Anthropic;
@@ -191,9 +205,14 @@ export class ChatbotService {
       totalInputTokens = result.totalInputTokens;
       totalOutputTokens = result.totalOutputTokens;
 
-      // 5. Record usage
+      // 5. Record usage — including the cached prefix, which Anthropic bills
+      //    and `usage.input_tokens` does not report (TD-012, REQ-P017).
       const costResult = await this.costTracker.recordUsage(
-        familyId, request.model, totalInputTokens, totalOutputTokens,
+        familyId, request.model, totalInputTokens, totalOutputTokens, 'interactive',
+        {
+          writeTokens: result.totalCacheWriteTokens,
+          readTokens: result.totalCacheReadTokens,
+        },
       );
 
       const usage = {
@@ -267,13 +286,39 @@ export class ChatbotService {
         message,
       );
 
+      const spent = collector.iterations.reduce(
+        (acc, i) => ({
+          input: acc.input + i.inputTokens,
+          output: acc.output + i.outputTokens,
+          cacheWrite: acc.cacheWrite + i.cacheCreationTokens,
+          cacheRead: acc.cacheRead + i.cacheReadTokens,
+        }),
+        { input: 0, output: 0, cacheWrite: 0, cacheRead: 0 },
+      );
+
+      // Tokens spent before the failure were still billed. Recording them only
+      // on the success path meant the two most expensive failure modes — a tool
+      // loop that ran to its 10-iteration limit, and a request that timed out
+      // after several Claude calls — cost real money and moved the monthly
+      // total by $0. A cap that stops counting exactly when a request goes
+      // wrong is not a cap. Best-effort: a failure here must not replace the
+      // user's error message with a different one.
+      try {
+        await this.costTracker.recordUsage(
+          familyId, request.model, spent.input, spent.output, 'interactive',
+          { writeTokens: spent.cacheWrite, readTokens: spent.cacheRead },
+        );
+      } catch (recordError) {
+        log.error({ err: recordError, familyId }, 'failed to record usage for a failed request');
+      }
+
       // A failed request is the one most worth having a trace for.
       await this.recordTrace({
         traceId, familyId, userId, conversationId, collector, attachment,
         model: request.model,
         latencyMs: Date.now() - startTime,
-        totalInputTokens: collector.iterations.reduce((n, i) => n + i.inputTokens, 0),
-        totalOutputTokens: collector.iterations.reduce((n, i) => n + i.outputTokens, 0),
+        totalInputTokens: spent.input,
+        totalOutputTokens: spent.output,
         outcome: 'error',
         errorMessage: message,
       });
@@ -315,6 +360,8 @@ export class ChatbotService {
   ): Promise<ToolLoopResult> {
     let totalInputTokens = 0;
     let totalOutputTokens = 0;
+    let totalCacheWriteTokens = 0;
+    let totalCacheReadTokens = 0;
 
     // The cached system-prompt block must stay byte-identical across turns.
     // User-specific context is appended AFTER the cache breakpoint so it
@@ -340,6 +387,8 @@ export class ChatbotService {
 
       totalInputTokens += response.usage.input_tokens;
       totalOutputTokens += response.usage.output_tokens;
+      totalCacheWriteTokens += response.usage.cache_creation_input_tokens ?? 0;
+      totalCacheReadTokens += response.usage.cache_read_input_tokens ?? 0;
 
       // REQ-P060: per-call token counts and stop reason, not just the totals.
       // Cache hit/miss is what explains a surprising bill, so it is captured too.
@@ -360,6 +409,8 @@ export class ChatbotService {
           content: textContent?.text || '',
           totalInputTokens,
           totalOutputTokens,
+          totalCacheWriteTokens,
+          totalCacheReadTokens,
         };
       }
 
@@ -412,6 +463,8 @@ export class ChatbotService {
               proposal: outcome.proposal,
               totalInputTokens,
               totalOutputTokens,
+              totalCacheWriteTokens,
+              totalCacheReadTokens,
             };
           }
 
