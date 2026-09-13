@@ -21,6 +21,7 @@ Family-scale app for 2 users: personal budgeting (with Plaid), shared tasks, tri
 | AI Categorization | [AI-CATEGORIZATION-BRD.md](docs/features/AI-CATEGORIZATION-BRD.md) | [AI-CATEGORIZATION-PLAN.yaml](docs/features/AI-CATEGORIZATION-PLAN.yaml) |
 | AI Amazon Receipts | [AI-AMAZON-RECEIPT-BRD.md](docs/features/AI-AMAZON-RECEIPT-BRD.md) | [AI-AMAZON-RECEIPT-PLAN.yaml](docs/features/AI-AMAZON-RECEIPT-PLAN.yaml) |
 | AI Chat Actions | [AI-CHAT-ACTIONS-BRD.md](docs/features/AI-CHAT-ACTIONS-BRD.md) | [AI-CHAT-ACTIONS-PLAN.yaml](docs/features/AI-CHAT-ACTIONS-PLAN.yaml) |
+| AI Capability Platform | [AI-CAPABILITY-PLATFORM-BRD.md](docs/features/AI-CAPABILITY-PLATFORM-BRD.md) | — |
 | Auto-Cat Suggestions | [AUTO-CAT-SUGGESTIONS-BRD.md](docs/features/AUTO-CAT-SUGGESTIONS-BRD.md) | [AUTO-CAT-SUGGESTIONS-PLAN.yaml](docs/features/AUTO-CAT-SUGGESTIONS-PLAN.yaml) |
 | Category Hierarchy | [CATEGORY-HIERARCHY-BUDGETING-BRD.md](docs/features/CATEGORY-HIERARCHY-BUDGETING-BRD.md) | [CATEGORY-HIERARCHY-BUDGETING-PLAN.yaml](docs/features/CATEGORY-HIERARCHY-BUDGETING-PLAN.yaml) |
 | Savings Categories | [SAVINGS-CATEGORY-BRD.md](docs/features/SAVINGS-CATEGORY-BRD.md) | [SAVINGS-CATEGORY-PLAN.yaml](docs/features/SAVINGS-CATEGORY-PLAN.yaml) |
