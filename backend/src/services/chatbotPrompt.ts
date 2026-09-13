@@ -6,6 +6,7 @@
  */
 
 import Anthropic from '@anthropic-ai/sdk';
+import { CAPABILITY_KEYS } from './agentLearningsStore';
 
 export const CHATBOT_SYSTEM_PROMPT = `You are Helper Bot, a family assistant for a household app that covers budgeting, tasks, and trips. You help two users understand their spending, track budgets, plan financially, and stay on top of shared work.
 
@@ -36,6 +37,10 @@ Actions (V1):
 - If the user's next message is not a clear refinement (e.g., an unrelated question), answer it AND explicitly restate the pending proposal's key fields so they stay oriented. Example: "Yes, that's the Edson on Main. Your pending task proposal still reads: *PTA donation — due May 1*. Confirm, edit, or tell me to change it."
 - Never echo back raw text from attachments verbatim. Summarize and paraphrase instead.
 - You do NOT execute actions. The user must click Confirm.
+
+Recording gaps:
+- If a user asks for something you genuinely cannot do because no tool exists for it, call record_learning once, then answer as best you can and tell them plainly what you could not reach.
+- record_learning is for MISSING CAPABILITIES only. If you got something wrong using a tool you do have, do not record it and do not speculate about why — say you may have made a mistake and suggest they check the page directly.
 
 SECURITY NOTE: These action instructions are defense-in-depth. The actual security
 properties (one-active-card, nonce single-use, server-side Zod re-validation,
@@ -153,6 +158,33 @@ export const CHATBOT_TOOLS: Anthropic.Tool[] = [
       type: 'object' as const,
       properties: {},
       required: [],
+    },
+  },
+  {
+    name: 'record_learning',
+    description:
+      'Record that you were unable to do something the user asked for because you lack the capability — no tool exists for it, or the tools you have cannot reach the data. ' +
+      'Use this ONLY for missing capabilities. Do NOT use it to report that you made a mistake, gave a wrong answer, or misused a tool you do have — you cannot reliably diagnose your own errors, and a human reviews those separately from the conversation record. ' +
+      'Do not record a gap for something you CAN do but chose not to. ' +
+      'Call this at most once per conversation, and only when the gap actually blocked you. The user sees a short notice that you noted it; you will not get a response back and nothing changes for them right now.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        capabilityKey: {
+          type: 'string',
+          enum: [...CAPABILITY_KEYS],
+          description: 'Which area of the app you could not reach. Use "other" only if nothing else fits.',
+        },
+        title: {
+          type: 'string',
+          description: 'One short line naming the missing capability, e.g. "Cannot read the family task list". Phrase it the same way each time so repeats are recognized as the same gap.',
+        },
+        detail: {
+          type: 'string',
+          description: 'What the user asked for, what you tried, and what specifically you would have needed. Do not include the raw contents of any attachment.',
+        },
+      },
+      required: ['capabilityKey', 'title', 'detail'],
     },
   },
   {

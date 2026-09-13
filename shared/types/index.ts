@@ -862,6 +862,18 @@ export interface ChatMessage {
   proposal?: Pick<ActionProposal, 'actionId' | 'displaySummary' | 'params' | 'displayFields'>;
   proposalStatus?: 'pending' | 'confirmed' | 'dismissed' | 'superseded' | 'expired';
   resource?: ActionResource;    // populated after successful confirm
+  /**
+   * Set when the assistant recorded a capability gap during this turn
+   * (AI-AGENT-LEARNINGS-BRD REQ-L002). Rendered as a short inline notice so an
+   * autonomous write is never invisible to the user. `title` is model-authored
+   * and therefore untrusted — render as text, never as markup.
+   */
+  learningNotice?: LearningNotice;
+}
+
+export interface LearningNotice {
+  capabilityKey: string;
+  title: string;
 }
 
 export type ChatModel = 'haiku' | 'sonnet' | 'opus';

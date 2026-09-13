@@ -120,6 +120,19 @@ export function ChatMessageBubble({
           )}
         </Paper>
 
+        {/* REQ-L002: the assistant recorded a capability gap this turn. Shown so
+            an autonomous write is never invisible, and because "I couldn't reach
+            your tasks" is useful to the user on its own.
+
+            SEC-L002: `title` is model-authored and therefore untrusted. It is
+            rendered inside <Text> as a plain string — never through the markdown
+            renderer, never as markup. */}
+        {!isUser && message.learningNotice && (
+          <Text size="xs" c="dimmed" fs="italic" pl="xs">
+            Noted for the developer: {message.learningNotice.title}
+          </Text>
+        )}
+
         {/* Action card rendered below the bubble when a proposal is present */}
         {hasProposal && message.proposal && (
           <ActionCard

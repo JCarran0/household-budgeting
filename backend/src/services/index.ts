@@ -26,6 +26,7 @@ import { ChatbotDataService } from './chatbotDataService';
 import { ChatbotCostTracker } from './chatbotCostTracker';
 import { ChatbotService } from './chatbotService';
 import { AgentTraceStore } from './agentTraceStore';
+import { AgentLearningsStore } from './agentLearningsStore';
 import { CategorizationService } from './categorizationService';
 import { ManualAccountService } from './manualAccountService';
 import { AmazonReceiptService } from './amazonReceiptService';
@@ -106,11 +107,16 @@ const chatbotCostTracker = new ChatbotCostTracker(
 // `ai_traces_{familyId}` namespace, not a general write capability — the
 // SEC-018 boundary around ChatbotDataService is unaffected.
 export const agentTraceStore = new AgentTraceStore(dataService);
+// Same narrow-appender rationale as AgentTraceStore. Note there is no read path
+// from here into any tool — the agent writes learnings and can never read them
+// back (SEC-L006).
+export const agentLearningsStore = new AgentLearningsStore(dataService);
 export const chatbotService = new ChatbotService(
   chatbotDataService,
   chatbotCostTracker,
   config.ai.anthropicApiKey,
   agentTraceStore,
+  agentLearningsStore,
 );
 export const categorizationService = new CategorizationService(
   chatbotDataService,

@@ -173,6 +173,47 @@ describe('ChatMessageBubble — rendering invariant (SEC-P025)', () => {
     });
   });
 
+  describe('learning notices are rendered as untrusted text (SEC-L002)', () => {
+    // The notice title is model-authored. It must never reach the markdown
+    // renderer, or a recorded "gap" becomes a second injection surface — one
+    // that persists, since learnings outlive the conversation.
+    function renderNotice(title: string) {
+      return render(
+        <MantineProvider>
+          <ChatMessageBubble
+            message={{
+              ...assistantMessage('I could not reach that.'),
+              learningNotice: { capabilityKey: 'tasks.read', title },
+            }}
+          />
+        </MantineProvider>,
+      );
+    }
+
+    it('shows the notice so an autonomous write is never invisible (REQ-L002)', () => {
+      renderNotice('Cannot read the family task list');
+
+      expect(screen.getByText(/Cannot read the family task list/)).toBeInTheDocument();
+    });
+
+    it('does not render markdown or HTML inside the notice title', () => {
+      const { container } = renderNotice(`**bold** ![x](${EXFIL})`);
+
+      // The URL appearing as literal text is the correct outcome: nothing is
+      // fetched and nothing is clickable. What must not exist is an element.
+      expect(container.querySelector('img')).toBeNull();
+      expect(container.querySelector('a')).toBeNull();
+      expect(container.querySelector('strong')).toBeNull();
+      expect(screen.getByText(/\*\*bold\*\*/)).toBeInTheDocument();
+    });
+
+    it('renders nothing when no learning was recorded', () => {
+      const { container } = renderContent('Just an answer.');
+
+      expect(container.textContent).not.toMatch(/Noted for the developer/);
+    });
+  });
+
   describe('user-authored content is never treated as markdown', () => {
     it('renders a user turn as plain text', () => {
       const { container } = render(

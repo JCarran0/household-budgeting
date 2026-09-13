@@ -24,6 +24,7 @@ import { childLogger } from '../utils/logger';
 
 const log = childLogger('chatbotService');
 import { CHATBOT_SYSTEM_PROMPT, CHATBOT_TOOLS } from './chatbotPrompt';
+import { AgentLearningsStore, isCapabilityKey } from './agentLearningsStore';
 import {
   AgentTraceStore,
   buildToolCallEntry,
@@ -44,6 +45,7 @@ import type {
   GetSpendingByCategoryInput,
   GetCashFlowInput,
   ActionProposalInput,
+  LearningNotice,
 } from '../shared/types';
 
 const MAX_TOOL_ITERATIONS = 10;
@@ -99,6 +101,12 @@ interface TraceCollector {
   iterations: TraceIteration[];
   toolCalls: TraceToolCall[];
   proposalActionId: string | null;
+  /**
+   * REQ-L002: an autonomous learning write must be visible to the user in the
+   * same turn. Collected here and attached to the response message so nothing
+   * the agent writes about itself happens invisibly.
+   */
+  learningNotices: LearningNotice[];
 }
 
 /** In-request attachment data — transient, never persisted (SEC-A014). */
@@ -121,6 +129,7 @@ export class ChatbotService {
     private readonly costTracker: ChatbotCostTracker,
     anthropicApiKey: string,
     private readonly traceStore: AgentTraceStore,
+    private readonly learningsStore: AgentLearningsStore,
   ) {
     this.client = new Anthropic({ apiKey: anthropicApiKey });
   }
@@ -163,7 +172,7 @@ export class ChatbotService {
     // REQ-P060/P062: one correlation ID per AI request, shared with any proposal
     // it issues and with the audit entry written when that proposal is confirmed.
     const traceId = newTraceId();
-    const collector: TraceCollector = { iterations: [], toolCalls: [], proposalActionId: null };
+    const collector: TraceCollector = { iterations: [], toolCalls: [], proposalActionId: null, learningNotices: [] };
 
     try {
       const result = await this.executeWithTimeout(
@@ -212,6 +221,7 @@ export class ChatbotService {
               outputTokens: totalOutputTokens,
               estimatedCost: costResult.estimatedCost,
             },
+            learningNotice: collector.learningNotices[0],
           },
           proposal: result.proposal,
           usage,
@@ -231,6 +241,7 @@ export class ChatbotService {
             outputTokens: totalOutputTokens,
             estimatedCost: costResult.estimatedCost,
           },
+          learningNotice: collector.learningNotices[0],
         },
         usage,
       };
@@ -413,6 +424,71 @@ export class ChatbotService {
               totalInputTokens,
               totalOutputTokens,
             };
+          }
+
+          // INTERCEPT: record_learning — a write, but to the maintainer-facing
+          // learnings collection, not to family data. No confirmation card:
+          // there is nothing for the user to approve about the agent noting its
+          // own blind spot. Visibility comes from the inline notice instead
+          // (REQ-L001, REQ-L002, D-L02).
+          if (toolUse.name === 'record_learning') {
+            const learningInput = toolUse.input as {
+              capabilityKey?: unknown;
+              title?: unknown;
+              detail?: unknown;
+            };
+
+            // REQ-L005: an unknown key comes back as a tool error so the model
+            // can self-correct within the existing iteration limit.
+            if (!isCapabilityKey(learningInput.capabilityKey)) {
+              toolResults.push({
+                type: 'tool_result',
+                tool_use_id: toolUse.id,
+                content: 'Unknown capabilityKey. Choose one from the enum in the tool schema.',
+                is_error: true,
+              });
+              continue;
+            }
+
+            const title = typeof learningInput.title === 'string' ? learningInput.title : '';
+            const detail = typeof learningInput.detail === 'string' ? learningInput.detail : '';
+            if (!title.trim()) {
+              toolResults.push({
+                type: 'tool_result',
+                tool_use_id: toolUse.id,
+                content: 'A non-empty title is required.',
+                is_error: true,
+              });
+              continue;
+            }
+
+            const outcome = await this.learningsStore.recordCapabilityGap({
+              familyId,
+              conversationId,
+              capabilityKey: learningInput.capabilityKey,
+              title,
+              detail,
+              traceId,
+            });
+
+            if (outcome.recorded) {
+              collector.learningNotices.push({
+                capabilityKey: outcome.learning.capabilityKey ?? 'other',
+                title: outcome.learning.title,
+              });
+            }
+
+            // Terse, and never an error on the rate-limited path — a dropped
+            // learning is not the user's problem and must not derail the turn
+            // (SEC-L005, SEC-L008).
+            toolResults.push({
+              type: 'tool_result',
+              tool_use_id: toolUse.id,
+              content: outcome.recorded
+                ? 'Noted. Continue answering the user; do not record this again.'
+                : 'Not recorded. Continue answering the user; do not retry.',
+            });
+            continue;
           }
 
           // Execute data tool
