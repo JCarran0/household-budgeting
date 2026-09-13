@@ -21,6 +21,7 @@ import request from 'supertest';
 import Anthropic from '@anthropic-ai/sdk';
 import app from '../../app';
 import { dataService, authService, chatbotService } from '../../services';
+import { logger } from '../../utils/logger';
 import { registerUser } from '../helpers/apiHelper';
 import {
   issueProposal,
@@ -770,7 +771,38 @@ describe('10.6 — MIME spoofing: file content does not match declared Content-T
 // ============================================================================
 
 describe('10.7 — Attachment content is not logged (only metadata)', () => {
-  it('console.log calls contain MIME metadata but not raw buffer or base64 content', async () => {
+  /**
+   * Capture real log output (SEC-A016).
+   *
+   * This previously spied on console.*, which captured nothing: the app logs via
+   * pino, and pino's level is 'silent' in test mode. Both the "raw bytes absent"
+   * assertions therefore passed against an empty string — a security test that
+   * could never fail. The fix reads pino's actual destination, and asserts the
+   * capture is non-empty BEFORE asserting absence, so the vacuous-pass mode
+   * cannot come back silently.
+   */
+  async function captureLogOutput(fn: () => Promise<void>): Promise<string> {
+    const previousLevel = logger.level;
+    const originalWrite = process.stdout.write.bind(process.stdout);
+    const chunks: string[] = [];
+
+    logger.level = 'info'; // pino propagates this to children created at import
+    (process.stdout as NodeJS.WriteStream).write = ((chunk: string | Uint8Array) => {
+      chunks.push(typeof chunk === 'string' ? chunk : Buffer.from(chunk).toString());
+      return true;
+    }) as typeof process.stdout.write;
+
+    try {
+      await fn();
+    } finally {
+      (process.stdout as NodeJS.WriteStream).write = originalWrite;
+      logger.level = previousLevel;
+    }
+
+    return chunks.join('');
+  }
+
+  it('logs attachment metadata but never raw buffer or base64 content', async () => {
     const user = await createUser('log7');
     const fields = chatFormFields();
     const jpegBuffer = makeJpegBuffer();
@@ -778,55 +810,41 @@ describe('10.7 — Attachment content is not logged (only metadata)', () => {
 
     const createSpy = spyOnAnthropicMessages(makeEndTurnMessage('I see an image.'));
 
-    // Capture the log calls that happen during this request.
-    // setup.ts replaces console.* with jest.fn() globally — we collect
-    // calls to all three channels to be exhaustive.
-    const logMock = console.log as jest.Mock;
-    const warnMock = console.warn as jest.Mock;
-    const errorMock = console.error as jest.Mock;
-    logMock.mockClear();
-    warnMock.mockClear();
-    errorMock.mockClear();
-
     try {
-      const res = await request(app)
-        .post('/api/v1/chatbot/message')
-        .set('Authorization', `Bearer ${user.token}`)
-        .field('message', fields.message)
-        .field('conversationId', fields.conversationId)
-        .field('conversationHistory', fields.conversationHistory)
-        .field('pageContext', fields.pageContext)
-        .field('model', fields.model)
-        .attach('attachment', jpegBuffer, {
-          filename: 'flyer.jpg',
-          contentType: 'image/jpeg',
-        });
+      let status = 0;
+      const combinedLog = await captureLogOutput(async () => {
+        const res = await request(app)
+          .post('/api/v1/chatbot/message')
+          .set('Authorization', `Bearer ${user.token}`)
+          .field('message', fields.message)
+          .field('conversationId', fields.conversationId)
+          .field('conversationHistory', fields.conversationHistory)
+          .field('pageContext', fields.pageContext)
+          .field('model', fields.model)
+          .attach('attachment', jpegBuffer, {
+            filename: 'flyer.jpg',
+            contentType: 'image/jpeg',
+          });
+        status = res.status;
+      });
 
-      expect(res.status).toBe(200);
+      expect(status).toBe(200);
 
-      // Collect all logged strings across all console channels
-      const allLoggedStrings: string[] = [
-        ...logMock.mock.calls.flat().map((a) => JSON.stringify(a)),
-        ...warnMock.mock.calls.flat().map((a) => JSON.stringify(a)),
-        ...errorMock.mock.calls.flat().map((a) => JSON.stringify(a)),
-      ];
-      const combinedLog = allLoggedStrings.join('\n');
+      // (0) Guard against the vacuous pass: if nothing was captured, every
+      // "not present" assertion below is meaningless. Fail here instead.
+      expect(combinedLog.length).toBeGreaterThan(0);
 
-      // (a) Attachment metadata IS present in logs (SEC-A016 positive assertion)
-      const hasMetadata = allLoggedStrings.some(
-        (s) => s.includes('image/jpeg') || s.includes('chat_attachment_received'),
-      );
-      expect(hasMetadata).toBe(true);
+      // (a) Attachment metadata IS present (SEC-A016 positive assertion)
+      expect(combinedLog).toContain('chat_attachment_received');
+      expect(combinedLog).toContain('image/jpeg');
 
       // (b) Raw buffer bytes are NOT present
-      const rawHex = jpegBuffer.toString('hex');
-      expect(combinedLog).not.toContain(rawHex);
+      expect(combinedLog).not.toContain(jpegBuffer.toString('hex'));
 
       // (c) Base64-encoded content is NOT present
       expect(combinedLog).not.toContain(base64Content);
 
-      // (d) 'buffer' as a JSON key containing data is NOT present
-      // (catches accidental serialization of the Buffer object)
+      // (d) A serialized Buffer object is NOT present
       expect(combinedLog).not.toMatch(/"buffer"\s*:\s*\{/);
     } finally {
       createSpy.mockRestore();
