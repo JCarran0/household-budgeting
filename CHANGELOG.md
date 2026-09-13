@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+### [6.4.1](https://github.com/JCarran0/household-budgeting/compare/v6.4.0...v6.4.1) (2026-09-13)
+
+
+### Bug Fixes
+
+* **ai:** count cached and failed-request tokens against the spend cap ([c3b6a22](https://github.com/JCarran0/household-budgeting/commit/c3b6a2208fe919b7774a74a81960bbadb782b866))
+* **ai:** pin the trace behind a learning, and surface every learning ([956e8a0](https://github.com/JCarran0/household-budgeting/commit/956e8a07ce1b3e9eee4ba146564c42a68c168353))
+
+
+### Documentation
+
+* **ai:** correct claims the code does not support, and record what shipped ([9e0b248](https://github.com/JCarran0/household-budgeting/commit/9e0b24898bfbd5251001e4fed85fa6273a4cab26))
+
 ## [6.4.0](https://github.com/JCarran0/household-budgeting/compare/v6.3.1...v6.4.0) (2026-09-13)
 
 
