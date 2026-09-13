@@ -18,6 +18,9 @@
 
 import { ReadOnlyDataService } from './readOnlyDataService';
 import { getActiveTransactions } from './transactionReader';
+import { ChatbotTaskReader } from './chatbotReaders/taskReader';
+import { ChatbotTripReader } from './chatbotReaders/tripReader';
+import { ChatbotProjectReader } from './chatbotReaders/projectReader';
 import type {
   Category,
   Transaction,
@@ -242,7 +245,28 @@ function manualCategoryToAccountType(category: ManualAccount['category']): Accou
 }
 
 export class ChatbotDataService {
-  constructor(private readonly dataService: ReadOnlyDataService) {}
+  /**
+   * Domain readers (AI-CAPABILITY-PLATFORM-BRD §9.2/§9.3, Phase 2).
+   *
+   * Composed rather than inlined for two reasons. The mechanical one is the
+   * 800-LOC service budget — tasks, trips and projects would each add ~150
+   * lines here. The real one is that each domain carries its own correctness
+   * landmine (night-based stays, non-exclusive tags, estimate-only line items),
+   * and those are far easier to review as a self-contained file with its own
+   * docblock than as three more method clusters in a 700-line class.
+   *
+   * They receive the same ReadOnlyDataService this class holds, so SEC-018's
+   * compile-time read-only boundary extends to them unchanged.
+   */
+  readonly tasks: ChatbotTaskReader;
+  readonly trips: ChatbotTripReader;
+  readonly projects: ChatbotProjectReader;
+
+  constructor(private readonly dataService: ReadOnlyDataService) {
+    this.tasks = new ChatbotTaskReader(dataService);
+    this.trips = new ChatbotTripReader(dataService);
+    this.projects = new ChatbotProjectReader(dataService);
+  }
 
   /**
    * Query transactions with filters. All results scoped to familyId.

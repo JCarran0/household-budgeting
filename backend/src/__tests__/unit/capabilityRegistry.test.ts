@@ -102,10 +102,74 @@ describe('workspace filtering (REQ-P016)', () => {
 
   it('can restrict the surface to named domains', () => {
     const budgeting = buildChatbotTools({ domains: ['budgeting'] });
-    expect(budgeting.length).toBeGreaterThan(0);
+    expect(budgeting.map(t => t.name)).toContain('query_transactions');
+    expect(budgeting.map(t => t.name)).not.toContain('query_tasks');
 
-    const none = buildChatbotTools({ domains: ['tasks'] });
-    // No task capabilities exist yet, so only the platform tools remain.
-    expect(none.map(t => t.name)).toEqual(['record_learning', 'propose_action']);
+    const tasks = buildChatbotTools({ domains: ['tasks'] });
+    expect(tasks.map(t => t.name)).toContain('query_tasks');
+    expect(tasks.map(t => t.name)).not.toContain('query_transactions');
+
+    // Platform tools are not domain-scoped: they mediate access rather than
+    // expose data, so they survive every filter.
+    for (const surface of [budgeting, tasks]) {
+      expect(surface.map(t => t.name)).toEqual(
+        expect.arrayContaining(['record_learning', 'propose_action']),
+      );
+    }
+  });
+
+  it('an unknown domain yields platform tools only, never the full surface', () => {
+    // Fails open would be the dangerous direction: a typo'd domain silently
+    // handing back every financial tool.
+    const bogus = buildChatbotTools({ domains: [] });
+    expect(bogus.map(t => t.name)).toEqual(['record_learning', 'propose_action']);
+  });
+});
+
+describe('domain coverage (Phase 2 — REQ-P080 read-first)', () => {
+  it('registers reads for every domain the BRD scopes', () => {
+    const domains = new Set(READ_CAPABILITIES.map(c => c.domain));
+    expect([...domains].sort()).toEqual(['budgeting', 'projects', 'tasks', 'trips']);
+  });
+
+  it('keeps the flat tool list under the REQ-P018 grouping threshold', () => {
+    // Past 20 tools the BRD requires progressive disclosure. This is a tripwire,
+    // not a limit: when it fires, group by domain rather than raising the number.
+    expect(buildChatbotTools().length).toBeLessThanOrEqual(20);
+  });
+
+  it('classifies task reads as metadata and money reads as financial', () => {
+    // dataClass is what SEC-P003 gates T2 eligibility on. A financial read
+    // mislabelled as metadata would let an unattended write reach money later.
+    const byName = new Map(READ_CAPABILITIES.map(c => [c.name, c]));
+    expect(byName.get('query_tasks')?.dataClass).toBe('metadata');
+    expect(byName.get('get_family_members')?.dataClass).toBe('metadata');
+    expect(byName.get('list_projects')?.dataClass).toBe('financial');
+    expect(byName.get('list_trips')?.dataClass).toBe('financial');
+  });
+});
+
+describe('absence and identity rules (SEC-P032 / SEC-P033)', () => {
+  it('planning tools tell the model how to read a null', () => {
+    // SEC-P033: "no value set" and "no data returned" must be distinguishable.
+    // Each of these tools has a specific null that is easy to misread, and the
+    // description is where the model is told which is which.
+    const byName = new Map(READ_CAPABILITIES.map(c => [c.name, c.definition.description ?? '']));
+    expect(byName.get('query_tasks')).toMatch(/unresolved/i);
+    expect(byName.get('list_trips')).toMatch(/NOT REQUESTED|hasBudget/);
+    expect(byName.get('get_trip_itinerary')).toMatch(/found=false/);
+    expect(byName.get('get_project')).toMatch(/found=false/);
+  });
+
+  it('every tool that reports tag-derived money warns that totals are not additive', () => {
+    // The whole reason these flags exist: one transaction can carry a trip tag
+    // and a project tag, so summing across entities double counts.
+    const byName = new Map(READ_CAPABILITIES.map(c => [c.name, c.definition.description ?? '']));
+    for (const name of ['list_trips', 'list_projects', 'get_project']) {
+      // Prose, because the model reads prose before it reads field names.
+      expect(byName.get(name)).toMatch(/never be added|never sum|not be added/i);
+      // And the machine-readable flag, because prose is not a contract.
+      expect(byName.get(name)).toMatch(/AreNotAdditive/);
+    }
   });
 });
