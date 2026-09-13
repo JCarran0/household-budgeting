@@ -5,10 +5,12 @@
  * Must be imported at service startup so the registry is populated before
  * any chat request arrives.
  *
- * Registration log at boot: "[chatActions] Registered: create_task"
+ * Registration log at boot lists every registered actionId.
  */
 
 import './createTaskAction'; // registers via side-effect
+import './updateTaskAction'; // registers via side-effect
+import './completeTaskAction'; // registers via side-effect
 import './submitGithubIssueAction'; // registers via side-effect
 
 export * from './registry';

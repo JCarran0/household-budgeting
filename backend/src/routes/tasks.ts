@@ -39,7 +39,10 @@ export const createTaskSchema = z.object({
   sortOrder: z.number().finite().optional(),
 });
 
-const updateTaskSchema = z.object({
+// Exported so the update_task chat action re-uses the same schema (REQ-P011).
+// SECURITY (SEC-A004): one source of truth — tightening this automatically
+// applies to both the HTTP route and the chat action path.
+export const updateTaskSchema = z.object({
   title: z.string().min(1).max(200).optional(),
   description: z.string().max(2000).optional(),
   scope: z.enum(['family', 'personal']).optional(),

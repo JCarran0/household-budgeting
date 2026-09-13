@@ -480,6 +480,31 @@ router.post(
         plan.push({ rowId: row.rowId, actionId: row.actionId, def: actionDef, params: paramsResult.data, grant });
       }
 
+      // ---- Resolve identifiers against live data (SEC-P030) ----
+      // A SEPARATE PASS, deliberately. Every row has parsed; none has written.
+      // Folding this into the execute loop below would let row 1 write before
+      // row 3's bad categoryId was discovered, which is the partial-application
+      // state REQ-P023 exists to prevent. Folding it into the parse loop above
+      // would be equivalent today but couples "is it well-formed" to "does it
+      // exist", and only the second needs data access.
+      for (const step of plan) {
+        try {
+          await step.def.validateSemantics?.(step.params, {
+            userId: step.grant.userId,
+            familyId: step.grant.familyId,
+          });
+        } catch (semanticError) {
+          const message =
+            semanticError instanceof Error ? semanticError.message : 'Could not resolve a referenced record';
+          log.warn(
+            { proposalId: body.proposalId, rowId: step.rowId, actionId: step.actionId },
+            'chat action batch rejected by semantic validation',
+          );
+          rejectBatch(400, 'validation_failed', message, step.rowId);
+          return;
+        }
+      }
+
       // ---- Execute, in the order the rows were displayed (REQ-P022) ----
       const results: ActionRowResult[] = [];
       for (const step of plan) {

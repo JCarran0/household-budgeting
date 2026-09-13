@@ -780,7 +780,11 @@ export interface TokenUsage {
 // =============================================================================
 
 /** V1 allowlist — extensible string union */
-export type ChatActionId = 'create_task' | 'submit_github_issue';
+export type ChatActionId =
+  | 'create_task'
+  | 'update_task'
+  | 'complete_task'
+  | 'submit_github_issue';
 
 /** Drives card field rendering */
 export type DisplayFieldType = 'text' | 'textarea' | 'date' | 'select' | 'tags';

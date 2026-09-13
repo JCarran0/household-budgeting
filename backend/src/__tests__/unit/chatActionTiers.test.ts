@@ -138,12 +138,50 @@ describe('the shipped action set (REQ-P015)', () => {
     expect(real).toEqual([]);
   });
 
-  it('both shipped actions declare a tier and data class', () => {
+  it('every shipped action declares a tier and data class', () => {
+    // This list is deliberately exhaustive rather than a shape check: adding an
+    // action should require editing a test, so a new write capability cannot
+    // arrive unnoticed in review.
     const shipped = listChatActionIds().filter(id => !String(id).startsWith('__test_action_'));
-    expect(shipped.sort()).toEqual(['create_task', 'submit_github_issue']);
+    expect(shipped.sort()).toEqual([
+      'complete_task',
+      'create_task',
+      'submit_github_issue',
+      'update_task',
+    ]);
 
     expect(getChatAction('create_task')).toMatchObject({ tier: 'T1', dataClass: 'content' });
+    expect(getChatAction('update_task')).toMatchObject({ tier: 'T1', dataClass: 'content' });
+    expect(getChatAction('complete_task')).toMatchObject({ tier: 'T1', dataClass: 'content' });
     // Leaves the system entirely — permanently ineligible for T2.
     expect(getChatAction('submit_github_issue')).toMatchObject({ tier: 'T1', dataClass: 'external' });
+  });
+
+  it('keeps complete_task out of the unattended tier, permanently', () => {
+    // BRD §9.2 names this one explicitly. Completion credits a shared,
+    // competitive leaderboard, so an unattended completion awards points in a
+    // record the other household member can see. SEC-P001's one-click
+    // reversibility does not rescue it: by the time anyone undoes it, a person
+    // has already seen the standing change.
+    expect(getChatAction('complete_task')?.tier).toBe('T1');
+    expect(listT2ActionIds()).not.toContain('complete_task');
+  });
+
+  it('every action that accepts an identifier resolves it before executing', () => {
+    // SEC-P030. An action taking a model-supplied id with no validateSemantics
+    // hook would reach its handler with nothing but a well-formed string, and
+    // "well-formed" is not "refers to a record in this family".
+    for (const id of ['update_task', 'complete_task'] as const) {
+      expect(typeof getChatAction(id)?.validateSemantics).toBe('function');
+    }
+  });
+
+  it('every update action can describe what it overwrites', () => {
+    // SEC-P011. A create has nothing to replace and correctly omits this; an
+    // update that omitted it would show the user only the destination.
+    for (const id of ['update_task', 'complete_task'] as const) {
+      expect(typeof getChatAction(id)?.describeCurrent).toBe('function');
+    }
+    expect(getChatAction('create_task')?.describeCurrent).toBeUndefined();
   });
 });

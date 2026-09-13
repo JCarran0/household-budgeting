@@ -63,6 +63,28 @@ export interface ChatActionDefinition<TParams> {
     params: TParams,
     ctx: ChatActionHandlerContext,
   ) => Promise<DisplayField[] | null>;
+  /**
+   * SEC-P030: resolve every model-supplied identifier against live data.
+   *
+   * Zod proves a value is well-formed, not that it refers to something real.
+   * A well-formed taskId for a task in another family, a categoryId that has
+   * gone orphaned, an assigneeId for someone who left the household — all pass
+   * `paramsSchema` and all must fail before a write.
+   *
+   * WHY THIS IS A SEPARATE HOOK RATHER THAN A CHECK INSIDE `execute`:
+   * REQ-P023 requires all-or-nothing validation across the batch. The confirm
+   * route runs every row's `validateSemantics` in its own pass, after all rows
+   * have parsed and before any row executes. A check living inside `execute`
+   * would fire on row 3 only after rows 1 and 2 had already written, which is
+   * precisely the partial-application state REQ-P023 exists to prevent.
+   *
+   * Throw to reject. The thrown message is shown to the user, so it must name
+   * what could not be resolved and must not leak anything from another family.
+   */
+  validateSemantics?: (
+    params: TParams,
+    ctx: ChatActionHandlerContext,
+  ) => Promise<void>;
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- registry holds heterogeneous schemas
