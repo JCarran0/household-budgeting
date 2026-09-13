@@ -50,10 +50,15 @@ const MAX_OUTPUT_TOKENS = 4096;
 const MAX_HISTORY = 50; // REQ-028
 
 // Map ChatModel to Anthropic model IDs
+// REQ-P056. Reviewed 2026-09-13 against the current generation. Sonnet and
+// Opus move to the 5 series; Haiku 4.5 is still current and stays pinned to its
+// dated build. These are the identifiers the cost model in
+// chatbotCostTracker.ts prices — update both together or the cap drifts from
+// reality.
 const MODEL_IDS: Record<ChatModel, string> = {
   haiku: 'claude-haiku-4-5-20251001',
-  sonnet: 'claude-sonnet-4-6',
-  opus: 'claude-opus-4-6',
+  sonnet: 'claude-sonnet-5',
+  opus: 'claude-opus-5',
 };
 
 // TD-012 part 1 — prompt caching. The static CHATBOT_SYSTEM_PROMPT and

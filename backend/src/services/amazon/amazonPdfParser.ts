@@ -40,7 +40,8 @@ export interface ParseFileResult {
   outputTokens: number;
 }
 
-const MODEL = 'claude-sonnet-4-6';
+// REQ-P056 — reviewed 2026-09-13.
+const MODEL = 'claude-sonnet-5';
 const MAX_TOKENS = 8192;
 
 export class AmazonPdfParser {

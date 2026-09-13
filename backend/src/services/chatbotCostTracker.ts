@@ -19,7 +19,14 @@ import type { DataService } from './dataService';
 import type { ChatModel } from '../shared/types';
 import type { WorkloadClass } from './workloadClass';
 
-// Cost per million tokens by model (update when pricing changes)
+// Cost per million tokens by model (update when pricing changes).
+//
+// ⚠️ NOT re-verified when the model IDs moved to the 5 series (REQ-P056,
+// 2026-09-13). These figures were set for the previous generation. If real
+// pricing is higher, the $20 cap under-counts and real spend overshoots it;
+// if lower, the cap is stricter than intended. Check current per-token rates
+// and correct this table — it is the only thing standing between the family
+// and an unbounded AI bill.
 const MODEL_PRICING: Record<ChatModel, { input: number; output: number }> = {
   haiku: { input: 1, output: 5 },
   sonnet: { input: 3, output: 15 },

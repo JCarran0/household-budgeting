@@ -28,7 +28,8 @@ import type {
   Transaction,
 } from '../../shared/types';
 
-const MODEL = 'claude-sonnet-4-6';
+// REQ-P056 — reviewed 2026-09-13.
+const MODEL = 'claude-sonnet-5';
 const MAX_TOKENS = 8192;
 const MAX_EXAMPLES_PER_CATEGORY = 5;
 const MAX_EXAMPLE_CATEGORIES = 20;
