@@ -101,6 +101,7 @@ export const chatbotDataService = new ChatbotDataService(readOnlyDataService);
 const chatbotCostTracker = new ChatbotCostTracker(
   dataService,
   config.ai.chatbotMonthlyLimit,
+  config.ai.backgroundMonthlyLimit,
 );
 // NOTE: like ChatbotCostTracker, AgentTraceStore receives the writable
 // DataService because it must persist. It is a narrow appender over the

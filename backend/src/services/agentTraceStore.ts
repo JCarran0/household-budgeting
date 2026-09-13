@@ -29,12 +29,14 @@
 import { Mutex } from 'async-mutex';
 import { randomUUID } from 'crypto';
 import type { DataService } from './dataService';
+import type { WorkloadClass } from './workloadClass';
 import { childLogger } from '../utils/logger';
 
 const log = childLogger('agentTraceStore');
 
-/** REQ-P050: spend and now traces are attributed per workload class. */
-export type WorkloadClass = 'interactive' | 'background';
+// REQ-P050: traces and spend are attributed on the same axis, so the type has
+// one home and both import it.
+export type { WorkloadClass } from './workloadClass';
 
 export interface TraceToolCall {
   sequence: number;

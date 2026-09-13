@@ -60,6 +60,12 @@ const storageSchema = z.object({
 const aiSchema = z.object({
   anthropicApiKey: z.string().default(''),
   chatbotMonthlyLimit: z.coerce.number().default(20),
+  /**
+   * Independent cap for unattended work (REQ-P051). Separate from the
+   * interactive cap so a runaway background job exhausts its own budget
+   * without ever silencing the chatbot.
+   */
+  backgroundMonthlyLimit: z.coerce.number().default(5),
   githubIssuesPat: z.string().default(''),
 });
 
@@ -115,6 +121,7 @@ const rawEnvSchema = z.object({
   // AI
   ANTHROPIC_API_KEY: aiSchema.shape.anthropicApiKey,
   CHATBOT_MONTHLY_LIMIT: aiSchema.shape.chatbotMonthlyLimit,
+  AI_BACKGROUND_MONTHLY_LIMIT: aiSchema.shape.backgroundMonthlyLimit,
   GITHUB_ISSUES_PAT: aiSchema.shape.githubIssuesPat,
 
   // VAPID (Push Notifications)
@@ -169,6 +176,7 @@ export interface AppConfig {
   ai: {
     anthropicApiKey: string;
     chatbotMonthlyLimit: number;
+    backgroundMonthlyLimit: number;
     githubIssuesPat: string;
   };
   vapid: {
@@ -317,6 +325,7 @@ export function loadConfig(
     ai: {
       anthropicApiKey: raw.ANTHROPIC_API_KEY,
       chatbotMonthlyLimit: raw.CHATBOT_MONTHLY_LIMIT,
+      backgroundMonthlyLimit: raw.AI_BACKGROUND_MONTHLY_LIMIT,
       githubIssuesPat: raw.GITHUB_ISSUES_PAT,
     },
     vapid: {

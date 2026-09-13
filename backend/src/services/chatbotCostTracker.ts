@@ -1,14 +1,23 @@
 /**
- * Chatbot Cost Tracker — SEC-010/011/012/017
+ * Chatbot Cost Tracker — SEC-010/011/012/017, REQ-P050 – REQ-P055
  *
  * Tracks per-request and monthly aggregate LLM token usage and cost.
  * Uses an async mutex to prevent concurrent requests from bypassing
  * the spending cap via read-modify-write race conditions.
+ *
+ * SPLIT CAPS (REQ-P050/P051)
+ * Budget is capped per workspace AND per workload class. Interactive work (a
+ * person waiting on a chat turn) and background work (unattended sweeps and
+ * digests) draw on independent pools with independent kill switches, so a
+ * runaway cron job exhausts its own allowance and the chatbot keeps answering.
+ *
+ * This supersedes SEC-010's single $20 cap from the chatbot BRD.
  */
 
 import { Mutex } from 'async-mutex';
 import type { DataService } from './dataService';
 import type { ChatModel } from '../shared/types';
+import type { WorkloadClass } from './workloadClass';
 
 // Cost per million tokens by model (update when pricing changes)
 const MODEL_PRICING: Record<ChatModel, { input: number; output: number }> = {
@@ -50,7 +59,18 @@ export class ChatbotCostTracker {
   constructor(
     private readonly dataService: DataService,
     private readonly monthlyLimit: number,
+    /**
+     * Independent allowance for unattended work. Defaults to the interactive
+     * limit only so existing two-argument construction keeps working; real
+     * wiring passes config.ai.backgroundMonthlyLimit.
+     */
+    private readonly backgroundMonthlyLimit: number = monthlyLimit,
   ) {}
+
+  /** REQ-P051: each class has its own ceiling. */
+  private limitFor(workload: WorkloadClass): number {
+    return workload === 'background' ? this.backgroundMonthlyLimit : this.monthlyLimit;
+  }
 
   /**
    * Check if the current monthly spend allows another request for the given
@@ -61,20 +81,41 @@ export class ChatbotCostTracker {
    *
    * @param familyId - The active workspace's familyId (from JWT claim).
    */
-  async checkBudget(familyId: string): Promise<CostCheckResult> {
+  async checkBudget(familyId: string, workload: WorkloadClass = 'interactive'): Promise<CostCheckResult> {
     const release = await this.mutex.acquire();
     try {
-      const data = await this.getMonthData(familyId);
+      const data = await this.getMonthData(familyId, workload);
+      const limit = this.limitFor(workload);
       const spend = data.totalEstimatedCost;
       return {
-        allowed: spend < this.monthlyLimit,
+        allowed: spend < limit,
         monthlySpend: Math.round(spend * 100) / 100,
-        monthlyLimit: this.monthlyLimit,
-        remainingBudget: Math.round(Math.max(0, this.monthlyLimit - spend) * 100) / 100,
+        monthlyLimit: limit,
+        remainingBudget: Math.round(Math.max(0, limit - spend) * 100) / 100,
       };
     } finally {
       release();
     }
+  }
+
+  /**
+   * REQ-P055: bound a background batch BEFORE it starts.
+   *
+   * A batch that cannot finish inside the remaining allowance must not start at
+   * all — a half-applied sweep is worse than one that never ran, because the
+   * user is left reconciling which rows the AI reached.
+   */
+  async canAffordBatch(
+    familyId: string,
+    estimatedCost: number,
+    workload: WorkloadClass = 'background',
+  ): Promise<{ allowed: boolean; remainingBudget: number; estimatedCost: number }> {
+    const { remainingBudget } = await this.checkBudget(familyId, workload);
+    return {
+      allowed: estimatedCost <= remainingBudget,
+      remainingBudget,
+      estimatedCost: Math.round(estimatedCost * 1_000_000) / 1_000_000,
+    };
   }
 
   /**
@@ -91,6 +132,7 @@ export class ChatbotCostTracker {
     model: ChatModel,
     inputTokens: number,
     outputTokens: number,
+    workload: WorkloadClass = 'interactive',
   ): Promise<{ estimatedCost: number; capExceeded: boolean; monthlySpend: number }> {
     const release = await this.mutex.acquire();
     try {
@@ -99,7 +141,7 @@ export class ChatbotCostTracker {
         (inputTokens / 1_000_000) * pricing.input +
         (outputTokens / 1_000_000) * pricing.output;
 
-      const data = await this.getMonthData(familyId);
+      const data = await this.getMonthData(familyId, workload);
 
       const record: CostRecord = {
         timestamp: new Date().toISOString(),
@@ -115,13 +157,13 @@ export class ChatbotCostTracker {
       data.totalEstimatedCost += estimatedCost;
       data.requests.push(record);
 
-      await this.saveMonthData(familyId, data);
+      await this.saveMonthData(familyId, data, workload);
 
       const monthlySpend = Math.round(data.totalEstimatedCost * 100) / 100;
 
       return {
         estimatedCost: Math.round(estimatedCost * 1_000_000) / 1_000_000,
-        capExceeded: data.totalEstimatedCost >= this.monthlyLimit,
+        capExceeded: data.totalEstimatedCost >= this.limitFor(workload),
         monthlySpend,
       };
     } finally {
@@ -135,13 +177,17 @@ export class ChatbotCostTracker {
    *
    * @param familyId - The active workspace's familyId (from JWT claim).
    */
-  async getUsage(familyId: string): Promise<{ monthlySpend: number; monthlyLimit: number; remainingBudget: number }> {
-    const data = await this.getMonthData(familyId);
+  async getUsage(
+    familyId: string,
+    workload: WorkloadClass = 'interactive',
+  ): Promise<{ monthlySpend: number; monthlyLimit: number; remainingBudget: number }> {
+    const data = await this.getMonthData(familyId, workload);
+    const limit = this.limitFor(workload);
     const spend = Math.round(data.totalEstimatedCost * 100) / 100;
     return {
       monthlySpend: spend,
-      monthlyLimit: this.monthlyLimit,
-      remainingBudget: Math.round(Math.max(0, this.monthlyLimit - spend) * 100) / 100,
+      monthlyLimit: limit,
+      remainingBudget: Math.round(Math.max(0, limit - spend) * 100) / 100,
     };
   }
 
@@ -162,14 +208,20 @@ export class ChatbotCostTracker {
    * monthly total resets to $0 once — intentional and documented in D11.
    * This is acceptable for a 2-user app; the old key simply stops accumulating.
    */
-  private getMonthKey(familyId: string): string {
+  private getMonthKey(familyId: string, workload: WorkloadClass): string {
     const now = new Date();
     const month = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-    return `chatbot_costs_${familyId}_${month}`;
+    // Interactive deliberately keeps the ORIGINAL key shape. Adding a suffix to
+    // it would orphan the current month's accumulated spend and silently reset
+    // the running total to $0 — the same one-time reset D11 accepted once, which
+    // there is no reason to repeat. Background is new, so it gets a new key.
+    return workload === 'background'
+      ? `chatbot_costs_${familyId}_background_${month}`
+      : `chatbot_costs_${familyId}_${month}`;
   }
 
-  private async getMonthData(familyId: string): Promise<MonthlyCostData> {
-    const key = this.getMonthKey(familyId);
+  private async getMonthData(familyId: string, workload: WorkloadClass): Promise<MonthlyCostData> {
+    const key = this.getMonthKey(familyId, workload);
     const data = await this.dataService.getData<MonthlyCostData>(key);
     if (data) return data;
 
@@ -183,8 +235,8 @@ export class ChatbotCostTracker {
     };
   }
 
-  private async saveMonthData(familyId: string, data: MonthlyCostData): Promise<void> {
-    const key = this.getMonthKey(familyId);
+  private async saveMonthData(familyId: string, data: MonthlyCostData, workload: WorkloadClass): Promise<void> {
+    const key = this.getMonthKey(familyId, workload);
     await this.dataService.saveData(key, data);
   }
 }

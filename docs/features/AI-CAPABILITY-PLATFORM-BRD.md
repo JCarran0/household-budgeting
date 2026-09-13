@@ -314,7 +314,9 @@ The existing $20/month cap was sized for a human typing into a chat overlay, wit
 | REQ-P053 | Cost tracking must remain concurrency-safe (mutex or equivalent) across both classes. (Restates SEC-017.) |
 | REQ-P054 | Background work must route to the cheapest model adequate for the task. Classification, clustering, and extraction are fast-tier work; conversational reasoning is frontier-tier. Model selection is per-capability and declared in the registry. |
 | REQ-P055 | A pre-flight estimate must bound any background batch before it runs. A batch whose estimate exceeds the remaining background budget must not start partially. |
-| REQ-P056 | Model identifiers in `chatbotService.ts` and `categorizationService.ts` must be reviewed against current available models when this work begins; they are pinned to an older generation. |
+| REQ-P056 | Model identifiers in `chatbotService.ts` and `categorizationService.ts` must be reviewed against current available models when this work begins; they are pinned to an older generation. **Still open** — not addressed by the split-cap work. |
+
+**Implemented:** REQ-P050–P055 in `chatbotCostTracker.ts`. Interactive deliberately keeps the original storage key (`chatbot_costs_{familyId}_{month}`); suffixing it would have orphaned the current month's accrued spend and silently reset the running total, repeating the one-time reset D11 already paid for. Background writes to a new key. `canAffordBatch` implements the REQ-P055 pre-flight so a sweep that cannot finish never starts.
 
 > Confirmation is deliberately free: confirming a pending card performs no LLM call, so a cap exhausted between proposal and confirmation does not strand a valid card. (Preserves SEC-A020.)
 
@@ -424,7 +426,7 @@ Diagnosis after the fact is only possible if the evidence was captured at the ti
 | Phase | Scope | Exit criteria |
 |-------|-------|---------------|
 | **0 — Correctness** | Fix `get_budgets` (returns no actuals despite its description; returns bare IDs; absent budgets indistinguishable from no lookup). Add the §7.3 rendering-invariant test. | **Done.** The Subaru-class failure is covered by regression tests; the rendering invariant is locked and mutation-verified. |
-| **1 — Foundations** | Tier + dataClass in the registry; tool definitions derived from it; plan cards with per-row toggles; split cost caps; ~~structured trace (§10.1)~~ **done**. | Existing two actions run unchanged on the new machinery. |
+| **1 — Foundations** | ~~Tier + dataClass in the registry~~ **done**; tool definitions derived from it; plan cards with per-row toggles; ~~split cost caps~~ **done**; ~~structured trace (§10.1)~~ **done**. | Existing two actions run unchanged on the new machinery. |
 | **2 — Read coverage** | Task, trip, and project read tools. | The assistant can answer "what's on our plate this weekend?" |
 | **3 — Confirmed writes** | T1 action set per §9. | Multi-step plan cards work end to end. |
 | **4 — Activity log & undo** | Durable undo handles, user-facing activity log, bulk undo. | Every AI write is visible and reversible. Prerequisite for Phase 5. |
@@ -454,7 +456,7 @@ Phase 4 gates Phase 5 deliberately: SEC-P001 (one-click reversibility) is unenfo
 
 | ID | Question | Proposed default |
 |----|----------|------------------|
-| Q-P01 | What are the actual cap values for `interactive` vs `background`? | Hold the $20 total; split $15 interactive / $5 background, revisit after one month of real data. |
+| Q-P01 | What are the actual cap values for `interactive` vs `background`? | **Needs your call — implemented differently from the BRD's proposal.** The mechanism is configurable (`CHATBOT_MONTHLY_LIMIT`, `AI_BACKGROUND_MONTHLY_LIMIT`) and currently ships **$20 interactive / $5 background**, not the proposed $15/$5. Rationale: cutting the interactive cap by 25% is a user-visible regression in a budget the family already relies on, and no background workload exists yet to spend the $5. Set `CHATBOT_MONTHLY_LIMIT=15` to honour the original "hold $20 total" intent. |
 | ~~Q-P02~~ | ~~Trace retention period.~~ | **Decided & implemented.** 30 days, with a `pinned` flag exempting traces referenced by an open learning. A hard cap of 1000 traces per family bounds the file regardless; pinned traces are evicted last, never first. |
 | Q-P03 | Does the plan-card legibility threshold (25 rows) hold in practice on mobile? | Validate during Phase 3 with a real 40-row recategorization. |
 | Q-P04 | Should T2 automations run on a schedule, or on data arrival (post-Plaid-sync)? | On data arrival — it bounds volume to what actually changed and makes idempotency natural. |
