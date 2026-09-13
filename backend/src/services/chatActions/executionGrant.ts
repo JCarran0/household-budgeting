@@ -12,8 +12,12 @@
  * HONEST LIMIT: JavaScript has no module-private constructor, so a determined
  * caller inside this codebase could mint a grant it did not earn. What this
  * buys is that doing so requires an explicit, greppable, obviously-wrong line
- * of code rather than simply forgetting a check. Combined with the call-site
- * test in chatActionTiers.test.ts, that is the enforceable version of REQ-P002.
+ * of code rather than simply forgetting a check. The source scan in
+ * __tests__/unit/executionGrantCallSites.test.ts is what turns "greppable" into
+ * "enforced": it fails if anything outside proposalStore mints a confirmation
+ * grant, or if anything outside registry.ts calls a handler directly. That, plus
+ * the tier/basis checks in executeChatAction, is the enforceable version of
+ * REQ-P002.
  */
 
 const GRANT_BRAND: unique symbol = Symbol('chatActionExecutionGrant');

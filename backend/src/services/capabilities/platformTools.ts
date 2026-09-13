@@ -38,56 +38,83 @@ export const RECORD_LEARNING_TOOL: Anthropic.Tool = {
     },
   };
 
-export const PROPOSE_ACTION_TOOL: Anthropic.Tool = {
+const ROW_FIELD_SCHEMA = {
+  displaySummary: {
+    type: 'string',
+    description:
+      'Short human-readable summary shown on this row (max 200 chars). Example: "Create task: PTA donation — due May 1".',
+  },
+  displayFields: {
+    type: 'array',
+    description:
+      'Fields to render in this row (max 20 items). MUST include one entry for every param you set — a row that would write a value it does not display is rejected. Resolve IDs to human-readable names; values must be non-empty strings and keys must be unique.',
+    items: {
+      type: 'object' as const,
+      properties: {
+        key:      { type: 'string', description: 'Param field name' },
+        label:    { type: 'string', description: 'Human-readable label (e.g. "Due date")' },
+        value:    { type: 'string', description: 'Formatted display value' },
+        editable: { type: 'boolean', description: 'Whether Edit mode shows this field' },
+        type: {
+          type: 'string',
+          enum: ['text', 'textarea', 'date', 'select', 'tags'],
+          description: 'Input type for Edit mode',
+        },
+      },
+      required: ['key', 'label', 'value', 'editable', 'type'],
+    },
+  },
+} as const;
+
+const PARAMS_DESCRIPTION =
+  'Fields for the target action. For create_task: { title (required), description?, dueDate? (YYYY-MM-DD), assigneeId?, scope? (family|personal), tags?, subTasks? }. For submit_github_issue: { title (required), body (required, markdown), labels (required, array containing "bug" or "enhancement") }. Server validates and rejects invalid values.';
+
+/**
+ * Built lazily so the actionId enum is read from the registry after the
+ * registration side effects have run (REQ-P010) — one allowlist, not a schema
+ * copy that drifts from it.
+ */
+export function buildProposeActionTool(allowedActionIds: string[]): Anthropic.Tool {
+  const actionIdSchema = {
+    type: 'string',
+    enum: allowedActionIds,
+    description: 'The action to propose. Must be from the allowlist.',
+  };
+
+  return {
     // SECURITY (SEC-A003): actionId is a strict enum. Any other value causes the
     // tool call to fail at the Claude SDK schema level before the backend ever
     // runs registry validation. Backend still re-checks as defense in depth.
     name: 'propose_action',
     description:
-      'Propose an action for the user to confirm. You NEVER execute actions — the user must click Confirm. Use this when the user clearly intends to create/modify something (e.g., a task), when an uploaded attachment maps to an enabled action, or when the user is reporting a bug / requesting a feature (submit_github_issue). ONE proposal per turn. If a proposal is already pending and the user asks to change it, call this tool again with adjusted params; the prior proposal will be superseded.',
+      'Propose one or more actions for the user to confirm. You NEVER execute actions — the user must click Confirm. Use this when the user clearly intends to create/modify something (e.g., a task), when an uploaded attachment maps to an enabled action, or when the user is reporting a bug / requesting a feature (submit_github_issue). For a single intent that needs several writes, put the extra writes in additionalActions so the user confirms the whole plan once instead of approving them one at a time. ONE proposal per turn. If a proposal is already pending and the user asks to change it, call this tool again with adjusted params; the prior proposal will be superseded.',
     input_schema: {
       type: 'object' as const,
       properties: {
-        actionId: {
-          type: 'string',
-          enum: ['create_task', 'submit_github_issue'],
-          description: 'The action to propose. Must be from the allowlist.',
-        },
-        params: {
-          type: 'object' as const,
-          description:
-            'Fields for the target action. For create_task: { title (required), description?, dueDate? (YYYY-MM-DD), assigneeId?, scope? (family|personal), tags?, subTasks? }. For submit_github_issue: { title (required), body (required, markdown), labels (required, array containing "bug" or "enhancement") }. Server validates and rejects invalid values.',
-        },
-        displaySummary: {
-          type: 'string',
-          description:
-            'Short human-readable summary shown on the action card (max 200 chars). Example: "Create task: PTA donation — due May 1".',
-        },
-        displayFields: {
-          type: 'array',
-          description: 'Fields to render in the card preview (max 20 items).',
-          items: {
-            type: 'object' as const,
-            properties: {
-              key:      { type: 'string', description: 'Param field name' },
-              label:    { type: 'string', description: 'Human-readable label (e.g. "Due date")' },
-              value:    { type: 'string', description: 'Formatted display value' },
-              editable: { type: 'boolean', description: 'Whether Edit mode shows this field' },
-              type: {
-                type: 'string',
-                enum: ['text', 'textarea', 'date', 'select', 'tags'],
-                description: 'Input type for Edit mode',
-              },
-            },
-            required: ['key', 'label', 'value', 'editable', 'type'],
-          },
-        },
+        actionId: actionIdSchema,
+        params: { type: 'object' as const, description: PARAMS_DESCRIPTION },
+        ...ROW_FIELD_SCHEMA,
         reasoning: {
           type: 'string',
           description:
-            'Brief plain-language justification for why this action fits (max 500 chars). Shown under a collapsed "Why?" on the card.',
+            'Brief plain-language justification for why this plan fits (max 500 chars). Shown under a collapsed "Why?" on the card. Covers the whole proposal, not one row.',
+        },
+        additionalActions: {
+          type: 'array',
+          description:
+            'Optional further writes belonging to the same intent. Each becomes its own reviewable row that the user can uncheck independently. Omit entirely for a single action.',
+          items: {
+            type: 'object' as const,
+            properties: {
+              actionId: actionIdSchema,
+              params: { type: 'object' as const, description: PARAMS_DESCRIPTION },
+              ...ROW_FIELD_SCHEMA,
+            },
+            required: ['actionId', 'params', 'displaySummary', 'displayFields'],
+          },
         },
       },
       required: ['actionId', 'params', 'displaySummary', 'displayFields', 'reasoning'],
     },
   };
+}

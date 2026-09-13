@@ -35,6 +35,7 @@ import wishlistRoutes from './routes/wishlist';
 import workspaceRoutes from './routes/workspaces';
 import businessStatementRoutes from './routes/businessStatements';
 import businessSettingsRoutes from './routes/businessSettings';
+import { buildChatbotTools } from './services/capabilities/readCapabilities';
 
 // Load environment variables (skip in test mode as it's loaded in setup.ts)
 if (process.env.NODE_ENV !== 'test') {
@@ -42,6 +43,14 @@ if (process.env.NODE_ENV !== 'test') {
 }
 
 // Create Express app
+// REQ-P010 / REQ-P014 — assert the AI tool surface can be built before the
+// server accepts a single request. propose_action's actionId enum is read from
+// the chat action registry, which is populated by import side effects; this is
+// the first point where every one of those imports has finished. Without it an
+// ordering mistake would reach a user as "Claude is temporarily unavailable"
+// rather than a boot failure. chatbotService memoizes its own copy on first use.
+buildChatbotTools();
+
 const app: Express = express();
 
 // Exactly one proxy hop (nginx on the same host, which sets X-Forwarded-For).

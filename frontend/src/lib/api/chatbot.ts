@@ -19,6 +19,19 @@ export interface SendChatMessageParams {
   attachment?: File;
 }
 
+/**
+ * The server's failure body, when it sent one. Narrowed rather than cast: an
+ * error page or a proxy's HTML would otherwise be surfaced to the user as if it
+ * were a considered response.
+ */
+function isActionConfirmFailure(
+  body: unknown,
+): body is Extract<ActionConfirmResponse, { success: false }> {
+  if (typeof body !== 'object' || body === null) return false;
+  const b = body as Record<string, unknown>;
+  return b.success === false && typeof b.error === 'string' && typeof b.errorCode === 'string';
+}
+
 export function createChatbotApi(client: AxiosInstance) {
   return {
     async sendChatMessage(params: SendChatMessageParams): Promise<ChatResponse> {
@@ -69,13 +82,25 @@ export function createChatbotApi(client: AxiosInstance) {
 
     async confirmChatAction(params: {
       proposalId: string;
-      confirmedParams: Record<string, unknown>;
+      /** The rows the user checked. One entry for an ordinary single-action card. */
+      rows: Array<{ rowId: string; params: Record<string, unknown> }>;
     }): Promise<ActionConfirmResponse> {
-      const { data } = await client.post<ActionConfirmResponse>(
-        '/chatbot/actions/confirm',
-        params,
-      );
-      return data;
+      try {
+        const { data } = await client.post<ActionConfirmResponse>(
+          '/chatbot/actions/confirm',
+          params,
+        );
+        return data;
+      } catch (err) {
+        // Every failure mode here is reported in the RESPONSE BODY — which row
+        // failed, how many of a batch were applied, the human-readable nonce
+        // error. Letting axios's rejection through would replace all of that
+        // with "Request failed with status code 500", which is precisely the
+        // situation where the user most needs to know what landed.
+        const body = (err as { response?: { data?: unknown } }).response?.data;
+        if (isActionConfirmFailure(body)) return body;
+        throw err;
+      }
     },
 
     async getChatUsage(): Promise<{ monthlySpend: number; monthlyLimit: number; remainingBudget: number }> {

@@ -92,11 +92,16 @@ export function issueProposal(args: {
 
 type ConsumeResult =
   /**
-   * `grant` is minted here and only here for the confirmation path: consuming a
-   * nonce IS the authorization event, so proof of it is produced at the same
+   * `grants` are minted here and only here for the confirmation path: consuming
+   * a nonce IS the authorization event, so proof of it is produced at the same
    * instant rather than reconstructed later (REQ-P002).
+   *
+   * One grant per row, keyed by rowId. A plan card's rows may target different
+   * actions, and a grant is bound to a single actionId — so a per-row grant is
+   * what keeps `executeChatAction`'s actionId check meaningful on a mixed card
+   * instead of handing one over-broad grant to every row.
    */
-  | { ok: true; stored: StoredProposal; grant: ExecutionGrant }
+  | { ok: true; stored: StoredProposal; grants: ReadonlyMap<string, ExecutionGrant> }
   | { ok: false; errorCode: ActionConfirmErrorCode };
 
 /**
@@ -121,16 +126,19 @@ export function consumeProposal(args: {
   if (stored.used) return { ok: false, errorCode: 'nonce_already_used' };
 
   stored.used = true;
-  return {
-    ok: true,
-    stored,
-    grant: mintConfirmationGrant({
-      actionId: stored.proposal.actionId,
-      userId: stored.userId,
-      familyId: stored.familyId,
-      proposalId: args.nonce,
-    }),
-  };
+  const grants = new Map<string, ExecutionGrant>();
+  for (const row of stored.proposal.rows) {
+    grants.set(
+      row.rowId,
+      mintConfirmationGrant({
+        actionId: row.actionId,
+        userId: stored.userId,
+        familyId: stored.familyId,
+        proposalId: args.nonce,
+      }),
+    );
+  }
+  return { ok: true, stored, grants };
 }
 
 // Periodic memory sweep — remove expired/used entries to prevent unbounded growth

@@ -70,7 +70,10 @@ const chatbotMarkdownSchema: SanitizeSchema = {
 interface ChatMessageBubbleProps {
   message: ChatMessage;
   /** Called when the user clicks Confirm on an action card */
-  onConfirmAction?: (messageId: string, params: Record<string, unknown>) => Promise<void>;
+  onConfirmAction?: (
+    messageId: string,
+    rows: Array<{ rowId: string; params: Record<string, unknown> }>,
+  ) => Promise<void>;
   /** Called when the user dismisses an action card */
   onDismissAction?: (messageId: string) => void;
   /** Error message to display on a failed action card */
@@ -145,10 +148,11 @@ export function ChatMessageBubble({
                 : ((message.proposalStatus ?? 'pending') as ActionCardStatus)
             }
             resource={message.resource as ActionResource | undefined}
+            results={message.actionResults}
             errorMessage={actionErrorMessage}
-            onConfirm={(params) =>
+            onConfirm={(rows) =>
               onConfirmAction
-                ? onConfirmAction(message.id, params)
+                ? onConfirmAction(message.id, rows)
                 : Promise.resolve()
             }
             onDismiss={() => onDismissAction?.(message.id)}

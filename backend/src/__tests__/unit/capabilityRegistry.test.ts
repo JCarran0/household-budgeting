@@ -15,6 +15,9 @@ import {
   buildChatbotTools,
   getReadCapability,
 } from '../../services/capabilities/readCapabilities';
+// propose_action's actionId enum is read from the chat action registry, so the
+// registrations must have run before buildChatbotTools() is called (REQ-P010).
+import '../../services/chatActions';
 
 describe('registry integrity (REQ-P010)', () => {
   it('every read capability pairs a definition with an executor', () => {
@@ -91,6 +94,9 @@ describe('workspace filtering (REQ-P016)', () => {
   it('exposes no tools at all when AI is disabled for the workspace', () => {
     // BRD §11: the Business Workspace holds trust-ledger money that is not the
     // family's and is excluded from AI entirely, reads included.
+    // NOTE: this flag is not what enforces the Business Workspace exclusion.
+    // That lives in refuseBusinessWorkspace (routes/chatbot.ts) and is covered
+    // by businessWorkspaceAi.security.test.ts.
     expect(buildChatbotTools({ aiEnabled: false })).toEqual([]);
   });
 

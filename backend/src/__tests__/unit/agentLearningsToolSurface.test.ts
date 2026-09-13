@@ -19,6 +19,9 @@
 
 import { buildChatbotTools } from '../../services/capabilities/readCapabilities';
 import { CAPABILITY_KEYS, AgentLearningsStore } from '../../services/agentLearningsStore';
+// propose_action's actionId enum is read from the chat action registry, so the
+// registrations must have run before buildChatbotTools() is called (REQ-P010).
+import '../../services/chatActions';
 
 const CHATBOT_TOOLS = buildChatbotTools();
 const recordLearning = CHATBOT_TOOLS.find(t => t.name === 'record_learning');

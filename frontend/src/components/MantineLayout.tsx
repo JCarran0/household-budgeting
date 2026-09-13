@@ -117,6 +117,7 @@ export function MantineLayout() {
   const activeWorkspace = workspaces.find(ws => ws.id === activeWorkspaceId);
   const activeWorkspaceType = activeWorkspace?.workspaceType ?? 'personal';
   const navItems = activeWorkspaceType === 'business' ? BUSINESS_NAV : PERSONAL_NAV;
+  const isBusinessWorkspace = activeWorkspaceType === 'business';
 
   // Workspace switcher: hidden when the user has ≤1 workspace (REQ-004)
   const showSwitcher = workspaces.length > 1;
@@ -318,13 +319,23 @@ export function MantineLayout() {
         onClose={closeFeedback}
       />
 
-      <ChatFAB onClick={toggleChat} isOpen={chatOpened} />
-      <ChatOverlay
-        opened={chatOpened}
-        onClose={closeChat}
-        initialAttachment={pendingSharedAttachment}
-        onInitialAttachmentConsumed={() => setPendingSharedAttachment(null)}
-      />
+      {/*
+        REQ-P016 / AI-CAPABILITY-PLATFORM-BRD §3.3: no AI surface in the
+        business workspace, which holds money held in trust for a client. This
+        hides the affordance; the enforcement is refuseBusinessWorkspace on the
+        backend chatbot routes, because a hidden button is not a control.
+      */}
+      {!isBusinessWorkspace && (
+        <>
+          <ChatFAB onClick={toggleChat} isOpen={chatOpened} />
+          <ChatOverlay
+            opened={chatOpened}
+            onClose={closeChat}
+            initialAttachment={pendingSharedAttachment}
+            onInitialAttachmentConsumed={() => setPendingSharedAttachment(null)}
+          />
+        </>
+      )}
 
       <InspirationModal opened={inspirationOpened} onClose={closeInspiration} />
     </AppShell>

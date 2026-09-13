@@ -20,7 +20,7 @@ import multer from 'multer';
 import { z } from 'zod';
 import { authenticate, validateBody } from '../middleware/authMiddleware';
 import { rateLimitChatbot } from '../middleware/rateLimit';
-import { chatbotService, categorizationService } from '../services';
+import { chatbotService, categorizationService, familyService } from '../services';
 import { childLogger } from '../utils/logger';
 
 const log = childLogger('chatbot');
@@ -33,7 +33,13 @@ import {
 import { getChatAction, consumeProposal, executeChatAction } from '../services/chatActions';
 import { logAuditSuccess, logAuditRejection } from '../services/chatActions/auditLog';
 import { chatRequestSchema, classifyTransactionsSchema, suggestRulesSchema } from '../validators/chatbotValidators';
-import type { ChatRequest } from '../shared/types';
+import type {
+  ChatRequest,
+  ActionConfirmErrorCode,
+  ActionResource,
+  ActionRowResult,
+  ChatActionId,
+} from '../shared/types';
 import type { ChatAttachmentMimeType } from '../middleware/chatAttachmentUpload';
 
 const router = Router();
@@ -112,9 +118,51 @@ const conditionalAttachmentUpload = (
   });
 };
 
+
+/**
+ * REQ-P016 / BRD §3.3, §11 — the Business Workspace is excluded from AI
+ * entirely, reads included. It holds Amazon royalties held in trust for a
+ * client; that money is not the family's, and a chatbot that can read it is a
+ * fiduciary problem, not a privacy preference.
+ *
+ * Enforced here rather than by hiding the chat button: the JWT carries the
+ * active familyId, so a token minted in the business workspace must be refused
+ * at the route no matter what the client renders. Mirrors
+ * requireBusinessWorkspace in routes/businessStatements.ts, inverted.
+ */
+async function refuseBusinessWorkspace(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  try {
+    const familyId = req.user?.familyId;
+    if (!familyId) {
+      res.status(401).json({ success: false, error: 'Unauthorized' });
+      return;
+    }
+
+    const family = await familyService.getFamily(familyId);
+    if (family?.workspaceType === 'business') {
+      log.warn({ familyId }, 'AI request refused in business workspace (REQ-P016)');
+      res.status(403).json({
+        success: false,
+        error: 'Helper Bot is not available in the business workspace.',
+        code: 'AI_NOT_AVAILABLE_IN_WORKSPACE',
+      });
+      return;
+    }
+
+    next();
+  } catch (error) {
+    next(error);
+  }
+}
+
 router.post(
   '/message',
   authenticate,
+  refuseBusinessWorkspace,
   rateLimitChatbot,
   conditionalAttachmentUpload,
   validateBody(chatRequestSchema),
@@ -175,6 +223,7 @@ router.post(
 router.get(
   '/usage',
   authenticate,
+  refuseBusinessWorkspace,
   async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       const { familyId } = req.user!;
@@ -193,6 +242,7 @@ router.get(
 router.post(
   '/classify-transactions',
   authenticate,
+  refuseBusinessWorkspace,
   rateLimitChatbot,
   validateBody(classifyTransactionsSchema),
   async (req: Request, res: Response, next: NextFunction): Promise<void> => {
@@ -222,6 +272,7 @@ router.post(
 router.post(
   '/suggest-rules',
   authenticate,
+  refuseBusinessWorkspace,
   validateBody(suggestRulesSchema),
   async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
@@ -249,10 +300,26 @@ router.post(
 //   structured-log audited.
 // =============================================================================
 
-const confirmActionSchema = z.object({
-  proposalId: z.string().uuid('proposalId must be a UUID'),
-  confirmedParams: z.record(z.string(), z.unknown()),
-});
+// REQ-P021: `rows` is the plan-card form — the user's checked rows, each with
+// its (possibly edited) params. `confirmedParams` is the single-row shorthand,
+// kept for existing callers; it is refused on a multi-row card, where "which
+// row did you mean?" has no safe default.
+const confirmActionSchema = z
+  .object({
+    proposalId: z.string().uuid('proposalId must be a UUID'),
+    rows: z
+      .array(
+        z.object({
+          rowId: z.string().min(1),
+          params: z.record(z.string(), z.unknown()),
+        }),
+      )
+      .optional(),
+    confirmedParams: z.record(z.string(), z.unknown()).optional(),
+  })
+  .refine(b => b.rows !== undefined || b.confirmedParams !== undefined, {
+    message: 'Provide either rows or confirmedParams',
+  });
 
 function humanReadableError(errorCode: string): string {
   switch (errorCode) {
@@ -268,10 +335,11 @@ function humanReadableError(errorCode: string): string {
 router.post(
   '/actions/confirm',
   authenticate,
+  refuseBusinessWorkspace,
   rateLimitChatbot,
   async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
-      const { userId, familyId } = req.user!;
+      const { userId } = req.user!;
 
       // Validate request body
       const bodyResult = confirmActionSchema.safeParse(req.body);
@@ -308,62 +376,156 @@ router.post(
         return;
       }
 
-      const { stored, grant } = consumed;
-      const actionId = stored.proposal.actionId;
+      const { stored, grants } = consumed;
+      const proposalRows = stored.proposal.rows;
 
-      // Verify action is still in registry (guards against hot-reload / config drift)
-      const actionDef = getChatAction(actionId);
-      if (!actionDef) {
+      // ---- Resolve which rows the user actually checked (REQ-P021) ----
+      let selection: Array<{ rowId: string; params: Record<string, unknown> }>;
+      if (body.rows !== undefined) {
+        selection = body.rows;
+      } else if (proposalRows.length === 1) {
+        selection = [{ rowId: proposalRows[0].rowId, params: body.confirmedParams! }];
+      } else {
+        selection = [];
+      }
+
+      const rejectBatch = (
+        statusCode: number,
+        errorCode: ActionConfirmErrorCode,
+        message: string,
+        failedRowId?: string,
+      ): void => {
         logAuditRejection({
           traceId: stored.traceId,
           userId,
-          actionId,
+          actionId: failedRowId
+            ? proposalRows.find(r => r.rowId === failedRowId)?.actionId ?? 'unknown'
+            : 'unknown',
           proposalId: body.proposalId,
-          errorCode: 'action_not_allowed',
+          errorCode,
+          ...(errorCode === 'validation_failed' ? { validationError: message } : {}),
         });
-        res.status(400).json({
+        res.status(statusCode).json({
           success: false,
-          error: humanReadableError('action_not_allowed'),
-          errorCode: 'action_not_allowed',
+          error: message,
+          errorCode,
+          ...(failedRowId ? { failedRowId } : {}),
         });
+      };
+
+      if (selection.length === 0) {
+        rejectBatch(
+          400,
+          'validation_failed',
+          proposalRows.length === 1
+            ? 'Nothing was selected to confirm.'
+            : 'Select at least one row, or send `rows` explicitly for a multi-row proposal.',
+        );
         return;
       }
 
-      // SEC-A004: Re-validate confirmedParams (may differ from original if user used Edit)
-      const paramsResult = actionDef.paramsSchema.safeParse(body.confirmedParams);
-      if (!paramsResult.success) {
-        logAuditRejection({
+      // ---- Validate EVERY checked row before executing ANY of them ----
+      //
+      // REQ-P023 asks for all-or-nothing. Validating the whole batch up front is
+      // the part that is achievable without undo: a row the server would reject
+      // stops the batch before a single write lands. What it does NOT cover is a
+      // storage failure partway through execution, which can still leave the
+      // earlier rows applied. That gap closes in Phase 4, when confirmed batches
+      // produce a durable undo handle (REQ-P025). Until then the failure is
+      // reported with the row that failed rather than silently swallowed.
+      const plan: Array<{
+        rowId: string;
+        actionId: ChatActionId;
+        def: NonNullable<ReturnType<typeof getChatAction>>;
+        params: unknown;
+        grant: NonNullable<ReturnType<typeof grants.get>>;
+      }> = [];
+      const seenRowIds = new Set<string>();
+
+      for (const checked of selection) {
+        const row = proposalRows.find(r => r.rowId === checked.rowId);
+        if (!row) {
+          rejectBatch(400, 'validation_failed', `Unknown row: ${checked.rowId}`);
+          return;
+        }
+        if (seenRowIds.has(checked.rowId)) {
+          // A duplicated rowId would execute the same row twice under one
+          // confirmation the user read once.
+          rejectBatch(400, 'validation_failed', `Duplicate row: ${checked.rowId}`, checked.rowId);
+          return;
+        }
+        seenRowIds.add(checked.rowId);
+
+        // Verify action is still in registry (guards against hot-reload / config drift)
+        const actionDef = getChatAction(row.actionId);
+        if (!actionDef) {
+          rejectBatch(400, 'action_not_allowed', humanReadableError('action_not_allowed'), row.rowId);
+          return;
+        }
+
+        // SEC-A004 / REQ-P024: every row re-validated independently. A row the
+        // user edited is validated as edited.
+        const paramsResult = actionDef.paramsSchema.safeParse(checked.params);
+        if (!paramsResult.success) {
+          rejectBatch(400, 'validation_failed', paramsResult.error.message, row.rowId);
+          return;
+        }
+
+        const grant = grants.get(row.rowId);
+        if (!grant) {
+          rejectBatch(400, 'action_not_allowed', humanReadableError('action_not_allowed'), row.rowId);
+          return;
+        }
+
+        plan.push({ rowId: row.rowId, actionId: row.actionId, def: actionDef, params: paramsResult.data, grant });
+      }
+
+      // ---- Execute, in the order the rows were displayed (REQ-P022) ----
+      const results: ActionRowResult[] = [];
+      for (const step of plan) {
+        let resource: ActionResource;
+        try {
+          // Execute through the platform, which verifies the grant against the
+          // action's tier before the handler runs (REQ-P002). Identity comes
+          // from the grant, which came from the JWT (SEC-A001, SEC-A002).
+          resource = await executeChatAction(step.def, step.params, step.grant);
+        } catch (execError) {
+          log.error(
+            { err: execError, proposalId: body.proposalId, rowId: step.rowId, applied: results.length },
+            'chat action batch failed mid-execution',
+          );
+          rejectBatch(
+            500,
+            'internal_error',
+            results.length === 0
+              ? 'This change could not be applied. Nothing was saved.'
+              : `Stopped after applying ${results.length} of ${plan.length} changes. ` +
+                `The rest were not applied.`,
+            step.rowId,
+          );
+          return;
+        }
+
+        logAuditSuccess({
           traceId: stored.traceId,
           userId,
-          actionId,
+          // The grant's familyId, not the JWT's. They differ if the user
+          // switched workspaces between proposal and confirm, and the write
+          // goes where the GRANT says — an audit entry naming the other one
+          // would misdirect exactly the investigation it exists for.
+          familyId: step.grant.familyId,
+          actionId: step.actionId,
           proposalId: body.proposalId,
-          errorCode: 'validation_failed',
-          validationError: paramsResult.error.message,
+          confirmedParams: step.params as Record<string, unknown>,
+          resource,
         });
-        res.status(400).json({
-          success: false,
-          error: paramsResult.error.message,
-          errorCode: 'validation_failed',
-        });
-        return;
+
+        results.push({ rowId: step.rowId, actionId: step.actionId, resource });
       }
 
-      // Execute through the platform, which verifies the grant against the
-      // action's tier before the handler runs (REQ-P002). Identity comes from
-      // the grant, which came from the JWT (SEC-A001, SEC-A002).
-      const resource = await executeChatAction(actionDef, paramsResult.data, grant);
-
-      logAuditSuccess({
-        traceId: stored.traceId,
-        userId,
-        familyId,
-        actionId,
-        proposalId: body.proposalId,
-        confirmedParams: paramsResult.data,
-        resource,
-      });
-
-      res.json({ success: true, resource });
+      // `resource` is the first result, so single-row callers read the response
+      // exactly as they did before plan cards existed.
+      res.json({ success: true, results, resource: results[0].resource });
     } catch (error) {
       next(error);
     }

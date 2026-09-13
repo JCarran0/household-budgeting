@@ -25,7 +25,7 @@ import { childLogger } from '../utils/logger';
 const log = childLogger('chatbotService');
 import { CHATBOT_SYSTEM_PROMPT } from './chatbotPrompt';
 import { buildChatbotTools, getReadCapability } from './capabilities/readCapabilities';
-import { AgentLearningsStore, isCapabilityKey } from './agentLearningsStore';
+import { AgentLearningsStore } from './agentLearningsStore';
 import {
   AgentTraceStore,
   buildToolCallEntry,
@@ -34,13 +34,13 @@ import {
   type TraceIteration,
   type TraceToolCall,
 } from './agentTraceStore';
-import { getChatAction, listChatActionIds, issueProposal } from './chatActions';
+import { handleProposeAction, handleRecordLearning } from './capabilities/toolIntercepts';
 import type {
   ChatRequest,
   ChatResponse,
   ChatMessage,
   ChatModel,
-  ActionProposalInput,
+  ActionProposal,
   LearningNotice,
 } from '../shared/types';
 
@@ -71,7 +71,16 @@ const SYSTEM_PROMPT_BASE: Anthropic.TextBlockParam = {
 
 // REQ-P010: derived from the capability registry, not maintained alongside it.
 // buildChatbotTools applies the cache breakpoint to the final tool (REQ-P017).
-const CACHED_CHATBOT_TOOLS: Anthropic.Tool[] = buildChatbotTools();
+//
+// Built on first use rather than at module load: propose_action's actionId enum
+// is read from the chat-action registry, and this module sits inside the import
+// cycle that registers those actions. Memoized, so the cached prefix is still
+// byte-identical across requests.
+let cachedTools: Anthropic.Tool[] | null = null;
+function chatbotTools(): Anthropic.Tool[] {
+  if (!cachedTools) cachedTools = buildChatbotTools();
+  return cachedTools;
+}
 
 /**
  * Operational log line only — sizes, never contents. This is what reaches
@@ -113,7 +122,7 @@ export interface ChatAttachment {
 /** Internal toolLoop result shape — discriminated union for type safety */
 type ToolLoopResult =
   | { type: 'message'; content: string; totalInputTokens: number; totalOutputTokens: number }
-  | { type: 'action_proposal'; content: string; proposal: ReturnType<typeof issueProposal>; totalInputTokens: number; totalOutputTokens: number };
+  | { type: 'action_proposal'; content: string; proposal: ActionProposal; totalInputTokens: number; totalOutputTokens: number };
 
 export class ChatbotService {
   private client: Anthropic;
@@ -320,7 +329,7 @@ export class ChatbotService {
         model: MODEL_IDS[model],
         max_tokens: MAX_OUTPUT_TOKENS,
         system: systemBlocks,
-        tools: CACHED_CHATBOT_TOOLS,
+        tools: chatbotTools(),
         messages,
       });
 
@@ -361,126 +370,61 @@ export class ChatbotService {
           // INTERCEPT: Action proposal — do NOT execute (SEC-A001, D-8)
           // Includes submit_github_issue (migrated from bespoke intercept per D-15)
           if (toolUse.name === 'propose_action') {
-            const input = toolUse.input as ActionProposalInput;
-
-            // Registry membership check (SEC-A003)
-            const actionDef = getChatAction(input.actionId);
-            if (!actionDef) {
-              // Return tool error so Claude can self-correct within MAX_TOOL_ITERATIONS
-              toolResults.push({
-                type: 'tool_result',
-                tool_use_id: toolUse.id,
-                content: `Unknown actionId: "${input.actionId}". Valid actions: ${listChatActionIds().join(', ')}`,
-                is_error: true,
-              });
-              continue;
-            }
-
-            // Zod validation of params (SEC-A004)
-            const parsed = actionDef.paramsSchema.safeParse(input.params);
-            if (!parsed.success) {
-              // Return validation error so Claude can retry with corrected values
-              toolResults.push({
-                type: 'tool_result',
-                tool_use_id: toolUse.id,
-                content: `Invalid params for ${input.actionId}: ${parsed.error.message}. Retry with corrected values.`,
-                is_error: true,
-              });
-              continue;
-            }
-
-            // Validation succeeded — issue nonce and return proposal to frontend
-            // SECURITY: nonce is NOT sent to Claude (SEC-A009). The LLM only
-            // sees the proposal ID via conversation context if it re-proposes.
-            collector.proposalActionId = input.actionId;
-            const proposal = issueProposal({
+            const outcome = await handleProposeAction({
+              rawInput: toolUse.input,
               traceId,
               userId,
               familyId,
               conversationId,
-              proposalInput: {
-                actionId: input.actionId,
-                params: parsed.data as Record<string, unknown>,
-                displaySummary: input.displaySummary,
-                displayFields: input.displayFields,
-                reasoning: input.reasoning,
-              },
             });
+
+            if (outcome.kind !== 'proposal') {
+              toolResults.push({
+                type: 'tool_result',
+                tool_use_id: toolUse.id,
+                content: outcome.message,
+                is_error: true,
+              });
+              continue;
+            }
+
+            // Distinct action types on the card, so a trace records what a
+            // heterogeneous plan proposed rather than only its first row.
+            collector.proposalActionId = Array.from(new Set(outcome.actionIds)).join('+');
 
             const textBlock = response.content.find(
               (b): b is Anthropic.TextBlock => b.type === 'text',
             );
+            const rowCount = outcome.proposal.rows.length;
 
             return {
               type: 'action_proposal',
-              content: textBlock?.text ?? `${actionDef.label} ready for your review.`,
-              proposal,
+              content:
+                textBlock?.text ??
+                (rowCount === 1
+                  ? `${outcome.proposal.rows[0].label} ready for your review.`
+                  : `${rowCount} changes ready for your review.`),
+              proposal: outcome.proposal,
               totalInputTokens,
               totalOutputTokens,
             };
           }
 
-          // INTERCEPT: record_learning — a write, but to the maintainer-facing
-          // learnings collection, not to family data. No confirmation card:
-          // there is nothing for the user to approve about the agent noting its
-          // own blind spot. Visibility comes from the inline notice instead
-          // (REQ-L001, REQ-L002, D-L02).
+          // INTERCEPT: record_learning — the agent noting its own blind spot.
           if (toolUse.name === 'record_learning') {
-            const learningInput = toolUse.input as {
-              capabilityKey?: unknown;
-              title?: unknown;
-              detail?: unknown;
-            };
-
-            // REQ-L005: an unknown key comes back as a tool error so the model
-            // can self-correct within the existing iteration limit.
-            if (!isCapabilityKey(learningInput.capabilityKey)) {
-              toolResults.push({
-                type: 'tool_result',
-                tool_use_id: toolUse.id,
-                content: 'Unknown capabilityKey. Choose one from the enum in the tool schema.',
-                is_error: true,
-              });
-              continue;
-            }
-
-            const title = typeof learningInput.title === 'string' ? learningInput.title : '';
-            const detail = typeof learningInput.detail === 'string' ? learningInput.detail : '';
-            if (!title.trim()) {
-              toolResults.push({
-                type: 'tool_result',
-                tool_use_id: toolUse.id,
-                content: 'A non-empty title is required.',
-                is_error: true,
-              });
-              continue;
-            }
-
-            const outcome = await this.learningsStore.recordCapabilityGap({
+            const { result, notice } = await handleRecordLearning({
+              rawInput: toolUse.input,
+              store: this.learningsStore,
               familyId,
               conversationId,
-              capabilityKey: learningInput.capabilityKey,
-              title,
-              detail,
               traceId,
             });
-
-            if (outcome.recorded) {
-              collector.learningNotices.push({
-                capabilityKey: outcome.learning.capabilityKey ?? 'other',
-                title: outcome.learning.title,
-              });
-            }
-
-            // Terse, and never an error on the rate-limited path — a dropped
-            // learning is not the user's problem and must not derail the turn
-            // (SEC-L005, SEC-L008).
+            if (notice) collector.learningNotices.push(notice);
             toolResults.push({
               type: 'tool_result',
               tool_use_id: toolUse.id,
-              content: outcome.recorded
-                ? 'Noted. Continue answering the user; do not record this again.'
-                : 'Not recorded. Continue answering the user; do not retry.',
+              content: result.message,
+              ...(result.kind === 'tool_error' ? { is_error: true } : {}),
             });
             continue;
           }
@@ -576,9 +520,15 @@ export class ChatbotService {
       });
       // Track the latest pending proposal so we can inject context on the current turn
       if (msg.role === 'assistant' && msg.proposal && msg.proposalStatus === 'pending') {
+        // conversationHistory is client-supplied and passthrough-validated, so
+        // `rows` is whatever the caller sent. Guard the shape rather than
+        // trusting it — a non-array here would 500 the whole turn.
+        const rows = Array.isArray(msg.proposal.rows) ? msg.proposal.rows : [];
+        const rowSummary = rows.length === 1
+          ? `actionId: ${String(rows[0]?.actionId)}, summary: "${String(rows[0]?.displaySummary)}"`
+          : `${rows.length} rows: ${rows.map(r => String(r?.actionId)).join(', ')}`;
         pendingProposalContext =
-          `[Context: An action proposal is currently pending — actionId: ${msg.proposal.actionId}, ` +
-          `summary: "${msg.proposal.displaySummary}". ` +
+          `[Context: An action proposal is currently pending — ${rowSummary}. ` +
           `If the user's message is a refinement, call propose_action again with updated params. ` +
           `Otherwise, answer normally and remind the user of the pending proposal.]`;
       } else if (msg.role === 'assistant' && msg.proposalStatus && msg.proposalStatus !== 'pending') {

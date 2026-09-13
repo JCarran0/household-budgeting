@@ -13,7 +13,7 @@
  */
 
 import { z } from 'zod';
-import type { ChatActionId, ActionResource } from '../../shared/types';
+import type { ChatActionId, ActionResource, DisplayField } from '../../shared/types';
 import {
   isDataClassValid,
   isT2Eligible,
@@ -50,6 +50,19 @@ export interface ChatActionDefinition<TParams> {
     params: TParams,
     ctx: ChatActionHandlerContext,
   ) => Promise<ActionResource>;
+  /**
+   * SEC-P011: describe the record this action would overwrite, so the plan card
+   * can show current-vs-proposed rather than only the destination.
+   *
+   * Deliberately server-side and action-owned: the propose_action tool schema
+   * has no field for current values, so the model cannot narrate what it is
+   * about to replace. Creates have nothing to overwrite and omit this; the
+   * first implementers are the Phase 3 update actions.
+   */
+  describeCurrent?: (
+    params: TParams,
+    ctx: ChatActionHandlerContext,
+  ) => Promise<DisplayField[] | null>;
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- registry holds heterogeneous schemas

@@ -21,6 +21,7 @@ import request from 'supertest';
 import Anthropic from '@anthropic-ai/sdk';
 import app from '../../app';
 import { dataService, authService, chatbotService } from '../../services';
+import pino from 'pino';
 import { logger } from '../../utils/logger';
 import { registerUser } from '../helpers/apiHelper';
 import {
@@ -75,17 +76,23 @@ describe('10.1 — Action proposal intercepted, never executed by LLM', () => {
       conversationId: convId,
       traceId: 'trace_test',
       proposalInput: {
-        actionId: 'create_task',
-        params: makeValidTaskParams(),
-        displaySummary: 'Create task: PTA donation',
-        displayFields: [],
+        rows: [
+          {
+            rowId: 'row-0',
+            actionId: 'create_task',
+            label: 'Create a task',
+            params: makeValidTaskParams(),
+            displaySummary: 'Create task: PTA donation',
+            displayFields: [],
+          },
+        ],
         reasoning: 'Test',
       },
     });
 
     // Proposal issued successfully
     expect(proposal.proposalId).toBeTruthy();
-    expect(proposal.actionId).toBe('create_task');
+    expect(proposal.rows[0].actionId).toBe('create_task');
     expect(proposal.expiresAt).toBeTruthy();
 
     // No task created yet — only a nonce issued
@@ -120,10 +127,16 @@ describe('10.2 — Cross-user nonce confirmation is blocked', () => {
       conversationId: convId,
       traceId: 'trace_test',
       proposalInput: {
-        actionId: 'create_task',
-        params: makeValidTaskParams(),
-        displaySummary: 'Create task: PTA donation',
-        displayFields: [],
+        rows: [
+          {
+            rowId: 'row-0',
+            actionId: 'create_task',
+            label: 'Create a task',
+            params: makeValidTaskParams(),
+            displaySummary: 'Create task: PTA donation',
+            displayFields: [],
+          },
+        ],
         reasoning: 'Test',
       },
     });
@@ -158,10 +171,16 @@ describe('10.2 — Cross-user nonce confirmation is blocked', () => {
       conversationId: convId,
       traceId: 'trace_test',
       proposalInput: {
-        actionId: 'create_task',
-        params: makeValidTaskParams(),
-        displaySummary: 'Test',
-        displayFields: [],
+        rows: [
+          {
+            rowId: 'row-0',
+            actionId: 'create_task',
+            label: 'Create a task',
+            params: makeValidTaskParams(),
+            displaySummary: 'Test',
+            displayFields: [],
+          },
+        ],
         reasoning: 'Test',
       },
     });
@@ -193,10 +212,16 @@ describe('10.3 — Replay attack on confirm endpoint is blocked', () => {
       conversationId: convId,
       traceId: 'trace_test',
       proposalInput: {
-        actionId: 'create_task',
-        params: makeValidTaskParams(),
-        displaySummary: 'Create task: PTA donation',
-        displayFields: [],
+        rows: [
+          {
+            rowId: 'row-0',
+            actionId: 'create_task',
+            label: 'Create a task',
+            params: makeValidTaskParams(),
+            displaySummary: 'Create task: PTA donation',
+            displayFields: [],
+          },
+        ],
         reasoning: 'Test',
       },
     });
@@ -248,10 +273,16 @@ describe('10.4 — Supersession: new proposal invalidates prior nonce', () => {
       conversationId: convId,
       traceId: 'trace_test',
       proposalInput: {
-        actionId: 'create_task',
-        params: { title: 'Task A' },
-        displaySummary: 'Create task: Task A',
-        displayFields: [],
+        rows: [
+          {
+            rowId: 'row-0',
+            actionId: 'create_task',
+            label: 'Create a task',
+            params: { title: 'Task A' },
+            displaySummary: 'Create task: Task A',
+            displayFields: [],
+          },
+        ],
         reasoning: 'Test',
       },
     });
@@ -263,10 +294,16 @@ describe('10.4 — Supersession: new proposal invalidates prior nonce', () => {
       conversationId: convId,
       traceId: 'trace_test',
       proposalInput: {
-        actionId: 'create_task',
-        params: { title: 'Task B (refined)' },
-        displaySummary: 'Create task: Task B (refined)',
-        displayFields: [],
+        rows: [
+          {
+            rowId: 'row-0',
+            actionId: 'create_task',
+            label: 'Create a task',
+            params: { title: 'Task B (refined)' },
+            displaySummary: 'Create task: Task B (refined)',
+            displayFields: [],
+          },
+        ],
         reasoning: 'User refined it',
       },
     });
@@ -312,10 +349,16 @@ describe('10.4 — Supersession: new proposal invalidates prior nonce', () => {
       conversationId: convId,
       traceId: 'trace_test',
       proposalInput: {
-        actionId: 'create_task',
-        params: { title: 'Task A' },
-        displaySummary: 'A',
-        displayFields: [],
+        rows: [
+          {
+            rowId: 'row-0',
+            actionId: 'create_task',
+            label: 'Create a task',
+            params: { title: 'Task A' },
+            displaySummary: 'A',
+            displayFields: [],
+          },
+        ],
         reasoning: 'Test',
       },
     });
@@ -327,10 +370,16 @@ describe('10.4 — Supersession: new proposal invalidates prior nonce', () => {
       conversationId: convId,
       traceId: 'trace_test',
       proposalInput: {
-        actionId: 'create_task',
-        params: { title: 'Task B' },
-        displaySummary: 'B',
-        displayFields: [],
+        rows: [
+          {
+            rowId: 'row-0',
+            actionId: 'create_task',
+            label: 'Create a task',
+            params: { title: 'Task B' },
+            displaySummary: 'B',
+            displayFields: [],
+          },
+        ],
         reasoning: 'Test',
       },
     });
@@ -359,10 +408,16 @@ describe('10.5 — Zod re-validation on confirm rejects tampered params', () => 
       conversationId: convId,
       traceId: 'trace_test',
       proposalInput: {
-        actionId: 'create_task',
-        params: makeValidTaskParams(),
-        displaySummary: 'Create task: test',
-        displayFields: [],
+        rows: [
+          {
+            rowId: 'row-0',
+            actionId: 'create_task',
+            label: 'Create a task',
+            params: makeValidTaskParams(),
+            displaySummary: 'Create task: test',
+            displayFields: [],
+          },
+        ],
         reasoning: 'Test',
       },
     });
@@ -401,10 +456,16 @@ describe('10.5 — Zod re-validation on confirm rejects tampered params', () => 
       conversationId: convId,
       traceId: 'trace_test',
       proposalInput: {
-        actionId: 'create_task',
-        params: makeValidTaskParams(),
-        displaySummary: 'Create task: test',
-        displayFields: [],
+        rows: [
+          {
+            rowId: 'row-0',
+            actionId: 'create_task',
+            label: 'Create a task',
+            params: makeValidTaskParams(),
+            displaySummary: 'Create task: test',
+            displayFields: [],
+          },
+        ],
         reasoning: 'Test',
       },
     });
@@ -469,10 +530,16 @@ describe('10.8 — Action handler cannot be called with spoofed userId', () => {
       conversationId: convId,
       traceId: 'trace_test',
       proposalInput: {
-        actionId: 'create_task',
-        params: makeValidTaskParams(),
-        displaySummary: 'Test',
-        displayFields: [],
+        rows: [
+          {
+            rowId: 'row-0',
+            actionId: 'create_task',
+            label: 'Create a task',
+            params: makeValidTaskParams(),
+            displaySummary: 'Test',
+            displayFields: [],
+          },
+        ],
         reasoning: 'Test',
       },
     });
@@ -777,25 +844,33 @@ describe('10.7 — Attachment content is not logged (only metadata)', () => {
    * This previously spied on console.*, which captured nothing: the app logs via
    * pino, and pino's level is 'silent' in test mode. Both the "raw bytes absent"
    * assertions therefore passed against an empty string — a security test that
-   * could never fail. The fix reads pino's actual destination, and asserts the
-   * capture is non-empty BEFORE asserting absence, so the vacuous-pass mode
+   * could never fail.
+   *
+   * It then spied on process.stdout.write, which captured output only when jest
+   * happened to run this file in the main process. Pino writes to its own
+   * destination stream (a SonicBoom on fd 1), not through process.stdout, so in
+   * a worker the capture came back empty again. This wraps pino's actual
+   * destination, which is the thing the log line really goes to, and asserts the
+   * capture is non-empty BEFORE asserting absence so the vacuous-pass mode
    * cannot come back silently.
    */
   async function captureLogOutput(fn: () => Promise<void>): Promise<string> {
     const previousLevel = logger.level;
-    const originalWrite = process.stdout.write.bind(process.stdout);
+    const stream = (logger as unknown as Record<symbol, { write: (s: string) => void }>)[
+      pino.symbols.streamSym
+    ];
+    const originalWrite = stream.write.bind(stream);
     const chunks: string[] = [];
 
     logger.level = 'info'; // pino propagates this to children created at import
-    (process.stdout as NodeJS.WriteStream).write = ((chunk: string | Uint8Array) => {
-      chunks.push(typeof chunk === 'string' ? chunk : Buffer.from(chunk).toString());
-      return true;
-    }) as typeof process.stdout.write;
+    stream.write = (chunk: string) => {
+      chunks.push(String(chunk));
+    };
 
     try {
       await fn();
     } finally {
-      (process.stdout as NodeJS.WriteStream).write = originalWrite;
+      stream.write = originalWrite;
       logger.level = previousLevel;
     }
 
@@ -888,7 +963,8 @@ describe('10.9 — Prompt injection via attachment cannot self-execute', () => {
 
       // (b) The proposal is present but NOT yet executed
       expect(res.body.proposal).toBeDefined();
-      expect(res.body.proposal.actionId).toBe('create_task');
+      expect(res.body.proposal.rows).toHaveLength(1);
+      expect(res.body.proposal.rows[0].actionId).toBe('create_task');
 
       // (c) No task was created — confirmation POST is still required
       const tasks = await request(app)
@@ -1064,10 +1140,16 @@ describe('10.10 — Cost cap blocks attachment requests when monthly spend is at
       conversationId: convId,
       traceId: 'trace_test',
       proposalInput: {
-        actionId: 'create_task',
-        params: makeValidTaskParams(),
-        displaySummary: 'Create task: PTA donation',
-        displayFields: [],
+        rows: [
+          {
+            rowId: 'row-0',
+            actionId: 'create_task',
+            label: 'Create a task',
+            params: makeValidTaskParams(),
+            displaySummary: 'Create task: PTA donation',
+            displayFields: [],
+          },
+        ],
         reasoning: 'Test',
       },
     });

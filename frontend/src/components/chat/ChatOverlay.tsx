@@ -221,10 +221,8 @@ export function ChatOverlay({
       const newMessage: ChatMessage = {
         ...message,
         proposal: {
-          actionId: proposal.actionId,
-          displaySummary: proposal.displaySummary,
-          params: proposal.params,
-          displayFields: proposal.displayFields,
+          rows: proposal.rows,
+          reasoning: proposal.reasoning,
         },
         proposalStatus: 'pending',
       };
@@ -430,20 +428,24 @@ export function ChatOverlay({
 
   // ---- Action card confirm handler (Phase 8.4, 9.1) ----
   const handleConfirmAction = useCallback(
-    async (messageId: string, params: Record<string, unknown>) => {
+    async (
+      messageId: string,
+      rows: Array<{ rowId: string; params: Record<string, unknown> }>,
+    ) => {
       const fullProposal = fullProposals.get(messageId);
       if (!fullProposal) return;
 
       try {
         const result = await api.confirmChatAction({
           proposalId: fullProposal.proposalId,
-          confirmedParams: params,
+          rows,
         });
 
         if (result.success) {
           updateMessageById(messageId, {
             proposalStatus: 'confirmed',
             resource: result.resource,
+            actionResults: result.results,
           });
           setActiveProposalMessageId((current) =>
             current === messageId ? null : current

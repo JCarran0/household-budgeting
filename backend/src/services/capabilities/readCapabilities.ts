@@ -20,7 +20,12 @@
 import Anthropic from '@anthropic-ai/sdk';
 import type { ChatbotDataService } from '../chatbotDataService';
 import type { DataClass } from '../chatActions/tiers';
-import { RECORD_LEARNING_TOOL, PROPOSE_ACTION_TOOL } from './platformTools';
+import { RECORD_LEARNING_TOOL, buildProposeActionTool } from './platformTools';
+// registry.ts directly, NOT the chatActions barrel: the barrel pulls in the
+// action modules, which reach back through routes into this module. Importing
+// the leaf keeps that cycle out of the picture; the empty-registry guard in
+// platformTools() is what catches being called before registration has run.
+import { listChatActionIds } from '../chatActions/registry';
 import type {
   QueryTransactionsInput,
   GetBudgetsInput,
@@ -215,16 +220,23 @@ export const READ_CAPABILITIES: ReadCapability[] = [
 ];
 
 /** Platform tools. Not capabilities — they mediate access rather than expose data. */
-export const PLATFORM_TOOLS: Anthropic.Tool[] = [
-  RECORD_LEARNING_TOOL,
-  PROPOSE_ACTION_TOOL,
-];
+function platformTools(): Anthropic.Tool[] {
+  const actionIds = listChatActionIds();
+  if (actionIds.length === 0) {
+    // An empty enum would silently ship a propose_action tool that can never
+    // name a valid action. Fail at boot, consistent with registerChatAction.
+    throw new Error('No chat actions registered — cannot build propose_action tool schema');
+  }
+  return [RECORD_LEARNING_TOOL, buildProposeActionTool(actionIds)];
+}
 
 export interface BuildToolsOptions {
   /**
-   * REQ-P016. The Business Workspace holds trust-ledger money that is not the
-   * family's; BRD §11 excludes it from AI entirely, reads included. Passing
-   * false yields an empty tool surface.
+   * REQ-P016. Yields an empty tool surface. This is a belt to the route guard's
+   * braces, NOT the enforcement point: the Business Workspace exclusion is
+   * enforced by refuseBusinessWorkspace in routes/chatbot.ts, which refuses the
+   * request before a tool surface is ever built. A flag consulted only when
+   * someone remembers to pass it is not a security control.
    */
   aiEnabled?: boolean;
   /** Restrict to specific domains. Unset means every registered domain. */
@@ -239,6 +251,14 @@ export interface BuildToolsOptions {
  * registration order, then platform tools — because reordering invalidates the
  * cache for every subsequent turn.
  */
+/**
+ * BOOT ORDER: propose_action's actionId enum is read from the chat action
+ * registry, so `services/chatActions` must have been imported (which runs the
+ * registrations) before this is called. Production satisfies this through
+ * services/index; callers that import this module in isolation must import the
+ * barrel themselves. Calling it too early throws rather than shipping an empty
+ * enum.
+ */
 export function buildChatbotTools(options: BuildToolsOptions = {}): Anthropic.Tool[] {
   const { aiEnabled = true, domains } = options;
   if (!aiEnabled) return [];
@@ -247,7 +267,7 @@ export function buildChatbotTools(options: BuildToolsOptions = {}): Anthropic.To
     .filter(c => !domains || domains.includes(c.domain))
     .map(c => c.definition);
 
-  const tools = [...reads, ...PLATFORM_TOOLS];
+  const tools = [...reads, ...platformTools()];
 
   return tools.map((tool, i, arr) =>
     i === arr.length - 1

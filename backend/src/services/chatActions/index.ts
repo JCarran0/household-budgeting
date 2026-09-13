@@ -15,6 +15,7 @@ export * from './registry';
 export * from './tiers';
 export * from './executionGrant';
 export * from './proposalStore';
+export * from './proposalRows';
 export * from './auditLog';
 
 import { listChatActionIds } from './registry';

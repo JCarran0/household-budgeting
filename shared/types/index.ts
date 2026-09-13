@@ -801,15 +801,52 @@ export interface ActionProposalInput {
   displaySummary: string;
   displayFields: DisplayField[];
   reasoning: string;
+  /**
+   * Optional additional rows, turning a single card into a plan card. The
+   * top-level actionId/params remain the first row so a single-action proposal
+   * is expressed exactly as before.
+   */
+  additionalActions?: Array<{
+    actionId: ChatActionId;
+    params: Record<string, unknown>;
+    displaySummary: string;
+    displayFields: DisplayField[];
+  }>;
 }
 
 /** What the backend returns to the frontend after interception */
-export interface ActionProposal {
-  proposalId: string;           // nonce — single-use UUID
+/**
+ * One proposed write inside a plan card (AI-CAPABILITY-PLATFORM-BRD §5).
+ *
+ * A card carries 1..N rows. One row is the ordinary case ("create a task");
+ * many rows is how a single intent like "recategorize these 40 transactions"
+ * or "plan our Portland trip" becomes one confirmation instead of forty.
+ */
+export interface ProposalRow {
+  rowId: string;                // Stable within the proposal; addresses the row on confirm
   actionId: ChatActionId;
+  label: string;                // Resolved server-side from the registry, not model-authored
   params: Record<string, unknown>; // Server-validated, Zod-coerced
   displaySummary: string;
   displayFields: DisplayField[];
+  /**
+   * SEC-P011: the values this row would replace, so the user sees what CHANGES
+   * rather than only what it becomes. Absent for creates, which replace nothing.
+   */
+  currentValues?: DisplayField[];
+}
+
+/**
+ * SEC-P012 — above this many rows a plan card groups by action type and shows a
+ * count-by-type summary. Lives in shared/ because the backend documents it and
+ * the frontend renders it; two copies of one threshold is how they drift.
+ */
+export const PROPOSAL_ROW_GROUPING_THRESHOLD = 25;
+
+export interface ActionProposal {
+  proposalId: string;           // nonce — single-use UUID
+  /** Ordered, individually de-selectable (REQ-P020, REQ-P021). */
+  rows: ProposalRow[];
   reasoning: string;
   expiresAt: string;            // ISO, nonce expiry (15 min)
 }
@@ -817,7 +854,18 @@ export interface ActionProposal {
 /** Confirmation request body */
 export interface ActionConfirmRequest {
   proposalId: string;
-  confirmedParams: Record<string, unknown>;
+  /**
+   * The rows the user checked (REQ-P021). Rows omitted here are not executed.
+   * Params are re-validated per row at confirm time (REQ-P024), so an edited
+   * row is validated as edited.
+   */
+  rows?: Array<{ rowId: string; params: Record<string, unknown> }>;
+  /**
+   * Single-row shorthand, retained so existing callers keep working. Applies to
+   * the proposal's only row and is rejected for a multi-row plan, where "which
+   * row?" has no safe default.
+   */
+  confirmedParams?: Record<string, unknown>;
 }
 
 export interface ActionResource {
@@ -836,9 +884,27 @@ export type ActionConfirmErrorCode =
   | 'internal_error';
 
 /** Confirmation response */
+export interface ActionRowResult {
+  rowId: string;
+  actionId: ChatActionId;
+  resource: ActionResource;
+}
+
 export type ActionConfirmResponse =
-  | { success: true; resource: ActionResource }
-  | { success: false; error: string; errorCode: ActionConfirmErrorCode };
+  | {
+      success: true;
+      /** One entry per executed row, in the order they ran. */
+      results: ActionRowResult[];
+      /** First result's resource — the single-row shorthand callers expect. */
+      resource: ActionResource;
+    }
+  | {
+      success: false;
+      error: string;
+      errorCode: ActionConfirmErrorCode;
+      /** Which row failed, when the failure is row-specific (REQ-P023). */
+      failedRowId?: string;
+    };
 
 /** Attachment metadata (transient — no content, just meta) */
 export interface ChatAttachmentMeta {
@@ -859,7 +925,9 @@ export interface ChatMessage {
   attachment?: ChatAttachmentMeta;
   /** Proposal metadata for assistant messages that triggered an action card.
    *  NOTE: nonce (proposalId) is intentionally excluded — never sent to LLM. */
-  proposal?: Pick<ActionProposal, 'actionId' | 'displaySummary' | 'params' | 'displayFields'>;
+  proposal?: Pick<ActionProposal, 'rows' | 'reasoning'>;
+  /** Every row applied by a confirmation, when more than one row ran. */
+  actionResults?: ActionRowResult[];
   proposalStatus?: 'pending' | 'confirmed' | 'dismissed' | 'superseded' | 'expired';
   resource?: ActionResource;    // populated after successful confirm
   /**
