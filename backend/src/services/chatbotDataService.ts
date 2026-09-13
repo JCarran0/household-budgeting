@@ -60,6 +60,38 @@ export interface QueryTransactionsToolResult {
   };
 }
 
+/**
+ * Tool-facing get_budgets response shape.
+ *
+ * Fixes two defects that made budget confabulation likely (AI-CAPABILITY-PLATFORM-BRD
+ * §15.1, SEC-P032 / SEC-P033):
+ *
+ * 1. The raw getBudgets() result carries `categoryId` but no name, forcing the model
+ *    to join against get_categories. An incomplete join leaves it holding IDs it
+ *    cannot interpret — a confabulation trigger.
+ * 2. A category with no budget row is simply absent from the raw array, making
+ *    "no budget is set" indistinguishable from "I never looked it up".
+ *
+ * Every line therefore carries a resolved name and an explicit `hasBudget` flag,
+ * and the result reports how many in-scope categories have no budget at all.
+ */
+export interface BudgetLineForTool {
+  categoryId: string;
+  categoryName: string;   // Leaf name, e.g. "Maintenance"
+  categoryPath: string;   // Full path, e.g. "Auto & Transport > Maintenance"
+  hasBudget: boolean;     // False => no budget row exists for this category/month
+  budgetedAmount: number; // 0 when hasBudget is false
+}
+
+export interface GetBudgetsToolResult {
+  month: string;
+  /** Echoes the filter applied, or null when unfiltered. */
+  query: string | null;
+  lines: BudgetLineForTool[];
+  /** In-scope, non-hidden categories carrying no budget for this month. */
+  categoriesWithoutBudget: number;
+}
+
 const DEFAULT_TOOL_LIMIT = 50;
 const HARD_TOOL_LIMIT = 500;
 
@@ -332,6 +364,67 @@ export class ChatbotDataService {
         month: b.month,
         amount: b.amount,
       }));
+  }
+
+  /**
+   * Tool-facing budget lookup. Resolves category names and makes the absence of a
+   * budget explicit, so the model never has to infer a number it was not given.
+   *
+   * Note on actuals: this tool deliberately returns budgeted amounts only. Actuals
+   * are rollup-aware (max(parent, sum(children)) for budgets; additive for spend)
+   * and already computed by getBudgetSummary and getSpendingByCategory. Computing
+   * them a third time here would duplicate calculation logic and risk a third set
+   * of semantics. The tool description points the model at those tools instead.
+   */
+  async getBudgetsForTool(
+    familyId: string,
+    month: string,
+    categoryQuery?: string,
+  ): Promise<GetBudgetsToolResult> {
+    const [budgets, categories] = await Promise.all([
+      this.getBudgets(familyId, month),
+      this.getCategories(familyId),
+    ]);
+
+    const byId = new Map(categories.map(c => [c.id, c]));
+    const pathOf = (c: Category): string => {
+      const parent = c.parentId ? byId.get(c.parentId) : undefined;
+      return parent ? `${parent.name} > ${c.name}` : c.name;
+    };
+
+    const budgetByCategoryId = new Map(budgets.map(b => [b.categoryId, b.amount]));
+
+    const query = categoryQuery?.trim().toLowerCase() || null;
+    const visible = categories.filter(c => !c.isHidden);
+
+    // Scope: a query matches on leaf name or full path so both "maintenance" and
+    // "auto & transport" resolve. Unfiltered, only categories carrying a budget are
+    // listed -- the full taxonomy is ~125 entries and would swamp the context --
+    // but categoriesWithoutBudget still reports what the list omits.
+    const inScope = query
+      ? visible.filter(
+          c =>
+            c.name.toLowerCase().includes(query) ||
+            pathOf(c).toLowerCase().includes(query),
+        )
+      : visible;
+
+    const lines: BudgetLineForTool[] = inScope
+      .filter(c => (query ? true : budgetByCategoryId.has(c.id)))
+      .map(c => ({
+        categoryId: c.id,
+        categoryName: c.name,
+        categoryPath: pathOf(c),
+        hasBudget: budgetByCategoryId.has(c.id),
+        budgetedAmount: budgetByCategoryId.get(c.id) ?? 0,
+      }));
+
+    return {
+      month,
+      query: categoryQuery?.trim() || null,
+      lines,
+      categoriesWithoutBudget: inScope.filter(c => !budgetByCategoryId.has(c.id)).length,
+    };
   }
 
   /**

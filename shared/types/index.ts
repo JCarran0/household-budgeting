@@ -944,6 +944,14 @@ export interface QueryTransactionsInput {
 
 export interface GetBudgetsInput {
   month: string; // YYYY-MM
+  /**
+   * Optional case-insensitive substring filter on category name or full path
+   * ("maintenance", "auto & transport"). When supplied, every matching category
+   * is returned with an explicit hasBudget flag so that "no budget is set" is
+   * distinguishable from "the lookup returned nothing".
+   * See AI-CAPABILITY-PLATFORM-BRD SEC-P033.
+   */
+  categoryQuery?: string;
 }
 
 export interface GetBudgetSummaryInput {

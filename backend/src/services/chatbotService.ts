@@ -395,8 +395,14 @@ export class ChatbotService {
         return this.chatbotDataService.queryTransactionsForTool(familyId, input as unknown as QueryTransactionsInput);
       case 'get_categories':
         return this.chatbotDataService.getCategories(familyId);
-      case 'get_budgets':
-        return this.chatbotDataService.getBudgets(familyId, (input as unknown as GetBudgetsInput).month);
+      case 'get_budgets': {
+        const budgetsInput = input as unknown as GetBudgetsInput;
+        return this.chatbotDataService.getBudgetsForTool(
+          familyId,
+          budgetsInput.month,
+          budgetsInput.categoryQuery,
+        );
+      }
       case 'get_budget_summary':
         return this.chatbotDataService.getBudgetSummary(familyId, (input as unknown as GetBudgetSummaryInput).month);
       case 'get_accounts':
