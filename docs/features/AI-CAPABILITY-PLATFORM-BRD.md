@@ -109,7 +109,7 @@ The registry design achieves the same goals — executes as the user, same valid
 | ID | Requirement |
 |----|-------------|
 | REQ-P001 | Every registered capability (read tool or write action) must declare a `tier` of `T0`, `T1`, or `T2` in its registry definition. Registration without a tier must throw at startup. |
-| REQ-P002 | The tier must be enforced at execution time by the platform, not by the capability's own handler. A T1 action must be structurally unable to execute without a consumed nonce. |
+| REQ-P002 | The tier must be enforced at execution time by the platform, not by the capability's own handler. A T1 action must be structurally unable to execute without a consumed nonce. Grants are branded values only `proposalStore` mints; `executionGrantCallSites.test.ts` scans production source and fails if anything else mints one or calls a handler directly — which is what turns "greppable" into "enforced", given JS has no module-private constructor. |
 | REQ-P003 | T3 is not a declarable tier. It is the set of operations no registry entry may wrap; enforcement is by the absence of a registration plus the service-layer isolation already required by SEC-001–003. |
 | REQ-P004 | Tier changes (promoting an action from T1 to T2) must be a deliberate code change reviewed against §3.3, not a configuration toggle. |
 
@@ -151,7 +151,7 @@ The existing `chatActions/registry.ts` generalizes into the single place where A
 | REQ-P013 | Handler context remains JWT-derived only (`userId`, `familyId`). No identity, family, or privilege parameter may be accepted from model output. (Restates SEC-A002; now platform-wide.) |
 | REQ-P014 | Registration must fail fast at startup on: duplicate `actionId`, missing tier, missing `dataClass`, or a T2 declaration whose `dataClass` is not in the permitted set. |
 | REQ-P015 | A test must assert that the set of registered T2 actions equals an explicit hardcoded list. Adding a T2 action requires editing that list, making promotion visible in review. |
-| REQ-P016 | The tool definitions exposed to the model must be filtered by workspace. The Business Workspace exposes no AI tools at all (§11). **Mechanism implemented, policy NOT enforced — see Q-P07.** |
+| REQ-P016 | The tool definitions exposed to the model must be filtered by workspace. The Business Workspace exposes no AI tools at all (§11). **Enforced.** `refuseBusinessWorkspace` in `routes/chatbot.ts` 403s every chatbot route when the JWT's active family is a business workspace; the frontend also hides the chat surface, but the route guard is the control. The `aiEnabled` flag on `buildChatbotTools` is a second layer, not the enforcement point — a flag nobody passes protects nothing. See Q-P07. |
 
 ### 4.1 Tool Surface Growth
 
@@ -177,8 +177,8 @@ A **plan card** is one proposal carrying N proposed writes, each rendered as an 
 |----|-------------|
 | REQ-P020 | A proposal may contain 1..N rows. Rows may be homogeneous (40 recategorizations) or heterogeneous (create trip → add stops → tag budget). |
 | REQ-P021 | Each row must be independently de-selectable. Confirm executes exactly the checked rows. |
-| REQ-P022 | Rows are ordered and executed as a single batch under one confirmation, producing one undo handle for the whole batch. |
-| REQ-P023 | Execution is all-or-nothing per confirmation. A row failing server-side validation rolls back the batch and reports which row failed and why. |
+| REQ-P022 | Rows are ordered and executed as a single batch under one confirmation, producing one undo handle for the whole batch. (Ordering and batching shipped in Phase 1; the undo handle is Phase 4.) |
+| REQ-P023 | Execution is all-or-nothing per confirmation. A row failing server-side validation rolls back the batch and reports which row failed and why. **Partially shipped.** Every checked row is validated before any row executes, so a batch that *would* fail validation writes nothing. A storage failure partway through execution still leaves the earlier rows applied; the response names the failing row and the number applied. The remaining gap closes with REQ-P025 (durable undo handles) in Phase 4 — there is no rollback to perform until prior state is recorded. The failure response names the failing row and how many rows were applied, and the frontend surfaces that body verbatim rather than axios's "Request failed with status code 500"; the card then withdraws Confirm and Edit, because the nonce is spent whether or not execution succeeded. |
 | REQ-P024 | Every row must be re-validated by its action's Zod schema at confirm time, independently. A row edited by the user is validated as edited. (Extends SEC-A004.) |
 
 ### 5.2 Legibility
@@ -187,8 +187,8 @@ The plan card is the mechanism by which this design trades per-action scrutiny f
 
 | ID | Requirement |
 |----|-------------|
-| SEC-P010 | Each row must display the **real values** that will be written — resolved human-readable names, not IDs, and not a model-authored summary of itself. A row the UI cannot fully render must be rejected rather than truncated. (Extends SEC-A008.) |
-| SEC-P011 | Rows must display the *current* value alongside the proposed value for any update, so the user sees what changes rather than only what it becomes. |
+| SEC-P010 | Each row must display the **real values** that will be written — resolved human-readable names, not IDs, and not a model-authored summary of itself. A row the UI cannot fully render must be rejected rather than truncated. (Extends SEC-A008.) **Enforced as coverage, not presence:** `buildProposalRows` rejects any row whose server-parsed params contain a key with no matching `displayField`. Shape-checking alone was not enough — the dangerous proposal is a well-formed row showing a plausible title while `params.body` carries 64 KB the user never sees, which is a one-click exfiltration primitive for `submit_github_issue` and authorable by injected content in an uploaded receipt. Also rejects: non-array `displayFields`, empty-string values (they render as nothing), duplicate keys (one silently disappears in render), and an empty field list. |
+| SEC-P011 | Rows must display the *current* value alongside the proposed value for any update, so the user sees what changes rather than only what it becomes. The comparison is produced by the action's own `describeCurrent` hook on the server; `propose_action` deliberately has no field for it, so the model cannot narrate what it is about to overwrite. Both shipped actions are creates and populate nothing; the first implementers are the Phase 3 update actions. |
 | SEC-P012 | Cards exceeding a legibility threshold (initially 25 rows) must group rows by action type with per-group select-all, and must surface a count-by-type summary above the rows. The summary supplements the rows; it never replaces them. |
 | SEC-P013 | The confirm control must state the exact count being executed ("Apply 38 changes"), derived from checked rows at click time. |
 
@@ -251,7 +251,7 @@ SEC-A007 ("only one action proposal may be active per conversation") is **preser
 |-----|----------|-------|
 | Access to private data | **Yes** | Full family financial history, tasks, trips. Non-negotiable — it is the product. |
 | Exposure to untrusted content | **Yes** | See §7.2. Cannot be eliminated; Plaid merchant strings and uploaded attachments are inherently attacker-influenceable. |
-| Exfiltration vector | **No — by policy** | See §7.3. This is the leg we hold closed, and the only one we realistically can. |
+| Exfiltration vector | **Rendering: closed by policy. Outbound actions: closed by SEC-P010.** | Two vectors, not one. §7.3 closes *rendering* — no remote images, no active content. But `submit_github_issue` is itself an outbound channel with a server-held token, and an adversarial review found the real hole was not the renderer: a row could carry a 64 KB `body` the card never displayed, so injected receipt text could author a plausible-looking bug report containing the household's balances and the user would approve it having read only the title. Closed by requiring every written param to appear on the card (SEC-P010). Any future action with an outbound effect re-opens this question and must be assessed against it, not waved through on §7.3. |
 
 Because two legs are structural, **the entire injection defense rests on the third**. This elevates §7.3 from a rendering preference to the load-bearing control in the system.
 
@@ -426,7 +426,7 @@ Diagnosis after the fact is only possible if the evidence was captured at the ti
 | Phase | Scope | Exit criteria |
 |-------|-------|---------------|
 | **0 — Correctness** | Fix `get_budgets` (returns no actuals despite its description; returns bare IDs; absent budgets indistinguishable from no lookup). Add the §7.3 rendering-invariant test. | **Done.** The Subaru-class failure is covered by regression tests; the rendering invariant is locked and mutation-verified. |
-| **1 — Foundations** | ~~Tier + dataClass in the registry~~ **done**; ~~tool definitions derived from it~~ **done**; plan cards with per-row toggles; ~~split cost caps~~ **done**; ~~structured trace (§10.1)~~ **done**. | Existing two actions run unchanged on the new machinery. |
+| **1 — Foundations** | ~~Tier + dataClass in the registry~~ **done**; ~~tool definitions derived from it~~ **done**; ~~plan cards with per-row toggles~~ **done**; ~~split cost caps~~ **done**; ~~structured trace (§10.1)~~ **done**. | Existing two actions run unchanged on the new machinery. |
 | **2 — Read coverage** | Task, trip, and project read tools. | The assistant can answer "what's on our plate this weekend?" |
 | **3 — Confirmed writes** | T1 action set per §9. | Multi-step plan cards work end to end. |
 | **4 — Activity log & undo** | Durable undo handles, user-facing activity log, bulk undo. | Every AI write is visible and reversible. Prerequisite for Phase 5. |
@@ -461,7 +461,7 @@ Phase 4 gates Phase 5 deliberately: SEC-P001 (one-click reversibility) is unenfo
 | Q-P03 | Does the plan-card legibility threshold (25 rows) hold in practice on mobile? | Validate during Phase 3 with a real 40-row recategorization. |
 | Q-P04 | Should T2 automations run on a schedule, or on data arrival (post-Plaid-sync)? | On data arrival — it bounds volume to what actually changed and makes idempotency natural. |
 | ~~Q-P05~~ | ~~Where does the trace/incident store live given the JSON-file storage model?~~ | **Decided & implemented.** Per-family JSON at `ai_traces_{familyId}`, written by `AgentTraceStore` — a narrow appender over that one namespace, not a general write capability handed to the chatbot. Retention is applied on each write rather than by a separate sweep. |
-| Q-P07 | The BRD excludes the Business Workspace from AI entirely, reads included (§11) — but the chatbot **is reachable there today**, and `chatbotCostTracker` explicitly budgets for it (REQ-007/D11). Enforcing §11 removes a working feature. | **Needs your call.** `buildChatbotTools({ aiEnabled: false })` returns an empty surface, so the mechanism is ready, but nothing calls it with `false`. I did not wire it to `workspaceType`, because silently disabling a feature the family may be using is not a decision to make inside a refactor. Either enforce it (chatbot becomes unavailable in the business workspace) or amend §11 to permit reads there. |
+| Q-P07 | The BRD excludes the Business Workspace from AI entirely, reads included (§11) — but the chatbot **was reachable there**, and `chatbotCostTracker` explicitly budgets for it (REQ-007/D11). Enforcing §11 removes a working feature. | **Enforced, pending your confirmation.** Originally left open on the grounds that disabling a working feature is not a refactor's call. Reversed after an adversarial review pointed out this was a live exposure of trust-ledger data — a business-workspace JWT could read client royalty transactions through `get_spending_by_category`, against a written exclusion, with the only "control" being a hidden button. Fail-closed is the right default for a fiduciary boundary. **If you want the chatbot back in the business workspace, say so and it is a one-line revert** (drop `refuseBusinessWorkspace` from `routes/chatbot.ts` and amend §11); covered by `businessWorkspaceAi.security.test.ts`. |
 | Q-P06 | External links are clickable today (`protocols.href` allows http/https), which SEC-P024 forbids. Enforce it, or amend SEC-P024? | Undecided. Enforcing costs the ability to cite a restaurant or bank URL in trip and budget conversations; amending accepts a click-gated exfiltration path. Decide before Trips read tools ship in Phase 2, since that is when external URLs start appearing in output. |
 
 ---
