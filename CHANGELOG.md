@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [6.4.0](https://github.com/JCarran0/household-budgeting/compare/v6.3.1...v6.4.0) (2026-09-13)
+
+
+### Features
+
+* **ai:** make chat links clickable but never anonymous (SEC-P024 amended) ([68a1426](https://github.com/JCarran0/household-budgeting/commit/68a1426296a958682c8cdb8254e6f3781580ffdb))
+* **ai:** move Sonnet and Opus to the 5 series (REQ-P056) ([65a75eb](https://github.com/JCarran0/household-budgeting/commit/65a75eb3921b95fbece5da2bd14edd802bf4099c))
+
+
+### Documentation
+
+* **ai:** close Q-P04 and Q-P06, amend SEC-P024, open Q-P08 ([d4b1c18](https://github.com/JCarran0/household-budgeting/commit/d4b1c18bca44093247226289a2ebc786c6041c35))
+
 ### [6.3.1](https://github.com/JCarran0/household-budgeting/compare/v6.3.0...v6.3.1) (2026-09-13)
 
 
