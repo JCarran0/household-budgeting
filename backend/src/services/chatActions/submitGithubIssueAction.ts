@@ -31,6 +31,10 @@ const GITHUB_REPO = 'JCarran0/household-budgeting';
 registerChatAction<GitHubIssueDraft>({
   actionId: 'submit_github_issue',
   label: 'Report an issue',
+  // T1 with dataClass 'external' — this one leaves the system entirely. It can
+  // never be promoted to unattended regardless of how reliable it looks.
+  tier: 'T1',
+  dataClass: 'external',
   paramsSchema: githubIssueSchema,
   async execute(params) {
     const pat = config.ai.githubIssuesPat;

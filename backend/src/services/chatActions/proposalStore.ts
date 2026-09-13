@@ -18,6 +18,7 @@
 
 import { randomUUID } from 'crypto';
 import type { ActionProposal, ActionConfirmErrorCode, ActionConfirmResponse } from '../../shared/types';
+import { mintConfirmationGrant, type ExecutionGrant } from './executionGrant';
 
 const TTL_MS = 15 * 60 * 1000; // 15 minutes (SEC-A006)
 
@@ -90,7 +91,12 @@ export function issueProposal(args: {
 }
 
 type ConsumeResult =
-  | { ok: true; stored: StoredProposal }
+  /**
+   * `grant` is minted here and only here for the confirmation path: consuming a
+   * nonce IS the authorization event, so proof of it is produced at the same
+   * instant rather than reconstructed later (REQ-P002).
+   */
+  | { ok: true; stored: StoredProposal; grant: ExecutionGrant }
   | { ok: false; errorCode: ActionConfirmErrorCode };
 
 /**
@@ -115,7 +121,16 @@ export function consumeProposal(args: {
   if (stored.used) return { ok: false, errorCode: 'nonce_already_used' };
 
   stored.used = true;
-  return { ok: true, stored };
+  return {
+    ok: true,
+    stored,
+    grant: mintConfirmationGrant({
+      actionId: stored.proposal.actionId,
+      userId: stored.userId,
+      familyId: stored.familyId,
+      proposalId: args.nonce,
+    }),
+  };
 }
 
 // Periodic memory sweep — remove expired/used entries to prevent unbounded growth

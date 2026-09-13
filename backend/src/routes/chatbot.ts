@@ -30,7 +30,7 @@ import {
   enforcePdfPageLimit,
   countPdfPages,
 } from '../middleware/chatAttachmentUpload';
-import { getChatAction, consumeProposal } from '../services/chatActions';
+import { getChatAction, consumeProposal, executeChatAction } from '../services/chatActions';
 import { logAuditSuccess, logAuditRejection } from '../services/chatActions/auditLog';
 import { chatRequestSchema, classifyTransactionsSchema, suggestRulesSchema } from '../validators/chatbotValidators';
 import type { ChatRequest } from '../shared/types';
@@ -308,7 +308,7 @@ router.post(
         return;
       }
 
-      const { stored } = consumed;
+      const { stored, grant } = consumed;
       const actionId = stored.proposal.actionId;
 
       // Verify action is still in registry (guards against hot-reload / config drift)
@@ -348,8 +348,10 @@ router.post(
         return;
       }
 
-      // Execute the action with the authenticated user's identity (SEC-A001)
-      const resource = await actionDef.execute(paramsResult.data, { userId, familyId });
+      // Execute through the platform, which verifies the grant against the
+      // action's tier before the handler runs (REQ-P002). Identity comes from
+      // the grant, which came from the JWT (SEC-A001, SEC-A002).
+      const resource = await executeChatAction(actionDef, paramsResult.data, grant);
 
       logAuditSuccess({
         traceId: stored.traceId,

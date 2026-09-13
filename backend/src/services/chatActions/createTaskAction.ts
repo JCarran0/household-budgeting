@@ -22,6 +22,10 @@ import type { CreateTaskDto } from '../../shared/types';
 registerChatAction<CreateTaskDto>({
   actionId: 'create_task',
   label: 'Create a task',
+  // T1: creating a task is a user-authored record, not metadata, so it is
+  // permanently outside the unattended tier (SEC-P003).
+  tier: 'T1',
+  dataClass: 'content',
   paramsSchema: createTaskSchema,
   async execute(params, ctx) {
     const task = await taskService.createTask(params, ctx.userId, ctx.familyId);
