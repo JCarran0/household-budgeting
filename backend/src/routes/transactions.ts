@@ -7,6 +7,18 @@ import { transactionService, accountService, importService, pushNotificationServ
 import { authMiddleware } from '../middleware/authMiddleware';
 import { AuthorizationError } from '../errors';
 import { z } from 'zod';
+import {
+  transactionFilterSchema,
+  updateCategorySchema,
+  addTagsSchema,
+  updateDescriptionSchema,
+  updateNotesSchema,
+  updateHiddenSchema,
+  updateFlaggedSchema,
+  splitTransactionSchema,
+  syncAllSchema,
+  bulkUpdateSchema,
+} from '../validators/transactionValidators';
 import type { StoredTransaction } from '../services/transactionService';
 
 import { childLogger } from '../utils/logger';
@@ -131,109 +143,9 @@ interface AuthRequest extends Request {
   user?: { userId: string; username: string; familyId: string; workspaceIds: string[] };
 }
 
-// Input validation schemas
-const transactionFilterSchema = z.object({
-  startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
-  endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
-  accountId: z.string().optional(), // Single accountId for simple filtering
-  accountIds: z.array(z.string()).optional(),
-  categoryIds: z.union([z.array(z.string()), z.string()]).optional().transform(val => {
-    if (typeof val === 'string') return [val];
-    return val;
-  }),
-  tags: z.union([z.array(z.string()), z.string()]).optional().transform(val => {
-    if (typeof val === 'string') return [val];
-    return val;
-  }),
-  searchQuery: z.string().optional(),
-  includePending: z.union([z.boolean(), z.string()]).optional().transform(val => {
-    if (typeof val === 'string') return val === 'true';
-    return val;
-  }),
-  includeHidden: z.union([z.boolean(), z.string()]).optional().transform(val => {
-    if (typeof val === 'string') return val === 'true';
-    return val;
-  }),
-  onlyUncategorized: z.union([z.boolean(), z.string()]).optional().transform(val => {
-    if (typeof val === 'string') return val === 'true';
-    return val;
-  }),
-  onlyFlagged: z.union([z.boolean(), z.string()]).optional().transform(val => {
-    if (typeof val === 'string') return val === 'true';
-    return val;
-  }),
-  minAmount: z.union([z.number(), z.string()]).optional().transform(val => {
-    if (typeof val === 'string') return parseFloat(val);
-    return val;
-  }),
-  maxAmount: z.union([z.number(), z.string()]).optional().transform(val => {
-    if (typeof val === 'string') return parseFloat(val);
-    return val;
-  }),
-  exactAmount: z.union([z.number(), z.string()]).optional().transform(val => {
-    if (typeof val === 'string') return parseFloat(val);
-    return val;
-  }),
-  amountTolerance: z.union([z.number(), z.string()]).optional().transform(val => {
-    if (typeof val === 'string') return parseFloat(val);
-    return val;
-  }),
-  transactionType: z.enum(['income', 'expense', 'transfer', 'all']).optional(),
-});
-
-// Exported so the chat action re-uses the same schema (REQ-P011 / SEC-A004).
-export const updateCategorySchema = z.object({
-  categoryId: z.union([z.string().min(1), z.null()]),
-});
-
-const addTagsSchema = z.object({
-  tags: z.array(z.string().min(1)),
-});
-
-// Exported so the chat action re-uses the same schema (REQ-P011 / SEC-A004).
-export const updateDescriptionSchema = z.object({
-  description: z.string().nullable(),
-});
-
-const updateNotesSchema = z.object({
-  notes: z.string().nullable(),
-});
-
-const updateHiddenSchema = z.object({
-  isHidden: z.boolean(),
-});
-
-const updateFlaggedSchema = z.object({
-  isFlagged: z.boolean(),
-});
-
-const splitTransactionSchema = z.object({
-  splits: z.array(z.object({
-    amount: z.number().positive(),
-    categoryId: z.string().optional(),
-    description: z.string().optional(),
-    tags: z.array(z.string()).optional(),
-  })).min(2),
-});
-
-const syncAllSchema = z.object({
-  startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
-});
-
-const bulkUpdateSchema = z.object({
-  transactionIds: z.array(z.string().min(1)).min(1).max(100),
-  updates: z.object({
-    categoryId: z.union([z.string().min(1), z.null()]).optional(),
-    userDescription: z.union([z.string(), z.null()]).optional(),
-    isHidden: z.boolean().optional(),
-    isFlagged: z.boolean().optional(),
-    tagsToAdd: z.array(z.string().min(1)).optional(),
-    tagsToRemove: z.array(z.string().min(1)).optional(),
-  }).refine(data => Object.keys(data).length > 0, {
-    message: 'At least one update field must be provided',
-  }),
-});
-
+// Validation schemas live in validators/transactionValidators.ts so chat
+// actions can re-use them without importing this route module (REQ-P011,
+// TD-031). transactionImportSchema stays below — it is route-only.
 /**
  * GET /api/v1/transactions/uncategorized/count
  * Get count of uncategorized transactions

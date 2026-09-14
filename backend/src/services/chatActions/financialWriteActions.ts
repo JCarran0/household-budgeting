@@ -29,6 +29,7 @@ import { z } from 'zod';
 import { registerChatAction } from './registry';
 import { createBudgetSchema } from '../../validators/budgetValidators';
 import { createRuleSchema } from '../../validators/ruleValidators';
+import { updateHiddenSchema } from '../../validators/transactionValidators';
 import {
   transactionService,
   categoryService,
@@ -78,9 +79,14 @@ async function categoryLabel(categoryId: string, familyId: string): Promise<stri
 // set_transaction_hidden
 // -----------------------------------------------------------------------------
 
-const setHiddenParamsSchema = z.object({
+/**
+ * Re-uses the route's own updateHiddenSchema (REQ-P011). The only addition is
+ * `transactionId`, which the HTTP route carries in its URL path rather than its
+ * body — the identifier has to arrive somehow, and extending keeps the field
+ * rule itself single-sourced.
+ */
+const setHiddenParamsSchema = updateHiddenSchema.extend({
   transactionId: z.string().min(1),
-  isHidden: z.boolean(),
 });
 
 type SetHiddenParams = z.infer<typeof setHiddenParamsSchema>;

@@ -16,16 +16,17 @@
  * from the JWT. The model supplies only the taskId and the fields to change,
  * and both are resolved against family-scoped data before anything is written.
  *
- * SECURITY (SEC-A004 / REQ-P011): params re-use updateTaskSchema exported from
- * routes/tasks.ts, so tightening validation there applies here automatically.
- * The only addition is `taskId`, which the HTTP route carries in its URL path
- * rather than its body — the identifier has to arrive somehow, and adding it
- * here keeps the field rules themselves single-sourced.
+ * SECURITY (SEC-A004 / REQ-P011): params re-use updateTaskSchema from
+ * validators/taskValidators.ts — the same module routes/tasks.ts parses with —
+ * so tightening validation there applies here automatically. The only addition
+ * is `taskId`, which the HTTP route carries in its URL path rather than its
+ * body; the identifier has to arrive somehow, and adding it here keeps the
+ * field rules themselves single-sourced.
  */
 
 import { z } from 'zod';
 import { registerChatAction } from './registry';
-import { updateTaskSchema } from '../../routes/tasks';
+import { updateTaskSchema } from '../../validators/taskValidators';
 import { taskService, familyService } from '../index';
 import type { StoredTask } from '../../shared/types';
 

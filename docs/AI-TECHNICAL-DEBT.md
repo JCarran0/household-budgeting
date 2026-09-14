@@ -95,7 +95,7 @@ Twelve tests on the redactor, half of them asserting what it leaves ALONE — a 
 ---
 
 ### TD-031: Route-Owned Zod Schemas Are Imported by Chat Actions
-**Status**: Open — partially mitigated
+**Status**: **Resolved 2026-09-13**
 **Created**: 2026-09-13
 **Impact**: High when it fires, and it fires silently
 **Effort**: Low
@@ -107,7 +107,11 @@ The failure is not a warning. The schema resolves to `undefined` at module-eval 
 
 **Fix**: move the schema to `backend/src/validators/` and have BOTH the route and the action import it. Done for the rule and budget schemas (`ruleValidators.ts`, `budgetValidators.ts`), following the `stopValidators.ts` precedent.
 
-**Still outstanding**: `updateTaskSchema` in `routes/tasks.ts` and `updateCategorySchema` / `updateDescriptionSchema` in `routes/transactions.ts` are still imported route-side by `updateTaskAction` and `transactionMetadataActions`. They work today only because the import order happens to resolve them in time. That is not a property anyone is maintaining deliberately, and the next action added to either route could flip it — with the whole tasks or transactions route going 400 as the symptom.
+**Resolution**: every route-owned schema block now lives under `validators/` — `stopValidators`, `ruleValidators`, `budgetValidators`, and now `taskValidators` and `transactionValidators`. Routes and chat actions both import from there; no service imports a route module.
+
+The guard is `__tests__/unit/routeImportCycles.test.ts`, which scans production source for `from '.../routes/...'` outside `app.ts`. It exists because the broken version looks completely reasonable in review: it is one import line, and it is the line REQ-P011 appears to ask for. The test carries a positive control asserting the pattern actually matches a real route import, so a typo cannot turn it into a no-op that reports clean forever. Mutation-verified by repointing `updateTaskAction` back at `routes/tasks` — the test names the file and line.
+
+**Picked up along the way**: `set_transaction_hidden` had been declaring its own `isHidden: z.boolean()` instead of extending the route's `updateHiddenSchema`, which is the REQ-P011 violation this entry is about, one layer down. It now extends the shared schema.
 
 ---
 

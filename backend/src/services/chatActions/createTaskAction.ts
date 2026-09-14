@@ -15,7 +15,7 @@
 import { registerChatAction } from './registry';
 // Re-use the EXACT same schema exported from the tasks route — one source of
 // truth for task validation whether the caller is HTTP or chat. (SEC-A004)
-import { createTaskSchema } from '../../routes/tasks';
+import { createTaskSchema } from '../../validators/taskValidators';
 import { taskService } from '../index';
 import type { CreateTaskDto } from '../../shared/types';
 

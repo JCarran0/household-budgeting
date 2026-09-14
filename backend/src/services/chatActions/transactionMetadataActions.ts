@@ -27,7 +27,7 @@ import { registerChatAction } from './registry';
 import {
   updateCategorySchema,
   updateDescriptionSchema,
-} from '../../routes/transactions';
+} from '../../validators/transactionValidators';
 import { transactionService, categoryService } from '../index';
 import type { StoredTransaction } from '../transactionService';
 
