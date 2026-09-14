@@ -27,6 +27,13 @@
  * The proposal timeline prints alongside the traces because the two together
  * are what answer "what did the agent do?" — a nonce burned by a trace that
  * isn't there is the signature of a turn that outlived its request.
+ *
+ * Open learnings print too. The agent records its own capability gaps to a
+ * maintainer-facing store it can never read back (SEC-L003), which made it a
+ * store with no reader at all: the first learning this app ever recorded sat
+ * unseen in S3 until someone thought to ask. A learning also PINS its trace
+ * against the 30-day retention sweep (REQ-P063), so the evidence behind an open
+ * item is still here — this is what makes that reachable.
  */
 
 import * as path from 'path';
@@ -56,6 +63,7 @@ import { StorageFactory } from '../src/services/storage/storageFactory';
 import type { StorageAdapter } from '../src/services/storage/types';
 import type { AgentTrace } from '../src/services/agentTraceStore';
 import type { StoredProposal } from '../src/services/chatActions/proposalStore';
+import type { AgentLearning } from '../src/services/agentLearningsStore';
 
 /**
  * The storage adapter directly, NOT UnifiedDataService.
@@ -84,6 +92,7 @@ type ReadOnlyStorage = ReturnType<typeof readOnlyStorage>;
 
 const TRACE_PREFIX = 'ai_traces_';
 const PROPOSAL_PREFIX = 'ai_proposals_';
+const LEARNING_PREFIX = 'agent_learnings_';
 
 /** `--since 90m` / `--since 3h` / `--since 2d`, or an ISO timestamp. */
 function parseSince(raw: string | undefined): number {
@@ -133,6 +142,16 @@ async function listFamilies(store: ReadOnlyStorage): Promise<void> {
 }
 
 /** The full ledger for one trace — what the model actually saw (REQ-P061). */
+/**
+ * Model-authored text reaches this terminal untrusted (SEC-L002). It is already
+ * redacted and length-capped on the way into the store; keep it on one line so
+ * a title full of newlines cannot forge the surrounding output.
+ */
+function oneLine(value: string, width: number): string {
+  const flat = value.replace(/\s+/g, ' ').trim();
+  return flat.length > width ? `${flat.slice(0, width - 1)}…` : flat;
+}
+
 function printOneTrace(trace: AgentTrace): void {
   console.log(`\ntrace   ${trace.traceId}`);
   console.log(`when    ${clock(trace.createdAt)}  (${trace.latencyMs} ms)`);
@@ -145,6 +164,9 @@ function printOneTrace(trace: AgentTrace): void {
     console.log(`file    ${trace.attachment.mimeType} ${trace.attachment.bytes} bytes`);
   }
   if (trace.errorMessage) console.log(`error   ${trace.errorMessage}`);
+  if (trace.pinned) {
+    console.log('pinned  kept past the 30-day sweep — a learning cites this turn as evidence');
+  }
 
   if (trace.iterations.length > 0) {
     console.log('\niterations');
@@ -258,6 +280,19 @@ async function main(): Promise<void> {
           pad(Array.from(new Set(p.proposal.rows.map(r => r.actionId))).join('+'), 26) +
           (p.result ? `${p.result.success ? 'ok' : p.result.error}` : '-'),
       );
+    }
+  }
+
+  const learnings = (await store.read<AgentLearning[]>(`${LEARNING_PREFIX}${familyId}`)) ?? [];
+  const open = learnings.filter(l => l.status === 'open');
+
+  console.log(`\n${open.length} open learnings (of ${learnings.length} recorded, all time)\n`);
+  for (const l of open) {
+    const seen = l.occurrenceCount > 1 ? ` ×${l.occurrenceCount}` : '';
+    console.log(`  ${clock(l.lastSeenAt)}  [${l.capabilityKey ?? 'other'}]${seen}  ${oneLine(l.title, 90)}`);
+    console.log(`      ${oneLine(l.detail, 150)}`);
+    if (l.traceIds.length > 0) {
+      console.log(`      evidence: ${l.traceIds.map(id => short(id)).join(', ')}`);
     }
   }
 
