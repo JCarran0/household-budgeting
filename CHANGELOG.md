@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.2.0](https://github.com/JCarran0/household-budgeting/compare/v7.1.0...v7.2.0) (2026-09-14)
+
+
+### Features
+
+* **chat:** let the user download the conversation ([ac767d4](https://github.com/JCarran0/household-budgeting/commit/ac767d4a2a54a79b13867a440d29b3da8c6b21d8))
+* **scripts:** surface open learnings in the trace inspector ([d159171](https://github.com/JCarran0/household-budgeting/commit/d159171a48e927336186db4d146dc48e8e9835a1))
+
 ## [7.1.0](https://github.com/JCarran0/household-budgeting/compare/v7.0.0...v7.1.0) (2026-09-14)
 
 
