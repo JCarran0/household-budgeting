@@ -2,8 +2,12 @@
 # AI Capability Platform — Implementation Plan
 # =============================================================================
 # BRD: docs/features/AI-CAPABILITY-PLATFORM-BRD.md
-# Status: Phases 0-2 complete; Phase 3 largely delivered; Phase 4 backend
-#         delivered, activity-log UI outstanding
+# Status: Phases 0-4 complete except the activity-log UI, which is built and
+#         awaiting QA before it lands. Phase 5 (unattended tier) DEFERRED BY
+#         OWNER DECISION 2026-09-13 — T2 ships empty (REQ-P083). Phase 6
+#         (proactive reads) not started and blocked on product decisions, not
+#         on engineering: nothing in the BRD says what a digest contains, when
+#         it runs, or where it surfaces, and this app has no scheduler.
 # Last Updated: 2026-09-13
 # =============================================================================
 
