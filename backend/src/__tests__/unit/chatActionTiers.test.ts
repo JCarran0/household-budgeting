@@ -141,6 +141,12 @@ describe('the shipped action set (REQ-P015)', () => {
     // rather than an observation that no candidate exists. REQ-P081 independently
     // blocks promotion until durable undo and the activity log ship, because
     // SEC-P001 gates T2 on one-click reversibility.
+    //
+    // Those shipped. The gate is open and the tier is still empty — that is now
+    // a standing product decision, not a sequencing artifact. Asked directly on
+    // 2026-09-13 whether anything should run unattended, the owner said nothing
+    // should (REQ-P083). So this expectation no longer says "not yet"; it says
+    // "not without asking again".
     const real = listT2ActionIds().filter(id => !String(id).startsWith('__test_action_'));
     expect(real).toEqual([]);
   });
@@ -151,8 +157,11 @@ describe('the shipped action set (REQ-P015)', () => {
     // arrive unnoticed in review.
     const shipped = listChatActionIds().filter(id => !String(id).startsWith('__test_action_'));
     expect(shipped.sort()).toEqual([
+      'add_project_line_item',
+      'add_trip_stop',
       'complete_task',
       'create_task',
+      'move_trip_stop',
       'set_transaction_category',
       'set_transaction_description',
       'submit_github_issue',
@@ -162,10 +171,18 @@ describe('the shipped action set (REQ-P015)', () => {
     expect(getChatAction('create_task')).toMatchObject({ tier: 'T1', dataClass: 'content' });
     expect(getChatAction('update_task')).toMatchObject({ tier: 'T1', dataClass: 'content' });
     expect(getChatAction('complete_task')).toMatchObject({ tier: 'T1', dataClass: 'content' });
-    // Metadata: classification only, never an amount. This is what makes them
-    // the flagship T2 candidates for Phase 5 (SEC-P003).
+    // Metadata: classification only, never an amount. That is what would make
+    // them the flagship T2 candidates if T2 were ever populated (SEC-P003);
+    // per REQ-P083 it is not.
     expect(getChatAction('set_transaction_category')).toMatchObject({ tier: 'T1', dataClass: 'metadata' });
     expect(getChatAction('set_transaction_description')).toMatchObject({ tier: 'T1', dataClass: 'metadata' });
+    // Itinerary edits are a user-authored plan, like tasks.
+    expect(getChatAction('add_trip_stop')).toMatchObject({ tier: 'T1', dataClass: 'content' });
+    expect(getChatAction('move_trip_stop')).toMatchObject({ tier: 'T1', dataClass: 'content' });
+    // A line item is a dollar figure inside a budget. SEC-P003 classifies on the
+    // data, not the consequence, so 'financial' — which is what permanently
+    // excludes it from T2 even though nothing here moves real money.
+    expect(getChatAction('add_project_line_item')).toMatchObject({ tier: 'T1', dataClass: 'financial' });
     // Leaves the system entirely — permanently ineligible for T2.
     expect(getChatAction('submit_github_issue')).toMatchObject({ tier: 'T1', dataClass: 'external' });
   });

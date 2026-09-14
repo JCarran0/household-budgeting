@@ -657,10 +657,48 @@ phase_3_confirmed_writes:
 
     - id: "3.2"
       task: Trip and project write actions
-      status: pending
+      status: completed
       details: |
-        Add/move a stop, create a line item. Stay-overlap validation must run
-        server-side via tripHelpers.ts, never in the tool.
+        Three actions: add_trip_stop, move_trip_stop (chatActions/
+        tripStopActions.ts) and add_project_line_item
+        (chatActions/projectLineItemAction.ts).
+
+        THE MODEL CANNOT ADD A STAY. TRIP-ITINERARIES-BRD REQ-009 requires a
+        Stay to carry a VERIFIED location — placeId, lat, lng — and those are
+        fetched, not reasoned out. A model asked for them produces something
+        well-formed and wrong, and a fabricated placeId does not sit inert: the
+        Map tab plots it and the photo lookup queries it. So 'stay' is absent
+        from the add_trip_stop type enum; the refusal is in the params schema,
+        not in a handler that has to remember it. Adding lodging stays a human
+        action performed against the real place picker.
+        For the same reason every location these actions write is
+        kind:'freeText'. "Verified" is a claim about provenance, and the
+        provenance of a model-supplied address is the model.
+
+        Stay-overlap runs through the SHARED validateNoStayOverlap in
+        validateSemantics, ahead of execution. tripService.updateStop enforces
+        it too, but that throws mid-batch — mutation-verified: removing the
+        pre-execution check leaves an earlier add_trip_stop row written while
+        the move fails, which is exactly the half-applied batch REQ-P023
+        forbids. Moving a stay requires an explicit endDate (the LAST night,
+        D2); defaulting it would silently shorten or extend a booking.
+
+        add_project_line_item is dataClass 'financial', not 'content' — a line
+        item is a dollar figure inside a budget, and SEC-P003 classifies on the
+        data rather than the consequence. That permanently excludes it from T2.
+        It can only add to a category the project ALREADY budgets: creating a
+        budget means choosing an amount under the totalBudget >= Σ amounts
+        constraint, which is a budgeting decision, not a bookkeeping one. It
+        never touches an amount or a total (that is 3.4). The resource label
+        says "estimate" because this app never reconciles a line item against a
+        transaction, and an activity-log row reading "Cabinets $4,200" would be
+        read as money spent.
+        Undo is scoped to ONE category's line items rather than the whole
+        categoryBudgets array, so reversing it cannot take out a spouse's edit
+        to an unrelated category as collateral damage.
+
+        12 tests in tripProjectWrites.security.test.ts, each guard with a
+        positive control alongside it.
 
     - id: "3.3"
       task: Transaction metadata actions — set_transaction_category, set_transaction_description
@@ -783,10 +821,14 @@ phase_4_activity_log_and_undo:
 
     - id: "4.5"
       task: Mark unattended writes wherever the record is displayed
-      status: pending
+      status: partially_delivered
       details: |
         REQ-P039. Nothing to mark until a T2 automation exists, so this lands
-        with Phase 5 rather than here.
+        with Phase 5 rather than here — and Phase 5 is now deferred by owner
+        decision, so nothing further is coming.
+        The activity log already renders an "Automatic" badge on any entry with
+        origin 'unattended', which is the surface that would matter first. It is
+        unreachable today and locked by a test so it cannot rot before it is.
 
     - id: "4.6"
       task: Persist the proposal store
@@ -800,11 +842,24 @@ phase_4_activity_log_and_undo:
         across the confirm route and the chat loop, not a storage swap.
 
 phase_5_unattended_tier:
-  status: not_started
+  status: deferred_by_owner_decision
+  decided: 2026-09-13
   description: |
-    Standing-consent settings, caps, kill switch. First T2 automation is
+    Standing-consent settings, caps, kill switch. First T2 automation would be
     transaction categorization. Exit: an automation can be enabled, produces
     marked writes, and is bulk-undoable.
+
+    NOT BEING BUILT. Asked directly whether anything should run unattended now
+    that undo and the activity log make it survivable, the owner said no.
+    That is the whole phase: T2 exists as a tier with no members.
+
+    What this decision does NOT mean: the machinery was wasted. The tier system
+    is what lets every action declare itself T1 and be enforced as T1 at
+    execution time. `T2_PERMITTED_DATA_CLASSES = ['metadata']` stays as written.
+    An empty T2 is the safest possible state for it and costs nothing to hold.
+
+    To revisit, the sequence is 4.6 (durable proposal store) -> 5.1 -> 5.2 ->
+    5.3, and it starts with a conversation, not a commit.
   tasks:
     - id: "5.1"
       task: Per-automation standing consent

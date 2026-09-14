@@ -420,7 +420,7 @@ REQ-P061's verbatim rule is bounded by a size limit, since an uncapped ledger wo
 
 The schedule — which phase is where, what has shipped, and what each phase
 contains — lives in [AI-CAPABILITY-PLATFORM-PLAN.yaml](AI-CAPABILITY-PLATFORM-PLAN.yaml).
-Three ordering rules are normative and belong here, because violating them
+Four rules are normative and belong here, because violating them
 produces an unsafe system rather than a late one.
 
 | ID | Constraint |
@@ -428,6 +428,7 @@ produces an unsafe system rather than a late one.
 | REQ-P080 | Domains are added **read-first, write-second**. A domain earns write actions only after its read tools have proven useful in practice. |
 | REQ-P081 | Durable undo (§5.4) and the user-facing activity log (§6.3) must ship **before** any T2 automation. SEC-P001 gates T2 on one-click reversibility, which is unenforceable until undo exists — so unattended writes cannot ship before the thing that makes them survivable. |
 | REQ-P082 | A durable proposal store (REQ-P028) must ship before any proposal is queued for review outside the conversation that produced it. |
+| REQ-P083 | **T2 ships empty.** No action is registered for unattended execution, and none is promoted without an explicit, recorded owner decision — not a code review, not a follow-up ticket. The tier exists so that every action must declare itself and be enforced at execution time; an empty T2 is the safest state for it and costs nothing to hold. Asked directly on 2026-09-13, once undo and the activity log had made unattended writes survivable, the owner's answer was *nothing unattended right now*. `T2_PERMITTED_DATA_CLASSES` stays `['metadata']` regardless: widening it is a separate and larger decision than adding a member. |
 
 ## 13. Decisions
 

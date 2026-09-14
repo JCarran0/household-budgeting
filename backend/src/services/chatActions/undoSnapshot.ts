@@ -30,7 +30,7 @@
 import { createHash } from 'crypto';
 
 /** What a snapshot is capable of restoring. */
-export type UndoTargetKind = 'task' | 'transaction';
+export type UndoTargetKind = 'task' | 'transaction' | 'trip_stop' | 'project';
 
 /**
  * An action's undo capability, as three small functions rather than one.
