@@ -9,8 +9,23 @@
  *
  * All values render as plain text. No markdown, no links, no HTML.
  */
-import { Checkbox, Group, Stack, Text, Badge } from '@mantine/core';
+import { useState } from 'react';
+import { Anchor, Badge, Checkbox, Group, Stack, Text } from '@mantine/core';
 import type { DisplayField, ProposalRow } from '../../../../shared/types';
+
+/**
+ * Above this, a value is clipped behind a toggle rather than dumped into the
+ * card.
+ *
+ * The server now renders display values from the params themselves (SEC-P010),
+ * which is what makes a card honest — and it means a 1,700-character issue body
+ * arrives here in full rather than as the model's one-line paraphrase of it.
+ * Honest and unreadable is not an improvement: a wall of text that pushes
+ * Confirm off the screen gets approved unread just as reliably as a summary
+ * does. So the value is clipped with its LENGTH stated, because the length is
+ * the thing that tells a reader whether there is more here than they expected.
+ */
+const LONG_VALUE_CHARS = 220;
 
 interface ActionCardRowProps {
   row: ProposalRow;
@@ -20,6 +35,31 @@ interface ActionCardRowProps {
   disabled?: boolean;
   /** Shown on multi-row cards, where rows of different types sit together. */
   showLabel?: boolean;
+}
+
+/**
+ * A value the user can actually read, without hiding that there is more of it.
+ */
+function FieldValue({ value }: { value: string }) {
+  const [expanded, setExpanded] = useState(false);
+
+  if (value.length <= LONG_VALUE_CHARS) return <>{value}</>;
+
+  return (
+    <>
+      <Text span size="xs" style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+        {expanded ? value : `${value.slice(0, LONG_VALUE_CHARS).trimEnd()}…`}
+      </Text>{' '}
+      <Anchor
+        component="button"
+        type="button"
+        size="xs"
+        onClick={() => setExpanded(e => !e)}
+      >
+        {expanded ? 'Show less' : `Show all ${value.length.toLocaleString()} characters`}
+      </Anchor>
+    </>
+  );
 }
 
 /** Pairs a proposed field with the current value it replaces, when there is one. */
@@ -68,7 +108,7 @@ export function ActionCardRow({
                       {before}
                     </Text>
                   )}
-                  {field.value}
+                  <FieldValue value={field.value} />
                 </Text>
               </Group>
             );

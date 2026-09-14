@@ -20,6 +20,56 @@ import type { ActionProposalInput, ChatActionId, DisplayField, ProposalRow } fro
 import { getChatAction, type ChatActionHandlerContext } from './registry';
 
 /**
+ * Opaque identifiers. The raw value is a UUID no human can check, so the model's
+ * resolved name ("Buy milk") is the only readable rendering and is kept.
+ *
+ * This is the ONE place a display value is still model-authored, and it is a
+ * deliberate, bounded residual: an id cannot carry a payload, and SEC-P011's
+ * server-authored `currentValues` is what shows the user which record is
+ * actually about to change. Every other param is rendered from the parsed
+ * params below.
+ */
+const IDENTIFIER_KEY = /(^|[a-z])Id$/;
+
+/** Above this, a value is treated as long-form text rather than a one-liner. */
+const TEXTAREA_THRESHOLD = 120;
+
+function isScalar(v: unknown): boolean {
+  return typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean';
+}
+
+/**
+ * SEC-P010, the part the coverage check was missing.
+ *
+ * Requiring a display field per param proves a field EXISTS. It says nothing
+ * about what is in it, and the model authored both halves — so a card could
+ * show `Details: "Describes 9 transactions…"` while `params.body` carried 1,742
+ * characters of markdown bound for a public GitHub repo. That is exactly the
+ * "plausible title, unseen payload" shape the coverage check was written to
+ * stop, and it shipped anyway because presence and fidelity are different
+ * properties.
+ *
+ * So the server renders the value from the parsed params and the model keeps
+ * only the LABEL. Returning null means "the server has no faithful rendering of
+ * this and the model's text stands" — true for identifiers and for absent
+ * values, and for nothing else.
+ */
+function renderParamValue(key: string, value: unknown): string | null {
+  if (IDENTIFIER_KEY.test(key)) return null;
+  // Absent carries no payload: there is nothing here for a user to review.
+  if (value === null || value === undefined) return null;
+
+  if (typeof value === 'string') return value.length > 0 ? value : '(empty)';
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+  if (Array.isArray(value) && value.every(isScalar)) {
+    return value.length > 0 ? value.join(', ') : '(none)';
+  }
+  // Nested structures — subTasks, say. JSON is ugly on a card and honest on a
+  // card, and between those two, a write the user has actually seen wins.
+  return JSON.stringify(value);
+}
+
+/**
  * Hard ceiling on rows in one card. Well above the SEC-P012 legibility
  * threshold of 25 (which changes the *rendering*, not the limit) and far below
  * anything that would make a single Confirm click unreviewable in principle.
@@ -70,6 +120,22 @@ function findUndisplayedParams(
   return Object.keys(params).filter(
     key => params[key] !== undefined && !shown.has(key),
   );
+}
+
+/**
+ * The mirror of the coverage rule: a field that names no param.
+ *
+ * Coverage stops a param from being hidden. This stops the opposite trick —
+ * a field the user reads as part of the write ("Repository: JCarran0/…") that
+ * corresponds to nothing and is therefore unconstrained model prose sitting in
+ * the middle of an approval surface. After this, a card is strictly a view of
+ * the params plus the server's own current-value comparison.
+ */
+function findFieldsWithoutParams(
+  params: Record<string, unknown>,
+  fields: DisplayField[],
+): string[] {
+  return fields.filter(f => !(f.key in params)).map(f => f.key);
 }
 
 interface RawRow {
@@ -170,6 +236,30 @@ export async function buildProposalRows(
       };
     }
 
+    const orphaned = findFieldsWithoutParams(parsedParams, fields);
+    if (orphaned.length > 0) {
+      return {
+        ok: false,
+        error:
+          `These displayField keys${where} are not params of ${r.actionId}: ${orphaned.join(', ')}. ` +
+          `A card shows what will be written and nothing else — drop them.`,
+      };
+    }
+
+    // The values are now the server's, not the model's (SEC-P010).
+    const displayed = fields.map(f => {
+      const rendered = renderParamValue(f.key, parsedParams[f.key]);
+      if (rendered === null) return f;
+      return {
+        ...f,
+        value: rendered,
+        // A 1,700-character body in a single-line text input is unreviewable
+        // and uneditable. The server knows how long the value is, so it, not
+        // the model, decides how the field is rendered.
+        type: rendered.length > TEXTAREA_THRESHOLD ? ('textarea' as const) : f.type,
+      };
+    });
+
     // SEC-P011. Only the action itself can say what it is about to overwrite,
     // and only the server can be trusted to say it — there is deliberately no
     // tool-schema field through which the model could supply this.
@@ -193,7 +283,7 @@ export async function buildProposalRows(
       label: def.label, // Registry-owned, never model-authored (SEC-P010)
       params: parsedParams,
       displaySummary: summary,
-      displayFields: fields,
+      displayFields: displayed,
       ...(currentValues ? { currentValues } : {}),
     });
   }

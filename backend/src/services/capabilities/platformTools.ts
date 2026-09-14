@@ -47,13 +47,13 @@ const ROW_FIELD_SCHEMA = {
   displayFields: {
     type: 'array',
     description:
-      'Fields to render in this row (max 20 items). MUST include one entry for every param you set — a row that would write a value it does not display is rejected. Resolve IDs to human-readable names; values must be non-empty strings and keys must be unique.',
+      'Fields to render in this row (max 20 items). Exactly one entry per param you set: a param with no field is rejected, and so is a field naming no param. The SERVER renders each value from the params themselves — your `value` is kept only for *Id fields, where you should resolve the id to a human-readable name. Do not summarize or shorten a value: for everything else your text is replaced by the real one, so a paraphrase just makes your card disagree with itself. Keys must be unique.',
     items: {
       type: 'object' as const,
       properties: {
         key:      { type: 'string', description: 'Param field name' },
         label:    { type: 'string', description: 'Human-readable label (e.g. "Due date")' },
-        value:    { type: 'string', description: 'Formatted display value' },
+        value:    { type: 'string', description: 'Display value. Used only for *Id fields (give the resolved name); for every other param the server renders the real value.' },
         editable: { type: 'boolean', description: 'Whether Edit mode shows this field' },
         type: {
           type: 'string',

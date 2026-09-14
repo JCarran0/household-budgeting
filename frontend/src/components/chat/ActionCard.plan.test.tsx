@@ -256,3 +256,56 @@ describe('failed confirm — the nonce is already spent', () => {
     expect(screen.getByText(/Ask me again to get a fresh one/)).toBeTruthy();
   });
 });
+
+describe('a long value is readable without being hidden (SEC-P010)', () => {
+  // The server renders display values from the params now, so the whole 1,742-
+  // character issue body reaches the card instead of the model's summary of it.
+  // Honest and unreadable is not an improvement, so it clips — and says how
+  // much there is, because the length is what tells a reader something is off.
+  const LONG = `Repro steps:\n${'x'.repeat(1500)}`;
+
+  function longRow(): ProposalRow {
+    return {
+      rowId: 'row-0',
+      actionId: 'submit_github_issue',
+      label: 'Report an issue',
+      params: { title: 'Merchant name corrupted', body: LONG, labels: ['bug'] },
+      displaySummary: 'File a bug report',
+      displayFields: [
+        { key: 'title', label: 'Title', value: 'Merchant name corrupted', editable: true, type: 'text' },
+        { key: 'body', label: 'Details', value: LONG, editable: true, type: 'textarea' },
+        { key: 'labels', label: 'Labels', value: 'bug', editable: true, type: 'tags' },
+      ],
+    };
+  }
+
+  it('clips it and states the full length', () => {
+    renderCard([longRow()]);
+
+    expect(screen.queryByText(LONG)).not.toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: `Show all ${LONG.length.toLocaleString()} characters` }),
+    ).toBeInTheDocument();
+  });
+
+  it('shows the whole value on request', async () => {
+    const user = userEvent.setup();
+    renderCard([longRow()]);
+
+    await user.click(
+      screen.getByRole('button', { name: `Show all ${LONG.length.toLocaleString()} characters` }),
+    );
+
+    // The payload is reachable in full — clipping must never be the only state.
+    // Raw normalizer: the body's newlines are part of what the user is
+    // approving, and the default matcher would collapse them away.
+    expect(screen.getByText(LONG, { normalizer: (str) => str })).toBeInTheDocument();
+  });
+
+  it('leaves a short value alone', () => {
+    renderCard([row(0, 'Take out the recycling')]);
+
+    expect(screen.getByText('Take out the recycling')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Show all/ })).not.toBeInTheDocument();
+  });
+});
