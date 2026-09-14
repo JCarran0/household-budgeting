@@ -8,7 +8,7 @@
  *
  * Key safety features:
  * - Tool call loop capped at 10 iterations (D11, SEC-014)
- * - Per-request timeout of 60 seconds (SEC-015)
+ * - Per-request timeout, per model, that CANCELS the loop (SEC-015)
  * - max_tokens: 4096 per Claude call (D16, SEC-013)
  * - Conversation history truncated to 50 messages (D14, REQ-028)
  * - propose_action interception — actions never executed by LLM (SEC-A001)
@@ -46,7 +46,46 @@ import type {
 } from '../shared/types';
 
 const MAX_TOOL_ITERATIONS = 10;
-const REQUEST_TIMEOUT_MS = 60_000;
+
+/**
+ * Per-request wall clock (SEC-015), by model.
+ *
+ * A single 60s ceiling was set when the assistant had a handful of read tools
+ * and no plan cards. It is now routinely too tight for Opus with three or four
+ * tool calls, and a timeout that fires on ordinary questions is not a safety
+ * limit — it is a source of abandoned turns. Scaled by model speed instead, so
+ * the ceiling still catches a runaway loop without punishing the slow model for
+ * being the slow model.
+ */
+const REQUEST_TIMEOUT_MS: Record<ChatModel, number> = {
+  haiku: 60_000,
+  sonnet: 90_000,
+  opus: 120_000,
+};
+
+/**
+ * Thrown when the wall clock fires and the loop is cancelled mid-flight.
+ *
+ * Distinct from CHATBOT_REQUEST_TIMEOUT (which the race itself throws) because
+ * the two describe different instants: the race loses at the deadline, while
+ * this is the loop noticing it has been cancelled and declining to do anything
+ * further. Both map to the same user-facing message.
+ */
+const ABORTED = 'CHATBOT_REQUEST_ABORTED';
+
+/**
+ * The check that makes cancellation mean something.
+ *
+ * An in-flight `messages.create` rejects on abort, so most of the time the loop
+ * unwinds on its own. The dangerous case is the response that lands in the same
+ * tick the deadline fires: the await resolves normally, and without this guard
+ * the loop proceeds to `propose_action` on behalf of a request nobody is
+ * waiting for any more. That is how an abandoned turn silently superseded a
+ * live action card in production on 2026-09-14.
+ */
+function throwIfAborted(signal: AbortSignal): void {
+  if (signal.aborted) throw new Error(ABORTED);
+}
 const MAX_OUTPUT_TOKENS = 4096;
 const MAX_HISTORY = 50; // REQ-028
 
@@ -200,8 +239,9 @@ export class ChatbotService {
 
     try {
       const result = await this.executeWithTimeout(
-        this.toolLoop(familyId, userId, conversationId, messages, request.model, toolCallLogs, collector, traceId, request.userDisplayName),
-        REQUEST_TIMEOUT_MS,
+        signal =>
+          this.toolLoop(familyId, userId, conversationId, messages, request.model, toolCallLogs, collector, traceId, signal, request.userDisplayName),
+        REQUEST_TIMEOUT_MS[request.model],
       );
 
       totalInputTokens = result.totalInputTokens;
@@ -325,7 +365,9 @@ export class ChatbotService {
         errorMessage: message,
       });
 
-      if (message === 'CHATBOT_REQUEST_TIMEOUT') {
+      // Both halves of a cancelled request land here: the race's own rejection
+      // and, if the loop got there first, its abort check. One message.
+      if (message === 'CHATBOT_REQUEST_TIMEOUT' || message === ABORTED || error instanceof Anthropic.APIUserAbortError) {
         return this.errorResponse('That took too long — try a simpler question or a faster model.', budget);
       }
       if (message === 'CHATBOT_TOOL_LOOP_LIMIT') {
@@ -358,6 +400,7 @@ export class ChatbotService {
     toolCallLogs: ToolCallLog[],
     collector: TraceCollector,
     traceId: string,
+    signal: AbortSignal,
     userDisplayName?: string,
   ): Promise<ToolLoopResult> {
     let totalInputTokens = 0;
@@ -379,13 +422,20 @@ export class ChatbotService {
       : [SYSTEM_PROMPT_BASE];
 
     for (let iteration = 0; iteration < MAX_TOOL_ITERATIONS; iteration++) {
-      const response = await this.client.messages.create({
-        model: MODEL_IDS[model],
-        max_tokens: MAX_OUTPUT_TOKENS,
-        system: systemBlocks,
-        tools: chatbotTools(),
-        messages,
-      });
+      throwIfAborted(signal);
+
+      // The signal reaches Anthropic too: an abandoned turn must stop costing
+      // money at the deadline, not keep generating into a dropped connection.
+      const response = await this.client.messages.create(
+        {
+          model: MODEL_IDS[model],
+          max_tokens: MAX_OUTPUT_TOKENS,
+          system: systemBlocks,
+          tools: chatbotTools(),
+          messages,
+        },
+        { signal },
+      );
 
       totalInputTokens += response.usage.input_tokens;
       totalOutputTokens += response.usage.output_tokens;
@@ -421,6 +471,9 @@ export class ChatbotService {
         const toolUseBlocks = response.content.filter(
           (b): b is Anthropic.ToolUseBlock => b.type === 'tool_use',
         );
+
+        // Before ANY tool branch — the write-adjacent intercepts included.
+        throwIfAborted(signal);
 
         const toolResults: Anthropic.ToolResultBlockParam[] = [];
 
@@ -655,13 +708,46 @@ export class ChatbotService {
   // Private: Helpers
   // ==========================================================================
 
-  private async executeWithTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
-    return Promise.race([
-      promise,
-      new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error('CHATBOT_REQUEST_TIMEOUT')), timeoutMs),
-      ),
-    ]);
+  /**
+   * Race the work against the wall clock — and CANCEL the loser.
+   *
+   * This used to be a bare `Promise.race` over a promise it had no handle on.
+   * Losing the race returned an error to the user and left the tool loop
+   * running: still calling Claude, still spending tokens nothing counted, and
+   * still able to reach `propose_action`. On 2026-09-14 a turn abandoned at 60s
+   * finished 87 seconds later, issued a proposal no client ever received, and
+   * — because SEC-A007 invalidates every other live nonce in the conversation —
+   * burned the card the user was looking at. The card was correct; the
+   * confirmation failed with "already confirmed or superseded".
+   *
+   * So the caller no longer hands over a running promise. It hands over a
+   * function that takes the signal, which makes the work cancellable by
+   * construction rather than by remembering to wire it up.
+   */
+  private async executeWithTimeout<T>(
+    run: (signal: AbortSignal) => Promise<T>,
+    timeoutMs: number,
+  ): Promise<T> {
+    const controller = new AbortController();
+    let timer: NodeJS.Timeout | undefined;
+
+    const deadline = new Promise<never>((_, reject) => {
+      timer = setTimeout(() => {
+        controller.abort();
+        reject(new Error('CHATBOT_REQUEST_TIMEOUT'));
+      }, timeoutMs);
+    });
+
+    try {
+      return await Promise.race([run(controller.signal), deadline]);
+    } finally {
+      // The timer is cleared on every path: a 60-to-120 second dangling handle
+      // per request is a leak in its own right. The abort is belt and braces —
+      // on the success path the loop has already returned, and on any error
+      // path it guarantees nothing outlives the response.
+      clearTimeout(timer);
+      controller.abort();
+    }
   }
 
   private capReachedResponse(monthlySpend: number, monthlyLimit: number): ChatResponse {
