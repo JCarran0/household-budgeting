@@ -5,6 +5,30 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [6.6.0](https://github.com/JCarran0/household-budgeting/compare/v6.5.0...v6.6.0) (2026-09-14)
+
+
+### Features
+
+* **ai:** add hide, budget-amount and auto-cat-rule write actions ([c980fa6](https://github.com/JCarran0/household-budgeting/commit/c980fa62d9c3ab91b57a6b10bc41716b390c70ed))
+* **ai:** add task update/complete actions behind semantic validation ([b2474b2](https://github.com/JCarran0/household-budgeting/commit/b2474b2674194a0a0f7633f928f7bae45e3cfd72))
+* **ai:** add the Helper Bot activity log with undo ([faebafa](https://github.com/JCarran0/household-budgeting/commit/faebafa9b557f8d252be7a74163451a5d34bb556))
+* **ai:** add transaction categorize/rename actions with orphan-id guards ([bfb0261](https://github.com/JCarran0/household-budgeting/commit/bfb026106753ae14a300b2d63e237d507fabc713))
+* **ai:** add trip itinerary and project line-item write actions ([433115f](https://github.com/JCarran0/household-budgeting/commit/433115fe4e75911c2e09cc7eaa02354d7f394771))
+* **ai:** persist the proposal store so a card survives a restart ([74f4b26](https://github.com/JCarran0/household-budgeting/commit/74f4b268bfdd996a8ef9e1dce5cb13d4bfba39c0))
+* **ai:** record every AI write and make it reversible ([06afd14](https://github.com/JCarran0/household-budgeting/commit/06afd1470958dfc1cd128f3f64a6115fdc2d4bd3))
+
+
+### Bug Fixes
+
+* **ai:** redact credentials from learnings and trace string values ([daaf29b](https://github.com/JCarran0/household-budgeting/commit/daaf29b96409ec5adf6695dd8b97d8b0edbc221d))
+
+
+### Documentation
+
+* **ai:** record Phases 3-4 and the guards they added ([76a6f4f](https://github.com/JCarran0/household-budgeting/commit/76a6f4f0cde2019c14d0f79fb71fc4d958540add))
+* **ai:** update capability platform status after phases 3-4 ([11cecc5](https://github.com/JCarran0/household-budgeting/commit/11cecc5859c3f86c36f71723a1d90a2783f558c0))
+
 ## [6.5.0](https://github.com/JCarran0/household-budgeting/compare/v6.4.2...v6.5.0) (2026-09-13)
 
 
