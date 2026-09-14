@@ -14,8 +14,14 @@ STAGED_FILES=$(git diff --cached --name-only --diff-filter=ACM)
 BACKEND_FILES=$(echo "$STAGED_FILES" | grep "^backend/.*\.\(ts\|tsx\)$" || true)
 # Check if there are any frontend TypeScript/JavaScript files
 FRONTEND_FILES=$(echo "$STAGED_FILES" | grep "^frontend/.*\.\(ts\|tsx\|js\|jsx\)$" || true)
-# Shared utils — exercised by backend's Jest suite via the moduleNameMapper,
-# so changes there must also trigger the backend test run.
+# shared/ is imported by BOTH sides — the backend's Jest suite reaches it via
+# moduleNameMapper, and the frontend imports shared/types directly. So a change
+# there must trigger both gates.
+#
+# It did not, and that cost six consecutive failed production deploys on
+# 2026-09-13: widening ChatActionId in shared/types broke two exhaustive
+# Records in the frontend, every commit that followed was backend-only, and the
+# frontend gate never ran. CI caught it at `tsc -b` each time, after the push.
 SHARED_FILES=$(echo "$STAGED_FILES" | grep "^shared/.*\.\(ts\|tsx\)$" || true)
 
 # Track if any checks fail
@@ -42,7 +48,7 @@ if [ -n "$BACKEND_FILES" ] || [ -n "$SHARED_FILES" ]; then
 fi
 
 # Frontend: lint + test
-if [ -n "$FRONTEND_FILES" ]; then
+if [ -n "$FRONTEND_FILES" ] || [ -n "$SHARED_FILES" ]; then
     echo "🎨 Checking frontend code..."
     (cd frontend && npm run lint:all)
     if [ $? -ne 0 ]; then
