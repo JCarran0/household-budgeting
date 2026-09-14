@@ -27,6 +27,8 @@ import {
   IconPaperclip,
   IconFileText,
   IconX,
+  IconMaximize,
+  IconMinimize,
 } from '@tabler/icons-react';
 import { notifications } from '@mantine/notifications';
 import { useMediaQuery } from '@mantine/hooks';
@@ -34,6 +36,7 @@ import { api } from '../../lib/api';
 import { useAuthStore } from '../../stores/authStore';
 import { usePageContext } from '../../hooks/usePageContext';
 import { ChatMessageBubble } from './ChatMessageBubble';
+import { useChatPanelLayout } from './useChatPanelLayout';
 import type {
   ChatMessage,
   ChatModel,
@@ -140,6 +143,25 @@ export function ChatOverlay({
   const inputRef = useRef<HTMLInputElement>(null);
   const pageContext = usePageContext();
   const isMobile = useMediaQuery('(max-width: 48em)');
+  const { expanded, canExpand, toggle: toggleExpanded, collapse, panelStyle, contentStyle } =
+    useChatPanelLayout(Boolean(isMobile));
+
+  /**
+   * Escape shrinks an expanded panel back to the corner.
+   *
+   * Deliberately does NOT close the overlay — that is not today's behaviour and
+   * changing it would lose a conversation to a reflex keypress. Expanded is the
+   * state where Escape has something obvious to undo, because the panel is
+   * covering the page the user was reading.
+   */
+  useEffect(() => {
+    if (!opened || !expanded) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') collapse();
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [opened, expanded, collapse]);
 
   // ---- Attachment preview URL lifecycle ----
   useEffect(() => {
@@ -517,24 +539,7 @@ export function ChatOverlay({
   if (!opened) return null;
 
   return (
-    <Paper
-      shadow="xl"
-      radius={isMobile ? 0 : 'md'}
-      style={{
-        position: 'fixed',
-        bottom: isMobile ? 0 : 80,
-        right: isMobile ? 0 : 20,
-        left: isMobile ? 0 : undefined,
-        top: isMobile ? 0 : undefined,
-        width: isMobile ? '100vw' : 400,
-        height: isMobile ? '100dvh' : 600,
-        zIndex: 1000,
-        display: 'flex',
-        flexDirection: 'column',
-        overflow: 'hidden',
-        border: isMobile ? 'none' : '1px solid var(--mantine-color-dark-4)',
-      }}
-    >
+    <Paper shadow="xl" radius={isMobile ? 0 : 'md'} style={panelStyle}>
       {/* Header */}
       <Group
         justify="space-between"
@@ -552,6 +557,19 @@ export function ChatOverlay({
           )}
         </Group>
         <Group gap={4}>
+          {canExpand && (
+            <Tooltip label={expanded ? 'Shrink to corner' : 'Expand for easier reading'}>
+              <ActionIcon
+                size="sm"
+                variant="subtle"
+                color="gray"
+                aria-label={expanded ? 'Shrink chat' : 'Expand chat'}
+                onClick={toggleExpanded}
+              >
+                {expanded ? <IconMinimize size={14} /> : <IconMaximize size={14} />}
+              </ActionIcon>
+            </Tooltip>
+          )}
           <Tooltip label="New conversation">
             <ActionIcon
               size="sm"
@@ -596,7 +614,7 @@ export function ChatOverlay({
         style={{ minHeight: 0 }}
       >
         {messages.length === 0 ? (
-          <Stack gap="xs" align="center" mt="xl">
+          <Stack gap="xs" align="center" mt="xl" style={contentStyle}>
             <Text size="sm" c="dimmed" ta="center">
               Ask me anything about your finances!
             </Text>
@@ -606,7 +624,7 @@ export function ChatOverlay({
             </Text>
           </Stack>
         ) : (
-          <Stack gap="sm">
+          <Stack gap="sm" style={contentStyle}>
             {messages.map((msg) => (
               <ChatMessageBubble
                 key={msg.id}
@@ -688,68 +706,65 @@ export function ChatOverlay({
         onChange={handleFilePick}
       />
 
-      <Group
-        p="sm"
-        gap="xs"
-        align="center"
-        style={{
-          borderTop: '1px solid var(--mantine-color-dark-4)',
-          flexShrink: 0,
-        }}
-      >
-        {/* Camera icon — triggers rear camera on mobile (REQ-002) */}
-        <Tooltip label="Take a photo">
-          <ActionIcon
-            size={isMobile ? 'lg' : 'md'}
-            variant="subtle"
-            color="gray"
-            aria-label="Take a photo"
-            onClick={() => cameraInputRef.current?.click()}
+      {/* The border spans the full panel; the controls inside align with the
+          message column, so the composer does not drift away from the text it
+          belongs to when expanded. */}
+      <Box style={{ borderTop: '1px solid var(--mantine-color-dark-4)', flexShrink: 0 }}>
+        <Group p="sm" gap="xs" align="center" style={contentStyle}>
+          {/* Camera icon — triggers rear camera on mobile (REQ-002) */}
+          <Tooltip label="Take a photo">
+            <ActionIcon
+              size={isMobile ? 'lg' : 'md'}
+              variant="subtle"
+              color="gray"
+              aria-label="Take a photo"
+              onClick={() => cameraInputRef.current?.click()}
+              disabled={isLoading}
+            >
+              <IconCamera size={isMobile ? 20 : 16} />
+            </ActionIcon>
+          </Tooltip>
+
+          {/* Paperclip icon — opens file picker */}
+          <Tooltip label="Attach file">
+            <ActionIcon
+              size={isMobile ? 'lg' : 'md'}
+              variant="subtle"
+              color="gray"
+              aria-label="Attach file"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={isLoading}
+            >
+              <IconPaperclip size={isMobile ? 20 : 16} />
+            </ActionIcon>
+          </Tooltip>
+
+          {/* Text input — REQ-006: focus order is text → camera → paperclip → send;
+              DOM order here is camera, paperclip, text, send. We reorder visually
+              but keep keyboard tab order intuitive by placing text first in DOM. */}
+          <TextInput
+            ref={inputRef}
+            flex={1}
+            size={isMobile ? 'md' : 'sm'}
+            placeholder="Ask about your finances..."
+            value={input}
+            onChange={(e) => setInput(e.currentTarget.value)}
+            onKeyDown={handleKeyDown}
             disabled={isLoading}
-          >
-            <IconCamera size={isMobile ? 20 : 16} />
-          </ActionIcon>
-        </Tooltip>
+          />
 
-        {/* Paperclip icon — opens file picker */}
-        <Tooltip label="Attach file">
+          {/* Send button */}
           <ActionIcon
-            size={isMobile ? 'lg' : 'md'}
-            variant="subtle"
-            color="gray"
-            aria-label="Attach file"
-            onClick={() => fileInputRef.current?.click()}
-            disabled={isLoading}
+            size={isMobile ? 'xl' : 'lg'}
+            variant="filled"
+            onClick={() => void sendMessage()}
+            disabled={!canSend}
+            aria-label="Send"
           >
-            <IconPaperclip size={isMobile ? 20 : 16} />
+            <IconSend size={isMobile ? 20 : 16} />
           </ActionIcon>
-        </Tooltip>
-
-        {/* Text input — REQ-006: focus order is text → camera → paperclip → send;
-            DOM order here is camera, paperclip, text, send. We reorder visually
-            but keep keyboard tab order intuitive by placing text first in DOM. */}
-        <TextInput
-          ref={inputRef}
-          flex={1}
-          size={isMobile ? 'md' : 'sm'}
-          placeholder="Ask about your finances..."
-          value={input}
-          onChange={(e) => setInput(e.currentTarget.value)}
-          onKeyDown={handleKeyDown}
-          disabled={isLoading}
-        />
-
-        {/* Send button */}
-        <ActionIcon
-          size={isMobile ? 'xl' : 'lg'}
-          variant="filled"
-          onClick={() => void sendMessage()}
-          disabled={!canSend}
-          aria-label="Send"
-        >
-          <IconSend size={isMobile ? 20 : 16} />
-        </ActionIcon>
-      </Group>
+        </Group>
+      </Box>
     </Paper>
   );
 }
