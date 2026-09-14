@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.1.0](https://github.com/JCarran0/household-budgeting/compare/v7.0.0...v7.1.0) (2026-09-14)
+
+
+### Features
+
+* **scripts:** add a reader for the AI trace ledger ([87166d6](https://github.com/JCarran0/household-budgeting/commit/87166d6e38e987e963da8f88baf481a986adc192))
+
+
+### Bug Fixes
+
+* **chat:** cancel a timed-out turn instead of abandoning it ([276a57e](https://github.com/JCarran0/household-budgeting/commit/276a57ecfe8d356bd9b622d34465f0fdc7a9d32a))
+* **chat:** close the holes an adversarial review found in the last three commits ([8bd8d4b](https://github.com/JCarran0/household-budgeting/commit/8bd8d4b539661b1e7e7076f88b6ad2e90c112ce1))
+* **chat:** render action card values from the params, not the model's prose ([7dd5ea9](https://github.com/JCarran0/household-budgeting/commit/7dd5ea920679689423a8cd0f81a164a76bfde531))
+
 ## [7.0.0](https://github.com/JCarran0/household-budgeting/compare/v6.7.0...v7.0.0) (2026-09-14)
 
 
