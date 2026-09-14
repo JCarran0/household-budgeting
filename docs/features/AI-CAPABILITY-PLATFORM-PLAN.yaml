@@ -874,14 +874,38 @@ phase_4_activity_log_and_undo:
 
     - id: "4.6"
       task: Persist the proposal store
-      status: pending
+      status: completed
       details: |
-        REQ-P028 / REQ-P082 / TD-030. The in-memory Map is acceptable for
-        conversation-scoped cards on a single PM2 process; it is not acceptable
-        for a queue a background agent writes to and a human reviews hours
-        later. Must land before Phase 5/6. Note that issueProposal and
-        consumeProposal are synchronous today, so this is a sync-to-async change
-        across the confirm route and the chat loop, not a storage swap.
+        REQ-P028 / REQ-P082 / TD-030 closed. proposalStore.ts is now a
+        ProposalStore class over dataService, keyed ai_proposals_{familyId} and
+        instantiated in services/index.
+
+        It was indeed a sync-to-async change rather than a storage swap: the
+        free functions became methods, which rippled through the confirm route,
+        the tool-intercept path and six test files. The store is INJECTED into
+        ChatbotService and passed down to handleProposeAction rather than
+        imported from services/index — toolIntercepts is reached FROM
+        services/index, and importing back would close exactly the cycle TD-031
+        documents.
+
+        WHAT DID NOT CHANGE, DELIBERATELY: TTL and single-use are still enforced
+        in code, not by the storage. A nonce past its TTL is refused on read no
+        matter what is on disk, so expiry never depends on a prune having run.
+        Supersession stays atomic because the read, the invalidation and the
+        write all happen inside one mutex section — the async equivalent of the
+        single synchronous function it replaced.
+        A consumed nonce is MARKED used rather than deleted: "already used" and
+        "never existed" have to stay distinguishable, or a double-click reports
+        that the card never existed and the superseded-by-a-newer-proposal
+        message is lost. A failure to persist the burn fails the consume, since
+        a nonce that could not be burned must not be treated as spent.
+
+        7 tests in proposalDurability.security.test.ts, every one written
+        against a SECOND store instance over the same DataService — the closest
+        a test gets to a PM2 restart. Four mutations verified, including the one
+        that matters most: superseding every conversation rather than only this
+        one passes the supersession test and silently kills every other open
+        card.
 
 phase_5_unattended_tier:
   status: deferred_by_owner_decision
@@ -965,5 +989,4 @@ open_questions:
 
 deferred_and_tracked_elsewhere:
   - TD-029 — agent learnings have no redaction pass
-  - TD-030 — the proposal store is in-memory (REQ-P028, task 4.3)
   - TD-012 — carries a postscript on the caching-caused cost undercount (task 1.13)

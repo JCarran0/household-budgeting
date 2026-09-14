@@ -24,12 +24,8 @@ import { dataService, authService, chatbotService } from '../../services';
 import pino from 'pino';
 import { logger } from '../../utils/logger';
 import { registerUser } from '../helpers/apiHelper';
-import {
-  issueProposal,
-  consumeProposal,
-  getChatAction,
-  listChatActionIds,
-} from '../../services/chatActions';
+import { getChatAction, listChatActionIds } from '../../services/chatActions';
+import { proposalStore } from '../../services';
 
 // ============================================================================
 // Helpers
@@ -70,7 +66,7 @@ describe('10.1 — Action proposal intercepted, never executed by LLM', () => {
     const user = await createUser('proposal');
     const convId = randomUUID();
 
-    const proposal = issueProposal({
+    const proposal = await proposalStore.issue({
       userId: user.userId,
       familyId: user.familyId,
       conversationId: convId,
@@ -121,7 +117,7 @@ describe('10.2 — Cross-user nonce confirmation is blocked', () => {
     const userB = await createUser('userB');
     const convId = randomUUID();
 
-    const proposal = issueProposal({
+    const proposal = await proposalStore.issue({
       userId: userA.userId,
       familyId: userA.familyId,
       conversationId: convId,
@@ -162,10 +158,10 @@ describe('10.2 — Cross-user nonce confirmation is blocked', () => {
     expect(tasksA.body).toHaveLength(0);
   });
 
-  it('consumeProposal ownership check uses userId, not familyId', () => {
+  it('consume ownership check uses userId, not familyId', async () => {
     const convId = randomUUID();
 
-    const proposal = issueProposal({
+    const proposal = await proposalStore.issue({
       userId: 'user-a',
       familyId: 'shared-family',
       conversationId: convId,
@@ -186,9 +182,10 @@ describe('10.2 — Cross-user nonce confirmation is blocked', () => {
     });
 
     // Same family, different user — should fail
-    const result = consumeProposal({
+    const result = await proposalStore.consume({
       nonce: proposal.proposalId,
       userId: 'user-b',
+      familyId: 'shared-family',
     });
     expect(result.ok).toBe(false);
     if (!result.ok) {
@@ -206,7 +203,7 @@ describe('10.3 — Replay attack on confirm endpoint is blocked', () => {
     const user = await createUser('replay');
     const convId = randomUUID();
 
-    const proposal = issueProposal({
+    const proposal = await proposalStore.issue({
       userId: user.userId,
       familyId: user.familyId,
       conversationId: convId,
@@ -267,7 +264,7 @@ describe('10.4 — Supersession: new proposal invalidates prior nonce', () => {
     const convId = randomUUID();
 
     // Issue proposal A
-    const proposalA = issueProposal({
+    const proposalA = await proposalStore.issue({
       userId: user.userId,
       familyId: user.familyId,
       conversationId: convId,
@@ -288,7 +285,7 @@ describe('10.4 — Supersession: new proposal invalidates prior nonce', () => {
     });
 
     // Issue proposal B for the same conversation — supersedes A
-    const proposalB = issueProposal({
+    const proposalB = await proposalStore.issue({
       userId: user.userId,
       familyId: user.familyId,
       conversationId: convId,
@@ -340,10 +337,10 @@ describe('10.4 — Supersession: new proposal invalidates prior nonce', () => {
     expect(tasks.body[0].title).toBe('Task B (refined)');
   });
 
-  it('supersession is atomic — prior nonce is invalidated in same issueProposal call', () => {
+  it('supersession is atomic — prior nonce is invalidated in the same issue call', async () => {
     const convId = randomUUID();
 
-    const proposalA = issueProposal({
+    const proposalA = await proposalStore.issue({
       userId: 'user-x',
       familyId: 'fam-x',
       conversationId: convId,
@@ -364,7 +361,7 @@ describe('10.4 — Supersession: new proposal invalidates prior nonce', () => {
     });
 
     // Immediately issue B
-    issueProposal({
+    await proposalStore.issue({
       userId: 'user-x',
       familyId: 'fam-x',
       conversationId: convId,
@@ -385,7 +382,11 @@ describe('10.4 — Supersession: new proposal invalidates prior nonce', () => {
     });
 
     // A is already marked used after B is issued
-    const resultA = consumeProposal({ nonce: proposalA.proposalId, userId: 'user-x' });
+    const resultA = await proposalStore.consume({
+      nonce: proposalA.proposalId,
+      userId: 'user-x',
+      familyId: 'fam-x',
+    });
     expect(resultA.ok).toBe(false);
     if (!resultA.ok) {
       expect(resultA.errorCode).toBe('nonce_already_used');
@@ -402,7 +403,7 @@ describe('10.5 — Zod re-validation on confirm rejects tampered params', () => 
     const user = await createUser('tamper');
     const convId = randomUUID();
 
-    const proposal = issueProposal({
+    const proposal = await proposalStore.issue({
       userId: user.userId,
       familyId: user.familyId,
       conversationId: convId,
@@ -450,7 +451,7 @@ describe('10.5 — Zod re-validation on confirm rejects tampered params', () => 
     const user = await createUser('notitle');
     const convId = randomUUID();
 
-    const proposal = issueProposal({
+    const proposal = await proposalStore.issue({
       userId: user.userId,
       familyId: user.familyId,
       conversationId: convId,
@@ -524,7 +525,7 @@ describe('10.8 — Action handler cannot be called with spoofed userId', () => {
     const user = await createUser('jwtctx');
     const convId = randomUUID();
 
-    const proposal = issueProposal({
+    const proposal = await proposalStore.issue({
       userId: user.userId,
       familyId: user.familyId,
       conversationId: convId,
@@ -1134,7 +1135,7 @@ describe('10.10 — Cost cap blocks attachment requests when monthly spend is at
     const convId = randomUUID();
 
     // Issue a proposal BEFORE the cap is seeded
-    const proposal = issueProposal({
+    const proposal = await proposalStore.issue({
       userId: user.userId,
       familyId: user.familyId,
       conversationId: convId,

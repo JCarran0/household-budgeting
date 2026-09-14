@@ -51,7 +51,7 @@ Family-scale app for 2 users: personal budgeting (with Plaid), shared tasks, tri
 
 **Security boundaries — do not erode:**
 - `backend/src/services/chatbotDataService.ts` — chatbot receives `ReadOnlyDataService` only (SEC-018). Writes flow through chat-action-card registry, never LLM-executed.
-- `backend/src/services/chatActions/registry.ts` + `proposalStore.ts` — nonce-based, Zod-revalidated, audit-logged write path for chat actions
+- `backend/src/services/chatActions/registry.ts` + `proposalStore.ts` — nonce-based, Zod-revalidated, audit-logged write path for chat actions. The store is durable (`ai_proposals_{familyId}`) but TTL and single-use live in **code, not storage**: a nonce past its TTL is refused on read regardless of what is on disk, and a consumed nonce is marked used rather than deleted so "already used" and "never existed" stay distinguishable
 - `backend/src/services/chatActions/tiers.ts` — `T2_PERMITTED_DATA_CLASSES`. Widening this is the single highest-leverage mistake available in this codebase: it is what keeps unattended, unconfirmed writes away from financial data
 - `backend/src/services/chatActions/executionGrant.ts` — proof that authorization happened. Only `proposalStore` may mint a confirmation grant; `executionGrantCallSites.test.ts` scans the source and fails if anything else does, or if any handler is called outside `executeChatAction`
 - `backend/src/services/chatActions/tripStopActions.ts` — the model has no way to add a Stay or to write a `kind: 'verified'` location. A verified location is a Google Places record (placeId/lat/lng) that the Map tab plots and the photo lookup queries; a model-supplied one is a fabrication wearing a provenance claim. The refusal lives in the params schema, not in a handler

@@ -31,7 +31,8 @@ import {
   autoCategorizeService,
 } from '../../services';
 import { registerUser } from '../helpers/apiHelper';
-import { issueProposal, listChatActionIds } from '../../services/chatActions';
+import {listChatActionIds } from '../../services/chatActions';
+import { proposalStore } from '../../services';
 import type { ProposalRow } from '../../shared/types';
 
 async function createUser(prefix: string) {
@@ -40,7 +41,7 @@ async function createUser(prefix: string) {
 }
 
 function issuePlan(user: { userId: string; familyId: string }, rows: ProposalRow[]) {
-  return issueProposal({
+  return proposalStore.issue({
     userId: user.userId,
     familyId: user.familyId,
     conversationId: randomUUID(),
@@ -155,7 +156,7 @@ describe('set_transaction_hidden', () => {
     expect(split.success).toBe(true);
 
     const rows = [row(0, 'set_transaction_hidden', { transactionId: 'txn-1', isHidden: false })];
-    const proposal = issuePlan(user, rows);
+    const proposal = await issuePlan(user, rows);
 
     const res = await confirm(user.token, proposal.proposalId, rows).expect(400);
     expect(res.body.errorCode).toBe('validation_failed');
@@ -171,7 +172,7 @@ describe('set_transaction_hidden', () => {
     await seedTransaction(user.familyId);
 
     const rows = [row(0, 'set_transaction_hidden', { transactionId: 'txn-1', isHidden: true })];
-    const proposal = issuePlan(user, rows);
+    const proposal = await issuePlan(user, rows);
     await confirm(user.token, proposal.proposalId, rows).expect(200);
 
     const after = await transactionService.getTransactions(user.familyId, { includeHidden: true });
@@ -183,7 +184,7 @@ describe('set_transaction_hidden', () => {
     await seedTransaction(user.familyId);
 
     const rows = [row(0, 'set_transaction_hidden', { transactionId: 'txn-1', isHidden: false })];
-    const proposal = issuePlan(user, rows);
+    const proposal = await issuePlan(user, rows);
 
     const res = await confirm(user.token, proposal.proposalId, rows).expect(400);
     expect(res.body.error).toMatch(/already visible/i);
@@ -200,7 +201,7 @@ describe('set_budget_amount', () => {
     const rows = [
       row(0, 'set_budget_amount', { categoryId: category.id, month: '2026-10', amount: 800 }),
     ];
-    const proposal = issuePlan(user, rows);
+    const proposal = await issuePlan(user, rows);
     await confirm(user.token, proposal.proposalId, rows).expect(200);
     expect((await budgetService.getBudget(category.id, '2026-10', user.familyId))?.amount).toBe(800);
 
@@ -229,7 +230,7 @@ describe('set_budget_amount', () => {
     const rows = [
       row(0, 'set_budget_amount', { categoryId: category.id, month: '2026-10', amount: 800 }),
     ];
-    const proposal = issuePlan(user, rows);
+    const proposal = await issuePlan(user, rows);
     await confirm(user.token, proposal.proposalId, rows).expect(200);
 
     const entries = await request(app)
@@ -262,7 +263,7 @@ describe('set_budget_amount', () => {
     );
 
     const rows = [row(0, 'set_budget_amount', { categoryId: 'SALARY', month: '2026-10', amount: 800 })];
-    const proposal = issuePlan(user, rows);
+    const proposal = await issuePlan(user, rows);
 
     const res = await confirm(user.token, proposal.proposalId, rows).expect(400);
     expect(res.body.error).toMatch(/income category/i);
@@ -282,7 +283,7 @@ describe('create_auto_categorize_rule', () => {
         categoryId: category.id,
       }),
     ];
-    const proposal = issuePlan(user, rows);
+    const proposal = await issuePlan(user, rows);
     const res = await confirm(user.token, proposal.proposalId, rows).expect(200);
 
     // The existing matching transaction is untouched — rules are forward-acting.
@@ -306,7 +307,7 @@ describe('create_auto_categorize_rule', () => {
         categoryName: 'Entertainment',
       }),
     ];
-    const proposal = issuePlan(user, rows);
+    const proposal = await issuePlan(user, rows);
     await confirm(user.token, proposal.proposalId, rows).expect(200);
 
     const rules = await autoCategorizeService.getRules(user.familyId);
@@ -329,7 +330,7 @@ describe('create_auto_categorize_rule', () => {
         categoryId: category.id,
       }),
     ];
-    const proposal = issuePlan(user, rows);
+    const proposal = await issuePlan(user, rows);
 
     const res = await confirm(user.token, proposal.proposalId, rows).expect(400);
     expect(res.body.errorCode).toBe('validation_failed');
@@ -348,7 +349,7 @@ describe('create_auto_categorize_rule', () => {
         categoryId: category.id,
       }),
     ];
-    const proposal = issuePlan(user, rows);
+    const proposal = await issuePlan(user, rows);
     await confirm(user.token, proposal.proposalId, rows).expect(200);
     expect(await autoCategorizeService.getRules(user.familyId)).toHaveLength(1);
 

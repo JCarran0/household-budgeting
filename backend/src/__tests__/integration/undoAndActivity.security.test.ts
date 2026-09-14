@@ -23,7 +23,7 @@ import {
   transactionService,
 } from '../../services';
 import { registerUser } from '../helpers/apiHelper';
-import { issueProposal } from '../../services/chatActions';
+import { proposalStore } from '../../services';
 import type { ProposalRow } from '../../shared/types';
 
 async function createUser(prefix: string) {
@@ -32,7 +32,7 @@ async function createUser(prefix: string) {
 }
 
 function issuePlan(user: { userId: string; familyId: string }, rows: ProposalRow[]) {
-  return issueProposal({
+  return proposalStore.issue({
     userId: user.userId,
     familyId: user.familyId,
     conversationId: randomUUID(),
@@ -121,7 +121,7 @@ describe('REQ-P037 — every AI write lands in the activity log', () => {
   it('records a confirmed batch with one row per write', async () => {
     const user = await createUser('act');
     const rows = [row(0, 'create_task', { title: 'Alpha' }), row(1, 'create_task', { title: 'Beta' })];
-    const proposal = issuePlan(user, rows);
+    const proposal = await issuePlan(user, rows);
     await confirm(user.token, proposal.proposalId, rows).expect(200);
 
     const res = await listActivity(user.token).expect(200);
@@ -136,7 +136,7 @@ describe('REQ-P037 — every AI write lands in the activity log', () => {
     const owner = await createUser('actowner');
     const other = await createUser('actother');
     const rows = [row(0, 'create_task', { title: 'Private' })];
-    const proposal = issuePlan(owner, rows);
+    const proposal = await issuePlan(owner, rows);
     await confirm(owner.token, proposal.proposalId, rows).expect(200);
 
     const res = await listActivity(other.token).expect(200);
@@ -150,7 +150,7 @@ describe('REQ-P037 — every AI write lands in the activity log', () => {
     await taskService.createTask({ title: 'x' }, user.userId, user.familyId);
 
     const rows = [row(0, 'create_task', { title: 'Undoable' })];
-    const proposal = issuePlan(user, rows);
+    const proposal = await issuePlan(user, rows);
     await confirm(user.token, proposal.proposalId, rows).expect(200);
 
     const res = await listActivity(user.token).expect(200);
@@ -164,7 +164,7 @@ describe('REQ-P026 — undo restores the prior value', () => {
     const task = await taskService.createTask({ title: 'Original' }, user.userId, user.familyId);
 
     const rows = [row(0, 'update_task', { taskId: task.id, title: 'Changed' })];
-    const proposal = issuePlan(user, rows);
+    const proposal = await issuePlan(user, rows);
     await confirm(user.token, proposal.proposalId, rows).expect(200);
     expect((await taskService.getTask(task.id, user.familyId))?.title).toBe('Changed');
 
@@ -183,7 +183,7 @@ describe('REQ-P026 — undo restores the prior value', () => {
     const task = await taskService.createTask({ title: 'Chore' }, user.userId, user.familyId);
 
     const rows = [row(0, 'complete_task', { taskId: task.id })];
-    const proposal = issuePlan(user, rows);
+    const proposal = await issuePlan(user, rows);
     await confirm(user.token, proposal.proposalId, rows).expect(200);
     expect((await taskService.getTask(task.id, user.familyId))?.completedAt).not.toBeNull();
 
@@ -201,7 +201,7 @@ describe('REQ-P026 — undo restores the prior value', () => {
     await seedTransaction(user.familyId, 'txn-1', 'GROCERIES');
 
     const rows = [row(0, 'set_transaction_category', { transactionId: 'txn-1', categoryId: 'HOME' })];
-    const proposal = issuePlan(user, rows);
+    const proposal = await issuePlan(user, rows);
     await confirm(user.token, proposal.proposalId, rows).expect(200);
 
     const entries = (await listActivity(user.token).expect(200)).body.entries;
@@ -214,7 +214,7 @@ describe('REQ-P026 — undo restores the prior value', () => {
   it('reverses a create by removing what was created', async () => {
     const user = await createUser('undo');
     const rows = [row(0, 'create_task', { title: 'Remove me' })];
-    const proposal = issuePlan(user, rows);
+    const proposal = await issuePlan(user, rows);
     await confirm(user.token, proposal.proposalId, rows).expect(200);
     expect(await taskService.getAllTasks(user.familyId)).toHaveLength(1);
 
@@ -228,7 +228,7 @@ describe('REQ-P026 — undo restores the prior value', () => {
   it('undoes only the rows named, leaving the rest applied', async () => {
     const user = await createUser('undo');
     const rows = [row(0, 'create_task', { title: 'Keep' }), row(1, 'create_task', { title: 'Drop' })];
-    const proposal = issuePlan(user, rows);
+    const proposal = await issuePlan(user, rows);
     await confirm(user.token, proposal.proposalId, rows).expect(200);
 
     const entries = (await listActivity(user.token).expect(200)).body.entries;
@@ -248,7 +248,7 @@ describe('REQ-P027 — undo skips rather than clobbers', () => {
     const task = await taskService.createTask({ title: 'Original' }, user.userId, user.familyId);
 
     const rows = [row(0, 'update_task', { taskId: task.id, title: 'AI version' })];
-    const proposal = issuePlan(user, rows);
+    const proposal = await issuePlan(user, rows);
     await confirm(user.token, proposal.proposalId, rows).expect(200);
 
     await taskService.updateTask(task.id, { title: 'Human version' }, user.userId, user.familyId);
@@ -265,7 +265,7 @@ describe('REQ-P027 — undo skips rather than clobbers', () => {
     // The most destructive case available to this feature.
     const user = await createUser('undo');
     const rows = [row(0, 'create_task', { title: 'Plan the trip' })];
-    const proposal = issuePlan(user, rows);
+    const proposal = await issuePlan(user, rows);
     await confirm(user.token, proposal.proposalId, rows).expect(200);
 
     const created = (await taskService.getAllTasks(user.familyId))[0];
@@ -288,7 +288,7 @@ describe('REQ-P027 — undo skips rather than clobbers', () => {
     const task = await taskService.createTask({ title: 'Doomed' }, user.userId, user.familyId);
 
     const rows = [row(0, 'update_task', { taskId: task.id, title: 'Changed' })];
-    const proposal = issuePlan(user, rows);
+    const proposal = await issuePlan(user, rows);
     await confirm(user.token, proposal.proposalId, rows).expect(200);
 
     await taskService.deleteTask(task.id, user.familyId);
@@ -303,7 +303,7 @@ describe('REQ-P027 — undo skips rather than clobbers', () => {
     const task = await taskService.createTask({ title: 'Original' }, user.userId, user.familyId);
 
     const rows = [row(0, 'update_task', { taskId: task.id, title: 'Changed' })];
-    const proposal = issuePlan(user, rows);
+    const proposal = await issuePlan(user, rows);
     await confirm(user.token, proposal.proposalId, rows).expect(200);
 
     const entries = (await listActivity(user.token).expect(200)).body.entries;
@@ -319,7 +319,7 @@ describe('REQ-P027 — undo skips rather than clobbers', () => {
     const user = await createUser('undo');
     const task = await taskService.createTask({ title: 'Original' }, user.userId, user.familyId);
     const rows = [row(0, 'update_task', { taskId: task.id, title: 'Changed' })];
-    const proposal = issuePlan(user, rows);
+    const proposal = await issuePlan(user, rows);
     await confirm(user.token, proposal.proposalId, rows).expect(200);
 
     const entries = (await listActivity(user.token).expect(200)).body.entries;
@@ -338,7 +338,7 @@ describe('cross-family and workspace boundaries', () => {
     const task = await taskService.createTask({ title: 'Theirs' }, owner.userId, owner.familyId);
 
     const rows = [row(0, 'update_task', { taskId: task.id, title: 'Changed' })];
-    const proposal = issuePlan(owner, rows);
+    const proposal = await issuePlan(owner, rows);
     await confirm(owner.token, proposal.proposalId, rows).expect(200);
 
     const entries = (await listActivity(owner.token).expect(200)).body.entries;
@@ -361,7 +361,7 @@ describe('REQ-P038 — bulk undo across a range', () => {
 
     for (const title of ['One', 'Two', 'Three']) {
       const rows = [row(0, 'create_task', { title })];
-      const proposal = issuePlan(user, rows);
+      const proposal = await issuePlan(user, rows);
       await confirm(user.token, proposal.proposalId, rows).expect(200);
     }
     expect(await taskService.getAllTasks(user.familyId)).toHaveLength(3);
@@ -379,7 +379,7 @@ describe('REQ-P038 — bulk undo across a range', () => {
   it('leaves entries outside the window alone', async () => {
     const user = await createUser('bulk');
     const rows = [row(0, 'create_task', { title: 'Survivor' })];
-    const proposal = issuePlan(user, rows);
+    const proposal = await issuePlan(user, rows);
     await confirm(user.token, proposal.proposalId, rows).expect(200);
 
     const future = new Date(Date.now() + 60_000).toISOString();

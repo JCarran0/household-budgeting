@@ -21,7 +21,8 @@ import request from 'supertest';
 import app from '../../app';
 import { dataService, authService, taskService, transactionService, categoryService } from '../../services';
 import { registerUser } from '../helpers/apiHelper';
-import { issueProposal, buildProposalRows } from '../../services/chatActions';
+import {buildProposalRows } from '../../services/chatActions';
+import { proposalStore } from '../../services';
 import type { ProposalRow } from '../../shared/types';
 
 async function createUser(prefix: string) {
@@ -30,7 +31,7 @@ async function createUser(prefix: string) {
 }
 
 function issuePlan(user: { userId: string; familyId: string }, rows: ProposalRow[]) {
-  return issueProposal({
+  return proposalStore.issue({
     userId: user.userId,
     familyId: user.familyId,
     conversationId: randomUUID(),
@@ -96,7 +97,7 @@ describe('SEC-P030 — identifiers must resolve', () => {
   it('rejects a well-formed taskId that names no task', async () => {
     const user = await createUser('sem');
     const rows = [updateRow(0, { taskId: randomUUID(), title: 'Renamed' })];
-    const proposal = issuePlan(user, rows);
+    const proposal = await issuePlan(user, rows);
 
     const res = await confirm(user.token, proposal.proposalId, rows).expect(400);
     expect(res.body.success).toBe(false);
@@ -109,7 +110,7 @@ describe('SEC-P030 — identifiers must resolve', () => {
     const task = await taskService.createTask({ title: 'Real task' }, user.userId, user.familyId);
 
     const rows = [updateRow(0, { taskId: task.id, assigneeId: 'not-a-member' })];
-    const proposal = issuePlan(user, rows);
+    const proposal = await issuePlan(user, rows);
 
     const res = await confirm(user.token, proposal.proposalId, rows).expect(400);
     expect(res.body.error).toMatch(/not a member/i);
@@ -125,7 +126,7 @@ describe('SEC-P030 — identifiers must resolve', () => {
     const task = await taskService.createTask({ title: 'Real task' }, user.userId, user.familyId);
 
     const rows = [updateRow(0, { taskId: task.id, assigneeId: user.userId })];
-    const proposal = issuePlan(user, rows);
+    const proposal = await issuePlan(user, rows);
 
     await confirm(user.token, proposal.proposalId, rows).expect(200);
     const after = await taskService.getTask(task.id, user.familyId);
@@ -142,7 +143,7 @@ describe('SEC-P030 — identifiers must resolve', () => {
     );
 
     const rows = [updateRow(0, { taskId: secret.id, title: 'Hijacked' })];
-    const proposal = issuePlan(attacker, rows);
+    const proposal = await issuePlan(attacker, rows);
 
     const res = await confirm(attacker.token, proposal.proposalId, rows).expect(400);
 
@@ -163,7 +164,7 @@ describe('SEC-P030 — identifiers must resolve', () => {
     const before = await taskService.getTask(task.id, user.familyId);
 
     const rows = [completeRow(0, task.id)];
-    const proposal = issuePlan(user, rows);
+    const proposal = await issuePlan(user, rows);
     const res = await confirm(user.token, proposal.proposalId, rows).expect(400);
     expect(res.body.error).toMatch(/already complete/i);
 
@@ -182,7 +183,7 @@ describe('REQ-P023 — a semantically invalid row writes nothing, not "nothing a
     // found to be bogus.
     const user = await createUser('sem');
     const rows = [createRow(0, 'Should not exist'), updateRow(1, { taskId: randomUUID(), title: 'Bogus' })];
-    const proposal = issuePlan(user, rows);
+    const proposal = await issuePlan(user, rows);
 
     const res = await confirm(user.token, proposal.proposalId, rows).expect(400);
     expect(res.body.failedRowId).toBe('row-1');
@@ -198,7 +199,7 @@ describe('REQ-P023 — a semantically invalid row writes nothing, not "nothing a
     const existing = await taskService.createTask({ title: 'Existing' }, user.userId, user.familyId);
 
     const rows = [createRow(0, 'Fresh'), updateRow(1, { taskId: existing.id, title: 'Renamed' })];
-    const proposal = issuePlan(user, rows);
+    const proposal = await issuePlan(user, rows);
 
     const res = await confirm(user.token, proposal.proposalId, rows).expect(200);
     expect(res.body.success).toBe(true);
@@ -215,7 +216,7 @@ describe('REQ-P023 — a semantically invalid row writes nothing, not "nothing a
       updateRow(0, { taskId: good.id, title: 'A' }),
       completeRow(1, randomUUID()),
     ];
-    const proposal = issuePlan(user, rows);
+    const proposal = await issuePlan(user, rows);
 
     const res = await confirm(user.token, proposal.proposalId, rows).expect(400);
     expect(res.body.failedRowId).toBe('row-1');
@@ -396,7 +397,7 @@ describe('SEC-P030 — the orphaned categoryId case this requirement was written
     await seedTransaction(user);
 
     const rows = [categoryRow(0, 'txn-1', 'CATEGORY_THAT_NEVER_EXISTED')];
-    const proposal = issuePlan(user, rows);
+    const proposal = await issuePlan(user, rows);
 
     const res = await confirm(user.token, proposal.proposalId, rows).expect(400);
     expect(res.body.error).toMatch(/No category matches/i);
@@ -425,7 +426,7 @@ describe('SEC-P030 — the orphaned categoryId case this requirement was written
     expect(real).not.toBeNull();
 
     const rows = [categoryRow(0, 'txn-1', real!.id)];
-    const proposal = issuePlan(user, rows);
+    const proposal = await issuePlan(user, rows);
 
     await confirm(user.token, proposal.proposalId, rows).expect(200);
     const after = await transactionService.getTransactions(user.familyId, { includeHidden: true });
@@ -437,7 +438,7 @@ describe('SEC-P030 — the orphaned categoryId case this requirement was written
     await seedTransaction(user);
 
     const rows = [categoryRow(0, 'txn-1', null)];
-    const proposal = issuePlan(user, rows);
+    const proposal = await issuePlan(user, rows);
     await confirm(user.token, proposal.proposalId, rows).expect(200);
   });
 
@@ -469,7 +470,7 @@ describe('SEC-P030 — the orphaned categoryId case this requirement was written
     ]);
 
     const rows = [categoryRow(0, 'txn-ghost', null)];
-    const proposal = issuePlan(user, rows);
+    const proposal = await issuePlan(user, rows);
     const res = await confirm(user.token, proposal.proposalId, rows).expect(400);
     expect(res.body.error).toMatch(/could not be found/i);
   });
@@ -480,7 +481,7 @@ describe('SEC-P030 — the orphaned categoryId case this requirement was written
     await seedTransaction(owner);
 
     const rows = [categoryRow(0, 'txn-1', null)];
-    const proposal = issuePlan(attacker, rows);
+    const proposal = await issuePlan(attacker, rows);
     const res = await confirm(attacker.token, proposal.proposalId, rows).expect(400);
     expect(res.body.error).toMatch(/could not be found/i);
     expect(res.body.error).not.toMatch(/Hardware/i);

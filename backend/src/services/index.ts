@@ -28,6 +28,7 @@ import { ChatbotService } from './chatbotService';
 import { AgentTraceStore } from './agentTraceStore';
 import { AgentLearningsStore } from './agentLearningsStore';
 import { ActionActivityStore } from './actionActivityStore';
+import { ProposalStore } from './chatActions/proposalStore';
 import { ActionUndoService } from './actionUndoService';
 import { CategorizationService } from './categorizationService';
 import { ManualAccountService } from './manualAccountService';
@@ -119,6 +120,7 @@ export const agentLearningsStore = new AgentLearningsStore(dataService);
  * agentTraceStore — not general write capability handed to the chatbot, and
  * deliberately not reachable from any tool or action.
  */
+export const proposalStore = new ProposalStore(dataService);
 export const actionActivityStore = new ActionActivityStore(dataService);
 export const actionUndoService = new ActionUndoService(actionActivityStore);
 export const chatbotService = new ChatbotService(
@@ -127,6 +129,7 @@ export const chatbotService = new ChatbotService(
   config.ai.anthropicApiKey,
   agentTraceStore,
   agentLearningsStore,
+  proposalStore,
 );
 export const categorizationService = new CategorizationService(
   chatbotDataService,

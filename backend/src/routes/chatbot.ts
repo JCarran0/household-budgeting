@@ -21,7 +21,7 @@ import { z } from 'zod';
 import { authenticate, validateBody } from '../middleware/authMiddleware';
 import { rateLimitChatbot } from '../middleware/rateLimit';
 import { refuseBusinessWorkspace } from '../middleware/refuseBusinessWorkspace';
-import { chatbotService, categorizationService, actionActivityStore } from '../services';
+import { chatbotService, categorizationService, actionActivityStore, proposalStore } from '../services';
 import { childLogger } from '../utils/logger';
 
 const log = childLogger('chatbot');
@@ -31,7 +31,7 @@ import {
   enforcePdfPageLimit,
   countPdfPages,
 } from '../middleware/chatAttachmentUpload';
-import { getChatAction, consumeProposal, executeChatAction } from '../services/chatActions';
+import { getChatAction, executeChatAction } from '../services/chatActions';
 import { logAuditSuccess, logAuditRejection } from '../services/chatActions/auditLog';
 import { fingerprint } from '../services/chatActions/undoSnapshot';
 import type { ActivityRowRecord } from '../services/actionActivityStore';
@@ -389,7 +389,7 @@ router.post(
   rateLimitChatbot,
   async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
-      const { userId } = req.user!;
+      const { userId, familyId: requestFamilyId } = req.user!;
 
       // Validate request body
       const bodyResult = confirmActionSchema.safeParse(req.body);
@@ -404,7 +404,13 @@ router.post(
       const body = bodyResult.data;
 
       // Consume nonce (ownership check + expiry + replay prevention)
-      const consumed = consumeProposal({ nonce: body.proposalId, userId });
+      // familyId narrows the lookup to this household's proposal file; the
+      // userId check inside is still what enforces ownership.
+      const consumed = await proposalStore.consume({
+        nonce: body.proposalId,
+        userId,
+        familyId: requestFamilyId,
+      });
       if (!consumed.ok) {
         logAuditRejection({
           traceId: null, // nonce unresolved — no trace to correlate with

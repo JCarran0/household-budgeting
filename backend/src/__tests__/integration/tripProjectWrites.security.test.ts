@@ -31,7 +31,8 @@ import {
   categoryService,
 } from '../../services';
 import { registerUser } from '../helpers/apiHelper';
-import { issueProposal, getChatAction } from '../../services/chatActions';
+import {getChatAction } from '../../services/chatActions';
+import { proposalStore } from '../../services';
 import type { ProposalRow } from '../../shared/types';
 
 async function createUser(prefix: string) {
@@ -40,7 +41,7 @@ async function createUser(prefix: string) {
 }
 
 function issuePlan(user: { userId: string; familyId: string }, rows: ProposalRow[]) {
-  return issueProposal({
+  return proposalStore.issue({
     userId: user.userId,
     familyId: user.familyId,
     conversationId: randomUUID(),
@@ -131,7 +132,7 @@ describe('add_trip_stop — what the model is not allowed to assert', () => {
         locationLabel: 'Carrer de la Unió',
       }),
     ];
-    const proposal = issuePlan(user, rows);
+    const proposal = await issuePlan(user, rows);
 
     await confirm(user.token, proposal.proposalId, rows).expect(200);
 
@@ -152,7 +153,7 @@ describe('add_trip_stop — what the model is not allowed to assert', () => {
         locationLabel: 'Carrer de Mallorca, 401',
       }),
     ];
-    const proposal = issuePlan(user, rows);
+    const proposal = await issuePlan(user, rows);
     await confirm(user.token, proposal.proposalId, rows).expect(200);
 
     const after = await tripService.getTrip(trip.id, user.familyId);
@@ -179,7 +180,7 @@ describe('add_trip_stop — what the model is not allowed to assert', () => {
         name: 'Probe',
       }),
     ];
-    const proposal = issuePlan(attacker, rows);
+    const proposal = await issuePlan(attacker, rows);
 
     const res = await confirm(attacker.token, proposal.proposalId, rows).expect(400);
     // Reads exactly like a trip that never existed — which is the correct
@@ -228,7 +229,7 @@ describe('move_trip_stop — overlap is caught before anything is written', () =
         endDate: '2026-10-04',
       }),
     ];
-    const proposal = issuePlan(user, rows);
+    const proposal = await issuePlan(user, rows);
 
     const res = await confirm(user.token, proposal.proposalId, rows).expect(400);
     expect(res.body.errorCode).toBe('validation_failed');
@@ -256,7 +257,7 @@ describe('move_trip_stop — overlap is caught before anything is written', () =
         endDate: '2026-10-04',
       }),
     ];
-    const proposal = issuePlan(user, rows);
+    const proposal = await issuePlan(user, rows);
 
     await confirm(user.token, proposal.proposalId, rows).expect(400);
 
@@ -277,7 +278,7 @@ describe('move_trip_stop — overlap is caught before anything is written', () =
         endDate: '2026-10-07',
       }),
     ];
-    const proposal = issuePlan(user, rows);
+    const proposal = await issuePlan(user, rows);
     await confirm(user.token, proposal.proposalId, rows).expect(200);
 
     const after = await tripService.getTrip(trip.id, user.familyId);
@@ -292,7 +293,7 @@ describe('move_trip_stop — overlap is caught before anything is written', () =
     const { trip, first } = await tripWithTwoStays(user);
 
     const rows = [row(0, 'move_trip_stop', { tripId: trip.id, stopId: first.id, date: '2026-10-02' })];
-    const proposal = issuePlan(user, rows);
+    const proposal = await issuePlan(user, rows);
 
     const res = await confirm(user.token, proposal.proposalId, rows).expect(400);
     expect(res.body.error).toMatch(/end date/i);
@@ -345,7 +346,7 @@ describe('add_project_line_item — estimates only, into budgets that exist', ()
         estimatedCost: 4200,
       }),
     ];
-    const proposal = issuePlan(user, rows);
+    const proposal = await issuePlan(user, rows);
 
     const res = await confirm(user.token, proposal.proposalId, rows).expect(400);
     expect(res.body.error).toMatch(/no budget for/i);
@@ -367,7 +368,7 @@ describe('add_project_line_item — estimates only, into budgets that exist', ()
         estimatedCost: 4200,
       }),
     ];
-    const proposal = issuePlan(user, rows);
+    const proposal = await issuePlan(user, rows);
     await confirm(user.token, proposal.proposalId, rows).expect(200);
 
     const after = await projectService.getProject(project.id, user.familyId);
@@ -407,7 +408,7 @@ describe('add_project_line_item — estimates only, into budgets that exist', ()
         estimatedCost: 4200,
       }),
     ];
-    const proposal = issuePlan(user, rows);
+    const proposal = await issuePlan(user, rows);
     const res = await confirm(user.token, proposal.proposalId, rows).expect(200);
 
     // The activity log shows resource.label. This app never reconciles a line

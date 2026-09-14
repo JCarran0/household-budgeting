@@ -12,7 +12,7 @@ import request from 'supertest';
 import app from '../../app';
 import { dataService, authService } from '../../services';
 import { registerUser } from '../helpers/apiHelper';
-import { issueProposal } from '../../services/chatActions';
+import { proposalStore } from '../../services';
 import type { ProposalRow } from '../../shared/types';
 
 async function createUser(prefix: string) {
@@ -32,7 +32,7 @@ function taskRow(index: number, title: string): ProposalRow {
 }
 
 function issuePlan(user: { userId: string; familyId: string }, rows: ProposalRow[]) {
-  return issueProposal({
+  return proposalStore.issue({
     userId: user.userId,
     familyId: user.familyId,
     conversationId: randomUUID(),
@@ -60,7 +60,7 @@ describe('P.1 — Confirm executes exactly the checked rows (REQ-P021)', () => {
   it('applies every row when all are checked', async () => {
     const user = await createUser('plan');
     const rows = [taskRow(0, 'Alpha'), taskRow(1, 'Beta'), taskRow(2, 'Gamma')];
-    const proposal = issuePlan(user, rows);
+    const proposal = await issuePlan(user, rows);
 
     const res = await request(app)
       .post('/api/v1/chatbot/actions/confirm')
@@ -79,7 +79,7 @@ describe('P.1 — Confirm executes exactly the checked rows (REQ-P021)', () => {
   it('does NOT apply a row the user unchecked', async () => {
     const user = await createUser('plan');
     const rows = [taskRow(0, 'Keep'), taskRow(1, 'Drop'), taskRow(2, 'Keep2')];
-    const proposal = issuePlan(user, rows);
+    const proposal = await issuePlan(user, rows);
 
     await request(app)
       .post('/api/v1/chatbot/actions/confirm')
@@ -100,7 +100,7 @@ describe('P.1 — Confirm executes exactly the checked rows (REQ-P021)', () => {
 
   it('rejects a rowId that is not in the proposal — the request cannot invent work', async () => {
     const user = await createUser('plan');
-    const proposal = issuePlan(user, [taskRow(0, 'Alpha')]);
+    const proposal = await issuePlan(user, [taskRow(0, 'Alpha')]);
 
     const res = await request(app)
       .post('/api/v1/chatbot/actions/confirm')
@@ -117,7 +117,7 @@ describe('P.1 — Confirm executes exactly the checked rows (REQ-P021)', () => {
 
   it('rejects a duplicated rowId — one reviewed row must not execute twice', async () => {
     const user = await createUser('plan');
-    const proposal = issuePlan(user, [taskRow(0, 'Alpha')]);
+    const proposal = await issuePlan(user, [taskRow(0, 'Alpha')]);
 
     const res = await request(app)
       .post('/api/v1/chatbot/actions/confirm')
@@ -138,7 +138,7 @@ describe('P.1 — Confirm executes exactly the checked rows (REQ-P021)', () => {
 
   it('rejects an empty selection rather than treating it as "confirm everything"', async () => {
     const user = await createUser('plan');
-    const proposal = issuePlan(user, [taskRow(0, 'Alpha'), taskRow(1, 'Beta')]);
+    const proposal = await issuePlan(user, [taskRow(0, 'Alpha'), taskRow(1, 'Beta')]);
 
     await request(app)
       .post('/api/v1/chatbot/actions/confirm')
@@ -154,7 +154,7 @@ describe('P.2 — Every row re-validated before any row executes (REQ-P023, REQ-
   it('an invalid LAST row prevents the valid FIRST row from being written', async () => {
     const user = await createUser('plan');
     const rows = [taskRow(0, 'Valid first'), taskRow(1, 'Valid second')];
-    const proposal = issuePlan(user, rows);
+    const proposal = await issuePlan(user, rows);
 
     const res = await request(app)
       .post('/api/v1/chatbot/actions/confirm')
@@ -177,7 +177,7 @@ describe('P.2 — Every row re-validated before any row executes (REQ-P023, REQ-
 
   it('validates edited params as edited, not as proposed (SEC-A004)', async () => {
     const user = await createUser('plan');
-    const proposal = issuePlan(user, [taskRow(0, 'As proposed')]);
+    const proposal = await issuePlan(user, [taskRow(0, 'As proposed')]);
 
     await request(app)
       .post('/api/v1/chatbot/actions/confirm')
@@ -196,7 +196,7 @@ describe('P.3 — The nonce still governs the whole batch (SEC-A005)', () => {
   it('a second confirm of the same plan is rejected as replay', async () => {
     const user = await createUser('plan');
     const rows = [taskRow(0, 'Alpha'), taskRow(1, 'Beta')];
-    const proposal = issuePlan(user, rows);
+    const proposal = await issuePlan(user, rows);
     const body = {
       proposalId: proposal.proposalId,
       rows: rows.map(r => ({ rowId: r.rowId, params: r.params })),
@@ -220,7 +220,7 @@ describe('P.3 — The nonce still governs the whole batch (SEC-A005)', () => {
 
   it('a rejected batch still burns the nonce — retry needs a fresh proposal', async () => {
     const user = await createUser('plan');
-    const proposal = issuePlan(user, [taskRow(0, 'Alpha')]);
+    const proposal = await issuePlan(user, [taskRow(0, 'Alpha')]);
 
     await request(app)
       .post('/api/v1/chatbot/actions/confirm')
@@ -240,7 +240,7 @@ describe('P.3 — The nonce still governs the whole batch (SEC-A005)', () => {
   it('another user cannot confirm rows from this plan (404, no existence leak)', async () => {
     const owner = await createUser('planowner');
     const attacker = await createUser('planattacker');
-    const proposal = issuePlan(owner, [taskRow(0, 'Alpha')]);
+    const proposal = await issuePlan(owner, [taskRow(0, 'Alpha')]);
 
     const res = await request(app)
       .post('/api/v1/chatbot/actions/confirm')
@@ -257,7 +257,7 @@ describe('P.3 — The nonce still governs the whole batch (SEC-A005)', () => {
 describe('P.4 — Single-row shorthand (migration compatibility)', () => {
   it('confirmedParams still works for a one-row proposal', async () => {
     const user = await createUser('plan');
-    const proposal = issuePlan(user, [taskRow(0, 'Legacy shape')]);
+    const proposal = await issuePlan(user, [taskRow(0, 'Legacy shape')]);
 
     const res = await request(app)
       .post('/api/v1/chatbot/actions/confirm')
@@ -271,7 +271,7 @@ describe('P.4 — Single-row shorthand (migration compatibility)', () => {
 
   it('confirmedParams is REFUSED on a multi-row plan — "which row?" has no safe default', async () => {
     const user = await createUser('plan');
-    const proposal = issuePlan(user, [taskRow(0, 'Alpha'), taskRow(1, 'Beta')]);
+    const proposal = await issuePlan(user, [taskRow(0, 'Alpha'), taskRow(1, 'Beta')]);
 
     const res = await request(app)
       .post('/api/v1/chatbot/actions/confirm')
@@ -285,7 +285,7 @@ describe('P.4 — Single-row shorthand (migration compatibility)', () => {
 
   it('a body with neither rows nor confirmedParams is rejected at the schema', async () => {
     const user = await createUser('plan');
-    const proposal = issuePlan(user, [taskRow(0, 'Alpha')]);
+    const proposal = await issuePlan(user, [taskRow(0, 'Alpha')]);
 
     await request(app)
       .post('/api/v1/chatbot/actions/confirm')

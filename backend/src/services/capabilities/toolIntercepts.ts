@@ -20,7 +20,8 @@ import type {
   ChatActionId,
   LearningNotice,
 } from '../../shared/types';
-import { buildProposalRows, issueProposal, listChatActionIds } from '../chatActions';
+import { buildProposalRows, listChatActionIds } from '../chatActions';
+import type { ProposalStore } from '../chatActions/proposalStore';
 import { AgentLearningsStore, isCapabilityKey } from '../agentLearningsStore';
 
 /**
@@ -42,6 +43,12 @@ export async function handleProposeAction(args: {
   userId: string;
   familyId: string;
   conversationId: string;
+  /**
+   * Passed in rather than imported from services/index: this module is reached
+   * FROM services/index, and importing back closes the cycle that TD-031
+   * documents.
+   */
+  proposalStore: ProposalStore;
 }): Promise<InterceptResult> {
   const input = args.rawInput as ActionProposalInput;
 
@@ -60,7 +67,7 @@ export async function handleProposeAction(args: {
 
   // SECURITY: the nonce is NOT sent to Claude (SEC-A009). It goes to the
   // frontend in the proposal and comes back on confirm.
-  const proposal = issueProposal({
+  const proposal = await args.proposalStore.issue({
     traceId: args.traceId,
     userId: args.userId,
     familyId: args.familyId,

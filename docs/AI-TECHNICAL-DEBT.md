@@ -104,7 +104,7 @@ The failure is not a warning. The schema resolves to `undefined` at module-eval 
 ---
 
 ### TD-030: Proposal Store Is In-Memory and Single-Process
-**Status**: Open — blocks Phase 5 of the capability platform
+**Status**: **Resolved 2026-09-13**
 **Created**: 2026-09-13
 **Impact**: Medium now, High before unattended writes ship
 **Effort**: Medium
@@ -116,7 +116,11 @@ This is acceptable today and deliberately so — cards are conversation-scoped, 
 
 **Fix**: persist proposals through `dataService` like every other entity, keyed per family. The TTL and single-use semantics are already enforced in code rather than by the storage, so the swap is mostly mechanical.
 
-**Deliberately not done now**: there is no unattended workload to serve, and moving it early would add a storage round-trip to the interactive path for no present benefit.
+**Resolution**: `proposalStore.ts` is now a `ProposalStore` class over `dataService`, keyed `ai_proposals_{familyId}`. TTL and single-use stayed in code rather than moving to the storage — a nonce past its TTL is refused on read regardless of what is on disk, so expiry never depends on a prune having run. Supersession stayed atomic by putting the read, the invalidation and the write inside one mutex section. A consumed nonce is marked used rather than deleted, so "already used" and "never existed" remain distinguishable.
+
+The sync-to-async ripple was the bulk of the work, as predicted: the confirm route, the tool-intercept path and six test files. The store is injected into `ChatbotService` rather than imported from `services/index`, because `toolIntercepts` is reached from `services/index` and importing back closes the cycle in TD-031.
+
+Verified against a second store instance over the same `DataService` — the closest a test gets to a PM2 restart — for confirmability, replay, supersession, cross-user, cross-family and expiry.
 
 ---
 

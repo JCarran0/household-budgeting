@@ -26,6 +26,7 @@ const log = childLogger('chatbotService');
 import { CHATBOT_SYSTEM_PROMPT } from './chatbotPrompt';
 import { buildChatbotTools, getReadCapability } from './capabilities/readCapabilities';
 import { AgentLearningsStore } from './agentLearningsStore';
+import type { ProposalStore } from './chatActions/proposalStore';
 import {
   AgentTraceStore,
   buildToolCallEntry,
@@ -152,6 +153,7 @@ export class ChatbotService {
     anthropicApiKey: string,
     private readonly traceStore: AgentTraceStore,
     private readonly learningsStore: AgentLearningsStore,
+    private readonly proposalStore: ProposalStore,
   ) {
     this.client = new Anthropic({ apiKey: anthropicApiKey });
   }
@@ -432,6 +434,7 @@ export class ChatbotService {
               userId,
               familyId,
               conversationId,
+              proposalStore: this.proposalStore,
             });
 
             if (outcome.kind !== 'proposal') {
