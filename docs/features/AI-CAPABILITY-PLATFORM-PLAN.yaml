@@ -2,12 +2,13 @@
 # AI Capability Platform — Implementation Plan
 # =============================================================================
 # BRD: docs/features/AI-CAPABILITY-PLATFORM-BRD.md
-# Status: Phases 0-4 complete except the activity-log UI, which is built and
-#         awaiting QA before it lands. Phase 5 (unattended tier) DEFERRED BY
-#         OWNER DECISION 2026-09-13 — T2 ships empty (REQ-P083). Phase 6
-#         (proactive reads) not started and blocked on product decisions, not
-#         on engineering: nothing in the BRD says what a digest contains, when
-#         it runs, or where it surfaces, and this app has no scheduler.
+# Status: Phases 0-4 COMPLETE. Phase 5 (unattended tier) DEFERRED BY OWNER
+#         DECISION 2026-09-13 — T2 ships empty (REQ-P083). Phase 6 (proactive
+#         reads) ON HOLD by the same decision, and blocked on requirements
+#         rather than engineering: nothing in the BRD says what a digest
+#         contains, when it runs, or where it surfaces, and this app has no
+#         scheduler. One item is knowingly outstanding — Q-P03, the 40-row
+#         mobile legibility check, which needs a human with a phone.
 # Last Updated: 2026-09-13
 # =============================================================================
 
@@ -860,10 +861,35 @@ phase_4_activity_log_and_undo:
 
     - id: "4.4"
       task: User-facing activity log UI
-      status: pending
+      status: completed
       details: |
-        REQ-P037's surface, plus REQ-P026's inline undo for recent batches.
-        Deferred to a separate change so it can be spot-checked before landing.
+        REQ-P037's surface, plus REQ-P026's undo control.
+        components/settings/AiActivitySection.tsx, composed into Settings.
+
+        Every ROW is listed, not just the batch. §5.2's legibility argument
+        applies to the log as much as to the card: "Applied 38 changes" is a
+        summary the user cannot check, and the rows are what make the log an
+        account of what happened rather than an assertion that something did.
+
+        A SKIPPED UNDO IS NOT AN ERROR. REQ-P027 leaves a record alone when a
+        human edited it after the AI touched it, and that has to read as "we
+        protected your edit" — reported in yellow with the reason, never in red.
+        Locked by a test: reporting it as a failure fails the suite.
+
+        LINK RENDERING IS A SECURITY SURFACE HERE TOO. resource.url is MIXED —
+        task and transaction rows carry an in-app path, but submit_github_issue
+        carries an absolute URL that came back from GitHub's API. So the rule
+        from ChatMessageBubble is applied rather than the field being trusted:
+        in-app paths become router links, http(s) links disclose their host and
+        sever the opener, and anything else renders as plain text. That
+        invariant now lives in two components; a third home means extracting it.
+
+        The 'Automatic' badge for origin:'unattended' is built and unreachable —
+        nothing is T2 (REQ-P083) — but tested, so it cannot rot before it is
+        needed. That is the only part of task 4.5 that exists.
+
+        6 tests, three mutation-verified (drop the protocol allowlist, drop
+        rel="noopener", report a skipped undo in red).
 
     - id: "4.5"
       task: Mark unattended writes wherever the record is displayed
@@ -968,11 +994,23 @@ phase_5_unattended_tier:
         here rather than in Phase 1.
 
 phase_6_proactive_reads:
-  status: not_started
+  status: on_hold_by_owner_decision
+  decided: 2026-09-13
   description: |
     Scheduled digests and insight generation. May queue proposals for later
     approval; never writes. Exit: the background budget holds and chat is never
     starved.
+
+    ON HOLD. Not blocked on engineering — blocked on requirements that do not
+    exist. The BRD never says what a digest contains, when it runs, or where it
+    surfaces, and this app has no scheduler of any kind. Building it would mean
+    inventing all three, and then spending on the background budget every day
+    whether or not anyone reads the output.
+
+    6.2 (queued proposals reviewable hours later) is now UNBLOCKED — the
+    durable store landed in 4.6 — but has nothing to review until 6.1 produces
+    something. Picking this up starts with writing the requirements into the
+    BRD, not with a commit.
   tasks:
     - id: "6.1"
       task: Scheduled digest and insight generation
@@ -980,10 +1018,12 @@ phase_6_proactive_reads:
 
     - id: "6.2"
       task: Queued proposals reviewable hours later
-      status: pending
+      status: unblocked_but_not_started
       details: |
-        Depends on 4.3 — an in-memory nonce store cannot hold a proposal across
-        a restart, let alone across a review delay.
+        Depended on an in-memory nonce store being replaced — it cannot hold a
+        proposal across a restart, let alone across a review delay. Task 4.6
+        did that. What remains is that nothing produces a queued proposal yet,
+        which is 6.1.
 
 open_questions:
   - id: Q-P03

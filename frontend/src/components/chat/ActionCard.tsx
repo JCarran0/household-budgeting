@@ -30,7 +30,7 @@ import {
   IconChevronDown,
   IconChevronUp,
 } from '@tabler/icons-react';
-import type { ActionProposal, ActionResource, ActionRowResult, ProposalRow } from '../../../../shared/types';
+import type { ActionProposal, ActionResource, ActionRowResult, ChatActionId, ProposalRow } from '../../../../shared/types';
 import { getActionForm } from './action-forms';
 import { ActionCardRow } from './ActionCardRow';
 import { PROPOSAL_ROW_GROUPING_THRESHOLD } from '../../../../shared/types';
@@ -94,12 +94,31 @@ function groupByType(
   return Array.from(groups, ([key, { label, rows: groupRows }]) => ({ key, label, rows: groupRows }));
 }
 
-function getConfirmedPrefix(resourceType: ActionResource['type']): string {
-  switch (resourceType) {
-    case 'task':          return 'Created task:';
-    case 'github_issue':  return 'Filed issue:';
-  }
-}
+/**
+ * Keyed on the ACTION, not the resource type.
+ *
+ * The resource type cannot tell you what happened to it — a `task` resource
+ * comes back from create_task, update_task and complete_task alike, and the
+ * old version said "Created task:" for all three. The action is the thing that
+ * is actually known.
+ *
+ * Exhaustive on purpose: adding an action forces a line here, which is a
+ * decision about what the user is told they just did.
+ */
+const CONFIRMED_PREFIX: Record<ChatActionId, string> = {
+  create_task: 'Created task:',
+  update_task: 'Updated task:',
+  complete_task: 'Completed task:',
+  set_transaction_category: 'Recategorized:',
+  set_transaction_description: 'Renamed:',
+  add_trip_stop: 'Added to trip:',
+  move_trip_stop: 'Moved:',
+  add_project_line_item: 'Added estimate:',
+  set_transaction_hidden: 'Updated:',
+  set_budget_amount: 'Set budget:',
+  create_auto_categorize_rule: 'Created rule:',
+  submit_github_issue: 'Filed issue:',
+};
 
 export function ActionCard({
   proposal,
@@ -239,7 +258,7 @@ export function ActionCard({
               <>Applied <Text span fw={600}>{appliedCount} changes</Text></>
             ) : (
               <>
-                {getConfirmedPrefix(resource.type)}{' '}
+                {CONFIRMED_PREFIX[results?.[0]?.actionId ?? singleRow.actionId]}{' '}
                 <Text span fw={600}>{resource.label}</Text>
               </>
             )}

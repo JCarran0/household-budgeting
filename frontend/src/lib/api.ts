@@ -10,6 +10,7 @@ import { createMiscApi } from './api/misc';
 import { createTripsApi } from './api/trips';
 import { createProjectsApi } from './api/projects';
 import { createChatbotApi } from './api/chatbot';
+import { createAiActivityApi } from './api/aiActivity';
 import { createFeedbackApi } from './api/feedback';
 import { createActualsOverridesApi } from './api/actualsOverrides';
 import { createManualAccountsApi } from './api/manualAccounts';
@@ -53,6 +54,7 @@ export const api = {
   ...createTripsApi(client),
   ...createProjectsApi(client),
   ...createChatbotApi(client),
+  ...createAiActivityApi(client),
   ...createFeedbackApi(client),
   ...createActualsOverridesApi(client),
   ...createManualAccountsApi(client),

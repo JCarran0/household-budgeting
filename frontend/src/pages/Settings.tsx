@@ -4,6 +4,7 @@ import { PasswordSection } from '../components/settings/PasswordSection';
 import { NotificationsSection } from '../components/settings/NotificationsSection';
 import { FamilySection } from '../components/settings/FamilySection';
 import { AccountOwnerMappingsSection } from '../components/settings/AccountOwnerMappingsSection';
+import { AiActivitySection } from '../components/settings/AiActivitySection';
 
 export function Settings() {
   return (
@@ -15,6 +16,7 @@ export function Settings() {
         <NotificationsSection />
         <FamilySection />
         <AccountOwnerMappingsSection />
+        <AiActivitySection />
       </Stack>
     </Container>
   );

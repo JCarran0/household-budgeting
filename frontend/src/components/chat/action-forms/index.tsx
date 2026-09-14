@@ -25,7 +25,14 @@ export interface ActionFormProps {
 // values but still satisfies the registry's generic ActionFormProps contract.
 // This is the "three-touch extensibility" pattern: to add a new action, create
 // a form component + add one entry here.
-const FORM_REGISTRY: Record<ChatActionId, FC<ActionFormProps>> = {
+//
+// PARTIAL, not exhaustive. Most actions have no edit form and should not: a row
+// that targets a resolved id (a taskId, a transactionId, a stopId) is not
+// something the user should be retyping on a card — they uncheck it instead.
+// getActionForm already returns null for an unregistered action, and the card
+// hides Edit when it does. An exhaustive Record here would assert that every
+// action is editable, which has never been true.
+const FORM_REGISTRY: Partial<Record<ChatActionId, FC<ActionFormProps>>> = {
   create_task: ((props: ActionFormProps) => (
     <TaskActionCardEditForm
       initialValues={props.initialValues}
