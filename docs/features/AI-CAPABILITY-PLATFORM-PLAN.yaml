@@ -2,7 +2,8 @@
 # AI Capability Platform — Implementation Plan
 # =============================================================================
 # BRD: docs/features/AI-CAPABILITY-PLATFORM-BRD.md
-# Status: Phases 0-2 complete; Phase 3 not started
+# Status: Phases 0-2 complete; Phase 3 largely delivered; Phase 4 backend
+#         delivered, activity-log UI outstanding
 # Last Updated: 2026-09-13
 # =============================================================================
 
@@ -19,6 +20,11 @@ overview:
     the requirement text.
 
     Phases 0 (correctness), 1 (foundations) and 2 (read coverage) are complete.
+    Phase 3 has delivered its task and transaction-metadata write actions along
+    with the SEC-P030 machinery they needed; trip/project and financial writes
+    remain. Phase 4's backend — undo handles, the activity store, the undo
+    service and its routes — is delivered; the user-facing activity log UI is
+    not.
     Phase 1 also absorbed the whole of Agent Learnings Phase 1 — see
     AI-AGENT-LEARNINGS-PLAN.yaml.
 
@@ -49,6 +55,14 @@ overview:
     project_reader: backend/src/services/chatbotReaders/projectReader.ts
     family_member_reader: backend/src/services/chatbotReaders/familyMemberReader.ts
     message_bubble: frontend/src/components/chat/ChatMessageBubble.tsx
+    undo_snapshot: backend/src/services/chatActions/undoSnapshot.ts
+    activity_store: backend/src/services/actionActivityStore.ts
+    undo_service: backend/src/services/actionUndoService.ts
+    activity_routes: backend/src/routes/aiActivity.ts
+    workspace_guard: backend/src/middleware/refuseBusinessWorkspace.ts
+    update_task_action: backend/src/services/chatActions/updateTaskAction.ts
+    complete_task_action: backend/src/services/chatActions/completeTaskAction.ts
+    transaction_actions: backend/src/services/chatActions/transactionMetadataActions.ts
 
   pre_existing_foundation: |
     The platform was not greenfield. What already worked before Phase 0, and
@@ -219,6 +233,67 @@ decisions:
       confident, plausible, wrong dollar figure — the Subaru failure mode.
       BRD §9.4 was corrected in the same change: it had described non-additive
       *line-item* actuals, a mechanism that does not exist in this app.
+
+  - id: D13
+    date: 2026-09-13
+    decision: |
+      SEC-P030 is a `validateSemantics` hook run as its OWN pass in the confirm
+      route — after every row parses, before any row executes.
+    rationale: |
+      REQ-P023 requires all-or-nothing validation across a batch. A check inside
+      `execute` passes its own unit test and still leaves the batch
+      half-applied when row 3 turns out to name a record that does not exist.
+      Mutation-verified: moving the pass into the execute loop breaks six tests,
+      including "applies no row when a LATER row fails to resolve".
+      Kept separate from the parse loop as well, because "is it well-formed" and
+      "does it exist" are different questions and only the second needs data.
+
+  - id: D14
+    date: 2026-09-13
+    decision: |
+      Undo is three functions per action — capture, read, restore — not one.
+    rationale: |
+      Splitting capture from read lets the PLATFORM own change detection: it
+      fingerprints the record after the write and again at undo time, so
+      REQ-P027's skip-don't-clobber rule is implemented once. An action only
+      says how to read and restore its own record, and cannot get the rule
+      subtly wrong. `read` must return the same shape `capture` records, or
+      every undo would look like a modified record and refuse to run.
+
+  - id: D15
+    date: 2026-09-13
+    decision: |
+      An action with no `undo` capability is irreversible, and the activity log
+      says so explicitly rather than hiding the row or offering a dead control.
+    rationale: |
+      submit_github_issue is the standing case: a posted issue cannot be
+      unposted. Every branch where undo is unavailable — no capability, capture
+      failed, record unreadable afterwards — records its own reason at write
+      time, so the user learns it from the log rather than from a click that
+      does nothing.
+
+  - id: D16
+    date: 2026-09-13
+    decision: |
+      Undo and the activity log are NOT capabilities. No tool, no registry
+      entry, no propose_action path.
+    rationale: |
+      Undo restores a value the user already approved changing, so it looks
+      harmless. It is not: an agent-reachable undo is a write primitive outside
+      the proposal mechanism. The model could not choose the value, but it
+      could choose the moment, and "revert the categorisation you just
+      approved" is a mutation nobody consented to.
+
+  - id: D17
+    date: 2026-09-13
+    decision: |
+      refuseBusinessWorkspace moved from routes/chatbot.ts into shared
+      middleware.
+    rationale: |
+      It was local to one router, so the second AI router (activity log and
+      undo) could have been written without it and nothing would have caught
+      the omission. Undo is a write path, which is strictly worse than the read
+      exposure the guard originally closed.
 
 phase_0_correctness:
   status: completed
@@ -558,63 +633,99 @@ phase_2_read_coverage:
         it, which a model reading that tool alone would not follow.
 
 phase_3_confirmed_writes:
-  status: not_started
+  status: in_progress
   description: |
-    The T1 action set per BRD §9. Exit: multi-step plan cards work end to end.
+    The T1 action set per BRD §9. Task and transaction-metadata writes are
+    delivered along with the SEC-P030 semantic-validation machinery; trip,
+    project and financial writes remain.
   tasks:
     - id: "3.1"
-      task: Task write actions — update fields, subtasks, complete
-      status: pending
+      task: Task write actions — update_task, complete_task
+      status: completed
       details: |
-        Complete is T1 and never T2: completion credits the leaderboard, and an
-        unattended completion silently awards points in a shared competitive
-        record. Subtasks must model "both of us" as a parent plus per-person
-        subtasks — assigneeId is deliberately single-valued.
+        update_task re-uses updateTaskSchema exported from routes/tasks.ts
+        (REQ-P011), adding only taskId, which the HTTP route carries in its URL
+        path rather than its body.
+        complete_task is permanently T1 per BRD §9.2 and deliberately narrow: it
+        completes and nothing else. A general set_task_status would be the same
+        tier and no harder to build, but would let a mis-parsed instruction
+        cancel work rather than finish it, and cancellation is what a user is
+        least likely to catch while skimming a card.
+        Re-completing an already-done task is refused: it would append a second
+        transition and re-stamp completedAt, moving the task in the
+        leaderboard's eyes for something that already happened.
 
     - id: "3.2"
-      task: Trip and project write actions — add/move a stop, create a line item
+      task: Trip and project write actions
       status: pending
       details: |
-        Stay-overlap validation runs server-side via tripHelpers.ts, never in
-        the tool.
+        Add/move a stop, create a line item. Stay-overlap validation must run
+        server-side via tripHelpers.ts, never in the tool.
 
     - id: "3.3"
-      task: Transaction write actions — split, hide/unhide, rules, budget amounts
-      status: pending
+      task: Transaction metadata actions — set_transaction_category, set_transaction_description
+      status: completed
       details: |
-        All T1. Auto-categorization rules are forward-acting (one write changes
-        all future categorization) and are never T2. Budget amounts are excluded
-        from T2 by SEC-P003.
+        dataClass 'metadata' — the only class SEC-P003 permits to become T2 —
+        so these are the flagship candidates for Phase 5. Shipped as T1 because
+        REQ-P081 blocks promotion until undo and the activity log exist.
+        Write targets go through getTransactions, which applies excludeRemoved.
+        Plaid leaves replaced pending holds in storage as status:'removed'; they
+        are invisible everywhere in the UI, so editing one is a change the user
+        can never see, find, or undo. Mutation-verified by reading raw storage.
+        Neither action can touch an amount. Splits, manual transactions and
+        budget figures are dataClass 'financial' and permanently outside T2.
 
     - id: "3.4"
-      task: First describeCurrent implementations
+      task: Remaining transaction writes — split, hide/unhide, rules, budget amounts
       status: pending
       details: |
-        SEC-P011's before/after display has no populated implementers yet —
-        both shipped actions are creates. The Phase 3 update actions are the
-        first.
+        All T1, all dataClass 'financial' or 'content'. Auto-categorization
+        rules are forward-acting (one write changes all future categorization)
+        and are never T2.
 
     - id: "3.5"
-      task: Semantic validation at confirm time
-      status: pending
+      task: First describeCurrent implementations (SEC-P011)
+      status: completed
       details: |
-        SEC-P030: resolve every model-supplied identifier against live data —
-        category exists and is not orphaned (stored categoryIds are known to go
-        orphaned in this codebase), assignee is a family member, trip/project
-        belongs to the family, transaction is not removed.
+        The hook had existed since Phase 1 with no production caller, because
+        both shipped actions were creates and had nothing to overwrite.
+        An update shows only the fields it replaces — a before/after row for
+        something that is not changing is noise that makes the changing rows
+        harder to see, which is the legibility failure §5.2 guards against.
+        A currently-blank value renders as "(none)" rather than an empty string:
+        an empty string renders as absence, which reads as "not part of this
+        change" instead of "currently blank".
+        A describeCurrent that throws degrades to no comparison rather than
+        failing the proposal; the semantic pass is what rejects a bad id.
 
     - id: "3.6"
-      task: Answer Q-P03 with a real 40-row card
+      task: Semantic validation at confirm time (SEC-P030)
+      status: completed
+      details: |
+        See D13 for placement. The orphaned-categoryId case is the one the
+        requirement was written for: stored categoryIds in this app are already
+        known to go orphaned, with their own cleanup scripts and a documented
+        cell-vs-modal mismatch.
+        Every guard has a positive control alongside it, so a check cannot
+        degrade into blanket-deny and still pass.
+        Cross-family and bank-removed records are both reported as simply not
+        found; a test fails if a real title or merchant name reaches the error
+        message.
+
+    - id: "3.7"
+      task: Answer Q-P03 with a real bulk card
       status: pending
       details: |
-        Does the 25-row legibility threshold hold on mobile? Unanswerable until
-        a real recategorization card exists to look at.
+        Now ANSWERABLE rather than blocked: set_transaction_category makes a
+        40-row recategorization card real. Requires a human to look at one on a
+        phone, so it is QA rather than code.
 
 phase_4_activity_log_and_undo:
-  status: not_started
+  status: in_progress
   description: |
-    Durable undo handles, user-facing activity log, bulk undo. Exit: every AI
-    write is visible and reversible.
+    Durable undo handles, user-facing activity log, bulk undo. Backend
+    delivered; the UI is outstanding.
 
     This phase gates Phase 5 deliberately — SEC-P001 (one-click reversibility)
     is unenforceable until undo exists, so unattended writes cannot ship before
@@ -622,31 +733,71 @@ phase_4_activity_log_and_undo:
   tasks:
     - id: "4.1"
       task: Durable undo handles recording prior state per affected record
-      status: pending
+      status: completed
       details: |
-        REQ-P025-P027. Undo must be idempotent and degrade safely: a record
-        modified after the batch is skipped and reported, never clobbered.
-        This is also what closes D9's remaining REQ-P023 gap — there is no
-        rollback to perform until prior state is recorded.
+        chatActions/undoSnapshot.ts defines the capability; each action
+        implements capture/read/restore. See D14 and D15.
+        The snapshot holds the FULL prior record rather than a diff: a diff has
+        to be interpreted at restore time against a record that may have moved
+        on, and interpreting it wrong writes a state that never existed.
+        Captured BEFORE execute, while the prior value still exists; a capture
+        failure costs the undo and is recorded honestly rather than blocking a
+        write the user already approved.
+        Undoing a CREATE is the one destructive reversal, and the fingerprint
+        check is doing real work there: deleting a task the household has since
+        filled in is the worst outcome this feature could produce.
 
     - id: "4.2"
-      task: User-facing activity log with bulk undo
-      status: pending
+      task: Activity store and undo service
+      status: completed
       details: |
-        REQ-P037-P039. Shows when, which automation or conversation, what
-        changed (before -> after), and an undo control; supports bulk undo
-        across a batch and a time range. The existing auditLog.ts writes to
-        CloudWatch and is not surfaced in UI — this is where that changes.
-        Supersedes D-14 of the Chat Actions BRD.
+        actionActivityStore.ts — per-family JSON at ai_activity_{familyId},
+        180-day retention applied on write, 2000-entry cap, oldest evicted
+        first. Longer than the 30-day trace window on purpose: a trace answers
+        "why did it do that", asked within days; the log answers "what did it
+        change", asked when someone notices a number looks wrong, which can be
+        a quarter later.
+        Recording never fails the write it records — the change is already
+        applied, so an error there would invite the user to redo done work.
+        actionUndoService.ts owns REQ-P027. Rows unwind in reverse order of
+        application, so a create-then-modify batch leaves no intermediate state.
 
     - id: "4.3"
+      task: Activity and undo HTTP routes
+      status: completed
+      details: |
+        routes/aiActivity.ts, mounted at /api/v1/ai. Separate router from
+        chatbot.ts partly for size but mostly for boundary: nothing here talks
+        to the model, and keeping it out of the file that builds tool surfaces
+        makes it harder to wire one to the other by accident.
+        Behind the same refuseBusinessWorkspace guard (D17).
+        `before` values are stripped from the list response: the log shows what
+        a row did, and the prior value is an implementation detail of undo.
+
+    - id: "4.4"
+      task: User-facing activity log UI
+      status: pending
+      details: |
+        REQ-P037's surface, plus REQ-P026's inline undo for recent batches.
+        Deferred to a separate change so it can be spot-checked before landing.
+
+    - id: "4.5"
+      task: Mark unattended writes wherever the record is displayed
+      status: pending
+      details: |
+        REQ-P039. Nothing to mark until a T2 automation exists, so this lands
+        with Phase 5 rather than here.
+
+    - id: "4.6"
       task: Persist the proposal store
       status: pending
       details: |
-        REQ-P028 / TD-030. The in-memory Map is acceptable for
+        REQ-P028 / REQ-P082 / TD-030. The in-memory Map is acceptable for
         conversation-scoped cards on a single PM2 process; it is not acceptable
         for a queue a background agent writes to and a human reviews hours
-        later. Must land before Phase 5.
+        later. Must land before Phase 5/6. Note that issueProposal and
+        consumeProposal are synchronous today, so this is a sync-to-async change
+        across the confirm route and the chat loop, not a storage swap.
 
 phase_5_unattended_tier:
   status: not_started
