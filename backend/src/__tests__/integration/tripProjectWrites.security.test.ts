@@ -304,7 +304,7 @@ describe('move_trip_stop — overlap is caught before anything is written', () =
   });
 });
 
-describe('add_project_line_item — estimates only, into budgets that exist', () => {
+describe('add_project_line_item — project-level estimates with unique tags', () => {
   async function seedProject(user: { userId: string; familyId: string }, budgeted: boolean) {
     await dataService.saveCategories(
       [{
@@ -334,50 +334,76 @@ describe('add_project_line_item — estimates only, into budgets that exist', ()
     return { project, category };
   }
 
-  it('refuses a category the project does not budget, and does not pick an amount', async () => {
+  // PROJECTS-BRD v2.0 §5.5.2 moved line items off category budgets and onto the
+  // project. The old "refuses a category the project does not budget" case
+  // guarded an attachment point that no longer exists; the refusal it was really
+  // protecting — the action declines rather than inventing where an estimate
+  // belongs — is now the duplicate-tag case below.
+
+  it('refuses a tag the project already uses, and writes nothing', async () => {
     const user = await createUser('proj');
-    const { project, category } = await seedProject(user, false);
+    const { project } = await seedProject(user, true);
+    await projectService.updateProject(
+      project.id,
+      { lineItems: [{ id: 'li-existing', name: 'Cabinet boxes', estimatedCost: 3000, tag: 'cabinets' }] },
+      user.familyId,
+      user.userId,
+    );
 
     const rows = [
       row(0, 'add_project_line_item', {
         projectId: project.id,
-        categoryId: category.id,
-        name: 'Cabinets',
+        name: 'Cabinet doors',
         estimatedCost: 4200,
+        tag: 'Cabinets',
       }),
     ];
     const proposal = await issuePlan(user, rows);
 
     const res = await confirm(user.token, proposal.proposalId, rows).expect(400);
-    expect(res.body.error).toMatch(/no budget for/i);
+    // Normalization happens before the clash check, so a case variant is caught.
+    expect(res.body.error).toMatch(/already has a line item tagged/i);
 
     const after = await projectService.getProject(project.id, user.familyId);
-    expect(after?.categoryBudgets).toHaveLength(0);
-    expect(after?.totalBudget).toBeNull();
+    expect(after?.lineItems).toHaveLength(1);
+    expect(after?.lineItems[0].id).toBe('li-existing');
   });
 
-  it('adds a line item to a budgeted category and leaves the amount alone', async () => {
+  it('refuses the reserved project: tag prefix', async () => {
+    const def = getChatAction('add_project_line_item');
+    const parsed = def!.paramsSchema.safeParse({
+      projectId: 'p1', name: 'Cabinets', estimatedCost: 4200, tag: 'project:kitchen',
+    });
+    expect(parsed.success).toBe(false);
+  });
+
+  it('adds a project-level line item and leaves every budget amount alone', async () => {
     const user = await createUser('proj');
     const { project, category } = await seedProject(user, true);
 
     const rows = [
       row(0, 'add_project_line_item', {
         projectId: project.id,
-        categoryId: category.id,
         name: 'Cabinets',
         estimatedCost: 4200,
+        tag: 'Cabinets',
       }),
     ];
     const proposal = await issuePlan(user, rows);
     await confirm(user.token, proposal.proposalId, rows).expect(200);
 
     const after = await projectService.getProject(project.id, user.familyId);
+    expect(after?.lineItems).toHaveLength(1);
+    // Stored normalized, so it matches lowercase transaction tags.
+    expect(after?.lineItems[0]).toMatchObject({
+      name: 'Cabinets', estimatedCost: 4200, tag: 'cabinets',
+    });
+    // The estimating axis must not perturb the budgeting axis (§5.5.2).
     const budget = after!.categoryBudgets.find(cb => cb.categoryId === category.id);
-    expect(budget?.lineItems).toHaveLength(1);
-    expect(budget?.lineItems?.[0]).toMatchObject({ name: 'Cabinets', estimatedCost: 4200 });
-    // The line item is an estimate UNDER the budget, not a change to it.
     expect(budget?.amount).toBe(50000);
     expect(after?.totalBudget).toBe(50000);
+    // And it never writes to a transaction — matching is derived at read time.
+    expect(after?.lineItems[0]).not.toHaveProperty('transactionIds');
   });
 
   it('assigns the line item id server-side rather than taking one from the model', async () => {
@@ -386,9 +412,9 @@ describe('add_project_line_item — estimates only, into budgets that exist', ()
     const def = getChatAction('add_project_line_item');
     const parsed = def!.paramsSchema.safeParse({
       projectId: 'p1',
-      categoryId: 'c1',
       name: 'Cabinets',
       estimatedCost: 4200,
+      tag: 'cabinets',
       id: randomUUID(),
     });
     expect(parsed.success).toBe(true);
@@ -398,22 +424,22 @@ describe('add_project_line_item — estimates only, into budgets that exist', ()
 
   it('calls the change an estimate everywhere the user will read it back', async () => {
     const user = await createUser('proj');
-    const { project, category } = await seedProject(user, true);
+    const { project } = await seedProject(user, true);
 
     const rows = [
       row(0, 'add_project_line_item', {
         projectId: project.id,
-        categoryId: category.id,
         name: 'Cabinets',
         estimatedCost: 4200,
+        tag: 'cabinets',
       }),
     ];
     const proposal = await issuePlan(user, rows);
     const res = await confirm(user.token, proposal.proposalId, rows).expect(200);
 
-    // The activity log shows resource.label. This app never reconciles a line
-    // item against a transaction, so a label reading "Cabinets $4,200" would be
-    // read as money spent.
+    // The activity log shows resource.label. The figure written is an ESTIMATE;
+    // a label reading "Cabinets $4,200" would be read as money spent. (An actual
+    // exists now, but it is derived from tags, never from this number.)
     expect(res.body.resource.label).toMatch(/estimate/i);
   });
 });

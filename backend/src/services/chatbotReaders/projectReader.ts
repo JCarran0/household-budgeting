@@ -19,16 +19,25 @@
  * per-category breakdown IS additive and does reconcile to `totalSpent`, so
  * that total is safe to state.
  *
- * LINE ITEMS ARE ESTIMATES, NOT ACTUALS:
- * PROJECTS-BRD §5.5.5 puts "linking a line item to an actual transaction" out
- * of scope — line items carry `estimatedCost` and nothing else. A tool that
- * implied a line item had been "spent" would invent a reconciliation the app
- * does not perform, so `estimatedCost` is labelled as an estimate in the
- * payload and never compared to actuals here.
+ * LINE ITEMS DO HAVE ACTUALS NOW — AND THEY ARE NOT ADDITIVE EITHER:
+ * This file was written when PROJECTS-BRD put "linking a line item to an actual
+ * transaction" out of scope. BRD v2.0 (§5.5) reverses that: line items are
+ * project-level, carry a `tag`, and their `actual` is derived from the project's
+ * transactions carrying that tag.
+ *
+ * The derivation is deliberately naive (§5.5.5): a transaction carrying two line
+ * item tags counts its FULL amount toward BOTH. So `lineItems[].actual` repeats
+ * the same landmine as cross-project totals one level down — the column MUST NOT
+ * be summed, and it does NOT reconcile to `totalSpent`. `unattributedSpent` is
+ * the honest coverage signal and is emitted alongside it for that reason.
  */
 
 import type { StoredProject, Category, ProjectLineItem } from '../../shared/types';
 import { getActiveTransactions } from '../transactionReader';
+import {
+  computeLineItemSpending,
+  type LineItemSpendingResult,
+} from '../../shared/utils/projectHelpers';
 
 export interface ProjectDataReader {
   getData<T>(key: string): Promise<T | null>;
@@ -40,13 +49,24 @@ interface StoredTransactionLike {
   amount: number;
   tags: string[];
   categoryId: string | null;
+  isHidden: boolean;
 }
 
 export interface ProjectLineItemForTool {
   id: string;
   name: string;
-  /** An ESTIMATE. This app never reconciles line items against transactions. */
   estimatedCost: number;
+  /** Tag matched against this project's transactions to derive `actual`. */
+  tag: string;
+  /**
+   * Spend on project transactions carrying `tag` (PROJECTS-BRD §5.5.5).
+   *
+   * NOT additive across line items: a transaction carrying two line item tags
+   * counts fully toward both, so summing this column can exceed totalSpent.
+   * Use `unattributedSpent` to reason about coverage instead.
+   */
+  actual: number;
+  matchCount: number;
   notes: string | null;
 }
 
@@ -56,7 +76,6 @@ export interface ProjectCategorySpendForTool {
   budgeted: number | null;
   hasBudget: boolean;
   spent: number;
-  lineItems: ProjectLineItemForTool[];
 }
 
 export interface ProjectSummaryForTool {
@@ -73,6 +92,14 @@ export interface ProjectSummaryForTool {
   totalSpent: number;
   transactionCount: number;
   categories: ProjectCategorySpendForTool[];
+  /**
+   * Project-level estimates (PROJECTS-BRD §5.5.2). Siblings of `categories`,
+   * not nested inside them — the budgeting axis and the estimating axis are
+   * independent lenses on the same transactions.
+   */
+  lineItems: ProjectLineItemForTool[];
+  /** Project spend carrying NONE of the line item tags above (§5.5.6). */
+  unattributedSpent: number;
   /** See the module docblock. Always true; stated so the model is told, not trusted. */
   crossProjectTotalsAreNotAdditive: true;
   /** PROJECTS-BRD §6 — tagged transactions count regardless of date. */
@@ -96,11 +123,18 @@ function projectStatus(startDate: string, endDate: string, today: string): 'plan
   return 'active';
 }
 
-function toLineItems(items: ProjectLineItem[] | undefined): ProjectLineItemForTool[] {
+function toLineItems(
+  items: ProjectLineItem[] | undefined,
+  spending: LineItemSpendingResult[],
+): ProjectLineItemForTool[] {
+  const byId = new Map(spending.map(row => [row.lineItemId, row]));
   return (items ?? []).map(li => ({
     id: li.id,
     name: li.name,
     estimatedCost: li.estimatedCost,
+    tag: li.tag,
+    actual: byId.get(li.id)?.actual ?? 0,
+    matchCount: byId.get(li.id)?.matchCount ?? 0,
     notes: li.notes ?? null,
   }));
 }
@@ -119,7 +153,11 @@ export class ChatbotProjectReader {
   ): Promise<ProjectSummaryForTool> {
     // SEC-P031: removed transactions never reach an AI read path.
     const txns = await getActiveTransactions<StoredTransactionLike>(this.dataService, familyId);
-    const tagged = txns.filter(t => t.tags.includes(project.tag));
+    // Hidden transactions are excluded from project totals everywhere else
+    // (PROJECTS-BRD §5.6). Without this the assistant reports a different total
+    // than the Projects page for the same project — and split parents, which
+    // are hidden on split, would be counted alongside their children.
+    const tagged = txns.filter(t => t.tags.includes(project.tag) && !t.isHidden);
 
     const spentByCategory = new Map<string, number>();
     let totalSpent = 0;
@@ -145,7 +183,6 @@ export class ChatbotProjectReader {
           budgeted: null,
           hasBudget: false,
           spent: spentByCategory.get(categoryId) ?? 0,
-          lineItems: [],
         });
         continue;
       }
@@ -158,11 +195,16 @@ export class ChatbotProjectReader {
         budgeted: budget ? budget.amount : null,
         hasBudget: budget !== undefined,
         spent: spentByCategory.get(categoryId) ?? 0,
-        lineItems: toLineItems(budget?.lineItems),
       });
     }
 
     categoryRows.sort((a, b) => b.spent - a.spent);
+
+    const projectLineItems = project.lineItems ?? [];
+    const { lineItemSpending, unattributedSpent } = computeLineItemSpending(
+      projectLineItems,
+      tagged,
+    );
 
     return {
       id: project.id,
@@ -177,6 +219,8 @@ export class ChatbotProjectReader {
       totalSpent,
       transactionCount: tagged.length,
       categories: categoryRows,
+      lineItems: toLineItems(projectLineItems, lineItemSpending),
+      unattributedSpent,
       crossProjectTotalsAreNotAdditive: true,
       includesTransactionsOutsideDateRange: true,
     };

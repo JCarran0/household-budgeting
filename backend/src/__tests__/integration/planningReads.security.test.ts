@@ -53,7 +53,10 @@ function task(over: Partial<StoredTask> & { id: string; title: string }): Stored
   } as StoredTask;
 }
 
-function txn(over: { id: string; amount: number; tags: string[]; status?: string; categoryId?: string | null }) {
+function txn(over: {
+  id: string; amount: number; tags: string[]; status?: string;
+  categoryId?: string | null; isHidden?: boolean;
+}) {
   return {
     id: over.id,
     accountId: 'acct-1',
@@ -65,7 +68,7 @@ function txn(over: { id: string; amount: number; tags: string[]; status?: string
     tags: over.tags,
     status: over.status ?? 'posted',
     pending: false,
-    isHidden: false,
+    isHidden: over.isHidden ?? false,
   };
 }
 
@@ -280,13 +283,15 @@ describe('planning reads — family scoping, SEC-P031/P032/P033', () => {
     });
   });
 
-  describe('projects — tag overlap and estimate-only line items', () => {
+  describe('projects — tag overlap and tag-derived line item actuals', () => {
     const project: StoredProject = {
       id: 'proj-1', name: 'Kitchen Remodel', tag: 'proj-kitchen',
       startDate: '2026-04-01', endDate: '2026-08-01',
       totalBudget: 20000, notes: '',
-      categoryBudgets: [
-        { categoryId: 'HOME', amount: 15000, lineItems: [{ id: 'li1', name: 'Countertops', estimatedCost: 4000 }] },
+      categoryBudgets: [{ categoryId: 'HOME', amount: 15000 }],
+      lineItems: [
+        { id: 'li1', name: 'Countertops', estimatedCost: 4000, tag: 'countertops' },
+        { id: 'li2', name: 'Sheetrock', estimatedCost: 1200, tag: 'sheetrock' },
       ],
       userId: 'u1', createdAt: '', updatedAt: '',
     };
@@ -348,15 +353,69 @@ describe('planning reads — family scoping, SEC-P031/P032/P033', () => {
       expect(row?.categoryName).not.toBe('GONE');
     });
 
-    it('keeps line items labelled as estimates and never as spend', async () => {
+    // PROJECTS-BRD v2.0 §5.5 reverses the old "estimates, full stop" contract:
+    // line items are project-level and DO carry a tag-derived actual. The tests
+    // below pin the invariants that replaced it.
+
+    it('reports line items at the project level, not nested under a category', async () => {
       const { projects } = await chatbot.projects.listProjects(FAMILY_ID);
-      const home = projects[0].categories.find(c => c.categoryId === 'HOME');
-      expect(home?.lineItems).toEqual([
-        { id: 'li1', name: 'Countertops', estimatedCost: 4000, notes: null },
+      expect(projects[0].lineItems.map(li => li.id)).toEqual(['li1', 'li2']);
+      // The two axes are siblings (§5.5.2). A category row carrying line items
+      // would re-nest the estimating axis inside the budgeting one.
+      for (const row of projects[0].categories) {
+        expect(row).not.toHaveProperty('lineItems');
+      }
+    });
+
+    it('derives a line item actual from the line item tag, not from the category', async () => {
+      await dataService.saveData(`transactions_${FAMILY_ID}`, [
+        txn({ id: 'a', amount: 300, tags: ['proj-kitchen', 'countertops'] }),
+        txn({ id: 'b', amount: 50, tags: ['proj-kitchen'] }),
+        // Carries the line item tag but NOT the project tag — must not count.
+        txn({ id: 'c', amount: 999, tags: ['countertops'] }),
       ]);
-      // If a `spent` ever appears on a line item, this app has started a
-      // reconciliation PROJECTS-BRD §5.5.5 says it does not do.
-      expect(home?.lineItems[0]).not.toHaveProperty('spent');
+      const { projects } = await chatbot.projects.listProjects(FAMILY_ID);
+      const counters = projects[0].lineItems.find(li => li.id === 'li1');
+      expect(counters?.actual).toBe(300);
+      expect(counters?.matchCount).toBe(1);
+      expect(projects[0].lineItems.find(li => li.id === 'li2')?.actual).toBe(0);
+      expect(projects[0].totalSpent).toBe(350);
+    });
+
+    it('counts a multi-tagged transaction fully toward every line item it matches', async () => {
+      // The §5.5.5 landmine one level below the cross-project one: $200 shows as
+      // $200 on BOTH items. 200 + 200 > totalSpent, and that is correct-by-design.
+      await dataService.saveData(`transactions_${FAMILY_ID}`, [
+        txn({ id: 'both', amount: 200, tags: ['proj-kitchen', 'countertops', 'sheetrock'] }),
+      ]);
+      const { projects } = await chatbot.projects.listProjects(FAMILY_ID);
+      const sum = projects[0].lineItems.reduce((acc, li) => acc + li.actual, 0);
+      expect(sum).toBe(400);
+      expect(projects[0].totalSpent).toBe(200);
+      expect(sum).toBeGreaterThan(projects[0].totalSpent);
+      expect(projects[0].unattributedSpent).toBe(0);
+    });
+
+    it('reports project spend matching no line item tag as unattributed', async () => {
+      await dataService.saveData(`transactions_${FAMILY_ID}`, [
+        txn({ id: 'a', amount: 300, tags: ['proj-kitchen', 'countertops'] }),
+        txn({ id: 'b', amount: 75, tags: ['proj-kitchen', 'permit-fees'] }),
+      ]);
+      const { projects } = await chatbot.projects.listProjects(FAMILY_ID);
+      expect(projects[0].unattributedSpent).toBe(75);
+    });
+
+    it('excludes hidden transactions from project and line item totals', async () => {
+      // PROJECTS-BRD §5.6 — hidden means hidden everywhere. A split parent is
+      // hidden on split, so counting it would double its children.
+      await dataService.saveData(`transactions_${FAMILY_ID}`, [
+        txn({ id: 'parent', amount: 412, tags: ['proj-kitchen', 'countertops'], isHidden: true }),
+        txn({ id: 'child', amount: 412, tags: ['proj-kitchen', 'countertops'] }),
+      ]);
+      const { projects } = await chatbot.projects.listProjects(FAMILY_ID);
+      expect(projects[0].totalSpent).toBe(412);
+      expect(projects[0].transactionCount).toBe(1);
+      expect(projects[0].lineItems.find(li => li.id === 'li1')?.actual).toBe(412);
     });
 
     it('separates "no such project" from "project with no spending"', async () => {
