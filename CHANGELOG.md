@@ -5,6 +5,68 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.0.0](https://github.com/JCarran0/household-budgeting/compare/v6.7.0...v7.0.0) (2026-09-14)
+
+
+### ⚠ BREAKING CHANGES
+
+* **projects:** line items move from ProjectCategoryBudget.lineItems[] to
+Project.lineItems[] and gain a required `tag`. Run
+backend/scripts/migrateProjectLineItems.ts (supports --dry-run) before
+deploying; it is idempotent and preserves ids. Tags are seeded from item
+names, so review the ones it flags as too long to type.
+
+Line items deliberately have no categoryId. The two axes do not nest — a
+sheetrock purchase may be categorized Home Improvement while the drill
+from the same store run is Shops > Hardware. Declaring a category on the
+estimate would assert a relationship the transactions are free to
+contradict; where a category rollup is wanted it must come from the
+matched transactions' own categories.
+
+Matching is deliberately naive: a transaction carrying two line item tags
+counts fully toward both. No apportioning, no double-count detection. The
+consequence is that per-item actuals may overlap, so the table never
+prints a column total — it shows Unattributed instead, which is
+well-defined: project spend carrying none of the project's line item tags.
+
+Also fixes the project half of the hidden-transaction bug (getProjectSummary
+passed includeHidden: true) and the allocation hint now compares estimates
+against totalBudget rather than a single category's amount.
+
+Supporting changes this needed:
+  - GET /transactions/tags — a real distinct-tags endpoint. The autocomplete
+    was faked from the first 1000 transactions, which silently dropped tags
+    on older rows; a missing suggestion invites the typo that orphans spend.
+  - tagsMatchAll on the transaction filter. Drill-down needs project tag AND
+    item tag; the filter was OR-only, so both tags returned the union.
+  - ignoreCategoryFilter on TransactionPreviewModal — line items span
+    categories, and categoryId: null already meant "uncategorized only".
+
+Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01VGjMHUbYhMHQB68LPhC2cc
+
+### Features
+
+* **chat:** teach the AI platform the project-level line item model ([2e224dd](https://github.com/JCarran0/household-budgeting/commit/2e224ddb4e6a24824630edfc70f263999b6d2880))
+* **projects:** match line items to transactions by tag ([001635b](https://github.com/JCarran0/household-budgeting/commit/001635b1ad8bb3c02e0391c61505e28e90d86eef))
+
+
+### Bug Fixes
+
+* **transactions:** inherit parent tags on split children ([4edfabd](https://github.com/JCarran0/household-budgeting/commit/4edfabdb0e065321d122dac9d903aae34fc1b3c0))
+* **transactions:** serve tag autocomplete from the server everywhere ([60c6513](https://github.com/JCarran0/household-budgeting/commit/60c6513a0a4d084e7bce45d14dae7bb69fb9688c))
+* **trips:** exclude hidden transactions from trip summaries ([8c0ba40](https://github.com/JCarran0/household-budgeting/commit/8c0ba40049624094b766e019dd63882da751669c))
+
+
+### Tests
+
+* **projects:** cover hidden-transaction exclusion and tag attribution ([f3f8deb](https://github.com/JCarran0/household-budgeting/commit/f3f8deb79a4c442f03ec34bbbe55f035ee8608ce))
+
+
+### Documentation
+
+* **projects:** record why line item tag renames are not propagated ([6495cf5](https://github.com/JCarran0/household-budgeting/commit/6495cf56ef196321c4406fb359699cd0a4a7ed2e))
+
 ## [6.7.0](https://github.com/JCarran0/household-budgeting/compare/v6.6.2...v6.7.0) (2026-09-14)
 
 
