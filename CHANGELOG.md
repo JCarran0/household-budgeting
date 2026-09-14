@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+### [6.6.1](https://github.com/JCarran0/household-budgeting/compare/v6.6.0...v6.6.1) (2026-09-14)
+
+
+### Bug Fixes
+
+* **ci:** run the frontend gate when shared/ changes ([423fb4b](https://github.com/JCarran0/household-budgeting/commit/423fb4b5d6efde8ddf58590cb1bc2cec3b891e2e))
+
 ## [6.6.0](https://github.com/JCarran0/household-budgeting/compare/v6.5.0...v6.6.0) (2026-09-14)
 
 
