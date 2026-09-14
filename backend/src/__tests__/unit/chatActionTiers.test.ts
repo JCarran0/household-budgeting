@@ -160,10 +160,13 @@ describe('the shipped action set (REQ-P015)', () => {
       'add_project_line_item',
       'add_trip_stop',
       'complete_task',
+      'create_auto_categorize_rule',
       'create_task',
       'move_trip_stop',
+      'set_budget_amount',
       'set_transaction_category',
       'set_transaction_description',
+      'set_transaction_hidden',
       'submit_github_issue',
       'update_task',
     ]);
@@ -183,6 +186,13 @@ describe('the shipped action set (REQ-P015)', () => {
     // data, not the consequence, so 'financial' — which is what permanently
     // excludes it from T2 even though nothing here moves real money.
     expect(getChatAction('add_project_line_item')).toMatchObject({ tier: 'T1', dataClass: 'financial' });
+    // Financial by §9.1's own reasoning, each for a different reason: hiding
+    // changes reported totals, budget amounts are named in SEC-P003's exclusion
+    // list outright, and a rule is forward-acting. Same consequence — none can
+    // ever be promoted.
+    expect(getChatAction('set_transaction_hidden')).toMatchObject({ tier: 'T1', dataClass: 'financial' });
+    expect(getChatAction('set_budget_amount')).toMatchObject({ tier: 'T1', dataClass: 'financial' });
+    expect(getChatAction('create_auto_categorize_rule')).toMatchObject({ tier: 'T1', dataClass: 'financial' });
     // Leaves the system entirely — permanently ineligible for T2.
     expect(getChatAction('submit_github_issue')).toMatchObject({ tier: 'T1', dataClass: 'external' });
   });

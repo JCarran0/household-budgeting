@@ -716,11 +716,53 @@ phase_3_confirmed_writes:
 
     - id: "3.4"
       task: Remaining transaction writes — split, hide/unhide, rules, budget amounts
-      status: pending
+      status: completed_with_one_deliberate_exclusion
       details: |
-        All T1, all dataClass 'financial' or 'content'. Auto-categorization
-        rules are forward-acting (one write changes all future categorization)
-        and are never T2.
+        Three shipped in chatActions/financialWriteActions.ts, all T1, all
+        dataClass 'financial' — set_transaction_hidden, set_budget_amount,
+        create_auto_categorize_rule. Each is financial for a different reason
+        (hiding changes reported totals in BvA; budget amounts are named in
+        SEC-P003's exclusion list outright; a rule is forward-acting), and the
+        consequence is the same: none can ever reach T2.
+
+        SPLIT IS DELIBERATELY NOT SHIPPED. BRD §9.1 lists it as T1, "not cleanly
+        reversible in one click" — which understates it. This app has NO
+        unsplit: not in transactionService, not in the UI, nowhere. A split
+        creates N children and hides the parent, and nothing in the product puts
+        that back. Handing the model a write primitive that neither undo nor the
+        user can reverse inverts SEC-P001 rather than bending it. Splitting
+        becomes available to the assistant when the app itself can unsplit, and
+        not before. A test asserts its ABSENCE from the registry, so shipping it
+        has to be a decision rather than an omission.
+
+        THE GUARD THAT MATTERS MOST: a split PARENT is not a visibility target
+        in either direction. splitTransaction hides the parent on purpose so its
+        children count in its place; unhiding it double-counts the money —
+        silently, plausibly, and showing up as a wrong total rather than as an
+        error.
+
+        set_budget_amount's undo REMOVES a budget it created rather than zeroing
+        it: "not budgeted" and "budgeted at $0" are different facts that BvA
+        renders differently. `notes` is omitted from the params entirely,
+        preserving budgetService's existing protection that an amount-only edit
+        cannot clobber a saved note.
+        create_auto_categorize_rule resolves categoryName server-side (a
+        model-supplied one would mislabel every future match) and its activity
+        label says "from now on", because creating a rule recategorizes nothing
+        that already exists.
+
+        11 tests in financialWrites.security.test.ts; the three load-bearing
+        guards mutation-verified.
+
+        FOUND WHILE BUILDING THIS — TD-031. Importing a Zod schema from its
+        route module to satisfy REQ-P011 closes a
+        services -> chatActions -> routes -> services cycle, and the schema then
+        resolves to undefined at module-eval time: the route starts 400-ing
+        every valid request, with a TypeError downstream naming nothing about
+        the cycle. It took out 29 auto-categorization tests at once. Fixed by
+        moving the rule and budget schemas to validators/, which both sides
+        import. The task and transaction schemas are still imported route-side
+        and work only by import order.
 
     - id: "3.5"
       task: First describeCurrent implementations (SEC-P011)

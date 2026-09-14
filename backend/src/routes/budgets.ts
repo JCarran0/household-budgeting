@@ -1,5 +1,6 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
+import { createBudgetSchema, batchUpdateBudgetsSchema } from '../validators/budgetValidators';
 import { budgetService } from '../services';
 import { authMiddleware } from '../middleware/authMiddleware';
 import { AuthorizationError } from '../errors';
@@ -7,16 +8,8 @@ import { AuthorizationError } from '../errors';
 const router = Router();
 
 // Validation schemas
-const createBudgetSchema = z.object({
-  categoryId: z.string().min(1),
-  month: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/, 'Invalid month format. Use YYYY-MM'),
-  amount: z.number().min(0, 'Budget amount must not be negative'),
-  notes: z.string().max(1000, 'Notes must be 1000 characters or fewer').optional()
-});
-
-const batchUpdateBudgetsSchema = z.object({
-  updates: z.array(createBudgetSchema)
-});
+// Validation schemas live in validators/budgetValidators.ts so chat actions can
+// re-use them without importing this route module (REQ-P011).
 
 // All routes require authentication
 router.use(authMiddleware);

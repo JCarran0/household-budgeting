@@ -86,6 +86,23 @@ That is the weaker half of an otherwise careful design. The store is correctly u
 
 ---
 
+### TD-031: Route-Owned Zod Schemas Are Imported by Chat Actions
+**Status**: Open — partially mitigated
+**Created**: 2026-09-13
+**Impact**: High when it fires, and it fires silently
+**Effort**: Low
+
+**Problem**:
+REQ-P011 says a chat action re-uses the Zod schema its HTTP route parses, so tightening validation in one place tightens both. The obvious implementation imports the schema *from the route module* — and that closes a cycle: `services/index -> chatActions/index -> routes/X -> services/index`.
+
+The failure is not a warning. The schema resolves to `undefined` at module-eval time, `schema.parse(req.body)` throws, and **every request to that route starts returning 400** — surfacing as `TypeError: Cannot read properties of undefined` somewhere downstream, naming nothing about the cycle. Observed 2026-09-13: exporting `createRuleSchema` from `routes/autoCategorize.ts` for `create_auto_categorize_rule` took out 29 auto-categorization tests at once.
+
+**Fix**: move the schema to `backend/src/validators/` and have BOTH the route and the action import it. Done for the rule and budget schemas (`ruleValidators.ts`, `budgetValidators.ts`), following the `stopValidators.ts` precedent.
+
+**Still outstanding**: `updateTaskSchema` in `routes/tasks.ts` and `updateCategorySchema` / `updateDescriptionSchema` in `routes/transactions.ts` are still imported route-side by `updateTaskAction` and `transactionMetadataActions`. They work today only because the import order happens to resolve them in time. That is not a property anyone is maintaining deliberately, and the next action added to either route could flip it — with the whole tasks or transactions route going 400 as the symptom.
+
+---
+
 ### TD-030: Proposal Store Is In-Memory and Single-Process
 **Status**: Open — blocks Phase 5 of the capability platform
 **Created**: 2026-09-13

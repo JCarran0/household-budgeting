@@ -789,6 +789,9 @@ export type ChatActionId =
   | 'add_trip_stop'
   | 'move_trip_stop'
   | 'add_project_line_item'
+  | 'set_transaction_hidden'
+  | 'set_budget_amount'
+  | 'create_auto_categorize_rule'
   | 'submit_github_issue';
 
 /** Drives card field rendering */
@@ -878,7 +881,14 @@ export interface ActionConfirmRequest {
 }
 
 export interface ActionResource {
-  type: 'task' | 'github_issue' | 'transaction' | 'trip_stop' | 'project';
+  type:
+    | 'task'
+    | 'github_issue'
+    | 'transaction'
+    | 'trip_stop'
+    | 'project'
+    | 'budget'
+    | 'auto_categorize_rule';
   id: string;
   url?: string;                 // Frontend-resolvable deep link (or external for github_issue)
   label: string;                // Human-readable name of the resource
