@@ -32,6 +32,7 @@ import { Mutex } from 'async-mutex';
 import { createHash, randomUUID } from 'crypto';
 import type { DataService } from './dataService';
 import { childLogger } from '../utils/logger';
+import { redactSecretsInText } from '../utils/redaction';
 
 const log = childLogger('agentLearningsStore');
 
@@ -204,8 +205,11 @@ export class AgentLearningsStore {
         status: 'open',
         source: 'agent',
         capabilityKey: input.capabilityKey,
-        title: input.title.slice(0, MAX_TITLE_LEN),
-        detail: input.detail.slice(0, MAX_DETAIL_LEN),
+        // SEC-L004 (TD-029). Redact BEFORE truncating: slicing first can cut a
+        // token in half and leave a fragment that no longer matches a pattern
+        // but is still a fragment of a credential.
+        title: redactSecretsInText(input.title).slice(0, MAX_TITLE_LEN),
+        detail: redactSecretsInText(input.detail).slice(0, MAX_DETAIL_LEN),
         userNote: null,
         fingerprint,
         occurrenceCount: 1,

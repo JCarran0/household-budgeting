@@ -278,4 +278,9 @@ open_questions:
       records params.
 
 deferred_and_tracked_elsewhere:
-  - TD-029 — learnings have no redaction pass (relates to SEC-L004)
+  - TD-029 — RESOLVED 2026-09-13. utils/redaction.ts matches credential SHAPES
+    (Plaid prefixes, Anthropic keys, JWTs, 64-char hex, inline password: x) and
+    runs over title/detail before truncation. The debt entry's original fix —
+    reuse redactSensitive — would have done nothing: it matches key NAMES, and
+    free text has no keys. Attachment text and financial content still rest on
+    the prompt rule and human review, which redaction.ts states outright.

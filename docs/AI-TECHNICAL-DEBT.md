@@ -70,7 +70,7 @@ Production data is JSON blobs in S3, not a database. `cd backend && npm run back
 Bump `**Last Updated**`, add an `## Audits` line for anything incident-driven, and record *what was deliberately not done and why* — several entries below are more useful for their rejected options than their accepted ones.
 
 ### TD-029: Learnings Have No Redaction Pass; SEC-L004 Rests on Prompt Text Alone
-**Status**: Open
+**Status**: **Resolved 2026-09-13**
 **Created**: 2026-09-13
 **Impact**: Medium — a maintainer-facing store of model-authored text with no mechanical filter
 **Effort**: Low
@@ -80,9 +80,17 @@ Bump `**Last Updated**`, add an `## Audits` line for anything incident-driven, a
 
 That is the weaker half of an otherwise careful design. The store is correctly unreadable by any tool (SEC-L006, D-L03), so this is not an injection-persistence hole. The exposure is the human: `/evaluate-learnings` will one day present 4 KB of attacker-influenced text to a maintainer who may paste it into an agent.
 
-**Fix**: run the same `redactSensitive()` pass over `title`/`detail` on write. The function already exists and is already tested; this is wiring, not new machinery.
+**Fix as originally written — and why it was wrong**: "run the same `redactSensitive()` pass over `title`/`detail`". That would have done nothing. `redactSensitive` matches on KEY NAMES: it turns `{ accessToken: '...' }` into `{ accessToken: '[redacted]' }`. A learning's `title` and `detail` are free text with no keys, so the pass runs over them and returns them unchanged. Wiring the existing function in would have closed the ticket and left the gap exactly where it was.
 
-**Deliberately not done**: filtering for *financial* content specifically. "Never mention a dollar amount" is not mechanically checkable without false positives that would gut the usefulness of a detail field, and the prompt rule plus the human review step is a reasonable place to stop for a two-user app.
+**Resolution**: a new `utils/redaction.ts` matches on VALUE SHAPE instead — Plaid tokens by their unambiguous prefix, Anthropic keys, JWTs, 64-char hex (the `ENCRYPTION_KEY`'s shape), and inline `password: x` in prose. Applied to `title` and `detail` BEFORE truncation, since slicing first can cut a token in half and leave a fragment that no longer matches a pattern but is still a fragment of a credential.
+
+The 64-hex pattern also matches a sha256 digest, and this app computes those for undo fingerprints. Redacting one costs a diagnostic detail; failing to redact the encryption key costs every Plaid token in the system.
+
+**Also closed here, same class of gap**: `redactSensitive` was returning string leaves untouched, so a credential arriving as a VALUE under an innocent key — `{ note: 'use access-production-abc123' }` — was stored verbatim in traces. String leaves now go through the text pass.
+
+**Deliberately not done**: filtering for *financial* content, or for attachment text. Neither has a shape. "Never mention a dollar amount" is not mechanically checkable without false positives that would gut the usefulness of a detail field, and the prompt rule plus the human review step is a reasonable place to stop for a two-user app. `utils/redaction.ts` says so in its own docblock rather than implying the filter is complete.
+
+Twelve tests on the redactor, half of them asserting what it leaves ALONE — a redactor that eats ordinary prose gets ignored by the maintainer it was written for.
 
 ---
 

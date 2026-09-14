@@ -61,6 +61,7 @@ Family-scale app for 2 users: personal budgeting (with Plaid), shared tasks, tri
 - `backend/src/services/chatActions/undoSnapshot.ts` + `actionUndoService.ts` — REQ-P027. Undo must SKIP a record a human edited after the AI touched it, never clobber it. The fingerprint check lives in the service so no action can implement the rule subtly wrong; undoing a create is the one destructive reversal and that check is what stops it deleting a task somebody filled in
 - `backend/src/services/actionActivityStore.ts` — the record of every AI write, and the undo handles. Not reachable by the model: an agent-reachable undo is a write primitive outside the proposal mechanism
 - `backend/src/services/chatbotReaders/familyMemberReader.ts` — the ONLY AI path to the global `families` blob. Families are not stored per-family, so a read that forgets to select by id leaks every household's roster
+- `backend/src/utils/redaction.ts` — credential redaction by value SHAPE, for free text that has no keys to match on (SEC-L004, SEC-P041). `redactSensitive` in `agentTraceStore.ts` matches key names and is the wrong tool for a learning's `title`/`detail`; both now compose. Redaction runs BEFORE truncation, or a sliced token leaves an unmatched fragment
 - `backend/src/services/authService.ts` — JWT + account lockout
 - `backend/src/services/transactionReader.ts` — canonical removed-transaction filter. **All read paths must use `excludeRemoved()` / `getActiveTransactions()`**; mutation paths intentionally bypass.
 

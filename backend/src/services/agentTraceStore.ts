@@ -31,6 +31,7 @@ import { randomUUID } from 'crypto';
 import type { DataService } from './dataService';
 import type { WorkloadClass } from './workloadClass';
 import { childLogger } from '../utils/logger';
+import { redactSecretsInText } from '../utils/redaction';
 
 const log = childLogger('agentTraceStore');
 
@@ -117,6 +118,10 @@ const MAX_REDACT_DEPTH = 12;
  */
 export function redactSensitive(value: unknown, depth = 0, seen = new WeakSet<object>()): unknown {
   if (depth > MAX_REDACT_DEPTH) return '[max depth]';
+  // Key-name matching misses a credential that arrives as the VALUE under an
+  // innocent key — `{ note: 'use access-production-abc123' }` was being stored
+  // verbatim. The text pass catches it by shape (TD-029).
+  if (typeof value === 'string') return redactSecretsInText(value);
   if (value === null || typeof value !== 'object') return value;
 
   if (seen.has(value as object)) return '[circular]';

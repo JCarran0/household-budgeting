@@ -41,6 +41,44 @@ describe('AgentLearningsStore', () => {
     });
   }
 
+  describe('credential redaction on write (SEC-L004, TD-029)', () => {
+    /**
+     * The store is unreadable by any tool (SEC-L006), so this is not an
+     * injection-persistence hole. The exposure is the HUMAN: /evaluate-learnings
+     * puts 4 KB of model-authored text in front of a maintainer who may well
+     * paste it somewhere. A credential must not be in that text.
+     */
+    it('redacts a Plaid token that reached the detail field', async () => {
+      const result = await gap({
+        detail: 'The sync failed with token access-production-8d1f2a3b4c5d6e7f8a9b.',
+      });
+
+      expect(result.recorded).toBe(true);
+      if (!result.recorded) return;
+      expect(result.learning.detail).not.toContain('access-production');
+      expect(result.learning.detail).toContain('[redacted]');
+    });
+
+    it('redacts the title too, not only the detail', async () => {
+      const result = await gap({
+        title: 'Cannot use sk-ant-api03-AAAAbbbbCCCCddddEEEE1234',
+      });
+      expect(result.recorded).toBe(true);
+      if (!result.recorded) return;
+      expect(result.learning.title).not.toContain('sk-ant-');
+    });
+
+    it('leaves an ordinary capability gap completely untouched', async () => {
+      // Without this, a redactor that replaced everything would pass the two
+      // tests above and quietly destroy the collection's usefulness.
+      const detail = 'User asked what is due this weekend; no task tool exists.';
+      const result = await gap({ detail });
+      expect(result.recorded).toBe(true);
+      if (!result.recorded) return;
+      expect(result.learning.detail).toBe(detail);
+    });
+  });
+
   describe('recording', () => {
     it('records a gap as open, agent-sourced, with one occurrence', async () => {
       const outcome = await gap();
