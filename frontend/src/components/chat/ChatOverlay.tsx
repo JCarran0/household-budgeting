@@ -3,7 +3,6 @@ import {
   useEffect,
   useRef,
   useCallback,
-  type ChangeEvent,
 } from 'react';
 import {
   Paper,
@@ -23,6 +22,7 @@ import {
 import {
   IconSend,
   IconTrash,
+  IconDownload,
   IconCamera,
   IconPaperclip,
   IconFileText,
@@ -30,13 +30,14 @@ import {
   IconMaximize,
   IconMinimize,
 } from '@tabler/icons-react';
-import { notifications } from '@mantine/notifications';
 import { useMediaQuery } from '@mantine/hooks';
 import { api } from '../../lib/api';
 import { useAuthStore } from '../../stores/authStore';
 import { usePageContext } from '../../hooks/usePageContext';
 import { ChatMessageBubble } from './ChatMessageBubble';
 import { useChatPanelLayout } from './useChatPanelLayout';
+import { buildTranscript, transcriptFilename } from './transcript';
+import { useChatAttachment } from './useChatAttachment';
 import {
   SESSION_KEY_CONVERSATION,
   SESSION_KEY_FULL_PROPOSALS,
@@ -59,16 +60,6 @@ import type {
 
 // What survives a refresh — and the rules for re-adopting it — live in
 // chatSessionStorage.ts, next to the reasons they are what they are.
-
-/** MIME types accepted by the paperclip picker */
-const ALLOWED_CLIENT_MIMES = new Set([
-  'image/jpeg',
-  'image/png',
-  'image/webp',
-  'application/pdf',
-]);
-
-const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024; // 10 MB
 
 /**
  * Maps message ID → action error message (for failed confirm attempts).
@@ -107,8 +98,10 @@ export function ChatOverlay({
   const [error, setError] = useState<string | null>(null);
 
   // ---- Attachment state (Phase 6) ----
-  const [attachment, setAttachment] = useState<File | null>(null);
-  const [attachmentPreviewUrl, setAttachmentPreviewUrl] = useState<string | null>(null);
+  // Pick, validate, preview and clear all live in the hook — one copy of the
+  // rules for the paperclip and the share target alike.
+  const { attachment, setAttachment, previewUrl: attachmentPreviewUrl, handleFilePick } =
+    useChatAttachment({ initialAttachment, onInitialAttachmentConsumed });
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -160,17 +153,6 @@ export function ChatOverlay({
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [opened, expanded, collapse]);
-
-  // ---- Attachment preview URL lifecycle ----
-  useEffect(() => {
-    if (!attachment) {
-      setAttachmentPreviewUrl(null);
-      return;
-    }
-    const url = URL.createObjectURL(attachment);
-    setAttachmentPreviewUrl(url);
-    return () => URL.revokeObjectURL(url);
-  }, [attachment]);
 
   // ---- Persist messages and model to sessionStorage ----
   useEffect(() => {
@@ -330,77 +312,6 @@ export function ChatOverlay({
     [handleActionProposalResponse]
   );
 
-  // ---- File pick handler (Phase 6.2, 6.5) ----
-  const handleFilePick = useCallback((e: ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    // Reset input so the same file can be re-picked after removal
-    e.target.value = '';
-    if (!file) return;
-
-    // HEIC rejection with guidance (Phase 6.5 / BRD A-5)
-    if (
-      file.type === 'image/heic' ||
-      file.type === 'image/heif' ||
-      file.name.toLowerCase().endsWith('.heic') ||
-      file.name.toLowerCase().endsWith('.heif')
-    ) {
-      notifications.show({
-        color: 'orange',
-        message:
-          'HEIC photos are not supported. On iOS, go to Settings → Camera → Formats → Most Compatible, then try again.',
-      });
-      return;
-    }
-
-    if (file.size > MAX_ATTACHMENT_BYTES) {
-      notifications.show({ color: 'red', message: 'File too large (10 MB max).' });
-      return;
-    }
-
-    if (!ALLOWED_CLIENT_MIMES.has(file.type)) {
-      notifications.show({
-        color: 'red',
-        message: 'Unsupported file type. Accepted: JPEG, PNG, WebP, PDF.',
-      });
-      return;
-    }
-
-    setAttachment(file);
-  }, []);
-
-  // ---- Ingest externally-piped attachment (Web Share Target) ----
-  // Same validation as handleFilePick; consumed once per File reference.
-  useEffect(() => {
-    if (!initialAttachment) return;
-    const file = initialAttachment;
-
-    const reject = (message: string) => {
-      notifications.show({ color: 'orange', message });
-      onInitialAttachmentConsumed?.();
-    };
-
-    if (
-      file.type === 'image/heic' ||
-      file.type === 'image/heif' ||
-      file.name.toLowerCase().endsWith('.heic') ||
-      file.name.toLowerCase().endsWith('.heif')
-    ) {
-      reject('HEIC photos are not supported. Convert to JPEG and try again.');
-      return;
-    }
-    if (file.size > MAX_ATTACHMENT_BYTES) {
-      reject('Shared file too large (10 MB max).');
-      return;
-    }
-    if (!ALLOWED_CLIENT_MIMES.has(file.type)) {
-      reject('Shared file type not supported. Accepted: JPEG, PNG, WebP, PDF.');
-      return;
-    }
-
-    setAttachment(file);
-    onInitialAttachmentConsumed?.();
-  }, [initialAttachment, onInitialAttachmentConsumed]);
-
   // ---- Send message (Phase 6.1 + 7.1 integration) ----
   const sendMessage = useCallback(async () => {
     const trimmed = input.trim();
@@ -462,6 +373,7 @@ export function ChatOverlay({
   }, [
     input,
     attachment,
+    setAttachment,
     isLoading,
     messages,
     model,
@@ -530,6 +442,33 @@ export function ChatOverlay({
     [updateMessageById]
   );
 
+  /**
+   * Download the conversation as Markdown.
+   *
+   * The assistant filed this against itself as a capability gap: the transcript
+   * exists only in this tab's sessionStorage, because the server keeps tool
+   * calls and token counts and deliberately no prose (SEC-P040). Before this,
+   * reporting a bug about the assistant meant screenshotting it.
+   *
+   * Entirely client-side — the conversation is already here, and round-tripping
+   * it through the server to get a file back would mean storing the prose the
+   * trace store is careful not to store.
+   */
+  const handleDownloadTranscript = useCallback(() => {
+    const markdown = buildTranscript(messages, { conversationId });
+    const url = URL.createObjectURL(new Blob([markdown], { type: 'text/markdown' }));
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = transcriptFilename();
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    // Revoked on the next frame: revoking synchronously can beat the download
+    // in some browsers, and holding the blob forever leaks the whole
+    // conversation into memory for the life of the tab.
+    setTimeout(() => URL.revokeObjectURL(url), 0);
+  }, [messages, conversationId]);
+
   // ---- New conversation ----
   const handleNewConversation = useCallback(() => {
     setMessages([]);
@@ -542,7 +481,7 @@ export function ChatOverlay({
     // starts fresh (Phase 7.3).
     setConversationId(crypto.randomUUID());
     clearChatSession();
-  }, []);
+  }, [setAttachment]);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
@@ -589,6 +528,19 @@ export function ChatOverlay({
                 onClick={toggleExpanded}
               >
                 {expanded ? <IconMinimize size={14} /> : <IconMaximize size={14} />}
+              </ActionIcon>
+            </Tooltip>
+          )}
+          {messages.length > 0 && (
+            <Tooltip label="Download this conversation">
+              <ActionIcon
+                size="sm"
+                variant="subtle"
+                color="gray"
+                aria-label="Download this conversation"
+                onClick={handleDownloadTranscript}
+              >
+                <IconDownload size={14} />
               </ActionIcon>
             </Tooltip>
           )}
