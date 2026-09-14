@@ -27,6 +27,8 @@ import { ChatbotCostTracker } from './chatbotCostTracker';
 import { ChatbotService } from './chatbotService';
 import { AgentTraceStore } from './agentTraceStore';
 import { AgentLearningsStore } from './agentLearningsStore';
+import { ActionActivityStore } from './actionActivityStore';
+import { ActionUndoService } from './actionUndoService';
 import { CategorizationService } from './categorizationService';
 import { ManualAccountService } from './manualAccountService';
 import { AmazonReceiptService } from './amazonReceiptService';
@@ -112,6 +114,13 @@ export const agentTraceStore = new AgentTraceStore(dataService);
 // from here into any tool — the agent writes learnings and can never read them
 // back (SEC-L006).
 export const agentLearningsStore = new AgentLearningsStore(dataService);
+/**
+ * REQ-P037 / REQ-P025. Narrow appenders over one key namespace each, like
+ * agentTraceStore — not general write capability handed to the chatbot, and
+ * deliberately not reachable from any tool or action.
+ */
+export const actionActivityStore = new ActionActivityStore(dataService);
+export const actionUndoService = new ActionUndoService(actionActivityStore);
 export const chatbotService = new ChatbotService(
   chatbotDataService,
   chatbotCostTracker,

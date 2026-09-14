@@ -23,6 +23,7 @@ import actualsOverrideRoutes from './routes/actualsOverrides';
 import tripRoutes from './routes/trips';
 import projectRoutes from './routes/projects';
 import chatbotRoutes from './routes/chatbot';
+import aiActivityRoutes from './routes/aiActivity';
 import themeRoutes from './routes/themes';
 import manualAccountRoutes from './routes/manualAccounts';
 import amazonReceiptRoutes from './routes/amazonReceipts';
@@ -185,6 +186,8 @@ app.use(`${apiPrefix}/actuals-overrides`, actualsOverrideRoutes);
 app.use(`${apiPrefix}/trips`, tripRoutes);
 app.use(`${apiPrefix}/projects`, projectRoutes);
 app.use(`${apiPrefix}/chatbot`, chatbotRoutes);
+// AI activity log & undo (BRD §6.3, §5.4). Same workspace guard as chatbot.
+app.use(`${apiPrefix}/ai`, aiActivityRoutes);
 app.use(`${apiPrefix}/themes`, themeRoutes);
 app.use(`${apiPrefix}/manual-accounts`, manualAccountRoutes);
 app.use(`${apiPrefix}/amazon-receipts`, amazonReceiptRoutes);

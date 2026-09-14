@@ -20,7 +20,8 @@ import multer from 'multer';
 import { z } from 'zod';
 import { authenticate, validateBody } from '../middleware/authMiddleware';
 import { rateLimitChatbot } from '../middleware/rateLimit';
-import { chatbotService, categorizationService, familyService } from '../services';
+import { refuseBusinessWorkspace } from '../middleware/refuseBusinessWorkspace';
+import { chatbotService, categorizationService, actionActivityStore } from '../services';
 import { childLogger } from '../utils/logger';
 
 const log = childLogger('chatbot');
@@ -32,6 +33,8 @@ import {
 } from '../middleware/chatAttachmentUpload';
 import { getChatAction, consumeProposal, executeChatAction } from '../services/chatActions';
 import { logAuditSuccess, logAuditRejection } from '../services/chatActions/auditLog';
+import { fingerprint } from '../services/chatActions/undoSnapshot';
+import type { ActivityRowRecord } from '../services/actionActivityStore';
 import { chatRequestSchema, classifyTransactionsSchema, suggestRulesSchema } from '../validators/chatbotValidators';
 import type {
   ChatRequest,
@@ -41,6 +44,93 @@ import type {
   ChatActionId,
 } from '../shared/types';
 import type { ChatAttachmentMimeType } from '../middleware/chatAttachmentUpload';
+
+
+/**
+ * Build one activity-log row, including its undo handle (REQ-P025).
+ *
+ * Extracted from the confirm handler to keep that function inside its budget
+ * and, more usefully, because every branch here is a decision about what to
+ * tell the user when undo is NOT available. Each one is recorded explicitly
+ * rather than defaulting to "undoable" and discovering otherwise on click.
+ */
+async function buildActivityRow(
+  step: {
+    rowId: string;
+    actionId: ChatActionId;
+    def: NonNullable<ReturnType<typeof getChatAction>>;
+    params: unknown;
+  },
+  resource: ActionResource,
+  captured: { recordId: string | null; before: unknown } | null,
+  captureFailed: boolean,
+  displaySummary: string,
+  ctx: { userId: string; familyId: string },
+): Promise<ActivityRowRecord> {
+  const base = {
+    rowId: step.rowId,
+    actionId: step.actionId,
+    displaySummary,
+    resource: {
+      type: resource.type,
+      id: resource.id,
+      ...(resource.url ? { url: resource.url } : {}),
+      label: resource.label,
+    },
+  };
+
+  if (!step.def.undo) {
+    // The action never declared undo. submit_github_issue is the standing case:
+    // a posted issue cannot be unposted.
+    return {
+      ...base,
+      undo: { undoable: false, reason: 'This kind of change cannot be reversed automatically.' },
+    };
+  }
+  if (captureFailed) {
+    return {
+      ...base,
+      undo: { undoable: false, reason: 'The previous value could not be recorded, so this cannot be reversed.' },
+    };
+  }
+  if (!captured) {
+    // capture() returned null — the action decided this particular write was
+    // not reversible, even though the action type generally is.
+    return {
+      ...base,
+      undo: { undoable: false, reason: 'This change cannot be reversed.' },
+    };
+  }
+
+  // recordId is null for creates, where the id does not exist until execute
+  // has run. The resource is the authority on what was just created.
+  const recordId = captured.recordId ?? resource.id;
+
+  try {
+    const after = await step.def.undo.read(recordId, ctx);
+    if (after === null) {
+      return {
+        ...base,
+        undo: { undoable: false, reason: 'The changed record could not be re-read, so this cannot be reversed.' },
+      };
+    }
+    return {
+      ...base,
+      undo: {
+        undoable: true,
+        kind: step.def.undo.kind,
+        recordId,
+        before: captured.before,
+        fingerprintAfter: fingerprint(after),
+      },
+    };
+  } catch {
+    return {
+      ...base,
+      undo: { undoable: false, reason: 'The changed record could not be re-read, so this cannot be reversed.' },
+    };
+  }
+}
 
 const router = Router();
 
@@ -118,46 +208,6 @@ const conditionalAttachmentUpload = (
   });
 };
 
-
-/**
- * REQ-P016 / BRD §3.3, §11 — the Business Workspace is excluded from AI
- * entirely, reads included. It holds Amazon royalties held in trust for a
- * client; that money is not the family's, and a chatbot that can read it is a
- * fiduciary problem, not a privacy preference.
- *
- * Enforced here rather than by hiding the chat button: the JWT carries the
- * active familyId, so a token minted in the business workspace must be refused
- * at the route no matter what the client renders. Mirrors
- * requireBusinessWorkspace in routes/businessStatements.ts, inverted.
- */
-async function refuseBusinessWorkspace(
-  req: Request,
-  res: Response,
-  next: NextFunction,
-): Promise<void> {
-  try {
-    const familyId = req.user?.familyId;
-    if (!familyId) {
-      res.status(401).json({ success: false, error: 'Unauthorized' });
-      return;
-    }
-
-    const family = await familyService.getFamily(familyId);
-    if (family?.workspaceType === 'business') {
-      log.warn({ familyId }, 'AI request refused in business workspace (REQ-P016)');
-      res.status(403).json({
-        success: false,
-        error: 'Helper Bot is not available in the business workspace.',
-        code: 'AI_NOT_AVAILABLE_IN_WORKSPACE',
-      });
-      return;
-    }
-
-    next();
-  } catch (error) {
-    next(error);
-  }
-}
 
 router.post(
   '/message',
@@ -507,7 +557,28 @@ router.post(
 
       // ---- Execute, in the order the rows were displayed (REQ-P022) ----
       const results: ActionRowResult[] = [];
+      const activityRows: ActivityRowRecord[] = [];
       for (const step of plan) {
+        const undoCtx = { userId: step.grant.userId, familyId: step.grant.familyId };
+
+        // REQ-P025: capture prior state BEFORE the write, while it still
+        // exists. A capture that failed must not block the write the user
+        // already approved — it costs the undo, which is recorded honestly
+        // below rather than silently offered and broken.
+        let captured: { recordId: string | null; before: unknown } | null = null;
+        let captureFailed = false;
+        if (step.def.undo) {
+          try {
+            captured = await step.def.undo.capture(step.params, undoCtx);
+          } catch (captureError) {
+            captureFailed = true;
+            log.warn(
+              { err: captureError, rowId: step.rowId, actionId: step.actionId },
+              'could not capture undo snapshot; row will be recorded as not undoable',
+            );
+          }
+        }
+
         let resource: ActionResource;
         try {
           // Execute through the platform, which verifies the grant against the
@@ -546,7 +617,30 @@ router.post(
         });
 
         results.push({ rowId: step.rowId, actionId: step.actionId, resource });
+
+        // REQ-P025/P027: fingerprint the record as it stands AFTER the write.
+        // Re-reading through the action's own `read` keeps the recorded shape
+        // identical to the one undo will compare against later — deriving it
+        // any other way is how a fingerprint comes to differ when nothing has
+        // changed, which would make undo refuse on untouched records.
+        const row = proposalRows.find(r => r.rowId === step.rowId);
+        activityRows.push(
+          await buildActivityRow(step, resource, captured, captureFailed, row?.displaySummary ?? '', undoCtx),
+        );
       }
+
+      // REQ-P037. Recorded AFTER the batch succeeds, and never allowed to fail
+      // it: the changes are already applied by this point, so reporting an
+      // error here would invite the user to redo work that was done.
+      await actionActivityStore.record({
+        familyId: stored.familyId,
+        userId,
+        traceId: stored.traceId,
+        proposalId: body.proposalId,
+        conversationId: stored.conversationId,
+        origin: 'confirmed',
+        rows: activityRows,
+      });
 
       // `resource` is the first result, so single-row callers read the response
       // exactly as they did before plan cards existed.

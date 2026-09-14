@@ -67,6 +67,31 @@ registerChatAction<CompleteTaskActionParams>({
     ];
   },
 
+  /**
+   * REQ-P025. Only the status needs restoring, and the leaderboard is the
+   * reason that is exactly enough: credit is computed statelessly from
+   * task.completedAt, and updateTaskStatus nulls completedAt on any transition
+   * back out of 'done'. Restoring the status therefore withdraws the
+   * leaderboard credit as a consequence, with no separate un-crediting step
+   * that could drift out of sync with it.
+   */
+  undo: {
+    kind: 'task',
+    async capture(params, ctx) {
+      const task = await taskService.getTask(params.taskId, ctx.familyId);
+      if (!task) return null;
+      return { recordId: task.id, before: { status: task.status } };
+    },
+    async read(recordId, ctx) {
+      const task = await taskService.getTask(recordId, ctx.familyId);
+      return task ? { status: task.status } : null;
+    },
+    async restore(recordId, before, ctx) {
+      const prior = before as { status: 'todo' | 'started' | 'done' | 'cancelled' };
+      await taskService.updateTaskStatus(recordId, prior.status, ctx.userId, ctx.familyId);
+    },
+  },
+
   async execute(params, ctx) {
     const task = await taskService.updateTaskStatus(params.taskId, 'done', ctx.userId, ctx.familyId);
     return {

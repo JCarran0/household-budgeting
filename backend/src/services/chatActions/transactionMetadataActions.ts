@@ -131,6 +131,28 @@ registerChatAction<SetCategoryParams>({
     ];
   },
 
+  undo: {
+    kind: 'transaction',
+    async capture(params, ctx) {
+      const txn = await lookupTransaction(ctx.familyId, params.transactionId);
+      if (!txn) return null;
+      return { recordId: txn.id, before: { categoryId: txn.categoryId } };
+    },
+    async read(recordId, ctx) {
+      const txn = await lookupTransaction(ctx.familyId, recordId);
+      return txn ? { categoryId: txn.categoryId } : null;
+    },
+    async restore(recordId, before, ctx) {
+      const prior = before as { categoryId: string | null };
+      const result = await transactionService.updateTransactionCategory(
+        ctx.familyId,
+        recordId,
+        prior.categoryId,
+      );
+      if (!result.success) throw new Error(result.error ?? 'Could not restore the category.');
+    },
+  },
+
   async execute(params, ctx) {
     const result = await transactionService.updateTransactionCategory(
       ctx.familyId,
@@ -185,6 +207,28 @@ registerChatAction<SetDescriptionParams>({
         type: 'text',
       },
     ];
+  },
+
+  undo: {
+    kind: 'transaction',
+    async capture(params, ctx) {
+      const txn = await lookupTransaction(ctx.familyId, params.transactionId);
+      if (!txn) return null;
+      return { recordId: txn.id, before: { description: txn.userDescription ?? null } };
+    },
+    async read(recordId, ctx) {
+      const txn = await lookupTransaction(ctx.familyId, recordId);
+      return txn ? { description: txn.userDescription ?? null } : null;
+    },
+    async restore(recordId, before, ctx) {
+      const prior = before as { description: string | null };
+      const result = await transactionService.updateTransactionDescription(
+        ctx.familyId,
+        recordId,
+        prior.description,
+      );
+      if (!result.success) throw new Error(result.error ?? 'Could not restore the name.');
+    },
   },
 
   async execute(params, ctx) {

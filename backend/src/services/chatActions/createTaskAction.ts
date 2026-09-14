@@ -27,6 +27,46 @@ registerChatAction<CreateTaskDto>({
   tier: 'T1',
   dataClass: 'content',
   paramsSchema: createTaskSchema,
+  /**
+   * REQ-P025 – REQ-P027. Undoing a CREATE means removing what was created,
+   * which is the one undo in this system that destroys a record rather than
+   * restoring one. Two things make that safe:
+   *
+   *   - `recordId: null` at capture time, because the task does not exist yet.
+   *     The confirm route fills the id in from the resource execute returns.
+   *   - The fingerprint check, which is doing real work here rather than being
+   *     a formality. If either household member has touched the task since —
+   *     retitled it, assigned it, ticked a subtask — the record no longer
+   *     matches what the AI created, and undo skips it. Deleting a task
+   *     somebody has since filled in would be the worst outcome this feature
+   *     could produce, and it is exactly what an unchecked "undo a create"
+   *     would do.
+   */
+  undo: {
+    kind: 'task',
+    async capture() {
+      // `before: null` means "did not exist", so restore removes it.
+      return { recordId: null, before: null };
+    },
+    async read(recordId, ctx) {
+      const task = await taskService.getTask(recordId, ctx.familyId);
+      if (!task) return null;
+      return {
+        title: task.title,
+        description: task.description,
+        scope: task.scope,
+        assigneeId: task.assigneeId,
+        dueDate: task.dueDate,
+        status: task.status,
+        tags: [...task.tags],
+        subTasks: task.subTasks.map(s => ({ ...s })),
+      };
+    },
+    async restore(recordId, _before, ctx) {
+      await taskService.deleteTask(recordId, ctx.familyId);
+    },
+  },
+
   async execute(params, ctx) {
     const task = await taskService.createTask(params, ctx.userId, ctx.familyId);
     return {

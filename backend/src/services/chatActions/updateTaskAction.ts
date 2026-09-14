@@ -27,12 +27,31 @@ import { z } from 'zod';
 import { registerChatAction } from './registry';
 import { updateTaskSchema } from '../../routes/tasks';
 import { taskService, familyService } from '../index';
+import type { StoredTask } from '../../shared/types';
 
 const updateTaskParamsSchema = updateTaskSchema.extend({
   taskId: z.string().min(1),
 });
 
 type UpdateTaskActionParams = z.infer<typeof updateTaskParamsSchema>;
+
+/**
+ * The fields update_task can write, and therefore exactly what undo must
+ * restore and fingerprint. Deliberately NOT the whole StoredTask: transitions,
+ * timestamps and sortOrder change for reasons unrelated to this action, and
+ * including them would make every undo look like a modified record.
+ */
+function mutableTaskFields(task: StoredTask) {
+  return {
+    title: task.title,
+    description: task.description,
+    scope: task.scope,
+    assigneeId: task.assigneeId,
+    dueDate: task.dueDate,
+    tags: [...task.tags],
+    subTasks: task.subTasks.map(s => ({ ...s })),
+  };
+}
 
 function formatAssignee(assigneeId: string | null, names: Map<string, string>): string {
   if (assigneeId === null) return 'Unassigned';
@@ -147,6 +166,29 @@ registerChatAction<UpdateTaskActionParams>({
     }
 
     return fields.length > 0 ? fields : null;
+  },
+
+  /**
+   * REQ-P025. Captures the whole set of fields this action can change, so any
+   * combination of them restores — recording only the fields the proposal
+   * happened to touch would leave a later undo unable to reverse a different
+   * row that touched others.
+   */
+  undo: {
+    kind: 'task',
+    async capture(params, ctx) {
+      const task = await taskService.getTask(params.taskId, ctx.familyId);
+      if (!task) return null;
+      return { recordId: task.id, before: mutableTaskFields(task) };
+    },
+    async read(recordId, ctx) {
+      const task = await taskService.getTask(recordId, ctx.familyId);
+      return task ? mutableTaskFields(task) : null;
+    },
+    async restore(recordId, before, ctx) {
+      const prior = before as ReturnType<typeof mutableTaskFields>;
+      await taskService.updateTask(recordId, prior, ctx.userId, ctx.familyId);
+    },
   },
 
   async execute(params, ctx) {

@@ -22,6 +22,7 @@ import {
   type DataClass,
 } from './tiers';
 import { isExecutionGrant, type ExecutionGrant } from './executionGrant';
+import type { UndoCapability } from './undoSnapshot';
 
 /** Context passed to every action handler — populated from the session JWT. */
 export interface ChatActionHandlerContext {
@@ -85,6 +86,12 @@ export interface ChatActionDefinition<TParams> {
     params: TParams,
     ctx: ChatActionHandlerContext,
   ) => Promise<void>;
+  /**
+   * REQ-P025 – REQ-P027. How this action is reversed, or absent if it cannot
+   * be. See UndoCapability for why it is three functions and why omitting it
+   * is the safe default.
+   */
+  undo?: UndoCapability<TParams>;
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- registry holds heterogeneous schemas
