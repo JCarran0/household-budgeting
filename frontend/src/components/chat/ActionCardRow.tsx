@@ -43,11 +43,22 @@ interface ActionCardRowProps {
 function FieldValue({ value }: { value: string }) {
   const [expanded, setExpanded] = useState(false);
 
-  if (value.length <= LONG_VALUE_CHARS) return <>{value}</>;
+  // pre-wrap on BOTH branches. Newlines are part of what the user is approving,
+  // and HTML collapses them — so a short multi-line value would render as one
+  // run-on line while the same text over the threshold rendered correctly.
+  // `dir="ltr"` because a bidi override in a value can otherwise reorder the
+  // glyphs around it.
+  if (value.length <= LONG_VALUE_CHARS) {
+    return (
+      <Text span size="xs" dir="ltr" style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+        {value}
+      </Text>
+    );
+  }
 
   return (
     <>
-      <Text span size="xs" style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+      <Text span size="xs" dir="ltr" style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
         {expanded ? value : `${value.slice(0, LONG_VALUE_CHARS).trimEnd()}…`}
       </Text>{' '}
       <Anchor

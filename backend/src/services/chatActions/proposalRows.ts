@@ -18,21 +18,38 @@
 
 import type { ActionProposalInput, ChatActionId, DisplayField, ProposalRow } from '../../shared/types';
 import { getChatAction, type ChatActionHandlerContext } from './registry';
+import { hasIdentifierResolver, resolveIdentifier } from './identifierLabels';
 
 /**
- * Opaque identifiers. The raw value is a UUID no human can check, so the model's
- * resolved name ("Buy milk") is the only readable rendering and is kept.
+ * Opaque identifiers. The raw value is a UUID no human can check, so a resolved
+ * name is the only readable rendering.
  *
- * This is the ONE place a display value is still model-authored, and it is a
- * deliberate, bounded residual: an id cannot carry a payload, and SEC-P011's
- * server-authored `currentValues` is what shows the user which record is
- * actually about to change. Every other param is rendered from the parsed
- * params below.
+ * Where the server can resolve the name itself it does — see identifierLabels.
+ * Only ids with no resolver fall through to the model's text, and that residual
+ * is the one place a display value is still model-authored. It is narrower than
+ * it looks: an id carries no payload, and for a SUBJECT id (the record being
+ * changed) SEC-P011's server-authored `currentValues` names the record
+ * independently. It was NOT narrow enough for a TARGET id — the category a
+ * transaction moves to, the member a task is reassigned to — which is what
+ * identifierLabels now resolves.
  */
 const IDENTIFIER_KEY = /(^|[a-z])Id$/;
 
 /** Above this, a value is treated as long-form text rather than a one-liner. */
 const TEXTAREA_THRESHOLD = 120;
+
+/**
+ * Caps on the two strings the model still authors outright.
+ *
+ * Neither is ever written anywhere, so this is legibility rather than
+ * exfiltration — but `displaySummary` renders bold, above the fields, and is
+ * the line a user actually reads before clicking Confirm. Uncapped, it is a
+ * place to put reassuring prose that pushes the real values and the Confirm
+ * button off the screen. The tool schema has always said 200 characters; it was
+ * never enforced.
+ */
+const MAX_SUMMARY_CHARS = 200;
+const MAX_LABEL_CHARS = 40;
 
 function isScalar(v: unknown): boolean {
   return typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean';
@@ -55,12 +72,24 @@ function isScalar(v: unknown): boolean {
  * values, and for nothing else.
  */
 function renderParamValue(key: string, value: unknown): string | null {
+  // Identifiers are resolved asynchronously against live data by the caller.
   if (IDENTIFIER_KEY.test(key)) return null;
-  // Absent carries no payload: there is nothing here for a user to review.
-  if (value === null || value === undefined) return null;
+  // Genuinely absent: nothing is being written here, so nothing to review.
+  if (value === undefined) return null;
+
+  /**
+   * `null` is NOT absent. These fields are nullable precisely because clearing
+   * one is a write — unassign a task, uncategorize a transaction, drop a due
+   * date. Deferring to the model here let a card show "Due date: 2026-12-25"
+   * for a param of `null`, i.e. a date being DELETED rendered as one being set,
+   * and with describeCurrent it read as a normal before/after change.
+   */
+  if (value === null) return '(cleared)';
 
   if (typeof value === 'string') return value.length > 0 ? value : '(empty)';
-  if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+  if (typeof value === 'number') return String(value);
+  // "Hidden: true" is developer output. The card is read by a person.
+  if (typeof value === 'boolean') return value ? 'Yes' : 'No';
   if (Array.isArray(value) && value.every(isScalar)) {
     return value.length > 0 ? value.join(', ') : '(none)';
   }
@@ -193,7 +222,8 @@ export async function buildProposalRows(
       };
     }
 
-    const summary = typeof r.displaySummary === 'string' ? r.displaySummary.trim() : '';
+    const rawSummary = typeof r.displaySummary === 'string' ? r.displaySummary.trim() : '';
+    const summary = rawSummary.slice(0, MAX_SUMMARY_CHARS);
     if (!summary) {
       return {
         ok: false,
@@ -247,18 +277,27 @@ export async function buildProposalRows(
     }
 
     // The values are now the server's, not the model's (SEC-P010).
-    const displayed = fields.map(f => {
-      const rendered = renderParamValue(f.key, parsedParams[f.key]);
-      if (rendered === null) return f;
-      return {
+    const displayed: DisplayField[] = [];
+    for (const f of fields) {
+      const label = f.label.slice(0, MAX_LABEL_CHARS);
+      const rendered = hasIdentifierResolver(f.key)
+        ? await resolveIdentifier(f.key, parsedParams[f.key], ctx)
+        : renderParamValue(f.key, parsedParams[f.key]);
+
+      if (rendered === null) {
+        displayed.push({ ...f, label });
+        continue;
+      }
+      displayed.push({
         ...f,
+        label,
         value: rendered,
         // A 1,700-character body in a single-line text input is unreviewable
         // and uneditable. The server knows how long the value is, so it, not
         // the model, decides how the field is rendered.
         type: rendered.length > TEXTAREA_THRESHOLD ? ('textarea' as const) : f.type,
-      };
-    });
+      });
+    }
 
     // SEC-P011. Only the action itself can say what it is about to overwrite,
     // and only the server can be trusted to say it — there is deliberately no

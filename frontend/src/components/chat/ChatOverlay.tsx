@@ -37,6 +37,19 @@ import { useAuthStore } from '../../stores/authStore';
 import { usePageContext } from '../../hooks/usePageContext';
 import { ChatMessageBubble } from './ChatMessageBubble';
 import { useChatPanelLayout } from './useChatPanelLayout';
+import {
+  SESSION_KEY_CONVERSATION,
+  SESSION_KEY_FULL_PROPOSALS,
+  SESSION_KEY_HISTORY,
+  SESSION_KEY_MODEL,
+  clearChatSession,
+  persist,
+  readStoredConversationId,
+  readStoredMessages,
+  readStoredModel,
+  readStoredProposals,
+  reconcileRestoredProposals,
+} from './chatSessionStorage';
 import type {
   ChatMessage,
   ChatModel,
@@ -44,9 +57,8 @@ import type {
   ActionProposal,
 } from '../../../../shared/types';
 
-const SESSION_KEY_HISTORY = 'chatbot_history';
-const SESSION_KEY_MODEL = 'chatbot_model';
-const SESSION_KEY_FULL_PROPOSALS = 'chatbot_full_proposals';
+// What survives a refresh — and the rules for re-adopting it — live in
+// chatSessionStorage.ts, next to the reasons they are what they are.
 
 /** MIME types accepted by the paperclip picker */
 const ALLOWED_CLIENT_MIMES = new Set([
@@ -86,15 +98,8 @@ export function ChatOverlay({
   const userDisplayName = useAuthStore((s) => s.user?.displayName);
 
   // ---- Core chat state ----
-  const [messages, setMessages] = useState<ChatMessage[]>(() => {
-    try {
-      const stored = sessionStorage.getItem(SESSION_KEY_HISTORY);
-      return stored ? JSON.parse(stored) : [];
-    } catch { return []; }
-  });
-  const [model, setModel] = useState<ChatModel>(() => {
-    return (sessionStorage.getItem(SESSION_KEY_MODEL) as ChatModel) || 'sonnet';
-  });
+  const [messages, setMessages] = useState<ChatMessage[]>(readStoredMessages);
+  const [model, setModel] = useState<ChatModel>(readStoredModel);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [costDisplay, setCostDisplay] = useState<string | null>(null);
@@ -108,10 +113,12 @@ export function ChatOverlay({
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // ---- Conversation ID (Phase 7.3) ----
-  // Generated once per overlay mount; reset on "New conversation"
-  const [conversationId, setConversationId] = useState<string>(() =>
-    crypto.randomUUID()
-  );
+  // Persisted, not regenerated per mount. The transcript and its pending cards
+  // survive a refresh, and the conversation they belong to has to survive with
+  // them: server-side supersession (SEC-A007) is scoped BY conversation, so a
+  // fresh id after a refresh would leave the restored card live in a
+  // conversation nothing can ever supersede while a new card opened in another.
+  const [conversationId, setConversationId] = useState<string>(readStoredConversationId);
 
   // ---- Action card state (Phase 9) ----
   const [activeProposalMessageId, setActiveProposalMessageId] = useState<
@@ -126,18 +133,9 @@ export function ChatOverlay({
   // (SEC-A009). Persisted to sessionStorage so pending cards survive
   // refreshes within the same session; the nonce's 15-min TTL is the
   // backstop against stale entries.
-  const [fullProposals, setFullProposals] = useState<
-    Map<string, ActionProposal>
-  >(() => {
-    try {
-      const stored = sessionStorage.getItem(SESSION_KEY_FULL_PROPOSALS);
-      if (!stored) return new Map();
-      const entries = JSON.parse(stored) as [string, ActionProposal][];
-      return new Map(entries);
-    } catch {
-      return new Map();
-    }
-  });
+  const [fullProposals, setFullProposals] = useState<Map<string, ActionProposal>>(
+    readStoredProposals,
+  );
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -176,19 +174,44 @@ export function ChatOverlay({
 
   // ---- Persist messages and model to sessionStorage ----
   useEffect(() => {
-    sessionStorage.setItem(SESSION_KEY_HISTORY, JSON.stringify(messages));
+    persist(SESSION_KEY_HISTORY, JSON.stringify(messages));
   }, [messages]);
 
   useEffect(() => {
-    sessionStorage.setItem(SESSION_KEY_MODEL, model);
+    persist(SESSION_KEY_MODEL, model);
   }, [model]);
 
   useEffect(() => {
-    sessionStorage.setItem(
+    persist(SESSION_KEY_CONVERSATION, conversationId);
+  }, [conversationId]);
+
+  useEffect(() => {
+    persist(
       SESSION_KEY_FULL_PROPOSALS,
       JSON.stringify(Array.from(fullProposals.entries()))
     );
   }, [fullProposals]);
+
+  /**
+   * Re-adopt restored cards, once, on mount. The rules are in
+   * chatSessionStorage.reconcileRestoredProposals; this only applies them.
+   */
+  useEffect(() => {
+    const { expired, superseded, active } = reconcileRestoredProposals(messages, fullProposals);
+    if (expired.size > 0 || superseded.size > 0) {
+      setMessages((prev) =>
+        prev.map((m) => {
+          if (expired.has(m.id)) return { ...m, proposalStatus: 'expired' as const };
+          if (superseded.has(m.id)) return { ...m, proposalStatus: 'superseded' as const };
+          return m;
+        }),
+      );
+    }
+    if (active) setActiveProposalMessageId(active);
+    // Mount only: this reconciles restored state, and re-running it would fight
+    // the live bookkeeping in handleActionProposalResponse.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // ---- Fetch cost on open ----
   useEffect(() => {
@@ -518,8 +541,7 @@ export function ChatOverlay({
     // Generate a new conversation UUID so the backend's supersession logic
     // starts fresh (Phase 7.3).
     setConversationId(crypto.randomUUID());
-    sessionStorage.removeItem(SESSION_KEY_HISTORY);
-    sessionStorage.removeItem(SESSION_KEY_FULL_PROPOSALS);
+    clearChatSession();
   }, []);
 
   const handleKeyDown = useCallback(

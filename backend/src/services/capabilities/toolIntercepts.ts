@@ -49,6 +49,14 @@ export async function handleProposeAction(args: {
    * documents.
    */
   proposalStore: ProposalStore;
+  /**
+   * The request's deadline. Checked again just before the nonce is written:
+   * everything between the caller's check and that write — row construction,
+   * each action's `describeCurrent` — does live storage reads, and a turn that
+   * has already returned an error to the user must not issue a card into the
+   * conversation on its way out (SEC-A007).
+   */
+  signal?: AbortSignal;
 }): Promise<InterceptResult> {
   const input = args.rawInput as ActionProposalInput;
 
@@ -63,6 +71,10 @@ export async function handleProposeAction(args: {
       kind: 'tool_error',
       message: `${built.error} Valid actions: ${listChatActionIds().join(', ')}`,
     };
+  }
+
+  if (args.signal?.aborted) {
+    return { kind: 'tool_error', message: 'Request cancelled before the proposal was issued.' };
   }
 
   // SECURITY: the nonce is NOT sent to Claude (SEC-A009). It goes to the
@@ -93,6 +105,8 @@ export async function handleRecordLearning(args: {
   familyId: string;
   conversationId: string;
   traceId: string;
+  /** Same reasoning as propose_action: this store is durable. */
+  signal?: AbortSignal;
 }): Promise<{ result: ToolMessageResult; notice: LearningNotice | null }> {
   const input = args.rawInput as { capabilityKey?: unknown; title?: unknown; detail?: unknown };
 
@@ -113,6 +127,13 @@ export async function handleRecordLearning(args: {
   if (!title.trim()) {
     return {
       result: { kind: 'tool_error', message: 'A non-empty title is required.' },
+      notice: null,
+    };
+  }
+
+  if (args.signal?.aborted) {
+    return {
+      result: { kind: 'tool_error', message: 'Request cancelled.' },
       notice: null,
     };
   }

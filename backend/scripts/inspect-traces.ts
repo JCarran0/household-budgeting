@@ -15,8 +15,9 @@
  * chatbot could ever reach (SEC-P040 — an agent-readable trace store is durable
  * storage for prompt injection).
  *
- * Read-only. Goes through the configured StorageAdapter, so it works against
- * local filesystem (dev) and S3 (prod) exactly like the app:
+ * Read-only, and read-only by construction — it holds a storage handle with
+ * only `read` and `list` on it, never a DataService (whose constructor writes).
+ * Works against local filesystem (dev) and S3 (prod) exactly like the app:
  *
  *   npx tsx backend/scripts/inspect-traces.ts --list
  *   npx tsx backend/scripts/inspect-traces.ts --family <id> --since 2h
@@ -51,9 +52,35 @@ if (has('prod')) {
   console.log(`[PROD] bucket=${bucket} prefix=${process.env.S3_PREFIX} region=${process.env.AWS_REGION}\n`);
 }
 
-import { UnifiedDataService } from '../src/services/dataService';
+import { StorageFactory } from '../src/services/storage/storageFactory';
+import type { StorageAdapter } from '../src/services/storage/types';
 import type { AgentTrace } from '../src/services/agentTraceStore';
 import type { StoredProposal } from '../src/services/chatActions/proposalStore';
+
+/**
+ * The storage adapter directly, NOT UnifiedDataService.
+ *
+ * `new UnifiedDataService()` calls `ensureInitialData()` from its constructor,
+ * which writes an empty `users` and `families` blob whenever `exists()` is
+ * false — and S3Adapter.exists returns false on ANY error, including
+ * AccessDenied, throttling and expired credentials. A diagnostic run against
+ * production during an incident is exactly when those are most likely, and the
+ * blast radius is the whole user roster. (The two orphan-categoryid scripts
+ * have the same latent problem; they are not made worse by leaving them, but
+ * this one is reached for during incidents.)
+ *
+ * The wrapper makes read-only a property of the handle rather than a promise in
+ * a docblock: there is no code path from this script to a write.
+ */
+function readOnlyStorage(): Pick<StorageAdapter, 'read' | 'list'> {
+  const adapter = StorageFactory.getAdapter();
+  return {
+    read: key => adapter.read(key),
+    list: prefix => adapter.list(prefix),
+  };
+}
+
+type ReadOnlyStorage = ReturnType<typeof readOnlyStorage>;
 
 const TRACE_PREFIX = 'ai_traces_';
 const PROPOSAL_PREFIX = 'ai_proposals_';
@@ -87,8 +114,8 @@ function pad(value: string, width: number): string {
   return value.length > width ? `${value.slice(0, width - 1)}…` : value.padEnd(width);
 }
 
-async function listFamilies(data: UnifiedDataService): Promise<void> {
-  const keys = await data.listKeys(TRACE_PREFIX);
+async function listFamilies(store: ReadOnlyStorage): Promise<void> {
+  const keys = await store.list(TRACE_PREFIX);
   if (keys.length === 0) {
     console.log('No trace files found. (Wrong storage target? Try --prod.)');
     return;
@@ -96,7 +123,7 @@ async function listFamilies(data: UnifiedDataService): Promise<void> {
   console.log('Families with traces:\n');
   for (const key of keys) {
     const familyId = key.replace(TRACE_PREFIX, '').replace(/\.json$/, '');
-    const traces = (await data.getData<AgentTrace[]>(`${TRACE_PREFIX}${familyId}`)) ?? [];
+    const traces = (await store.read<AgentTrace[]>(`${TRACE_PREFIX}${familyId}`)) ?? [];
     const newest = traces[traces.length - 1];
     console.log(
       `  ${familyId}  ${String(traces.length).padStart(4)} traces` +
@@ -146,10 +173,10 @@ function printOneTrace(trace: AgentTrace): void {
 }
 
 async function main(): Promise<void> {
-  const data = new UnifiedDataService();
+  const store = readOnlyStorage();
 
   if (has('list')) {
-    await listFamilies(data);
+    await listFamilies(store);
     return;
   }
 
@@ -162,7 +189,7 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
-  const traces = (await data.getData<AgentTrace[]>(`${TRACE_PREFIX}${familyId}`)) ?? [];
+  const traces = (await store.read<AgentTrace[]>(`${TRACE_PREFIX}${familyId}`)) ?? [];
   if (traces.length === 0) {
     console.log(`No traces for family ${familyId}. (Wrong storage target? Try --prod.)`);
     return;
@@ -208,7 +235,7 @@ async function main(): Promise<void> {
 
   // The other half of the story. A proposal with no trace beside it is a turn
   // that outlived the request that started it.
-  const proposals = (await data.getData<StoredProposal[]>(`${PROPOSAL_PREFIX}${familyId}`)) ?? [];
+  const proposals = (await store.read<StoredProposal[]>(`${PROPOSAL_PREFIX}${familyId}`)) ?? [];
   const live = proposals.filter(p => {
     if (p.createdAt < since) return false;
     if (conversation && !p.conversationId.startsWith(conversation)) return false;

@@ -74,6 +74,13 @@ const REQUEST_TIMEOUT_MS: Record<ChatModel, number> = {
 const ABORTED = 'CHATBOT_REQUEST_ABORTED';
 
 /**
+ * The caller hung up. Distinct from the deadline so a trace says WHICH kind of
+ * abandonment happened — a run of these is how you discover the reverse proxy
+ * is giving up before the app does.
+ */
+const CLIENT_GONE = 'CHATBOT_CLIENT_GONE';
+
+/**
  * The check that makes cancellation mean something.
  *
  * An in-flight `messages.create` rejects on abort, so most of the time the loop
@@ -204,12 +211,20 @@ export class ChatbotService {
    * @param request   Chat request (message, history, model, etc.)
    * @param userId    Authenticated user ID — used for action proposal ownership
    * @param attachment  Optional file attachment (image or PDF)
+   * @param clientSignal  Aborts when the caller stops waiting — the HTTP
+   *   connection closed before a response was written. The deadline is not the
+   *   only way a turn becomes unwanted: nginx's own `proxy_read_timeout` (60s
+   *   by default, and this app's ceiling for Opus is now 120s) closes the
+   *   upstream connection while the loop runs on, as does a user closing the
+   *   tab. Without this, that gap is the abandoned-turn bug relocated one layer
+   *   up, and the fix for the deadline would not touch it.
    */
   async chat(
     familyId: string,
     request: ChatRequest,
     userId: string,
     attachment?: ChatAttachment,
+    clientSignal?: AbortSignal,
   ): Promise<ChatResponse> {
     // 1. Check monthly spend against cap — scoped to this workspace (REQ-007 / D11).
     const budget = await this.costTracker.checkBudget(familyId);
@@ -242,6 +257,7 @@ export class ChatbotService {
         signal =>
           this.toolLoop(familyId, userId, conversationId, messages, request.model, toolCallLogs, collector, traceId, signal, request.userDisplayName),
         REQUEST_TIMEOUT_MS[request.model],
+        clientSignal,
       );
 
       totalInputTokens = result.totalInputTokens;
@@ -367,7 +383,12 @@ export class ChatbotService {
 
       // Both halves of a cancelled request land here: the race's own rejection
       // and, if the loop got there first, its abort check. One message.
-      if (message === 'CHATBOT_REQUEST_TIMEOUT' || message === ABORTED || error instanceof Anthropic.APIUserAbortError) {
+      if (
+        message === 'CHATBOT_REQUEST_TIMEOUT' ||
+        message === ABORTED ||
+        message === CLIENT_GONE ||
+        error instanceof Anthropic.APIUserAbortError
+      ) {
         return this.errorResponse('That took too long — try a simpler question or a faster model.', budget);
       }
       if (message === 'CHATBOT_TOOL_LOOP_LIMIT') {
@@ -472,12 +493,16 @@ export class ChatbotService {
           (b): b is Anthropic.ToolUseBlock => b.type === 'tool_use',
         );
 
-        // Before ANY tool branch — the write-adjacent intercepts included.
-        throwIfAborted(signal);
-
         const toolResults: Anthropic.ToolResultBlockParam[] = [];
 
         for (const toolUse of toolUseBlocks) {
+          // INSIDE the loop, not above it. Claude emits parallel tool blocks
+          // routinely, and the read tools ahead of a propose_action in the same
+          // message are the slow part of a turn — so the deadline lands DURING
+          // this loop far more often than between iterations. Checking once
+          // before the loop left the original bug fully reproducible.
+          throwIfAborted(signal);
+
           // INTERCEPT: Action proposal — do NOT execute (SEC-A001, D-8)
           // Includes submit_github_issue (migrated from bespoke intercept per D-15)
           if (toolUse.name === 'propose_action') {
@@ -488,6 +513,11 @@ export class ChatbotService {
               familyId,
               conversationId,
               proposalStore: this.proposalStore,
+              // Re-checked immediately before the nonce is written. Between the
+              // check above and the write sit `buildProposalRows` and each
+              // action's `describeCurrent`, which do live storage reads — a
+              // deadline can fall inside those just as easily.
+              signal,
             });
 
             if (outcome.kind !== 'proposal') {
@@ -532,6 +562,9 @@ export class ChatbotService {
               familyId,
               conversationId,
               traceId,
+              // The learnings store is durable too: an abandoned turn must not
+              // leave a record behind any more than it may issue a card.
+              signal,
             });
             if (notice) collector.learningNotices.push(notice);
             toolResults.push({
@@ -727,6 +760,7 @@ export class ChatbotService {
   private async executeWithTimeout<T>(
     run: (signal: AbortSignal) => Promise<T>,
     timeoutMs: number,
+    clientSignal?: AbortSignal,
   ): Promise<T> {
     const controller = new AbortController();
     let timer: NodeJS.Timeout | undefined;
@@ -738,9 +772,28 @@ export class ChatbotService {
       }, timeoutMs);
     });
 
+    // "Nobody is waiting for this any more" has two causes and one correct
+    // response. Listener removed in the finally below so a long-lived request
+    // object cannot accumulate them.
+    let onClientGone = () => {};
+    const hangUp = new Promise<never>((_, reject) => {
+      onClientGone = () => {
+        controller.abort();
+        // Reject rather than waiting for the loop to notice. Whether the
+        // in-flight call honours an abort is the SDK's business; freeing this
+        // request when nobody is listening is ours.
+        reject(new Error(CLIENT_GONE));
+      };
+    });
+    if (clientSignal) {
+      if (clientSignal.aborted) onClientGone();
+      else clientSignal.addEventListener('abort', onClientGone, { once: true });
+    }
+
     try {
-      return await Promise.race([run(controller.signal), deadline]);
+      return await Promise.race([run(controller.signal), deadline, hangUp]);
     } finally {
+      clientSignal?.removeEventListener('abort', onClientGone);
       // The timer is cleared on every path: a 60-to-120 second dangling handle
       // per request is a leak in its own right. The abort is belt and braces —
       // on the success path the loop has already returned, and on any error

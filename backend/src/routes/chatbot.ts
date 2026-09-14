@@ -241,7 +241,35 @@ router.post(
         };
       }
 
-      const response = await chatbotService.chat(familyId, chatRequest, userId, attachment);
+      /**
+       * Cancel the turn if the caller stops waiting.
+       *
+       * `close` fires on a completed response too, so the guard is
+       * `res.writableEnded` — abort only when the connection went away with
+       * nothing written. What this catches in practice is nginx giving up at
+       * its own `proxy_read_timeout` (60s by default; the Opus ceiling is now
+       * 120s) and closing the upstream connection, plus the user closing the
+       * tab. Both leave a turn running that no one will ever see, and an
+       * unattended turn can still reach propose_action — which is how a live
+       * action card got superseded by a request that had already failed.
+       */
+      const clientGone = new AbortController();
+      // `res`, not `req`. Node emits 'close' on the REQUEST when its body has
+      // been fully consumed — which for a multipart upload happens immediately,
+      // before Claude is ever called. The response object is the one whose
+      // 'close' means the connection went away, and `writableFinished`
+      // distinguishes "we finished writing" from "it left".
+      res.on('close', () => {
+        if (!res.writableFinished) clientGone.abort();
+      });
+
+      const response = await chatbotService.chat(
+        familyId,
+        chatRequest,
+        userId,
+        attachment,
+        clientGone.signal,
+      );
 
       // Observability logging for attachment requests (REQ-023, SEC-A016)
       // SECURITY: Only metadata logged — never attachment content

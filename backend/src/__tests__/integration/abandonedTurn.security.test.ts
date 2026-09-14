@@ -211,3 +211,103 @@ describe('the deadline still exists', () => {
     spy.mockRestore();
   });
 });
+
+
+describe('the deadline can land anywhere, not just between iterations', () => {
+  /**
+   * The first fix checked the signal once, above the loop over tool blocks.
+   * Claude emits parallel tool blocks routinely, and the read tools that come
+   * BEFORE a propose_action in the same message are the slow part of a turn —
+   * so the deadline lands inside that loop far more often than between
+   * iterations. An adversarial review reproduced the original incident against
+   * the fix for it. This is that reproduction.
+   */
+  it('cannot issue a proposal when the deadline falls during an earlier tool in the same message', async () => {
+    const client = (chatbotService as unknown as { client: Anthropic }).client;
+
+    const parallelBlocks = {
+      id: 'msg_parallel',
+      type: 'message',
+      role: 'assistant',
+      content: [
+        { type: 'tool_use', id: 'toolu_read', name: 'get_accounts', input: {} },
+        {
+          type: 'tool_use',
+          id: 'toolu_write',
+          name: 'propose_action',
+          input: {
+            actionId: 'create_task',
+            params: { title: 'Written after the deadline' },
+            displaySummary: 'Create a task',
+            displayFields: [
+              { key: 'title', label: 'Title', value: 'Written after the deadline' },
+            ],
+            reasoning: 'test',
+          },
+        },
+      ],
+      model: 'claude-opus-5',
+      stop_reason: 'tool_use',
+      stop_sequence: null,
+      usage: usage(),
+    } as unknown as Anthropic.Message;
+
+    const spy = jest
+      .spyOn(client.messages, 'create')
+      .mockResolvedValue(parallelBlocks as never);
+
+    // The read tool straddles the deadline: it starts inside the window and
+    // returns after it has closed, which is exactly what an S3 read under load
+    // does at 120 seconds.
+    const toolSpy = jest
+      .spyOn(chatbotService as unknown as { executeTool: () => Promise<unknown> }, 'executeTool')
+      .mockImplementation(
+        () => new Promise(resolve => { setTimeout(() => resolve({ accounts: [] }), 200_000); }),
+      );
+
+    const pending = chatbotService.chat(FAMILY, chatRequest(), USER);
+    await jest.advanceTimersByTimeAsync(130_000);
+    const response = await pending;
+    await jest.advanceTimersByTimeAsync(120_000);
+
+    expect(response.message.content).toContain('took too long');
+    expect(await storedProposals()).toHaveLength(0);
+
+    toolSpy.mockRestore();
+    spy.mockRestore();
+  });
+});
+
+
+describe('a caller that stops waiting cancels the turn too', () => {
+  /**
+   * The deadline is not the only way a turn becomes unwanted. nginx sits in
+   * front of this app with its own `proxy_read_timeout` — 60s by default, while
+   * the Opus ceiling here is now 120s — and closing a tab does the same thing.
+   * Without this, everything between the proxy's patience and the backend's is
+   * the abandoned-turn bug relocated one layer up.
+   */
+  it('issues no proposal when the client disconnects mid-turn', async () => {
+    const client = (chatbotService as unknown as { client: Anthropic }).client;
+    const spy = jest
+      .spyOn(client.messages, 'create')
+      .mockImplementation((() => new Promise(resolve => {
+        setTimeout(() => resolve(proposeActionMessage()), 90_000);
+      })) as never);
+
+    const clientGone = new AbortController();
+    const pending = chatbotService.chat(FAMILY, chatRequest(), USER, undefined, clientGone.signal);
+
+    // The proxy gives up at 60s, well inside the Opus ceiling of 120s.
+    await jest.advanceTimersByTimeAsync(60_000);
+    clientGone.abort();
+    await jest.advanceTimersByTimeAsync(1);
+
+    await pending;
+    await jest.advanceTimersByTimeAsync(120_000);
+
+    expect(await storedProposals()).toHaveLength(0);
+
+    spy.mockRestore();
+  });
+});
