@@ -11,6 +11,7 @@
 import './createTaskAction'; // registers via side-effect
 import './updateTaskAction'; // registers via side-effect
 import './completeTaskAction'; // registers via side-effect
+import './transactionMetadataActions'; // registers via side-effect
 import './submitGithubIssueAction'; // registers via side-effect
 
 export * from './registry';

@@ -19,7 +19,7 @@
 import { randomUUID } from 'crypto';
 import request from 'supertest';
 import app from '../../app';
-import { dataService, authService, taskService } from '../../services';
+import { dataService, authService, taskService, transactionService, categoryService } from '../../services';
 import { registerUser } from '../helpers/apiHelper';
 import { issueProposal, buildProposalRows } from '../../services/chatActions';
 import type { ProposalRow } from '../../shared/types';
@@ -342,5 +342,175 @@ describe('SEC-P011 — an update shows what it replaces', () => {
     expect(built.ok).toBe(true);
     if (!built.ok) return;
     expect(built.rows[0].currentValues).toBeUndefined();
+  });
+});
+
+describe('SEC-P030 — the orphaned categoryId case this requirement was written for', () => {
+  // Stored categoryId values in this app are ALREADY known to go orphaned
+  // relative to the categories file; it produces cell-vs-modal mismatches and
+  // has its own cleanup scripts. A model-supplied categoryId passes
+  // z.string().min(1) whether or not it names anything. Writing one would put
+  // the transaction in a state the UI cannot render, silently, in bulk, across
+  // a card approved with one click.
+
+  async function seedTransaction(user: { userId: string; familyId: string }) {
+    await dataService.saveData(`transactions_${user.familyId}`, [
+      {
+        id: 'txn-1',
+        accountId: 'acct-1',
+        plaidTransactionId: 'plaid-1',
+        date: '2026-05-01',
+        name: 'HARDWARE STORE 123',
+        merchantName: 'Hardware Store',
+        userDescription: null,
+        amount: 42.5,
+        categoryId: null,
+        tags: [],
+        status: 'posted',
+        pending: false,
+        isHidden: false,
+        isFlagged: false,
+        notes: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      },
+    ]);
+  }
+
+  function categoryRow(index: number, transactionId: string, categoryId: string | null): ProposalRow {
+    return {
+      rowId: `row-${index}`,
+      actionId: 'set_transaction_category',
+      label: 'Set a transaction category',
+      params: { transactionId, categoryId },
+      displaySummary: 'Categorize transaction',
+      displayFields: [
+        { key: 'transactionId', label: 'Transaction', value: transactionId, editable: false, type: 'text' },
+        { key: 'categoryId', label: 'Category', value: String(categoryId), editable: false, type: 'text' },
+      ],
+    };
+  }
+
+  it('refuses a categoryId that matches no category', async () => {
+    const user = await createUser('orph');
+    await seedTransaction(user);
+
+    const rows = [categoryRow(0, 'txn-1', 'CATEGORY_THAT_NEVER_EXISTED')];
+    const proposal = issuePlan(user, rows);
+
+    const res = await confirm(user.token, proposal.proposalId, rows).expect(400);
+    expect(res.body.error).toMatch(/No category matches/i);
+
+    const after = await transactionService.getTransactions(user.familyId, { includeHidden: true });
+    expect(after.transactions?.[0].categoryId).toBeNull();
+  });
+
+  it('accepts a categoryId that does resolve — the guard is not blanket-deny', async () => {
+    const user = await createUser('orph');
+    await seedTransaction(user);
+    await dataService.saveCategories(
+      [{
+        id: 'HOME_IMPROVEMENT',
+        name: 'Home Improvement',
+        parentId: null,
+        isCustom: false,
+        isHidden: false,
+        isRollover: false,
+        isIncome: false,
+        isSavings: false,
+      }],
+      user.familyId,
+    );
+    const real = await categoryService.getCategoryById('HOME_IMPROVEMENT', user.familyId);
+    expect(real).not.toBeNull();
+
+    const rows = [categoryRow(0, 'txn-1', real!.id)];
+    const proposal = issuePlan(user, rows);
+
+    await confirm(user.token, proposal.proposalId, rows).expect(200);
+    const after = await transactionService.getTransactions(user.familyId, { includeHidden: true });
+    expect(after.transactions?.[0].categoryId).toBe(real!.id);
+  });
+
+  it('accepts an explicit null — uncategorizing is a real intent, not a missing value', async () => {
+    const user = await createUser('orph');
+    await seedTransaction(user);
+
+    const rows = [categoryRow(0, 'txn-1', null)];
+    const proposal = issuePlan(user, rows);
+    await confirm(user.token, proposal.proposalId, rows).expect(200);
+  });
+
+  it('refuses a transaction removed by the bank', async () => {
+    // Plaid leaves replaced pending holds in storage as status:'removed'. They
+    // are invisible everywhere in the UI, so editing one is a change the user
+    // can never see, find, or undo.
+    const user = await createUser('orph');
+    await dataService.saveData(`transactions_${user.familyId}`, [
+      {
+        id: 'txn-ghost',
+        accountId: 'acct-1',
+        plaidTransactionId: 'plaid-ghost',
+        date: '2026-05-01',
+        name: 'GHOST HOLD',
+        merchantName: 'Ghost',
+        userDescription: null,
+        amount: 10,
+        categoryId: null,
+        tags: [],
+        status: 'removed',
+        pending: false,
+        isHidden: false,
+        isFlagged: false,
+        notes: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      },
+    ]);
+
+    const rows = [categoryRow(0, 'txn-ghost', null)];
+    const proposal = issuePlan(user, rows);
+    const res = await confirm(user.token, proposal.proposalId, rows).expect(400);
+    expect(res.body.error).toMatch(/could not be found/i);
+  });
+
+  it('refuses a transaction belonging to another family without confirming it exists', async () => {
+    const owner = await createUser('orphowner');
+    const attacker = await createUser('orphother');
+    await seedTransaction(owner);
+
+    const rows = [categoryRow(0, 'txn-1', null)];
+    const proposal = issuePlan(attacker, rows);
+    const res = await confirm(attacker.token, proposal.proposalId, rows).expect(400);
+    expect(res.body.error).toMatch(/could not be found/i);
+    expect(res.body.error).not.toMatch(/Hardware/i);
+  });
+
+  it('shows the current category on the card before replacing it (SEC-P011)', async () => {
+    const user = await createUser('orph');
+    await seedTransaction(user);
+
+    const built = await buildProposalRows(
+      {
+        actionId: 'set_transaction_category',
+        params: { transactionId: 'txn-1', categoryId: null },
+        displaySummary: 'Categorize transaction',
+        displayFields: [
+          { key: 'transactionId', label: 'Transaction', value: 'txn-1', editable: false, type: 'text' },
+          { key: 'categoryId', label: 'Category', value: 'null', editable: false, type: 'text' },
+        ],
+        reasoning: 'Test',
+      },
+      { userId: user.userId, familyId: user.familyId },
+    );
+
+    expect(built.ok).toBe(true);
+    if (!built.ok) return;
+
+    const current = new Map((built.rows[0].currentValues ?? []).map(f => [f.key, f.value]));
+    // The merchant, so the user can tell WHICH transaction this row is.
+    expect(current.get('transactionId')).toBe('Hardware Store');
+    // And an uncategorized transaction says so rather than rendering blank.
+    expect(current.get('categoryId')).toBe('(uncategorized)');
   });
 });

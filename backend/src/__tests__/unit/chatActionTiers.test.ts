@@ -134,6 +134,13 @@ describe('the shipped action set (REQ-P015)', () => {
     // Deliberately a fixed expectation. Promoting an action to T2 must require
     // editing this line, so the promotion is visible in review rather than
     // arriving as a one-word diff in a handler file.
+    //
+    // This became load-bearing rather than trivial once the transaction
+    // metadata actions shipped: two registered actions are now T2-ELIGIBLE by
+    // data class, so "nothing is T2" is a live claim about a deliberate choice
+    // rather than an observation that no candidate exists. REQ-P081 independently
+    // blocks promotion until durable undo and the activity log ship, because
+    // SEC-P001 gates T2 on one-click reversibility.
     const real = listT2ActionIds().filter(id => !String(id).startsWith('__test_action_'));
     expect(real).toEqual([]);
   });
@@ -146,6 +153,8 @@ describe('the shipped action set (REQ-P015)', () => {
     expect(shipped.sort()).toEqual([
       'complete_task',
       'create_task',
+      'set_transaction_category',
+      'set_transaction_description',
       'submit_github_issue',
       'update_task',
     ]);
@@ -153,6 +162,10 @@ describe('the shipped action set (REQ-P015)', () => {
     expect(getChatAction('create_task')).toMatchObject({ tier: 'T1', dataClass: 'content' });
     expect(getChatAction('update_task')).toMatchObject({ tier: 'T1', dataClass: 'content' });
     expect(getChatAction('complete_task')).toMatchObject({ tier: 'T1', dataClass: 'content' });
+    // Metadata: classification only, never an amount. This is what makes them
+    // the flagship T2 candidates for Phase 5 (SEC-P003).
+    expect(getChatAction('set_transaction_category')).toMatchObject({ tier: 'T1', dataClass: 'metadata' });
+    expect(getChatAction('set_transaction_description')).toMatchObject({ tier: 'T1', dataClass: 'metadata' });
     // Leaves the system entirely — permanently ineligible for T2.
     expect(getChatAction('submit_github_issue')).toMatchObject({ tier: 'T1', dataClass: 'external' });
   });
@@ -171,7 +184,12 @@ describe('the shipped action set (REQ-P015)', () => {
     // SEC-P030. An action taking a model-supplied id with no validateSemantics
     // hook would reach its handler with nothing but a well-formed string, and
     // "well-formed" is not "refers to a record in this family".
-    for (const id of ['update_task', 'complete_task'] as const) {
+    for (const id of [
+      'update_task',
+      'complete_task',
+      'set_transaction_category',
+      'set_transaction_description',
+    ] as const) {
       expect(typeof getChatAction(id)?.validateSemantics).toBe('function');
     }
   });
@@ -179,7 +197,12 @@ describe('the shipped action set (REQ-P015)', () => {
   it('every update action can describe what it overwrites', () => {
     // SEC-P011. A create has nothing to replace and correctly omits this; an
     // update that omitted it would show the user only the destination.
-    for (const id of ['update_task', 'complete_task'] as const) {
+    for (const id of [
+      'update_task',
+      'complete_task',
+      'set_transaction_category',
+      'set_transaction_description',
+    ] as const) {
       expect(typeof getChatAction(id)?.describeCurrent).toBe('function');
     }
     expect(getChatAction('create_task')?.describeCurrent).toBeUndefined();

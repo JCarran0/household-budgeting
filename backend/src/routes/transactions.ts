@@ -181,7 +181,8 @@ const transactionFilterSchema = z.object({
   transactionType: z.enum(['income', 'expense', 'transfer', 'all']).optional(),
 });
 
-const updateCategorySchema = z.object({
+// Exported so the chat action re-uses the same schema (REQ-P011 / SEC-A004).
+export const updateCategorySchema = z.object({
   categoryId: z.union([z.string().min(1), z.null()]),
 });
 
@@ -189,7 +190,8 @@ const addTagsSchema = z.object({
   tags: z.array(z.string().min(1)),
 });
 
-const updateDescriptionSchema = z.object({
+// Exported so the chat action re-uses the same schema (REQ-P011 / SEC-A004).
+export const updateDescriptionSchema = z.object({
   description: z.string().nullable(),
 });
 

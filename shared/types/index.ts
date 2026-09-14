@@ -784,6 +784,8 @@ export type ChatActionId =
   | 'create_task'
   | 'update_task'
   | 'complete_task'
+  | 'set_transaction_category'
+  | 'set_transaction_description'
   | 'submit_github_issue';
 
 /** Drives card field rendering */
@@ -873,7 +875,7 @@ export interface ActionConfirmRequest {
 }
 
 export interface ActionResource {
-  type: 'task' | 'github_issue';
+  type: 'task' | 'github_issue' | 'transaction';
   id: string;
   url?: string;                 // Frontend-resolvable deep link (or external for github_issue)
   label: string;                // Human-readable name of the resource
