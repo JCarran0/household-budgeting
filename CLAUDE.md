@@ -156,7 +156,7 @@ Entries link the BRD for full context. Older decisions live in git history.
 
 ## 🔄 Pending
 
-- **Subdomain migration** — `budget.jaredcarrano.com` → `family.jaredcarrano.com`. Details in `PROJECT_PLAN.md` Phase 14.5.
+- **Subdomain migration** — `budget.jaredcarrano.com` → `family.jaredcarrano.com`. Details in [docs/features/SUBDOMAIN-MIGRATION.md](docs/features/SUBDOMAIN-MIGRATION.md).
 
 ## 🚨 Known Issues
 

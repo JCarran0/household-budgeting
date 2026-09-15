@@ -421,7 +421,8 @@ chore: maintenance tasks         # No version change
 The CHANGELOG.md is automatically updated after each push to main. See [CONTRIBUTING.md](CONTRIBUTING.md) for detailed guidelines and release process.
 
 ### Project Plan
-See [PROJECT_PLAN.md](PROJECT_PLAN.md) for development phases and progress.
+Per-feature requirements live in the BRDs indexed in [CLAUDE.md](CLAUDE.md#-documentation-index).
+[PROJECT_PLAN.md](PROJECT_PLAN.md) carries the cross-feature "what's next" list and parked ideas.
 
 ## ⚠️ Known Issues
 
