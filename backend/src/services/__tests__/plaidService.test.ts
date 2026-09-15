@@ -1,5 +1,6 @@
 import { PlaidService } from '../plaidService';
 import { PlaidApi } from 'plaid';
+import { config } from '../../config';
 
 // Mock the entire Plaid module
 jest.mock('plaid');
@@ -89,30 +90,60 @@ describe('PlaidService', () => {
       });
     });
 
-    it('should include webhook URL in production environment', async () => {
-      const originalEnv = process.env.NODE_ENV;
-      process.env.NODE_ENV = 'production';
-      process.env.PLAID_WEBHOOK_URL = 'https://api.example.com/webhooks/plaid';
+    /**
+     * This used to set NODE_ENV=production and PLAID_WEBHOOK_URL at test time
+     * and assert the webhook was attached. It had been failing silently outside
+     * the CI gate for some time, for two reasons — both of which were the test
+     * describing a world that no longer exists:
+     *
+     *   - `config` is parsed from the environment ONCE at module load, so a
+     *     process.env assignment inside a test arrives far too late to be read.
+     *   - The production requirement was deliberately removed (TD-021): the
+     *     webhook is attached whenever a URL is configured, so that the
+     *     receiver can be exercised through a tunnel instead of being a code
+     *     path nobody runs until it matters.
+     *
+     * So it now tests the rule as it actually is, against the config object the
+     * service really reads.
+     */
+    it('attaches the webhook whenever one is configured, regardless of environment', async () => {
+      const original = config.plaid.webhookUrl;
+      (config.plaid as { webhookUrl?: string }).webhookUrl = 'https://api.example.com/webhooks/plaid';
 
-      const mockResponse = {
-        data: {
-          link_token: mockLinkToken,
-          expiration: '2025-01-01T00:00:00Z',
-          request_id: 'request-123',
-        },
-      };
+      try {
+        mockPlaidClient.linkTokenCreate.mockResolvedValue({
+          data: { link_token: mockLinkToken, expiration: '2025-01-01T00:00:00Z', request_id: 'request-123' },
+        });
 
-      mockPlaidClient.linkTokenCreate.mockResolvedValue(mockResponse);
+        await plaidService.createLinkToken(mockUserId);
 
-      await plaidService.createLinkToken(mockUserId);
+        expect(mockPlaidClient.linkTokenCreate).toHaveBeenCalledWith(
+          expect.objectContaining({ webhook: 'https://api.example.com/webhooks/plaid' }),
+        );
+      } finally {
+        (config.plaid as { webhookUrl?: string }).webhookUrl = original;
+      }
+    });
 
-      expect(mockPlaidClient.linkTokenCreate).toHaveBeenCalledWith(
-        expect.objectContaining({
-          webhook: 'https://api.example.com/webhooks/plaid',
-        })
-      );
+    it('attaches no webhook when none is configured', async () => {
+      // The control. Without it the assertion above passes just as well against
+      // a service that always sets the field.
+      const original = config.plaid.webhookUrl;
+      (config.plaid as { webhookUrl?: string }).webhookUrl = undefined;
 
-      process.env.NODE_ENV = originalEnv;
+      try {
+        mockPlaidClient.linkTokenCreate.mockResolvedValue({
+          data: { link_token: mockLinkToken, expiration: '2025-01-01T00:00:00Z', request_id: 'request-123' },
+        });
+
+        await plaidService.createLinkToken(mockUserId);
+
+        expect(mockPlaidClient.linkTokenCreate).toHaveBeenCalledWith(
+          expect.not.objectContaining({ webhook: expect.anything() }),
+        );
+      } finally {
+        (config.plaid as { webhookUrl?: string }).webhookUrl = original;
+      }
     });
   });
 
