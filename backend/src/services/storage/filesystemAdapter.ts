@@ -27,17 +27,23 @@ export class FilesystemAdapter implements StorageAdapter {
     return path.join(this.dataDir, fileName);
   }
 
+  /**
+   * An error is not an absence — see the header comment in s3Adapter.
+   *
+   * A missing file is null, because that is what missing means. A file that
+   * exists but cannot be read — truncated JSON from an interrupted write, a
+   * permissions problem — is NOT null: answering null there tells the caller
+   * the household has no data, and the next read-modify-write makes it true.
+   */
   async read<T = any>(key: string): Promise<T | null> {
+    const filePath = this.getFilePath(key);
+    if (!(await fs.pathExists(filePath))) return null;
+
     try {
-      const filePath = this.getFilePath(key);
-      if (await fs.pathExists(filePath)) {
-        const data = await fs.readJson(filePath);
-        return data as T;
-      }
-      return null;
+      return (await fs.readJson(filePath)) as T;
     } catch (error) {
       log.error({ err: error, key }, 'error reading data');
-      return null;
+      throw error;
     }
   }
 
@@ -83,7 +89,7 @@ export class FilesystemAdapter implements StorageAdapter {
       return matchingFiles.map(file => file.replace(/\.json$/, ''));
     } catch (error) {
       log.error({ err: error, prefix }, 'error listing files');
-      return [];
+      throw error;
     }
   }
 }

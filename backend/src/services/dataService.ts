@@ -2,10 +2,6 @@ import { Category, Family, UserColor } from '../shared/types';
 import { StorageAdapter, StorageFactory } from './storage';
 import { getRequestScope } from '../middleware/requestScope';
 
-import { childLogger } from '../utils/logger';
-
-const log = childLogger('dataService');
-
 export interface User {
   id: string;
   username: string;
@@ -62,31 +58,39 @@ export class UnifiedDataService implements DataService {
   private readonly USERS_KEY = 'users';
   private readonly FAMILIES_KEY = 'families';
 
+  /**
+   * No initialization. There used to be an `ensureInitialData()` here, called
+   * (unawaited) from this constructor, which wrote `{ users: [] }` and
+   * `{ families: [] }` whenever `exists()` came back false.
+   *
+   * `exists()` came back false on ANY error — AccessDenied, throttling, a
+   * network blip — so every boot of the production process was a chance to
+   * overwrite the user roster and the family blob with empty ones. It ran on
+   * every deploy and every PM2 restart.
+   *
+   * It is deleted rather than guarded because it was never needed: `readUsers`
+   * and `readFamilies` already treat a missing file as an empty list, and the
+   * first write creates the file. Its only other effect was a race — an
+   * unawaited write from a constructor, against the first request to arrive.
+   */
   constructor(storage?: StorageAdapter) {
     this.storage = storage || StorageFactory.getAdapter();
-    this.ensureInitialData();
-  }
-
-  private async ensureInitialData(): Promise<void> {
-    // Ensure users file exists
-    if (!(await this.storage.exists(this.USERS_KEY))) {
-      await this.storage.write(this.USERS_KEY, { users: [] });
-    }
-    // Ensure families file exists
-    if (!(await this.storage.exists(this.FAMILIES_KEY))) {
-      await this.storage.write(this.FAMILIES_KEY, { families: [] });
-    }
   }
 
   // User Management Methods
+  /**
+   * A missing file is an empty roster. A FAILED READ IS NOT.
+   *
+   * This used to catch everything and return `[]`, which meant a transient S3
+   * error presented as "this household has no users" — logins failed as
+   * "invalid credentials", and any read-modify-write that followed (createUser,
+   * updateUser) persisted the empty list over the real one. The storage layer
+   * now throws on a genuine failure, and this lets it: an unreachable bucket
+   * must look like an unreachable bucket, not like an empty one.
+   */
   private async readUsers(): Promise<User[]> {
-    try {
-      const data = await this.storage.read<{ users: User[] }>(this.USERS_KEY);
-      return data?.users || [];
-    } catch (error) {
-      log.error({ err: error }, 'error reading users');
-      return [];
-    }
+    const data = await this.storage.read<{ users: User[] }>(this.USERS_KEY);
+    return data?.users || [];
   }
 
   private async writeUsers(users: User[]): Promise<void> {
@@ -133,14 +137,10 @@ export class UnifiedDataService implements DataService {
   }
 
   // Family Management Methods
+  /** Same rule as readUsers: absence is empty, failure is failure. */
   private async readFamilies(): Promise<Family[]> {
-    try {
-      const data = await this.storage.read<{ families: Family[] }>(this.FAMILIES_KEY);
-      return data?.families || [];
-    } catch (error) {
-      log.error({ err: error }, 'error reading families');
-      return [];
-    }
+    const data = await this.storage.read<{ families: Family[] }>(this.FAMILIES_KEY);
+    return data?.families || [];
   }
 
   private async writeFamilies(families: Family[]): Promise<void> {

@@ -7,7 +7,46 @@ const log = childLogger('s3Adapter');
 /**
  * S3 storage adapter for production
  * Stores data as JSON objects in an S3 bucket
+ *
+ * AN ERROR IS NOT AN ABSENCE.
+ *
+ * Every read here used to answer a failure the same way it answers a missing
+ * object: `read` returned null, `exists` returned false. Callers then did what
+ * callers reasonably do with "there is nothing there" — `?? []`, and on the
+ * read-modify-write paths, wrote that empty list back.
+ *
+ * So a throttle, an expired credential, an IAM propagation delay or a network
+ * blip did not surface as an outage. It surfaced as an empty household: no
+ * users (login fails as "invalid credentials"), no families, no transactions —
+ * and the next write persisted whichever of those we happened to believe.
+ * `ensureInitialData` was the sharpest edge of the same rule, overwriting the
+ * user roster with `{ users: [] }` at boot whenever HeadObject failed for any
+ * reason; it has been deleted rather than guarded.
+ *
+ * Only the errors that genuinely mean "no such object" are absence now.
+ * Everything else throws, and an unreachable bucket looks like an unreachable
+ * bucket. `write` and `delete` already worked this way — the asymmetry was
+ * always in the reads.
  */
+
+/**
+ * The S3 vocabulary for "it isn't there", which is the only kind of empty.
+ *
+ * This rule DEPENDS on the caller holding `s3:ListBucket`: without it, S3
+ * answers GetObject for a missing key with 403 AccessDenied rather than 404, to
+ * avoid disclosing whether the key exists — and every first write of a new key
+ * would then throw here instead of finding an empty slot. The instance role
+ * grants it (terraform/s3-data.tf), which is what makes a 404 mean what it
+ * says. If that grant is ever narrowed, this function is the thing that breaks.
+ */
+function isGenuinelyMissing(error: unknown): boolean {
+  const err = error as { name?: string; $metadata?: { httpStatusCode?: number } };
+  return (
+    err?.name === 'NoSuchKey' ||
+    err?.name === 'NotFound' ||
+    err?.$metadata?.httpStatusCode === 404
+  );
+}
 export class S3Adapter implements StorageAdapter {
   private s3Client: S3Client;
   private bucketName: string;
@@ -47,13 +86,10 @@ export class S3Adapter implements StorageAdapter {
       }
       
       return null;
-    } catch (error: any) {
-      // NoSuchKey error means file doesn't exist - return null
-      if (error.name === 'NoSuchKey') {
-        return null;
-      }
+    } catch (error: unknown) {
+      if (isGenuinelyMissing(error)) return null;
       log.error({ err: error, key }, 'error reading data from s3');
-      return null;
+      throw error;
     }
   }
 
@@ -101,12 +137,10 @@ export class S3Adapter implements StorageAdapter {
 
       await this.s3Client.send(command);
       return true;
-    } catch (error: any) {
-      if (error.name === 'NotFound' || error.name === 'NoSuchKey') {
-        return false;
-      }
+    } catch (error: unknown) {
+      if (isGenuinelyMissing(error)) return false;
       log.error({ err: error, key }, 'error checking existence in s3');
-      return false;
+      throw error;
     }
   }
 
@@ -135,8 +169,11 @@ export class S3Adapter implements StorageAdapter {
           return withoutPrefix.replace(/\.json$/, '');
         });
     } catch (error) {
+      // Same rule: a listing that failed is not a listing that found nothing.
+      // Callers use this to discover which families exist and which accounts a
+      // webhook belongs to — an empty answer there is a silent miss.
       log.error({ err: error, prefix }, 'error listing objects in s3');
-      return [];
+      throw error;
     }
   }
 }
