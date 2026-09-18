@@ -7,6 +7,7 @@ import {
   NumberInput,
   Select,
   SegmentedControl,
+  Textarea,
   Text,
   Alert,
 } from '@mantine/core';
@@ -18,8 +19,11 @@ import { IconAlertCircle } from '@tabler/icons-react';
 import { ResponsiveModal } from '../ResponsiveModal';
 import { api } from '../../lib/api';
 import { useCategoryOptions } from '../../hooks/useCategoryOptions';
+import { WishlistUrlsInput } from './WishlistUrlsInput';
+import { validateUrl } from './wishlistUrls';
 import { isBudgetableCategory, isIncomeCategoryHierarchical, createCategoryLookup } from '../../../../shared/utils/categoryHelpers';
 import type { StoredWishlistItem, CreateWishlistItemDto, UpdateWishlistItemDto } from '../../../../shared/types';
+import { WISHLIST_NOTES_MAX_LENGTH } from '../../../../shared/types';
 
 interface WishlistItemModalProps {
   item?: StoredWishlistItem;
@@ -33,6 +37,13 @@ interface FormValues {
   estimatedMonth: Date | string | null;
   categoryId: string;
   status: 'PENDING' | 'AGREED' | 'REJECTED';
+  urls: string[];
+  notes: string;
+}
+
+/** Drop the blank rows the editor keeps around; those are UI state, not data. */
+function cleanUrls(urls: string[]): string[] {
+  return urls.map((u) => u.trim()).filter((u) => u.length > 0);
 }
 
 /**
@@ -94,6 +105,8 @@ export function WishlistItemModal({ item, opened, onClose }: WishlistItemModalPr
       estimatedMonth: null,
       categoryId: '',
       status: 'PENDING',
+      urls: [],
+      notes: '',
     },
     validate: {
       name: (v) => (!v.trim() ? 'Name is required' : null),
@@ -105,6 +118,14 @@ export function WishlistItemModal({ item, opened, onClose }: WishlistItemModalPr
       },
       estimatedMonth: (v) => (!v ? 'Month is required' : null),
       categoryId: (v) => (!v ? 'Category is required' : null),
+      urls: (v) => {
+        const firstError = cleanUrls(v).map(validateUrl).find((e) => e !== null);
+        return firstError ?? null;
+      },
+      notes: (v) =>
+        v.length > WISHLIST_NOTES_MAX_LENGTH
+          ? `Note must be ${WISHLIST_NOTES_MAX_LENGTH} characters or fewer`
+          : null,
     },
   });
 
@@ -118,6 +139,8 @@ export function WishlistItemModal({ item, opened, onClose }: WishlistItemModalPr
           estimatedMonth: yearMonthToDate(item.estimatedMonth),
           categoryId: item.categoryId,
           status: item.status,
+          urls: item.urls ?? [],
+          notes: item.notes ?? '',
         });
       } else {
         form.reset();
@@ -170,6 +193,9 @@ export function WishlistItemModal({ item, opened, onClose }: WishlistItemModalPr
     }
 
     const amount = Number(values.estimatedAmount);
+    const urls = cleanUrls(values.urls);
+    // Trimmed so a note of only whitespace clears rather than stores blanks.
+    const notes = values.notes.trim();
 
     if (isEdit && item) {
       updateMutation.mutate({
@@ -180,6 +206,8 @@ export function WishlistItemModal({ item, opened, onClose }: WishlistItemModalPr
           estimatedMonth: monthStr,
           categoryId: values.categoryId,
           status: values.status,
+          urls,
+          notes,
         },
       });
     } else {
@@ -189,6 +217,8 @@ export function WishlistItemModal({ item, opened, onClose }: WishlistItemModalPr
         estimatedMonth: monthStr,
         categoryId: values.categoryId,
         status: values.status,
+        urls,
+        notes,
       });
     }
   };
@@ -253,6 +283,22 @@ export function WishlistItemModal({ item, opened, onClose }: WishlistItemModalPr
               fullWidth
             />
           </div>
+
+          <WishlistUrlsInput
+            value={form.values.urls}
+            onChange={(next) => form.setFieldValue('urls', next)}
+          />
+
+          <Textarea
+            label="Note"
+            placeholder="Why we want this, which model, sizing…"
+            description="Optional"
+            autosize
+            minRows={2}
+            maxRows={6}
+            maxLength={WISHLIST_NOTES_MAX_LENGTH}
+            {...form.getInputProps('notes')}
+          />
 
           <Group justify="flex-end" mt="sm">
             <Button variant="subtle" onClick={onClose} disabled={isPending}>

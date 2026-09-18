@@ -32,9 +32,11 @@ export class WishlistService {
   // ---------------------------------------------------------------------------
 
   private async loadItems(familyId: string): Promise<StoredWishlistItem[]> {
-    return (
-      (await this.dataService.getData<StoredWishlistItem[]>(`wishlist_${familyId}`)) ?? []
-    );
+    const items =
+      (await this.dataService.getData<StoredWishlistItem[]>(`wishlist_${familyId}`)) ?? [];
+    // Items stored before links/notes existed have no value for those fields;
+    // normalize on read so every consumer can treat them as an array/string.
+    return items.map((item) => ({ ...item, urls: item.urls ?? [], notes: item.notes ?? '' }));
   }
 
   private async saveItems(items: StoredWishlistItem[], familyId: string): Promise<void> {
@@ -94,6 +96,8 @@ export class WishlistService {
       estimatedMonth: data.estimatedMonth,
       categoryId: data.categoryId,
       status: data.status ?? 'PENDING',
+      urls: data.urls ?? [],
+      notes: data.notes ?? '',
       createdBy: userId,
       createdAt: now,
       updatedAt: now,
@@ -140,6 +144,10 @@ export class WishlistService {
       ...(data.estimatedMonth !== undefined && { estimatedMonth: data.estimatedMonth }),
       ...(data.categoryId !== undefined && { categoryId: data.categoryId }),
       ...(data.status !== undefined && { status: data.status }),
+      // Full replacement — an explicit [] clears the links.
+      ...(data.urls !== undefined && { urls: data.urls }),
+      // Likewise an explicit '' clears the note.
+      ...(data.notes !== undefined && { notes: data.notes }),
       updatedAt: new Date().toISOString(),
     };
 

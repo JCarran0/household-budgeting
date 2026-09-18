@@ -3,7 +3,7 @@
 **Status:** Draft
 **Author:** Jared Carrano
 **Date:** 2026-05-26
-**Version:** 1.0
+**Version:** 1.2 (2026-09-18 — links + notes, REQ-014..017)
 
 ---
 
@@ -27,6 +27,8 @@ Today, "should we buy X?" conversations happen in text messages and get lost. Th
 - `categoryId` — required, references an existing spending category
 - `status` — required, one of `PENDING` | `AGREED` | `REJECTED`
 - `createdBy` — userId of the creator
+- `urls` — optional list of reference links (see REQ-014)
+- `notes` — optional free-text note (see REQ-017)
 - `createdAt`, `updatedAt` — timestamps
 
 **REQ-002:** `categoryId` must reference a category that is **not** income, **not** savings (`isSavings=false`), and **not** a transfer (per `isBudgetableCategory`). The category picker filters to spending categories only.
@@ -55,7 +57,19 @@ Today, "should we buy X?" conversations happen in text messages and get lost. Th
 
 **REQ-011:** Each row displays at minimum: name, estimated amount, estimated month, category, status, and a delete affordance.
 
-### 3.5 Security & Scope
+### 3.5 Links
+
+**REQ-014:** An item may carry up to **5** reference links (`urls`), each at most 2048 characters. Links are optional; an item with none is normal, not incomplete.
+
+**REQ-015:** Only `http` and `https` URLs may be stored. This is enforced server-side in `wishlistValidators.ts` and re-checked at the render site before a value becomes an `href`. Note that Zod's `z.string().url()` accepts *any* parseable scheme — `javascript:` and `data:` included — so the protocol allowlist is load-bearing, not decorative.
+
+**REQ-016:** On update, `urls` is a **full replacement**, not a merge: omitting the field leaves existing links untouched, and sending `[]` clears them. Links display labelled by hostname (so the destination is visible before the click) and open in a new tab with `rel="noopener noreferrer"`.
+
+### 3.6 Notes
+
+**REQ-017:** An item may carry an optional free-text `notes` value of at most **1000 characters**, matching the cap budgets and project line items already use. Like `urls`, it is a full replacement on update: omitting the field leaves the existing note untouched, and sending `''` clears it. The note renders as a secondary line beneath the item name (truncated, full text on hover) rather than as its own column — free text is the widest thing on a row and an eighth column would squeeze the rest.
+
+### 3.7 Security & Scope
 
 **REQ-012:** Wishlist data is family-shared (both users see the same list). It is not per-user private.
 
@@ -86,7 +100,7 @@ Today, "should we buy X?" conversations happen in text messages and get lost. Th
 - **Approval workflow restrictions.** No spouse-only approval, no creator-locked editing, no status state machine.
 - **Auto-archive / soft delete / undo.** Past items linger; delete is permanent.
 - **Audit history.** No per-item change log.
-- **Comments / discussion thread** on an item.
+- **Comments / discussion thread** on an item. (REQ-017 is a single shared free-text note, not a threaded, attributed discussion.)
 - **Priority / ranking** beyond default sort.
-- **Attachments** (images, links to product pages).
+- **Image attachments.** Links to product pages shipped in v1.1 (REQ-014..016); uploaded images and link previews/thumbnails remain out of scope.
 - **Recurring wishlist items.**

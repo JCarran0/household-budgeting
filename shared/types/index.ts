@@ -762,7 +762,28 @@ export interface WishlistItem {
   categoryId: string;         // spending category only
   status: WishlistStatus;
   createdBy: string;          // userId of the creator
+  /**
+   * Reference links for the item (product page, review, listing).
+   * http/https only, max 5 — see WISHLIST_URL_LIMITS. Optional because items
+   * created before the field existed have no value stored.
+   */
+  urls?: string[];
+  /**
+   * Free-text note ("why we want this", sizing, which model). Optional because
+   * items created before the field existed have no value stored; max
+   * WISHLIST_NOTES_MAX_LENGTH chars.
+   */
+  notes?: string;
 }
+
+/** Shared by the Zod schema, the form editor, and the tests. */
+export const WISHLIST_URL_LIMITS = {
+  maxCount: 5,
+  maxLength: 2048,
+} as const;
+
+/** Matches the `notes` cap used by budgets and project line items. */
+export const WISHLIST_NOTES_MAX_LENGTH = 1000;
 
 export interface StoredWishlistItem extends WishlistItem {
   createdAt: string;          // ISO timestamp
@@ -775,6 +796,8 @@ export interface CreateWishlistItemDto {
   estimatedMonth: string;
   categoryId: string;
   status?: WishlistStatus;    // defaults to PENDING server-side
+  urls?: string[];            // defaults to [] server-side
+  notes?: string;             // defaults to '' server-side
 }
 
 export interface UpdateWishlistItemDto {
@@ -783,6 +806,8 @@ export interface UpdateWishlistItemDto {
   estimatedMonth?: string;
   categoryId?: string;
   status?: WishlistStatus;
+  urls?: string[];            // full replacement; [] clears every link
+  notes?: string;             // full replacement; '' clears the note
 }
 
 // =============================================================================

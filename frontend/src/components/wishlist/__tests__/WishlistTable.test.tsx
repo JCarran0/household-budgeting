@@ -42,6 +42,8 @@ function makeItem(overrides: Partial<StoredWishlistItem> & { id: string }): Stor
     categoryId: overrides.categoryId ?? 'CUSTOM_CAT',
     status: overrides.status ?? 'PENDING',
     createdBy: 'user-1',
+    urls: overrides.urls,
+    notes: overrides.notes,
     createdAt: '2026-01-01T00:00:00Z',
     updatedAt: '2026-01-01T00:00:00Z',
   };
@@ -195,6 +197,71 @@ describe('WishlistTable', () => {
     // Give any async handlers a chance to fire; then assert no delete call
     await waitFor(() => {
       expect(deleteWishlistItem).not.toHaveBeenCalled();
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // Links
+  // ---------------------------------------------------------------------------
+
+  describe('links', () => {
+    it('renders each link labelled by host, opened safely in a new tab', () => {
+      renderTable([
+        makeItem({ id: '1', urls: ['https://www.example.com/sofa?ref=x', 'http://shop.test.org/a'] }),
+      ]);
+
+      const first = screen.getByRole('link', { name: /example\.com/ });
+      expect(first).toHaveAttribute('href', 'https://www.example.com/sofa?ref=x');
+      expect(first).toHaveAttribute('target', '_blank');
+      expect(first.getAttribute('rel')).toContain('noopener');
+      expect(first.getAttribute('rel')).toContain('noreferrer');
+
+      expect(screen.getByRole('link', { name: /shop\.test\.org/ })).toBeInTheDocument();
+    });
+
+    // SECURITY: the server schema keeps these out of storage; this asserts the
+    // render site refuses them independently, so a value that got in some other
+    // way still never becomes a live href.
+    it('never renders a non-http(s) link as an anchor', () => {
+      renderTable([
+        makeItem({
+          id: '1',
+          urls: ['javascript:alert(1)', 'data:text/html,<script>alert(1)</script>'],
+        }),
+      ]);
+
+      expect(screen.queryByRole('link')).toBeNull();
+    });
+
+    it('renders a placeholder when an item has no links', () => {
+      renderTable([makeItem({ id: '1', urls: [] })]);
+      expect(screen.queryByRole('link')).toBeNull();
+    });
+  });
+
+
+  // ---------------------------------------------------------------------------
+  // Notes
+  // ---------------------------------------------------------------------------
+
+  describe('notes', () => {
+    it('renders the note under the item name', () => {
+      renderTable([makeItem({ id: '1', name: 'Couch', notes: 'Only the sectional' })]);
+
+      expect(screen.getByTestId('wishlist-note')).toHaveTextContent('Only the sectional');
+    });
+
+    it('renders nothing for an item with no note or a whitespace-only note', () => {
+      renderTable([
+        makeItem({ id: '1', name: 'Plain' }),
+        makeItem({ id: '2', name: 'Blank', notes: '   ' }),
+      ]);
+
+      expect(screen.getByText('Plain')).toBeInTheDocument();
+      expect(screen.getByText('Blank')).toBeInTheDocument();
+      // Asserted by testid, not by text: Testing Library normalizes whitespace,
+      // so a text query for '   ' would pass even if a blank line did render.
+      expect(screen.queryAllByTestId('wishlist-note')).toHaveLength(0);
     });
   });
 });

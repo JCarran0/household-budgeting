@@ -10,14 +10,16 @@ import {
   SegmentedControl,
   Menu,
   Tooltip,
+  Anchor,
 } from '@mantine/core';
 import { useMediaQuery } from '@mantine/hooks';
 import { modals } from '@mantine/modals';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { notifications } from '@mantine/notifications';
-import { IconPencil, IconTrash, IconShoppingBag, IconDots } from '@tabler/icons-react';
+import { IconPencil, IconTrash, IconShoppingBag, IconDots, IconExternalLink } from '@tabler/icons-react';
 import { api } from '../../lib/api';
 import { formatCurrency } from '../../utils/formatters';
+import { hostLabel, isRenderableUrl } from './wishlistUrls';
 import type { StoredWishlistItem, WishlistStatus } from '../../../../shared/types';
 
 // ---------------------------------------------------------------------------
@@ -64,6 +66,50 @@ function StatusToggle({ item }: StatusToggleProps) {
 }
 
 // ---------------------------------------------------------------------------
+// Links cell
+// ---------------------------------------------------------------------------
+
+/**
+ * Renders an item's reference links, labelled by hostname so the destination is
+ * visible before the click.
+ *
+ * SECURITY: `isRenderableUrl` re-checks the scheme the server already enforced.
+ * A stored string is only ever turned into an href if it is http(s), so a value
+ * that reached the file some other way cannot become a `javascript:` link.
+ * `noopener noreferrer` keeps the destination from getting a handle on this
+ * window or a Referer header.
+ */
+function WishlistLinks({ urls }: { urls: string[] }) {
+  const renderable = urls.filter(isRenderableUrl);
+  if (renderable.length === 0) {
+    return (
+      <Text size="sm" c="dimmed">
+        —
+      </Text>
+    );
+  }
+
+  return (
+    <Stack gap={2}>
+      {renderable.map((url) => (
+        <Tooltip key={url} label={url} withArrow multiline maw={320}>
+          <Anchor
+            href={url}
+            target="_blank"
+            rel="noopener noreferrer"
+            size="xs"
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}
+          >
+            <IconExternalLink size={12} />
+            {hostLabel(url)}
+          </Anchor>
+        </Tooltip>
+      ))}
+    </Stack>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // WishlistTable props
 // ---------------------------------------------------------------------------
 
@@ -73,6 +119,29 @@ interface WishlistTableProps {
   categoryLabels: Map<string, string>;
   onEdit: (item: StoredWishlistItem) => void;
   onAddNew: () => void;
+}
+
+// ---------------------------------------------------------------------------
+// Note
+// ---------------------------------------------------------------------------
+
+/**
+ * Renders an item's note as a secondary line under its name. Deliberately not
+ * its own column: a free-text note is the widest thing on the row, and an
+ * eighth column would squeeze every other one. Truncated to a single line with
+ * the full text in a tooltip.
+ */
+function WishlistNote({ notes }: { notes?: string }) {
+  const trimmed = notes?.trim();
+  if (!trimmed) return null;
+
+  return (
+    <Tooltip label={trimmed} withArrow multiline maw={360} position="bottom-start">
+      <Text size="xs" c="dimmed" truncate data-testid="wishlist-note">
+        {trimmed}
+      </Text>
+    </Tooltip>
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -140,12 +209,14 @@ function MobileCard({
           <Text fw={600} size="sm" truncate>
             {item.name}
           </Text>
+          <WishlistNote notes={item.notes} />
           <Text size="xs" c="dimmed">
             {categoryLabel} · {item.estimatedMonth}
           </Text>
           <Text size="sm" fw={500}>
             {formatCurrency(item.estimatedAmount, true)}
           </Text>
+          {(item.urls ?? []).length > 0 && <WishlistLinks urls={item.urls ?? []} />}
         </Stack>
         <Menu withinPortal position="bottom-end" shadow="sm">
           <Menu.Target>
@@ -215,6 +286,7 @@ export function WishlistTable({ items, categoryLabels, onEdit, onAddNew }: Wishl
           <Table.Th>Amount</Table.Th>
           <Table.Th>Month</Table.Th>
           <Table.Th>Category</Table.Th>
+          <Table.Th>Links</Table.Th>
           <Table.Th>Status</Table.Th>
           <Table.Th style={{ width: 80 }}>Actions</Table.Th>
         </Table.Tr>
@@ -222,10 +294,11 @@ export function WishlistTable({ items, categoryLabels, onEdit, onAddNew }: Wishl
       <Table.Tbody>
         {items.map((item) => (
           <Table.Tr key={item.id}>
-            <Table.Td>
+            <Table.Td style={{ maxWidth: 260 }}>
               <Text size="sm" fw={500}>
                 {item.name}
               </Text>
+              <WishlistNote notes={item.notes} />
             </Table.Td>
             <Table.Td>
               <Text size="sm">{formatCurrency(item.estimatedAmount, true)}</Text>
@@ -235,6 +308,9 @@ export function WishlistTable({ items, categoryLabels, onEdit, onAddNew }: Wishl
             </Table.Td>
             <Table.Td>
               <Text size="sm">{categoryLabels.get(item.categoryId) ?? item.categoryId}</Text>
+            </Table.Td>
+            <Table.Td>
+              <WishlistLinks urls={item.urls ?? []} />
             </Table.Td>
             <Table.Td>
               <StatusToggle item={item} />
