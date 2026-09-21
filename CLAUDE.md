@@ -8,6 +8,7 @@ Family-scale app for 2 users: personal budgeting (with Plaid), shared tasks, tri
 |----------|---------|
 | [AI-APPLICATION-ARCHITECTURE.md](docs/AI-APPLICATION-ARCHITECTURE.md) | Service patterns, API structure, data flow, common tasks |
 | [AI-DEPLOYMENTS.md](docs/AI-DEPLOYMENTS.md) | CI/CD, AWS infra, production ops, SSH/PM2 |
+| [AI-COST-BUDGET.md](docs/AI-COST-BUDGET.md) | What it costs, the $15 subscription-parity target, what to monitor, what in the AWS account **isn't** this app |
 | [AI-TESTING-STRATEGY.md](docs/AI-TESTING-STRATEGY.md) | Test philosophy, examples, troubleshooting |
 | [AI-USER-STORIES.md](docs/AI-USER-STORIES.md) | Product requirements, acceptance criteria |
 | [AWS-LOCAL-SETUP.md](docs/AWS-LOCAL-SETUP.md) | Local dev with synced production data |
