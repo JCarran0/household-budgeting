@@ -9,6 +9,7 @@
 import request from 'supertest';
 import app from '../../app';
 import { registerUser } from '../../../src/__tests__/helpers/apiHelper';
+import { BASE_PNG, GPS_MARKER, jpegWithGps } from '../../__tests__/helpers/imageFixtures';
 
 const BASE = '/api/v1/wishlist';
 const CATEGORIES_BASE = '/api/v1/categories';
@@ -483,5 +484,169 @@ describe('Wishlist Routes', () => {
       .set('Authorization', `Bearer ${token}`);
 
     expect(res.status).toBe(404);
+  });
+
+  // ---------------------------------------------------------------------------
+  // Images (WISHLIST-BRD.md §3.7)
+  // ---------------------------------------------------------------------------
+
+  describe('images', () => {
+    const IMAGES_BASE = '/api/v1/images';
+
+    async function createItem(): Promise<string> {
+      const res = await request(app)
+        .post(BASE)
+        .set('Authorization', `Bearer ${token}`)
+        .send({ name: 'Lamp', estimatedAmount: 60, estimatedMonth: '2026-12', categoryId: spendingCategoryId });
+      return res.body.id;
+    }
+
+    function upload(itemId: string, body: Buffer, contentType: string, authToken = token) {
+      return request(app)
+        .post(`${BASE}/${itemId}/images`)
+        .set('Authorization', `Bearer ${authToken}`)
+        .attach('image', body, { filename: 'photo', contentType });
+    }
+
+    it('POST /:id/images returns 401 when unauthenticated', async () => {
+      const res = await request(app).post(`${BASE}/some-id/images`);
+      expect(res.status).toBe(401);
+    });
+
+    it('GET /images/:id returns 401 when unauthenticated', async () => {
+      const res = await request(app).get(`${IMAGES_BASE}/00000000-0000-4000-8000-000000000000`);
+      expect(res.status).toBe(401);
+    });
+
+    it('uploads, lists and serves an image with its metadata stripped', async () => {
+      const itemId = await createItem();
+
+      const up = await upload(itemId, jpegWithGps(), 'image/jpeg');
+      expect(up.status).toBe(201);
+      expect(up.body.images).toHaveLength(1);
+      const imageId: string = up.body.images[0].id;
+
+      const list = await request(app).get(BASE).set('Authorization', `Bearer ${token}`);
+      expect(list.body[0].images[0].id).toBe(imageId);
+
+      const img = await request(app)
+        .get(`${IMAGES_BASE}/${imageId}`)
+        .set('Authorization', `Bearer ${token}`)
+        .buffer(true)
+        .parse((res, cb) => {
+          const chunks: Buffer[] = [];
+          res.on('data', (c: Buffer) => chunks.push(c));
+          res.on('end', () => cb(null, Buffer.concat(chunks)));
+        });
+      expect(img.status).toBe(200);
+      expect(img.headers['content-type']).toBe('image/jpeg');
+      expect(img.headers['cache-control']).toContain('private');
+      expect(img.headers['x-content-type-options']).toBe('nosniff');
+      const body = img.body as Buffer;
+      expect(body.length).toBe(up.body.images[0].size);
+      expect(body.includes(Buffer.from(GPS_MARKER))).toBe(false);
+    });
+
+    it('another family cannot read the image (404, not 403)', async () => {
+      const itemId = await createItem();
+      const imageId: string = (await upload(itemId, jpegWithGps(), 'image/jpeg')).body.images[0].id;
+
+      const other = await registerUser(
+        `wl${Math.random().toString(36).substring(2, 10)}`,
+        'super-secure-passphrase-for-wishlist-tests',
+      );
+      const res = await request(app)
+        .get(`${IMAGES_BASE}/${imageId}`)
+        .set('Authorization', `Bearer ${other.token}`);
+      expect(res.status).toBe(404);
+    });
+
+    it('another family cannot attach to the item', async () => {
+      const itemId = await createItem();
+      const other = await registerUser(
+        `wl${Math.random().toString(36).substring(2, 10)}`,
+        'super-secure-passphrase-for-wishlist-tests',
+      );
+      const res = await upload(itemId, jpegWithGps(), 'image/jpeg', other.token);
+      expect(res.status).toBe(404);
+    });
+
+    it('GET /images/:id with a non-UUID id is a 404', async () => {
+      const res = await request(app)
+        .get(`${IMAGES_BASE}/..%2F..%2Fusers`)
+        .set('Authorization', `Bearer ${token}`);
+      expect(res.status).toBe(404);
+    });
+
+    it('rejects a second image while the v1 cap is 1', async () => {
+      const itemId = await createItem();
+      await upload(itemId, jpegWithGps(), 'image/jpeg');
+      const res = await upload(itemId, jpegWithGps(), 'image/jpeg');
+      expect(res.status).toBe(400);
+    });
+
+    it('rejects content that does not match the declared type', async () => {
+      const itemId = await createItem();
+      const res = await upload(itemId, BASE_PNG, 'image/jpeg');
+      expect(res.status).toBe(400);
+    });
+
+    it('rejects a non-image type', async () => {
+      const itemId = await createItem();
+      const res = await upload(itemId, Buffer.from('<svg/>'), 'image/svg+xml');
+      expect(res.status).toBe(400);
+    });
+
+    it('rejects a file over 5 MB', async () => {
+      const itemId = await createItem();
+      const big = Buffer.concat([jpegWithGps(), Buffer.alloc(5 * 1024 * 1024)]);
+      const res = await upload(itemId, big, 'image/jpeg');
+      expect(res.status).toBe(400);
+    });
+
+    it('rejects a request with no file', async () => {
+      const itemId = await createItem();
+      const res = await request(app)
+        .post(`${BASE}/${itemId}/images`)
+        .set('Authorization', `Bearer ${token}`)
+        .field('note', 'no file');
+      expect(res.status).toBe(400);
+    });
+
+    it('PUT /:id cannot set images through the JSON body', async () => {
+      const itemId = await createItem();
+      const res = await request(app)
+        .put(`${BASE}/${itemId}`)
+        .set('Authorization', `Bearer ${token}`)
+        .send({
+          name: 'Lamp 2',
+          images: [{ id: '00000000-0000-4000-8000-000000000000', mimeType: 'image/png', size: 1, uploadedAt: 'x' }],
+        });
+      expect(res.status).toBe(200);
+      expect(res.body.images).toEqual([]);
+    });
+
+    it('DELETE /:id/images/:imageId detaches the image and it is no longer served', async () => {
+      const itemId = await createItem();
+      const imageId: string = (await upload(itemId, jpegWithGps(), 'image/jpeg')).body.images[0].id;
+
+      const del = await request(app)
+        .delete(`${BASE}/${itemId}/images/${imageId}`)
+        .set('Authorization', `Bearer ${token}`);
+      expect(del.status).toBe(200);
+      expect(del.body.images).toEqual([]);
+
+      const img = await request(app).get(`${IMAGES_BASE}/${imageId}`).set('Authorization', `Bearer ${token}`);
+      expect(img.status).toBe(404);
+    });
+
+    it('deleting the item stops its image being served', async () => {
+      const itemId = await createItem();
+      const imageId: string = (await upload(itemId, jpegWithGps(), 'image/jpeg')).body.images[0].id;
+
+      await request(app).delete(`${BASE}/${itemId}`).set('Authorization', `Bearer ${token}`);
+      const img = await request(app).get(`${IMAGES_BASE}/${imageId}`).set('Authorization', `Bearer ${token}`);
+      expect(img.status).toBe(404);
+    });
   });
 });

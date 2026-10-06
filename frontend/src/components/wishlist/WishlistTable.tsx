@@ -11,6 +11,7 @@ import {
   Menu,
   Tooltip,
   Anchor,
+  UnstyledButton,
 } from '@mantine/core';
 import { useMediaQuery } from '@mantine/hooks';
 import { modals } from '@mantine/modals';
@@ -20,6 +21,7 @@ import { IconPencil, IconTrash, IconShoppingBag, IconDots, IconExternalLink } fr
 import { api } from '../../lib/api';
 import { formatCurrency } from '../../utils/formatters';
 import { hostLabel, isRenderableUrl } from './wishlistUrls';
+import { StoredImage } from '../common/StoredImage';
 import type { StoredWishlistItem, WishlistStatus } from '../../../../shared/types';
 
 // ---------------------------------------------------------------------------
@@ -145,6 +147,32 @@ function WishlistNote({ notes }: { notes?: string }) {
 }
 
 // ---------------------------------------------------------------------------
+// Thumbnail
+// ---------------------------------------------------------------------------
+
+const THUMB_SIZE = 40;
+
+/**
+ * The item's first photo, opening the item on click (no separate lightbox in
+ * v1). Renders nothing for items without a photo, so rows that have none look
+ * exactly as they did before images existed.
+ */
+function WishlistThumb({ item, onEdit }: { item: StoredWishlistItem; onEdit: (item: StoredWishlistItem) => void }) {
+  const image = item.images?.[0];
+  if (!image) return null;
+
+  return (
+    <UnstyledButton
+      onClick={() => onEdit(item)}
+      aria-label={`Open ${item.name}`}
+      style={{ flexShrink: 0, lineHeight: 0 }}
+    >
+      <StoredImage imageId={image.id} alt={item.name} width={THUMB_SIZE} height={THUMB_SIZE} />
+    </UnstyledButton>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Delete helper (used by both desktop and mobile rows)
 // ---------------------------------------------------------------------------
 
@@ -205,6 +233,7 @@ function MobileCard({
   return (
     <Card withBorder padding="sm" radius="sm">
       <Group justify="space-between" align="flex-start" wrap="nowrap">
+        <WishlistThumb item={item} onEdit={onEdit} />
         <Stack gap={2} style={{ flex: 1, minWidth: 0 }}>
           <Text fw={600} size="sm" truncate>
             {item.name}
@@ -295,10 +324,15 @@ export function WishlistTable({ items, categoryLabels, onEdit, onAddNew }: Wishl
         {items.map((item) => (
           <Table.Tr key={item.id}>
             <Table.Td style={{ maxWidth: 260 }}>
-              <Text size="sm" fw={500}>
-                {item.name}
-              </Text>
-              <WishlistNote notes={item.notes} />
+              <Group gap="sm" wrap="nowrap" align="center">
+                <WishlistThumb item={item} onEdit={onEdit} />
+                <Stack gap={0} style={{ minWidth: 0 }}>
+                  <Text size="sm" fw={500}>
+                    {item.name}
+                  </Text>
+                  <WishlistNote notes={item.notes} />
+                </Stack>
+              </Group>
             </Table.Td>
             <Table.Td>
               <Text size="sm">{formatCurrency(item.estimatedAmount, true)}</Text>

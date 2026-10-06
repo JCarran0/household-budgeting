@@ -14,6 +14,7 @@
 
 import multer from 'multer';
 import { ValidationError } from '../errors';
+import { isImageMimeType, matchesImageSignature } from '../utils/imageSignatures';
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB (BRD §3.1)
 const MAX_PDF_PAGES = 20;               // BRD §3.1
@@ -36,11 +37,7 @@ function isAllowedMime(mime: string): mime is ChatAttachmentMimeType {
   return ALLOWED_MIMES.has(mime);
 }
 
-/** Magic byte signatures */
-const JPEG_MAGIC = Buffer.from([0xff, 0xd8, 0xff]);
-const PNG_MAGIC  = Buffer.from([0x89, 0x50, 0x4e, 0x47]);
-const WEBP_RIFF  = Buffer.from('RIFF');
-const WEBP_MARK  = Buffer.from('WEBP');
+/** Image signatures are shared with stored images (utils/imageSignatures). */
 const PDF_MAGIC  = Buffer.from('%PDF-');
 
 /**
@@ -66,27 +63,9 @@ export const uploadChatAttachment = multer({
  * @throws ValidationError if content doesn't match declared type
  */
 export function validateAttachmentMagicBytes(file: Express.Multer.File): void {
-  const head = file.buffer.subarray(0, 16);
-  let valid = false;
-
-  switch (file.mimetype) {
-    case 'image/jpeg':
-      valid = head.subarray(0, 3).equals(JPEG_MAGIC);
-      break;
-    case 'image/png':
-      valid = head.subarray(0, 4).equals(PNG_MAGIC);
-      break;
-    case 'image/webp':
-      valid =
-        head.subarray(0, 4).equals(WEBP_RIFF) &&
-        head.subarray(8, 12).equals(WEBP_MARK);
-      break;
-    case 'application/pdf':
-      valid = head.subarray(0, 5).equals(PDF_MAGIC);
-      break;
-    default:
-      valid = false;
-  }
+  const valid = isImageMimeType(file.mimetype)
+    ? matchesImageSignature(file.buffer, file.mimetype)
+    : file.mimetype === 'application/pdf' && file.buffer.subarray(0, 5).equals(PDF_MAGIC);
 
   if (!valid) {
     throw new ValidationError(

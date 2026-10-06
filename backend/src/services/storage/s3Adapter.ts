@@ -1,5 +1,5 @@
 import { S3Client, GetObjectCommand, PutObjectCommand, DeleteObjectCommand, ListObjectsV2Command, HeadObjectCommand } from '@aws-sdk/client-s3';
-import { StorageAdapter } from './types';
+import { StorageAdapter, BinaryObjectStore, BinaryObject } from './types';
 import { childLogger } from '../../utils/logger';
 
 const log = childLogger('s3Adapter');
@@ -47,7 +47,7 @@ function isGenuinelyMissing(error: unknown): boolean {
     err?.$metadata?.httpStatusCode === 404
   );
 }
-export class S3Adapter implements StorageAdapter {
+export class S3Adapter implements StorageAdapter, BinaryObjectStore {
   private s3Client: S3Client;
   private bucketName: string;
   private prefix: string;
@@ -173,6 +173,63 @@ export class S3Adapter implements StorageAdapter {
       // Callers use this to discover which families exist and which accounts a
       // webhook belongs to — an empty answer there is a silent miss.
       log.error({ err: error, prefix }, 'error listing objects in s3');
+      throw error;
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Binary objects — keys used verbatim under the same prefix (see types.ts)
+  // ---------------------------------------------------------------------------
+
+  async putObject(
+    key: string,
+    body: Buffer,
+    options: { contentType: string; metadata: Record<string, string> }
+  ): Promise<void> {
+    try {
+      await this.s3Client.send(
+        new PutObjectCommand({
+          Bucket: this.bucketName,
+          Key: `${this.prefix}${key}`,
+          Body: body,
+          ContentType: options.contentType,
+          Metadata: options.metadata,
+          ServerSideEncryption: 'AES256',
+        })
+      );
+    } catch (error) {
+      log.error({ err: error, key }, 'error writing object to s3');
+      throw error;
+    }
+  }
+
+  async getObject(key: string): Promise<BinaryObject | null> {
+    try {
+      const response = await this.s3Client.send(
+        new GetObjectCommand({ Bucket: this.bucketName, Key: `${this.prefix}${key}` })
+      );
+      if (!response.Body) return null;
+      const bytes = await response.Body.transformToByteArray();
+      return {
+        body: Buffer.from(bytes),
+        contentType: response.ContentType ?? 'application/octet-stream',
+        metadata: response.Metadata ?? {},
+      };
+    } catch (error: unknown) {
+      if (isGenuinelyMissing(error)) return null;
+      log.error({ err: error, key }, 'error reading object from s3');
+      throw error;
+    }
+  }
+
+  async deleteObject(key: string): Promise<void> {
+    try {
+      // S3 DeleteObject succeeds for a missing key, which is the contract.
+      await this.s3Client.send(
+        new DeleteObjectCommand({ Bucket: this.bucketName, Key: `${this.prefix}${key}` })
+      );
+    } catch (error) {
+      log.error({ err: error, key }, 'error deleting object from s3');
       throw error;
     }
   }

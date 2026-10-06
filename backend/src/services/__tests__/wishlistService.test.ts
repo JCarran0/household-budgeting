@@ -1,5 +1,8 @@
 import { WishlistService } from '../wishlistService';
 import { InMemoryDataService } from '../dataService';
+import { ImageStore } from '../imageStore';
+import { InMemoryBinaryStore } from '../storage';
+import { BASE_PNG, GPS_MARKER, jpegWithGps } from '../../__tests__/helpers/imageFixtures';
 import { ValidationError, NotFoundError } from '../../errors';
 import type { Category } from '../../shared/types';
 
@@ -68,9 +71,15 @@ const ALL_CATEGORIES = [SPENDING_CAT, INCOME_CAT, SAVINGS_CAT, TRANSFER_CAT];
 // ---------------------------------------------------------------------------
 
 function makeService(categories: Category[] = ALL_CATEGORIES) {
+  return makeServiceWithStores(categories).svc;
+}
+
+function makeServiceWithStores(categories: Category[] = ALL_CATEGORIES) {
   const ds = new InMemoryDataService();
   const cs = makeCategoryService(categories);
-  return new WishlistService(ds, cs);
+  const blobs = new InMemoryBinaryStore();
+  const images = new ImageStore(blobs);
+  return { svc: new WishlistService(ds, cs, images), ds, blobs, images };
 }
 
 const FAMILY_A = 'family-a';
@@ -259,6 +268,173 @@ describe('WishlistService', () => {
     it('throws NotFoundError when id is unknown', async () => {
       const svc = makeService();
       await expect(svc.deleteItem('ghost-id', FAMILY_A)).rejects.toBeInstanceOf(NotFoundError);
+    });
+  });
+
+  describe('images', () => {
+    const PHOTO = { buffer: jpegWithGps(), mimeType: 'image/jpeg' };
+
+    async function makeItem(svc: WishlistService, familyId = FAMILY_A) {
+      return svc.createItem(
+        { name: 'Sofa', estimatedAmount: 900, estimatedMonth: '2026-11', categoryId: SPENDING_CAT.id },
+        familyId,
+        USER_1,
+      );
+    }
+
+    it('new items and items stored before the field existed both read as images: []', async () => {
+      const { svc, ds } = makeServiceWithStores();
+      const created = await makeItem(svc);
+      expect(created.images).toEqual([]);
+
+      const legacy = { ...created, id: 'legacy' } as Record<string, unknown>;
+      delete legacy.images;
+      await ds.saveData(`wishlist_${FAMILY_A}`, [legacy]);
+      const [read] = await svc.listItems(FAMILY_A);
+      expect(read.images).toEqual([]);
+    });
+
+    it('attaches a stripped image and stores it under images/{familyId}/{imageId}', async () => {
+      const { svc, blobs, images } = makeServiceWithStores();
+      const item = await makeItem(svc);
+
+      const updated = await svc.addImage(item.id, PHOTO, FAMILY_A);
+
+      expect(updated.images).toHaveLength(1);
+      const ref = updated.images![0];
+      expect(ref.mimeType).toBe('image/jpeg');
+      expect(blobs.keys()).toEqual([`images/${FAMILY_A}/${ref.id}`]);
+
+      const stored = await images.get(FAMILY_A, ref.id);
+      expect(stored!.body.includes(Buffer.from(GPS_MARKER))).toBe(false);
+      expect(ref.size).toBe(stored!.body.length);
+      // Persisted, not just returned.
+      expect((await svc.listItems(FAMILY_A))[0].images).toEqual([ref]);
+    });
+
+    it('records the owner on the stored object for a future orphan sweep', async () => {
+      const { svc, blobs } = makeServiceWithStores();
+      const item = await makeItem(svc);
+      const ref = (await svc.addImage(item.id, PHOTO, FAMILY_A)).images![0];
+
+      const object = await blobs.getObject(`images/${FAMILY_A}/${ref.id}`);
+      expect(object!.metadata).toEqual({
+        'family-id': FAMILY_A,
+        'owner-type': 'wishlist',
+        'owner-id': item.id,
+      });
+    });
+
+    it('refuses a second image while the v1 cap is 1, storing nothing', async () => {
+      const { svc, blobs } = makeServiceWithStores();
+      const item = await makeItem(svc);
+      await svc.addImage(item.id, PHOTO, FAMILY_A);
+
+      await expect(svc.addImage(item.id, PHOTO, FAMILY_A)).rejects.toBeInstanceOf(ValidationError);
+      expect(blobs.keys()).toHaveLength(1);
+    });
+
+    it('rejects content that does not match the declared type, storing nothing', async () => {
+      const { svc, blobs } = makeServiceWithStores();
+      const item = await makeItem(svc);
+
+      await expect(
+        svc.addImage(item.id, { buffer: BASE_PNG, mimeType: 'image/jpeg' }, FAMILY_A),
+      ).rejects.toBeInstanceOf(ValidationError);
+      expect(blobs.keys()).toHaveLength(0);
+    });
+
+    it('rejects an unsupported type such as SVG', async () => {
+      const { svc } = makeServiceWithStores();
+      const item = await makeItem(svc);
+      await expect(
+        svc.addImage(item.id, { buffer: Buffer.from('<svg/>'), mimeType: 'image/svg+xml' }, FAMILY_A),
+      ).rejects.toBeInstanceOf(ValidationError);
+    });
+
+    it('throws NotFoundError for an item in another family, storing nothing', async () => {
+      const { svc, blobs } = makeServiceWithStores();
+      const item = await makeItem(svc, FAMILY_A);
+
+      await expect(svc.addImage(item.id, PHOTO, FAMILY_B)).rejects.toBeInstanceOf(NotFoundError);
+      expect(blobs.keys()).toHaveLength(0);
+    });
+
+    it('deletes the stored object if the item vanished while the upload was in flight', async () => {
+      const { svc, blobs, images } = makeServiceWithStores();
+      const item = await makeItem(svc);
+      const realPut = images.put.bind(images);
+      jest.spyOn(images, 'put').mockImplementation(async (...args) => {
+        const ref = await realPut(...args);
+        await svc.deleteItem(item.id, FAMILY_A);
+        return ref;
+      });
+
+      await expect(svc.addImage(item.id, PHOTO, FAMILY_A)).rejects.toBeInstanceOf(NotFoundError);
+      expect(blobs.keys()).toHaveLength(0);
+    });
+
+    it('keeps an edit that landed while the upload was in flight', async () => {
+      const { svc, images } = makeServiceWithStores();
+      const item = await makeItem(svc);
+      const realPut = images.put.bind(images);
+      jest.spyOn(images, 'put').mockImplementation(async (...args) => {
+        const ref = await realPut(...args);
+        await svc.updateItem(item.id, { notes: 'edited meanwhile' }, FAMILY_A);
+        return ref;
+      });
+
+      const updated = await svc.addImage(item.id, PHOTO, FAMILY_A);
+      expect(updated.notes).toBe('edited meanwhile');
+      expect(updated.images).toHaveLength(1);
+    });
+
+    it('updateItem leaves images untouched', async () => {
+      const { svc } = makeServiceWithStores();
+      const item = await makeItem(svc);
+      const withImage = await svc.addImage(item.id, PHOTO, FAMILY_A);
+
+      const updated = await svc.updateItem(item.id, { name: 'Couch' }, FAMILY_A);
+      expect(updated.images).toEqual(withImage.images);
+    });
+
+    it('removeImage detaches the ref and deletes the object', async () => {
+      const { svc, blobs } = makeServiceWithStores();
+      const item = await makeItem(svc);
+      const ref = (await svc.addImage(item.id, PHOTO, FAMILY_A)).images![0];
+
+      const updated = await svc.removeImage(item.id, ref.id, FAMILY_A);
+
+      expect(updated.images).toEqual([]);
+      expect((await svc.listItems(FAMILY_A))[0].images).toEqual([]);
+      expect(blobs.keys()).toHaveLength(0);
+    });
+
+    it('removeImage throws NotFoundError for an image the item does not have', async () => {
+      const { svc } = makeServiceWithStores();
+      const item = await makeItem(svc);
+      await expect(
+        svc.removeImage(item.id, '00000000-0000-4000-8000-000000000000', FAMILY_A),
+      ).rejects.toBeInstanceOf(NotFoundError);
+    });
+
+    it('removeImage still detaches the ref when the object delete fails', async () => {
+      const { svc, images } = makeServiceWithStores();
+      const item = await makeItem(svc);
+      const ref = (await svc.addImage(item.id, PHOTO, FAMILY_A)).images![0];
+      jest.spyOn(images, 'delete').mockRejectedValue(new Error('S3 down'));
+
+      const updated = await svc.removeImage(item.id, ref.id, FAMILY_A);
+      expect(updated.images).toEqual([]);
+    });
+
+    it('deleteItem deletes the item\'s image objects', async () => {
+      const { svc, blobs } = makeServiceWithStores();
+      const item = await makeItem(svc);
+      await svc.addImage(item.id, PHOTO, FAMILY_A);
+
+      await svc.deleteItem(item.id, FAMILY_A);
+      expect(blobs.keys()).toHaveLength(0);
     });
   });
 });

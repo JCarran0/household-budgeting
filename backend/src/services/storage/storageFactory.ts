@@ -1,4 +1,4 @@
-import { StorageAdapter, StorageConfig } from './types';
+import { StorageAdapter, StorageConfig, BinaryObjectStore } from './types';
 import { FilesystemAdapter } from './filesystemAdapter';
 import { S3Adapter } from './s3Adapter';
 
@@ -10,7 +10,8 @@ const log = childLogger('storageFactory');
  * Factory for creating storage adapters based on environment
  */
 export class StorageFactory {
-  private static instance: StorageAdapter | null = null;
+  // Both concrete adapters implement both interfaces; one instance serves both.
+  private static instance: (StorageAdapter & BinaryObjectStore) | null = null;
 
   /**
    * Get the storage configuration from environment variables
@@ -42,6 +43,18 @@ export class StorageFactory {
    * @param config - Optional config to override environment settings (mainly for testing)
    */
   static getAdapter(config?: StorageConfig): StorageAdapter {
+    return this.resolve(config);
+  }
+
+  /**
+   * The same adapter, viewed as binary object storage. Deliberately a separate
+   * accessor so the JSON-document path (`DataService`) never sees it.
+   */
+  static getBinaryStore(config?: StorageConfig): BinaryObjectStore {
+    return this.resolve(config);
+  }
+
+  private static resolve(config?: StorageConfig): StorageAdapter & BinaryObjectStore {
     // Return existing instance if available (singleton pattern)
     if (this.instance) {
       return this.instance;

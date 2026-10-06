@@ -21,6 +21,8 @@ import { ActualsOverrideService } from './actualsOverrideService';
 import { TripService, getTripService } from './tripService';
 import { ProjectService, getProjectService } from './projectService';
 import { WishlistService, getWishlistService } from './wishlistService';
+import { ImageStore } from './imageStore';
+import { StorageFactory, InMemoryBinaryStore } from './storage';
 import { ReadOnlyDataServiceImpl } from './readOnlyDataService';
 import { ChatbotDataService } from './chatbotDataService';
 import { ChatbotCostTracker } from './chatbotCostTracker';
@@ -94,7 +96,12 @@ export const manualAccountService = new ManualAccountService(dataService);
 export const reportService = new ReportService(dataService, actualsOverrideService);
 export const tripService = getTripService(dataService, transactionService);
 export const projectService = getProjectService(dataService, transactionService);
-export const wishlistService = getWishlistService(dataService, categoryService);
+// Binary image storage — deliberately NOT part of dataService, so nothing built
+// on ReadOnlyDataService (the chatbot) can reach image bytes.
+export const imageStore = new ImageStore(
+  config.server.nodeEnv === 'test' ? new InMemoryBinaryStore() : StorageFactory.getBinaryStore()
+);
+export const wishlistService = getWishlistService(dataService, categoryService, imageStore);
 
 // SECURITY: chatbotDataService receives ONLY readOnlyDataService.
 // It must NEVER receive the full dataService, plaidService, accountService,

@@ -2,7 +2,8 @@ import { Router, Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
 import { wishlistService } from '../services';
 import { authMiddleware } from '../middleware/authMiddleware';
-import { AuthorizationError } from '../errors';
+import { uploadSingleImage } from '../middleware/imageUpload';
+import { AuthorizationError, ValidationError } from '../errors';
 import {
   createWishlistItemSchema,
   updateWishlistItemSchema,
@@ -77,5 +78,44 @@ router.delete('/:id', async (req: Request, res: Response, next: NextFunction): P
     next(error);
   }
 });
+
+// POST /api/v1/wishlist/:id/images — attach one image (multipart, field "image").
+// Validation, size/type checks and metadata stripping happen in imageStore.
+router.post(
+  '/:id/images',
+  uploadSingleImage,
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const familyId = req.user?.familyId;
+      if (!familyId) throw new AuthorizationError();
+      if (!req.file) throw new ValidationError('An image file is required (field "image")');
+
+      const item = await wishlistService.addImage(
+        req.params.id,
+        { buffer: req.file.buffer, mimeType: req.file.mimetype },
+        familyId
+      );
+      res.status(201).json(item);
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+// DELETE /api/v1/wishlist/:id/images/:imageId — detach and delete one image
+router.delete(
+  '/:id/images/:imageId',
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const familyId = req.user?.familyId;
+      if (!familyId) throw new AuthorizationError();
+
+      const item = await wishlistService.removeImage(req.params.id, req.params.imageId, familyId);
+      res.json(item);
+    } catch (error) {
+      next(error);
+    }
+  }
+);
 
 export default router;

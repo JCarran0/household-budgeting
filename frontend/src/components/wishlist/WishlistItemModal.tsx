@@ -20,6 +20,8 @@ import { ResponsiveModal } from '../ResponsiveModal';
 import { api } from '../../lib/api';
 import { useCategoryOptions } from '../../hooks/useCategoryOptions';
 import { WishlistUrlsInput } from './WishlistUrlsInput';
+import { WishlistImageField } from './WishlistImageField';
+import { useWishlistImageDraft } from './useWishlistImageDraft';
 import { validateUrl } from './wishlistUrls';
 import { isBudgetableCategory, isIncomeCategoryHierarchical, createCategoryLookup } from '../../../../shared/utils/categoryHelpers';
 import type { StoredWishlistItem, CreateWishlistItemDto, UpdateWishlistItemDto } from '../../../../shared/types';
@@ -72,6 +74,7 @@ function yearMonthToDate(ym: string): string {
 export function WishlistItemModal({ item, opened, onClose }: WishlistItemModalProps) {
   const queryClient = useQueryClient();
   const isEdit = item !== undefined;
+  const imageDraft = useWishlistImageDraft(opened, item?.images ?? []);
 
   // Only load categories when modal is open
   const { categories: allCategories, options: allOptions, isLoading: categoriesLoading } = useCategoryOptions({
@@ -150,13 +153,40 @@ export function WishlistItemModal({ item, opened, onClose }: WishlistItemModalPr
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [opened, item]);
 
+  /**
+   * Photo changes apply after the item saves. If they fail, the item is still
+   * saved, so the modal closes either way (retrying a create would duplicate
+   * the item) and the photo failure is reported on its own.
+   */
+  async function applyImages(itemId: string): Promise<string | null> {
+    try {
+      await imageDraft.apply(itemId);
+      return null;
+    } catch (err) {
+      return err instanceof Error ? err.message : 'An error occurred.';
+    }
+  }
+
+  function finishSave(imageError: string | null, title: string, message: string) {
+    queryClient.invalidateQueries({ queryKey: ['wishlist'] });
+    if (imageError) {
+      notifications.show({
+        title: 'Item saved, but the photo was not',
+        message: imageError,
+        color: 'red',
+      });
+    } else {
+      notifications.show({ title, message, color: 'green' });
+    }
+    onClose();
+  }
+
   const createMutation = useMutation({
-    mutationFn: (data: CreateWishlistItemDto) => api.createWishlistItem(data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['wishlist'] });
-      notifications.show({ title: 'Item added', message: 'Wishlist item created.', color: 'green' });
-      onClose();
+    mutationFn: async (data: CreateWishlistItemDto) => {
+      const created = await api.createWishlistItem(data);
+      return applyImages(created.id);
     },
+    onSuccess: (imageError) => finishSave(imageError, 'Item added', 'Wishlist item created.'),
     onError: (err: Error) => {
       notifications.show({
         title: 'Failed to create item',
@@ -167,13 +197,11 @@ export function WishlistItemModal({ item, opened, onClose }: WishlistItemModalPr
   });
 
   const updateMutation = useMutation({
-    mutationFn: ({ id, data }: { id: string; data: UpdateWishlistItemDto }) =>
-      api.updateWishlistItem(id, data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['wishlist'] });
-      notifications.show({ title: 'Item updated', message: 'Wishlist item saved.', color: 'green' });
-      onClose();
+    mutationFn: async ({ id, data }: { id: string; data: UpdateWishlistItemDto }) => {
+      await api.updateWishlistItem(id, data);
+      return applyImages(id);
     },
+    onSuccess: (imageError) => finishSave(imageError, 'Item updated', 'Wishlist item saved.'),
     onError: (err: Error) => {
       notifications.show({
         title: 'Failed to update item',
@@ -183,7 +211,7 @@ export function WishlistItemModal({ item, opened, onClose }: WishlistItemModalPr
     },
   });
 
-  const isPending = createMutation.isPending || updateMutation.isPending;
+  const isPending = createMutation.isPending || updateMutation.isPending || imageDraft.isPreparing;
 
   const handleSubmit = (values: FormValues) => {
     const monthStr = toYearMonth(values.estimatedMonth);
@@ -283,6 +311,8 @@ export function WishlistItemModal({ item, opened, onClose }: WishlistItemModalPr
               fullWidth
             />
           </div>
+
+          <WishlistImageField draft={imageDraft} itemName={form.values.name} />
 
           <WishlistUrlsInput
             value={form.values.urls}

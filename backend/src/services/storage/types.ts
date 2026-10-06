@@ -36,6 +36,41 @@ export interface StorageAdapter {
   list(prefix: string): Promise<string[]>;
 }
 
+/**
+ * A stored binary object (an image, today) with the content type it was
+ * written with and the owner metadata recorded alongside it.
+ */
+export interface BinaryObject {
+  body: Buffer;
+  contentType: string;
+  metadata: Record<string, string>;
+}
+
+/**
+ * Raw binary storage, alongside the JSON documents of `StorageAdapter`.
+ *
+ * Kept as a separate interface on purpose: `StorageAdapter` is what
+ * `DataService` (and through it, `ReadOnlyDataService` and the chatbot) is
+ * built on. Binary objects are reached only through `imageStore`, so adding
+ * them gives the AI no new read path.
+ *
+ * Keys are used verbatim — no `.json` suffix — under the same prefix as the
+ * JSON documents, so bucket versioning, IAM scope and the off-bucket snapshot
+ * (which syncs the whole prefix) cover them with no infrastructure change.
+ * `StorageAdapter.list` filters to `.json`, so these never appear in it.
+ */
+export interface BinaryObjectStore {
+  putObject(
+    key: string,
+    body: Buffer,
+    options: { contentType: string; metadata: Record<string, string> }
+  ): Promise<void>;
+  /** Null only when the object genuinely does not exist; other failures throw. */
+  getObject(key: string): Promise<BinaryObject | null>;
+  /** Deleting an absent object is not an error. */
+  deleteObject(key: string): Promise<void>;
+}
+
 export interface StorageConfig {
   type: 'filesystem' | 's3';
   // Filesystem specific

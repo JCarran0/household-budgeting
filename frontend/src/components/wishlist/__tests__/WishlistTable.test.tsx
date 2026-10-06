@@ -11,11 +11,13 @@ import type { StoredWishlistItem } from '../../../../../shared/types';
 
 const updateWishlistItem = vi.fn();
 const deleteWishlistItem = vi.fn();
+const getImageBlob = vi.fn();
 
 vi.mock('../../../lib/api', () => ({
   api: {
     updateWishlistItem: (...args: unknown[]) => updateWishlistItem(...args),
     deleteWishlistItem: (...args: unknown[]) => deleteWishlistItem(...args),
+    getImageBlob: (...args: unknown[]) => getImageBlob(...args),
   },
 }));
 
@@ -44,6 +46,7 @@ function makeItem(overrides: Partial<StoredWishlistItem> & { id: string }): Stor
     createdBy: 'user-1',
     urls: overrides.urls,
     notes: overrides.notes,
+    images: overrides.images,
     createdAt: '2026-01-01T00:00:00Z',
     updatedAt: '2026-01-01T00:00:00Z',
   };
@@ -262,6 +265,46 @@ describe('WishlistTable', () => {
       // Asserted by testid, not by text: Testing Library normalizes whitespace,
       // so a text query for '   ' would pass even if a blank line did render.
       expect(screen.queryAllByTestId('wishlist-note')).toHaveLength(0);
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // Photo thumbnail (WISHLIST-BRD.md §3.7)
+  // ---------------------------------------------------------------------------
+
+  describe('photo thumbnail', () => {
+    const IMAGE = {
+      id: '11111111-1111-4111-8111-111111111111',
+      mimeType: 'image/jpeg' as const,
+      size: 1234,
+      uploadedAt: '2026-10-01T00:00:00Z',
+    };
+
+    beforeEach(() => {
+      getImageBlob.mockReset().mockResolvedValue(new Blob(['x'], { type: 'image/jpeg' }));
+      URL.createObjectURL = vi.fn(() => 'blob:thumb');
+      URL.revokeObjectURL = vi.fn();
+    });
+
+    it('renders the thumbnail from the authenticated image fetch', async () => {
+      renderTable([makeItem({ id: 'a', name: 'Lamp', images: [IMAGE] })]);
+      const img = await screen.findByRole('img', { name: 'Lamp' });
+      expect(img).toHaveAttribute('src', 'blob:thumb');
+      expect(getImageBlob).toHaveBeenCalledWith(IMAGE.id);
+    });
+
+    it('opens the item when the thumbnail is clicked', async () => {
+      const onEdit = vi.fn();
+      const item = makeItem({ id: 'a', name: 'Lamp', images: [IMAGE] });
+      renderTable([item], { onEdit });
+      fireEvent.click(screen.getByRole('button', { name: 'Open Lamp' }));
+      expect(onEdit).toHaveBeenCalledWith(item);
+    });
+
+    it('renders no thumbnail or placeholder for an item without a photo', () => {
+      renderTable([makeItem({ id: 'a', name: 'Lamp' })]);
+      expect(screen.queryByRole('button', { name: 'Open Lamp' })).not.toBeInTheDocument();
+      expect(getImageBlob).not.toHaveBeenCalled();
     });
   });
 });

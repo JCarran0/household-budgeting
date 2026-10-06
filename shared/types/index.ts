@@ -749,6 +749,31 @@ export interface UpdateProjectDto {
 }
 
 // =============================================================================
+// Image Types (generic — wishlist is the first owner; tasks are expected next)
+// =============================================================================
+
+/**
+ * A reference to an uploaded image. The bytes live in object storage under
+ * `images/{familyId}/{id}`, served by `GET /api/v1/images/:id`; the owning
+ * record stores only this. Attach/detach goes through the owner's own routes
+ * (e.g. `POST /wishlist/:id/images`) so an image is never stored unowned.
+ */
+export interface ImageRef {
+  id: string;                 // UUID; immutable, so a client may cache by it forever
+  mimeType: 'image/jpeg' | 'image/png' | 'image/webp';
+  size: number;               // bytes, after metadata stripping
+  uploadedAt: string;         // ISO timestamp
+}
+
+/** Upload limits shared by the server check and the browser pre-processing. */
+export const IMAGE_UPLOAD_LIMITS = {
+  /** Server-enforced. The browser resize normally lands far below this. */
+  maxBytes: 5 * 1024 * 1024,
+  /** Browser resize target for the longest side, in px. */
+  maxDimension: 1600,
+} as const;
+
+// =============================================================================
 // Wishlist Types
 // =============================================================================
 
@@ -774,7 +799,22 @@ export interface WishlistItem {
    * WISHLIST_NOTES_MAX_LENGTH chars.
    */
   notes?: string;
+  /**
+   * Attached photos. Optional because items created before the field existed
+   * have no value stored. Only changed through the image routes, never via
+   * create/update DTOs. See WISHLIST_IMAGE_LIMITS for the count cap.
+   */
+  images?: ImageRef[];
 }
+
+/**
+ * The data model is an array sized for a gallery (5, like links), but v1 caps
+ * it at ONE: the UI has no multi-image handling yet. Raising this is the only
+ * server change a gallery needs.
+ */
+export const WISHLIST_IMAGE_LIMITS = {
+  maxCount: 1,
+} as const;
 
 /** Shared by the Zod schema, the form editor, and the tests. */
 export const WISHLIST_URL_LIMITS = {

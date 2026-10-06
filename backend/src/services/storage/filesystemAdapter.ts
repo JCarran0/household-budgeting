@@ -1,6 +1,6 @@
 import fs from 'fs-extra';
 import path from 'path';
-import { StorageAdapter } from './types';
+import { StorageAdapter, BinaryObjectStore, BinaryObject } from './types';
 import { childLogger } from '../../utils/logger';
 
 const log = childLogger('filesystemAdapter');
@@ -9,7 +9,7 @@ const log = childLogger('filesystemAdapter');
  * Filesystem storage adapter for local development
  * Stores data as JSON files in a local directory
  */
-export class FilesystemAdapter implements StorageAdapter {
+export class FilesystemAdapter implements StorageAdapter, BinaryObjectStore {
   private dataDir: string;
 
   constructor(dataDir?: string) {
@@ -91,5 +91,49 @@ export class FilesystemAdapter implements StorageAdapter {
       log.error({ err: error, prefix }, 'error listing files');
       throw error;
     }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Binary objects — local dev only. The body is the file at the verbatim key;
+  // content type and metadata live in a sidecar, since a filesystem has no
+  // place for them. Keys sit in subdirectories, which `list` (a top-level
+  // readdir) never descends into.
+  // ---------------------------------------------------------------------------
+
+  private getObjectPaths(key: string): { body: string; meta: string } {
+    const body = path.resolve(this.dataDir, key);
+    // Defense in depth: imageStore only builds keys from validated UUIDs, but
+    // this adapter must never be the thing that writes outside dataDir.
+    if (!body.startsWith(path.resolve(this.dataDir) + path.sep)) {
+      throw new Error(`Object key escapes data directory: ${key}`);
+    }
+    return { body, meta: `${body}.meta.json` };
+  }
+
+  async putObject(
+    key: string,
+    body: Buffer,
+    options: { contentType: string; metadata: Record<string, string> }
+  ): Promise<void> {
+    const paths = this.getObjectPaths(key);
+    await fs.ensureDir(path.dirname(paths.body));
+    await fs.writeFile(paths.body, body);
+    await fs.writeJson(paths.meta, options);
+  }
+
+  async getObject(key: string): Promise<BinaryObject | null> {
+    const paths = this.getObjectPaths(key);
+    if (!(await fs.pathExists(paths.body))) return null;
+    const [body, meta] = await Promise.all([
+      fs.readFile(paths.body),
+      fs.readJson(paths.meta) as Promise<{ contentType: string; metadata: Record<string, string> }>,
+    ]);
+    return { body, contentType: meta.contentType, metadata: meta.metadata };
+  }
+
+  async deleteObject(key: string): Promise<void> {
+    const paths = this.getObjectPaths(key);
+    await fs.remove(paths.body);
+    await fs.remove(paths.meta);
   }
 }
