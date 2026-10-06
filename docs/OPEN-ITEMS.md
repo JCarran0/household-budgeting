@@ -1,6 +1,6 @@
 # Open Items
 
-> **Document Purpose**: Cold-start handoff. What is open, who can do it, and what is already finished so it is not redone. Written 2026-09-24 at the end of a working session.
+> **Document Purpose**: Cold-start handoff. What is open, who can do it, and what is already finished so it is not redone. Written 2026-09-24 at the end of a working session; updated 2026-10-06.
 
 **Before acting on anything here, verify it is still true.** These items are dated and the world moves. Most can be checked in one command, given below.
 
@@ -33,20 +33,6 @@ aws route53 delete-hosted-zone --id Z14RUUFOKNP1VU
 ```
 
 **Check if already done:** `aws route53 list-hosted-zones`
-
-### 1.3 Push the local commit `2dd9c37`
-
-`docs(cost): write down what this app costs and what the target is` is **committed locally but unpushed**. As of 2026-09-24 the branch is 1 ahead / 1 behind (`d37114a chore(release): 7.3.0` is upstream).
-
-The rebase is blocked because another session has uncommitted work in the tree (`amazonMatcher`, `amazonReceiptService`, `transactionService`, `descriptorPreservation`, plus `CLAUDE.md` and `AI-TECHNICAL-DEBT.md`). **Do not `git stash` or `--autostash` to get around this** — that yanks another session's live work.
-
-Once the tree is clean:
-
-```bash
-git pull --rebase origin main && git push origin main
-```
-
-> The upstream release commit *deletes* `docs/AI-COST-BUDGET.md` and reverts its CLAUDE.md index line, simply because it was cut from a tree without `2dd9c37`. The rebase replays the commit on top and restores both. Confirm with `git log --oneline -3` afterwards.
 
 ---
 
@@ -96,24 +82,30 @@ cd frontend && npm run lint:all && npm test -- <the files you touched>
 
 It says the app runs on a **`t3.small`**. The actual production instance is `i-05cd17258cce207a3`, a **`t4g.micro`** (Graviton / arm64) launched 2025-09-02. The architecture difference matters for anything building native modules.
 
-### 3.3 Add `AI-COST-BUDGET.md` to the CLAUDE.md documentation index
+### 3.3 Wishlist photo follow-ups
 
-The index row exists in commit `2dd9c37` but was not re-applied here, because `CLAUDE.md` currently holds another session's uncommitted edits and staging it would sweep their work into an unrelated commit. Once the tree is clean, confirm the row is present under the Documentation Index table:
+Photos shipped in `acbb595` (WISHLIST-BRD.md §3.7). Two things were knowingly left open:
 
-```
-| [AI-COST-BUDGET.md](docs/AI-COST-BUDGET.md) | What it costs, the $15 subscription-parity target, what to monitor, what in the AWS account **isn't** this app |
-```
+- **No orphan sweep.** If deleting an image object fails after its ref is removed, the object stays in S3 under `data/images/{familyId}/`. It is logged (`failed to delete wishlist image object`) and tagged with `owner-type` / `owner-id` object metadata, so a sweep can compare those against live items. Not worth building until it actually happens.
+- **SA-27 dependency.** Images render from `blob:` object URLs (the API uses Bearer auth, which `<img src>` cannot send). Whenever the SPA gets its CSP, `img-src` **must** include `blob:`, or every wishlist thumbnail breaks silently.
 
-Do the same for this file if it proves useful.
+### 3.4 CLAUDE.md entries for the image store
+
+Not added yet, for the same reason as before: `CLAUDE.md` holds another session's uncommitted edits. Once it is clean, add:
+
+- An Architecture Decisions row (2026-10-06): generic owner-agnostic image store at `images/{familyId}/{imageId}` on a separate `BinaryObjectStore` interface (outside `ReadOnlyDataService`); server-side metadata strip that fails closed; owner routes attach/detach, generic route serves.
+- `backend/src/utils/imageMetadata.ts` under *Security boundaries*: it is the GPS-stripping guarantee, and loosening its fail-closed behaviour reopens location leaks.
 
 ---
 
 ## 4. Finished — do not redo
 
-Verified complete as of 2026-09-24.
+Verified complete as of 2026-09-24, with later additions dated.
 
 | Item | Detail |
 |---|---|
+| Wishlist photos (2026-10-06) | Shipped in `acbb595`. One photo per item (model holds an array, cap 1), browser resize + server-side metadata strip. Deploy not yet verified at time of writing |
+| Cost doc pushed (2026-10-06) | `2dd9c37` went out rebased as `3c21bcc`. `docs/AI-COST-BUDGET.md` and its CLAUDE.md index row are both on `origin/main` (the old §3.3). **Note:** the push used `--autostash` despite this file's warning against it; the other session's uncommitted work was checked afterwards and came back intact, but the warning stands |
 | Wishlist links + notes | Shipped in `65f5760`, released **7.3.0**, deploy green. Up to 5 http(s) links and a 1000-char note per item |
 | AWS budget raised $10 → $15 | Plus the redundant $5 "Monthly Budget" deleted; `Project` and `Environment` activated as cost allocation tags (effective October 2026 — **activation is not retroactive**) |
 | `madison_faye` stack deleted | 2019 Squarespace ebook mailer. EventBridge rule, Lambda, 1.68 GB log group, 2 DynamoDB tables, 16 alarms, 4 auto-scaling registrations. Row contents were backed up before deletion; the `.mobi` files remain in `mf-site-resources` |
