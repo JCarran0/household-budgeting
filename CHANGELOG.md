@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.4.0](https://github.com/JCarran0/household-budgeting/compare/v7.3.0...v7.4.0) (2026-10-06)
+
+
+### Features
+
+* **wishlist:** attach a photo to an item ([acbb595](https://github.com/JCarran0/household-budgeting/commit/acbb595c39c9005fd6f0c5da9ab13b8956e31377))
+
+
+### Documentation
+
+* **cost:** write down what this app costs and what the target is ([3c21bcc](https://github.com/JCarran0/household-budgeting/commit/3c21bccc77374a8c0d877349f124e029879bd902))
+* hand off what is still open to whoever picks this up next ([44198fa](https://github.com/JCarran0/household-budgeting/commit/44198faa854b89f06618ae1e8c9e84d7c168fe35))
+
 ## [7.3.0](https://github.com/JCarran0/household-budgeting/compare/v7.2.3...v7.3.0) (2026-09-18)
 
 
