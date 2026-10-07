@@ -95,6 +95,14 @@ Found 2026-10-07. `npm test` in `backend/` (and therefore the pre-commit hook an
 
 **Decide:** widen `test:ci` to `test:all` (all 1963 passed in ~2 min locally on 2026-10-07; check whether `integration/` needs Plaid sandbox credentials in CI first), or at least add `services/__tests__` and `routes/__tests__` to the pre-commit pattern. Until then, run `npm run test:all` before committing backend changes.
 
+### 3.5 Audit `withLock` callers for reads taken before the lock
+
+Found 2026-10-07 while locking the wishlist (`59b6b1c`). `Repository.withLock` and the per-request read memo (TD-011 parts 1a and 1b) interact: `getData` memoizes per request, so if a request reads a collection **before** acquiring the lock, the read inside the lock is replayed from the memo. It is stale by exactly the write the lock was waiting on, and the lock protects nothing. Wishlist's `addImage` had this bug.
+
+**Audit:** `tripService.ts` first (the self-healing photo refresh fires many concurrent stop updates), then `statementService.ts` and `transactionService.ts`. These are the other `withLock` callers. For each locked method, check whether anything in the same request (route handler, earlier service call, validation helper) reads the same key before the lock is taken.
+
+**Fix pattern:** move the first read inside the lock, as in `wishlistService.ts`. **Test pattern:** run calls against `UnifiedDataService` (not `InMemoryDataService`, which has no memo) with each call in its own `withRequestScope`. See the "concurrent writers (TD-011)" block in `services/__tests__/wishlistService.test.ts`. Note those suites are outside the default gate (§3.4); run them directly.
+
 ---
 
 ## 4. Finished — do not redo
