@@ -12,7 +12,9 @@ import {
   WIDE_DATE_WINDOW_DAYS,
   amountsMatch,
   createMatch,
+  hasOpaqueDescriptor,
   isAmazonMerchant,
+  isReceiptMatchCandidate,
   matchSingleOrder,
   withinDateWindow,
 } from '../../services/amazon/amazonMatcher';
@@ -58,6 +60,70 @@ function makeOrder(overrides: Partial<ParsedAmazonOrder> = {}): ParsedAmazonOrde
     ...overrides,
   };
 }
+
+describe('hasOpaqueDescriptor', () => {
+  // Capital One began masking card descriptors on 2026-07-18: it replaces
+  // alphanumerics with `*` and preserves the merchant token up to the first
+  // space. `Amazon.com*531C57BL2` has no space, so nothing survives and Plaid
+  // has nothing left to enrich from.
+  it('fires on a descriptor masked down to punctuation with no enrichment', () => {
+    expect(
+      hasOpaqueDescriptor(
+        makeTx({ name: '******.*************', merchantName: null }),
+      ),
+    ).toBe(true);
+  });
+
+  it('does not fire on a partially masked descriptor that still names the merchant', () => {
+    for (const name of [
+      'AMAZON ***************',
+      'AMAZON RETA* *********',
+      'Nintendo ************',
+    ]) {
+      expect(hasOpaqueDescriptor(makeTx({ name, merchantName: null }))).toBe(false);
+    }
+  });
+
+  // An asterisk is ordinary in card descriptors. Treating "contains a `*`" as
+  // masked would sweep in most of the card.
+  it('does not fire on an unmasked descriptor that merely contains an asterisk', () => {
+    for (const name of ['Fine*Woodworking', 'UEP*ICHIDDO RAMEN', 'Amazon.com*531C57BL2']) {
+      expect(hasOpaqueDescriptor(makeTx({ name, merchantName: null }))).toBe(false);
+    }
+  });
+
+  it('does not fire when enrichment recovered a merchant despite the mask', () => {
+    expect(
+      hasOpaqueDescriptor(
+        makeTx({ name: '******.*************', merchantName: 'Amazon' }),
+      ),
+    ).toBe(false);
+  });
+
+  // A blank name is missing data, not a mask; it carries no evidence that the
+  // bank withheld anything, so it stays out of the receipt flow.
+  it('does not fire on an empty or punctuation-only name with no asterisk', () => {
+    expect(hasOpaqueDescriptor(makeTx({ name: '', merchantName: null }))).toBe(false);
+    expect(hasOpaqueDescriptor(makeTx({ name: '...', merchantName: null }))).toBe(false);
+  });
+});
+
+describe('isReceiptMatchCandidate', () => {
+  it('admits both self-identifying Amazon rows and fully masked ones', () => {
+    expect(isReceiptMatchCandidate(makeTx({ name: 'AMAZON MKTPL*WJ2746XM3' }))).toBe(true);
+    expect(
+      isReceiptMatchCandidate(
+        makeTx({ name: '******.*************', merchantName: null }),
+      ),
+    ).toBe(true);
+  });
+
+  it('still excludes an ordinary non-Amazon merchant', () => {
+    expect(
+      isReceiptMatchCandidate(makeTx({ name: 'WALMART', merchantName: 'Walmart' })),
+    ).toBe(false);
+  });
+});
 
 describe('isAmazonMerchant', () => {
   it('matches every known merchant pattern (case-insensitive) on name or merchantName', () => {

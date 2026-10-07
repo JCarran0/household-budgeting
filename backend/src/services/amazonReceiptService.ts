@@ -24,7 +24,8 @@ import {
 } from './amazon/amazonPdfParser';
 import {
   CUSTOM_AMAZON_CATEGORY,
-  isAmazonMerchant,
+  hasOpaqueDescriptor,
+  isReceiptMatchCandidate,
   matchSingleOrder,
 } from './amazon/amazonMatcher';
 import { AmazonCategorizerAdapter } from './amazon/amazonCategorizerAdapter';
@@ -368,7 +369,8 @@ export class AmazonReceiptService {
    *
    * Eligibility rules (mirrors matchOrders so the UI count matches what the
    * matcher actually considers):
-   *   - Transaction is from an Amazon merchant and not hidden
+   *   - Transaction is from an Amazon merchant, or its descriptor was masked
+   *     into uselessness by the bank, and is not hidden
    *   - Was NOT successfully categorized/split in a prior session into a
    *     non-CUSTOM_AMAZON category (transactions still in CUSTOM_AMAZON are
    *     always re-eligible, even if they appeared in a prior session)
@@ -387,7 +389,7 @@ export class AmazonReceiptService {
   }> {
     const allTransactions = await this.chatbotDataService.queryTransactions(familyId, {});
     const amazonTransactions = allTransactions.filter(
-      t => isAmazonMerchant(t) && !t.isHidden,
+      t => isReceiptMatchCandidate(t) && !t.isHidden,
     );
 
     const allSessions = await this.loadSessions(familyId);
@@ -492,6 +494,7 @@ export class AmazonReceiptService {
           applied++;
           categoriesUpdated.add(action.categoryId);
           if (tx) totalDollarsRecategorized += Math.abs(tx.amount);
+          await this.restoreMaskedDescription(familyId, tx, match.orderNumber);
         }
       } else if (action.type === 'split' && action.splits) {
         const result = await this.transactionService.splitTransaction(
@@ -509,6 +512,7 @@ export class AmazonReceiptService {
           splits++;
           action.splits.forEach(s => categoriesUpdated.add(s.categoryId));
           if (tx) totalDollarsRecategorized += Math.abs(tx.amount);
+          await this.restoreMaskedDescription(familyId, tx, match.orderNumber);
         }
       } else if (action.type === 'skip') {
         match.status = 'skipped';
@@ -532,6 +536,37 @@ export class AmazonReceiptService {
         categoriesUpdated: [...categoriesUpdated],
       },
     };
+  }
+
+  /**
+   * Give a bank-masked transaction a description it can actually be read by.
+   *
+   * Some institutions mask the card descriptor before it reaches Plaid — from
+   * 2026-07-18 Capital One began delivering `Amazon.com*531C57BL2` as
+   * `******.*************`, with no merchant enrichment behind it. Every display
+   * surface falls back through `userDescription` first, so writing one here is
+   * what actually clears the asterisks from the transactions list, the edit
+   * modal and CSV export.
+   *
+   * The order number is not a guess. It comes from the receipt the user
+   * uploaded, matched on an exact amount inside the date window and confirmed by
+   * the user before this runs. A transaction the bank described normally is left
+   * alone, as is one the user has already titled themselves.
+   */
+  private async restoreMaskedDescription(
+    familyId: string,
+    transaction: Transaction | undefined,
+    orderNumber: string,
+  ): Promise<void> {
+    if (!transaction) return;
+    if (!hasOpaqueDescriptor(transaction)) return;
+    if (transaction.userDescription) return;
+
+    await this.transactionService.updateTransactionDescription(
+      familyId,
+      transaction.id,
+      `Amazon order ${orderNumber}`,
+    );
   }
 
   async suggestRules(

@@ -12,6 +12,7 @@ import { StoredAccount, AccountService } from './accountService';
 import { encryptionService } from '../utils/encryption';
 import { childLogger } from '../utils/logger';
 import { filterTransactions } from './transactionFilterEngine';
+import { isDescriptorDegradation, isMerchantNameErasure } from './descriptorPreservation';
 import { calculateIncome, calculateExpenses, calculateNetCashFlow } from '../shared/utils/transactionCalculations';
 import {
   etMonthString,
@@ -517,14 +518,32 @@ export class TransactionService {
       changed = true;
     }
 
+    // Descriptors are monotonic in information: Plaid may correct them, but a
+    // replacement that says strictly less than what we hold is refused. Some
+    // institutions mask descriptors retroactively, so without this a re-fetch
+    // silently overwrites good history with asterisks (issue #19).
     if (existing.name !== plaidTxn.name) {
-      existing.name = plaidTxn.name;
-      changed = true;
+      if (isDescriptorDegradation(existing.name, plaidTxn.name)) {
+        log.warn(
+          { transactionId: existing.id, plaidTransactionId: existing.plaidTransactionId },
+          'refused a masked descriptor that would have replaced a more informative one',
+        );
+      } else {
+        existing.name = plaidTxn.name;
+        changed = true;
+      }
     }
 
     if (existing.merchantName !== plaidTxn.merchantName) {
-      existing.merchantName = plaidTxn.merchantName;
-      changed = true;
+      if (isMerchantNameErasure(existing.merchantName, plaidTxn.merchantName)) {
+        log.warn(
+          { transactionId: existing.id, plaidTransactionId: existing.plaidTransactionId },
+          'refused a null merchant name that would have erased a resolved merchant',
+        );
+      } else {
+        existing.merchantName = plaidTxn.merchantName;
+        changed = true;
+      }
     }
 
     if (existing.accountOwner !== plaidTxn.accountOwner) {

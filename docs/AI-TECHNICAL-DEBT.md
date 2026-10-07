@@ -38,6 +38,7 @@ This document tracks technical debt identified during the April 2026 architectur
 | TD-020 (re-key a *replaced* account) | High | Medium | nothing — deferral re-argued and upheld 2026-09-08; new accounts now adopted automatically |
 | TD-017 (deployed ecosystem.config drift) | Medium | Low | nothing — needs a deploy + PM2 re-create |
 | TD-019 (schedule the backup) | Low-Med | Low | **prod access** (SSM + IAM) |
+| TD-032 (masked descriptors already stored) | Medium | Medium | upstream — Plaid's copy is masked too; recovery is receipt matching or manual entry |
 | TD-023 (dead rollover code) | Medium | Low | nothing |
 | TD-024 (type-detection sprawl) | Medium | Med | nothing |
 | TD-025 (optional hardening) | Low | Low | primary risk already closed 2026-08-02 |
@@ -91,6 +92,31 @@ The 64-hex pattern also matches a sha256 digest, and this app computes those for
 **Deliberately not done**: filtering for *financial* content, or for attachment text. Neither has a shape. "Never mention a dollar amount" is not mechanically checkable without false positives that would gut the usefulness of a detail field, and the prompt rule plus the human review step is a reasonable place to stop for a two-user app. `utils/redaction.ts` says so in its own docblock rather than implying the filter is complete.
 
 Twelve tests on the redactor, half of them asserting what it leaves ALONE — a redactor that eats ordinary prose gets ignored by the maintainer it was written for.
+
+---
+
+### TD-032: Masked Capital One Descriptors Already in Storage Are Unrecoverable
+**Status**: Open (guard shipped; the historical gap remains)
+**Created**: 2026-09-22
+**Impact**: Medium — ~40 transactions on one account carry no readable merchant or description
+**Effort**: Medium, and partly not ours to do
+
+**Problem**:
+Capital One masks card descriptors before Plaid ever sees them. It preserves the descriptor up to the first space and replaces the alphanumerics after it with `*`, leaving punctuation alone. Most rows survive this legibly (`AMAZON ***************` still enriches to `merchant_name: "Amazon"`), but the `Amazon.com*<order ref>` form contains **no space**, so the whole string is one token and nothing is left. With `name` fully masked, Plaid's enrichment has nothing to work from and returns `merchant_name: null` and `counterparties: []`, so those rows show no merchant *and* no description, and they miss merchant-based categorization.
+
+Confirmed upstream rather than ours: `options.include_original_description` — documented as "the string returned by the financial institution" — returns a value byte-identical to `name`. See issue #19 and `backend/src/scripts/probe-plaid-descriptors.ts`.
+
+**Two separate things came out of this, and only one is closed.**
+
+The *forward* risk is closed. The masking is applied retroactively — Plaid returns asterisks today for transactions it delivered clean months earlier — and `updateTransaction` used to assign `plaidTxn.name` over `existing.name` on any difference. A relink, a `reconcile-plaid-account-change.ts` run, or Plaid pushing those rows as `modified` would have destroyed roughly fifteen months of good descriptors, which are stored nowhere else. `descriptorPreservation.ts` now refuses a replacement that shows a mask run *and* carries strictly fewer alphanumerics, and refuses a null `merchantName` over a resolved one. Verified against the live API: 14 of 15 real divergences blocked.
+
+The *historical* gap is what stays open. About 40 rows were ingested after the masking began, so we never held their real text and **Plaid cannot re-supply it** — its own copy is masked. The only route back is Amazon receipt matching, which is why fully-masked rows are now admitted to that flow (`isReceiptMatchCandidate`) and why applying a match writes a real `userDescription`. That covers the Amazon ones. Anything masked that is *not* Amazon has no recovery path short of manual entry from the statement.
+
+**Deliberately not done**:
+- The guard allows a same-information masked replacement (`Market Basket` → `MARKET BASKET ********`). Tightening `<` to `<=` would block it; left loose because the stated principle is "never lose information", not "prefer the cleaner string". One live instance.
+- `include_original_description` is still unset on the real sync path. It changes nothing here — the value is identically masked — but it would give a second copy of the institution's string as a hedge against future mangling.
+
+**Watch for**: this is one institution today. The guard is institution-agnostic, but `hasOpaqueDescriptor` keys on "descriptor is entirely mask characters", not on "Amazon", so a non-Amazon merchant with a space-free descriptor would also become eligible for receipt matching. Eligibility alone is harmless — a match still needs an exact amount inside the date window plus user confirmation — but it is the assumption to revisit if another institution starts masking.
 
 ---
 

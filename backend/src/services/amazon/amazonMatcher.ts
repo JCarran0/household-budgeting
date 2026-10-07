@@ -47,6 +47,58 @@ export function isAmazonMerchant(transaction: Transaction): boolean {
 }
 
 /**
+ * Characters a bank's scrubber can leave behind once it has masked a
+ * descriptor. Punctuation is in the set because the masking observed on
+ * Capital One (from 2026-07-18) replaces alphanumerics only and leaves
+ * punctuation in place: `Amazon.com*531C57BL2` arrives as
+ * `******.*************`.
+ */
+const MASK_ONLY = /^[*.\s-]+$/;
+
+/**
+ * Did the bank tell us nothing at all about this merchant?
+ *
+ * True only when the descriptor has been fully masked upstream — every
+ * character is a mask character, at least one of them an asterisk, and Plaid's
+ * enrichment came back empty too (a fully-masked `name` gives it nothing to
+ * enrich from, so `merchantName` is null).
+ *
+ * This deliberately does NOT fire on a partially masked descriptor. Capital One
+ * preserves the merchant token up to the first space, so `AMAZON ***********`
+ * still identifies itself and is matched by `isAmazonMerchant` on its own
+ * merits. Only a descriptor with no space at all — the `Amazon.com*ORDERID`
+ * form — loses everything.
+ *
+ * Note that an unmasked `*` is ordinary in card descriptors (`Fine*Woodworking`,
+ * `UEP*ICHIDDO RAMEN`), which is why the whole string must be mask characters
+ * rather than merely containing one.
+ */
+export function hasOpaqueDescriptor(transaction: Transaction): boolean {
+  const name = (transaction.name || '').trim();
+  if (!name.includes('*')) return false;
+  if (!MASK_ONLY.test(name)) return false;
+  return (transaction.merchantName || '').trim() === '';
+}
+
+/**
+ * Should this transaction be offered to the receipt matcher?
+ *
+ * Two different reasons qualify, and they are kept distinct on purpose:
+ *   - `isAmazonMerchant` — the descriptor says Amazon. We know what it is.
+ *   - `hasOpaqueDescriptor` — the bank masked it, so we cannot rule Amazon
+ *     *out*. We are not asserting it is Amazon; we are declining to exclude an
+ *     unidentifiable transaction from a flow whose entire job is to supply the
+ *     identity the bank withheld.
+ *
+ * Nothing downstream treats the second group as Amazon on this basis alone. A
+ * match still requires an exact amount match against a real parsed order inside
+ * the date window, and the user still confirms it before anything is written.
+ */
+export function isReceiptMatchCandidate(transaction: Transaction): boolean {
+  return isAmazonMerchant(transaction) || hasOpaqueDescriptor(transaction);
+}
+
+/**
  * Amazon charges are positive expenses in this app's Plaid setup; bank tx
  * amounts may be signed either way. Compare absolute values, match to the cent.
  */
