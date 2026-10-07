@@ -89,13 +89,6 @@ Photos shipped in `acbb595` (WISHLIST-BRD.md §3.7). Two things were knowingly l
 - **No orphan sweep.** If deleting an image object fails after its ref is removed, the object stays in S3 under `data/images/{familyId}/`. It is logged (`failed to delete wishlist image object`) and tagged with `owner-type` / `owner-id` object metadata, so a sweep can compare those against live items. Not worth building until it actually happens.
 - **SA-27 dependency.** Images render from `blob:` object URLs (the API uses Bearer auth, which `<img src>` cannot send). Whenever the SPA gets its CSP, `img-src` **must** include `blob:`, or every wishlist thumbnail breaks silently.
 
-### 3.4 CLAUDE.md entries for the image store
-
-Not added yet, for the same reason as before: `CLAUDE.md` holds another session's uncommitted edits. Once it is clean, add:
-
-- An Architecture Decisions row (2026-10-06): generic owner-agnostic image store at `images/{familyId}/{imageId}` on a separate `BinaryObjectStore` interface (outside `ReadOnlyDataService`); server-side metadata strip that fails closed; owner routes attach/detach, generic route serves.
-- `backend/src/utils/imageMetadata.ts` under *Security boundaries*: it is the GPS-stripping guarantee, and loosening its fail-closed behaviour reopens location leaks.
-
 ---
 
 ## 4. Finished — do not redo
@@ -105,6 +98,8 @@ Verified complete as of 2026-09-24, with later additions dated.
 | Item | Detail |
 |---|---|
 | Wishlist photos (2026-10-06) | Shipped in `acbb595`. One photo per item (model holds an array, cap 1), browser resize + server-side metadata strip. Deploy not yet verified at time of writing |
+| Image store CLAUDE.md entries (2026-10-07) | Decision row + `imageMetadata.ts` under Security boundaries, added once `CLAUDE.md` was clean (the old §3.4) |
+| Masked-descriptor guard (2026-10-07) | Another session's uncommitted work from ~2026-09-22, reviewed and committed as `2a64ba2`. TD-032 tracks what stays open |
 | Cost doc pushed (2026-10-06) | `2dd9c37` went out rebased as `3c21bcc`. `docs/AI-COST-BUDGET.md` and its CLAUDE.md index row are both on `origin/main` (the old §3.3). **Note:** the push used `--autostash` despite this file's warning against it; the other session's uncommitted work was checked afterwards and came back intact, but the warning stands |
 | Wishlist links + notes | Shipped in `65f5760`, released **7.3.0**, deploy green. Up to 5 http(s) links and a 1000-char note per item |
 | AWS budget raised $10 → $15 | Plus the redundant $5 "Monthly Budget" deleted; `Project` and `Environment` activated as cost allocation tags (effective October 2026 — **activation is not retroactive**) |
