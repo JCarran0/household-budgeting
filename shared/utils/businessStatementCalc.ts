@@ -202,3 +202,21 @@ export function computeStatement(
     clientHeader,
   };
 }
+
+// ---------------------------------------------------------------------------
+// Commission total (internal bookkeeping — never on the client statement)
+// ---------------------------------------------------------------------------
+
+/**
+ * Sum of the per-row displayed commissions for a statement.
+ *
+ * Internal-only figure for the statement history table; the PDF and CSV the
+ * client receives deliberately show no commission total.
+ *
+ * This is Σ(commission_i), NOT Σ(payout_i) − royaltySubtotal. Because the
+ * royalty subtotal is rounded once on the aggregate (D7), those two can differ
+ * by a cent — the same accepted quirk documented at the top of this file.
+ */
+export function sumCommissions(lineItems: ReadonlyArray<StatementLineItem>): number {
+  return roundHalfUp(lineItems.reduce((sum, item) => sum + item.commission, 0));
+}

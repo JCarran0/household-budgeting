@@ -27,6 +27,7 @@ import { IconAlertTriangle, IconEye, IconFileTypeCsv, IconFileTypePdf, IconTrash
 import { api } from '../../lib/api';
 import { exportStatementToCSV } from '../../utils/statementCsv';
 import { StatementPreview } from './StatementPreview';
+import { sumCommissions } from '../../../../shared/utils/businessStatementCalc';
 import type { BusinessStatement } from '../../../../shared/types';
 
 function formatMoney(amount: number): string {
@@ -162,6 +163,7 @@ export function StatementHistoryTable() {
               <Table.Th>Period</Table.Th>
               <Table.Th>Payment Date</Table.Th>
               <Table.Th ta="right">Remittance</Table.Th>
+              <Table.Th ta="right">Commission</Table.Th>
               <Table.Th>Actions</Table.Th>
             </Table.Tr>
           </Table.Thead>
@@ -174,6 +176,7 @@ export function StatementHistoryTable() {
                 <Table.Td ta="right" fw={600}>
                   {formatMoney(s.remittanceTotal)}
                 </Table.Td>
+                <Table.Td ta="right">{formatMoney(sumCommissions(s.lineItems))}</Table.Td>
                 <Table.Td>
                   <Group gap="xs">
                     <Button

@@ -37,6 +37,7 @@ function renderWithProviders(ui: React.ReactElement) {
 import {
   computeStatement,
   roundHalfUp,
+  sumCommissions,
 } from '../../../../../shared/utils/businessStatementCalc';
 
 // ---------------------------------------------------------------------------
@@ -142,6 +143,23 @@ describe('computeStatement — payment-068 golden fixture (D7)', () => {
     expect(purchase?.amount).toBe(0);
     const shipping = result.charges.find((c) => c.subType === 'BIZ_BILLABLE_BOOK_SHIPPING');
     expect(shipping?.amount).toBe(0);
+  });
+
+  it('sumCommissions: Σ per-row commissions, rounded to cents', () => {
+    const result = computeStatement({
+      trustInflowTxns: FIXTURE_TRUST_INFLOW,
+      billableBySubtype: FIXTURE_BILLABLE_BY_SUBTYPE,
+      billableSubtypes: FIXTURE_SUBTYPES,
+      commissionRate: 0.05,
+      paymentNumber: 68,
+      paymentDate: '2025-02-01',
+      periodMonth: '2025-01',
+      clientHeader: FIXTURE_HEADER,
+    });
+
+    // 3511.04 + 1000.00 + 322.23
+    expect(sumCommissions(result.lineItems)).toBe(4833.27);
+    expect(sumCommissions([])).toBe(0);
   });
 
   it('roundHalfUp: 0.025 rounds up to 0.03 (half-cent boundary)', () => {
@@ -446,5 +464,22 @@ describe('StatementHistoryTable — delete', () => {
     await user.click(deleteButtons[deleteButtons.length - 1]);
 
     expect(api.deleteStatement).toHaveBeenCalledWith('s1');
+  });
+
+  it('shows a Commission column with the period commission total', async () => {
+    vi.mocked(api.getStatements).mockResolvedValue([
+      {
+        ...sample,
+        lineItems: [
+          { disbursementDate: '2026-05-01', payout: 70220.83, commission: 3511.04, royalty: 66709.79, transactionId: 't0' },
+          { disbursementDate: '2026-05-15', payout: 6444.66, commission: 322.23, royalty: 6122.43, transactionId: 't1' },
+        ],
+      },
+    ]);
+    renderWithProviders(<StatementHistoryTable />);
+
+    await screen.findByText('#068');
+    expect(screen.getByRole('columnheader', { name: 'Commission' })).toBeDefined();
+    expect(screen.getByText('$3,833.27')).toBeDefined();
   });
 });
