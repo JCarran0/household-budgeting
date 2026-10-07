@@ -89,6 +89,12 @@ Photos shipped in `acbb595` (WISHLIST-BRD.md §3.7). Two things were knowingly l
 - **No orphan sweep.** If deleting an image object fails after its ref is removed, the object stays in S3 under `data/images/{familyId}/`. It is logged (`failed to delete wishlist image object`) and tagged with `owner-type` / `owner-id` object metadata, so a sweep can compare those against live items. Not worth building until it actually happens.
 - **SA-27 dependency.** Images render from `blob:` object URLs (the API uses Bearer auth, which `<img src>` cannot send). Whenever the SPA gets its CSP, `img-src` **must** include `blob:`, or every wishlist thumbnail breaks silently.
 
+### 3.4 Most backend test suites are never run by a gate
+
+Found 2026-10-07. `npm test` in `backend/` (and therefore the pre-commit hook and CI's `test:ci`) runs only `__tests__/(critical|unit)/` — 79 suites, 1253 tests. `npm run test:all` runs 122 suites, 1963 tests. Everything under `src/services/__tests__/` and `src/routes/__tests__/` (wishlist, trips, tasks, …) plus `integration/` only runs when someone invokes it by hand, so a regression there ships silently.
+
+**Decide:** widen `test:ci` to `test:all` (all 1963 passed in ~2 min locally on 2026-10-07; check whether `integration/` needs Plaid sandbox credentials in CI first), or at least add `services/__tests__` and `routes/__tests__` to the pre-commit pattern. Until then, run `npm run test:all` before committing backend changes.
+
 ---
 
 ## 4. Finished — do not redo

@@ -1,5 +1,7 @@
 import { WishlistService } from '../wishlistService';
-import { InMemoryDataService } from '../dataService';
+import { InMemoryDataService, UnifiedDataService } from '../dataService';
+import type { StorageAdapter } from '../storage';
+import { withRequestScope } from '../../middleware/requestScope';
 import { ImageStore } from '../imageStore';
 import { InMemoryBinaryStore } from '../storage';
 import { BASE_PNG, GPS_MARKER, jpegWithGps } from '../../__tests__/helpers/imageFixtures';
@@ -360,35 +362,6 @@ describe('WishlistService', () => {
       expect(blobs.keys()).toHaveLength(0);
     });
 
-    it('deletes the stored object if the item vanished while the upload was in flight', async () => {
-      const { svc, blobs, images } = makeServiceWithStores();
-      const item = await makeItem(svc);
-      const realPut = images.put.bind(images);
-      jest.spyOn(images, 'put').mockImplementation(async (...args) => {
-        const ref = await realPut(...args);
-        await svc.deleteItem(item.id, FAMILY_A);
-        return ref;
-      });
-
-      await expect(svc.addImage(item.id, PHOTO, FAMILY_A)).rejects.toBeInstanceOf(NotFoundError);
-      expect(blobs.keys()).toHaveLength(0);
-    });
-
-    it('keeps an edit that landed while the upload was in flight', async () => {
-      const { svc, images } = makeServiceWithStores();
-      const item = await makeItem(svc);
-      const realPut = images.put.bind(images);
-      jest.spyOn(images, 'put').mockImplementation(async (...args) => {
-        const ref = await realPut(...args);
-        await svc.updateItem(item.id, { notes: 'edited meanwhile' }, FAMILY_A);
-        return ref;
-      });
-
-      const updated = await svc.addImage(item.id, PHOTO, FAMILY_A);
-      expect(updated.notes).toBe('edited meanwhile');
-      expect(updated.images).toHaveLength(1);
-    });
-
     it('updateItem leaves images untouched', async () => {
       const { svc } = makeServiceWithStores();
       const item = await makeItem(svc);
@@ -434,6 +407,104 @@ describe('WishlistService', () => {
       await svc.addImage(item.id, PHOTO, FAMILY_A);
 
       await svc.deleteItem(item.id, FAMILY_A);
+      expect(blobs.keys()).toHaveLength(0);
+    });
+  });
+
+  /**
+   * TD-011. These run against UnifiedDataService — the production data
+   * service, which memoizes reads per request — with each call in its own
+   * request scope, the way two HTTP requests arrive. InMemoryDataService has
+   * no memo, so it cannot show the stale-read failure these guard against.
+   */
+  describe('concurrent writers (TD-011)', () => {
+    /** Async JSON storage, so reads and writes genuinely interleave. */
+    function slowStorage(): StorageAdapter {
+      const data = new Map<string, string>();
+      const tick = () => new Promise((r) => setTimeout(r, 5));
+      return {
+        read: async <T>(key: string) => {
+          await tick();
+          const raw = data.get(key);
+          return raw === undefined ? null : (JSON.parse(raw) as T);
+        },
+        write: async (key: string, value: unknown) => {
+          await tick();
+          data.set(key, JSON.stringify(value));
+        },
+        delete: async (key: string) => {
+          data.delete(key);
+        },
+        exists: async (key: string) => data.has(key),
+        list: async () => [...data.keys()],
+      };
+    }
+
+    function makeScopedService() {
+      const blobs = new InMemoryBinaryStore();
+      const images = new ImageStore(blobs);
+      const svc = new WishlistService(
+        new UnifiedDataService(slowStorage()),
+        makeCategoryService(ALL_CATEGORIES),
+        images,
+      );
+      return { svc, images, blobs };
+    }
+
+    const NEW_ITEM = {
+      name: 'Rug',
+      estimatedAmount: 300,
+      estimatedMonth: '2026-11',
+      categoryId: SPENDING_CAT.id,
+    };
+
+    it('two concurrent creates both persist', async () => {
+      const { svc } = makeScopedService();
+      await Promise.all([
+        withRequestScope(() => svc.createItem({ ...NEW_ITEM, name: 'A' }, FAMILY_A, USER_1)),
+        withRequestScope(() => svc.createItem({ ...NEW_ITEM, name: 'B' }, FAMILY_A, USER_1)),
+      ]);
+      const names = (await svc.listItems(FAMILY_A)).map((i) => i.name).sort();
+      expect(names).toEqual(['A', 'B']);
+    });
+
+    it('an edit made while a photo is uploading is not lost', async () => {
+      const { svc, images } = makeScopedService();
+      const item = await withRequestScope(() => svc.createItem(NEW_ITEM, FAMILY_A, USER_1));
+
+      // Hold the upload open until the concurrent edit has been issued.
+      let releaseUpload!: () => void;
+      const uploadGate = new Promise<void>((r) => (releaseUpload = r));
+      const realPut = images.put.bind(images);
+      jest.spyOn(images, 'put').mockImplementation(async (...args) => {
+        await uploadGate;
+        return realPut(...args);
+      });
+
+      const upload = withRequestScope(() =>
+        svc.addImage(item.id, { buffer: jpegWithGps(), mimeType: 'image/jpeg' }, FAMILY_A),
+      );
+      const edit = withRequestScope(() => svc.updateItem(item.id, { notes: 'edited meanwhile' }, FAMILY_A));
+      await new Promise((r) => setTimeout(r, 20));
+      releaseUpload();
+      await Promise.all([upload, edit]);
+
+      const [stored] = await withRequestScope(() => svc.listItems(FAMILY_A));
+      expect(stored.notes).toBe('edited meanwhile');
+      expect(stored.images).toHaveLength(1);
+    });
+
+    it('deleting an item while its photo uploads leaves no orphaned object', async () => {
+      const { svc, blobs } = makeScopedService();
+      const item = await withRequestScope(() => svc.createItem(NEW_ITEM, FAMILY_A, USER_1));
+
+      const upload = withRequestScope(() =>
+        svc.addImage(item.id, { buffer: jpegWithGps(), mimeType: 'image/jpeg' }, FAMILY_A),
+      );
+      const del = withRequestScope(() => svc.deleteItem(item.id, FAMILY_A));
+      await Promise.all([upload, del]);
+
+      expect(await withRequestScope(() => svc.listItems(FAMILY_A))).toEqual([]);
       expect(blobs.keys()).toHaveLength(0);
     });
   });
