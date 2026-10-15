@@ -625,10 +625,10 @@ notes:
     - Q (default sort): resolved in D10 — status group then month asc
     - Q (filter chips): not in v1; revisit if list grows
     - Q (nav placement): between Projects and Tasks (Phase 5.7)
-    - Q (empty state copy): "No wishlist items yet. Add one to get
-      started." placeholder in WishlistTable (Phase 5.4)
-    - Q (mobile interactions): stacked Card layout + kebab menu, no
-      swipe actions in v1 (Phase 5.4)
+    - 'Q (empty state copy): "No wishlist items yet. Add one to get
+      started." placeholder in WishlistTable (Phase 5.4)'
+    - 'Q (mobile interactions): stacked Card layout + kebab menu, no
+      swipe actions in v1 (Phase 5.4)'
 
   future_work_if_validated:
     - BvA integration (BRD §6 out-of-scope item 1) — surface AGREED

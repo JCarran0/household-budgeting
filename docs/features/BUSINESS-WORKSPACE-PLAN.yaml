@@ -73,7 +73,7 @@ decisions:
 
   - id: D2
     date: 2026-06-05
-    decision: User gains `workspaceIds: string[]`; active workspace lives in the JWT.
+    decision: "User gains `workspaceIds: string[]`; active workspace lives in the JWT."
     rationale: |
       `User.familyId` (single string) becomes membership list `workspaceIds`.
       The currently-active workspace is the `familyId` claim in the JWT, so
@@ -97,7 +97,7 @@ decisions:
 
   - id: D4
     date: 2026-06-05
-    decision: `Family.workspaceType: 'personal' | 'business'` drives feature gating.
+    decision: '`Family.workspaceType: ''personal'' | ''business''` drives feature gating.'
     rationale: |
       The frontend filters nav + routes by the active workspace's type
       (BRD REQ-029/030). Default 'personal' for all existing families;
@@ -934,11 +934,11 @@ release_grouping:
 # =============================================================================
 notes:
   brd_open_questions_resolved_in_plan:
-    - PDF fidelity → D9 + 7.3: @react-pdf/renderer document mirroring page 1
+    - 'PDF fidelity → D9 + 7.3: @react-pdf/renderer document mirroring page 1'
     - Billable sub-types fixed vs configurable → fixed set in the seed (3.1);
       revisit if a second charge family appears
-    - Workspace switcher mechanics → D2: active workspace in JWT, re-issued
-      on switch (no server session)
+    - 'Workspace switcher mechanics → D2: active workspace in JWT, re-issued
+      on switch (no server session)'
     - Provisioning UX → D10: backend endpoint surfaced on Admin (or script)
   still_open_for_implementation:
     - Disbursement date vs. bank-posted date — confirm Plaid transaction date

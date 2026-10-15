@@ -682,9 +682,9 @@ notes:
     merchantName / name. Plan locks to the implementation truth (D2);
     BRD should be updated for accuracy in a follow-up edit.
   open_brd_questions:
-    - Q-1 (preview shows categorized sample too?): default in Phase 6.3
-      is YES, capped at 5
-    - Q-2 (auto-clear dismissal on rule creation?): default in Phase 6.4
-      is YES
-    - Q-3 (numeric badge on Auto Cat tab itself?): NOT in v1; revisit
-      after the section ships
+    - 'Q-1 (preview shows categorized sample too?): default in Phase 6.3
+      is YES, capped at 5'
+    - 'Q-2 (auto-clear dismissal on rule creation?): default in Phase 6.4
+      is YES'
+    - 'Q-3 (numeric badge on Auto Cat tab itself?): NOT in v1; revisit
+      after the section ships'
