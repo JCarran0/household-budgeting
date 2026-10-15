@@ -2,8 +2,8 @@
 # Business Workspace — Implementation Plan
 # =============================================================================
 # BRD: docs/features/BUSINESS-WORKSPACE-BRD.md
-# Status: Not Started
-# Last Updated: 2026-06-05
+# Status: Shipped (847dca4…7a1a063, 2026-06-06; in production use since)
+# Last Updated: 2026-10-15
 # =============================================================================
 
 overview:
@@ -237,7 +237,7 @@ decisions:
 # PHASE 0: Shared Types
 # =============================================================================
 phase_0_types:
-  status: not_started
+  status: complete
   description: |
     Type changes that every later phase imports. Additive and
     backward-compatible.
@@ -245,7 +245,7 @@ phase_0_types:
   tasks:
     - id: "0.1"
       task: Extend User and Family in shared/types/index.ts
-      status: not_started
+      status: complete
       details: |
         User (currently has single `familyId`):
           familyId: string;            // KEEP — alias of activeWorkspaceId (D2/D3)
@@ -259,7 +259,7 @@ phase_0_types:
 
     - id: "0.2"
       task: Add Statement types
-      status: not_started
+      status: complete
       details: |
         export interface StatementLineItem {     // one Amazon deposit
           disbursementDate: string;              // YYYY-MM-DD
@@ -295,7 +295,7 @@ phase_0_types:
 # PHASE 1: Backend — Multi-Workspace Membership & Switching
 # =============================================================================
 phase_1_workspace_backend:
-  status: not_started
+  status: complete
   description: |
     Turn single-family membership into multi-workspace membership, add the
     switch endpoint, and the workspace-list/create endpoints. This is the
@@ -304,7 +304,7 @@ phase_1_workspace_backend:
   tasks:
     - id: "1.1"
       task: Migration / backfill for existing users (D3)
-      status: not_started
+      status: complete
       details: |
         Lazy backfill in authMiddleware (preferred for a 2-user app): when
         loading a user that lacks `workspaceIds`, set
@@ -315,7 +315,7 @@ phase_1_workspace_backend:
 
     - id: "1.2"
       task: authMiddleware — membership by array (authMiddleware.ts)
-      status: not_started
+      status: complete
       details: |
         verifyFamilyMembership(userId, claimedFamilyId):
           - was: user.familyId === claimedFamilyId
@@ -326,7 +326,7 @@ phase_1_workspace_backend:
 
     - id: "1.3"
       task: authService — JWT + switchWorkspace (authService.ts)
-      status: not_started
+      status: complete
       details: |
         JWTPayload: unchanged shape — `familyId` is the ACTIVE workspace.
         login/register: set familyId claim = user.activeWorkspaceId
@@ -340,7 +340,7 @@ phase_1_workspace_backend:
 
     - id: "1.4"
       task: familyService — createWorkspace + array-aware membership (familyService.ts)
-      status: not_started
+      status: complete
       details: |
         createWorkspace(userId, name, workspaceType): Family
           - create Family { workspaceType, members: [caller] }
@@ -355,7 +355,7 @@ phase_1_workspace_backend:
 
     - id: "1.5"
       task: Routes — switch + workspaces + create (routes/auth.ts)
-      status: not_started
+      status: complete
       details: |
         POST /api/v1/auth/switch-workspace  { familyId }  → new token + user
         GET  /api/v1/workspaces                            → listWorkspaces
@@ -366,7 +366,7 @@ phase_1_workspace_backend:
 
     - id: "1.6"
       task: Tests — membership, switching, isolation
-      status: not_started
+      status: complete
       details: |
         backend/src/services/__tests__/workspaceSwitch.test.ts
         - switchWorkspace to a workspace the user belongs to → new token,
@@ -384,7 +384,7 @@ phase_1_workspace_backend:
 # PHASE 2: Frontend — Workspace Switcher & Gating
 # =============================================================================
 phase_2_workspace_frontend:
-  status: not_started
+  status: complete
   description: |
     Header switcher control, auth store support, nav/route gating by the
     active workspace type. After this phase you can create a business
@@ -393,7 +393,7 @@ phase_2_workspace_frontend:
   tasks:
     - id: "2.1"
       task: authStore — workspaces + switchWorkspace (authStore.ts)
-      status: not_started
+      status: complete
       details: |
         State: workspaces: Family[]; activeWorkspaceId: string | null.
         On login: also GET /workspaces → store list; set activeWorkspaceId
@@ -407,7 +407,7 @@ phase_2_workspace_frontend:
 
     - id: "2.2"
       task: Workspace switcher control in header (MantineLayout.tsx)
-      status: not_started
+      status: complete
       details: |
         In the header Group (~line 138), render a Menu/Select showing the
         user's workspaces (label = family name, badge = type). Hidden/inert
@@ -418,7 +418,7 @@ phase_2_workspace_frontend:
 
     - id: "2.3"
       task: Nav + route gating by workspace type (MantineLayout.tsx, App.tsx)
-      status: not_started
+      status: complete
       details: |
         Derive activeWorkspaceType from the active workspace.
         navItems → split into PERSONAL_NAV and BUSINESS_NAV:
@@ -434,7 +434,7 @@ phase_2_workspace_frontend:
 
     - id: "2.4"
       task: Tests — switcher + gating
-      status: not_started
+      status: complete
       details: |
         - switcher hidden with a single workspace
         - switching invalidates query cache (spy on queryClient.clear)
@@ -445,7 +445,7 @@ phase_2_workspace_frontend:
 # PHASE 3: Backend — Business Category Seed
 # =============================================================================
 phase_3_business_seed:
-  status: not_started
+  status: complete
   description: |
     The trust-ledger taxonomy with reserved, well-known category IDs that
     the statement generator references (D6).
@@ -453,7 +453,7 @@ phase_3_business_seed:
   tasks:
     - id: "3.1"
       task: Define BUSINESS_CATEGORY_SEED + role map (constants/categoryTemplates.ts)
-      status: not_started
+      status: complete
       details: |
         Reserved root IDs (isCustom=false so users can't delete the roots):
           BIZ_TRUST_INFLOW      — "Royalties Held in Trust" (Amazon payouts)
@@ -480,7 +480,7 @@ phase_3_business_seed:
 
     - id: "3.2"
       task: seedCategoriesForWorkspaceType (categoryService.ts)
-      status: not_started
+      status: complete
       details: |
         async seedCategoriesForWorkspaceType(familyId, type: WorkspaceType) {
           if (type !== 'business') return;            // personal stays seed-free (D5)
@@ -491,7 +491,7 @@ phase_3_business_seed:
 
     - id: "3.3"
       task: Role resolution helper (categoryService.ts or a small util)
-      status: not_started
+      status: complete
       details: |
         resolveStatementRole(categoryId, familyId): role | null
           - walk parentId up to a reserved root; return which STATEMENT_ROLES
@@ -502,7 +502,7 @@ phase_3_business_seed:
 
     - id: "3.4"
       task: Tests — seed + role resolution
-      status: not_started
+      status: complete
       details: |
         - seeding a business workspace writes the reserved tree exactly once
         - seeding 'personal' is a no-op
@@ -525,7 +525,7 @@ phase_4_plaid_txns:
   tasks:
     - id: "4.1"
       task: Verify Plaid connect works in business workspace
-      status: deferred_to_activation
+      status: complete
       details: |
         With the active workspace = business, the existing PlaidLinkProvider
         flow (createLinkToken → Link → connectAccount) stores the item under
@@ -550,7 +550,7 @@ phase_4_plaid_txns:
 
     - id: "4.3"
       task: Confirm transaction list + tagging UI render in business workspace
-      status: deferred_to_activation
+      status: complete
       details: |
         EnhancedTransactions / TransactionTable / TransactionEditModal are
         category-agnostic (they take categories as props). Confirm they show
@@ -573,7 +573,7 @@ phase_4_plaid_txns:
 # PHASE 5: Backend — Statement Generator
 # =============================================================================
 phase_5_statement_service:
-  status: not_started
+  status: complete
   description: |
     The only genuinely new domain logic. Pure, heavily unit-tested against
     the real payment-068 fixture (D7). Persistence + payment numbering (D8).
@@ -581,7 +581,7 @@ phase_5_statement_service:
   tasks:
     - id: "5.1"
       task: Statement math as a pure module (statementService.ts or shared/utils)
-      status: not_started
+      status: complete
       details: |
         computeStatement(input): BusinessStatement-without-id
           inputs: trustInflowTxns[], billableTxns[] grouped by subtype,
@@ -597,7 +597,7 @@ phase_5_statement_service:
 
     - id: "5.2"
       task: StatementService — load + persist (statementService.ts)
-      status: not_started
+      status: complete
       details: |
         generateStatement(familyId, periodMonth, opts):
           - load active transactions for the month (use transactionReader /
@@ -613,11 +613,11 @@ phase_5_statement_service:
 
     - id: "5.3"
       task: Wire singleton (services/index.ts)
-      status: not_started
+      status: complete
 
     - id: "5.4"
       task: Tests — the money math is the highest-risk surface
-      status: not_started
+      status: complete
       details: |
         backend/src/services/__tests__/statementService.test.ts
         GOLDEN FIXTURE (payment 068, from the real statement):
@@ -640,14 +640,14 @@ phase_5_statement_service:
 # PHASE 6: Backend — Statement Routes
 # =============================================================================
 phase_6_statement_routes:
-  status: not_started
+  status: complete
   description: |
     REST surface for the generator, gated to business workspaces.
 
   tasks:
     - id: "6.1"
       task: routes/businessStatements.ts
-      status: not_started
+      status: complete
       details: |
         Guard: reject if the active workspace's type !== 'business' (404/403).
         POST /api/v1/business/statements        { periodMonth, paymentNumber?,
@@ -659,7 +659,7 @@ phase_6_statement_routes:
 
     - id: "6.2"
       task: Mount in app.ts + integration test
-      status: not_started
+      status: complete
       details: |
         app.use(`${apiPrefix}/business/statements`, businessStatementRoutes)
         Integration test: seed a business workspace + tagged txns, POST
@@ -670,7 +670,7 @@ phase_6_statement_routes:
 # PHASE 7: Frontend — Statement UI + PDF/CSV
 # =============================================================================
 phase_7_statement_ui:
-  status: not_started
+  status: complete
   description: |
     Business Statements page: pick month → preview → finalize (persist) →
     history list → export PDF + CSV. Split across components to stay under
@@ -679,14 +679,14 @@ phase_7_statement_ui:
   tasks:
     - id: "7.1"
       task: Add @react-pdf/renderer dependency (D9)
-      status: not_started
+      status: complete
       details: |
         Frontend dep. Confirm bundle impact is acceptable (lazy-load the PDF
         module so it doesn't bloat the main chunk for the personal app).
 
     - id: "7.2"
       task: API client module (lib/api/businessStatements.ts) + register
-      status: not_started
+      status: complete
       details: |
         createBusinessStatementsApi(client):
           generateStatement({ periodMonth, paymentNumber?, paymentDate? })
@@ -696,7 +696,7 @@ phase_7_statement_ui:
 
     - id: "7.3"
       task: Statement components (components/business/)
-      status: not_started
+      status: complete
       details: |
         StatementGenerator.tsx — month picker + optional payment#/date,
           calls generate, shows the computed preview before/after persist.
@@ -713,7 +713,7 @@ phase_7_statement_ui:
 
     - id: "7.4"
       task: Page + route (pages/BusinessStatements.tsx, App.tsx)
-      status: not_started
+      status: complete
       details: |
         Route /business/statements wrapped in RouteErrorBoundary, guarded to
         the business workspace (Phase 2.3). Page composes generator + history;
@@ -721,7 +721,7 @@ phase_7_statement_ui:
 
     - id: "7.5"
       task: Static header config (client + business identity)
-      status: not_started
+      status: complete
       details: |
         Where the StatementHeader values come from (BRD REQ-020): store on
         the Family record (business workspace settings) or a small
@@ -731,7 +731,7 @@ phase_7_statement_ui:
 
     - id: "7.6"
       task: Frontend tests
-      status: not_started
+      status: complete
       details: |
         - preview math matches fixture via the shared pure fn
         - generate flow calls api with the right payload + refetches history
@@ -742,11 +742,11 @@ phase_7_statement_ui:
 # PHASE 8: Isolation Fixes (BRD REQ-007)
 # =============================================================================
 phase_8_isolation:
-  status: not_started
+  status: complete
   tasks:
     - id: "8.1"
       task: Per-workspace chatbot cost cap (chatbotCostTracker.ts) (D11)
-      status: not_started
+      status: complete
       details: |
         Key cost file per familyId: chatbot_costs_{familyId}_{month}. Cap
         enforced per workspace so business usage never consumes the family
@@ -754,7 +754,7 @@ phase_8_isolation:
 
     - id: "8.2"
       task: Confirm auth rate-limit scope (rateLimit.ts)
-      status: not_started
+      status: complete
       details: |
         Verify business-account login failures cannot lock out the family
         account (and vice versa). If lockout is keyed purely globally or by
@@ -765,18 +765,18 @@ phase_8_isolation:
 # PHASE 9: Docs & Manual Validation
 # =============================================================================
 phase_9_docs:
-  status: not_started
+  status: partial   # 9.1 done; 9.2/9.3 never recorded — see below
   tasks:
     - id: "9.1"
       task: CLAUDE.md index + ADR
-      status: not_started
+      status: complete
       details: |
         Already added at the BRD commit (BRD table row + Architecture
         Decisions row). Update the ADR if any decision here supersedes it.
 
     - id: "9.2"
       task: Manual test checklist
-      status: not_started
+      status: not_recorded   # no record the checklist was run; workspace has been in real use since 2026-06
       details: |
         Workspace switching:
         - [ ] Single-workspace user sees no switcher
@@ -803,7 +803,7 @@ phase_9_docs:
 
     - id: "9.3"
       task: Provisioning runbook
-      status: not_started
+      status: not_started   # provisioning shipped as Admin UI (7a1a063); no written runbook exists
       details: |
         Document the one-time creation of the OoT business workspace
         (Admin action or seed script per D10), entering the static

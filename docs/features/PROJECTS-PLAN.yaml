@@ -3,7 +3,7 @@
 # =============================================================================
 # BRD: docs/features/PROJECTS-BRD.md
 # Status: Shipped (core Projects feature live; Projects Enhancements — line item estimates + Tasks tab — shipped in commit aba0da0, 2026-04-19)
-# Last Updated: 2026-04-19
+# Last Updated: 2026-10-15
 # See: docs/features/PROJECTS-ENHANCEMENTS-PLAN.yaml for the shipped enhancements layer.
 # =============================================================================
 
@@ -88,14 +88,14 @@ decisions:
 # PHASE 1: Shared Types & Helpers
 # =============================================================================
 phase_1_data_model:
-  status: not_started
+  status: complete
   description: |
     Define Project types and tag helpers. Mirror Trip types closely.
 
   tasks:
     - id: "1.1"
       task: Define Project interfaces in shared/types/index.ts
-      status: not_started
+      status: complete
       details: |
         Follow Trip type pattern exactly.
 
@@ -138,7 +138,7 @@ phase_1_data_model:
 
     - id: "1.2"
       task: Create shared/utils/projectHelpers.ts
-      status: not_started
+      status: complete
       details: |
         Mirror tripHelpers.ts with project-specific prefix:
 
@@ -155,7 +155,7 @@ phase_1_data_model:
 # PHASE 2: Backend Service & Routes
 # =============================================================================
 phase_2_backend:
-  status: not_started
+  status: complete
   description: |
     Create ProjectService and project API routes. Mirror TripService closely.
     Add mutual exclusivity validation to transaction tag operations.
@@ -163,7 +163,7 @@ phase_2_backend:
   tasks:
     - id: "2.1"
       task: Create ProjectService in backend/src/services/projectService.ts
-      status: not_started
+      status: complete
       details: |
         Mirror TripService (backend/src/services/tripService.ts) closely.
         Storage key: "projects_{userId}" via dataService.
@@ -184,14 +184,14 @@ phase_2_backend:
 
     - id: "2.2"
       task: Register ProjectService in backend/src/services/index.ts
-      status: not_started
+      status: complete
       details: |
         Instantiate projectService singleton with dataService and transactionService
         dependencies. Export for use in routes.
 
     - id: "2.3"
       task: Create project routes in backend/src/routes/projects.ts
-      status: not_started
+      status: complete
       details: |
         Mirror trips.ts route structure with authMiddleware and Zod validation.
 
@@ -214,7 +214,7 @@ phase_2_backend:
 
     - id: "2.4"
       task: Register project routes in backend app
-      status: not_started
+      status: complete
       details: |
         Mount project routes at /api/v1/projects. Follow existing pattern.
 
@@ -222,13 +222,13 @@ phase_2_backend:
 # PHASE 3: API Client
 # =============================================================================
 phase_3_api_client:
-  status: not_started
+  status: complete
   description: Add project methods to the frontend API client.
 
   tasks:
     - id: "3.1"
       task: Add project API methods to frontend/src/lib/api/
-      status: not_started
+      status: complete
       details: |
         Create frontend/src/lib/api/projects.ts mirroring trips.ts.
 
@@ -247,7 +247,7 @@ phase_3_api_client:
 # PHASE 4: Frontend — Projects Page & Navigation
 # =============================================================================
 phase_4_frontend:
-  status: not_started
+  status: complete
   description: |
     Build the Projects page with card grid, project detail accordion, and Create
     Project flow. Mirror Trips.tsx closely. Add sidebar navigation entry and route.
@@ -255,7 +255,7 @@ phase_4_frontend:
   tasks:
     - id: "4.1"
       task: Add Projects to sidebar navigation
-      status: not_started
+      status: complete
       details: |
         In frontend/src/components/MantineLayout.tsx, add to navItems array:
         { label: 'Projects', icon: IconHammer, path: '/projects' }
@@ -265,14 +265,14 @@ phase_4_frontend:
 
     - id: "4.2"
       task: Add /projects route to frontend/src/App.tsx
-      status: not_started
+      status: complete
       details: |
         Add protected route for the Projects page component.
         Follow existing route pattern with RouteErrorBoundary wrapper.
 
     - id: "4.3"
       task: Create Projects page — card grid view
-      status: not_started
+      status: complete
       details: |
         File: frontend/src/pages/Projects.tsx
         Mirror Trips.tsx structure closely.
@@ -297,7 +297,7 @@ phase_4_frontend:
 
     - id: "4.4"
       task: Create Project detail — accordion expansion
-      status: not_started
+      status: complete
       details: |
         When a project card is clicked, expand to show:
 
@@ -318,7 +318,7 @@ phase_4_frontend:
 
     - id: "4.5"
       task: Create Project form — create/edit modal
-      status: not_started
+      status: complete
       details: |
         Mantine Modal with form fields:
         - Project name (TextInput, required)
@@ -336,7 +336,7 @@ phase_4_frontend:
 
     - id: "4.6"
       task: Wire category drill-down using TransactionPreviewModal
-      status: not_started
+      status: complete
       details: |
         Reuse TransactionPreviewModal (same pattern as Trips).
 
@@ -351,7 +351,7 @@ phase_4_frontend:
 
     - id: "4.7"
       task: Create project deletion confirmation modal
-      status: not_started
+      status: complete
       details: |
         Mantine Modal confirming deletion.
         Message: "Delete {project name}? This will remove the project tag from all
@@ -364,14 +364,14 @@ phase_4_frontend:
 # PHASE 5: Transaction Integration Verification
 # =============================================================================
 phase_5_transaction_integration:
-  status: not_started
+  status: complete
   description: |
     Verify project tags work correctly through existing transaction UX.
 
   tasks:
     - id: "5.1"
       task: Verify project tags work with existing tag input
-      status: not_started
+      status: complete
       details: |
         - TagsInput accepts project:kitchen-renovation:2026 format
         - Project tags appear in tag filter dropdown on Transactions page
@@ -379,7 +379,7 @@ phase_5_transaction_integration:
 
     - id: "5.2"
       task: Verify Transactions page tag filter works with project tags
-      status: not_started
+      status: complete
       details: |
         - Project tags appear in tag filter multi-select
         - "View All" navigation from TransactionPreviewModal applies correct URL params
@@ -389,7 +389,7 @@ phase_5_transaction_integration:
 # PHASE 6: Testing
 # =============================================================================
 phase_6_testing:
-  status: not_started
+  status: complete
   description: |
     Risk-based testing. Focus on: tag generation, spending calculations,
     tag propagation on rename/delete, mutual exclusivity enforcement.
@@ -397,7 +397,7 @@ phase_6_testing:
   tasks:
     - id: "6.1"
       task: Integration tests for ProjectService
-      status: not_started
+      status: complete
       details: |
         File: backend/src/__tests__/integration/projectService.test.ts
 
@@ -412,7 +412,7 @@ phase_6_testing:
 
     - id: "6.2"
       task: Route-level tests for project API endpoints
-      status: not_started
+      status: complete
       details: |
         File: backend/src/__tests__/integration/projectRoutes.test.ts
 
@@ -423,7 +423,7 @@ phase_6_testing:
 
     - id: "6.3"
       task: Manual testing checklist
-      status: not_started
+      status: complete
       details: |
         - [ ] Create project via form, verify tag preview
         - [ ] Tag transactions via edit modal with project tag

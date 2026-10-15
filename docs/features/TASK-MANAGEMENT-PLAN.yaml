@@ -2,8 +2,8 @@
 # Household Task Management — Implementation Plan
 # =============================================================================
 # BRD: docs/features/TASK-MANAGEMENT-BRD.md
-# Status: Not Started
-# Last Updated: 2026-04-11
+# Status: Shipped (2049e56, 2026-04-11). v2.0 enhancements tracked in TASK-MANAGEMENT-ENHANCEMENTS-PLAN.yaml
+# Last Updated: 2026-10-15
 # =============================================================================
 
 overview:
@@ -100,7 +100,7 @@ decisions:
 # PHASE 1: Shared Types
 # =============================================================================
 phase_1_types:
-  status: not_started
+  status: complete
   description: |
     Define all Task-related TypeScript interfaces in shared/types/index.ts.
     These types are consumed by backend services, routes, and the frontend.
@@ -108,7 +108,7 @@ phase_1_types:
   tasks:
     - id: "1.1"
       task: Define Task entity types in shared/types/index.ts
-      status: not_started
+      status: complete
       details: |
         Core types:
 
@@ -145,7 +145,7 @@ phase_1_types:
 
     - id: "1.2"
       task: Define Task DTO types
-      status: not_started
+      status: complete
       details: |
         interface CreateTaskDto {
           title: string;
@@ -169,7 +169,7 @@ phase_1_types:
 
     - id: "1.3"
       task: Define Task Template types
-      status: not_started
+      status: complete
       details: |
         interface TaskTemplate {
           id: string;                     // UUID
@@ -200,7 +200,7 @@ phase_1_types:
 
     - id: "1.4"
       task: Define Leaderboard response type
-      status: not_started
+      status: complete
       details: |
         interface LeaderboardEntry {
           userId: string;
@@ -225,7 +225,7 @@ phase_1_types:
 # PHASE 2: Backend — Task Service
 # =============================================================================
 phase_2_task_service:
-  status: not_started
+  status: complete
   description: |
     Core task CRUD and status management. This is the largest backend phase.
     Follow the singleton service pattern used by TripService, ProjectService, etc.
@@ -233,7 +233,7 @@ phase_2_task_service:
   tasks:
     - id: "2.1"
       task: Create TaskService in backend/src/services/taskService.ts
-      status: not_started
+      status: complete
       details: |
         Constructor dependencies: DataService (for persistence)
         Storage key: tasks_{familyId}
@@ -295,7 +295,7 @@ phase_2_task_service:
 
     - id: "2.2"
       task: Create TaskTemplateService in backend/src/services/taskTemplateService.ts
-      status: not_started
+      status: complete
       details: |
         Constructor dependencies: DataService
         Storage key: task_templates_{familyId}
@@ -313,7 +313,7 @@ phase_2_task_service:
 
     - id: "2.3"
       task: Register services in backend/src/services/index.ts
-      status: not_started
+      status: complete
       details: |
         Instantiate TaskService and TaskTemplateService singletons with
         DataService dependency. Export for use in routes.
@@ -322,7 +322,7 @@ phase_2_task_service:
 # PHASE 3: Backend — Routes
 # =============================================================================
 phase_3_routes:
-  status: not_started
+  status: complete
   description: |
     API routes for tasks and task templates. Follow existing route patterns
     with authMiddleware and Zod validation.
@@ -330,7 +330,7 @@ phase_3_routes:
   tasks:
     - id: "3.1"
       task: Create task routes in backend/src/routes/tasks.ts
-      status: not_started
+      status: complete
       details: |
         All endpoints protected by authMiddleware.
         familyId and userId extracted from req.user (set by auth middleware).
@@ -362,7 +362,7 @@ phase_3_routes:
 
     - id: "3.2"
       task: Create task template routes in backend/src/routes/taskTemplates.ts
-      status: not_started
+      status: complete
       details: |
         POST   /api/v1/task-templates              — Create template
         GET    /api/v1/task-templates              — List all templates (sorted)
@@ -381,7 +381,7 @@ phase_3_routes:
 
     - id: "3.3"
       task: Register routes in backend app
-      status: not_started
+      status: complete
       details: |
         Mount task routes at /api/v1/tasks
         Mount template routes at /api/v1/task-templates
@@ -391,13 +391,13 @@ phase_3_routes:
 # PHASE 4: API Client
 # =============================================================================
 phase_4_api_client:
-  status: not_started
+  status: complete
   description: Add task and template methods to the frontend API client.
 
   tasks:
     - id: "4.1"
       task: Create frontend/src/lib/api/tasks.ts
-      status: not_started
+      status: complete
       details: |
         Methods:
         - createTask(data: CreateTaskDto): Promise<StoredTask>
@@ -411,7 +411,7 @@ phase_4_api_client:
 
     - id: "4.2"
       task: Create frontend/src/lib/api/taskTemplates.ts
-      status: not_started
+      status: complete
       details: |
         Methods:
         - createTemplate(data: CreateTaskTemplateDto): Promise<StoredTaskTemplate>
@@ -422,7 +422,7 @@ phase_4_api_client:
 
     - id: "4.3"
       task: Register in main API client and bind methods
-      status: not_started
+      status: complete
       details: |
         Follow existing pattern in frontend/src/lib/api.ts or api/index.ts.
         Ensure all methods are properly bound to prevent context loss
@@ -432,7 +432,7 @@ phase_4_api_client:
 # PHASE 5: Frontend — Kanban Board
 # =============================================================================
 phase_5_kanban:
-  status: not_started
+  status: complete
   description: |
     The core UI: a four-column Kanban board with drag-and-drop. This is the
     most complex frontend phase and should be built incrementally.
@@ -440,7 +440,7 @@ phase_5_kanban:
   tasks:
     - id: "5.1"
       task: Add Tasks to sidebar navigation
-      status: not_started
+      status: complete
       details: |
         In frontend/src/components/MantineLayout.tsx, add to navItems:
         { label: 'Tasks', icon: IconChecklist, path: '/tasks' }
@@ -450,14 +450,14 @@ phase_5_kanban:
 
     - id: "5.2"
       task: Add /tasks route to frontend/src/App.tsx
-      status: not_started
+      status: complete
       details: |
         Add protected route for the Tasks page component.
         Follow existing route pattern with RouteErrorBoundary wrapper.
 
     - id: "5.3"
       task: Install and configure @hello-pangea/dnd
-      status: not_started
+      status: complete
       details: |
         npm install @hello-pangea/dnd
 
@@ -467,7 +467,7 @@ phase_5_kanban:
 
     - id: "5.4"
       task: Create TaskBoard component
-      status: not_started
+      status: complete
       details: |
         File: frontend/src/pages/Tasks.tsx (main page)
         File: frontend/src/components/tasks/TaskBoard.tsx (board component)
@@ -494,7 +494,7 @@ phase_5_kanban:
 
     - id: "5.5"
       task: Create TaskCard component
-      status: not_started
+      status: complete
       details: |
         File: frontend/src/components/tasks/TaskCard.tsx
 
@@ -513,7 +513,7 @@ phase_5_kanban:
 
     - id: "5.6"
       task: Create KanbanColumn component
-      status: not_started
+      status: complete
       details: |
         File: frontend/src/components/tasks/KanbanColumn.tsx
 
@@ -526,7 +526,7 @@ phase_5_kanban:
 
     - id: "5.7"
       task: Implement auto-assignment on drag
-      status: not_started
+      status: complete
       details: |
         In the onDragEnd handler within TaskBoard:
 
@@ -544,7 +544,7 @@ phase_5_kanban:
 
     - id: "5.8"
       task: Add board filter bar
-      status: not_started
+      status: complete
       details: |
         Filter controls above the board:
         - Assignee filter: Select dropdown with family members + "Unassigned"
@@ -558,7 +558,7 @@ phase_5_kanban:
 # PHASE 6: Frontend — Task CRUD Modals
 # =============================================================================
 phase_6_task_crud:
-  status: not_started
+  status: complete
   description: |
     Task creation, editing, and detail views. Includes the split button
     with template dropdown.
@@ -566,7 +566,7 @@ phase_6_task_crud:
   tasks:
     - id: "6.1"
       task: Create TaskFormModal (create/edit)
-      status: not_started
+      status: complete
       details: |
         File: frontend/src/components/tasks/TaskFormModal.tsx
 
@@ -587,7 +587,7 @@ phase_6_task_crud:
 
     - id: "6.2"
       task: Create TaskDetailModal
-      status: not_started
+      status: complete
       details: |
         File: frontend/src/components/tasks/TaskDetailModal.tsx
 
@@ -605,7 +605,7 @@ phase_6_task_crud:
 
     - id: "6.3"
       task: Create split button with template dropdown
-      status: not_started
+      status: complete
       details: |
         File: frontend/src/components/tasks/CreateTaskButton.tsx
 
@@ -628,7 +628,7 @@ phase_6_task_crud:
 
     - id: "6.4"
       task: Create TemplateManagementModal
-      status: not_started
+      status: complete
       details: |
         File: frontend/src/components/tasks/TemplateManagementModal.tsx
 
@@ -648,7 +648,7 @@ phase_6_task_crud:
 # PHASE 7: Frontend — Leaderboard
 # =============================================================================
 phase_7_leaderboard:
-  status: not_started
+  status: complete
   description: |
     Collapsible leaderboard panel on the Tasks page showing completion
     counts per family member across three time windows.
@@ -656,7 +656,7 @@ phase_7_leaderboard:
   tasks:
     - id: "7.1"
       task: Create Leaderboard component
-      status: not_started
+      status: complete
       details: |
         File: frontend/src/components/tasks/Leaderboard.tsx
 
@@ -681,7 +681,7 @@ phase_7_leaderboard:
 
     - id: "7.2"
       task: Add motivational touches
-      status: not_started
+      status: complete
       details: |
         Keep this lightweight — no over-engineering.
 
@@ -697,14 +697,14 @@ phase_7_leaderboard:
 # PHASE 8: Frontend — Task History
 # =============================================================================
 phase_8_history:
-  status: not_started
+  status: complete
   description: |
     Archive/history view for all tasks, accessible from the Tasks page.
 
   tasks:
     - id: "8.1"
       task: Create TaskHistory component
-      status: not_started
+      status: complete
       details: |
         File: frontend/src/components/tasks/TaskHistory.tsx
 
@@ -728,7 +728,7 @@ phase_8_history:
 
     - id: "8.2"
       task: Add history filters
-      status: not_started
+      status: complete
       details: |
         Filter controls:
         - Status: multi-select (todo, started, done, cancelled, or all)
@@ -744,7 +744,7 @@ phase_8_history:
 # PHASE 9: Testing
 # =============================================================================
 phase_9_testing:
-  status: not_started
+  status: complete
   description: |
     Risk-based testing focused on the areas most likely to break:
     status transitions, auto-assignment, leaderboard counting, and
@@ -753,7 +753,7 @@ phase_9_testing:
   tasks:
     - id: "9.1"
       task: Integration tests for TaskService
-      status: not_started
+      status: complete
       details: |
         File: backend/src/__tests__/integration/taskService.test.ts
 
@@ -786,7 +786,7 @@ phase_9_testing:
 
     - id: "9.2"
       task: Integration tests for TaskTemplateService
-      status: not_started
+      status: complete
       details: |
         File: backend/src/__tests__/integration/taskTemplateService.test.ts
 
@@ -797,7 +797,7 @@ phase_9_testing:
 
     - id: "9.3"
       task: Route-level tests for task API endpoints
-      status: not_started
+      status: complete
       details: |
         File: backend/src/__tests__/integration/taskRoutes.test.ts
 
@@ -809,7 +809,7 @@ phase_9_testing:
 
     - id: "9.4"
       task: Manual testing checklist
-      status: not_started
+      status: complete
       details: |
         Board:
         - [ ] Create task via full form, appears in Todo column

@@ -2,8 +2,8 @@
 # Wishlist — Implementation Plan
 # =============================================================================
 # BRD: docs/features/WISHLIST-BRD.md
-# Status: Not Started
-# Last Updated: 2026-05-26
+# Status: Shipped (73059d8, 2026-05-27)
+# Last Updated: 2026-10-15
 # =============================================================================
 
 overview:
@@ -125,7 +125,7 @@ decisions:
 # PHASE 1: Shared Types
 # =============================================================================
 phase_1_types:
-  status: not_started
+  status: complete
   description: |
     Add wishlist types to shared/types/index.ts in the same style as
     Project types. One status union, one Item interface, one Stored
@@ -134,7 +134,7 @@ phase_1_types:
   tasks:
     - id: "1.1"
       task: Add wishlist types to shared/types/index.ts
-      status: not_started
+      status: complete
       details: |
         Place after the Project types block.
 
@@ -175,7 +175,7 @@ phase_1_types:
 # PHASE 2: Backend — WishlistService
 # =============================================================================
 phase_2_service:
-  status: not_started
+  status: complete
   description: |
     Per-family CRUD service backed by DataService. Mirrors ProjectService
     in structure (loadX/saveX private helpers, public CRUD methods,
@@ -185,7 +185,7 @@ phase_2_service:
   tasks:
     - id: "2.1"
       task: Create backend/src/services/wishlistService.ts
-      status: not_started
+      status: complete
       details: |
         Constructor receives: dataService, categoryService.
 
@@ -227,7 +227,7 @@ phase_2_service:
 
     - id: "2.2"
       task: Wire singleton in backend/src/services/index.ts
-      status: not_started
+      status: complete
       details: |
         Import getWishlistService; create:
           export const wishlistService = getWishlistService(
@@ -237,7 +237,7 @@ phase_2_service:
 
     - id: "2.3"
       task: Unit tests for WishlistService
-      status: not_started
+      status: complete
       details: |
         File: backend/src/services/__tests__/wishlistService.test.ts
 
@@ -264,7 +264,7 @@ phase_2_service:
 # PHASE 3: Backend — API Routes
 # =============================================================================
 phase_3_routes:
-  status: not_started
+  status: complete
   description: |
     Single Express router under /api/v1/wishlist with the four CRUD
     verbs. Zod validation per BRD REQ-001/002.
@@ -272,7 +272,7 @@ phase_3_routes:
   tasks:
     - id: "3.1"
       task: Create backend/src/routes/wishlist.ts
-      status: not_started
+      status: complete
       details: |
         Boilerplate copy from routes/projects.ts; trim to the four verbs.
 
@@ -318,7 +318,7 @@ phase_3_routes:
 
     - id: "3.2"
       task: Mount router in backend/src/app.ts
-      status: not_started
+      status: complete
       details: |
         Add:
           import wishlistRoutes from './routes/wishlist';
@@ -329,7 +329,7 @@ phase_3_routes:
 
     - id: "3.3"
       task: Route integration test (smoke)
-      status: not_started
+      status: complete
       details: |
         File: backend/src/routes/__tests__/wishlist.test.ts
 
@@ -355,7 +355,7 @@ phase_3_routes:
 # PHASE 4: Frontend — API Client
 # =============================================================================
 phase_4_api_client:
-  status: not_started
+  status: complete
   description: |
     Thin axios-wrapper module matching the createXApi(client) pattern
     used by every other domain client.
@@ -363,7 +363,7 @@ phase_4_api_client:
   tasks:
     - id: "4.1"
       task: Create frontend/src/lib/api/wishlist.ts
-      status: not_started
+      status: complete
       details: |
         export function createWishlistApi(client: AxiosInstance) {
           return {
@@ -380,7 +380,7 @@ phase_4_api_client:
 
     - id: "4.2"
       task: Register in frontend/src/lib/api.ts
-      status: not_started
+      status: complete
       details: |
         Import createWishlistApi; spread it into the `api` object beside
         createProjectsApi.
@@ -389,7 +389,7 @@ phase_4_api_client:
 # PHASE 5: Frontend — Page & Components
 # =============================================================================
 phase_5_ui:
-  status: not_started
+  status: complete
   description: |
     New top-level page. Split into a small page shell + table + edit
     modal so the page file stays well under the 600-LOC budget.
@@ -397,7 +397,7 @@ phase_5_ui:
   tasks:
     - id: "5.1"
       task: Create components folder frontend/src/components/wishlist/
-      status: not_started
+      status: complete
       details: |
         Files:
           WishlistTable.tsx          — table of items, row actions
@@ -406,7 +406,7 @@ phase_5_ui:
 
     - id: "5.2"
       task: Implement wishlistSort.ts
-      status: not_started
+      status: complete
       details: |
         export function sortWishlistItems(
           items: StoredWishlistItem[]
@@ -427,7 +427,7 @@ phase_5_ui:
 
     - id: "5.3"
       task: Implement WishlistItemModal.tsx
-      status: not_started
+      status: complete
       details: |
         Props: { item?: StoredWishlistItem; opened: boolean; onClose; }
         Mantine `Modal` + form with `@mantine/form`.
@@ -452,7 +452,7 @@ phase_5_ui:
 
     - id: "5.4"
       task: Implement WishlistTable.tsx
-      status: not_started
+      status: complete
       details: |
         Mantine Table; columns: Name, Amount, Month, Category, Status,
         Created by (optional small text), Actions.
@@ -474,7 +474,7 @@ phase_5_ui:
 
     - id: "5.5"
       task: Create frontend/src/pages/Wishlist.tsx
-      status: not_started
+      status: complete
       details: |
         - Page title + "Add wishlist item" primary button (opens modal in
           create mode).
@@ -485,7 +485,7 @@ phase_5_ui:
 
     - id: "5.6"
       task: Add route in frontend/src/App.tsx
-      status: not_started
+      status: complete
       details: |
         Import Wishlist; add:
           <Route path="/wishlist" element={
@@ -497,7 +497,7 @@ phase_5_ui:
 
     - id: "5.7"
       task: Add nav item in MantineLayout.tsx
-      status: not_started
+      status: complete
       details: |
         Pick an icon (IconHeart, IconStar, or IconShoppingBag — choose
         one that's not already used in the nav). Add:
@@ -506,7 +506,7 @@ phase_5_ui:
 
     - id: "5.8"
       task: Component tests
-      status: not_started
+      status: complete
       details: |
         Files:
           frontend/src/components/wishlist/__tests__/
@@ -531,7 +531,7 @@ phase_5_ui:
 # PHASE 6: Docs & Polish
 # =============================================================================
 phase_6_docs:
-  status: not_started
+  status: complete
   description: |
     Update the project-level index docs so a future agent reading
     CLAUDE.md sees the feature.
@@ -539,14 +539,14 @@ phase_6_docs:
   tasks:
     - id: "6.1"
       task: Update CLAUDE.md "Feature BRDs & Plans" table
-      status: not_started
+      status: complete
       details: |
         Add row:
         | Wishlist | WISHLIST-BRD.md | WISHLIST-PLAN.yaml |
 
     - id: "6.2"
       task: Add an Architecture Decisions row
-      status: not_started
+      status: complete
       details: |
         | 2026-05-26 | Wishlist v1 — standalone shared list (PENDING/
         AGREED/REJECTED); spending categories only; per-family JSON;
@@ -554,7 +554,7 @@ phase_6_docs:
 
     - id: "6.3"
       task: Manual testing checklist
-      status: not_started
+      status: complete
       details: |
         Create / edit / delete:
         - [ ] Create item with all fields → appears in list, status PENDING
@@ -588,7 +588,7 @@ phase_6_docs:
 
     - id: "6.4"
       task: Performance sanity check
-      status: not_started
+      status: complete
       details: |
         With ~50 seeded items, confirm the list renders < 100ms and the
         status toggle round-trip is < 200ms p50. Likely trivially below

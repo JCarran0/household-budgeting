@@ -2,8 +2,8 @@
 # Auto-Categorization Rule Suggestions — Implementation Plan
 # =============================================================================
 # BRD: docs/features/AUTO-CAT-SUGGESTIONS-BRD.md
-# Status: Not Started
-# Last Updated: 2026-05-04
+# Status: Shipped (d79c1ae, 2026-05-04)
+# Last Updated: 2026-10-15
 # =============================================================================
 
 overview:
@@ -109,7 +109,7 @@ decisions:
 # PHASE 1: Shared Types
 # =============================================================================
 phase_1_types:
-  status: not_started
+  status: complete
   description: |
     Define the suggestion DTO in shared/types/index.ts. Single new
     interface, no enums or discriminated unions needed.
@@ -117,7 +117,7 @@ phase_1_types:
   tasks:
     - id: "1.1"
       task: Add AutoCatSuggestion + response types to shared/types/index.ts
-      status: not_started
+      status: complete
       details: |
         interface AutoCatSuggestion {
           normalizedKey: string;          // also the proposed rule pattern
@@ -142,7 +142,7 @@ phase_1_types:
 # PHASE 2: Backend — Merchant Normalization Utility
 # =============================================================================
 phase_2_normalization:
-  status: not_started
+  status: complete
   description: |
     Pure function module that derives the normalized merchant key for a
     transaction. Lives in shared/utils so both backend (suggestion engine)
@@ -151,7 +151,7 @@ phase_2_normalization:
   tasks:
     - id: "2.1"
       task: Create shared/utils/merchantNormalization.ts
-      status: not_started
+      status: complete
       details: |
         export function normalizeMerchantKey(
           tx: Pick<Transaction, 'merchantName' | 'name'>
@@ -177,7 +177,7 @@ phase_2_normalization:
 
     - id: "2.2"
       task: Unit tests for merchantNormalization
-      status: not_started
+      status: complete
       details: |
         File: shared/utils/__tests__/merchantNormalization.test.ts
 
@@ -197,7 +197,7 @@ phase_2_normalization:
 # PHASE 3: Backend — Suggestion Engine Service
 # =============================================================================
 phase_3_suggestion_service:
-  status: not_started
+  status: complete
   description: |
     Pure service that builds suggestions from transactions, categories,
     and existing rules. Stateless; computed per-request.
@@ -205,7 +205,7 @@ phase_3_suggestion_service:
   tasks:
     - id: "3.1"
       task: Create backend/src/services/autoCatSuggestionService.ts
-      status: not_started
+      status: complete
       details: |
         Constructor receives:
         - dataService (for getCategories, getTransactions per familyId)
@@ -266,7 +266,7 @@ phase_3_suggestion_service:
 
     - id: "3.2"
       task: Add normalizeRulePattern() helper in merchantNormalization.ts
-      status: not_started
+      status: complete
       details: |
         Different from normalizeMerchantKey(): rule patterns are
         user-typed and shouldn't have processor-prefix or store-number
@@ -275,7 +275,7 @@ phase_3_suggestion_service:
 
     - id: "3.3"
       task: Register the service
-      status: not_started
+      status: complete
       details: |
         Wire into backend/src/services/index.ts (or wherever the existing
         service singletons are constructed). Inject dataService and
@@ -283,7 +283,7 @@ phase_3_suggestion_service:
 
     - id: "3.4"
       task: Unit tests for AutoCatSuggestionService
-      status: not_started
+      status: complete
       details: |
         File: backend/src/services/__tests__/autoCatSuggestionService.test.ts
 
@@ -315,7 +315,7 @@ phase_3_suggestion_service:
 # PHASE 4: Backend — API Route
 # =============================================================================
 phase_4_routes:
-  status: not_started
+  status: complete
   description: |
     Single GET endpoint exposed under the existing /api/v1/categories
     namespace (sibling to auto-cat rule endpoints).
@@ -323,7 +323,7 @@ phase_4_routes:
   tasks:
     - id: "4.1"
       task: Add GET /api/v1/categories/auto-cat/suggestions
-      status: not_started
+      status: complete
       details: |
         Router file: backend/src/routes/autoCategorize.ts (or wherever the
         existing auto-cat routes live — confirm during impl).
@@ -336,7 +336,7 @@ phase_4_routes:
 
     - id: "4.2"
       task: Augment rule-creation log line with source field
-      status: not_started
+      status: complete
       details: |
         Existing POST /api/v1/autocategorize/rules log line should accept
         an optional source: 'manual' | 'suggestion' field (default
@@ -350,7 +350,7 @@ phase_4_routes:
 
     - id: "4.3"
       task: Route-level integration test
-      status: not_started
+      status: complete
       details: |
         File: backend/src/routes/__tests__/autoCategorize.suggestions.test.ts
 
@@ -362,7 +362,7 @@ phase_4_routes:
 # PHASE 5: Frontend — API Client
 # =============================================================================
 phase_5_api_client:
-  status: not_started
+  status: complete
   description: |
     Add the suggestions fetcher and extend the rule creation method to
     optionally pass source='suggestion'.
@@ -370,7 +370,7 @@ phase_5_api_client:
   tasks:
     - id: "5.1"
       task: Add getAutoCatSuggestions() to frontend/src/lib/api/autoCategorize.ts
-      status: not_started
+      status: complete
       details: |
         async getAutoCatSuggestions(): Promise<AutoCatSuggestionsResponse>
         - GET /api/v1/categories/auto-cat/suggestions
@@ -378,7 +378,7 @@ phase_5_api_client:
 
     - id: "5.2"
       task: Extend createAutoCategorizeRule() to accept source
-      status: not_started
+      status: complete
       details: |
         Optional second arg or extra body field: source?: 'suggestion'.
         Default unset so the existing manual-create call sites are
@@ -388,7 +388,7 @@ phase_5_api_client:
 # PHASE 6: Frontend — Suggested Rules Section UI
 # =============================================================================
 phase_6_ui:
-  status: not_started
+  status: complete
   description: |
     All UI lives inside or above frontend/src/components/categories/
     AutoCategorization.tsx. Keep it modular — new files for the section,
@@ -398,7 +398,7 @@ phase_6_ui:
   tasks:
     - id: "6.1"
       task: Create useDismissedAutoCatSuggestions hook
-      status: not_started
+      status: complete
       details: |
         File: frontend/src/components/categories/useDismissedAutoCatSuggestions.ts
 
@@ -411,7 +411,7 @@ phase_6_ui:
 
     - id: "6.2"
       task: Create SuggestedRulesSection component
-      status: not_started
+      status: complete
       details: |
         File: frontend/src/components/categories/SuggestedRulesSection.tsx
 
@@ -428,7 +428,7 @@ phase_6_ui:
 
     - id: "6.3"
       task: Create SuggestedRuleCard component
-      status: not_started
+      status: complete
       details: |
         File: frontend/src/components/categories/SuggestedRuleCard.tsx
 
@@ -450,7 +450,7 @@ phase_6_ui:
 
     - id: "6.4"
       task: Wire the Create rule action with collision handling
-      status: not_started
+      status: complete
       details: |
         Mutation flow on Create click:
 
@@ -487,7 +487,7 @@ phase_6_ui:
 
     - id: "6.5"
       task: Mount SuggestedRulesSection at top of Auto Cat tab
-      status: not_started
+      status: complete
       details: |
         Inside AutoCategorization.tsx, render <SuggestedRulesSection />
         directly above the existing rules table.
@@ -499,7 +499,7 @@ phase_6_ui:
 
     - id: "6.6"
       task: Component tests for SuggestedRuleCard
-      status: not_started
+      status: complete
       details: |
         File: frontend/src/components/categories/__tests__/
               SuggestedRuleCard.test.tsx
@@ -511,7 +511,7 @@ phase_6_ui:
 
     - id: "6.7"
       task: Component test for SuggestedRulesSection — empty + populated
-      status: not_started
+      status: complete
       details: |
         - Empty suggestions array → renders nothing
         - 3 suggestions, 1 dismissed → renders 2 cards
@@ -521,21 +521,21 @@ phase_6_ui:
 # PHASE 7: Telemetry
 # =============================================================================
 phase_7_telemetry:
-  status: not_started
+  status: complete
   description: |
     Lightweight server-side structured logs only (per BRD §7).
 
   tasks:
     - id: "7.1"
       task: Emit auto_cat_suggestions.scan from suggestion service
-      status: not_started
+      status: complete
       details: |
         Already specified in 3.1 step 11. Verify it's wired and shows up
         in dev logs with all required fields.
 
     - id: "7.2"
       task: Emit auto_cat_suggestions.rule_created from rule POST handler
-      status: not_started
+      status: complete
       details: |
         When the rule POST handler receives source='suggestion', additionally
         log auto_cat_suggestions.rule_created with:
@@ -554,7 +554,7 @@ phase_7_telemetry:
 
     - id: "7.3"
       task: Manual log inspection during testing
-      status: not_started
+      status: complete
       details: |
         Confirm both events fire with correct payloads in dev. No
         automated test for log emission unless trivially cheap.
@@ -563,7 +563,7 @@ phase_7_telemetry:
 # PHASE 8: Manual Testing & Polish
 # =============================================================================
 phase_8_testing:
-  status: not_started
+  status: complete
   description: |
     Manual validation. Run against real production-shape data via
     AWS-LOCAL-SETUP.
@@ -571,7 +571,7 @@ phase_8_testing:
   tasks:
     - id: "8.1"
       task: Manual testing checklist
-      status: not_started
+      status: complete
       details: |
         Discovery:
         - [ ] Section hidden when zero suggestions
@@ -625,7 +625,7 @@ phase_8_testing:
 
     - id: "8.2"
       task: Performance sanity check
-      status: not_started
+      status: complete
       details: |
         With production-shape data (npm run backup:local first),
         time the suggestions endpoint. Target: < 200ms p50.
@@ -634,7 +634,7 @@ phase_8_testing:
 
     - id: "8.3"
       task: Update CLAUDE.md docs index
-      status: not_started
+      status: complete
       details: |
         Add to the "Feature BRDs & Plans" table:
         | Auto-Cat Suggestions | AUTO-CAT-SUGGESTIONS-BRD.md |
