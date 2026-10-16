@@ -19,7 +19,7 @@ Family-scale app for 2 users: personal budgeting (with Plaid), shared tasks, tri
 | Feature | BRD | Plan |
 |---------|-----|------|
 | AI Chatbot | [AI-CHATBOT-BRD.md](docs/features/AI-CHATBOT-BRD.md) | [AI-CHATBOT-PLAN.yaml](docs/features/AI-CHATBOT-PLAN.yaml) |
-| AI Categorization | [AI-CATEGORIZATION-BRD.md](docs/features/AI-CATEGORIZATION-BRD.md) | [AI-CATEGORIZATION-PLAN.yaml](docs/features/AI-CATEGORIZATION-PLAN.yaml) |
+| AI Categorization v2.0 | [AI-CATEGORIZATION-BRD.md](docs/features/AI-CATEGORIZATION-BRD.md) | [AI-CATEGORIZATION-ENHANCEMENTS-PLAN.yaml](docs/features/AI-CATEGORIZATION-ENHANCEMENTS-PLAN.yaml) |
 | AI Amazon Receipts | [AI-AMAZON-RECEIPT-BRD.md](docs/features/AI-AMAZON-RECEIPT-BRD.md) | [AI-AMAZON-RECEIPT-PLAN.yaml](docs/features/AI-AMAZON-RECEIPT-PLAN.yaml) |
 | AI Chat Actions | [AI-CHAT-ACTIONS-BRD.md](docs/features/AI-CHAT-ACTIONS-BRD.md) | [AI-CHAT-ACTIONS-PLAN.yaml](docs/features/AI-CHAT-ACTIONS-PLAN.yaml) |
 | AI Capability Platform | [AI-CAPABILITY-PLATFORM-BRD.md](docs/features/AI-CAPABILITY-PLATFORM-BRD.md) | [AI-CAPABILITY-PLATFORM-PLAN.yaml](docs/features/AI-CAPABILITY-PLATFORM-PLAN.yaml) |

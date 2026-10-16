@@ -1,0 +1,358 @@
+# =============================================================================
+# AI Categorization v2.0 — Implementation Plan
+# =============================================================================
+# BRD: docs/features/AI-CATEGORIZATION-BRD.md §12 (v2.0)
+# Predecessor: docs/features/AI-CATEGORIZATION-PLAN.yaml (v1.0, shipped 7e4c1ad)
+# Prerequisite: 271ecd5 — truncation fix + Opus 5.5 (shipped with this plan's drafting)
+# Status: Not Started
+# Last Updated: 2026-10-15
+# =============================================================================
+
+overview:
+  description: |
+    Four enhancements to the shipped AI categorization flow:
+
+    1. Run record — every classification run is persisted per family with the
+       AI's suggestion and the user's final outcome for every transaction,
+       plus an optional "Why?" note on changed rows. Kept 12 months.
+    2. Run report — reasons shown per row, plain-language reasons on Unsure
+       rows, and an end-of-run summary (counts, unsure reasons, cost, model).
+    3. Plaid evidence — each transaction's Plaid category is sent, along with
+       a code-built table of how the family has categorized each Plaid
+       category before. Evidence only; the model decides.
+    4. Rule suggestions v2 — the AI rule step sees this run's outcomes,
+       declines split-history merchants explicitly, normalizes processor noise,
+       and explains each proposal.
+
+    Chat-about-a-run, standing family notes, and feeding corrections back into
+    classification are v2.1 (BRD §12.2).
+
+  key_files:
+    brd: docs/features/AI-CATEGORIZATION-BRD.md
+    shared_types: shared/types/index.ts
+    categorization_service: backend/src/services/categorizationService.ts
+    categorization_prompt: backend/src/services/categorizationPrompt.ts
+    chatbot_routes: backend/src/routes/chatbot.ts
+    chatbot_validators: backend/src/validators/chatbotValidators.ts
+    proposal_store_pattern: backend/src/services/chatActions/proposalStore.ts
+    redaction: backend/src/utils/redaction.ts
+    flow_modal: frontend/src/components/transactions/CategorizationFlowModal.tsx
+    bucket_review: frontend/src/components/transactions/BucketReviewStep.tsx
+    rule_suggestions_step: frontend/src/components/transactions/RuleSuggestionsStep.tsx
+    api_client: frontend/src/lib/api/chatbot.ts
+
+# =============================================================================
+# DECISIONS LOG — settled during BRD drafting; see BRD §12.3
+# =============================================================================
+decisions:
+  - id: D1
+    date: 2026-10-15
+    decision: One model chosen by us (Opus 5.5, effort medium); no user-facing picker
+    rationale: |
+      Two users, no data to choose with, and each option needs pricing and
+      testing (REQ-P056). The run record supplies the data for a later change.
+
+  - id: D2
+    date: 2026-10-15
+    decision: Show decisions, not process — per-row reasons and an end summary; no live progress, no raw thinking
+    rationale: |
+      The one-sentence reason, read on the row it explains, is the useful
+      part of the thinking.
+
+  - id: D3
+    date: 2026-10-15
+    decision: Plaid category is evidence, never a decision
+    rationale: |
+      Restaurants (and similar) split by occasion — weekday lunch, family
+      outing, party pickup. Even 80% patterns have outliers worth protecting.
+      Only a user-created auto-categorization rule makes a decision automatic.
+
+  - id: D4
+    date: 2026-10-15
+    decision: Keep the AI rule step in the flow and give it better inputs; leave the Categories-page deterministic suggestions as they are
+    rationale: |
+      Messy names and split histories are where model judgment is worth the
+      cost. Merge the two engines only if they visibly confuse.
+
+  - id: D5
+    date: 2026-10-15
+    decision: Full run record (every transaction, suggestion and outcome), 12-month retention
+    rationale: |
+      Serves learning, measurement and v2.1 chat from one record. A
+      corrections-only record loses the denominator.
+
+  - id: D6
+    date: 2026-10-15
+    decision: Optional 200-char "Why?" note on changed rows only; recorded, never sent to a model in v2.0
+    rationale: |
+      Captures intent at the moment it is known. No user text feeds the model
+      in v2.0, which keeps the Plaid-evidence measurement clean. Standing
+      family notes follow in v2.1.
+
+  - id: D7
+    date: 2026-10-15
+    decision: Ship the run record and run report before Plaid evidence
+    rationale: |
+      v1 kept no records, so there is no baseline. A few recorded runs
+      without the mapping make its effect measurable (BRD V2-Q1).
+
+  - id: D8
+    date: 2026-10-15
+    decision: Extract new logic into sibling modules rather than growing categorizationService.ts
+    rationale: |
+      The service is 566 LOC against an 800 budget (Critical Rule 6). The run
+      store, the Plaid mapping builder, and rule suggestions each get their
+      own module.
+
+# =============================================================================
+# PHASE 1: Run record (backend)
+# =============================================================================
+phase_1_run_record:
+  status: not_started
+  description: |
+    Persist each run and accept per-row outcomes. No UI change yet beyond
+    carrying the runId (phase 2 reports outcomes).
+
+  tasks:
+    - id: "1.1"
+      task: Shared types for runs and outcomes
+      status: not_started
+      details: |
+        shared/types/index.ts:
+          - ClassificationRun { id, familyId, createdAt, model, effort,
+            costUsd, durationMs, rows: ClassificationRunRow[],
+            counts: { sent, classified, unsure, failedByReason } }
+          - ClassificationRunRow { transactionId, name, merchantName, amount,
+            date, plaidCategory: { broad, detailed } | null,
+            suggestedCategoryId: string | null, confidence, reasoning,
+            failureReason: string | null, citedPlaidMapping: boolean,
+            outcome: { kind: 'accepted' | 'changed' | 'skipped',
+                       categoryId: string | null, note: string | null,
+                       recordedAt } | null }
+          - ClassifyTransactionsResponse gains runId.
+        Check `npm run lint:all` from the root: shared type changes have broken
+        frontend exhaustive Records before (CLAUDE.md debugging table).
+
+    - id: "1.2"
+      task: categorizationRunStore.ts
+      status: not_started
+      details: |
+        New backend/src/services/categorizationRunStore.ts, modeled on
+        proposalStore.ts: key `ai_categorization_runs_{familyId}`, a Mutex
+        around read-modify-write, prune runs older than 12 months on write.
+        Methods: createRun(run), recordOutcomes(familyId, runId, outcomes[]).
+        recordOutcomes validates each transactionId belongs to the run and each
+        categoryId exists and is not hidden (REQ-132), and runs notes through
+        redaction.ts then truncates to 200 chars (SEC-101: redact before
+        truncate). Not exposed through ReadOnlyDataService (SEC-102).
+
+    - id: "1.3"
+      task: Create the run in classifyTransactions
+      status: not_started
+      details: |
+        After reconcile(), build rows from results + failures and call
+        createRun. A store failure is logged and the classification response
+        still returns (runId null) — the run record must never cost the user
+        their suggestions.
+
+    - id: "1.4"
+      task: Outcome endpoint
+      status: not_started
+      details: |
+        POST /api/v1/chatbot/classification-runs/:runId/outcomes
+          body: { outcomes: [{ transactionId, kind, categoryId?, note? }] }
+        Zod schema in validators/chatbotValidators.ts. Behind
+        refuseBusinessWorkspace (the chatbot router already is — confirm).
+        Writes only to the run store (SEC-104). 404 for an unknown runId.
+
+    - id: "1.5"
+      task: Maintainer script
+      status: not_started
+      details: |
+        backend/scripts/inspect-categorization-runs.ts, same --prod/--family/
+        --since conventions as inspect-traces.ts. Prints REQ-135: acceptance
+        overall and by confidence, Plaid-cited vs not, failures by reason,
+        cost, notes.
+
+# =============================================================================
+# PHASE 2: Run report + notes (frontend)
+# =============================================================================
+phase_2_run_report:
+  status: not_started
+  description: |
+    Show the reasons the backend already returns, report outcomes, and
+    summarize the run.
+
+  tasks:
+    - id: "2.1"
+      task: Reason per row in BucketReviewStep
+      status: not_started
+      details: |
+        One line of secondary text under each row's name (REQ-101). Unsure
+        rows with an empty selection show the failure reason instead (REQ-102).
+        Mobile: wraps, never truncates mid-sentence.
+
+    - id: "2.2"
+      task: '"Why?" note on changed rows'
+      status: not_started
+      details: |
+        When a row's selected category differs from suggestedCategoryId, show
+        an optional single-line input, maxLength 200 (REQ-140/141). Clearing
+        the change back to the suggestion hides it and discards the note.
+
+    - id: "2.3"
+      task: Report outcomes on apply/skip
+      status: not_started
+      details: |
+        In CategorizationFlowModal.handleApply and the skip handler, after the
+        bulk update succeeds, POST outcomes for the bucket. Fire-and-forget
+        with a caught error (REQ-133). Outcome kind derives from
+        selectedCategoryId vs suggestedCategoryId; skipped rows report
+        'skipped'.
+
+    - id: "2.4"
+      task: Summary step
+      status: not_started
+      details: |
+        REQ-104: classified, Unsure grouped by reason, applied/changed/skipped,
+        rules created, cost, model. Model name and cost come from the classify
+        response (add `model` to it). REQ-105: counts come from what was
+        applied, so closing early stays accurate.
+        Watch CategorizationFlowModal (282 LOC) — extract a SummaryStep
+        component rather than growing the modal.
+
+# =============================================================================
+# PHASE 3: Plaid evidence
+# =============================================================================
+phase_3_plaid_evidence:
+  status: not_started
+  description: |
+    Starts after a few runs have been recorded without it (D7).
+
+  tasks:
+    - id: "3.1"
+      task: categorizationEvidence.ts — mapping builder
+      status: not_started
+      details: |
+        Pure function buildPlaidCategoryMapping(transactions, categories):
+        categorized, non-removed transactions (use transactionReader), last 12
+        months, hidden categories excluded. Key by detailed Plaid category when
+        it has >= 3 examples, else broad. Output rows like
+        { plaidCategory, level, total, byCategory: [{ categoryId, name, count }] }
+        sorted by count. Validate Plaid strings against /^[A-Z_]+$/ and drop
+        anything else (REQ-115). Unit-tested on fixtures.
+
+    - id: "3.2"
+      task: Send Plaid category per transaction and the table per batch
+      status: not_started
+      details: |
+        Transaction[].category holds [broad, detailed] from plaidService
+        mapTransactions. Include both in the per-transaction tool data, and the
+        mapping table in the context — as data inside the user message, per
+        SEC-002, not interpolated into the system prompt. Only the mapping rows
+        relevant to the batch's Plaid categories are sent.
+
+    - id: "3.3"
+      task: Prompt and tool changes
+      status: not_started
+      details: |
+        System prompt: the table is a tendency, not a rule; merchant, amount
+        and date can outweigh it; cite it in reasoning when it influenced the
+        choice (REQ-112/113). Tool schema gains a required boolean
+        `citedPlaidMapping` per classification (strict mode needs it required)
+        so the run record can measure it without parsing prose.
+
+# =============================================================================
+# PHASE 4: Rule suggestions v2
+# =============================================================================
+phase_4_rule_suggestions:
+  status: not_started
+  tasks:
+    - id: "4.1"
+      task: Extract ruleSuggestionService.ts
+      status: not_started
+      details: |
+        Move suggestRules out of categorizationService.ts. Input becomes the
+        runId plus final categorizations; the service loads the run's outcomes
+        (REQ-120) and the merchant's 12-month category history.
+
+    - id: "4.2"
+      task: New tool schema and prompt
+      status: not_started
+      details: |
+        Output: { proposals: [{ patterns, categoryId, rationale,
+        exampleTransactions }], declined: [{ merchant, split: [{ categoryName,
+        count }], reason }] }. strict: true, Zod-validated, stop_reason checked
+        (REQ-126). Prompt covers split histories (REQ-121), processor-noise
+        normalization (REQ-122), text-only matching (REQ-125), and existing
+        rules for dedupe (REQ-124). Validate categoryId against non-hidden
+        categories, as reconcile() does for classification.
+
+    - id: "4.3"
+      task: RuleSuggestionsStep shows rationale and declined merchants
+      status: not_started
+      details: |
+        Rationale under each proposal (REQ-123); "Considered, no rule" section
+        collapsed below (REQ-121). A failed rule call shows a one-line message
+        before moving to the summary, instead of the current silent
+        `.catch(() => setStep('summary'))`.
+
+# =============================================================================
+# PHASE 5: Tests
+# =============================================================================
+phase_5_testing:
+  status: not_started
+  tasks:
+    - id: "5.1"
+      task: Run store
+      status: not_started
+      details: |
+        Outcome validation rejects foreign transactionIds and hidden/unknown
+        categories; notes are redacted then truncated; 12-month prune; a store
+        failure does not fail classification.
+    - id: "5.2"
+      task: Mapping builder
+      status: not_started
+      details: |
+        Detailed vs broad fallback at the 3-example threshold; removed
+        transactions and hidden categories excluded; malformed Plaid strings
+        dropped.
+    - id: "5.3"
+      task: Rule suggestions
+      status: not_started
+      details: |
+        Truncated/refused/malformed output yields a visible failure; unknown
+        category ids are dropped; declined merchants pass through.
+    - id: "5.4"
+      task: Frontend
+      status: not_started
+      details: |
+        Note field appears only on changed rows; outcome kinds derived
+        correctly; an outcome POST failure does not block apply.
+
+# =============================================================================
+# IMPLEMENTATION ORDER
+# =============================================================================
+implementation_order:
+  description: |
+    SLICE A — phases 1 + 2 (run record + run report). Ship, then run the
+    categorizer a few times to record a baseline.
+    SLICE B — phase 3 (Plaid evidence). Compare acceptance with slice A runs
+    using the maintainer script.
+    SLICE C — phase 4 (rule suggestions v2). Independent of B; may run in
+    parallel once A has shipped.
+    Phase 5 tests land with the phase they cover.
+
+# =============================================================================
+# OPEN ITEMS
+# =============================================================================
+open_items:
+  - id: O1
+    item: Confirm refuseBusinessWorkspace covers every /chatbot route including the new outcomes endpoint
+    blocks: "1.4"
+  - id: O2
+    item: Decide whether the cost tracker's opus row moves to Opus 5.5 pricing ($4/$20) — only when the chatbot also moves (REQ-P056)
+    blocks: none
+  - id: O3
+    item: amazonCategorizerAdapter.ts and amazonPdfParser.ts share the pre-fix weakness (Sonnet, no stop_reason check). Separate fix, not this plan
+    blocks: none
