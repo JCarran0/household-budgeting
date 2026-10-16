@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.7.0](https://github.com/JCarran0/household-budgeting/compare/v7.6.1...v7.7.0) (2026-10-16)
+
+
+### Features
+
+* **amazon:** learn item categories from the family's past Amazon decisions ([0b7a9ce](https://github.com/JCarran0/household-budgeting/commit/0b7a9ce8708cdeffcbc771ee36034ade90171dbe))
+
+
+### Documentation
+
+* **open-items:** add the Amazon item-history check to the AI categorization check-in ([0f7b226](https://github.com/JCarran0/household-budgeting/commit/0f7b226b925556aadfac26ff2d162d554905c863))
+
 ### [7.6.1](https://github.com/JCarran0/household-budgeting/compare/v7.6.0...v7.6.1) (2026-10-16)
 
 
