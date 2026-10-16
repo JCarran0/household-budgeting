@@ -29,11 +29,17 @@ import {
   matchSingleOrder,
 } from './amazon/amazonMatcher';
 import { AmazonCategorizerAdapter } from './amazon/amazonCategorizerAdapter';
+import {
+  AmazonItemHistoryStore,
+  historyEntriesForAction,
+  recordSuggestions,
+} from './amazon/amazonItemHistoryStore';
 import { childLogger } from '../utils/logger';
 
 const log = childLogger('amazonReceiptService');
 import type { PdfExtractionOutput } from '../validators/amazonReceiptValidators';
 import type {
+  AmazonItemHistoryEntry,
   AmazonReceiptSession,
   AmazonReceiptUploadResponse,
   AmazonReceiptMatchResponse,
@@ -58,6 +64,7 @@ const STALE_PARSED_DAYS = 7;
 export class AmazonReceiptService {
   private readonly pdfParser: AmazonPdfParser;
   private readonly categorizer: AmazonCategorizerAdapter;
+  private readonly itemHistory: AmazonItemHistoryStore;
 
   constructor(
     private readonly dataService: DataService,
@@ -74,6 +81,7 @@ export class AmazonReceiptService {
       chatbotDataService,
       costTracker,
     );
+    this.itemHistory = new AmazonItemHistoryStore(dataService);
   }
 
   // ===========================================================================
@@ -437,7 +445,14 @@ export class AmazonReceiptService {
       return { recommendations: [], splitRecommendations: [], failures: [], costUsed: 0 };
     }
 
-    const result = await this.categorizer.categorize(familyId, matchesToCategorize);
+    // First use pre-fills the history from surviving sessions and Amazon
+    // split transactions (REQ-A204).
+    const history = await this.itemHistory.load(familyId, async () => ({
+      sessions: await this.loadSessions(familyId),
+      transactions: await this.chatbotDataService.queryTransactions(familyId, {}),
+    }));
+    const result = await this.categorizer.categorize(familyId, matchesToCategorize, history);
+    recordSuggestions(matchesToCategorize, result);
 
     session.status = 'reviewing';
     const sessions = await this.loadSessions(familyId);
@@ -467,6 +482,8 @@ export class AmazonReceiptService {
 
     const allTransactions = await this.chatbotDataService.queryTransactions(familyId, {});
     const txMap = new Map(allTransactions.map(t => [t.id, t]));
+    const appliedAt = new Date().toISOString();
+    const historyEntries: AmazonItemHistoryEntry[] = [];
 
     for (const action of actions) {
       const match = session.matches.find(m => m.id === action.matchId);
@@ -481,6 +498,7 @@ export class AmazonReceiptService {
         if (result.success) {
           match.status = 'categorized';
           match.items.forEach(i => { i.appliedCategoryId = action.categoryId!; });
+          historyEntries.push(...historyEntriesForAction(match, action, appliedAt));
           applied++;
           categoriesUpdated.add(action.categoryId);
           if (tx) totalDollarsRecategorized += Math.abs(tx.amount);
@@ -499,6 +517,7 @@ export class AmazonReceiptService {
         if (result.success) {
           match.status = 'split';
           match.splitTransactionIds = result.splitTransactions?.map(t => t.id) ?? [];
+          historyEntries.push(...historyEntriesForAction(match, action, appliedAt));
           splits++;
           action.splits.forEach(s => categoriesUpdated.add(s.categoryId));
           if (tx) totalDollarsRecategorized += Math.abs(tx.amount);
@@ -508,6 +527,14 @@ export class AmazonReceiptService {
         match.status = 'skipped';
         skipped++;
       }
+    }
+
+    // The categories are already applied; losing the history rows must not
+    // turn that into a failure (REQ-A209).
+    try {
+      await this.itemHistory.append(familyId, historyEntries);
+    } catch (error) {
+      log.error({ err: error, rows: historyEntries.length }, 'failed to record amazon item history');
     }
 
     session.status = 'completed';

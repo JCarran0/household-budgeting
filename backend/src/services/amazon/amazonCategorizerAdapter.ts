@@ -17,7 +17,8 @@ import {
   AMAZON_CATEGORIZATION_SYSTEM_PROMPT,
   AMAZON_CATEGORIZATION_TOOL,
 } from '../amazonReceiptPrompt';
-import { CUSTOM_AMAZON_CATEGORY } from './amazonMatcher';
+import { CUSTOM_AMAZON_CATEGORY, isAmazonMerchant } from './amazonMatcher';
+import { promptHistory } from './amazonItemHistoryStore';
 import { childLogger } from '../../utils/logger';
 
 const log = childLogger('amazonCategorizerAdapter');
@@ -26,6 +27,7 @@ import type {
   AmazonTransactionMatch,
   AmazonCategoryRecommendation,
   AmazonCategorizationFailure,
+  AmazonItemHistoryEntry,
   AmazonSplitRecommendation,
   Category,
   ChatModel,
@@ -107,22 +109,39 @@ export class AmazonCategorizerAdapter {
   async categorize(
     familyId: string,
     matches: AmazonTransactionMatch[],
+    history: AmazonItemHistoryEntry[],
   ): Promise<CategorizerResult> {
     const categories = await this.chatbotDataService.getCategories(familyId);
-    const categoryContext = buildCategoryContext(categories);
-    const examples = await this.buildExamples(familyId, categories);
-
     const allTransactions = await this.chatbotDataService.queryTransactions(familyId, {});
     const txMap = new Map(allTransactions.map(t => [t.id, t]));
     const catMap = new Map(categories.map(c => [c.id, c]));
+
+    const offeredName = (id: string) => {
+      const c = catMap.get(id);
+      return c && !c.isHidden ? c.name : undefined;
+    };
+    const context = buildStableContext(
+      buildCategoryContext(categories),
+      promptHistory(history, offeredName),
+      // Non-Amazon only (REQ-A208): every Amazon example reads "Amazon.com"
+      // and says nothing about items; the item history covers Amazon.
+      buildExamplesFromTransactions(allTransactions.filter(t => !isAmazonMerchant(t)).slice(0, 500), categories),
+    );
 
     const batches: AmazonTransactionMatch[][] = [];
     for (let i = 0; i < matches.length; i += BATCH_SIZE) {
       batches.push(matches.slice(i, i + BATCH_SIZE));
     }
-    const merged = mergeOutcomes(await Promise.all(
-      batches.map(batch => this.categorizeBatch(familyId, batch, txMap, categoryContext, examples)),
-    ));
+    // One batch: no cache marker, since a cache write costs more than plain
+    // input and nothing would read it back. Several: the first call writes
+    // the shared context to the cache and the rest, run in parallel after
+    // it, read it at a tenth of the price (REQ-A207).
+    const cache = batches.length > 1;
+    const first = await this.categorizeBatch(familyId, batches[0], txMap, context, cache);
+    const rest = await Promise.all(
+      batches.slice(1).map(batch => this.categorizeBatch(familyId, batch, txMap, context, cache)),
+    );
+    const merged = mergeOutcomes([first, ...rest]);
 
     const { output, failures } = reconcile(merged, matches, categories);
     log.info({
@@ -162,8 +181,8 @@ export class AmazonCategorizerAdapter {
     familyId: string,
     matches: AmazonTransactionMatch[],
     txMap: Map<string, Transaction>,
-    categoryContext: string,
-    examples: string,
+    context: string,
+    cache: boolean,
   ): Promise<BatchOutcome> {
     const matchData = matches.map(m => {
       const tx = txMap.get(m.transactionId);
@@ -177,17 +196,9 @@ export class AmazonCategorizerAdapter {
       };
     });
 
-    const userMessage = `Categorize these Amazon order items:
-
-MATCHED ORDERS:
-${JSON.stringify(matchData)}
-
-CATEGORY HIERARCHY:
-${categoryContext}
-
-EXAMPLES OF PREVIOUSLY CATEGORIZED TRANSACTIONS:
-${examples}`;
-
+    // SEC-A201: item names (from user-uploaded PDFs) and history travel as
+    // data in the user turn, never in the system prompt. The shared context
+    // comes first so it can be a cached prefix.
     const response = await this.client.messages.stream({
       model: MODEL,
       max_tokens: MAX_TOKENS,
@@ -195,20 +206,33 @@ ${examples}`;
       output_config: { effort: EFFORT },
       system: AMAZON_CATEGORIZATION_SYSTEM_PROMPT,
       tools: [AMAZON_CATEGORIZATION_TOOL],
-      messages: [{ role: 'user', content: userMessage }],
+      messages: [{
+        role: 'user',
+        content: [
+          { type: 'text', text: context, ...(cache ? { cache_control: { type: 'ephemeral' as const } } : {}) },
+          { type: 'text', text: `Categorize these Amazon order items:\n\nMATCHED ORDERS:\n${JSON.stringify(matchData)}` },
+        ],
+      }],
     }).finalMessage();
 
+    // usage.input_tokens excludes cache reads and writes, which are billed;
+    // pass them through so the cap counts them (see chatbotCostTracker).
+    const cacheTokens = {
+      writeTokens: response.usage.cache_creation_input_tokens ?? 0,
+      readTokens: response.usage.cache_read_input_tokens ?? 0,
+    };
     const cost = ChatbotCostTracker.estimateCost(
-      COST_TIER, response.usage.input_tokens, response.usage.output_tokens,
+      COST_TIER, response.usage.input_tokens, response.usage.output_tokens, cacheTokens,
     );
     await this.costTracker.recordUsage(
-      familyId, COST_TIER, response.usage.input_tokens, response.usage.output_tokens,
+      familyId, COST_TIER, response.usage.input_tokens, response.usage.output_tokens, 'interactive', cacheTokens,
     );
     log.info({
       batchSize: matches.length,
       stopReason: response.stop_reason,
       inputTokens: response.usage.input_tokens,
       outputTokens: response.usage.output_tokens,
+      ...cacheTokens,
       cost: Number(cost.toFixed(4)),
     }, 'amazon batch response');
 
@@ -225,8 +249,8 @@ ${examples}`;
       log.warn({ batchSize: matches.length }, 'amazon batch output truncated; splitting and retrying');
       const mid = Math.ceil(matches.length / 2);
       const halves = await Promise.all([
-        this.categorizeBatch(familyId, matches.slice(0, mid), txMap, categoryContext, examples),
-        this.categorizeBatch(familyId, matches.slice(mid), txMap, categoryContext, examples),
+        this.categorizeBatch(familyId, matches.slice(0, mid), txMap, context, cache),
+        this.categorizeBatch(familyId, matches.slice(mid), txMap, context, cache),
       ]);
       const merged = mergeOutcomes(halves);
       return { ...merged, cost: merged.cost + cost };
@@ -254,14 +278,30 @@ ${examples}`;
 
     return { output: parsed.data, failures: new Map(), cost };
   }
+}
 
-  private async buildExamples(
-    familyId: string,
-    categories: Category[],
-  ): Promise<string> {
-    const sample = await this.chatbotDataService.queryTransactions(familyId, { limit: 500 });
-    return buildExamplesFromTransactions(sample, categories);
-  }
+/**
+ * The part of the prompt every batch in a session shares: what the
+ * categories are, what this family has filed each Amazon item under before,
+ * and what the categories mean for their other spending. Exported for tests.
+ */
+export function buildStableContext(
+  categoryContext: string,
+  history: { itemName: string; category: string; times: number }[],
+  examples: string,
+): string {
+  const historyBlock = history.length > 0
+    ? history.map(h => JSON.stringify(h.times > 1 ? [h.itemName, h.category, h.times] : [h.itemName, h.category])).join('\n')
+    : '(none yet)';
+  return `CATEGORY HIERARCHY:
+${categoryContext}
+
+THIS FAMILY'S PAST AMAZON PURCHASES — [item, category] or [item, category, times], most recent first.
+When an item was filed under more than one category, each appears with its count:
+${historyBlock}
+
+EXAMPLES OF THIS FAMILY'S OTHER (NON-AMAZON) CATEGORIZED SPENDING:
+${examples}`;
 }
 
 /**

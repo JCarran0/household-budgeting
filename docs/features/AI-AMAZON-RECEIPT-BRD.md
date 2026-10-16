@@ -1,9 +1,11 @@
 # Amazon Receipt Matching — Business Requirements Document
 
-**Status:** Draft
+**Status:** v1.0 shipped · v2.0 Draft
 **Author:** Jared Carrano
-**Date:** 2026-04-08
-**Version:** 1.0
+**Date:** 2026-04-08 (v1.0) · 2026-10-15 (v2.0)
+**Version:** 2.0
+
+> **v2.0 (2026-10-15)** teaches categorization from the family's own past Amazon item decisions. See [§17](#17-v20-learning-from-amazon-item-history).
 
 ---
 
@@ -535,3 +537,51 @@ Well within the $20/month shared cap. PDF vision parsing is the most expensive s
 - **AI Categorizer integration** — When the AI Categorizer encounters a batch of Amazon transactions, surface a contextual prompt: "15 of these are Amazon — upload your order history for better results?"
 - **Email receipt parsing** — Parse Amazon order confirmation emails as an alternative to PDF upload
 - **Smarter auto-rules** — Use item-level data across sessions to build richer auto-categorization rules (e.g., "Amazon charges around $31 every 6 weeks" → Pet Supplies, based on recurring Kaytee bedding orders)
+
+---
+
+## 17. v2.0: Learning from Amazon Item History
+
+### 17.1 Why
+
+Category suggestions are mostly wrong. Two causes:
+
+1. **Silent failures.** Fixed on 2026-10-15 (`bb396a8`): both AI calls moved to Opus 5.5, cut-off and malformed output is detected, and every order ends with a recommendation or a stated reason.
+2. **The wrong examples.** The model learns how this family categorizes from a sample of bank transactions grouped by merchant. For Amazon that sample is "Amazon.com ($23.41)" under a dozen categories, which says nothing about whether dog food goes to Pet Food. The signal that would help, the item → category decisions already made in past sessions, is never sent, and most of it is erased: single-category orders keep their item names only inside a session, and completed sessions are stripped after 90 days or past the newest 20.
+
+### 17.2 Decisions
+
+| # | Decision | Rationale |
+|---|----------|-----------|
+| D-A2-1 | A permanent per-family **item history** store, written at apply time for every item (single-category and split), kept 24 months, pre-filled from what survives today. | The history is the fix, so it cannot depend on a session cleanup designed for something else. Writing at the one moment the user confirms a category keeps it simple to keep correct. |
+| D-A2-2 | Send the family's ~400 most recent distinct item → category decisions with every call, cached, and let the model find the relevant ones. | At household scale the history fits. The model matches "Viva paper towels" to past "Bounty paper towels" far better than word overlap would. Caching makes the repeat cost about a tenth. If history outgrows the cap, a code-side similarity filter goes in front. |
+| D-A2-3 | Each history row records both the category the AI suggested and the one applied. The model only ever sees what was applied. | Gives an acceptance rate to judge this change by. Showing the model its own past guesses would let it learn from itself rather than from the family. |
+
+### 17.3 Requirements
+
+| # | Requirement |
+|---|-------------|
+| REQ-A201 | When categories are applied, one history row is written per item: item name, applied category, AI-suggested category (or null), order number, transaction id, source (`categorize` / `split` / `import`), timestamp. |
+| REQ-A202 | A split records each line's item name and category. Applying a split also sets `appliedCategoryId` on the session's items, which v1 left unset. |
+| REQ-A203 | The AI's recommendations are saved on the session's matches at categorize time, so apply can compare suggestion against outcome. |
+| REQ-A204 | On first use, the store is pre-filled from (a) completed sessions' categorized items and (b) split child transactions of Amazon purchases (their `userDescription` is the item name). Imported rows have no suggestion. |
+| REQ-A205 | History rows older than 24 months are pruned on write. Session pruning is unchanged. |
+| REQ-A206 | The categorization prompt includes the most recent ~400 distinct (item, category) pairs, with a count where an item was filed under more than one category. The model decides; its reason cites the history when it used it. |
+| REQ-A207 | The category hierarchy and the history are sent as a cached block shared by every batch in a session. Cache reads and writes count toward the spend cap. |
+| REQ-A208 | Generic transaction examples are reduced to non-Amazon transactions, a few per category, so the model still knows what each category means for this family. |
+| REQ-A209 | Recording history never blocks or fails applying a category. |
+| REQ-A210 | A maintainer script prints acceptance rate (accepted / changed, by confidence) and the size of the history. |
+
+### 17.4 Security
+
+| # | Requirement |
+|---|-------------|
+| SEC-A201 | Item names come from Amazon PDFs, which are user-supplied documents. They enter the prompt as data inside the user message, never the system prompt (extends SEC-002). |
+| SEC-A202 | The store is family-scoped, not reachable from the chatbot's `ReadOnlyDataService`, and covered by the existing `refuseBusinessWorkspace` gate on the Amazon routes. |
+
+### 17.5 Success Criteria
+
+- Accepted-unchanged rate for categorizations at ≥0.85 confidence reaches 85% within the first few sessions after the history has data.
+- No order is silently dropped from review (already true since `bb396a8`).
+- Cost per session stays under $0.25 for a typical 20–30-order upload.
+

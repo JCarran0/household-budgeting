@@ -2,8 +2,8 @@
 # Amazon Receipt Matching — Implementation Plan
 # =============================================================================
 # BRD: docs/features/AI-AMAZON-RECEIPT-BRD.md
-# Status: Implementation Complete (Phases 1-9). Phase 10 (manual testing) pending.
-# Last Updated: 2026-04-09
+# Status: v1.0 shipped. v2.0 (item history, BRD §17) complete.
+# Last Updated: 2026-10-15
 # =============================================================================
 
 overview:
@@ -1177,3 +1177,34 @@ risks:
       within Node.js default memory limits. Rate limiting (3 req/min)
       prevents concurrent uploads from the same user. If memory becomes
       an issue, we can stream the PDF to Claude's API instead of buffering.
+
+# =============================================================================
+# v2.0: LEARNING FROM AMAZON ITEM HISTORY (BRD §17)
+# Prerequisite: bb396a8 (Opus 5.5 + truncation fix)
+# =============================================================================
+v2_item_history:
+  status: completed
+  decisions: [D-A2-1 permanent item history store, D-A2-2 send recent history cached, D-A2-3 record suggestion and outcome]
+  tasks:
+    - id: "v2.1"
+      task: Types + amazonItemHistoryStore.ts (amazon_item_history_{familyId}, mutex, 24-month prune, import marker)
+      status: completed
+    - id: "v2.2"
+      task: Save AI recommendations on matches at categorize time (REQ-A203)
+      status: completed
+    - id: "v2.3"
+      task: Write history rows at apply; set appliedCategoryId on split items (REQ-A201/202/209)
+      status: completed
+    - id: "v2.4"
+      task: One-time import from sessions + Amazon split children (REQ-A204)
+      status: completed
+    - id: "v2.5"
+      task: Prompt — cached hierarchy + history block, non-Amazon examples only, cite history (REQ-A206/207/208)
+      status: completed
+    - id: "v2.6"
+      task: inspect-amazon-history.ts maintainer script (REQ-A210)
+      status: completed
+    - id: "v2.7"
+      task: Tests — store, import, apply recording, prompt construction, cache cost recording
+      status: completed
+

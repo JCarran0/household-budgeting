@@ -80,11 +80,11 @@ describe('AmazonCategorizerAdapter outcomes', () => {
   it('throws a visible error, and still records cost, when output is truncated', async () => {
     const { adapter, tracker } = buildAdapter([match('m1')], [truncated()]);
 
-    const error = await adapter.categorize(FAMILY_ID, [match('m1')]).catch((e: unknown) => e);
+    const error = await adapter.categorize(FAMILY_ID, [match('m1')], []).catch((e: unknown) => e);
 
     expect(error).toBeInstanceOf(ExternalServiceError);
     expect((error as Error).message).toMatch(/cut off/);
-    expect(tracker.recordUsage).toHaveBeenCalledWith(FAMILY_ID, 'opus', 1000, 500);
+    expect(tracker.recordUsage).toHaveBeenCalledWith(FAMILY_ID, 'opus', 1000, 500, 'interactive', { writeTokens: 0, readTokens: 0 });
   });
 
   it('splits a truncated batch in half and retries', async () => {
@@ -95,7 +95,7 @@ describe('AmazonCategorizerAdapter outcomes', () => {
       ok([categorization('m2')]),
     ]);
 
-    const result = await adapter.categorize(FAMILY_ID, matches);
+    const result = await adapter.categorize(FAMILY_ID, matches, []);
 
     expect(stream).toHaveBeenCalledTimes(3);
     expect(result.recommendations).toHaveLength(2);
@@ -106,7 +106,7 @@ describe('AmazonCategorizerAdapter outcomes', () => {
     const matches = [match('m1'), match('m2', ['Paper towels', 'Sponges'])];
     const { adapter } = buildAdapter(matches, [ok([categorization('m1')])]);
 
-    const result = await adapter.categorize(FAMILY_ID, matches);
+    const result = await adapter.categorize(FAMILY_ID, matches, []);
 
     expect(result.failures).toEqual([
       { matchId: 'm2', itemName: 'Paper towels, Sponges', reason: expect.stringMatching(/skipped/) },
@@ -127,7 +127,7 @@ describe('AmazonCategorizerAdapter outcomes', () => {
       [split('m4', 'cat-invented')],
     )]);
 
-    const result = await adapter.categorize(FAMILY_ID, matches);
+    const result = await adapter.categorize(FAMILY_ID, matches, []);
 
     expect(result.recommendations.map(r => r.matchId)).toEqual(['m1']);
     expect(result.splitRecommendations).toEqual([]);
@@ -141,17 +141,17 @@ describe('AmazonCategorizerAdapter outcomes', () => {
       categorization('not-sent'),
     ])]);
 
-    const result = await adapter.categorize(FAMILY_ID, [match('m1')]);
+    const result = await adapter.categorize(FAMILY_ID, [match('m1')], []);
 
     expect(result.recommendations.map(r => [r.matchId, r.suggestedCategoryId])).toEqual([['m1', 'cat-pets']]);
   });
 
   it('treats malformed output and refusals as failures', async () => {
     const malformed = buildAdapter([match('m1')], [toolResponse({ categorizations: 'oops' })]);
-    await expect(malformed.adapter.categorize(FAMILY_ID, [match('m1')])).rejects.toThrow(/unexpected format/);
+    await expect(malformed.adapter.categorize(FAMILY_ID, [match('m1')], [])).rejects.toThrow(/unexpected format/);
 
     const refused = buildAdapter([match('m1')], [{ stop_reason: 'refusal', usage: { input_tokens: 1, output_tokens: 1 }, content: [] }]);
-    await expect(refused.adapter.categorize(FAMILY_ID, [match('m1')])).rejects.toThrow(/declined/);
+    await expect(refused.adapter.categorize(FAMILY_ID, [match('m1')], [])).rejects.toThrow(/declined/);
   });
 });
 

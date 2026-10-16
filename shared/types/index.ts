@@ -1415,6 +1415,31 @@ export interface AmazonTransactionMatch {
   status: AmazonMatchStatus;
 }
 
+/**
+ * One Amazon item → category decision, kept 24 months independently of the
+ * session it came from (AI-AMAZON-RECEIPT-BRD §17, D-A2-1). The model sees
+ * only `itemName` and `appliedCategoryId`; `suggestedCategoryId` is for
+ * measuring acceptance and is never sent back to it (D-A2-3).
+ */
+export interface AmazonItemHistoryEntry {
+  itemName: string;
+  appliedCategoryId: string;
+  /** What the AI recommended, or null (imported rows, or no recommendation). */
+  suggestedCategoryId: string | null;
+  /** The AI's confidence in that recommendation, when there was one. */
+  suggestedConfidence: number | null;
+  orderNumber: string | null;
+  transactionId: string;
+  source: 'categorize' | 'split' | 'import';
+  recordedAt: string;
+}
+
+export interface AmazonItemHistory {
+  /** Set once the one-time pre-fill from sessions and splits has run (REQ-A204). */
+  importedAt: string;
+  entries: AmazonItemHistoryEntry[];
+}
+
 export interface AmazonReceiptSession {
   id: string;
   userId: string;
