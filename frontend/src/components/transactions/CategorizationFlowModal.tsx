@@ -1,14 +1,16 @@
 import { useState, useCallback, useEffect } from 'react';
 import { Text, Stack, Center, Loader, Button, Group, ThemeIcon, Progress } from '@mantine/core';
 import { ResponsiveModal } from '../ResponsiveModal';
-import { IconSparkles, IconCheck } from '@tabler/icons-react';
+import { IconSparkles } from '@tabler/icons-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { api } from '../../lib/api';
 import { getApiErrorMessage } from '../../lib/api/errors';
 import { notifications } from '@mantine/notifications';
 import { BucketReviewStep, type BucketApplySelection } from './BucketReviewStep';
 import { RuleSuggestionsStep } from './RuleSuggestionsStep';
-import type { ClassificationBucket, RuleSuggestion } from '../../../../shared/types';
+import { CategorizationSummaryStep } from './CategorizationSummaryStep';
+import { bucketOutcomes, countChanged, mergeCounts, unsureReasons as countUnsureReasons } from './categorizationRunReport';
+import type { ClassificationBucket, ClassifyTransactionsResponse, RuleSuggestion } from '../../../../shared/types';
 
 type FlowStep = 'loading' | 'review' | 'rules' | 'summary' | 'error';
 
@@ -38,6 +40,13 @@ export function CategorizationFlowModal({ opened, onClose, uncategorizedCount, t
   const [costUsed, setCostUsed] = useState(0);
   const [remainingUncategorized, setRemainingUncategorized] = useState(0);
   const [isReclassifying, setIsReclassifying] = useState(false);
+  // Run report (AI-CATEGORIZATION-BRD §12.4.1), accumulated across "next batch" runs
+  const [runId, setRunId] = useState<string | null>(null);
+  const [model, setModel] = useState<string | null>(null);
+  const [sentCount, setSentCount] = useState(0);
+  const [classifiedCount, setClassifiedCount] = useState(0);
+  const [changedCount, setChangedCount] = useState(0);
+  const [unsureReasons, setUnsureReasons] = useState<Map<string, number>>(new Map());
 
   // Track all categorizations for rule suggestion
   const [allCategorizations, setAllCategorizations] = useState<{ transactionId: string; categoryId: string }[]>([]);
@@ -46,6 +55,37 @@ export function CategorizationFlowModal({ opened, onClose, uncategorizedCount, t
   const allBuckets = [...buckets, ...(unsureBucket && unsureBucket.transactions.length > 0 ? [unsureBucket] : [])];
   const totalBuckets = allBuckets.length;
   const currentBucket = allBuckets[currentBucketIndex];
+
+  // One handler for the first run and every "Categorize next" run; the
+  // session's totals accumulate across them.
+  const acceptResult = useCallback((result: ClassifyTransactionsResponse) => {
+    setBuckets(result.buckets);
+    setUnsureBucket(result.unsureBucket);
+    setCostUsed(prev => prev + result.costUsed);
+    setRemainingUncategorized(result.remainingUncategorized);
+    setRunId(result.runId);
+    setModel(result.model);
+    const sent = result.buckets.reduce((n, b) => n + b.transactions.length, 0) + result.unsureBucket.transactions.length;
+    setSentCount(prev => prev + sent);
+    setClassifiedCount(prev => prev + result.totalClassified);
+    setUnsureReasons(prev => mergeCounts(prev, countUnsureReasons(result)));
+    if (sent === 0) {
+      setStep('summary');
+    } else {
+      setStep('review');
+    }
+  }, []);
+
+  /**
+   * Fire-and-forget: the record is for measurement, and failing to save it
+   * must never look like failing to apply (REQ-133).
+   */
+  const reportOutcomes = useCallback((bucket: ClassificationBucket, applied: BucketApplySelection[]) => {
+    if (!runId) return;
+    api.recordClassificationOutcomes(runId, bucketOutcomes(bucket, applied)).catch(() => {
+      // Intentionally silent to the user; the server logs the failure.
+    });
+  }, [runId]);
 
   // Start classification when modal opens
   useEffect(() => {
@@ -58,19 +98,15 @@ export function CategorizationFlowModal({ opened, onClose, uncategorizedCount, t
       setCreatedRulesCount(0);
       setCostUsed(0);
       setError(null);
+      setRunId(null);
+      setModel(null);
+      setChangedCount(0);
+      setSentCount(0);
+      setClassifiedCount(0);
+      setUnsureReasons(new Map());
 
       api.classifyTransactions(transactionIds)
-        .then(result => {
-          setBuckets(result.buckets);
-          setUnsureBucket(result.unsureBucket);
-          setCostUsed(result.costUsed);
-          setRemainingUncategorized(result.remainingUncategorized);
-          if (result.buckets.length === 0 && result.unsureBucket.transactions.length === 0) {
-            setStep('summary');
-          } else {
-            setStep('review');
-          }
-        })
+        .then(acceptResult)
         .catch(err => {
           setError(getApiErrorMessage(err, 'Classification failed'));
           setStep('error');
@@ -90,23 +126,13 @@ export function CategorizationFlowModal({ opened, onClose, uncategorizedCount, t
     setRuleSuggestions([]);
     setError(null);
     api.classifyTransactions(transactionIds)
-      .then(result => {
-        setBuckets(result.buckets);
-        setUnsureBucket(result.unsureBucket);
-        setCostUsed(prev => prev + result.costUsed);
-        setRemainingUncategorized(result.remainingUncategorized);
-        if (result.buckets.length === 0 && result.unsureBucket.transactions.length === 0) {
-          setStep('summary');
-        } else {
-          setStep('review');
-        }
-      })
+      .then(acceptResult)
       .catch(err => {
         setError(getApiErrorMessage(err, 'Classification failed'));
         setStep('error');
       })
       .finally(() => setIsReclassifying(false));
-  }, [transactionIds]);
+  }, [transactionIds, acceptResult]);
 
   const advanceBucket = useCallback(() => {
     const nextIndex = currentBucketIndex + 1;
@@ -160,20 +186,25 @@ export function CategorizationFlowModal({ opened, onClose, uncategorizedCount, t
         setSkippedCount(prev => prev + perRowSkipped);
       }
       setAllCategorizations(prev => [...prev, ...selections]);
+      if (currentBucket) {
+        setChangedCount(prev => prev + countChanged(currentBucket, selections));
+        reportOutcomes(currentBucket, selections);
+      }
       advanceBucket();
     } catch {
       notifications.show({ title: 'Error', message: 'Failed to apply categories', color: 'red' });
     } finally {
       setIsApplying(false);
     }
-  }, [advanceBucket, currentBucket]);
+  }, [advanceBucket, currentBucket, reportOutcomes]);
 
   const handleSkip = useCallback(() => {
     if (currentBucket) {
       setSkippedCount(prev => prev + currentBucket.transactions.length);
+      reportOutcomes(currentBucket, []);
     }
     advanceBucket();
-  }, [advanceBucket, currentBucket]);
+  }, [advanceBucket, currentBucket, reportOutcomes]);
 
   const handleRulesDone = useCallback((count: number) => {
     setCreatedRulesCount(count);
@@ -251,31 +282,23 @@ export function CategorizationFlowModal({ opened, onClose, uncategorizedCount, t
       )}
 
       {step === 'summary' && (
-        <Stack align="center" gap="md" py="xl">
-          <ThemeIcon size={60} radius="xl" variant="light" color="green">
-            <IconCheck size={30} />
-          </ThemeIcon>
-          <Text size="lg" fw={600}>Categorization Complete</Text>
-          <Stack gap={4} align="center">
-            <Text size="sm">{appliedCount} transaction{appliedCount !== 1 ? 's' : ''} categorized</Text>
-            {skippedCount > 0 && <Text size="sm" c="dimmed">{skippedCount} skipped</Text>}
-            {createdRulesCount > 0 && <Text size="sm" c="blue">{createdRulesCount} new auto-categorization rule{createdRulesCount !== 1 ? 's' : ''} created</Text>}
-            {costUsed > 0 && <Text size="xs" c="dimmed">AI cost: ~${costUsed.toFixed(4)}</Text>}
-            {remainingUncategorized > 0 && (
-              <Text size="sm" c="dimmed" mt="xs">
-                {remainingUncategorized} uncategorized transaction{remainingUncategorized !== 1 ? 's' : ''} remaining
-              </Text>
-            )}
-          </Stack>
-          <Group>
-            {remainingUncategorized > 0 && (
-              <Button onClick={startNextBatch} loading={isReclassifying} leftSection={<IconSparkles size={16} />}>
-                Categorize next {Math.min(50, remainingUncategorized)}
-              </Button>
-            )}
-            <Button variant={remainingUncategorized > 0 ? 'subtle' : 'filled'} onClick={handleClose}>Done</Button>
-          </Group>
-        </Stack>
+        <CategorizationSummaryStep
+          summary={{
+            sentCount,
+            classifiedCount,
+            appliedCount,
+            changedCount,
+            skippedCount,
+            createdRulesCount,
+            unsureReasons,
+            costUsed,
+            model,
+            remainingUncategorized,
+          }}
+          onNextBatch={startNextBatch}
+          isReclassifying={isReclassifying}
+          onDone={handleClose}
+        />
       )}
     </ResponsiveModal>
   );

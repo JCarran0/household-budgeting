@@ -8,11 +8,13 @@
  */
 
 import Anthropic from '@anthropic-ai/sdk';
+import { randomUUID } from 'crypto';
 import { z } from 'zod';
 import { ChatbotDataService } from './chatbotDataService';
 import { ChatbotCostTracker } from './chatbotCostTracker';
 import { childLogger } from '../utils/logger';
 import { ExternalServiceError } from '../errors';
+import { CategorizationRunStore, buildRunRows } from './categorizationRunStore';
 
 const log = childLogger('categorizationService');
 
@@ -25,6 +27,7 @@ import {
 import type {
   ClassificationResult,
   ClassificationBucket,
+  ClassificationOutcomeInput,
   ClassifiedTransaction,
   ClassifyTransactionsResponse,
   RuleSuggestion,
@@ -88,6 +91,7 @@ export class CategorizationService {
     private readonly chatbotDataService: ChatbotDataService,
     private readonly costTracker: ChatbotCostTracker,
     anthropicApiKey: string,
+    private readonly runStore: CategorizationRunStore,
   ) {
     this.client = new Anthropic({ apiKey: anthropicApiKey });
   }
@@ -104,6 +108,7 @@ export class CategorizationService {
     if (!budget.allowed) {
       throw new Error('Monthly AI budget cap reached. Try again next month.');
     }
+    const startedAt = Date.now();
 
     // Fetch data
     const [allUncategorized, categories] = await Promise.all([
@@ -119,6 +124,8 @@ export class CategorizationService {
         totalClassified: 0,
         costUsed: 0,
         remainingUncategorized: 0,
+        runId: null,
+        model: MODEL,
       };
     }
 
@@ -157,6 +164,10 @@ export class CategorizationService {
       'classification reconciled',
     );
 
+    // Saved before the all-failed check: a failed run is exactly the kind the
+    // record exists to explain.
+    const runId = await this.saveRun(familyId, uncategorized, results, failures, merged.cost, startedAt);
+
     // Nothing usable at all: fail loudly rather than reporting a "complete"
     // run that categorized nothing. Spend has already been recorded.
     if (results.length === 0) {
@@ -175,7 +186,32 @@ export class CategorizationService {
       totalClassified: results.length,
       costUsed: Math.round(merged.cost * 1_000_000) / 1_000_000,
       remainingUncategorized,
+      runId,
+      model: MODEL,
     };
+  }
+
+  /**
+   * Attach what the user did to a run's rows (REQ-131/132). Applying
+   * categories goes through the bulk-update endpoint; this only records it
+   * (SEC-104). An outcome naming a category that is unknown or hidden is
+   * dropped, so the record cannot carry an orphan id the apply path would
+   * have refused.
+   */
+  async recordOutcomes(
+    familyId: string,
+    runId: string,
+    outcomes: ClassificationOutcomeInput[],
+  ): Promise<{ found: boolean; recorded: number }> {
+    const categories = await this.chatbotDataService.getCategories(familyId);
+    const offered = new Set(categories.filter(c => !c.isHidden).map(c => c.id));
+    const valid = outcomes.filter(o => o.categoryId === null || offered.has(o.categoryId));
+    if (valid.length < outcomes.length) {
+      log.warn({ runId, dropped: outcomes.length - valid.length }, 'outcomes named unknown or hidden categories');
+    }
+
+    const result = await this.runStore.recordOutcomes(familyId, runId, valid);
+    return result.ok ? { found: true, recorded: result.recorded } : { found: false, recorded: 0 };
   }
 
   /**
@@ -259,6 +295,37 @@ export class CategorizationService {
   // ==========================================================================
   // Private
   // ==========================================================================
+
+  /**
+   * Never lets a storage failure cost the user their suggestions (REQ-133):
+   * the run record is for measurement, the suggestions are the product.
+   */
+  private async saveRun(
+    familyId: string,
+    transactions: Transaction[],
+    results: ClassificationResult[],
+    failures: Map<string, string>,
+    cost: number,
+    startedAt: number,
+  ): Promise<string | null> {
+    const id = randomUUID();
+    try {
+      await this.runStore.createRun({
+        id,
+        familyId,
+        createdAt: new Date(startedAt).toISOString(),
+        model: MODEL,
+        effort: EFFORT,
+        costUsd: Math.round(cost * 1_000_000) / 1_000_000,
+        durationMs: Date.now() - startedAt,
+        rows: buildRunRows(transactions, results, failures),
+      });
+      return id;
+    } catch (error) {
+      log.error({ err: error }, 'failed to save classification run');
+      return null;
+    }
+  }
 
   private async getUncategorizedTransactions(
     familyId: string,
@@ -489,8 +556,9 @@ ${examples}`;
         amount: tx.amount,
         suggestedCategoryId: '',
         confidence: 'low',
-        reasoning: reason,
+        reasoning: '',
         selectedCategoryId: '',
+        failureReason: reason,
       });
     }
 
@@ -508,6 +576,7 @@ ${examples}`;
         confidence: r.confidence,
         reasoning: r.reasoning,
         selectedCategoryId: r.suggestedCategoryId,
+        failureReason: null,
       };
 
       if (r.confidence === 'low') {

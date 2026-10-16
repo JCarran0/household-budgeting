@@ -40,6 +40,17 @@ export const classifyTransactionsSchema = z.object({
   transactionIds: z.array(z.string()).optional(),
 });
 
+// Notes longer than 200 chars are rejected, not truncated: the input's
+// maxLength makes a longer note a client bug (REQ-141). The cap on outcomes
+// matches the 50-transaction classification limit with headroom.
+export const recordClassificationOutcomesSchema = z.object({
+  outcomes: z.array(z.object({
+    transactionId: z.string().min(1),
+    categoryId: z.string().min(1).nullable(),
+    note: z.string().max(200).optional(),
+  })).min(1).max(100),
+});
+
 export const suggestRulesSchema = z.object({
   categorizations: z.array(z.object({
     transactionId: z.string(),

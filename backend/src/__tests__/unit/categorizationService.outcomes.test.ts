@@ -9,11 +9,22 @@
 
 import { CategorizationService } from '../../services/categorizationService';
 import { ExternalServiceError } from '../../errors';
+import { CategorizationRunStore } from '../../services/categorizationRunStore';
+import type { DataService } from '../../services/dataService';
 import type { ChatbotDataService } from '../../services/chatbotDataService';
 import type { ChatbotCostTracker } from '../../services/chatbotCostTracker';
 import type { Category, Transaction } from '../../shared/types';
 
 const FAMILY_ID = 'family-abc';
+
+/** Just the two methods the run store uses, backed by a Map. */
+function memoryDataService(): DataService {
+  const data = new Map<string, unknown>();
+  return {
+    getData: async (key: string) => (data.has(key) ? structuredClone(data.get(key)) : null),
+    saveData: async (key: string, value: unknown) => { data.set(key, structuredClone(value)); },
+  } as unknown as DataService;
+}
 
 function txn(id: string): Transaction {
   return {
@@ -75,7 +86,8 @@ function buildService(transactions: Transaction[], responses: unknown[]) {
     getAutoCategorizeRules: jest.fn().mockResolvedValue([]),
   } as unknown as ChatbotDataService;
 
-  const service = new CategorizationService(chatbotDataService, costTracker, 'test-key');
+  const runStore = new CategorizationRunStore(memoryDataService());
+  const service = new CategorizationService(chatbotDataService, costTracker, 'test-key', runStore);
 
   const queue = [...responses];
   const stream = jest.fn().mockImplementation(() => ({
@@ -85,7 +97,7 @@ function buildService(transactions: Transaction[], responses: unknown[]) {
     messages: { stream },
   };
 
-  return { service, stream, recordUsage };
+  return { service, stream, recordUsage, runStore };
 }
 
 describe('CategorizationService outcomes', () => {
@@ -130,7 +142,7 @@ describe('CategorizationService outcomes', () => {
     const [skipped] = result.unsureBucket.transactions;
     expect(skipped.id).toBe('t2');
     expect(skipped.selectedCategoryId).toBe('');
-    expect(skipped.reasoning).toMatch(/skipped/);
+    expect(skipped.failureReason).toMatch(/skipped/);
   });
 
   it('never preselects a category the user cannot see', async () => {
@@ -186,5 +198,105 @@ describe('CategorizationService outcomes', () => {
     const { service } = buildService([txn('t1')], [refusal]);
 
     await expect(service.classifyTransactions(FAMILY_ID)).rejects.toThrow(/declined/);
+  });
+
+  describe('run record', () => {
+    it('saves every transaction sent, with its suggestion or failure reason', async () => {
+      const { service, runStore } = buildService(
+        [txn('t1'), txn('t2')],
+        [toolResponse([{ transactionId: 't1', suggestedCategoryId: 'cat-dining' }])],
+      );
+
+      const result = await service.classifyTransactions(FAMILY_ID);
+
+      expect(result.runId).toEqual(expect.any(String));
+      const run = await runStore.getRun(FAMILY_ID, result.runId!);
+      expect(run?.model).toBe(result.model);
+      expect(run?.rows.map(r => [r.transactionId, r.suggestedCategoryId, r.failureReason])).toEqual([
+        ['t1', 'cat-dining', null],
+        ['t2', null, expect.stringMatching(/skipped/)],
+      ]);
+    });
+
+    it('saves a run in which nothing could be classified', async () => {
+      const { service, runStore } = buildService([txn('t1')], [truncatedResponse()]);
+
+      await service.classifyTransactions(FAMILY_ID).catch(() => undefined);
+
+      const [run] = await runStore.listRuns(FAMILY_ID);
+      expect(run.rows[0].failureReason).toMatch(/cut off/);
+    });
+
+    it('still returns suggestions when saving the run fails', async () => {
+      const { service, runStore } = buildService(
+        [txn('t1')],
+        [toolResponse([{ transactionId: 't1', suggestedCategoryId: 'cat-dining' }])],
+      );
+      jest.spyOn(runStore, 'createRun').mockRejectedValue(new Error('S3 down'));
+
+      const result = await service.classifyTransactions(FAMILY_ID);
+
+      expect(result.runId).toBeNull();
+      expect(result.totalClassified).toBe(1);
+    });
+
+    it('derives accepted / changed / skipped from the stored suggestion', async () => {
+      const { service, runStore } = buildService(
+        [txn('t1'), txn('t2'), txn('t3')],
+        [toolResponse([
+          { transactionId: 't1', suggestedCategoryId: 'cat-dining' },
+          { transactionId: 't2', suggestedCategoryId: 'cat-dining' },
+          { transactionId: 't3', suggestedCategoryId: 'cat-dining' },
+        ])],
+      );
+      const { runId } = await service.classifyTransactions(FAMILY_ID);
+      // 'cat-groceries' is a second visible category for the "changed" row.
+      categories.push({ id: 'cat-groceries', name: 'Groceries', parentId: null, isHidden: false } as unknown as Category);
+
+      try {
+        const res = await service.recordOutcomes(FAMILY_ID, runId!, [
+          { transactionId: 't1', categoryId: 'cat-dining', note: 'ignored on an accepted row' },
+          { transactionId: 't2', categoryId: 'cat-groceries', note: 'Bought for the party' },
+          { transactionId: 't3', categoryId: null },
+        ]);
+        expect(res).toEqual({ found: true, recorded: 3 });
+
+        const run = await runStore.getRun(FAMILY_ID, runId!);
+        expect(run?.rows.map(r => [r.outcome?.kind, r.outcome?.categoryId, r.outcome?.note])).toEqual([
+          ['accepted', 'cat-dining', null],
+          ['changed', 'cat-groceries', 'Bought for the party'],
+          ['skipped', null, null],
+        ]);
+      } finally {
+        categories.pop();
+      }
+    });
+
+    it('drops outcomes naming a hidden or unknown category, and ids not in the run', async () => {
+      const { service, runStore } = buildService(
+        [txn('t1'), txn('t2')],
+        [toolResponse([
+          { transactionId: 't1', suggestedCategoryId: 'cat-dining' },
+          { transactionId: 't2', suggestedCategoryId: 'cat-dining' },
+        ])],
+      );
+      const { runId } = await service.classifyTransactions(FAMILY_ID);
+
+      const res = await service.recordOutcomes(FAMILY_ID, runId!, [
+        { transactionId: 't1', categoryId: 'cat-old' },
+        { transactionId: 't2', categoryId: 'cat-invented' },
+        { transactionId: 'not-in-run', categoryId: 'cat-dining' },
+      ]);
+
+      expect(res).toEqual({ found: true, recorded: 0 });
+      const run = await runStore.getRun(FAMILY_ID, runId!);
+      expect(run?.rows.every(r => r.outcome === null)).toBe(true);
+    });
+
+    it('reports an unknown run as not found', async () => {
+      const { service } = buildService([], []);
+      const res = await service.recordOutcomes(FAMILY_ID, 'no-such-run', [{ transactionId: 't1', categoryId: null }]);
+      expect(res.found).toBe(false);
+    });
   });
 });

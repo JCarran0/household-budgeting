@@ -1245,6 +1245,12 @@ export interface ClassifiedTransaction {
   confidence: ClassificationConfidence;
   reasoning: string;
   selectedCategoryId: string | null; // user can override before applying
+  /**
+   * Set when the AI produced nothing usable for this transaction (cut off,
+   * declined, skipped, unknown category). `reasoning` then holds no model
+   * reasoning, and `suggestedCategoryId` is ''. BRD §12.4.1 REQ-102.
+   */
+  failureReason: string | null;
 }
 
 export interface ClassificationBucket {
@@ -1267,6 +1273,76 @@ export interface ClassifyTransactionsResponse {
   // Uncategorized transactions left over after this batch was capped at
   // CLASSIFICATION_BATCH_LIMIT. Frontend re-runs the flow to drain them.
   remainingUncategorized: number;
+  /**
+   * The run record this classification was saved under, for reporting
+   * outcomes. Null when saving the record failed — the suggestions are still
+   * usable (BRD REQ-133).
+   */
+  runId: string | null;
+  /** Model id that produced the suggestions, shown in the summary (REQ-104). */
+  model: string;
+}
+
+/**
+ * What the user did with one suggested row (BRD §12.4.4).
+ *  - accepted: applied the AI's suggestion unchanged
+ *  - changed:  applied a different category than the AI suggested (or picked
+ *              one where the AI had none)
+ *  - skipped:  left uncategorized
+ */
+export type ClassificationOutcomeKind = 'accepted' | 'changed' | 'skipped';
+
+/**
+ * The client reports only what it applied; the server derives the outcome kind
+ * by comparing against the stored suggestion, so the two can never disagree.
+ */
+export interface ClassificationOutcomeInput {
+  transactionId: string;
+  /** The category applied, or null when the row was skipped. */
+  categoryId: string | null;
+  /** Optional "Why?" on a changed row, max 200 chars (REQ-140/141). */
+  note?: string;
+}
+
+export interface RecordClassificationOutcomesRequest {
+  outcomes: ClassificationOutcomeInput[];
+}
+
+export interface ClassificationRunOutcome {
+  kind: ClassificationOutcomeKind;
+  categoryId: string | null;
+  note: string | null;
+  recordedAt: string;
+}
+
+export interface ClassificationRunRow {
+  transactionId: string;
+  name: string;
+  merchantName: string | null;
+  amount: number;
+  date: string;
+  /** Plaid's category as stored on the transaction ([broad, detailed]). */
+  plaidCategory: { broad: string | null; detailed: string | null } | null;
+  suggestedCategoryId: string | null;
+  confidence: ClassificationConfidence | null;
+  reasoning: string | null;
+  failureReason: string | null;
+  outcome: ClassificationRunOutcome | null;
+}
+
+/**
+ * One classification request, persisted per family for 12 months (BRD D-V2-5).
+ * Not reachable from the chatbot's ReadOnlyDataService (SEC-102).
+ */
+export interface ClassificationRun {
+  id: string;
+  familyId: string;
+  createdAt: string;
+  model: string;
+  effort: string;
+  costUsd: number;
+  durationMs: number;
+  rows: ClassificationRunRow[];
 }
 
 export interface RuleSuggestion {

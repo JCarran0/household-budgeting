@@ -12,6 +12,7 @@
  */
 
 import { CategorizationService } from '../../services/categorizationService';
+import type { CategorizationRunStore } from '../../services/categorizationRunStore';
 import type { ChatbotDataService } from '../../services/chatbotDataService';
 import type { ChatbotCostTracker } from '../../services/chatbotCostTracker';
 import type { Category, Transaction } from '../../shared/types';
@@ -78,7 +79,8 @@ function buildService() {
     getAutoCategorizeRules: jest.fn().mockResolvedValue([]),
   } as unknown as ChatbotDataService;
 
-  const service = new CategorizationService(chatbotDataService, costTracker, 'test-key');
+  const runStore = { createRun: jest.fn().mockResolvedValue(undefined) } as unknown as CategorizationRunStore;
+  const service = new CategorizationService(chatbotDataService, costTracker, 'test-key', runStore);
 
   // Swap the SDK client for a stub so no network call is made.
   const stream = jest.fn().mockReturnValue({

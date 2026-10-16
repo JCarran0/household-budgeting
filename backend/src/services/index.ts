@@ -33,6 +33,7 @@ import { ActionActivityStore } from './actionActivityStore';
 import { ProposalStore } from './chatActions/proposalStore';
 import { ActionUndoService } from './actionUndoService';
 import { CategorizationService } from './categorizationService';
+import { CategorizationRunStore } from './categorizationRunStore';
 import { ManualAccountService } from './manualAccountService';
 import { AmazonReceiptService } from './amazonReceiptService';
 import { FamilyService } from './familyService';
@@ -138,10 +139,14 @@ export const chatbotService = new ChatbotService(
   agentLearningsStore,
   proposalStore,
 );
+// Like proposalStore: a narrow store over one key namespace, not reachable
+// from the chatbot's ReadOnlyDataService (AI-CATEGORIZATION-BRD SEC-102).
+export const categorizationRunStore = new CategorizationRunStore(dataService);
 export const categorizationService = new CategorizationService(
   chatbotDataService,
   chatbotCostTracker,
   config.ai.anthropicApiKey,
+  categorizationRunStore,
 );
 
 export const amazonReceiptService = new AmazonReceiptService(

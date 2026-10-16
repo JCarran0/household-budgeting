@@ -4,6 +4,7 @@ import type {
   ChatModel,
   ChatResponse,
   ClassifyTransactionsResponse,
+  ClassificationOutcomeInput,
   SuggestRulesResponse,
   ActionConfirmResponse,
   PageContext,
@@ -119,6 +120,17 @@ export function createChatbotApi(client: AxiosInstance) {
         { transactionIds }
       );
       return data;
+    },
+
+    /** Records what the user applied; never changes a transaction (SEC-104). */
+    async recordClassificationOutcomes(
+      runId: string,
+      outcomes: ClassificationOutcomeInput[],
+    ): Promise<void> {
+      await client.post(
+        `/chatbot/classification-runs/${encodeURIComponent(runId)}/outcomes`,
+        { outcomes },
+      );
     },
 
     async suggestCategorizeRules(

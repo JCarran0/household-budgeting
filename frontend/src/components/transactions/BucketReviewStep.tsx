@@ -3,13 +3,17 @@ import { Table, Select, Button, Group, Text, TextInput, Stack, Badge, ScrollArea
 import { IconCheck, IconX, IconArrowBackUp } from '@tabler/icons-react';
 import { useCategoryOptions } from '../../hooks/useCategoryOptions';
 import { formatCurrency } from '../../utils/formatters';
-import type { ClassificationBucket } from '../../../../shared/types';
+import type { ClassificationBucket, ClassifiedTransaction } from '../../../../shared/types';
 
 export interface BucketApplySelection {
   transactionId: string;
   categoryId: string;
   userDescription?: string;
+  /** The user's optional "Why?" — only on a row whose category they changed. */
+  note?: string;
 }
+
+const MAX_NOTE_LENGTH = 200;
 
 interface BucketReviewStepProps {
   bucket: ClassificationBucket;
@@ -42,6 +46,9 @@ export function BucketReviewStep({
   // Track per-row description edits
   const [descriptionEdits, setDescriptionEdits] = useState<Map<string, string>>(new Map());
 
+  // Optional "Why?" per changed row (AI-CATEGORIZATION-BRD REQ-140)
+  const [notes, setNotes] = useState<Map<string, string>>(new Map());
+
   // Track which rows the user has skipped within this bucket (won't be included in Apply)
   const [skippedIds, setSkippedIds] = useState<Set<string>>(new Set());
 
@@ -55,6 +62,16 @@ export function BucketReviewStep({
   };
 
   const handleCategoryChange = (transactionId: string, categoryId: string | null) => {
+    // Back to the AI's suggestion (or cleared): the row is no longer a
+    // correction, so its note goes with it.
+    const suggested = bucket.transactions.find(t => t.id === transactionId)?.suggestedCategoryId;
+    if (!categoryId || categoryId === suggested) {
+      setNotes(prev => {
+        const next = new Map(prev);
+        next.delete(transactionId);
+        return next;
+      });
+    }
     setSelections(prev => {
       const next = new Map(prev);
       if (categoryId) {
@@ -74,16 +91,31 @@ export function BucketReviewStep({
     });
   };
 
+  const handleNoteChange = (transactionId: string, value: string) => {
+    setNotes(prev => {
+      const next = new Map(prev);
+      next.set(transactionId, value);
+      return next;
+    });
+  };
+
+  const isChanged = (t: ClassifiedTransaction): boolean => {
+    const selected = selections.get(t.id);
+    return !!selected && selected !== t.suggestedCategoryId;
+  };
+
   const handleApply = () => {
     const results: BucketApplySelection[] = bucket.transactions
       .filter(t => !skippedIds.has(t.id))
       .map(t => {
         const edited = descriptionEdits.get(t.id);
+        const note = isChanged(t) ? notes.get(t.id)?.trim() : undefined;
         return {
           transactionId: t.id,
           categoryId: selections.get(t.id) || t.suggestedCategoryId,
           // Only include if the user actually changed it
           ...(edited !== undefined && edited !== t.name ? { userDescription: edited } : {}),
+          ...(note ? { note } : {}),
         };
       })
       .filter(r => r.categoryId);
@@ -156,6 +188,12 @@ export function BucketReviewStep({
                       disabled={isSkipped}
                       styles={{ input: { fontSize: 'var(--mantine-font-size-sm)', textDecoration: isSkipped ? 'line-through' : undefined } }}
                     />
+                    {/* REQ-101/102: why the AI suggested this, or why it couldn't. */}
+                    {(t.failureReason || t.reasoning) && (
+                      <Text size="xs" c={t.failureReason ? 'orange' : 'dimmed'} style={{ whiteSpace: 'normal' }}>
+                        {t.failureReason ?? t.reasoning}
+                      </Text>
+                    )}
                   </Table.Td>
                   <Table.Td style={{ textAlign: 'right', whiteSpace: 'nowrap', textDecoration: isSkipped ? 'line-through' : undefined }}>
                     {formatCurrency(Math.abs(t.amount))}
@@ -171,6 +209,17 @@ export function BucketReviewStep({
                       clearable={isUnsure}
                       placeholder={isUnsure ? 'Select category...' : undefined}
                     />
+                    {isChanged(t) && !isSkipped && (
+                      <TextInput
+                        size="xs"
+                        mt={4}
+                        placeholder="Why? (optional)"
+                        aria-label="Why did you change this category? (optional)"
+                        maxLength={MAX_NOTE_LENGTH}
+                        value={notes.get(t.id) ?? ''}
+                        onChange={(e) => handleNoteChange(t.id, e.currentTarget.value)}
+                      />
+                    )}
                   </Table.Td>
                 </Table.Tr>
               );

@@ -4,7 +4,7 @@
 # BRD: docs/features/AI-CATEGORIZATION-BRD.md §12 (v2.0)
 # Predecessor: docs/features/AI-CATEGORIZATION-PLAN.yaml (v1.0, shipped 7e4c1ad)
 # Prerequisite: 271ecd5 — truncation fix + Opus 5.5 (shipped with this plan's drafting)
-# Status: Not Started
+# Status: Slice A (phases 1-2, run record + run report) complete; slices B-C not started
 # Last Updated: 2026-10-15
 # =============================================================================
 
@@ -108,7 +108,7 @@ decisions:
 # PHASE 1: Run record (backend)
 # =============================================================================
 phase_1_run_record:
-  status: not_started
+  status: completed
   description: |
     Persist each run and accept per-row outcomes. No UI change yet beyond
     carrying the runId (phase 2 reports outcomes).
@@ -116,7 +116,7 @@ phase_1_run_record:
   tasks:
     - id: "1.1"
       task: Shared types for runs and outcomes
-      status: not_started
+      status: completed
       details: |
         shared/types/index.ts:
           - ClassificationRun { id, familyId, createdAt, model, effort,
@@ -135,7 +135,7 @@ phase_1_run_record:
 
     - id: "1.2"
       task: categorizationRunStore.ts
-      status: not_started
+      status: completed
       details: |
         New backend/src/services/categorizationRunStore.ts, modeled on
         proposalStore.ts: key `ai_categorization_runs_{familyId}`, a Mutex
@@ -148,7 +148,7 @@ phase_1_run_record:
 
     - id: "1.3"
       task: Create the run in classifyTransactions
-      status: not_started
+      status: completed
       details: |
         After reconcile(), build rows from results + failures and call
         createRun. A store failure is logged and the classification response
@@ -157,7 +157,7 @@ phase_1_run_record:
 
     - id: "1.4"
       task: Outcome endpoint
-      status: not_started
+      status: completed
       details: |
         POST /api/v1/chatbot/classification-runs/:runId/outcomes
           body: { outcomes: [{ transactionId, kind, categoryId?, note? }] }
@@ -167,7 +167,7 @@ phase_1_run_record:
 
     - id: "1.5"
       task: Maintainer script
-      status: not_started
+      status: completed
       details: |
         backend/scripts/inspect-categorization-runs.ts, same --prod/--family/
         --since conventions as inspect-traces.ts. Prints REQ-135: acceptance
@@ -178,7 +178,7 @@ phase_1_run_record:
 # PHASE 2: Run report + notes (frontend)
 # =============================================================================
 phase_2_run_report:
-  status: not_started
+  status: completed
   description: |
     Show the reasons the backend already returns, report outcomes, and
     summarize the run.
@@ -186,7 +186,7 @@ phase_2_run_report:
   tasks:
     - id: "2.1"
       task: Reason per row in BucketReviewStep
-      status: not_started
+      status: completed
       details: |
         One line of secondary text under each row's name (REQ-101). Unsure
         rows with an empty selection show the failure reason instead (REQ-102).
@@ -194,7 +194,7 @@ phase_2_run_report:
 
     - id: "2.2"
       task: '"Why?" note on changed rows'
-      status: not_started
+      status: completed
       details: |
         When a row's selected category differs from suggestedCategoryId, show
         an optional single-line input, maxLength 200 (REQ-140/141). Clearing
@@ -202,7 +202,7 @@ phase_2_run_report:
 
     - id: "2.3"
       task: Report outcomes on apply/skip
-      status: not_started
+      status: completed
       details: |
         In CategorizationFlowModal.handleApply and the skip handler, after the
         bulk update succeeds, POST outcomes for the bucket. Fire-and-forget
@@ -212,7 +212,7 @@ phase_2_run_report:
 
     - id: "2.4"
       task: Summary step
-      status: not_started
+      status: completed
       details: |
         REQ-104: classified, Unsure grouped by reason, applied/changed/skipped,
         rules created, cost, model. Model name and cost come from the classify

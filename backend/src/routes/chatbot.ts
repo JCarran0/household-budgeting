@@ -5,6 +5,7 @@
  * GET  /usage                  — Get current monthly cost usage
  * POST /classify-transactions  — AI bulk categorization
  * POST /suggest-rules          — Suggest auto-categorization rules
+ * POST /classification-runs/:runId/outcomes — Record what the user applied
  * POST /actions/confirm        — Confirm a pending chat action card
  *                                (GitHub-issue submission now flows through this
  *                                 path via the submit_github_issue action; D-15)
@@ -35,13 +36,14 @@ import { getChatAction, executeChatAction } from '../services/chatActions';
 import { logAuditSuccess, logAuditRejection } from '../services/chatActions/auditLog';
 import { fingerprint } from '../services/chatActions/undoSnapshot';
 import type { ActivityRowRecord } from '../services/actionActivityStore';
-import { chatRequestSchema, classifyTransactionsSchema, suggestRulesSchema } from '../validators/chatbotValidators';
+import { chatRequestSchema, classifyTransactionsSchema, recordClassificationOutcomesSchema, suggestRulesSchema } from '../validators/chatbotValidators';
 import type {
   ChatRequest,
   ActionConfirmErrorCode,
   ActionResource,
   ActionRowResult,
   ChatActionId,
+  RecordClassificationOutcomesRequest,
 } from '../shared/types';
 import type { ChatAttachmentMimeType } from '../middleware/chatAttachmentUpload';
 
@@ -339,6 +341,34 @@ router.post(
         res.status(429).json({ success: false, error: msg });
         return;
       }
+      next(error);
+    }
+  },
+);
+
+// =============================================================================
+// POST /classification-runs/:runId/outcomes — Record what the user applied
+//
+// Writes only to the run record (SEC-104): categories are applied through
+// PUT /transactions/bulk, and this route cannot change a transaction.
+// =============================================================================
+router.post(
+  '/classification-runs/:runId/outcomes',
+  authenticate,
+  refuseBusinessWorkspace,
+  validateBody(recordClassificationOutcomesSchema),
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const { familyId } = req.user!;
+      const { outcomes } = req.body as RecordClassificationOutcomesRequest;
+
+      const result = await categorizationService.recordOutcomes(familyId, String(req.params.runId), outcomes);
+      if (!result.found) {
+        res.status(404).json({ success: false, error: 'Classification run not found' });
+        return;
+      }
+      res.json({ success: true, recorded: result.recorded });
+    } catch (error) {
       next(error);
     }
   },
