@@ -123,6 +123,18 @@ npx tsx backend/scripts/inspect-categorization-runs.ts --family <id> --prod
 
 **Then decide:** start slice B (Plaid evidence), or adjust first if the numbers show a problem.
 
+**Amazon receipts, same check-in.** v2.0 (`ec6d260`, [AI-AMAZON-RECEIPT-BRD §17](./features/AI-AMAZON-RECEIPT-BRD.md)) teaches the categorizer from a per-family item history and records the AI's suggestion beside each applied category. There is no "before" number, since suggestions were never stored before v2.0.
+
+```bash
+npx tsx backend/scripts/inspect-amazon-history.ts --list --prod
+npx tsx backend/scripts/inspect-amazon-history.ts --family <id> --prod
+```
+
+- **History populated?** `imported` should show a date and `import` rows should exist. If `categorize`/`split` counts stay at 0 after a session was applied, history recording is failing (it is logged, never surfaced, REQ-A209).
+- **Acceptance at high confidence (≥0.85)** against the 85% target (BRD §17.5).
+- **`--rows`, look at the "changed" lines.** Repeated corrections in one direction mean the history isn't overriding the model's prior; a recurring item may want an auto-categorization rule.
+- **Cost per session** against the $0.25 target. The history adds about $0.04–0.05 per call.
+
 ---
 
 ## 4. Finished — do not redo
