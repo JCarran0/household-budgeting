@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+### [7.6.1](https://github.com/JCarran0/household-budgeting/compare/v7.6.0...v7.6.1) (2026-10-16)
+
+
+### Bug Fixes
+
+* **amazon:** surface truncated or invalid AI output in receipt matching ([bb396a8](https://github.com/JCarran0/household-budgeting/commit/bb396a813e999d22b584d5f16748ad27cd17679c))
+
+
+### Documentation
+
+* **open-items:** queue a check-in on the AI categorization baseline ([2c13f05](https://github.com/JCarran0/household-budgeting/commit/2c13f05195b6ea3e19d5e89ae4067bba9624ba23))
+
 ## [7.6.0](https://github.com/JCarran0/household-budgeting/compare/v7.5.1...v7.6.0) (2026-10-16)
 
 
