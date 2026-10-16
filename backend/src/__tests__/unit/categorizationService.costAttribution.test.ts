@@ -32,11 +32,12 @@ const categories: Category[] = [
 ];
 
 /**
- * Minimal Anthropic response carrying one tool_use block, matching the shape
- * `classifyBatch` destructures.
+ * Minimal Anthropic response carrying one valid tool_use block, matching the
+ * shape `classifyBatch` validates.
  */
 function stubAnthropicResponse() {
   return {
+    stop_reason: 'tool_use',
     usage: { input_tokens: 1200, output_tokens: 300 },
     content: [
       {
@@ -44,7 +45,12 @@ function stubAnthropicResponse() {
         name: 'classify_transactions',
         input: {
           classifications: [
-            { transactionId: 'txn-1', categoryId: 'cat-dining', confidence: 'high' },
+            {
+              transactionId: 'txn-1',
+              suggestedCategoryId: 'cat-dining',
+              confidence: 'high',
+              reasoning: 'Coffee shop.',
+            },
           ],
         },
       },
@@ -75,12 +81,14 @@ function buildService() {
   const service = new CategorizationService(chatbotDataService, costTracker, 'test-key');
 
   // Swap the SDK client for a stub so no network call is made.
-  const create = jest.fn().mockResolvedValue(stubAnthropicResponse());
-  (service as unknown as { client: { messages: { create: jest.Mock } } }).client = {
-    messages: { create },
+  const stream = jest.fn().mockReturnValue({
+    finalMessage: jest.fn().mockResolvedValue(stubAnthropicResponse()),
+  });
+  (service as unknown as { client: { messages: { stream: jest.Mock } } }).client = {
+    messages: { stream },
   };
 
-  return { service, recordUsage, checkBudget, create };
+  return { service, recordUsage, checkBudget, stream };
 }
 
 describe('CategorizationService cost attribution (SA-03)', () => {
@@ -106,7 +114,7 @@ describe('CategorizationService cost attribution (SA-03)', () => {
   });
 
   it('refuses to classify when the workspace cap is already reached', async () => {
-    const { service, recordUsage, checkBudget, create } = buildService();
+    const { service, recordUsage, checkBudget, stream } = buildService();
     (checkBudget as jest.Mock).mockResolvedValue({
       allowed: false,
       monthlySpend: 20,
@@ -117,7 +125,7 @@ describe('CategorizationService cost attribution (SA-03)', () => {
     await expect(service.classifyTransactions(FAMILY_ID)).rejects.toThrow(/budget cap/i);
 
     // No Claude call, no spend — the gate must short-circuit before the API.
-    expect(create).not.toHaveBeenCalled();
+    expect(stream).not.toHaveBeenCalled();
     expect(recordUsage).not.toHaveBeenCalled();
   });
 });

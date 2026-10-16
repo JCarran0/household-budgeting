@@ -8,9 +8,11 @@
  */
 
 import Anthropic from '@anthropic-ai/sdk';
+import { z } from 'zod';
 import { ChatbotDataService } from './chatbotDataService';
 import { ChatbotCostTracker } from './chatbotCostTracker';
 import { childLogger } from '../utils/logger';
+import { ExternalServiceError } from '../errors';
 
 const log = childLogger('categorizationService');
 
@@ -29,20 +31,55 @@ import type {
   SuggestRulesResponse,
   Transaction,
   Category,
-  AutoCategorizeRule,
+  ChatModel,
 } from '../shared/types';
 
-const BATCH_SIZE = 50;
-// Hard cap on transactions classified per request. Each batch of 50 takes
-// ~30-90s of Claude time; running many batches synchronously inside one HTTP
-// request blows past nginx/ALB/browser timeouts. The frontend re-invokes
-// classifyTransactions until remainingUncategorized hits 0.
-const CLASSIFICATION_REQUEST_LIMIT = BATCH_SIZE;
+// Hard cap on transactions classified per request. Running many batches
+// synchronously inside one HTTP request blows past nginx/ALB/browser timeouts.
+// The frontend re-invokes classifyTransactions until remainingUncategorized
+// hits 0.
+const CLASSIFICATION_REQUEST_LIMIT = 50;
+// Each request's transactions are split into batches that run concurrently,
+// so wall-clock is one batch's latency rather than the sum — a single Opus
+// call over all 50 with thinking risks nginx's 120s proxy ceiling.
+const BATCH_SIZE = 25;
 const MAX_EXAMPLES_PER_CATEGORY = 5;
 const MAX_EXAMPLE_CATEGORIES = 20;
-// REQ-P056 — reviewed 2026-09-13.
-const MODEL = 'claude-sonnet-5';
-const MAX_TOKENS = 8192; // larger than chatbot — batch output is verbose
+// REQ-P056 — reviewed 2026-10-15. Opus 5.5 cannot disable thinking, and
+// thinking tokens count against max_tokens, so the ceiling is sized for
+// thinking plus a full batch of classifications. Calls stream so a ceiling
+// this large cannot trip the SDK's non-streaming timeout guard.
+const MODEL = 'claude-opus-5-5';
+const EFFORT = 'medium';
+const MAX_TOKENS = 32000;
+// Opus 5.5 is $4/$20 per MTok; the 'opus' tier is priced at Opus 5's $5/$25
+// because the chatbot still runs Opus 5. Recording under it overstates this
+// spend by 25% — the safe direction for a cap.
+const COST_TIER: ChatModel = 'opus';
+
+// Tool input is model output: validate it rather than casting (Critical Rule 3).
+const classificationOutputSchema = z.object({
+  classifications: z.array(z.object({
+    transactionId: z.string(),
+    suggestedCategoryId: z.string(),
+    confidence: z.enum(['high', 'medium', 'low']),
+    reasoning: z.string(),
+  })),
+});
+
+/**
+ * What one classification call produced. Every transaction sent ends up in
+ * exactly one of `results` or `failures` once reconciled — a run that reports
+ * success with transactions silently missing is the bug this shape exists to
+ * prevent (2026-10-15: 50 sent, output truncated at max_tokens, 0 returned,
+ * UI showed "Categorization Complete").
+ */
+interface BatchOutcome {
+  results: ClassificationResult[];
+  /** transactionId → why the AI produced nothing usable for it. */
+  failures: Map<string, string>;
+  cost: number;
+}
 
 export class CategorizationService {
   private client: Anthropic;
@@ -69,10 +106,9 @@ export class CategorizationService {
     }
 
     // Fetch data
-    const [allUncategorized, categories, existingRules] = await Promise.all([
+    const [allUncategorized, categories] = await Promise.all([
       this.getUncategorizedTransactions(familyId, transactionIds),
       this.chatbotDataService.getCategories(familyId),
-      this.chatbotDataService.getAutoCategorizeRules(familyId),
     ]);
 
     if (allUncategorized.length === 0) {
@@ -104,31 +140,40 @@ export class CategorizationService {
     // Build category hierarchy context
     const categoryContext = this.buildCategoryContext(categories);
 
-    // Classify in batches
-    const allResults: ClassificationResult[] = [];
-    let totalCost = 0;
-    const totalBatches = Math.ceil(uncategorized.length / BATCH_SIZE);
-
+    // Classify in concurrent batches
+    const batches: Transaction[][] = [];
     for (let i = 0; i < uncategorized.length; i += BATCH_SIZE) {
-      const batchNum = Math.floor(i / BATCH_SIZE) + 1;
-      const batch = uncategorized.slice(i, i + BATCH_SIZE);
-      log.info({ batchNum, totalBatches, batchSize: batch.length }, 'classifying batch');
-      const { results, cost } = await this.classifyBatch(familyId, batch, categoryContext, examples, existingRules);
-      log.info({ batchNum, totalBatches, results: results.length, cost: Number(cost.toFixed(4)) }, 'batch complete');
-      allResults.push(...results);
-      totalCost += cost;
+      batches.push(uncategorized.slice(i, i + BATCH_SIZE));
+    }
+    const outcomes = await Promise.all(batches.map((batch, i) => {
+      log.info({ batchNum: i + 1, totalBatches: batches.length, batchSize: batch.length }, 'classifying batch');
+      return this.classifyBatch(familyId, batch, categoryContext, examples);
+    }));
+    const merged = mergeOutcomes(outcomes);
+
+    const { results, failures } = this.reconcile(merged, uncategorized, categories);
+    log.info(
+      { classified: results.length, failed: failures.size, cost: Number(merged.cost.toFixed(4)) },
+      'classification reconciled',
+    );
+
+    // Nothing usable at all: fail loudly rather than reporting a "complete"
+    // run that categorized nothing. Spend has already been recorded.
+    if (results.length === 0) {
+      const reason = failures.values().next().value ?? 'no suggestions were returned';
+      throw new ExternalServiceError(
+        `AI categorization returned no usable suggestions for ${uncategorized.length} transactions: ${reason} No changes were made.`,
+      );
     }
 
-    // Group into buckets
-    log.info({ resultCount: allResults.length }, 'grouping results into buckets');
-    const { buckets, unsureBucket } = this.groupIntoBuckets(allResults, uncategorized, categories);
+    const { buckets, unsureBucket } = this.groupIntoBuckets(results, failures, uncategorized, categories);
     log.info({ buckets: buckets.length, unsure: unsureBucket.transactions.length }, 'classification done');
 
     return {
       buckets,
       unsureBucket,
-      totalClassified: allResults.length,
-      costUsed: Math.round(totalCost * 1_000_000) / 1_000_000,
+      totalClassified: results.length,
+      costUsed: Math.round(merged.cost * 1_000_000) / 1_000_000,
       remainingUncategorized,
     };
   }
@@ -169,9 +214,11 @@ export class CategorizationService {
     const existingPatterns = existingRules.flatMap(r => r.patterns);
 
     try {
-      const response = await this.client.messages.create({
+      const response = await this.client.messages.stream({
         model: MODEL,
-        max_tokens: 4096,
+        max_tokens: MAX_TOKENS,
+        thinking: { type: 'adaptive' },
+        output_config: { effort: EFFORT },
         system: RULE_SUGGESTION_SYSTEM_PROMPT,
         tools: [RULE_SUGGESTION_TOOL],
         messages: [{
@@ -181,12 +228,19 @@ export class CategorizationService {
             existingRulePatterns: existingPatterns,
           }),
         }],
-      });
+      }).finalMessage();
 
       // Record cost
       await this.costTracker.recordUsage(
-        familyId, 'sonnet', response.usage.input_tokens, response.usage.output_tokens,
+        familyId, COST_TIER, response.usage.input_tokens, response.usage.output_tokens,
       );
+
+      // Rule suggestions are optional — a truncated or declined response just
+      // means no suggestions, but say so in the log instead of returning [] mutely.
+      if (response.stop_reason === 'max_tokens' || response.stop_reason === 'refusal') {
+        log.warn({ stopReason: response.stop_reason }, 'suggestRules: no usable response');
+        return { suggestions: [] };
+      }
 
       const toolUse = response.content.find(
         (b): b is Anthropic.ToolUseBlock => b.type === 'tool_use' && b.name === 'suggest_rules',
@@ -278,8 +332,7 @@ export class CategorizationService {
     transactions: Transaction[],
     categoryContext: string,
     examples: string,
-    _existingRules: AutoCategorizeRule[],
-  ): Promise<{ results: ClassificationResult[]; cost: number }> {
+  ): Promise<BatchOutcome> {
     const txData = transactions.map(t => ({
       id: t.id,
       name: t.name,
@@ -299,44 +352,120 @@ ${categoryContext}
 EXAMPLES OF PREVIOUSLY CATEGORIZED TRANSACTIONS:
 ${examples}`;
 
+    let response: Anthropic.Message;
     try {
-      const response = await this.client.messages.create({
+      response = await this.client.messages.stream({
         model: MODEL,
         max_tokens: MAX_TOKENS,
+        thinking: { type: 'adaptive' },
+        output_config: { effort: EFFORT },
         system: CATEGORIZATION_SYSTEM_PROMPT,
         tools: [CATEGORIZATION_TOOL],
         messages: [{ role: 'user', content: userMessage }],
-      });
-
-      const cost = ChatbotCostTracker.estimateCost(
-        'sonnet', response.usage.input_tokens, response.usage.output_tokens,
-      );
-
-      // Record cost against the workspace that incurred it, so classification
-      // spend counts toward the same cap `classifyTransactions` checks (SA-03).
-      await this.costTracker.recordUsage(
-        familyId, 'sonnet', response.usage.input_tokens, response.usage.output_tokens,
-      );
-
-      const toolUse = response.content.find(
-        (b): b is Anthropic.ToolUseBlock => b.type === 'tool_use' && b.name === 'classify_transactions',
-      );
-
-      if (!toolUse) {
-        log.warn('[CategorizationService] No tool_use in response, returning empty');
-        return { results: [], cost };
-      }
-
-      const output = toolUse.input as { classifications: ClassificationResult[] };
-      return { results: output.classifications || [], cost };
+      }).finalMessage();
     } catch (error) {
       log.error({ err: error }, 'classifyBatch error');
       throw error;
     }
+
+    const cost = ChatbotCostTracker.estimateCost(
+      COST_TIER, response.usage.input_tokens, response.usage.output_tokens,
+    );
+
+    // Record cost against the workspace that incurred it, so classification
+    // spend counts toward the same cap `classifyTransactions` checks (SA-03).
+    await this.costTracker.recordUsage(
+      familyId, COST_TIER, response.usage.input_tokens, response.usage.output_tokens,
+    );
+
+    log.info({
+      batchSize: transactions.length,
+      stopReason: response.stop_reason,
+      inputTokens: response.usage.input_tokens,
+      outputTokens: response.usage.output_tokens,
+      cost: Number(cost.toFixed(4)),
+    }, 'batch response');
+
+    const failAll = (reason: string): BatchOutcome => ({
+      results: [],
+      failures: new Map(transactions.map(t => [t.id, reason])),
+      cost,
+    });
+
+    // Truncated mid-output: the tool input is incomplete, so nothing in it can
+    // be trusted. Halve and retry until a batch fits or a single transaction
+    // still doesn't.
+    if (response.stop_reason === 'max_tokens') {
+      if (transactions.length === 1) {
+        return failAll('The AI response was cut off before it finished.');
+      }
+      log.warn({ batchSize: transactions.length }, 'batch output truncated; splitting and retrying');
+      const mid = Math.ceil(transactions.length / 2);
+      const halves = await Promise.all([
+        this.classifyBatch(familyId, transactions.slice(0, mid), categoryContext, examples),
+        this.classifyBatch(familyId, transactions.slice(mid), categoryContext, examples),
+      ]);
+      const merged = mergeOutcomes(halves);
+      return { ...merged, cost: merged.cost + cost };
+    }
+
+    if (response.stop_reason === 'refusal') {
+      log.warn({ batchSize: transactions.length }, 'batch declined by the model');
+      return failAll('The AI declined to classify this transaction.');
+    }
+
+    const toolUse = response.content.find(
+      (b): b is Anthropic.ToolUseBlock => b.type === 'tool_use' && b.name === 'classify_transactions',
+    );
+    if (!toolUse) {
+      log.warn({ stopReason: response.stop_reason }, 'no classify_transactions call in response');
+      return failAll('The AI did not return a classification.');
+    }
+
+    const parsed = classificationOutputSchema.safeParse(toolUse.input);
+    if (!parsed.success) {
+      log.warn({ issues: parsed.error.issues.slice(0, 5) }, 'classification output failed validation');
+      return failAll('The AI returned its classification in an unexpected format.');
+    }
+
+    return { results: parsed.data.classifications, failures: new Map(), cost };
+  }
+
+  /**
+   * Give every transaction sent exactly one outcome. Drops results for ids that
+   * were not in the request, and turns a suggestion naming a category the user
+   * cannot see into a failure — written through, it would be an orphan
+   * categoryId (see docs/features/ORPHAN-CATEGORYIDS-PLAN.yaml).
+   */
+  private reconcile(
+    outcome: BatchOutcome,
+    transactions: Transaction[],
+    categories: Category[],
+  ): { results: ClassificationResult[]; failures: Map<string, string> } {
+    const offered = new Set(categories.filter(c => !c.isHidden).map(c => c.id));
+    const byTxn = new Map<string, ClassificationResult>();
+    for (const r of outcome.results) {
+      if (!byTxn.has(r.transactionId)) byTxn.set(r.transactionId, r);
+    }
+
+    const results: ClassificationResult[] = [];
+    const failures = new Map<string, string>();
+    for (const t of transactions) {
+      const r = byTxn.get(t.id);
+      if (r && offered.has(r.suggestedCategoryId)) {
+        results.push(r);
+      } else if (r) {
+        failures.set(t.id, 'The AI suggested a category that does not exist.');
+      } else {
+        failures.set(t.id, outcome.failures.get(t.id) ?? 'The AI skipped this transaction.');
+      }
+    }
+    return { results, failures };
   }
 
   private groupIntoBuckets(
     results: ClassificationResult[],
+    failures: Map<string, string>,
     transactions: Transaction[],
     categories: Category[],
   ): { buckets: ClassificationBucket[]; unsureBucket: ClassificationBucket } {
@@ -346,6 +475,24 @@ ${examples}`;
     // Group by (categoryId, confidence)
     const groups = new Map<string, ClassifiedTransaction[]>();
     const unsure: ClassifiedTransaction[] = [];
+
+    // Failed transactions go to Unsure with no preselected category, so
+    // Apply skips them unless the user picks one.
+    for (const [id, reason] of failures) {
+      const tx = txMap.get(id);
+      if (!tx) continue;
+      unsure.push({
+        id: tx.id,
+        date: tx.date,
+        name: tx.merchantName || tx.name,
+        merchantName: tx.merchantName,
+        amount: tx.amount,
+        suggestedCategoryId: '',
+        confidence: 'low',
+        reasoning: reason,
+        selectedCategoryId: '',
+      });
+    }
 
     for (const r of results) {
       const tx = txMap.get(r.transactionId);
@@ -408,4 +555,12 @@ ${examples}`;
   private emptyBucket(): ClassificationBucket {
     return { categoryId: '', categoryName: 'Unsure', confidence: 'low', transactions: [], totalAmount: 0 };
   }
+}
+
+function mergeOutcomes(outcomes: BatchOutcome[]): BatchOutcome {
+  return {
+    results: outcomes.flatMap(o => o.results),
+    failures: new Map(outcomes.flatMap(o => [...o.failures])),
+    cost: outcomes.reduce((sum, o) => sum + o.cost, 0),
+  };
 }

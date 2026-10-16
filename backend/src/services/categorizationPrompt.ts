@@ -20,11 +20,15 @@ Instructions:
   - "low": Genuinely uncertain — multiple categories could apply or the transaction is ambiguous
 - Provide brief reasoning (1 sentence) for each classification.
 - If no category fits well, still pick the closest match but set confidence to "low".
-- Use subcategory IDs (children) when available, not parent category IDs.`;
+- Use subcategory IDs (children) when available, not parent category IDs.
+- Respond by calling classify_transactions once, with exactly one entry for every transaction you were given.`;
 
 export const CATEGORIZATION_TOOL: Anthropic.Tool = {
   name: 'classify_transactions',
   description: 'Classify a batch of uncategorized transactions into budget categories.',
+  // Opus 5.5 rejects forced tool_choice, so the call stays `auto` (steered by
+  // the prompt) and `strict` guarantees the arguments match this schema.
+  strict: true,
   input_schema: {
     type: 'object' as const,
     properties: {
@@ -39,10 +43,12 @@ export const CATEGORIZATION_TOOL: Anthropic.Tool = {
             reasoning: { type: 'string', description: 'Brief 1-sentence explanation' },
           },
           required: ['transactionId', 'suggestedCategoryId', 'confidence', 'reasoning'],
+          additionalProperties: false,
         },
       },
     },
     required: ['classifications'],
+    additionalProperties: false,
   },
 };
 
