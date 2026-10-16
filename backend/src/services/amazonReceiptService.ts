@@ -68,7 +68,7 @@ export class AmazonReceiptService {
     anthropicApiKey: string,
   ) {
     const client = new Anthropic({ apiKey: anthropicApiKey });
-    this.pdfParser = new AmazonPdfParser(client);
+    this.pdfParser = new AmazonPdfParser(client, costTracker);
     this.categorizer = new AmazonCategorizerAdapter(
       client,
       chatbotDataService,
@@ -121,15 +121,13 @@ export class AmazonReceiptService {
       );
     }
 
-    let totalInputTokens = 0;
-    let totalOutputTokens = 0;
+    // The parser records each file's spend itself, including files that fail.
+    let totalCost = 0;
     const parsedResults: PdfExtractionOutput[] = [];
 
     for (const file of files) {
-      const { parsed, inputTokens, outputTokens } =
-        await this.pdfParser.parseFile(file.buffer, file.mimeType);
-      totalInputTokens += inputTokens;
-      totalOutputTokens += outputTokens;
+      const { parsed, cost } = await this.pdfParser.parseFile(familyId, file.buffer, file.mimeType);
+      totalCost += cost;
       parsedResults.push(parsed);
     }
 
@@ -173,7 +171,6 @@ export class AmazonReceiptService {
       c => !completedOrderNumbers.has(c.orderNumber),
     );
     if (newOrders.length === 0 && newCharges.length === 0 && totalParsedCount > 0) {
-      await this.costTracker.recordUsage(familyId, 'sonnet', totalInputTokens, totalOutputTokens);
       throw new ValidationError(
         `All ${totalParsedCount} orders from this PDF were already categorized in a previous session. ` +
           'Upload a different PDF with new orders, or clear previous sessions to reprocess.',
@@ -204,19 +201,12 @@ export class AmazonReceiptService {
 
     await this.saveSessions(familyId, prunedSessions);
 
-    const costResult = await this.costTracker.recordUsage(
-      familyId,
-      'sonnet',
-      totalInputTokens,
-      totalOutputTokens,
-    );
-
     return {
       sessionId: session.id,
       pdfTypes: session.pdfTypes,
       parsedOrders: newOrders,
       parsedCharges: newCharges,
-      costUsed: costResult.estimatedCost,
+      costUsed: Math.round(totalCost * 1_000_000) / 1_000_000,
     };
   }
 
@@ -444,7 +434,7 @@ export class AmazonReceiptService {
     );
 
     if (matchesToCategorize.length === 0) {
-      return { recommendations: [], splitRecommendations: [], costUsed: 0 };
+      return { recommendations: [], splitRecommendations: [], failures: [], costUsed: 0 };
     }
 
     const result = await this.categorizer.categorize(familyId, matchesToCategorize);

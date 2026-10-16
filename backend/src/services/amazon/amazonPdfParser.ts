@@ -9,6 +9,7 @@
 
 import Anthropic from '@anthropic-ai/sdk';
 import type { SupportedUploadMimeType } from '../../middleware/pdfUpload';
+import { ChatbotCostTracker } from '../chatbotCostTracker';
 import { ValidationError } from '../../errors';
 import { childLogger } from '../../utils/logger';
 
@@ -24,6 +25,7 @@ import {
   type PdfExtractionOutput,
 } from '../../validators/amazonReceiptValidators';
 import type {
+  ChatModel,
   ParsedAmazonOrder,
   ParsedAmazonCharge,
 } from '../../shared/types';
@@ -36,16 +38,27 @@ export interface ReceiptUploadFile {
 
 export interface ParseFileResult {
   parsed: PdfExtractionOutput;
-  inputTokens: number;
-  outputTokens: number;
+  /** Estimated cost of this file's call, already recorded against the cap. */
+  cost: number;
 }
 
-// REQ-P056 — reviewed 2026-09-13.
-const MODEL = 'claude-sonnet-5';
-const MAX_TOKENS = 8192;
+// REQ-P056 — reviewed 2026-10-15. Moved with the categorizers to Opus 5.5.
+// Extraction is transcription, not judgment, so effort is low; the output
+// ceiling is sized for the schema's 500-order maximum (~100 tokens each) plus
+// thinking. On Sonnet 5 at 8192 a long orders PDF was cut off mid-list and
+// the orders past the cut were silently lost.
+const MODEL = 'claude-opus-5-5';
+const EFFORT = 'low';
+const MAX_TOKENS = 64000;
+// Opus 5.5 is $4/$20; the 'opus' tier is priced at Opus 5's $5/$25 — an
+// overstatement, the safe direction for a cap.
+const COST_TIER: ChatModel = 'opus';
 
 export class AmazonPdfParser {
-  constructor(private readonly client: Anthropic) {}
+  constructor(
+    private readonly client: Anthropic,
+    private readonly costTracker: ChatbotCostTracker,
+  ) {}
 
   /**
    * Send a PDF (or image) buffer to Claude vision and return the validated
@@ -53,6 +66,7 @@ export class AmazonPdfParser {
    * interpolated into the prompt.
    */
   async parseFile(
+    familyId: string,
     fileBuffer: Buffer,
     mimeType: SupportedUploadMimeType,
   ): Promise<ParseFileResult> {
@@ -82,9 +96,11 @@ export class AmazonPdfParser {
         'The image may have perspective distortion, shadows, or partial content — extract what you can.'
       : 'Extract all order/charge data from this Amazon PDF using the extract_amazon_data tool.';
 
-    const response = await this.client.messages.create({
+    const response = await this.client.messages.stream({
       model: MODEL,
       max_tokens: MAX_TOKENS,
+      thinking: { type: 'adaptive' },
+      output_config: { effort: EFFORT },
       system: PDF_PARSING_SYSTEM_PROMPT,
       tools: [PDF_EXTRACTION_TOOL],
       messages: [
@@ -96,7 +112,37 @@ export class AmazonPdfParser {
           ],
         },
       ],
-    });
+    }).finalMessage();
+
+    // Recorded here, before any of the throws below: a failed parse still
+    // cost money, and recording it later in the caller skipped it whenever
+    // this method threw.
+    const cost = ChatbotCostTracker.estimateCost(
+      COST_TIER, response.usage.input_tokens, response.usage.output_tokens,
+    );
+    await this.costTracker.recordUsage(
+      familyId, COST_TIER, response.usage.input_tokens, response.usage.output_tokens,
+    );
+    log.info({
+      mimeType,
+      stopReason: response.stop_reason,
+      inputTokens: response.usage.input_tokens,
+      outputTokens: response.usage.output_tokens,
+      cost: Number(cost.toFixed(4)),
+    }, 'parse response');
+
+    // A cut-off extraction is missing whatever came after the cut, and there
+    // is no way to tell which orders those were. Refuse it rather than create
+    // a session that quietly lacks them.
+    if (response.stop_reason === 'max_tokens') {
+      throw new ValidationError(
+        'This file has more orders than can be read in one pass, so some would have been missed. ' +
+          'Upload a shorter date range (fewer pages) and try again.',
+      );
+    }
+    if (response.stop_reason === 'refusal') {
+      throw new ValidationError('The AI declined to read this file. No changes were made.');
+    }
 
     const toolUse = response.content.find(
       (b): b is Anthropic.ToolUseBlock =>
@@ -112,11 +158,7 @@ export class AmazonPdfParser {
 
     const parseResult = pdfExtractionOutputSchema.safeParse(toolUse.input);
     if (parseResult.success) {
-      return {
-        parsed: parseResult.data,
-        inputTokens: response.usage.input_tokens,
-        outputTokens: response.usage.output_tokens,
-      };
+      return { parsed: parseResult.data, cost };
     }
 
     log.warn(
@@ -129,11 +171,7 @@ export class AmazonPdfParser {
         'Failed to extract valid data from the PDF. The format may not be supported.',
       );
     }
-    return {
-      parsed: salvaged,
-      inputTokens: response.usage.input_tokens,
-      outputTokens: response.usage.output_tokens,
-    };
+    return { parsed: salvaged, cost };
   }
 }
 

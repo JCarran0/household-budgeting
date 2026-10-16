@@ -1,10 +1,12 @@
 import { useState } from 'react';
 import { Stack, Text, Paper, Group, Badge, Button, Select, Divider } from '@mantine/core';
 import { useCategoryOptions } from '../../../hooks/useCategoryOptions';
-import type { AmazonCategoryRecommendation, AmazonApplyAction } from '../../../../../shared/types';
+import type { AmazonCategoryRecommendation, AmazonApplyAction, AmazonCategorizationFailure } from '../../../../../shared/types';
 
 interface CategoryReviewStepProps {
   recommendations: AmazonCategoryRecommendation[];
+  /** Orders the AI produced nothing usable for. Shown so none vanish silently. */
+  failures: AmazonCategorizationFailure[];
   onComplete: (actions: AmazonApplyAction[]) => void;
   isProcessing: boolean;
 }
@@ -23,6 +25,7 @@ const confidenceColor = (c: number) => {
 
 export function CategoryReviewStep({
   recommendations,
+  failures,
   onComplete,
   isProcessing,
 }: CategoryReviewStepProps) {
@@ -135,6 +138,21 @@ export function CategoryReviewStep({
           );
         })}
       </Stack>
+
+      {failures.length > 0 && (
+        <Paper p="sm" withBorder>
+          <Text size="sm" fw={500} mb={4}>
+            {failures.length} order{failures.length !== 1 ? 's' : ''} couldn’t be categorized and will be left as they are
+          </Text>
+          <Stack gap={2}>
+            {failures.map(f => (
+              <Text key={f.matchId} size="xs" c="dimmed">
+                <Text span size="xs" fw={500} c="orange">{f.itemName || 'Order'}</Text> — {f.reason}
+              </Text>
+            ))}
+          </Stack>
+        </Paper>
+      )}
 
       <Divider />
 

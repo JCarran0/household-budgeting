@@ -9,8 +9,10 @@
  */
 
 import Anthropic from '@anthropic-ai/sdk';
+import { z } from 'zod';
 import type { ChatbotDataService } from '../chatbotDataService';
-import type { ChatbotCostTracker } from '../chatbotCostTracker';
+import { ChatbotCostTracker } from '../chatbotCostTracker';
+import { ExternalServiceError } from '../../errors';
 import {
   AMAZON_CATEGORIZATION_SYSTEM_PROMPT,
   AMAZON_CATEGORIZATION_TOOL,
@@ -23,41 +25,71 @@ const log = childLogger('amazonCategorizerAdapter');
 import type {
   AmazonTransactionMatch,
   AmazonCategoryRecommendation,
+  AmazonCategorizationFailure,
   AmazonSplitRecommendation,
   Category,
+  ChatModel,
   Transaction,
 } from '../../shared/types';
 
-// REQ-P056 — reviewed 2026-09-13.
-const MODEL = 'claude-sonnet-5';
-const MAX_TOKENS = 8192;
+// REQ-P056 — reviewed 2026-10-15. Same settings and rationale as
+// categorizationService.ts: Opus 5.5 always thinks, thinking counts against
+// max_tokens, and streaming keeps a ceiling this large clear of the SDK's
+// non-streaming timeout guard. On Sonnet 5 at 8192 a large session could be
+// cut off mid-output and come back with recommendations silently missing.
+const MODEL = 'claude-opus-5-5';
+const EFFORT = 'medium';
+const MAX_TOKENS = 32000;
+// Opus 5.5 is $4/$20; the 'opus' tier is priced at Opus 5's $5/$25, so this
+// overstates spend by 25% — the safe direction for a cap.
+const COST_TIER: ChatModel = 'opus';
+// Matches per call. Batches run concurrently, so wall-clock is one batch's
+// latency, and a multi-item order produces far more output than a bank
+// transaction does — hence smaller than the categorizer's 25.
+const BATCH_SIZE = 15;
 const MAX_EXAMPLES_PER_CATEGORY = 5;
 const MAX_EXAMPLE_CATEGORIES = 20;
 
 export interface CategorizerResult {
   recommendations: AmazonCategoryRecommendation[];
   splitRecommendations: AmazonSplitRecommendation[];
+  failures: AmazonCategorizationFailure[];
   costUsed: number;
 }
 
-interface ClaudeCategorizeOutput {
-  categorizations: Array<{
-    matchId: string;
-    suggestedCategoryId: string;
-    confidence: number;
-    reasoning: string;
-    itemName: string;
-  }>;
-  splitRecommendations: Array<{
-    matchId: string;
-    splits: Array<{
-      itemName: string;
-      estimatedAmount: number;
-      suggestedCategoryId: string;
-      confidence: number;
-      isEstimatedPrice: boolean;
-    }>;
-  }>;
+// Tool input is model output: validate it rather than casting (Critical Rule 3).
+const categorizeOutputSchema = z.object({
+  categorizations: z.array(z.object({
+    matchId: z.string(),
+    suggestedCategoryId: z.string(),
+    confidence: z.number().min(0).max(1),
+    reasoning: z.string(),
+    itemName: z.string(),
+  })),
+  splitRecommendations: z.array(z.object({
+    matchId: z.string(),
+    splits: z.array(z.object({
+      itemName: z.string(),
+      estimatedAmount: z.number().min(0),
+      suggestedCategoryId: z.string(),
+      confidence: z.number().min(0).max(1),
+      isEstimatedPrice: z.boolean(),
+    })).min(1),
+  })),
+});
+
+type ClaudeCategorizeOutput = z.infer<typeof categorizeOutputSchema>;
+
+/**
+ * What one call produced. Once reconciled, every match sent ends up with a
+ * recommendation (single or split) or a failure reason — never silently
+ * missing (the 2026-10-15 categorization incident, same shape).
+ */
+export interface BatchOutcome {
+  output: ClaudeCategorizeOutput;
+  /** matchId → why the AI produced nothing usable for it. */
+  failures: Map<string, string>;
+  cost: number;
 }
 
 export class AmazonCategorizerAdapter {
@@ -84,6 +116,55 @@ export class AmazonCategorizerAdapter {
     const txMap = new Map(allTransactions.map(t => [t.id, t]));
     const catMap = new Map(categories.map(c => [c.id, c]));
 
+    const batches: AmazonTransactionMatch[][] = [];
+    for (let i = 0; i < matches.length; i += BATCH_SIZE) {
+      batches.push(matches.slice(i, i + BATCH_SIZE));
+    }
+    const merged = mergeOutcomes(await Promise.all(
+      batches.map(batch => this.categorizeBatch(familyId, batch, txMap, categoryContext, examples)),
+    ));
+
+    const { output, failures } = reconcile(merged, matches, categories);
+    log.info({
+      matches: matches.length,
+      categorized: output.categorizations.length,
+      splits: output.splitRecommendations.length,
+      failed: failures.size,
+      cost: Number(merged.cost.toFixed(4)),
+    }, 'amazon categorization reconciled');
+
+    // Nothing usable: fail loudly instead of a review step with nothing in
+    // it. Spend has already been recorded.
+    if (output.categorizations.length === 0 && output.splitRecommendations.length === 0) {
+      const reason = failures.values().next().value ?? 'no recommendations were returned';
+      throw new ExternalServiceError(
+        `AI categorization returned no usable recommendations for ${matches.length} orders: ${reason} No changes were made.`,
+      );
+    }
+
+    const recommendations = buildRecommendations(output, matches, txMap, catMap);
+    const splitRecommendations = buildSplitRecommendations(output, matches, txMap, catMap);
+    const itemNames = new Map(matches.map(m => [m.id, m.items.map(i => i.name).join(', ')]));
+
+    return {
+      recommendations: recommendations.sort((a, b) => b.confidence - a.confidence),
+      splitRecommendations,
+      failures: [...failures].map(([matchId, reason]) => ({
+        matchId,
+        itemName: itemNames.get(matchId) ?? '',
+        reason,
+      })),
+      costUsed: Math.round(merged.cost * 1_000_000) / 1_000_000,
+    };
+  }
+
+  private async categorizeBatch(
+    familyId: string,
+    matches: AmazonTransactionMatch[],
+    txMap: Map<string, Transaction>,
+    categoryContext: string,
+    examples: string,
+  ): Promise<BatchOutcome> {
     const matchData = matches.map(m => {
       const tx = txMap.get(m.transactionId);
       return {
@@ -107,38 +188,71 @@ ${categoryContext}
 EXAMPLES OF PREVIOUSLY CATEGORIZED TRANSACTIONS:
 ${examples}`;
 
-    const response = await this.client.messages.create({
+    const response = await this.client.messages.stream({
       model: MODEL,
       max_tokens: MAX_TOKENS,
+      thinking: { type: 'adaptive' },
+      output_config: { effort: EFFORT },
       system: AMAZON_CATEGORIZATION_SYSTEM_PROMPT,
       tools: [AMAZON_CATEGORIZATION_TOOL],
       messages: [{ role: 'user', content: userMessage }],
+    }).finalMessage();
+
+    const cost = ChatbotCostTracker.estimateCost(
+      COST_TIER, response.usage.input_tokens, response.usage.output_tokens,
+    );
+    await this.costTracker.recordUsage(
+      familyId, COST_TIER, response.usage.input_tokens, response.usage.output_tokens,
+    );
+    log.info({
+      batchSize: matches.length,
+      stopReason: response.stop_reason,
+      inputTokens: response.usage.input_tokens,
+      outputTokens: response.usage.output_tokens,
+      cost: Number(cost.toFixed(4)),
+    }, 'amazon batch response');
+
+    const failAll = (reason: string): BatchOutcome => ({
+      output: { categorizations: [], splitRecommendations: [] },
+      failures: new Map(matches.map(m => [m.id, reason])),
+      cost,
     });
 
-    const costResult = await this.costTracker.recordUsage(
-      familyId, 'sonnet', response.usage.input_tokens, response.usage.output_tokens,
-    );
+    // Truncated: the tool input is incomplete and none of it can be trusted.
+    // Halve and retry until a batch fits or a single order still doesn't.
+    if (response.stop_reason === 'max_tokens') {
+      if (matches.length === 1) return failAll('The AI response was cut off before it finished.');
+      log.warn({ batchSize: matches.length }, 'amazon batch output truncated; splitting and retrying');
+      const mid = Math.ceil(matches.length / 2);
+      const halves = await Promise.all([
+        this.categorizeBatch(familyId, matches.slice(0, mid), txMap, categoryContext, examples),
+        this.categorizeBatch(familyId, matches.slice(mid), txMap, categoryContext, examples),
+      ]);
+      const merged = mergeOutcomes(halves);
+      return { ...merged, cost: merged.cost + cost };
+    }
+
+    if (response.stop_reason === 'refusal') {
+      log.warn({ batchSize: matches.length }, 'amazon batch declined by the model');
+      return failAll('The AI declined to categorize this order.');
+    }
 
     const toolUse = response.content.find(
       (b): b is Anthropic.ToolUseBlock =>
         b.type === 'tool_use' && b.name === 'categorize_amazon_items',
     );
-
     if (!toolUse) {
-      log.warn('[AmazonCategorizerAdapter] No tool_use in categorization response');
-      return { recommendations: [], splitRecommendations: [], costUsed: costResult.estimatedCost };
+      log.warn({ stopReason: response.stop_reason }, 'no categorize_amazon_items call in response');
+      return failAll('The AI did not return a categorization.');
     }
 
-    const output = toolUse.input as ClaudeCategorizeOutput;
+    const parsed = categorizeOutputSchema.safeParse(toolUse.input);
+    if (!parsed.success) {
+      log.warn({ issues: parsed.error.issues.slice(0, 5) }, 'amazon categorization output failed validation');
+      return failAll('The AI returned its categorization in an unexpected format.');
+    }
 
-    const recommendations = buildRecommendations(output, matches, txMap, catMap);
-    const splitRecommendations = buildSplitRecommendations(output, matches, txMap, catMap);
-
-    return {
-      recommendations: recommendations.sort((a, b) => b.confidence - a.confidence),
-      splitRecommendations,
-      costUsed: costResult.estimatedCost,
-    };
+    return { output: parsed.data, failures: new Map(), cost };
   }
 
   private async buildExamples(
@@ -207,6 +321,71 @@ export function buildExamplesFromTransactions(
   }
 
   return lines.join('\n');
+}
+
+function mergeOutcomes(outcomes: BatchOutcome[]): BatchOutcome {
+  return {
+    output: {
+      categorizations: outcomes.flatMap(o => o.output.categorizations),
+      splitRecommendations: outcomes.flatMap(o => o.output.splitRecommendations),
+    },
+    failures: new Map(outcomes.flatMap(o => [...o.failures])),
+    cost: outcomes.reduce((sum, o) => sum + o.cost, 0),
+  };
+}
+
+/**
+ * Give every match sent exactly one outcome. Drops results for match ids that
+ * were not sent and duplicates, and turns any recommendation naming a category
+ * the user cannot see into a failure: applied, it would write an orphan
+ * categoryId (docs/features/ORPHAN-CATEGORYIDS-PLAN.yaml). A split is all or
+ * nothing — one bad line fails the whole split, since applying the rest would
+ * leave the amounts unbalanced.
+ *
+ * Exported for tests.
+ */
+export function reconcile(
+  outcome: BatchOutcome,
+  matches: AmazonTransactionMatch[],
+  categories: Category[],
+): { output: ClaudeCategorizeOutput; failures: Map<string, string> } {
+  const offered = new Set(categories.filter(c => !c.isHidden).map(c => c.id));
+  const sent = new Set(matches.map(m => m.id));
+  const done = new Set<string>();
+  const failures = new Map<string, string>();
+  const unknownCategory = 'The AI suggested a category that does not exist.';
+
+  // Splits first: when the model returns both shapes for one order, the
+  // split is the more specific answer.
+  const splitRecommendations: ClaudeCategorizeOutput['splitRecommendations'] = [];
+  for (const sr of outcome.output.splitRecommendations) {
+    if (!sent.has(sr.matchId) || done.has(sr.matchId)) continue;
+    done.add(sr.matchId);
+    if (sr.splits.every(sp => offered.has(sp.suggestedCategoryId))) {
+      splitRecommendations.push(sr);
+    } else {
+      failures.set(sr.matchId, unknownCategory);
+    }
+  }
+
+  const categorizations: ClaudeCategorizeOutput['categorizations'] = [];
+  for (const c of outcome.output.categorizations) {
+    if (!sent.has(c.matchId) || done.has(c.matchId)) continue;
+    done.add(c.matchId);
+    if (offered.has(c.suggestedCategoryId)) {
+      categorizations.push(c);
+    } else {
+      failures.set(c.matchId, unknownCategory);
+    }
+  }
+
+  for (const m of matches) {
+    if (!done.has(m.id)) {
+      failures.set(m.id, outcome.failures.get(m.id) ?? 'The AI skipped this order.');
+    }
+  }
+
+  return { output: { categorizations, splitRecommendations }, failures };
 }
 
 function buildRecommendations(

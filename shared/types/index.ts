@@ -1455,7 +1455,16 @@ export interface AmbiguousAmazonMatch {
 export interface AmazonCategorizationResponse {
   recommendations: AmazonCategoryRecommendation[];
   splitRecommendations: AmazonSplitRecommendation[];
+  /** Orders the AI produced nothing usable for, and why. Never silently dropped. */
+  failures: AmazonCategorizationFailure[];
   costUsed: number;
+}
+
+export interface AmazonCategorizationFailure {
+  matchId: string;
+  /** The order's item names, for display. */
+  itemName: string;
+  reason: string;
 }
 
 export interface AmazonCategoryRecommendation {

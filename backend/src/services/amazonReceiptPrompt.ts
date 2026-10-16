@@ -167,7 +167,8 @@ Assign numeric confidence 0.0–1.0:
 - <0.5: Genuinely uncertain — multiple categories could apply
 
 Use subcategory IDs (children) when available, not parent category IDs.
-Provide brief reasoning (1 sentence) for each classification.`;
+Provide brief reasoning (1 sentence) for each classification.
+Respond by calling categorize_amazon_items once. Every matched order must appear exactly once: in categorizations, or in splitRecommendations, never both.`;
 
 export const AMAZON_CATEGORIZATION_TOOL: Anthropic.Tool = {
   name: 'categorize_amazon_items',

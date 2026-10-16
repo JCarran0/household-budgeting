@@ -15,6 +15,7 @@ import type {
   ParsedAmazonOrder,
   AmazonCategoryRecommendation,
   AmazonSplitRecommendation,
+  AmazonCategorizationFailure,
   AmazonApplyAction,
   AmazonApplyResponse,
 } from '../../../../shared/types';
@@ -51,6 +52,7 @@ export function AmazonReceiptFlowModal({ opened, onClose }: AmazonReceiptFlowMod
   // Category data
   const [recommendations, setRecommendations] = useState<AmazonCategoryRecommendation[]>([]);
   const [splitRecommendations, setSplitRecommendations] = useState<AmazonSplitRecommendation[]>([]);
+  const [categorizationFailures, setCategorizationFailures] = useState<AmazonCategorizationFailure[]>([]);
 
   // Results
   const [applyResult, setApplyResult] = useState<AmazonApplyResponse | null>(null);
@@ -71,6 +73,7 @@ export function AmazonReceiptFlowModal({ opened, onClose }: AmazonReceiptFlowMod
       setUnmatched([]);
       setRecommendations([]);
       setSplitRecommendations([]);
+      setCategorizationFailures([]);
       setApplyResult(null);
       setRulesCreated(0);
       setTotalCostUsed(0);
@@ -121,6 +124,7 @@ export function AmazonReceiptFlowModal({ opened, onClose }: AmazonReceiptFlowMod
       const result = await api.categorizeAmazonMatches(sessionId, confirmedMatchIds);
       setRecommendations(result.recommendations);
       setSplitRecommendations(result.splitRecommendations);
+      setCategorizationFailures(result.failures ?? []);
       setTotalCostUsed(prev => prev + (result.costUsed || 0));
 
       if (result.recommendations.length === 0 && result.splitRecommendations.length === 0) {
@@ -248,6 +252,7 @@ export function AmazonReceiptFlowModal({ opened, onClose }: AmazonReceiptFlowMod
       {step === 'review-categories' && (
         <CategoryReviewStep
           recommendations={recommendations}
+          failures={categorizationFailures}
           onComplete={handleCategoryComplete}
           isProcessing={false}
         />
