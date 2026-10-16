@@ -103,6 +103,26 @@ Found 2026-10-07 while locking the wishlist (`59b6b1c`). `Repository.withLock` a
 
 **Fix pattern:** move the first read inside the lock, as in `wishlistService.ts`. **Test pattern:** run calls against `UnifiedDataService` (not `InMemoryDataService`, which has no memo) with each call in its own `withRequestScope`. See the "concurrent writers (TD-011)" block in `services/__tests__/wishlistService.test.ts`. Note those suites are outside the default gate (§3.4); run them directly.
 
+### 3.6 Check in on the AI categorization baseline
+
+Queued 2026-10-15. AI Categorization v2.0 slice A (`60c27ac`) records every run with the AI's suggestion and the user's outcome. Those runs are the **baseline** that slice B (Plaid category evidence) is measured against, so it must not ship before a baseline exists ([AI-CATEGORIZATION-ENHANCEMENTS-PLAN.yaml](./features/AI-CATEGORIZATION-ENHANCEMENTS-PLAN.yaml) D7).
+
+**Check around 2026-10-29, or once 3–5 runs exist:**
+
+```bash
+npx tsx backend/scripts/inspect-categorization-runs.ts --list --prod
+npx tsx backend/scripts/inspect-categorization-runs.ts --family <id> --prod
+```
+
+**Look at:**
+- **Outcomes recorded?** Rows showing "no outcome" mean outcome reporting is failing silently (it is fire-and-forget by design, REQ-133).
+- **Acceptance rate of high-confidence suggestions** against the 85% target (BRD §12.7).
+- **Failures by reason.** Any "cut off" means the 32k token ceiling or batch size of 25 needs another look.
+- **Cost per 50** against the $0.30–0.40 estimate and the $0.50 target.
+- **The notes.** A reason that recurs is a candidate standing rule for v2.1.
+
+**Then decide:** start slice B (Plaid evidence), or adjust first if the numbers show a problem.
+
 ---
 
 ## 4. Finished — do not redo
