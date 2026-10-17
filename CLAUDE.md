@@ -38,6 +38,7 @@ Family-scale app for 2 users: personal budgeting (with Plaid), shared tasks, tri
 | Stale Data Mitigation | [STALE-DATA-MITIGATION-BRD.md](docs/features/STALE-DATA-MITIGATION-BRD.md) | [STALE-DATA-MITIGATION-PLAN.yaml](docs/features/STALE-DATA-MITIGATION-PLAN.yaml) |
 | Wishlist | [WISHLIST-BRD.md](docs/features/WISHLIST-BRD.md) | [WISHLIST-PLAN.yaml](docs/features/WISHLIST-PLAN.yaml) |
 | Business Workspace | [BUSINESS-WORKSPACE-BRD.md](docs/features/BUSINESS-WORKSPACE-BRD.md) | [BUSINESS-WORKSPACE-PLAN.yaml](docs/features/BUSINESS-WORKSPACE-PLAN.yaml) |
+| Family Library | [FAMILY-LIBRARY-BRD.md](docs/features/FAMILY-LIBRARY-BRD.md) | [FAMILY-LIBRARY-PLAN.yaml](docs/features/FAMILY-LIBRARY-PLAN.yaml) |
 
 ## 🤖 Critical Rules — Never Violate
 

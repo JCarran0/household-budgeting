@@ -1,0 +1,181 @@
+# =============================================================================
+# Family Library — Implementation Plan
+# =============================================================================
+# BRD: docs/features/FAMILY-LIBRARY-BRD.md
+# Status: Phase 1 in progress — import tooling complete; reader and tools not started
+# Last Updated: 2026-10-17
+# =============================================================================
+
+overview:
+  description: |
+    How the library described in the BRD gets built. Phase 1 is a
+    read-only, text-only document library: ingested by the maintainer through
+    Claude Code, stored under the data prefix, and answered from by the
+    assistant with mandatory citations. No Google credential enters the app.
+
+    Phases 2+ (Facts, Money links, Estate documents) are directional in the
+    BRD roadmap and get their own refinement pass before build.
+
+  key_files:
+    brd: docs/features/FAMILY-LIBRARY-BRD.md
+    read_only_data_service: backend/src/services/readOnlyDataService.ts
+    chatbot_data_service: backend/src/services/chatbotDataService.ts
+    read_capabilities: backend/src/services/capabilities/readCapabilities.ts
+    redaction: backend/src/utils/redaction.ts
+    storage_precedent: backend/src/services/imageStore.ts
+    validators: backend/src/validators/libraryValidators.ts
+    document_redaction: backend/src/utils/documentRedaction.ts
+    library_script: backend/src/scripts/library-document.ts
+    import_skill: .claude/skills/import-document/SKILL.md
+
+decisions:
+  - id: D1
+    date: 2026-10-17
+    decision: Core job is find-the-facts-fast (arbitrary Q&A over documents).
+    rationale: |
+      BRD D-F01. Reframed from "never miss a date" by the maintainer during
+      discovery. Structured facts and reminders move to Phase 2 and are seeded
+      from the library.
+
+  - id: D2
+    date: 2026-10-17
+    decision: |
+      Phase 1 ingest is text-only via a Claude Code command; the app never
+      holds a Google credential.
+    rationale: |
+      BRD D-F02. Considered and rejected for Phase 1: a service account on a
+      shared Drive folder (1–2 days, long-lived key in SSM) and per-user OAuth
+      (drive.readonly is a restricted scope: 7-day refresh tokens in Testing,
+      security review in Production). Text-only validates usage first.
+
+  - id: D3
+    date: 2026-10-17
+    decision: Freshness is re-run on demand, diffed on Drive modifiedTime.
+    rationale: BRD D-F03.
+
+  - id: D4
+    date: 2026-10-17
+    decision: |
+      Shape-based redaction at ingest with typed markers
+      ([REDACTED:<type> …last4]) and per-document counts in frontmatter. No
+      reversible mapping.
+    rationale: |
+      BRD D-F04. The marker refinement came from the maintainer: the agent
+      should be able to tell what the source contains even when the value is
+      withheld. The reversible variant was rejected because it recreates the
+      sensitive store redaction exists to avoid.
+
+  - id: D5
+    date: 2026-10-17
+    decision: |
+      Scope: vehicles, home, major purchases, health plan summaries. Excluded:
+      tax, medical, IDs/passports, estate.
+    rationale: BRD D-F05. Estate docs are a dedicated later phase, not dropped.
+
+  - id: D6
+    date: 2026-10-17
+    decision: |
+      Citations mandatory; figures quoted verbatim; "the documents don't say"
+      is valid; golden set of ~10 questions.
+    rationale: BRD D-F06.
+
+  - id: D7
+    date: 2026-10-17
+    decision: |
+      No inventory phase. Import per document through /import-document,
+      starting with solar and Rivian R2 documents; golden questions are
+      collected per import with human-supplied answers.
+    rationale: BRD D-F07.
+
+  - id: D8
+    date: 2026-10-17
+    decision: |
+      Library entries are JSON keys (library_{familyId}_{docId}) in the
+      existing StorageAdapter, not markdown files under a new path; no
+      catalog file; evals at library_evals_{familyId}_{docId}.
+    rationale: |
+      BRD D-F08. Found while grounding the design in the storage layer:
+      StorageAdapter.list is prefix-based and JSON-only, and sync:production,
+      backup:local, versioning and snapshots all operate on it. Markdown
+      objects would have needed BinaryObjectStore plus a list method; a
+      catalog would have needed a remote merge on every push.
+
+phase_1_library:
+  status: in_progress
+  tasks:
+    - id: P1-1
+      title: Library document format
+      status: completed
+      description: |
+        backend/src/validators/libraryValidators.ts. JSON keys in the existing
+        storage layer (D8); domain enum enforces scope; page markers must be
+        1..pageCount; recorded redaction counts must match body markers; the
+        meta schema refuses fields the script derives. Tests:
+        libraryValidators.test.ts.
+
+    - id: P1-2
+      title: Typed redaction
+      status: completed
+      description: |
+        backend/src/utils/documentRedaction.ts composes redaction.ts and adds
+        SSN (delimited, or labeled undelimited), Luhn-valid card, labeled
+        routing, and bank account on bank-context lines only. SSN keeps no
+        digits. Tests: documentRedaction.test.ts, including what is KEPT
+        (VIN, policy no., customer account no., phone, figures).
+
+    - id: P1-3
+      title: library script + /import-document skill
+      status: completed
+      description: |
+        `npm run library -- families|prepare|evals|list|push`
+        (src/scripts/library-document.ts) and
+        .claude/skills/import-document/SKILL.md. prepare/evals write local data
+        only; push is the maintainer's gated production write and re-validates.
+        Refuses the business workspace, duplicate sources, and docId reuse
+        across sources; skips unchanged sources. Smoke-tested against a scratch
+        DATA_DIR.
+
+    - id: P1-4
+      title: Import first corpus
+      status: not_started
+      description: |
+        Solar documents and Rivian R2 extended service/warranty documents via
+        /import-document, with golden questions answered by the maintainer.
+
+    - id: P1-5
+      title: Library reader (read side)
+      status: not_started
+      description: |
+        Family-scoped reader over the library_{familyId}_ prefix, exposed
+        through ReadOnlyDataService. Validates every entry on read; fails
+        closed when familyId is absent (SEC-F004). Must never read
+        library_evals_ keys.
+
+    - id: P1-6
+      title: Assistant tools
+      status: not_started
+      description: |
+        list_documents (metadata minus body) and read_document as T0
+        capabilities. Tool descriptions carry REQ-F040–F043. Decide the
+        page-range parameter once the first corpus shows real document sizes.
+
+    - id: P1-7
+      title: Golden set runner
+      status: not_started
+      description: |
+        Script (in git) that loads library_evals_ keys (not in git), asks the
+        assistant each question, and reports pass/fail with the cited source.
+
+  acceptance:
+    - Golden set passes
+    - Business workspace cannot reach library tools
+    - No document content or golden answers in git history
+
+open_questions:
+  - read_document page-range parameter — decide from the first corpus
+  - Estate document handling model — Phase 4 refinement
+
+deferred_and_tracked_elsewhere:
+  - Phase 2 Facts (Assets, Agreements, obligations → tasks/push) — own refinement pass
+  - Phase 3 Money links — own refinement pass
+  - In-app upload / Drive sync — triggered by non-maintainer demand (BRD §2)

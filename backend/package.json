@@ -34,7 +34,8 @@
     "backup:local": "ts-node src/scripts/backup-local-data.ts",
     "backup:restore": "ts-node src/scripts/backup-local-data.ts --restore",
     "backup:list": "ts-node src/scripts/backup-local-data.ts --list",
-    "backup:cleanup": "ts-node src/scripts/backup-local-data.ts --cleanup"
+    "backup:cleanup": "ts-node src/scripts/backup-local-data.ts --cleanup",
+    "library": "ts-node src/scripts/library-document.ts"
   },
   "keywords": [],
   "author": "",
