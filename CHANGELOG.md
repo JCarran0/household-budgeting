@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.8.0](https://github.com/JCarran0/household-budgeting/compare/v7.7.0...v7.8.0) (2026-10-18)
+
+
+### Features
+
+* **library:** add /import-document tooling for the Family Library ([53caa7b](https://github.com/JCarran0/household-budgeting/commit/53caa7b0c98de14db4be16f35e4058e8ed4ea086))
+* **library:** let a document declare the documents it amends ([930496d](https://github.com/JCarran0/household-budgeting/commit/930496dd7ac9bb142b983c15ccb4a038bcadcf2a))
+
+
+### Bug Fixes
+
+* **library:** redact routing numbers whose label carries a parenthetical ([cc343ff](https://github.com/JCarran0/household-budgeting/commit/cc343ffcdbc10600a4f97d62a81734a1434027ef))
+
+
+### Documentation
+
+* **library:** allow a two-model cross-check for golden answers ([0d8d1ba](https://github.com/JCarran0/household-budgeting/commit/0d8d1ba8bb2e9debd46f44519c0fbe9df31f2667))
+
 ## [7.7.0](https://github.com/JCarran0/household-budgeting/compare/v7.6.1...v7.7.0) (2026-10-16)
 
 
