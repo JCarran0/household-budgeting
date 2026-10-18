@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+### [7.8.1](https://github.com/JCarran0/household-budgeting/compare/v7.8.0...v7.8.1) (2026-10-18)
+
+
+### Documentation
+
+* **library:** mark the first corpus import complete ([3f88454](https://github.com/JCarran0/household-budgeting/commit/3f884540afbf905641100b97d982895055f22e31))
+
 ## [7.8.0](https://github.com/JCarran0/household-budgeting/compare/v7.7.0...v7.8.0) (2026-10-18)
 
 
