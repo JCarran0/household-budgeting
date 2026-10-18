@@ -101,7 +101,7 @@ decisions:
       catalog would have needed a remote merge on every push.
 
 phase_1_library:
-  status: in_progress
+  status: completed
   tasks:
     - id: P1-1
       title: Library document format
@@ -180,10 +180,19 @@ phase_1_library:
 
     - id: P1-7
       title: Golden set runner
-      status: not_started
+      status: completed
       description: |
         Script (in git) that loads library_evals_ keys (not in git), asks the
         assistant each question, and reports pass/fail with the cited source.
+      outcome: |
+        backend/scripts/library-golden.ts (`npm run library:golden -- --family <id>`).
+        Local data only. Scores each answer three ways: an Opus judge against the
+        approved answer, a deterministic verbatim-figure check (REQ-F041;
+        helpers in src/utils/goldenScoring.ts, unit-tested), and the trace
+        ledger for which documents were opened and which page was cited.
+        First run 2026-10-18, Sonnet: 17/17 passed, $1.57 total, median
+        $0.08/question, max $0.27 (proving the absence of the Sunrun account
+        number read the whole lease plus the CAP package).
 
   acceptance:
     - Golden set passes

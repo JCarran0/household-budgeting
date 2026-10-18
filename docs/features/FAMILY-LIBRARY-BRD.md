@@ -144,6 +144,7 @@ The authoritative definition is `backend/src/validators/libraryValidators.ts`; t
 | SEC-F003 | Document content is never committed to the repository. Staging lives outside the repo. |
 | SEC-F004 | Library reads are family-scoped by path; a read that omits the family id must fail, not list the bucket. |
 | SEC-F005 | Out-of-scope categories (REQ-F021) are excluded at ingest, not filtered at read. |
+| SEC-F006 | **Accepted copy:** the agent trace ledger (`ai_traces_{familyId}`, 30-day retention, maintainer-only via `inspect-traces`) records tool results verbatim, so document pages the assistant read are copied there. Accepted 2026-10-18 because the text is already redacted and the trace is the only way to answer "why did the assistant say that?" about a document answer. A single result over 64 KB is dropped and marked rather than stored, so the largest `read_document` chunks never land. Watch item: the ledger is one JSON blob rewritten each turn; if document questions become frequent, check its size before reconsidering metadata-only logging for library reads. |
 
 ---
 

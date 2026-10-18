@@ -35,7 +35,8 @@
     "backup:restore": "ts-node src/scripts/backup-local-data.ts --restore",
     "backup:list": "ts-node src/scripts/backup-local-data.ts --list",
     "backup:cleanup": "ts-node src/scripts/backup-local-data.ts --cleanup",
-    "library": "ts-node src/scripts/library-document.ts"
+    "library": "ts-node src/scripts/library-document.ts",
+    "library:golden": "ts-node scripts/library-golden.ts"
   },
   "keywords": [],
   "author": "",
