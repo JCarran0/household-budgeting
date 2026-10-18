@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.16.0](https://github.com/JCarran0/household-budgeting/compare/v7.15.0...v7.16.0) (2026-10-18)
+
+
+### Features
+
+* **library:** redact loan numbers and birth dates; portal links for local files ([47d07ef](https://github.com/JCarran0/household-budgeting/commit/47d07efd5afd559902d1ab94d7b6066591f5cf0c))
+
+
+### Bug Fixes
+
+* **ledger:** recognize dashed month-first dates as printed ([1eb9d44](https://github.com/JCarran0/household-budgeting/commit/1eb9d442c6d33333fe993388d61cdef854ebbf15))
+
 ## [7.15.0](https://github.com/JCarran0/household-budgeting/compare/v7.14.1...v7.15.0) (2026-10-18)
 
 
