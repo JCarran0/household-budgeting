@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.11.0](https://github.com/JCarran0/household-budgeting/compare/v7.10.1...v7.11.0) (2026-10-18)
+
+
+### Features
+
+* **ledger:** add the Household Ledger schema, store and date engine ([c315a7a](https://github.com/JCarran0/household-budgeting/commit/c315a7a62fe6f7351deeed42c209f2da2a3e9929))
+
 ### [7.10.1](https://github.com/JCarran0/household-budgeting/compare/v7.10.0...v7.10.1) (2026-10-18)
 
 
