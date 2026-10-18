@@ -20,8 +20,10 @@ const server = app.listen(PORT, () => {
     },
     'backend started',
   );
-  // Single PM2 instance assumed: the reminder job's idempotency log is locked in-process.
-  if (config.server.nodeEnv !== 'test') ledgerReminderJob.start();
+  // Production only: a dev server on a copy of production data holds real push
+  // subscriptions and would send duplicate reminders to real phones. Single PM2
+  // instance assumed: the reminder job's idempotency log is locked in-process.
+  if (config.server.nodeEnv === 'production') ledgerReminderJob.start();
 });
 
 // Graceful shutdown

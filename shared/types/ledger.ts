@@ -142,3 +142,25 @@ export interface HeadsUpItem {
   daysUntilDue: number;
   phase: HeadsUpPhase;
 }
+
+/** What a person (form) or a confirmed card supplies. Id, source, status and timestamps are the server's. */
+export type LedgerFactInput = Pick<LedgerFact, 'subject' | 'title' | 'detail' | 'amount' | 'schedule' | 'leadDays'>;
+
+/** The library document a document fact cites, for linking (REQ-H050). */
+export interface LedgerDocumentRef {
+  title: string;
+  /** The original in Drive, when the document came from there. */
+  sourceUrl: string | null;
+}
+
+/** GET /api/v1/ledger */
+export interface LedgerView {
+  /** Household date (America/New_York) the Heads-up list was computed for. */
+  today: LedgerDate;
+  facts: LedgerFact[];
+  /** For the requesting person: their snoozes applied. */
+  headsUp: HeadsUpItem[];
+  prefs: LedgerUserPrefs;
+  /** Titles and links for every docId cited by a document fact. */
+  documents: Record<string, LedgerDocumentRef>;
+}

@@ -14,7 +14,7 @@
  */
 
 import { randomUUID } from 'crypto';
-import type { HeadsUpItem, LedgerFact, LedgerUserPrefs } from '../shared/types';
+import type { LedgerDocumentRef, LedgerFact, LedgerUserPrefs, LedgerView } from '../shared/types';
 import { etDateString } from '../shared/utils/easternTime';
 import {
   computeHeadsUp,
@@ -28,12 +28,8 @@ import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from '.
 import type { LedgerStore } from './ledgerStore';
 import type { LedgerFactInput } from '../validators/ledgerValidators';
 
-export interface LedgerView {
-  today: string;
-  facts: LedgerFact[];
-  headsUp: HeadsUpItem[];
-  prefs: LedgerUserPrefs;
-}
+/** Resolves a cited library document for display. Absent or invalid documents resolve to null. */
+export type LedgerDocumentLookup = (familyId: string, docId: string) => Promise<LedgerDocumentRef | null>;
 
 const MAX_TITLE = 160;
 
@@ -80,6 +76,7 @@ export function assertHandleable(facts: LedgerFact[], factId: string, occurrence
 export class LedgerService {
   constructor(
     private readonly store: LedgerStore,
+    private readonly lookupDocument: LedgerDocumentLookup = async () => null,
     private readonly clock: () => Date = () => new Date(),
   ) {}
 
@@ -94,7 +91,14 @@ export class LedgerService {
   async view(familyId: string, userId: string): Promise<LedgerView> {
     const [{ facts }, prefs] = await Promise.all([this.store.read(familyId), this.store.userPrefs(familyId, userId)]);
     const today = this.today();
-    return { today, facts, headsUp: computeHeadsUp(facts, today, prefs), prefs };
+    const docIds = [...new Set(facts.flatMap(f => (f.source.kind === 'document' ? [f.source.docId] : [])))];
+    const documents: Record<string, LedgerDocumentRef> = {};
+    await Promise.all(
+      docIds.map(async id => {
+        documents[id] = (await this.lookupDocument(familyId, id)) ?? { title: id, sourceUrl: null };
+      }),
+    );
+    return { today, facts, headsUp: computeHeadsUp(facts, today, prefs), prefs, documents };
   }
 
   async createFact(

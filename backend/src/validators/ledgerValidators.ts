@@ -22,7 +22,7 @@
  */
 
 import { z } from 'zod';
-import type { LedgerFact, LedgerFile, LedgerPrefsFile, LedgerSchedule } from '../shared/types';
+import type { LedgerFact, LedgerFactInput as SharedLedgerFactInput, LedgerFile, LedgerPrefsFile, LedgerSchedule } from '../shared/types';
 import { isCalendarDate, resolveDate } from '../shared/utils/ledgerDates';
 import { libraryDocIdSchema, pageText, type LibraryDocument } from './libraryValidators';
 
@@ -319,6 +319,8 @@ export const ledgerFactInputSchema = z
     }
   });
 export type LedgerFactInput = z.infer<typeof ledgerFactInputSchema>;
+const inputTypesAgree: Equals<LedgerFactInput, SharedLedgerFactInput> = true;
+void inputTypesAgree;
 
 export const ledgerMarkHandledSchema = z
   .object({

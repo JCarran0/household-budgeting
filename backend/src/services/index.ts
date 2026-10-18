@@ -33,6 +33,7 @@ import { ActionActivityStore } from './actionActivityStore';
 import { LedgerStore } from './ledgerStore';
 import { LedgerService } from './ledgerService';
 import { LedgerReminderJob } from './ledgerReminderJob';
+import { libraryDocKey, libraryDocumentSchema } from '../validators/libraryValidators';
 import { ProposalStore } from './chatActions/proposalStore';
 import { ActionUndoService } from './actionUndoService';
 import { CategorizationService } from './categorizationService';
@@ -109,7 +110,12 @@ export const wishlistService = getWishlistService(dataService, categoryService, 
 // Household Ledger (HOUSEHOLD-LEDGER-BRD). Writes are human-gated: this service
 // backs the Household page and the confirmed chat cards, never a model tool.
 export const ledgerStore = new LedgerStore(dataService);
-export const ledgerService = new LedgerService(ledgerStore);
+export const ledgerService = new LedgerService(ledgerStore, async (familyId, docId) => {
+  const parsed = libraryDocumentSchema.safeParse(await dataService.getData(libraryDocKey(familyId, docId)));
+  if (!parsed.success) return null;
+  const { title, source } = parsed.data;
+  return { title, sourceUrl: source.kind === 'drive' ? source.url : null };
+});
 
 // SECURITY: chatbotDataService receives ONLY readOnlyDataService.
 // It must NEVER receive the full dataService, plaidService, accountService,
