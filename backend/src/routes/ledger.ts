@@ -87,8 +87,9 @@ router.post('/facts/:id/correct', handle(async (req, res) => {
 
 router.post('/facts/:id/handled', handle(async (req, res) => {
   const { familyId, userId } = who(req);
-  const { occurrenceDate, note } = ledgerMarkHandledSchema.parse(req.body ?? {});
-  res.status(201).json(await ledgerService.markHandled(familyId, userId, factId(req), occurrenceDate, note));
+  const { occurrenceDate, note, outcome } = ledgerMarkHandledSchema.parse(req.body ?? {});
+  const event = outcome === 'declined' ? 'declined' : 'marked_handled';
+  res.status(201).json(await ledgerService.markHandled(familyId, userId, factId(req), occurrenceDate, note, event));
 }));
 
 // POST /api/v1/ledger/facts/:id/task — make an ordinary task for one occurrence (REQ-H034).

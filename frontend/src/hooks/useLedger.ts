@@ -44,6 +44,12 @@ export function useLedger(options: { enabled?: boolean } = {}) {
     'Marked handled for the household',
     'Could not mark handled',
   );
+  const decline = useLedgerAction(
+    ({ factId, occurrenceDate, note }: { factId: string; occurrenceDate: string; note?: string }) =>
+      api.markLedgerHandled(factId, occurrenceDate, note, 'declined'),
+    'Recorded as not doing it — no more reminders',
+    'Could not record that',
+  );
   const unmarkHandled = useLedgerAction((markId: string) => api.unmarkLedgerHandled(markId), 'Handled mark removed', 'Could not undo');
   const snooze = useLedgerAction(({ key, until }: { key: string; until: string }) => api.snoozeLedgerItem(key, until), 'Snoozed for you', 'Could not snooze');
   const unsnooze = useLedgerAction((key: string) => api.unsnoozeLedgerItem(key), null, 'Could not unsnooze');
@@ -57,5 +63,5 @@ export function useLedger(options: { enabled?: boolean } = {}) {
     onError: (err: unknown) => notifications.show({ title: 'Could not create the task', message: getApiErrorMessage(err), color: 'red' }),
   });
 
-  return { query, create, update, remove, correct, markHandled, unmarkHandled, snooze, unsnooze, mute, makeTask };
+  return { query, create, update, remove, correct, markHandled, decline, unmarkHandled, snooze, unsnooze, mute, makeTask };
 }

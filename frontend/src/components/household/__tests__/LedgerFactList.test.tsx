@@ -75,6 +75,12 @@ describe('LedgerFactList (REQ-H050, H053)', () => {
     expect(screen.queryByText('Handled')).not.toBeInTheDocument();
   });
 
+  it('shows a declined occurrence as a decision, not as handled', () => {
+    renderList({ facts: [doc, { ...mark, source: { kind: 'app', event: 'declined', userId: 'u2' } }] });
+    expect(screen.getByText(/✕ Dec 16, 2026 declined by Sam .* Decided to keep it/)).toBeInTheDocument();
+    expect(screen.queryByText(/handled by/)).not.toBeInTheDocument();
+  });
+
   it('keeps a corrected document fact visible, marked as replaced', () => {
     const fix: LedgerFact = { ...note, id: 'f_0b6f3a52-1d2e-4c7a-9f10-3c5d2e8a0003', subject: doc.subject, title: 'Refund window (corrected)', overrides: doc.id, schedule: { kind: 'deadline', due: { date: '2026-12-18' } } };
     renderList({ facts: [doc, fix] });

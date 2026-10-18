@@ -24,8 +24,9 @@ export function createLedgerApi(client: AxiosInstance) {
       const { data } = await client.post<LedgerFact>(`${fact(id)}/correct`, input);
       return data;
     },
-    async markLedgerHandled(id: string, occurrenceDate: string, note?: string): Promise<LedgerFact> {
-      const { data } = await client.post<LedgerFact>(`${fact(id)}/handled`, { occurrenceDate, ...(note ? { note } : {}) });
+    /** `declined`: the household decided not to act; closes the occurrence the same way. */
+    async markLedgerHandled(id: string, occurrenceDate: string, note?: string, outcome: 'done' | 'declined' = 'done'): Promise<LedgerFact> {
+      const { data } = await client.post<LedgerFact>(`${fact(id)}/handled`, { occurrenceDate, ...(note ? { note } : {}), outcome });
       return data;
     },
     async unmarkLedgerHandled(markId: string): Promise<void> {

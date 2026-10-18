@@ -114,6 +114,21 @@ describe('Household Ledger API', () => {
     expect(stored?.status).toBe('withdrawn');
   });
 
+  it('records a declined window as a decision that closes it, with the reason', async () => {
+    const user = await createUser();
+    const fact = docFact('refund', { kind: 'window', opens: { date: inDays(-1) }, closes: { date: inDays(59) } });
+    await ledgerStore.addFact(user.familyId, fact);
+
+    const mark = await api(user)
+      .post(`/facts/${fact.id}/handled`, { occurrenceDate: inDays(59), outcome: 'declined', note: 'Keeping the coverage' })
+      .expect(201);
+    expect(mark.body.source).toEqual({ kind: 'app', event: 'declined', userId: user.userId });
+    expect(mark.body.title).toMatch(/^Declined: /);
+    expect(mark.body.detail).toBe('Keeping the coverage');
+    expect((await api(user).get()).body.headsUp).toEqual([]);
+    await api(user).post(`/facts/${fact.id}/handled`, { occurrenceDate: inDays(59), outcome: 'maybe' }).expect(400);
+  });
+
   it('snoozes for the person who asked, and refuses a past date', async () => {
     const user = await createUser();
     const fact = docFact('opt-out', { kind: 'deadline', due: { date: inDays(10) } });

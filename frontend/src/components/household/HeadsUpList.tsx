@@ -1,9 +1,11 @@
+import { useState } from 'react';
 import { ActionIcon, Anchor, Badge, Group, Menu, Stack, Text, Tooltip } from '@mantine/core';
-import { IconAlarmSnooze, IconCheck, IconChecklist } from '@tabler/icons-react';
+import { IconAlarmSnooze, IconCheck, IconChecklist, IconX } from '@tabler/icons-react';
 import { Link } from 'react-router-dom';
 import type { HeadsUpItem } from '../../../../shared/types';
 import { addOffset } from '../../../../shared/utils/ledgerDates';
 import { useLedger } from '../../hooks/useLedger';
+import { DeclineModal } from './DeclineModal';
 import { PHASE_COLOR, PHASE_LABEL, isHandleable, whenText } from './ledgerFormat';
 
 interface HeadsUpListProps {
@@ -14,11 +16,13 @@ interface HeadsUpListProps {
 }
 
 /**
- * REQ-H052. Done is shared with the household; snooze hides the item for the
- * person who snoozed only; make-a-task hands ownership to the task board.
+ * REQ-H052. Done is shared with the household; "not doing this" closes it for
+ * both as a recorded decision; snooze hides the item for the person who
+ * snoozed only; make-a-task hands ownership to the task board.
  */
 export function HeadsUpList({ items, today, linkToFacts = false }: HeadsUpListProps) {
-  const { markHandled, snooze, makeTask } = useLedger({ enabled: false });
+  const { markHandled, decline, snooze, makeTask } = useLedger({ enabled: false });
+  const [declining, setDeclining] = useState<HeadsUpItem | null>(null);
 
   const snoozeOptions = (item: HeadsUpItem) => {
     const options = [
@@ -33,6 +37,15 @@ export function HeadsUpList({ items, today, linkToFacts = false }: HeadsUpListPr
 
   return (
     <Stack gap="sm">
+      <DeclineModal
+        item={declining}
+        saving={decline.isPending}
+        onClose={() => setDeclining(null)}
+        onSubmit={note => {
+          if (!declining) return;
+          decline.mutate({ factId: declining.factId, occurrenceDate: declining.dueDate, note }, { onSuccess: () => setDeclining(null) });
+        }}
+      />
       {items.map(item => (
         <Group key={item.occurrenceKey} justify="space-between" wrap="nowrap" align="flex-start">
           <div style={{ minWidth: 0 }}>
@@ -60,6 +73,13 @@ export function HeadsUpList({ items, today, linkToFacts = false }: HeadsUpListPr
                   onClick={() => markHandled.mutate({ factId: item.factId, occurrenceDate: item.dueDate })}
                 >
                   <IconCheck size={16} />
+                </ActionIcon>
+              </Tooltip>
+            )}
+            {isHandleable(item.kind) && (
+              <Tooltip label="Not doing this — stops it for both of you">
+                <ActionIcon variant="light" color="gray" aria-label={`Not doing "${item.title}"`} onClick={() => setDeclining(item)}>
+                  <IconX size={16} />
                 </ActionIcon>
               </Tooltip>
             )}

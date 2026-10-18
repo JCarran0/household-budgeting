@@ -87,7 +87,7 @@ const sourceSchema = z.discriminatedUnion('kind', [
   z
     .object({
       kind: z.literal('app'),
-      event: z.enum(['marked_handled', 'task_completed']),
+      event: z.enum(['marked_handled', 'task_completed', 'declined']),
       userId: z.string().min(1).max(100).nullable(),
     })
     .strict(),
@@ -336,6 +336,8 @@ export const ledgerMarkHandledSchema = z
   .object({
     occurrenceDate: ledgerDate,
     note: z.string().trim().min(1).max(500).optional(),
+    /** `declined`: the household decided not to act. Closes the occurrence the same way. */
+    outcome: z.enum(['done', 'declined']).optional(),
   })
   .strict();
 

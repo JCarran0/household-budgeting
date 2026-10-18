@@ -58,7 +58,14 @@ export type LedgerSource =
       quotes: LedgerQuote[];
     }
   | { kind: 'user'; userId: string; via: 'card' | 'form' }
-  | { kind: 'app'; event: 'marked_handled' | 'task_completed'; userId: string | null };
+  /**
+   * `declined`: the household chose not to act (e.g. kept a contract it could
+   * have cancelled for a refund). Closes the occurrence exactly like a handled
+   * mark — reminders stop — but is shown and read as a decision, not as done.
+   */
+  | { kind: 'app'; event: LedgerHandledEvent; userId: string | null };
+
+export type LedgerHandledEvent = 'marked_handled' | 'task_completed' | 'declined';
 
 export interface LedgerFact {
   /** `{docId}:{slug}` for document facts (stable across re-import); `f_{uuid}` otherwise. */

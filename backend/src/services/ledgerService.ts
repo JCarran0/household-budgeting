@@ -14,7 +14,7 @@
  */
 
 import { randomUUID } from 'crypto';
-import type { LedgerDocumentRef, LedgerFact, LedgerUserPrefs, LedgerView } from '../shared/types';
+import type { LedgerDocumentRef, LedgerFact, LedgerHandledEvent, LedgerUserPrefs, LedgerView } from '../shared/types';
 import { etDateString } from '../shared/utils/easternTime';
 import {
   computeHeadsUp,
@@ -190,7 +190,7 @@ export class LedgerService {
     factId: string,
     occurrenceDate: string,
     note?: string,
-    event: 'marked_handled' | 'task_completed' = 'marked_handled',
+    event: LedgerHandledEvent = 'marked_handled',
   ): Promise<LedgerFact> {
     const id = newFactId();
     const file = await this.store.update(familyId, facts => {
@@ -200,7 +200,7 @@ export class LedgerService {
         {
           id,
           subject: target.subject,
-          title: clip(`Handled: ${target.title}`, MAX_TITLE),
+          title: clip(`${event === 'declined' ? 'Declined' : 'Handled'}: ${target.title}`, MAX_TITLE),
           ...(note ? { detail: note } : {}),
           schedule: { kind: 'note' },
           handles: { factId, occurrenceDate },

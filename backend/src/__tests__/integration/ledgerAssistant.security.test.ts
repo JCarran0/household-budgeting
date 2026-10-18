@@ -75,7 +75,7 @@ describe('read_ledger (REQ-H060)', () => {
     if (result.status !== 'ok') throw new Error('expected ok');
     const ids = result.facts.map(f => f.id);
     expect(ids).toEqual([optOut.id, fix.id]);
-    expect(result.facts[0].handled).toEqual([{ occurrenceDate: inDays(5), markedOn: expect.any(String), note: 'Email sent' }]);
+    expect(result.facts[0].handled).toEqual([{ occurrenceDate: inDays(5), outcome: 'done', markedOn: expect.any(String), note: 'Email sent' }]);
     expect(result.facts[0].source).toEqual({ kind: 'document', docId: 'rivian-care', quotes: optOut.source.kind === 'document' ? optOut.source.quotes : [] });
     expect(result.facts[1].corrects).toEqual({ id: refund.id, title: refund.title, source: 'document' });
     expect(result.upcoming.map(u => [u.factId, u.dueDate, u.handled])).toEqual([

@@ -49,7 +49,8 @@ interface LedgerFactView {
     | { kind: 'app' };
   /** Present when a household member corrected a document fact; the correction is what counts. */
   corrects?: { id: string; title: string; source: 'document' };
-  handled: Array<{ occurrenceDate: string; markedOn: string; note?: string }>;
+  /** `declined`: the household chose not to act — say so, never call it done. */
+  handled: Array<{ occurrenceDate: string; outcome: 'done' | 'declined'; markedOn: string; note?: string }>;
 }
 
 interface UpcomingOccurrence {
@@ -128,7 +129,12 @@ export class ChatbotLedgerReader {
         ...(original ? { corrects: { id: original.id, title: original.title, source: 'document' as const } } : {}),
         handled: marks
           .filter(m => m.handles!.factId === f.id)
-          .map(m => ({ occurrenceDate: m.handles!.occurrenceDate, markedOn: m.createdAt.slice(0, 10), ...(m.detail ? { note: m.detail } : {}) })),
+          .map(m => ({
+            occurrenceDate: m.handles!.occurrenceDate,
+            outcome: m.source.kind === 'app' && m.source.event === 'declined' ? ('declined' as const) : ('done' as const),
+            markedOn: m.createdAt.slice(0, 10),
+            ...(m.detail ? { note: m.detail } : {}),
+          })),
       };
     });
 

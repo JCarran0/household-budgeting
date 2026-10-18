@@ -20,6 +20,11 @@ export interface LedgerFactListProps {
   onToggleMute: (subject: string, muted: boolean) => void;
 }
 
+/** A "not doing this" mark: closes the occurrence like Done, shown as a decision. */
+function isDeclined(mark: LedgerFact): boolean {
+  return mark.source.kind === 'app' && mark.source.event === 'declined';
+}
+
 function hostOf(url: string): string {
   try {
     return new URL(url).host;
@@ -131,9 +136,9 @@ export function LedgerFactList(props: LedgerFactListProps) {
             {sourceLine(f)}
             {marks.filter(m => m.handles!.factId === f.id).map(m => (
               <Group key={m.id} gap={6}>
-                <Text size="xs" c="green">
-                  ✓ {friendlyDate(m.handles!.occurrenceDate)} handled by {name(m.source.kind === 'app' ? m.source.userId : m.createdBy)} on{' '}
-                  {friendlyDate(m.createdAt.slice(0, 10))}
+                <Text size="xs" c={isDeclined(m) ? 'dimmed' : 'green'}>
+                  {isDeclined(m) ? '✕' : '✓'} {friendlyDate(m.handles!.occurrenceDate)} {isDeclined(m) ? 'declined' : 'handled'} by{' '}
+                  {name(m.source.kind === 'app' ? m.source.userId : m.createdBy)} on {friendlyDate(m.createdAt.slice(0, 10))}
                   {m.detail ? ` — ${m.detail}` : ''}
                 </Text>
                 <Anchor component="button" size="xs" onClick={() => props.onUnmark(m.id)}>undo</Anchor>
