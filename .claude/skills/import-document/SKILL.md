@@ -22,9 +22,10 @@ Turns one source document into one Family Library entry. Spec: `docs/features/FA
 ### 1. Identify the source
 
 - **Drive link:** get the file metadata through the Google Drive connector and note `fileId`, the canonical URL and `modifiedTime`. Prefer the PDF form. For a native Google Doc, export it as PDF so page numbers match a printed copy.
-- **Local file:** compute `shasum -a 256 <file>` and keep only the base filename, never the path.
+- **Local file:** compute `shasum -a 256 <file>` and keep only the base filename, never the path. If the user names a place the original lives (an insurer's or lender's portal), record it as the source `url` (https only). Never take a URL from the document's own text.
+- **Page count:** run `pdfinfo <file> | grep Pages` before transcribing. The Read tool does not report a PDF's length, and a wrong count leaves pages out without any error.
 
-Run `npm run library -- families` and use the **personal** family id. Then run `npm run library -- list --family <id>` to see what's already imported. If this source is already there, reuse its `docId`: the script refuses a second id for the same source, and skips an unchanged one.
+Run `npm run library -- families` and use the **personal** family id. Then run `npm run library -- list --family <id>` to see what's already imported, with each document's `subject`. If this source is already there, reuse its `docId`: the script refuses a second id for the same source, and skips an unchanged one.
 
 ### 2. Extract the text faithfully
 
@@ -33,6 +34,8 @@ Write `body.md` to the scratchpad:
 - Start each page with `<!-- page N -->`, numbered 1..N, in order, every page once, including blank ones (`<!-- page 7 -->` followed by `[blank page]`). Validation rejects gaps.
 - Transcribe **verbatim**. Keep section numbers, headings, defined terms and every figure exactly as printed. Don't summarize, paraphrase, fix typos or skip boilerplate: the clause you skip is the one someone will ask about.
 - Render tables as markdown tables. Mark text you can't read as `[illegible]`, never a guess.
+- **Layout isn't content.** Joining printed line-wraps, straight vs. curly quotes, turning a multi-column layout into a table or labelled block, and adding a column header the layout implies are all fine. Every word, figure and cell value must still be printed in the source and sit in the right row and column. Write images as a bracketed placeholder (`[QR code]`, `[logo]`) and checkboxes as printed (`YES: [ ] NO: [X]`).
+- `pdftotext -layout` is a good cross-check, but it splits words ("inf ormation") and can reorder columns. The rendered page is the authority.
 - Read PDFs in page ranges (at most 20 pages per Read call) and check you got every page.
 
 ### 3. Write the metadata
@@ -52,8 +55,12 @@ Write `meta.json` to the scratchpad:
 }
 ```
 
-- `docId`: a lowercase kebab slug, stable across re-imports.
-- `subject`: names the asset, so all of one car's or system's documents share it exactly (`2026 Rivian R2`, `Rooftop solar system`).
+A local file's source is `{ "kind": "file", "filename": "<base name>", "sha256": "<hex>", "url": "<optional https portal link>" }`.
+
+- `docId`: a lowercase kebab slug, stable across re-imports. **No year or term in it** (`travelers-homeowners-policy`, not `…-2026-2027`): next year's renewal is a re-import under the same id, which replaces this one and carries its ledger facts forward.
+- `kind`: a lowercase snake_case noun for the document type. Reuse one from `list` if it fits (`auto_insurance_policy`, `homeowners_insurance_policy`, `solar_lease`).
+- `subject`: names the asset, so all of one car's or system's documents share it exactly (`2027 Rivian R2`, `Rooftop solar system`, `Home — 33 Grandview Ave`). Reuse an existing subject whenever it is the same asset. When one document covers several assets (an auto policy on two cars), pick the one it is most bound to, such as the financed or leased car, and name every asset in the summary so a question about any of them still finds the document. Say which you picked to the user.
+- `effectiveDate`: the date the terms in this document start: a policy period's start, a contract's signing date. Not the print or issue date.
 - `summary`: describes *what questions this document can answer*, not the document's own marketing copy.
 - `amends`: list the `docId`s this document revises, such as a change order, final-design package, addendum or renewal. Where the two conflict, this document governs. Say in the summary *which* terms it changes ("Replaces the lease's Exhibit A payment schedule and production guarantee table"). The referenced documents must be imported first. Look for this on every import: a document that silently overrides another is the most likely source of a confidently wrong answer.
 - Don't include `redactions`, `pageCount`, `ingestedAt`, `formatVersion` or `body`. The script derives them and refuses them if you supply them.
@@ -69,8 +76,9 @@ On a validation error, fix the input and re-run. Never hand-edit the staged file
 - title, page count, redaction counts,
 - every redaction in context,
 - every line the script flags as **"Kept, but contain 8+ digit runs."** Ask the user to confirm none of these is a bank or card number. If one is, add a label the redactor recognizes (e.g. `Bank account #:`) to that line in `body.md`, note the change to the user, and re-run with `--force`. Changing labels is the only edit to the transcription that's allowed.
+- any personal identifier that survived and isn't a bank or card number. The redactor removes labelled SSNs, card, routing, bank account and loan numbers, and dates of birth (labelled or in a "Date of Birth" table column). Anything else, raise with the user.
 
-Then delete the scratchpad `body.md`.
+Delete the scratchpad `body.md` only after the user has confirmed the review. If a fix is needed later, the staged entry's `body` is the redacted transcription and can serve as the input to a re-run.
 
 ### 5. Golden questions
 
@@ -79,7 +87,7 @@ Propose 2 or 3 questions the family would realistically ask of this document:
 - at least one with a figure, date or limit, as `answerable`,
 - one involving a redacted value if the document has any, as `redacted`.
 
-Ask the user to supply each answer and page **from the source**. If the user prefers a model cross-check, launch two subagents on different models (e.g. `sonnet` and `fable`). Give each the Drive fileIds, not your transcription, and forbid reading `backend/data/`. Each downloads into its own scratch directory and deletes the copies afterwards. Each returns `{q, expect, answer, page, confidence, note}` per question. Show the user both sets side by side, flag every disagreement or low-confidence answer, and write evals only after the user approves.
+Ask the user to supply each answer and page **from the source**. If the user prefers a model cross-check, launch two subagents on different models (e.g. `sonnet` and `fable`). Give each the Drive fileIds or local file paths, not your transcription, and forbid reading `backend/data/`. Each downloads into its own scratch directory and deletes the copies afterwards. Each returns `{q, expect, answer, page, confidence, note}` per question. Show the user both sets side by side, flag every disagreement or low-confidence answer, and write evals only after the user approves.
 
 Write `evals.json`:
 

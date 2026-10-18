@@ -86,6 +86,15 @@ describe('libraryDocumentMetaSchema', () => {
     });
     expect(r.success).toBe(false);
   });
+
+  it('accepts an https portal link on a file source, and nothing else', () => {
+    const { formatVersion: _v, pageCount: _p, ingestedAt: _i, redactions: _r, body: _b, ...meta } = doc();
+    const file = (url: string) =>
+      libraryDocumentMetaSchema.safeParse({ ...meta, source: { kind: 'file', filename: 'policy.pdf', sha256: 'a'.repeat(64), url } });
+    expect(file('https://selfservice.travelers.com/personal/myt/policies').success).toBe(true);
+    expect(file('http://selfservice.travelers.com/').success).toBe(false);
+    expect(file('javascript:alert(1)').success).toBe(false);
+  });
 });
 
 describe('amends', () => {

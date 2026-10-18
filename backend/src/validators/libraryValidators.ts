@@ -37,6 +37,8 @@ export const LIBRARY_REDACTION_TYPES = [
   'card_number',
   'routing_number',
   'bank_account',
+  'loan_number',
+  'date_of_birth',
   'credential',
 ] as const;
 export type LibraryRedactionType = (typeof LIBRARY_REDACTION_TYPES)[number];
@@ -68,6 +70,16 @@ const fileSourceSchema = z.object({
   filename: z.string().min(1).max(200).regex(/^[^/\\]+$/, 'filename, not a path'),
   /** sha256 of the source bytes; a re-import compares against it. */
   sha256: z.string().regex(/^[0-9a-f]{64}$/),
+  /**
+   * Where a person finds the original — e.g. the insurer's policy portal — when
+   * the file itself is not on Drive. Set by whoever imports, never taken from
+   * the document's text; https only, and shown with its host (SEC-P024).
+   */
+  url: z
+    .string()
+    .url()
+    .refine(u => u.startsWith('https://'), 'must be an https URL')
+    .optional(),
 });
 
 export const librarySourceSchema = z.discriminatedUnion('kind', [driveSourceSchema, fileSourceSchema]);

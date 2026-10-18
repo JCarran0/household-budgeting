@@ -18,6 +18,12 @@
  *  2. No reversible mapping. The redacted value is not returned, logged, or
  *     stored anywhere. Drive is the faithful copy (REQ-F013).
  *
+ * Loan numbers and dates of birth are also removed: an insurance declarations
+ * page names the mortgage loan and every driver's birth date, and neither
+ * answers any question a household asks of its policy. Both are found by
+ * label only — a bare date is a deadline far more often than a birthday — and
+ * a birth date inside a markdown table is found by its column header.
+ *
  * WHAT THIS CANNOT DO: a bank account number with no label near it has no
  * shape. "Account Number: 88231907" on a solar bill is the lessor's customer
  * number — useful, and kept — and is indistinguishable from a bank account
@@ -36,8 +42,8 @@ export interface DocumentRedactionResult {
 }
 
 function marker(type: LibraryRedactionType, digits?: string): string {
-  // SSN last-4 is itself an identity-verification secret, so it keeps none.
-  if (!digits || type === 'ssn') return `[REDACTED:${type}]`;
+  // SSN last-4 and any part of a birth date are identity-verification secrets.
+  if (!digits || type === 'ssn' || type === 'date_of_birth') return `[REDACTED:${type}]`;
   return `[REDACTED:${type} …${digits.slice(-4)}]`;
 }
 
@@ -71,6 +77,47 @@ const ROUTING_LABELED =
 const BANK_CONTEXT = /\b(bank|checking|savings|routing|ABA|ACH|direct debit|auto-?pay|EFT)\b/i;
 const ACCOUNT_LABELED =
   /\b((?:bank\s+|checking\s+|savings\s+|deposit\s+)?account\s*(?:number|no\.?|#))(\s*[:#]?\s*)(\d(?:[ -]?\d){3,16})\b/gi;
+const LOAN_LABELED =
+  /\b((?:mortgage|loan)\s+(?:account\s+)?(?:number|no\.?|#))([ \t]*[:#]?[ \t]*)([A-Z]{0,3}\d(?:[ -]?\d){4,19})\b/gi;
+const DATE = String.raw`(?:\d{1,2}[-/.]\d{1,2}[-/.]\d{2,4}|\d{4}-\d{2}-\d{2}|[A-Z][a-z]{2,8}\.?\s+\d{1,2},?\s+\d{4})`;
+const DOB_LABEL = String.raw`\b(?:date\s+of\s+birth|birth\s*date|D\.?O\.?B\.?)`;
+const DOB_LABELED = new RegExp(`(${DOB_LABEL})([ \\t]*[:#]?[ \\t]*)(${DATE})`, 'gi');
+const DOB_HEADER = new RegExp(DOB_LABEL, 'i');
+const DATE_IN_CELL = new RegExp(DATE, 'g');
+
+const cellsOf = (line: string): string[] => line.trim().replace(/^\||\|$/g, '').split('|');
+const isTableSeparator = (line: string | undefined): boolean => !!line && /^\s*\|?\s*:?-{3,}/.test(line);
+
+/**
+ * Dates in the birth-date columns of markdown tables. The header names the
+ * column; the rows carry only "03-11-1983", which no label pattern can see.
+ */
+function redactBirthDateColumns(text: string, bump: () => void): string {
+  const lines = text.split('\n');
+  let columns: number[] = [];
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    if (!line.trim().startsWith('|')) {
+      columns = [];
+      continue;
+    }
+    if (isTableSeparator(lines[i + 1])) {
+      columns = cellsOf(line).flatMap((cell, idx) => (DOB_HEADER.test(cell) ? [idx] : []));
+      continue;
+    }
+    if (columns.length === 0 || isTableSeparator(line)) continue;
+    const cells = cellsOf(line);
+    for (const idx of columns) {
+      if (cells[idx] === undefined) continue;
+      cells[idx] = cells[idx].replace(DATE_IN_CELL, () => {
+        bump();
+        return marker('date_of_birth');
+      });
+    }
+    lines[i] = `|${cells.join('|')}|`;
+  }
+  return lines.join('\n');
+}
 
 /**
  * Redact credentials and financial identifiers from extracted document text.
@@ -122,6 +169,17 @@ export function redactDocumentText(input: string): DocumentRedactionResult {
       });
     })
     .join('\n');
+
+  text = text.replace(LOAN_LABELED, (_m, label: string, sep: string, num: string) => {
+    bump('loan_number');
+    return `${label}${sep}${marker('loan_number', digitsOf(num))}`;
+  });
+
+  text = text.replace(DOB_LABELED, (_m, label: string, sep: string) => {
+    bump('date_of_birth');
+    return `${label}${sep}${marker('date_of_birth')}`;
+  });
+  text = redactBirthDateColumns(text, () => bump('date_of_birth'));
 
   return { text, counts };
 }

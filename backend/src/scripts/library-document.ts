@@ -188,6 +188,8 @@ async function cmdList(args: Args): Promise<void> {
     const red = Object.entries(d.redactions).map(([t, n]) => `${t}:${n}`).join(' ');
     const amends = d.amends ? `  amends ${d.amends.join(',')}` : '';
     console.log(`  ${d.docId.padEnd(32)} ${d.domain}/${d.kind}  ${d.pageCount}p  ingested ${d.ingestedAt.slice(0, 10)}  ${red}${amends}`);
+    // Subjects must match exactly across one asset's documents; show them so a new import can reuse one.
+    console.log(`  ${''.padEnd(32)} subject: ${d.subject ?? '—'}`);
   }
 }
 

@@ -79,3 +79,43 @@ describe('redactDocumentText keeps identifiers the library exists to answer', ()
     expect(twice.counts).toEqual({});
   });
 });
+
+describe('redactDocumentText removes loan numbers and dates of birth by label', () => {
+  it('redacts a labeled mortgage loan number, keeping the last 4', () => {
+    const { text, counts } = redactDocumentText('KEY BANK N.A. ISAOA\nLOAN NUMBER: 6025201234');
+    expect(text).toBe('KEY BANK N.A. ISAOA\nLOAN NUMBER: [REDACTED:loan_number …1234]');
+    expect(counts).toEqual({ loan_number: 1 });
+  });
+
+  it('leaves an empty loan field and the words after a loan number alone', () => {
+    expect(redactDocumentText('TESLA LEASE TRUST<br>LOAN # |').counts).toEqual({});
+    expect(redactDocumentText('Loan # 88412 for the vehicle').text).toBe('Loan # [REDACTED:loan_number …8412] for the vehicle');
+  });
+
+  it('redacts a labeled date of birth and keeps none of it', () => {
+    const { text, counts } = redactDocumentText('Driver DOB: 03/11/1983, licensed 2001');
+    expect(text).toBe('Driver DOB: [REDACTED:date_of_birth], licensed 2001');
+    expect(redactDocumentText('Date of Birth March 11, 1983').text).toBe('Date of Birth [REDACTED:date_of_birth]');
+    expect(counts).toEqual({ date_of_birth: 1 });
+  });
+
+  it('redacts dates in a table column headed "Date of Birth" and nowhere else', () => {
+    const table = [
+      '| Drivers | Date of Birth | Licensed Since |',
+      '|---|---|---|',
+      '| 1. ALEX | 03-11-1983 | 09-07-2001 |',
+      '| 2. SAM | 03-15-1986 | 09-07-2004 |',
+      '',
+      '| Policy Period | 09-07-2026 |',
+    ].join('\n');
+    const { text, counts } = redactDocumentText(table);
+    expect(text).toContain('| 1. ALEX | [REDACTED:date_of_birth] | 09-07-2001 |');
+    expect(text).toContain('| 2. SAM | [REDACTED:date_of_birth] | 09-07-2004 |');
+    expect(text).toContain('| Policy Period | 09-07-2026 |');
+    expect(counts).toEqual({ date_of_birth: 2 });
+  });
+
+  it('keeps an unlabeled date, which is a deadline far more often than a birthday', () => {
+    expect(redactDocumentText('Policy period FROM: 03-29-26 To: 03-29-27').counts).toEqual({});
+  });
+});

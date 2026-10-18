@@ -158,7 +158,7 @@ export class ChatbotLibraryReader {
       effectiveDate: doc.effectiveDate ?? null,
       pageCount: doc.pageCount,
       ingestedAt: doc.ingestedAt,
-      sourceUrl: doc.source.kind === 'drive' ? doc.source.url : null,
+      sourceUrl: doc.source.url ?? null,
       sourceFilename: doc.source.kind === 'file' ? doc.source.filename : null,
       redactions: doc.redactions,
       amends: doc.amends ?? [],

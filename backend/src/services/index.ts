@@ -114,7 +114,7 @@ export const ledgerService = new LedgerService(ledgerStore, async (familyId, doc
   const parsed = libraryDocumentSchema.safeParse(await dataService.getData(libraryDocKey(familyId, docId)));
   if (!parsed.success) return null;
   const { title, source } = parsed.data;
-  return { title, sourceUrl: source.kind === 'drive' ? source.url : null };
+  return { title, sourceUrl: source.url ?? null };
 });
 
 // SECURITY: chatbotDataService receives ONLY readOnlyDataService.
