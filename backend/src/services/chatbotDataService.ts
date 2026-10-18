@@ -21,6 +21,7 @@ import { getActiveTransactions } from './transactionReader';
 import { ChatbotTaskReader } from './chatbotReaders/taskReader';
 import { ChatbotTripReader } from './chatbotReaders/tripReader';
 import { ChatbotProjectReader } from './chatbotReaders/projectReader';
+import { ChatbotLibraryReader } from './chatbotReaders/libraryReader';
 import type {
   Category,
   Transaction,
@@ -261,11 +262,14 @@ export class ChatbotDataService {
   readonly tasks: ChatbotTaskReader;
   readonly trips: ChatbotTripReader;
   readonly projects: ChatbotProjectReader;
+  /** Family Library documents (FAMILY-LIBRARY-BRD). */
+  readonly library: ChatbotLibraryReader;
 
   constructor(private readonly dataService: ReadOnlyDataService) {
     this.tasks = new ChatbotTaskReader(dataService);
     this.trips = new ChatbotTripReader(dataService);
     this.projects = new ChatbotProjectReader(dataService);
+    this.library = new ChatbotLibraryReader(dataService);
   }
 
   /**

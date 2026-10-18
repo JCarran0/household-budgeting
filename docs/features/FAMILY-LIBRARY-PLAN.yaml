@@ -153,7 +153,7 @@ phase_1_library:
 
     - id: P1-5
       title: Library reader (read side)
-      status: not_started
+      status: completed
       description: |
         Family-scoped reader over the library_{familyId}_ prefix, exposed
         through ReadOnlyDataService. Validates every entry on read; fails
@@ -162,11 +162,21 @@ phase_1_library:
 
     - id: P1-6
       title: Assistant tools
-      status: not_started
+      status: completed
       description: |
         list_documents (metadata minus body) and read_document as T0
         capabilities. Tool descriptions carry REQ-F040–F043. Decide the
         page-range parameter once the first corpus shows real document sizes.
+      outcome: |
+        services/chatbotReaders/libraryReader.ts + capabilities/libraryCapabilities.ts.
+        Page range decided: read_document takes optional startPage/endPage and
+        returns at most 60,000 chars per call, with truncated/nextStartPage.
+        First corpus: the 44-page lease (~101k chars) and the VSC take two
+        calls, everything else one. ReadOnlyDataService gained a single
+        family-scoped listing, listLibraryKeys(familyId) — deliberately not a
+        general listKeys(prefix). Entries are validated on read and reported
+        as unreadable on failure; amendedBy is derived so the amended
+        document points at what supersedes it.
 
     - id: P1-7
       title: Golden set runner
@@ -181,7 +191,6 @@ phase_1_library:
     - No document content or golden answers in git history
 
 open_questions:
-  - read_document page-range parameter — decide from the first corpus
   - Estate document handling model — Phase 4 refinement
 
 deferred_and_tracked_elsewhere:

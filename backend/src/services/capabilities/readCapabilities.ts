@@ -28,9 +28,10 @@ import { RECORD_LEARNING_TOOL, buildProposeActionTool } from './platformTools';
 import { listChatActionIds } from '../chatActions/registry';
 import { BUDGETING_CAPABILITIES } from './budgetingCapabilities';
 import { PLANNING_CAPABILITIES } from './planningCapabilities';
+import { LIBRARY_CAPABILITIES } from './libraryCapabilities';
 
 /** Grouping for REQ-P018 progressive disclosure once the surface outgrows a flat list. */
-export type CapabilityDomain = 'budgeting' | 'tasks' | 'trips' | 'projects';
+export type CapabilityDomain = 'budgeting' | 'tasks' | 'trips' | 'projects' | 'library';
 
 export interface ReadCapability {
   name: string;
@@ -45,6 +46,7 @@ export interface ReadCapability {
 export const READ_CAPABILITIES: ReadCapability[] = [
   ...BUDGETING_CAPABILITIES,
   ...PLANNING_CAPABILITIES,
+  ...LIBRARY_CAPABILITIES,
 ];
 
 /** Platform tools. Not capabilities — they mediate access rather than expose data. */
