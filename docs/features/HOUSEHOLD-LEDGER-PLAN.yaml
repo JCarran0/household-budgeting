@@ -74,6 +74,7 @@ decisions:
       facts only, and keeps a notification run from rewriting the facts.
 
 phase_1_ledger:
+  # All tasks done; stays in_progress until the two dated acceptance items are observed.
   status: in_progress
   tasks:
     - id: L1
@@ -139,7 +140,7 @@ phase_1_ledger:
 
     - id: L4
       title: Backfill the six library documents
-      status: in_progress
+      status: completed
       description: |
         Two-model extraction (different model families, original PDFs not
         required — facts are verified against the stored body) for the six
@@ -147,7 +148,7 @@ phase_1_ledger:
         refund windows (~2026-12-16), the arbitration opt-out deadline
         (2026-11-05) closed by a user fact for the email sent 2026-10-17, both
         contract expirations, and the Sunrun production audit cadence.
-      progress: |
+      outcome: |
         2026-10-17: Sonnet and Fable extracted independently (89 and 80
         proposals); union merged by an explicit mapping, 78 facts staged
         locally, all verifying on the first pass. Both models agree on every
@@ -157,9 +158,9 @@ phase_1_ledger:
         lease never prints the Activation Date — so the cadence is a note until
         the household adds the date (a user fact on the Household page).
         Dropped: past 2025 install-period dates, provider-side cancellation
-        rights, and items with no action. Awaiting maintainer approval, then
-        the maintainer's `npm run ledger -- push` per document. The opt-out is
-        closed by marking it handled in the app (email sent 2026-10-17).
+        rights, and items with no action. Maintainer approved; all six pushed to
+        production (78 facts). The opt-out is closed by marking it handled in
+        the app (email sent 2026-10-17).
 
     - id: L5
       title: API
@@ -186,6 +187,13 @@ phase_1_ledger:
         Frontend page grouped by subject (REQ-H050 – H053) with the fact form as
         its own component (600-LOC budget); dashboard Heads-up card with done /
         snooze / make-a-task. Pause for maintainer UI QA before committing.
+      outcome: |
+        pages/Household.tsx at /household (nav: Household). Subjects are a
+        collapsed accordion with "N facts · next <date>" and a per-person mute
+        bell; ?factId= opens and scrolls to the fact. Fact form
+        (LedgerFactModal) does create / edit / correct with literal dates only.
+        HeadsUpList shared by the page and the dashboard card (top 5, hidden
+        when empty or refused). Maintainer approved the UI.
 
     - id: L7
       title: Scheduler and push reminders
@@ -236,15 +244,18 @@ phase_1_ledger:
 
     - id: L9
       title: Golden checks for the ledger
-      status: in_progress
+      status: completed
       description: |
         Add "what is due before X?" and "did we handle Y?" questions to the
         golden set so a missed or wrongly dated fact fails a run.
       progress: |
         Runner support done: ledger_evals_{familyId} (library eval format,
         pseudo-docId household-ledger) staged with `npm run ledger -- evals`,
-        local only; source check is a read_ledger call. Questions and answers
-        await maintainer approval.
+        local only; source check is a read_ledger call. Four maintainer-approved
+        questions (refund window, everything due before 2027-01-01, PVP expiry,
+        Sunrun audit date as unanswerable). The figures check now compares
+        dates as dates (goldenScoring.datesIn), since "2026-11-05" states
+        "November 5, 2026" exactly. Full run 21/21, $1.45.
 
   acceptance:
     - The Rivian Care refund-window reminder fires from production data before 2026-12-16

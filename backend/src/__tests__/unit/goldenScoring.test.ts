@@ -28,6 +28,17 @@ describe('missingFigures', () => {
     expect(missingFigures("$276.33 (CAP package, superseding the lease's $289.15).", 'Year 2 is $276.33.')).toEqual([]);
   });
 
+  it('compares dates as dates, whatever the printed form', () => {
+    expect(missingFigures('Opt out by November 5, 2026.', 'Deadline: **2026-11-05**.')).toEqual([]);
+    expect(missingFigures('Closes Dec 16, 2026; $4,411.38.', 'By 12/16/2026 for 4,411.38.')).toEqual([]);
+    expect(missingFigures('Opt out by November 5, 2026.', 'Some time in November 2026.')).toEqual(['November 5, 2026']);
+    expect(missingFigures('Opt out by November 5, 2026.', 'By 2026-11-06.')).toEqual(['November 5, 2026']);
+  });
+
+  it('does not let a date in the answer supply a bare figure', () => {
+    expect(missingFigures('5 years', 'Starting November 5, 2026.')).toEqual(['5']);
+  });
+
   it('does not find a figure inside a longer number', () => {
     expect(missingFigures('60 days', 'within 600 days')).toEqual(['60']);
     expect(missingFigures('$50', 'a $500 deductible')).toEqual(['$50']);

@@ -35,11 +35,43 @@ function escapeRegExp(s: string): string {
  */
 export function missingFigures(expected: string, answer: string): string[] {
   const required = expected.replace(/\([^)]*\)/g, ' ');
-  return figuresIn(required).filter(f => {
+  // A date is one value, not three figures: "2026-11-05" states "November 5,
+  // 2026" exactly, while "November 2026" does not. Compare dates as dates, then
+  // check the remaining figures with the dates removed from both sides.
+  const answerDates = new Set(datesIn(answer).map(d => d.iso));
+  const missingDates = datesIn(required).filter(d => !answerDates.has(d.iso)).map(d => d.printed);
+  const answerRest = stripDates(answer);
+  const missing = figuresIn(stripDates(required)).filter(f => {
     const bare = escapeRegExp(f.replace(/^\$/, ''));
     const re = new RegExp(`(?<![\\d.,])\\$?${bare}(?!\\d|[.,]\\d)`);
-    return !re.test(answer);
+    return !re.test(answerRest);
   });
+  return Array.from(new Set([...missingDates, ...missing]));
+}
+
+const MONTHS = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
+const MONTH_NAME = '(Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|June?|July?|Aug(?:ust)?|Sept?(?:ember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\\.?';
+/** "November 5, 2026", "Nov. 5 2026", "2026-11-05", "11/5/2026". */
+const DATE = new RegExp(
+  `\\b${MONTH_NAME}\\s+(\\d{1,2}),?\\s+(\\d{4})\\b|\\b(\\d{4})-(\\d{2})-(\\d{2})\\b|\\b(\\d{1,2})/(\\d{1,2})/(\\d{4})\\b`,
+  'gi',
+);
+
+function iso(y: string, m: number, d: string): string {
+  return `${y}-${String(m).padStart(2, '0')}-${d.padStart(2, '0')}`;
+}
+
+/** Calendar dates in a text, whatever the printed form, as ISO strings. */
+export function datesIn(text: string): Array<{ printed: string; iso: string }> {
+  return Array.from(text.matchAll(DATE), m => {
+    if (m[1]) return { printed: m[0], iso: iso(m[3], MONTHS.indexOf(m[1].slice(0, 3).toLowerCase()) + 1, m[2]) };
+    if (m[4]) return { printed: m[0], iso: `${m[4]}-${m[5]}-${m[6]}` };
+    return { printed: m[0], iso: iso(m[9], Number(m[7]), m[8]) };
+  });
+}
+
+function stripDates(text: string): string {
+  return text.replace(DATE, ' ');
 }
 
 /** Page ranges an answer cites: "p. 7", "page 12", "pp. 4-5", "pages 24–30". */
