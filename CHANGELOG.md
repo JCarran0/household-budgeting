@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+### [7.10.1](https://github.com/JCarran0/household-budgeting/compare/v7.10.0...v7.10.1) (2026-10-18)
+
+
+### Documentation
+
+* **ledger:** add the Household Ledger BRD and plan ([789afb3](https://github.com/JCarran0/household-budgeting/commit/789afb31201ee5907d61d3ed65a750ecf56a3f58))
+
 ## [7.10.0](https://github.com/JCarran0/household-budgeting/compare/v7.9.0...v7.10.0) (2026-10-18)
 
 
