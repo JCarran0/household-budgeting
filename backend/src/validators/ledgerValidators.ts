@@ -217,6 +217,16 @@ export function ledgerSentKey(familyId: string): string {
   return `ledger_sent_${familyId}`;
 }
 
+/**
+ * Golden questions for the ledger (plan L9), in the library eval format under a
+ * pseudo-docId. Deliberately NOT under `ledger_{familyId}`'s shape and never
+ * read by the app: these are answer keys, local to the golden runner.
+ */
+export const LEDGER_EVAL_DOC_ID = 'household-ledger';
+export function ledgerEvalKey(familyId: string): string {
+  return `ledger_evals_${familyId}`;
+}
+
 // ---------------------------------------------------------------------------
 // Document fact verification (REQ-H010, SEC-H002)
 // ---------------------------------------------------------------------------

@@ -27,6 +27,11 @@
  * reported as warnings: a correct answer cited from a second page that states
  * the same thing is not wrong.
  *
+ * Household Ledger questions (HOUSEHOLD-LEDGER plan L9) live in one set at
+ * `ledger_evals_{familyId}` under the pseudo-docId LEDGER_EVAL_DOC_ID, staged
+ * with `npm run ledger -- evals`. For those the source check is that the
+ * assistant called read_ledger. They catch a missed or wrongly dated fact.
+ *
  * Golden answers contain real contract figures. This script prints them to the
  * terminal and writes nothing — keep its output out of git and out of issues.
  */
@@ -104,6 +109,7 @@ async function main(): Promise<void> {
   const { chatbotService, agentTraceStore } = await import('../src/services');
   const { StorageFactory } = await import('../src/services/storage');
   const { libraryEvalSetSchema } = await import('../src/validators/libraryValidators');
+  const { LEDGER_EVAL_DOC_ID, ledgerEvalKey } = await import('../src/validators/ledgerValidators');
   const { citesPage, missingFigures } = await import('../src/utils/goldenScoring');
   // Read-only handle for the answer keys: only list and read are used.
   const storage = StorageFactory.getAdapter();
@@ -117,10 +123,12 @@ async function main(): Promise<void> {
   const judge = new Anthropic({ apiKey: config.ai.anthropicApiKey });
 
   const evalPrefix = `library_evals_${familyId}_`;
-  const keys = (await storage.list(evalPrefix)).sort();
+  const keys = [...(await storage.list(evalPrefix)).sort(), ledgerEvalKey(familyId)];
   const sets = [];
   for (const key of keys) {
-    const parsed = libraryEvalSetSchema.safeParse(await storage.read(key));
+    const raw = await storage.read(key);
+    if (raw === null) continue;
+    const parsed = libraryEvalSetSchema.safeParse(raw);
     if (!parsed.success) {
       console.error(`✗ ${key} failed validation — skipped`);
       continue;
@@ -164,11 +172,14 @@ async function main(): Promise<void> {
       const usage = response.message.tokenUsage;
 
       const trace = (await agentTraceStore.list(familyId!, 200)).find(t => t.conversationId === conversationId);
-      const docsRead = Array.from(new Set(
-        (trace?.toolCalls ?? [])
+      const calls = trace?.toolCalls ?? [];
+      const docsRead = Array.from(new Set([
+        ...calls
           .filter(c => c.toolName === 'read_document')
           .map(c => String((c.input as { docId?: unknown } | null)?.docId ?? '')),
-      ));
+        // A ledger question's "document" is the ledger itself.
+        ...(calls.some(c => c.toolName === 'read_ledger') ? [LEDGER_EVAL_DOC_ID] : []),
+      ]));
 
       const pageCited = q.sourcePage === undefined ? null : citesPage(answer, q.sourcePage);
 

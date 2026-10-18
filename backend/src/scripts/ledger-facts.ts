@@ -13,6 +13,7 @@
  *   npm run ledger -- stage --family <id> --file <extraction.json>
  *   npm run ledger -- list  --family <id> [--prod] [--today YYYY-MM-DD]
  *   npm run ledger -- push  --family <id> --doc <docId>
+ *   npm run ledger -- evals --family <id> --file <evals.json>   (golden questions, local only)
  *
  * `stage` writes LOCAL data only and is all-or-nothing: one fact that fails
  * verification stages none, so a document's facts are never half-imported.
@@ -29,8 +30,8 @@ import { etDateString } from '../shared/utils/easternTime';
 import { computeHeadsUp, resolveDate } from '../shared/utils/ledgerDates';
 import { buildDocumentFacts, ledgerExtractionSchema, mergeDocumentFacts } from '../services/ledgerImport';
 import { redactFactText } from '../services/ledgerStore';
-import { LEDGER_FORMAT_VERSION, ledgerFileSchema, ledgerKey, verifyDocumentFact } from '../validators/ledgerValidators';
-import { libraryDocKey, libraryDocumentSchema, type LibraryDocument } from '../validators/libraryValidators';
+import { LEDGER_EVAL_DOC_ID, LEDGER_FORMAT_VERSION, ledgerEvalKey, ledgerFileSchema, ledgerKey, verifyDocumentFact } from '../validators/ledgerValidators';
+import { LIBRARY_FORMAT_VERSION, libraryDocKey, libraryDocumentSchema, libraryEvalSetSchema, type LibraryDocument } from '../validators/libraryValidators';
 import { type Args, fail, formatIssues, parseArgs, prodStore, readJsonFile, requireArg, requirePersonalFamily } from './storeCli';
 
 dotenv.config();
@@ -149,14 +150,31 @@ async function cmdPush(args: Args): Promise<void> {
   );
 }
 
+/**
+ * Golden questions for the ledger (plan L9). Answers come from the maintainer,
+ * never from the model that extracted the facts. Local only: the runner reads
+ * local data, and answer keys have no business in production.
+ */
+async function cmdEvals(args: Args): Promise<void> {
+  const familyId = requireArg(args, 'family');
+  const local = new FilesystemAdapter();
+  await requirePersonalFamily(local, familyId, 'ledger');
+  const input = readJsonFile(requireArg(args, 'file'));
+  const parsed = libraryEvalSetSchema.safeParse({ formatVersion: LIBRARY_FORMAT_VERSION, docId: LEDGER_EVAL_DOC_ID, ...(input as object) });
+  if (!parsed.success) fail(`eval set is invalid:\n${formatIssues(parsed.error.issues)}`);
+  await local.write(ledgerEvalKey(familyId), parsed.data);
+  console.log(`✓ staged ${parsed.data.questions.length} ledger golden question(s) locally`);
+}
+
 async function main(): Promise<void> {
   const { command, args } = parseArgs(process.argv.slice(2));
   switch (command) {
     case 'stage': return cmdStage(args);
     case 'list': return cmdList(args);
     case 'push': return cmdPush(args);
+    case 'evals': return cmdEvals(args);
     default:
-      fail('usage: npm run ledger -- <stage|list|push> [options] (see header of src/scripts/ledger-facts.ts)');
+      fail('usage: npm run ledger -- <stage|list|push|evals> [options] (see header of src/scripts/ledger-facts.ts)');
   }
 }
 
