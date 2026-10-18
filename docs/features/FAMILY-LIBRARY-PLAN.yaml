@@ -137,10 +137,19 @@ phase_1_library:
 
     - id: P1-4
       title: Import first corpus
-      status: not_started
+      status: completed
       description: |
         Solar documents and Rivian R2 extended service/warranty documents via
         /import-document, with golden questions answered by the maintainer.
+      outcome: |
+        2026-10-18: six documents in production — sunrun-solar-lease,
+        sunrun-cap-package (amends the lease), central-hudson-interconnection-agreement,
+        rivian-r2-vehicle-service-contract, rivian-r2-preferred-vehicle-protection,
+        rivian-r2-purchase-agreement — with 17 golden questions. Answers came from
+        a Sonnet + Fable cross-check on the source PDFs, all 17 in agreement and
+        approved by the maintainer (REQ-F044). Skipped as redundant: the Rivian
+        transaction receipt (same figures as the purchase agreement p.1) and the
+        DocuSign signing log.
 
     - id: P1-5
       title: Library reader (read side)
