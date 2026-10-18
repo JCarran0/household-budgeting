@@ -39,6 +39,7 @@ Family-scale app for 2 users: personal budgeting (with Plaid), shared tasks, tri
 | Wishlist | [WISHLIST-BRD.md](docs/features/WISHLIST-BRD.md) | [WISHLIST-PLAN.yaml](docs/features/WISHLIST-PLAN.yaml) |
 | Business Workspace | [BUSINESS-WORKSPACE-BRD.md](docs/features/BUSINESS-WORKSPACE-BRD.md) | [BUSINESS-WORKSPACE-PLAN.yaml](docs/features/BUSINESS-WORKSPACE-PLAN.yaml) |
 | Family Library | [FAMILY-LIBRARY-BRD.md](docs/features/FAMILY-LIBRARY-BRD.md) | [FAMILY-LIBRARY-PLAN.yaml](docs/features/FAMILY-LIBRARY-PLAN.yaml) |
+| Household Ledger | [HOUSEHOLD-LEDGER-BRD.md](docs/features/HOUSEHOLD-LEDGER-BRD.md) | [HOUSEHOLD-LEDGER-PLAN.yaml](docs/features/HOUSEHOLD-LEDGER-PLAN.yaml) |
 
 ## 🤖 Critical Rules — Never Violate
 

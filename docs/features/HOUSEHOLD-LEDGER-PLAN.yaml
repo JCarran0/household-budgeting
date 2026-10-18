@@ -1,0 +1,181 @@
+# =============================================================================
+# Household Ledger — Implementation Plan
+# =============================================================================
+# BRD: docs/features/HOUSEHOLD-LEDGER-BRD.md
+# Status: Phase 1 not started — discovery complete 2026-10-17
+# Last Updated: 2026-10-17
+# =============================================================================
+
+overview:
+  description: |
+    How the ledger described in the BRD gets built. Phase 1 is the fact store,
+    deterministic date rules and reminders, two-model fact extraction for the
+    six library documents, the Household page and Heads-up card, and the
+    assistant's read tool plus two confirmed-write chat actions.
+
+    Sequenced so the first reminder that matters — the Rivian Care full-refund
+    window, closing ~2026-12-16 — can fire from real data well before then.
+    Phase 2 (measured obligations, starting with solar production vs. the
+    guarantee) gets its own refinement pass.
+
+  key_files:
+    brd: docs/features/HOUSEHOLD-LEDGER-BRD.md
+    library_brd: docs/features/FAMILY-LIBRARY-BRD.md
+    library_validators: backend/src/validators/libraryValidators.ts
+    document_redaction: backend/src/utils/documentRedaction.ts
+    library_script: backend/src/scripts/library-document.ts
+    import_skill: .claude/skills/import-document/SKILL.md
+    read_capabilities: backend/src/services/capabilities/readCapabilities.ts
+    chat_action_registry: backend/src/services/chatActions/registry.ts
+    tiers: backend/src/services/chatActions/tiers.ts
+    push: backend/src/services/pushNotificationService.ts
+    golden_runner: backend/scripts/library-golden.ts
+
+decisions:
+  - id: D1
+    date: 2026-10-17
+    decision: One ledger; memories are `note` facts.
+    rationale: BRD D-H01.
+  - id: D2
+    date: 2026-10-17
+    decision: Every write human-gated or deterministic; gate by source.
+    rationale: BRD D-H02, SEC-H001. The ledger is agent-readable, so it must never be agent-writable without a human.
+  - id: D3
+    date: 2026-10-17
+    decision: Deterministic date rules for reminders; no model in the reminder path.
+    rationale: BRD D-H03.
+  - id: D4
+    date: 2026-10-17
+    decision: Household page with manual editing; document facts corrected by override.
+    rationale: BRD D-H04.
+  - id: D5
+    date: 2026-10-17
+    decision: Two-model extraction; quotes verified verbatim by code; dates computed by code from anchor + offset.
+    rationale: BRD D-H05.
+  - id: D6
+    date: 2026-10-17
+    decision: Handled shared; snooze and subject mute per person, server-side; ownership via tasks.
+    rationale: BRD D-H06.
+  - id: D7
+    date: 2026-10-17
+    decision: Personal workspace only in v1; data stored per workspace.
+    rationale: BRD D-H07.
+  - id: D8
+    date: 2026-10-17
+    decision: |
+      Storage keys. ledger_{familyId} holds facts (one blob, family scale, mutex
+      like the other per-family stores); ledger_prefs_{familyId} holds per-user
+      snoozes and mutes; ledger_sent_{familyId} is the reminder idempotency log.
+      The date engine lives in shared/utils/ledgerDates.ts because the backend
+      job, the API and the frontend must agree on what is due.
+    rationale: |
+      Matches the per-family JSON pattern used everywhere else. Splitting prefs
+      and the sent log out of the fact blob keeps the assistant's read tool to
+      facts only, and keeps a notification run from rewriting the facts.
+
+phase_1_ledger:
+  status: not_started
+  tasks:
+    - id: L1
+      title: Schema and store
+      status: not_started
+      description: |
+        validators/ledgerValidators.ts: fact record (REQ-H001 – H005), source
+        union (document | user | app), date rule (anchor + offset, recurrence),
+        correction and handled links. ledgerStore service: family-scoped
+        read/write with a mutex, refuses a business workspace, applies
+        documentRedaction to user text (REQ-H015). Unit tests for schema and
+        scoping.
+
+    - id: L2
+      title: Date engine (shared)
+      status: not_started
+      description: |
+        shared/utils/ledgerDates.ts, pure: resolve a rule to dates, expand
+        recurrences, compute warning dates per kind with overrides (REQ-H031),
+        and derive the Heads-up list given handled facts and one user's snoozes
+        and mutes. The single source of truth for "what is due" — never
+        duplicated in a component or the job. Tests cover month-end offsets,
+        leap years, window open/close and recurring occurrences.
+
+    - id: L3
+      title: Extraction tooling
+      status: not_started
+      description: |
+        `npm run ledger -- stage|list|push`, mirroring the library script:
+        verifies each document fact's quote verbatim on its cited page of the
+        stored body (and the anchor quote for a rule), computes dates, rejects
+        failures, shows a review list with single-model facts marked, and pushes
+        only on the maintainer's command. /import-document gains a fact step,
+        plus a mode for documents already in the library.
+
+    - id: L4
+      title: Backfill the six library documents
+      status: not_started
+      description: |
+        Two-model extraction (different model families, original PDFs not
+        required — facts are verified against the stored body) for the six
+        documents; maintainer approves the union. Must include the Rivian Care
+        refund windows (~2026-12-16), the arbitration opt-out deadline
+        (2026-11-05) closed by a user fact for the email sent 2026-10-17, both
+        contract expirations, and the Sunrun production audit cadence.
+
+    - id: L5
+      title: API
+      status: not_started
+      description: |
+        Routes with Zod schemas in validators/: list facts, create/edit/delete
+        user facts, add a correction, mark handled, per-user snooze and mute.
+        Business workspace refused. Document facts are read-only through the API.
+
+    - id: L6
+      title: Household page and Heads-up card
+      status: not_started
+      description: |
+        Frontend page grouped by subject (REQ-H050 – H053) with the fact form as
+        its own component (600-LOC budget); dashboard Heads-up card with done /
+        snooze / make-a-task. Pause for maintainer UI QA before committing.
+
+    - id: L7
+      title: Scheduler and push reminders
+      status: not_started
+      description: |
+        In-process daily runner (single PM2 instance) that computes warnings
+        through ledgerDates and sends push via pushNotificationService.
+        Idempotent through ledger_sent_ (fact, occurrence, lead), catches up
+        missed warnings, respects per-user snooze and mute, and keeps payloads
+        to subject + kind + date (SEC-H004).
+
+    - id: L8
+      title: Assistant integration
+      status: not_started
+      description: |
+        T0 read capability over facts (REQ-H060), T1 chat actions remember_fact
+        and mark_fact_handled with every param on the card (REQ-H062, SEC-H003),
+        and a system-prompt section: cite the document fact's page, read the
+        document for anything beyond the quote, propose "Remember this?" for
+        user-stated events only.
+
+    - id: L9
+      title: Golden checks for the ledger
+      status: not_started
+      description: |
+        Add "what is due before X?" and "did we handle Y?" questions to the
+        golden set so a missed or wrongly dated fact fails a run.
+
+  acceptance:
+    - The Rivian Care refund-window reminder fires from production data before 2026-12-16
+    - The arbitration opt-out deadline shows as handled by the email fact
+    - No path writes a fact without a human gate or deterministic code (test-enforced)
+    - Every document fact's quote verifies verbatim against the stored body
+    - Push payloads contain no amounts, quotes or identifiers
+
+open_questions:
+  - Re-import semantics for extracted facts (stable ids; withdrawn vs deleted)
+  - Where the household time zone is configured
+  - Scheduler if the deployment ever runs more than one backend instance
+
+deferred_and_tracked_elsewhere:
+  - Phase 2 measured obligations (solar production vs. guarantee) — own refinement pass
+  - Weekly AI briefing over the ledger — after Phase 1 has data
+  - Business workspace enablement — triggered by a real business deadline

@@ -45,14 +45,14 @@ Phase 1 deliberately has **no Google integration in the app**. Documents are ext
 | Phase | Scope | Exit signal |
 |-------|-------|-------------|
 | **1. Library** | `/import-document` → redacted text in storage; assistant read tools; citations; per-document golden questions. First corpus: solar documents, Rivian R2 extended service/warranty | The library gets used for real questions, and answers hold up against the golden set |
-| **2. Facts** | AI proposes key dates/terms from library docs for confirmation, seeding Assets, Agreements, and dated obligations that generate tasks and push reminders. Passport expiry returns here as a confirmed fact, not a scanned doc | Reminders fire for real obligations (warranty expiry, registration, lease milestones) |
+| **2. Facts → Household Ledger** | Moved to its own BRD and pulled forward on 2026-10-17: [HOUSEHOLD-LEDGER-BRD.md](HOUSEHOLD-LEDGER-BRD.md). Facts extracted from library documents (two-model, quote-verified), user memories, date-rule reminders, Household page | See the ledger BRD |
 | **3. Money links** | Agreements ↔ recurring transactions (e.g. solar payment); purchase → "track a warranty?" prompts (Plaid + Amazon receipts); per-asset cost of ownership | — |
 | **4. Estate documents** | Wills, trusts, POA. Dedicated phase with stricter handling than the rest of the library — highest sensitivity, highest cost of a wrong answer | — |
 | **Later / triggered** | In-app upload or Drive sync — triggered when a non-maintainer user wants to add a document themselves | "I wish I could just add this" |
 
 Phases 2+ are directional; each gets its own refinement pass before build.
 
-**Motivating Phase 2 case (found 2026-10-17 while importing the solar documents):** the family's own production log shows about 5,930 kWh over the first 12 months, against a CAP-package year-1 estimate of 9,047 kWh. The lease guarantees 90% of estimate, audited every 2 years and refunded at $0.110/kWh, with a cumulative year-2 guarantee of 16,244 kWh. Nobody would have connected a spreadsheet to a clause on page 16. Phase 2 should make "actual vs. guaranteed" a tracked obligation, with the audit date as a reminder.
+**Motivating Phase 2 case (found 2026-10-17 while importing the solar documents):** the family's own production log shows about 5,930 kWh over the first 12 months, against a CAP-package year-1 estimate of 9,047 kWh. The lease guarantees 90% of estimate, audited every 2 years and refunded at $0.110/kWh, with a cumulative year-2 guarantee of 16,244 kWh. Nobody would have connected a spreadsheet to a clause on page 16. The Household Ledger tracks the audit date as a reminder; comparing actual vs. guaranteed production is the ledger's Phase 2 (measured obligations).
 
 ---
 
