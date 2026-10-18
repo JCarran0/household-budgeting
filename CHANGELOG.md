@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.13.0](https://github.com/JCarran0/household-budgeting/compare/v7.12.0...v7.13.0) (2026-10-18)
+
+
+### Features
+
+* **ledger:** add ledger questions to the golden runner ([74b63ab](https://github.com/JCarran0/household-budgeting/commit/74b63abba6f58564fb20676af2c96fe28202991e))
+* **ledger:** cite documents in the ledger view and send reminders from production only ([e652498](https://github.com/JCarran0/household-budgeting/commit/e65249806f2700a62f7716b1c808cd48c3c4f05e))
+* **ledger:** send push reminders and link Heads-up items to tasks ([bd4d713](https://github.com/JCarran0/household-budgeting/commit/bd4d713fb1b09ad20959db2f896a94611f8d2c88))
+
 ## [7.12.0](https://github.com/JCarran0/household-budgeting/compare/v7.11.0...v7.12.0) (2026-10-18)
 
 
