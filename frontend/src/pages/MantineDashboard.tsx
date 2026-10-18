@@ -28,6 +28,7 @@ import { DashboardAlerts } from '../components/dashboard/DashboardAlerts';
 import { BudgetStatusCard } from '../components/dashboard/BudgetStatusCard';
 import { IncomeVsSpendingCard } from '../components/dashboard/IncomeVsSpendingCard';
 import { RecentTransactionsCard } from '../components/dashboard/RecentTransactionsCard';
+import { HeadsUpCard } from '../components/dashboard/HeadsUpCard';
 
 export function MantineDashboard() {
   const user = useAuthStore((s) => s.user);
@@ -211,6 +212,8 @@ export function MantineDashboard() {
       </Group>
 
       <DashboardAlerts accounts={accounts} uncategorizedData={uncategorizedData} />
+
+      <HeadsUpCard />
 
       {/* Stats Cards */}
       <SimpleGrid cols={{ base: 1, sm: 2, lg: stats.length > 4 ? 5 : 4 }} spacing="lg">

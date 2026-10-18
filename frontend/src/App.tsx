@@ -29,6 +29,7 @@ import { Projects } from './pages/Projects';
 import { Settings } from './pages/Settings';
 import { Tasks } from './pages/Tasks';
 import { Wishlist } from './pages/Wishlist';
+import { Household } from './pages/Household';
 import { BusinessStatements } from './pages/BusinessStatements';
 import { PlaidLinkProvider } from './providers/PlaidLinkProvider';
 import { queryClient } from './lib/queryClient';
@@ -106,6 +107,11 @@ function App() {
                     <Route path="/wishlist" element={
                       <RouteErrorBoundary routeName="Wishlist">
                         <Wishlist />
+                      </RouteErrorBoundary>
+                    } />
+                    <Route path="/household" element={
+                      <RouteErrorBoundary routeName="Household">
+                        <Household />
                       </RouteErrorBoundary>
                     } />
                     <Route path="/tasks" element={

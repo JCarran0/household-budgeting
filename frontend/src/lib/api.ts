@@ -22,6 +22,7 @@ import { createTasksApi } from './api/tasks';
 import { createTaskTemplatesApi } from './api/taskTemplates';
 import { createNotificationsApi } from './api/notifications';
 import { createWishlistApi } from './api/wishlist';
+import { createLedgerApi } from './api/ledger';
 import { createImagesApi } from './api/images';
 import { createWorkspacesApi } from './api/workspaces';
 import { createBusinessStatementsApi } from './api/businessStatements';
@@ -67,6 +68,7 @@ export const api = {
   ...createTaskTemplatesApi(client),
   ...createNotificationsApi(client),
   ...createWishlistApi(client),
+  ...createLedgerApi(client),
   ...createImagesApi(client),
   ...createWorkspacesApi(client),
   ...createBusinessStatementsApi(client),
