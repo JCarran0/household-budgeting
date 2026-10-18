@@ -106,6 +106,18 @@ describe('AI routes are refused in the business workspace (REQ-P016)', () => {
       .set('Authorization', `Bearer ${token}`)
       .expect(403);
   });
+
+  it('the Household Ledger is refused — the assistant reads it (D-H07)', async () => {
+    const user = await createUser('bizai');
+    const token = await businessToken(user.userId, user.token);
+
+    await request(app).get('/api/v1/ledger').set('Authorization', `Bearer ${token}`).expect(403);
+    await request(app)
+      .post('/api/v1/ledger/facts')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ subject: 'Trust', title: 'Anything', schedule: { kind: 'note' } })
+      .expect(403);
+  });
 });
 
 describe('the personal workspace is unaffected (guard is not blanket-deny)', () => {

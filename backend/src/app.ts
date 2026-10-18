@@ -33,6 +33,7 @@ import taskRoutes from './routes/tasks';
 import taskTemplateRoutes from './routes/taskTemplates';
 import notificationRoutes from './routes/notifications';
 import wishlistRoutes from './routes/wishlist';
+import ledgerRoutes from './routes/ledger';
 import imageRoutes from './routes/images';
 import workspaceRoutes from './routes/workspaces';
 import businessStatementRoutes from './routes/businessStatements';
@@ -198,6 +199,8 @@ app.use(`${apiPrefix}/tasks`, taskRoutes);
 app.use(`${apiPrefix}/task-templates`, taskTemplateRoutes);
 app.use(`${apiPrefix}/notifications`, notificationRoutes);
 app.use(`${apiPrefix}/wishlist`, wishlistRoutes);
+// Household Ledger — personal workspace only (D-H07); the assistant reads it, so it sits behind the AI guard.
+app.use(`${apiPrefix}/ledger`, ledgerRoutes);
 app.use(`${apiPrefix}/images`, imageRoutes);
 app.use(`${apiPrefix}/workspaces`, workspaceRoutes);
 app.use(`${apiPrefix}/business/statements`, businessStatementRoutes);

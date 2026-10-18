@@ -150,11 +150,21 @@ phase_1_ledger:
 
     - id: L5
       title: API
-      status: not_started
+      status: completed
       description: |
         Routes with Zod schemas in validators/: list facts, create/edit/delete
         user facts, add a correction, mark handled, per-user snooze and mute.
         Business workspace refused. Document facts are read-only through the API.
+      outcome: |
+        routes/ledger.ts over services/ledgerService.ts (shared with the L8 chat
+        actions). GET /ledger returns facts + this person's Heads-up + prefs,
+        computed with the ET date. Inputs never carry id/source/status, so a
+        caller cannot claim to be a document or an app event. A person-entered
+        deadline already past is tracked from its own date (shows overdue);
+        recurrences from today. Deleting a user fact drops its handled marks;
+        deleting a correction restores the original. Unmark withdraws rather
+        than deletes. Behind refuseBusinessWorkspace, added to the
+        businessWorkspaceAi security test.
 
     - id: L6
       title: Household page and Heads-up card

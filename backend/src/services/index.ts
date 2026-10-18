@@ -30,6 +30,8 @@ import { ChatbotService } from './chatbotService';
 import { AgentTraceStore } from './agentTraceStore';
 import { AgentLearningsStore } from './agentLearningsStore';
 import { ActionActivityStore } from './actionActivityStore';
+import { LedgerStore } from './ledgerStore';
+import { LedgerService } from './ledgerService';
 import { ProposalStore } from './chatActions/proposalStore';
 import { ActionUndoService } from './actionUndoService';
 import { CategorizationService } from './categorizationService';
@@ -103,6 +105,10 @@ export const imageStore = new ImageStore(
   config.server.nodeEnv === 'test' ? new InMemoryBinaryStore() : StorageFactory.getBinaryStore()
 );
 export const wishlistService = getWishlistService(dataService, categoryService, imageStore);
+// Household Ledger (HOUSEHOLD-LEDGER-BRD). Writes are human-gated: this service
+// backs the Household page and the confirmed chat cards, never a model tool.
+export const ledgerStore = new LedgerStore(dataService);
+export const ledgerService = new LedgerService(ledgerStore);
 
 // SECURITY: chatbotDataService receives ONLY readOnlyDataService.
 // It must NEVER receive the full dataService, plaidService, accountService,

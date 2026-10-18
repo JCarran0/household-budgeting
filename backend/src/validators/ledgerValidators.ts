@@ -293,3 +293,45 @@ export function verifyDocumentFact(fact: LedgerFact, doc: LibraryDocument): stri
   }
   return problems;
 }
+
+// ---------------------------------------------------------------------------
+// Route and chat-action inputs (plan L5, L8)
+//
+// Inputs never carry an id, a source, a status or a timestamp: the service
+// assigns those, so a caller cannot claim to be a document or an app event.
+// ---------------------------------------------------------------------------
+
+export const ledgerFactInputSchema = z
+  .object({
+    subject: z.string().trim().min(2).max(120),
+    title: z.string().trim().min(3).max(160),
+    detail: z.string().trim().max(2000).optional(),
+    amount: z.string().trim().min(1).max(60).optional(),
+    schedule: ledgerScheduleSchema,
+    leadDays: z.array(z.number().int().min(0).max(730)).min(1).max(4).optional(),
+  })
+  .strict()
+  .superRefine((input, ctx) => {
+    const problem = scheduleProblem(input.schedule);
+    if (problem) ctx.addIssue({ code: 'custom', path: ['schedule'], message: problem });
+    if (input.leadDays && input.schedule.kind === 'note') {
+      ctx.addIssue({ code: 'custom', path: ['leadDays'], message: 'an undated note has no warnings' });
+    }
+  });
+export type LedgerFactInput = z.infer<typeof ledgerFactInputSchema>;
+
+export const ledgerMarkHandledSchema = z
+  .object({
+    occurrenceDate: ledgerDate,
+    note: z.string().trim().min(1).max(500).optional(),
+  })
+  .strict();
+
+export const ledgerSnoozeSchema = z
+  .object({
+    occurrenceKey: z.string().min(3).max(200),
+    until: ledgerDate,
+  })
+  .strict();
+
+export const ledgerMuteSchema = z.object({ subject: z.string().trim().min(2).max(120), muted: z.boolean() }).strict();
