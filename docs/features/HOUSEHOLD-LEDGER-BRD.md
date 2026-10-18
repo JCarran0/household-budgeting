@@ -58,8 +58,8 @@ One **ledger of facts**, each with a subject, an optional date rule, and a **sou
 - **REQ-H001** A fact has: `id`, `subject` (the asset or area, matching library `subject` where one exists, e.g. "2027 Rivian R2"), `title`, optional `detail`, `kind`, an optional date rule, `source`, and `status`.
 - **REQ-H002** `kind` is one of `deadline`, `expiration`, `recurring`, `window` (opens and closes) or `note` (undated). Undated free-text memories are `note` facts, not a second store (D-H01).
 - **REQ-H003** Amounts are stored as **verbatim text** as printed ("$2,078.45"), never parsed into numbers the assistant could re-format.
-- **REQ-H004** A date is either a literal calendar date or a **rule**: an anchor date plus an offset (days, months or years), optionally recurring every N months/years until an end. **Code computes every derived date; a model never does date arithmetic** (D-H05). Dates are calendar dates in the household's time zone.
-- **REQ-H005** `status` is `active`, `handled` (for a deadline occurrence) or `overridden` (superseded by a correction). History is never deleted for document facts.
+- **REQ-H004** A date is either a literal calendar date or a **rule**: an anchor date plus an offset (days, months or years), optionally recurring every N months/years until an end. **Code computes every derived date; a model never does date arithmetic** (D-H05). Dates are calendar dates in the household's time zone, America/New_York — the zone the app already uses (`shared/utils/easternTime.ts`, `etDateString()`); the date engine takes `today` as an argument and never reads a clock.
+- **REQ-H005** Stored `status` is `active` or `withdrawn` (a re-import no longer finds a document fact). *Handled* and *overridden* are **derived**, never stored: an occurrence is handled while an active fact `handles` it, and a fact is overridden while an active correction `overrides` it — so withdrawing the mark or the correction restores the original with no second write to keep in sync. History is never deleted for document facts.
 
 ### 3.2 Sources and Write Gates (D-H02)
 
@@ -151,7 +151,6 @@ Every write passes a human gate or is deterministic code. The gate depends on th
 |----------|------|
 | Re-import semantics | When a document is re-imported and its extracted facts change, stable fact ids (`{docId}:{slug}`) keep handled marks attached; a fact that disappears is marked withdrawn, not deleted. Confirm during the build |
 | Scheduler | The backend has no job runner today. The plan proposes an in-process daily runner (single PM2 instance) with an idempotency log; revisit if the deployment ever runs more than one instance |
-| Household time zone | Dates are calendar dates in one household zone. Confirm where it is configured rather than assuming America/New_York |
 | Recall measurement | Extend the golden-set runner with "what is due before X?" questions so missed facts show up as failures |
 
 ---

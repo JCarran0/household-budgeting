@@ -74,22 +74,33 @@ decisions:
       facts only, and keeps a notification run from rewriting the facts.
 
 phase_1_ledger:
-  status: not_started
+  status: in_progress
   tasks:
     - id: L1
       title: Schema and store
-      status: not_started
+      status: completed
       description: |
         validators/ledgerValidators.ts: fact record (REQ-H001 – H005), source
         union (document | user | app), date rule (anchor + offset, recurrence),
         correction and handled links. ledgerStore service: family-scoped
-        read/write with a mutex, refuses a business workspace, applies
-        documentRedaction to user text (REQ-H015). Unit tests for schema and
-        scoping.
+        read/write with a mutex, applies documentRedaction to user text
+        (REQ-H015). Unit tests for schema and scoping.
+      outcome: |
+        Types in shared/types/ledger.ts; the Zod schema asserts at compile time
+        that it matches them. Stored status is active | withdrawn — handled and
+        overridden are derived (REQ-H005 amended). Schema enforces: id shape
+        tied to source, only user/app facts handle, only user facts override,
+        app facts must handle something, computable rules only, links resolve,
+        no override cycles. verifyDocumentFact (quote verbatim on its page,
+        every anchor/literal date printed in a quote) landed here rather than in
+        L3 so the tooling and the API share it. Store throws on a corrupt file
+        (empty would read as "nothing is due") and validates before every save.
+        Business-workspace refusal moved to the route (L5, refuseBusinessWorkspace)
+        to match every other AI-reachable surface.
 
     - id: L2
       title: Date engine (shared)
-      status: not_started
+      status: completed
       description: |
         shared/utils/ledgerDates.ts, pure: resolve a rule to dates, expand
         recurrences, compute warning dates per kind with overrides (REQ-H031),
@@ -97,6 +108,14 @@ phase_1_ledger:
         and mutes. The single source of truth for "what is due" — never
         duplicated in a component or the job. Tests cover month-end offsets,
         leap years, window open/close and recurring occurrences.
+      outcome: |
+        Pure, takes `today`. Recurrences step from the first date by multiples
+        of the interval (no clamp drift); occurrences before trackFrom are
+        history. Heads-up: windows show for 14 days after opening and again from
+        the closing warning; expirations stay 14 days after passing; deadlines
+        and recurring occurrences stay overdue until handled; mute affects
+        warnings only. pendingWarnings sends only the latest unsent warning per
+        live occurrence and returns the superseded keys to mark sent.
 
     - id: L3
       title: Extraction tooling
@@ -172,7 +191,6 @@ phase_1_ledger:
 
 open_questions:
   - Re-import semantics for extracted facts (stable ids; withdrawn vs deleted)
-  - Where the household time zone is configured
   - Scheduler if the deployment ever runs more than one backend instance
 
 deferred_and_tracked_elsewhere:

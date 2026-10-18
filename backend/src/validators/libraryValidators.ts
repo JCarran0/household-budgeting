@@ -116,6 +116,18 @@ export function pageMarkers(body: string): number[] {
   return Array.from(body.matchAll(PAGE_MARKER), m => Number(m[1]));
 }
 
+/**
+ * Text of one page of a validated body (without its marker), or null when the
+ * page does not exist. Used by the ledger's quote verification.
+ */
+export function pageText(body: string, page: number): string | null {
+  const parts = body.split(/<!-- page (\d+) -->/);
+  for (let i = 1; i < parts.length; i += 2) {
+    if (Number(parts[i]) === page) return parts[i + 1] ?? '';
+  }
+  return null;
+}
+
 export const libraryDocumentSchema = libraryDocumentMetaObject
   .extend({
     formatVersion: z.literal(LIBRARY_FORMAT_VERSION),

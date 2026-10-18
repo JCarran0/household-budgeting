@@ -2114,3 +2114,5 @@ export interface BusinessStatement {
   clientHeader: StatementHeader;
   createdAt: string;            // ISO timestamp
 }
+// Household Ledger types live in their own module (HOUSEHOLD-LEDGER-BRD).
+export * from './ledger';
