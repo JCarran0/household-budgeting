@@ -54,6 +54,7 @@ Write `meta.json` to the scratchpad:
 - `docId`: a lowercase kebab slug, stable across re-imports.
 - `subject`: names the asset, so all of one car's or system's documents share it exactly (`2026 Rivian R2`, `Rooftop solar system`).
 - `summary`: describes *what questions this document can answer*, not the document's own marketing copy.
+- `amends`: list the `docId`s this document revises, such as a change order, final-design package, addendum or renewal. Where the two conflict, this document governs. Say in the summary *which* terms it changes ("Replaces the lease's Exhibit A payment schedule and production guarantee table"). The referenced documents must be imported first. Look for this on every import: a document that silently overrides another is the most likely source of a confidently wrong answer.
 - Don't include `redactions`, `pageCount`, `ingestedAt`, `formatVersion` or `body`. The script derives them and refuses them if you supply them.
 
 ### 4. Stage it

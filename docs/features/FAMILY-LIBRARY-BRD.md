@@ -52,6 +52,8 @@ Phase 1 deliberately has **no Google integration in the app**. Documents are ext
 
 Phases 2+ are directional; each gets its own refinement pass before build.
 
+**Motivating Phase 2 case (found 2026-10-17 while importing the solar documents):** the family's own production log shows about 5,930 kWh over the first 12 months, against a CAP-package year-1 estimate of 9,047 kWh. The lease guarantees 90% of estimate, audited every 2 years and refunded at $0.110/kWh, with a cumulative year-2 guarantee of 16,244 kWh. Nobody would have connected a spreadsheet to a clause on page 16. Phase 2 should make "actual vs. guaranteed" a tracked obligation, with the audit date as a reminder.
+
 ---
 
 ## 3. Phase 1 Requirements
@@ -86,6 +88,7 @@ Phases 2+ are directional; each gets its own refinement pass before build.
 - **REQ-F030** Two T0 tools: `list_documents` (catalog: id, title, type, summary, ingest date, redaction counts) and `read_document` (full text by id, with page markers).
 - **REQ-F031** Library access goes through `ReadOnlyDataService`. The assistant has no write path to the library.
 - **REQ-F032** The business workspace has no library access (enforced by the existing route-level refusal).
+- **REQ-F033** A document may declare `amends: [docId…]`. Where an amending document conflicts with the one it amends, the amending document governs, and the assistant says so when the difference matters. Referenced documents must exist before an amending document is staged or pushed. (D-F09)
 
 ### 3.5 Answer Trust (D-F06)
 
@@ -155,6 +158,7 @@ The authoritative definition is `backend/src/validators/libraryValidators.ts`; t
 | D-F05 | Scope = owned things + signed contracts + health plan summaries; estate docs deferred to a dedicated phase | Excluded categories are where SSNs cluster; included ones are where retrieval pain is. Estate docs warrant stricter handling, not omission |
 | D-F06 | Citations mandatory; figures verbatim; "the documents don't say" is a valid answer; golden set | A confident wrong number is worse than no answer — the user will act on it. Cost: wordier answers, no deep page links (Drive PDF viewer), prompt-level enforcement in Phase 1 |
 | D-F07 | No inventory phase; import per document via `/import-document`, starting with the solar documents and the Rivian R2 extended service/warranty documents. Golden questions are collected per import rather than as an upfront set | The initial corpus is a handful of known documents. Per-import questions mean every document is covered by someone who just read it |
+| D-F09 | Documents declare what they amend (`amends`), and the amending document governs on conflict | Found on the first real corpus: the Sunrun CAP package revises the lease's payment schedule ($280.76 → $268.31/mo) and production guarantee table. Both documents are correctly cited, so citations alone cannot stop a wrong answer |
 | D-F08 | Library entries are JSON keys in the existing storage layer, not markdown files under a new path, and there is no catalog file | `StorageAdapter.list` already works by prefix, and prod sync, local backup, versioning and snapshots then cover the library with zero new infrastructure. A catalog would be a second source of truth that a partial push could leave stale |
 
 ---

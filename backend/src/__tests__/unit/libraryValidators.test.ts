@@ -88,6 +88,24 @@ describe('libraryDocumentMetaSchema', () => {
   });
 });
 
+describe('amends', () => {
+  it('accepts a document that amends another', () => {
+    const r = libraryDocumentSchema.safeParse(doc({ docId: 'solar-cap-package', amends: ['solar-lease'] }));
+    expect(r.success).toBe(true);
+  });
+
+  it('rejects a document that amends itself, in both schemas', () => {
+    expect(libraryDocumentSchema.safeParse(doc({ amends: ['solar-lease'] })).success).toBe(false);
+    const { formatVersion: _v, pageCount: _p, ingestedAt: _i, redactions: _r, body: _b, ...meta } = doc();
+    expect(libraryDocumentMetaSchema.safeParse({ ...meta, amends: ['solar-lease'] }).success).toBe(false);
+  });
+
+  it('rejects an empty or malformed amends list', () => {
+    expect(libraryDocumentSchema.safeParse(doc({ docId: 'x-cap', amends: [] })).success).toBe(false);
+    expect(libraryDocumentSchema.safeParse(doc({ docId: 'x-cap', amends: ['Solar Lease'] })).success).toBe(false);
+  });
+});
+
 describe('library storage keys', () => {
   it('keeps eval answers out of a family document listing', () => {
     expect(libraryEvalKey(FAMILY, 'solar-lease').startsWith(libraryFamilyPrefix(FAMILY))).toBe(false);

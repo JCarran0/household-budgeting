@@ -114,6 +114,18 @@ async function readDocs(store: StorageAdapter, familyId: string): Promise<Librar
   return docs;
 }
 
+/**
+ * An `amends` reference to a document the store does not have would tell the
+ * assistant to prefer this doc over nothing — or, worse, over a doc pushed
+ * later under that id. Referenced docs must exist first.
+ */
+async function requireAmendedDocs(store: StorageAdapter, familyId: string, amends: string[] | undefined, where: string): Promise<void> {
+  if (!amends) return;
+  const ids = new Set((await readDocs(store, familyId)).map(d => d.docId));
+  const missing = amends.filter(id => !ids.has(id));
+  if (missing.length > 0) fail(`amends ${missing.join(', ')}, which ${missing.length === 1 ? 'is' : 'are'} not in the ${where} library yet — import ${missing.length === 1 ? 'it' : 'them'} first`);
+}
+
 function sameSource(a: LibrarySource, b: LibrarySource): boolean {
   if (a.kind === 'drive' && b.kind === 'drive') return a.fileId === b.fileId;
   if (a.kind === 'file' && b.kind === 'file') return a.sha256 === b.sha256;
@@ -137,7 +149,12 @@ function printReview(body: string): void {
   }
   // The redactor cannot see an unlabeled bank account. Long digit runs that
   // survived are listed so a human decides, rather than nobody.
-  const residual = lines.filter(l => /\d(?:[ -]?\d){7,}/.test(l.replace(/\[REDACTED:[^\]]*\]/g, '')));
+  // Phone numbers, ZIP+4 and UUIDs (every DocuSign page header carries one) are
+  // stripped first, and repeated lines collapsed: a review list that is mostly
+  // noise trains the reviewer to skim past the line that matters.
+  const NOT_AN_ACCOUNT =
+    /\[REDACTED:[^\]]*\]|\b(?:1[ -])?(?:\(\d{3}\)\s?|\d{3}[-. ])\d{3}[-. ]\d{4}\b|\b\d{5}-\d{4}\b|\b[0-9A-F]{8}(?:-[0-9A-F]{4}){3}-[0-9A-F]{12}\b/gi;
+  const residual = [...new Set(lines.filter(l => /\d(?:[ -]?\d){7,}/.test(l.replace(NOT_AN_ACCOUNT, ''))))];
   if (residual.length > 0) {
     console.log('\nKept, but contain 8+ digit runs — confirm none is a bank/card number:');
     for (const l of residual) console.log(`  ${clip(l.trim())}`);
@@ -159,6 +176,8 @@ async function cmdPrepare(args: Args): Promise<void> {
   const metaResult = libraryDocumentMetaSchema.safeParse(readJsonFile(requireArg(args, 'meta')));
   if (!metaResult.success) fail(`metadata is invalid:\n${formatIssues(metaResult.error.issues)}`);
   const meta = metaResult.data;
+
+  await requireAmendedDocs(local, familyId, meta.amends, 'local');
 
   const existing = await readDocs(local, familyId);
   const duplicate = existing.find(d => d.docId !== meta.docId && sameSource(d.source, meta.source));
@@ -221,7 +240,8 @@ async function cmdList(args: Args): Promise<void> {
   console.log(`${args.prod === true ? 'PRODUCTION' : 'local'} library — ${docs.length} document(s)`);
   for (const d of docs) {
     const red = Object.entries(d.redactions).map(([t, n]) => `${t}:${n}`).join(' ');
-    console.log(`  ${d.docId.padEnd(32)} ${d.domain}/${d.kind}  ${d.pageCount}p  ingested ${d.ingestedAt.slice(0, 10)}  ${red}`);
+    const amends = d.amends ? `  amends ${d.amends.join(',')}` : '';
+    console.log(`  ${d.docId.padEnd(32)} ${d.domain}/${d.kind}  ${d.pageCount}p  ingested ${d.ingestedAt.slice(0, 10)}  ${red}${amends}`);
   }
 }
 
@@ -234,6 +254,8 @@ async function cmdPush(args: Args): Promise<void> {
 
   const doc = libraryDocumentSchema.safeParse(await local.read(libraryDocKey(familyId, docId)));
   if (!doc.success) fail(`local document "${docId}" is missing or invalid; nothing pushed`);
+
+  await requireAmendedDocs(prod, familyId, doc.data.amends, 'production');
 
   const evalsRaw = await local.read(libraryEvalKey(familyId, docId));
   const evals = evalsRaw === null ? null : libraryEvalSetSchema.safeParse(evalsRaw);

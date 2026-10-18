@@ -77,7 +77,7 @@ export type LibrarySource = z.infer<typeof librarySourceSchema>;
  * What the skill authors. Everything the script derives — redaction, counts,
  * timestamps, format version — is deliberately NOT accepted from the model.
  */
-export const libraryDocumentMetaSchema = z
+const libraryDocumentMetaObject = z
   .object({
     docId: libraryDocIdSchema,
     title: z.string().min(3).max(160),
@@ -90,9 +90,23 @@ export const libraryDocumentMetaSchema = z
     summary: z.string().min(40).max(1200),
     /** Signed/effective date of the document, if it has one. */
     effectiveDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+    /**
+     * Documents this one amends. Where they conflict, this one governs.
+     *
+     * Without it the library holds two confidently-cited answers to the same
+     * question — the solar lease says $280.76/mo, the CAP package that revised
+     * it says $268.31 — and citations cannot tell the assistant which is live.
+     * The script checks every referenced docId exists before staging or pushing.
+     */
+    amends: z.array(libraryDocIdSchema).min(1).max(10).optional(),
     source: librarySourceSchema,
   })
   .strict();
+
+const notSelfAmending = (m: { docId: string; amends?: string[] }): boolean => !m.amends?.includes(m.docId);
+const SELF_AMEND = { path: ['amends'], message: 'a document cannot amend itself' };
+
+export const libraryDocumentMetaSchema = libraryDocumentMetaObject.refine(notSelfAmending, SELF_AMEND);
 export type LibraryDocumentMeta = z.infer<typeof libraryDocumentMetaSchema>;
 
 const PAGE_MARKER = /<!-- page (\d+) -->/g;
@@ -102,7 +116,7 @@ export function pageMarkers(body: string): number[] {
   return Array.from(body.matchAll(PAGE_MARKER), m => Number(m[1]));
 }
 
-export const libraryDocumentSchema = libraryDocumentMetaSchema
+export const libraryDocumentSchema = libraryDocumentMetaObject
   .extend({
     formatVersion: z.literal(LIBRARY_FORMAT_VERSION),
     pageCount: z.number().int().min(1).max(1000),
@@ -111,6 +125,7 @@ export const libraryDocumentSchema = libraryDocumentMetaSchema
     body: z.string().min(1).max(LIBRARY_MAX_BODY_CHARS),
   })
   .strict()
+  .refine(notSelfAmending, SELF_AMEND)
   .superRefine((doc, ctx) => {
     // Citations depend on page markers (REQ-F002), so they must be exactly
     // 1..pageCount, in order, each once. A gap means the extractor skipped a
