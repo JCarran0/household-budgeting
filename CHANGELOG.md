@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.12.0](https://github.com/JCarran0/household-budgeting/compare/v7.11.0...v7.12.0) (2026-10-18)
+
+
+### Features
+
+* **ledger:** add document fact extraction tooling ([b54943a](https://github.com/JCarran0/household-budgeting/commit/b54943af206bd1876ccdd21e21565de49d715dfc))
+* **ledger:** add the Household Ledger API ([11c9e30](https://github.com/JCarran0/household-budgeting/commit/11c9e30eec34206ce0320a06801380cd634b1c3b))
+* **ledger:** let the assistant read the ledger and propose two confirmed writes ([8915fc9](https://github.com/JCarran0/household-budgeting/commit/8915fc969d34c015fb70443651da2bbd7782e922))
+
 ## [7.11.0](https://github.com/JCarran0/household-budgeting/compare/v7.10.1...v7.11.0) (2026-10-18)
 
 
