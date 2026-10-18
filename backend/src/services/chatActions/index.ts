@@ -16,6 +16,7 @@ import './tripStopActions'; // registers via side-effect
 import './projectLineItemAction'; // registers via side-effect
 import './financialWriteActions'; // registers via side-effect
 import './submitGithubIssueAction'; // registers via side-effect
+import './ledgerFactActions'; // registers via side-effect
 
 export * from './registry';
 export * from './tiers';

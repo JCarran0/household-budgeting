@@ -58,6 +58,25 @@ function clip(text: string, max: number): string {
   return text.length > max ? `${text.slice(0, max - 1)}…` : text;
 }
 
+/**
+ * The rule for marking an occurrence handled, shared by the service and the
+ * chat action's pre-execution check (SEC-P030) so the two cannot disagree.
+ * Returns the fact; throws a user-facing error otherwise.
+ */
+export function assertHandleable(facts: LedgerFact[], factId: string, occurrenceDate: string): LedgerFact {
+  const target = effectiveFacts(facts).find(f => f.id === factId && !f.handles);
+  if (!target) throw new NotFoundError('Fact not found, withdrawn, or replaced by a correction');
+  if (target.schedule.kind === 'note' || target.schedule.kind === 'expiration') {
+    throw new ValidationError('Only deadlines, windows and recurring items can be marked handled');
+  }
+  const key = occurrenceKey(factId, occurrenceDate);
+  if (!occurrencesOf(target, occurrenceDate).some(o => o.occurrenceKey === key)) {
+    throw new ValidationError(`"${target.title}" has no occurrence on ${occurrenceDate}`);
+  }
+  if (handledKeys(facts).has(key)) throw new ConflictError(`"${target.title}" is already marked handled`, 'ALREADY_HANDLED');
+  return target;
+}
+
 export class LedgerService {
   constructor(
     private readonly store: LedgerStore,
@@ -170,16 +189,7 @@ export class LedgerService {
   ): Promise<LedgerFact> {
     const id = newFactId();
     const file = await this.store.update(familyId, facts => {
-      const target = effectiveFacts(facts).find(f => f.id === factId);
-      if (!target) throw new NotFoundError('Fact not found, withdrawn, or replaced by a correction');
-      if (target.schedule.kind === 'note' || target.schedule.kind === 'expiration') {
-        throw new ValidationError('Only deadlines, windows and recurring items can be marked handled');
-      }
-      const key = occurrenceKey(factId, occurrenceDate);
-      if (!occurrencesOf(target, occurrenceDate).some(o => o.occurrenceKey === key)) {
-        throw new ValidationError(`${factId} has no occurrence on ${occurrenceDate}`);
-      }
-      if (handledKeys(facts).has(key)) throw new ConflictError('Already marked handled', 'ALREADY_HANDLED');
+      const target = assertHandleable(facts, factId, occurrenceDate);
       return [
         ...facts,
         {

@@ -118,6 +118,8 @@ const CONFIRMED_PREFIX: Record<ChatActionId, string> = {
   set_budget_amount: 'Set budget:',
   create_auto_categorize_rule: 'Created rule:',
   submit_github_issue: 'Filed issue:',
+  remember_fact: 'Remembered:',
+  mark_fact_handled: 'Marked handled:',
 };
 
 export function ActionCard({

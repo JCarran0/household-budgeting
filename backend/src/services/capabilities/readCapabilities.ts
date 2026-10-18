@@ -29,9 +29,10 @@ import { listChatActionIds } from '../chatActions/registry';
 import { BUDGETING_CAPABILITIES } from './budgetingCapabilities';
 import { PLANNING_CAPABILITIES } from './planningCapabilities';
 import { LIBRARY_CAPABILITIES } from './libraryCapabilities';
+import { LEDGER_CAPABILITIES } from './ledgerCapabilities';
 
 /** Grouping for REQ-P018 progressive disclosure once the surface outgrows a flat list. */
-export type CapabilityDomain = 'budgeting' | 'tasks' | 'trips' | 'projects' | 'library';
+export type CapabilityDomain = 'budgeting' | 'tasks' | 'trips' | 'projects' | 'library' | 'ledger';
 
 export interface ReadCapability {
   name: string;
@@ -47,6 +48,7 @@ export const READ_CAPABILITIES: ReadCapability[] = [
   ...BUDGETING_CAPABILITIES,
   ...PLANNING_CAPABILITIES,
   ...LIBRARY_CAPABILITIES,
+  ...LEDGER_CAPABILITIES,
 ];
 
 /** Platform tools. Not capabilities — they mediate access rather than expose data. */

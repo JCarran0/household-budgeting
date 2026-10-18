@@ -162,7 +162,9 @@ describe('the shipped action set (REQ-P015)', () => {
       'complete_task',
       'create_auto_categorize_rule',
       'create_task',
+      'mark_fact_handled',
       'move_trip_stop',
+      'remember_fact',
       'set_budget_amount',
       'set_transaction_category',
       'set_transaction_description',
@@ -195,6 +197,11 @@ describe('the shipped action set (REQ-P015)', () => {
     expect(getChatAction('create_auto_categorize_rule')).toMatchObject({ tier: 'T1', dataClass: 'financial' });
     // Leaves the system entirely — permanently ineligible for T2.
     expect(getChatAction('submit_github_issue')).toMatchObject({ tier: 'T1', dataClass: 'external' });
+    // The ledger is agent-READABLE, so its writes must always pass a person
+    // (HOUSEHOLD-LEDGER SEC-H001): an unattended write would let injected text
+    // plant a "fact" the assistant later repeats as the household's own.
+    expect(getChatAction('remember_fact')).toMatchObject({ tier: 'T1', dataClass: 'content' });
+    expect(getChatAction('mark_fact_handled')).toMatchObject({ tier: 'T1', dataClass: 'content' });
   });
 
   it('keeps complete_task out of the unattended tier, permanently', () => {
@@ -216,6 +223,7 @@ describe('the shipped action set (REQ-P015)', () => {
       'complete_task',
       'set_transaction_category',
       'set_transaction_description',
+      'mark_fact_handled',
     ] as const) {
       expect(typeof getChatAction(id)?.validateSemantics).toBe('function');
     }

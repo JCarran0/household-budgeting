@@ -884,7 +884,9 @@ export type ChatActionId =
   | 'set_transaction_hidden'
   | 'set_budget_amount'
   | 'create_auto_categorize_rule'
-  | 'submit_github_issue';
+  | 'submit_github_issue'
+  | 'remember_fact'
+  | 'mark_fact_handled';
 
 /** Drives card field rendering */
 export type DisplayFieldType = 'text' | 'textarea' | 'date' | 'select' | 'tags';
@@ -980,7 +982,8 @@ export interface ActionResource {
     | 'trip_stop'
     | 'project'
     | 'budget'
-    | 'auto_categorize_rule';
+    | 'auto_categorize_rule'
+    | 'ledger_fact';
   id: string;
   url?: string;                 // Frontend-resolvable deep link (or external for github_issue)
   label: string;                // Human-readable name of the resource

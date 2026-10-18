@@ -186,13 +186,26 @@ phase_1_ledger:
 
     - id: L8
       title: Assistant integration
-      status: not_started
+      status: completed
       description: |
         T0 read capability over facts (REQ-H060), T1 chat actions remember_fact
         and mark_fact_handled with every param on the card (REQ-H062, SEC-H003),
         and a system-prompt section: cite the document fact's page, read the
         document for anything beyond the quote, propose "Remember this?" for
         user-stated events only.
+      outcome: |
+        read_ledger (T0, domain 'ledger') over chatbotReaders/ledgerReader.ts:
+        effective facts with computed dates (and the rule behind each), handled
+        marks folded onto their fact, corrections shown with what they correct,
+        and an `upcoming` list through a horizon (default a year) including
+        still-unhandled past deadlines. Unreadable on validation failure; snoozes
+        and mutes not exposed. remember_fact is narrower than the plan implied:
+        literal dates only, kinds note/deadline/expiration, every param a scalar,
+        so the card shows exactly the date stored; windows, recurrences and
+        corrections stay on the Household page. mark_fact_handled shares
+        assertHandleable with the service so validation and execution agree;
+        factId resolved server-side for the card. Neither has undo (the Household
+        page deletes/unmarks).
 
     - id: L9
       title: Golden checks for the ledger

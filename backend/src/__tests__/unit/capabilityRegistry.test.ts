@@ -129,8 +129,9 @@ describe('workspace filtering (REQ-P016)', () => {
 describe('domain coverage (Phase 2 — REQ-P080 read-first)', () => {
   it('registers reads for every domain the BRD scopes', () => {
     const domains = new Set(READ_CAPABILITIES.map(c => c.domain));
-    // 'library' is scoped by FAMILY-LIBRARY-BRD REQ-F030, not the capability platform BRD.
-    expect([...domains].sort()).toEqual(['budgeting', 'library', 'projects', 'tasks', 'trips']);
+    // 'library' is scoped by FAMILY-LIBRARY-BRD REQ-F030 and 'ledger' by
+    // HOUSEHOLD-LEDGER-BRD REQ-H060, not the capability platform BRD.
+    expect([...domains].sort()).toEqual(['budgeting', 'ledger', 'library', 'projects', 'tasks', 'trips']);
   });
 
   it('keeps the flat tool list under the REQ-P018 grouping threshold', () => {

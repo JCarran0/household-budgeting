@@ -28,7 +28,7 @@
  * is more useful than a card that silently loses the field.
  */
 
-import { categoryService, familyService, taskService, tripService, projectService } from '../index';
+import { categoryService, familyService, taskService, tripService, projectService, ledgerStore } from '../index';
 import type { ChatActionHandlerContext } from './registry';
 
 type Resolver = (id: string, ctx: ChatActionHandlerContext) => Promise<string>;
@@ -57,6 +57,12 @@ const RESOLVERS: Record<string, Resolver> = {
   projectId: async (id, ctx) => {
     const project = await projectService.getProject(id, ctx.familyId);
     return project?.name ?? `Unknown project (${id})`;
+  },
+
+  factId: async (id, ctx) => {
+    const { facts } = await ledgerStore.read(ctx.familyId);
+    const fact = facts.find(f => f.id === id);
+    return fact ? `${fact.subject} — ${fact.title}` : `Unknown ledger item (${id})`;
   },
 };
 
