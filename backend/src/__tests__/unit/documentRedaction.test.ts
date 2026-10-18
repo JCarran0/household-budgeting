@@ -43,6 +43,14 @@ describe('redactDocumentText removes financial identifiers with typed markers', 
     expect(counts).toEqual({ routing_number: 1, bank_account: 1 });
   });
 
+  it('redacts a routing number whose label carries a parenthetical, as payment instructions print them', () => {
+    const { text, counts } = redactDocumentText('Routing # (Domestic Wires): 026009593\nRouting # (ACH/EFT): 072000805');
+    expect(text).toBe(
+      'Routing # (Domestic Wires): [REDACTED:routing_number …9593]\nRouting # (ACH/EFT): [REDACTED:routing_number …0805]'
+    );
+    expect(counts).toEqual({ routing_number: 2 });
+  });
+
   it('composes the credential pass under a typed marker', () => {
     const { text, counts } = redactDocumentText('portal password: hunter2');
     expect(text).toBe('portal password: [REDACTED:credential]');

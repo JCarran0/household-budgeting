@@ -65,7 +65,9 @@ const SSN_DELIMITED = /\b(\d{3})([- ])(\d{2})\2(\d{4})\b/g;
 const SSN_LABELED = /\b(SSN|SS#|Social Security(?:\s+(?:Number|No\.?|#))?)(\s*[:#]?\s*)(\d{9})\b/gi;
 const CARD = /\b\d(?:[ -]?\d){12,18}\b/g;
 const ROUTING_LABELED =
-  /\b(routing|ABA|RTN|transit)(\s+(?:number|no\.?|#))?(\s*[:#]?\s*)(\d{9})\b/gi;
+  // The optional parenthetical catches payment-instruction labels such as
+  // "Routing # (Domestic Wires):" and "Routing # (ACH/EFT):".
+  /\b(routing|ABA|RTN|transit)((?:\s+(?:number|no\.?|#))?(?:\s*\([^)\n]{1,40}\))?)(\s*[:#]?\s*)(\d{9})\b/gi;
 const BANK_CONTEXT = /\b(bank|checking|savings|routing|ABA|ACH|direct debit|auto-?pay|EFT)\b/i;
 const ACCOUNT_LABELED =
   /\b((?:bank\s+|checking\s+|savings\s+|deposit\s+)?account\s*(?:number|no\.?|#))(\s*[:#]?\s*)(\d(?:[ -]?\d){3,16})\b/gi;
