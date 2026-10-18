@@ -24,9 +24,9 @@
 import * as dotenv from 'dotenv';
 import * as fs from 'fs';
 import { FilesystemAdapter } from '../services/storage/filesystemAdapter';
-import { S3Adapter } from '../services/storage/s3Adapter';
 import type { StorageAdapter } from '../services/storage/types';
 import type { Family } from '../shared/types';
+import { type Args, fail, formatIssues, parseArgs, prodStore, readJsonFile, requireArg, requirePersonalFamily as requirePersonal } from './storeCli';
 import { redactDocumentText } from '../utils/documentRedaction';
 import {
   LIBRARY_FORMAT_VERSION,
@@ -43,62 +43,8 @@ import {
 
 dotenv.config();
 
-type Args = Record<string, string | true>;
-
-function parseArgs(argv: string[]): { command: string | undefined; args: Args } {
-  const [command, ...rest] = argv;
-  const args: Args = {};
-  for (let i = 0; i < rest.length; i++) {
-    const a = rest[i];
-    if (!a.startsWith('--')) continue;
-    const next = rest[i + 1];
-    if (next !== undefined && !next.startsWith('--')) {
-      args[a.slice(2)] = next;
-      i++;
-    } else {
-      args[a.slice(2)] = true;
-    }
-  }
-  return { command, args };
-}
-
-function requireArg(args: Args, name: string): string {
-  const v = args[name];
-  if (typeof v !== 'string' || v.length === 0) fail(`--${name} is required`);
-  return v;
-}
-
-function fail(message: string): never {
-  console.error(`✗ ${message}`);
-  process.exit(1);
-}
-
-function readJsonFile(path: string): unknown {
-  try {
-    return JSON.parse(fs.readFileSync(path, 'utf8'));
-  } catch (err) {
-    fail(`could not read JSON from ${path}: ${err instanceof Error ? err.message : String(err)}`);
-  }
-}
-
-function formatIssues(issues: ReadonlyArray<{ path: PropertyKey[]; message: string }>): string {
-  return issues.map(i => `  - ${i.path.map(String).join('.') || '(root)'}: ${i.message}`).join('\n');
-}
-
-function prodStore(): StorageAdapter {
-  const bucket = process.env.PRODUCTION_S3_BUCKET_NAME;
-  if (!bucket) fail('PRODUCTION_S3_BUCKET_NAME is not set (see docs/AWS-LOCAL-SETUP.md)');
-  return new S3Adapter(bucket, process.env.AWS_REGION, process.env.PRODUCTION_S3_PREFIX || 'data/');
-}
-
-/** The library belongs to personal families only — business is excluded from AI entirely. */
-async function requirePersonalFamily(store: StorageAdapter, familyId: string): Promise<Family> {
-  const blob = await store.read<{ families?: Family[] }>('families');
-  const family = blob?.families?.find(f => f.id === familyId);
-  if (!family) fail(`family ${familyId} not found`);
-  if (family.workspaceType === 'business') fail(`family ${familyId} is a business workspace; the library is not available there`);
-  return family;
-}
+const requirePersonalFamily = (store: StorageAdapter, familyId: string): Promise<Family> =>
+  requirePersonal(store, familyId, 'library');
 
 async function readDocs(store: StorageAdapter, familyId: string): Promise<LibraryDocument[]> {
   const keys = await store.list(libraryFamilyPrefix(familyId));

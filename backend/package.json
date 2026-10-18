@@ -36,7 +36,8 @@
     "backup:list": "ts-node src/scripts/backup-local-data.ts --list",
     "backup:cleanup": "ts-node src/scripts/backup-local-data.ts --cleanup",
     "library": "ts-node src/scripts/library-document.ts",
-    "library:golden": "ts-node scripts/library-golden.ts"
+    "library:golden": "ts-node scripts/library-golden.ts",
+    "ledger": "ts-node src/scripts/ledger-facts.ts"
   },
   "keywords": [],
   "author": "",

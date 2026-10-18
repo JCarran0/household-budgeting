@@ -119,7 +119,7 @@ phase_1_ledger:
 
     - id: L3
       title: Extraction tooling
-      status: not_started
+      status: completed
       description: |
         `npm run ledger -- stage|list|push`, mirroring the library script:
         verifies each document fact's quote verbatim on its cited page of the
@@ -127,6 +127,15 @@ phase_1_ledger:
         failures, shows a review list with single-model facts marked, and pushes
         only on the maintainer's command. /import-document gains a fact step,
         plus a mode for documents already in the library.
+      outcome: |
+        services/ledgerImport.ts (pure: build + verify + merge) under
+        scripts/ledger-facts.ts (`npm run ledger -- stage|list|push`). Stage is
+        all-or-nothing per document; push re-verifies against the PRODUCTION
+        copy of the document. Re-import semantics settled: ids are stable, a
+        kept fact keeps createdAt and trackFrom, a vanished fact is withdrawn
+        (never deleted), user/app facts are never touched. Shared CLI plumbing
+        extracted to scripts/storeCli.ts. Skill step 6 added; agents may read
+        the staged (redacted) body because facts verify against that same text.
 
     - id: L4
       title: Backfill the six library documents
@@ -190,7 +199,6 @@ phase_1_ledger:
     - Push payloads contain no amounts, quotes or identifiers
 
 open_questions:
-  - Re-import semantics for extracted facts (stable ids; withdrawn vs deleted)
   - Scheduler if the deployment ever runs more than one backend instance
 
 deferred_and_tracked_elsewhere:

@@ -67,6 +67,7 @@ Every write passes a human gate or is deterministic code. The gate depends on th
 
 - **REQ-H010 Document facts** are proposed at import by `/import-document`, never by the live assistant. Each carries `docId`, `page` and a **quote**; a date rule carries the quote for its anchor too. **Code verifies every quote appears verbatim on the cited page** of the stored, redacted document body, at staging and again at push. A fact that fails is rejected, not flagged.
 - **REQ-H011 Two models extract independently** (different model families). The maintainer reviews the union, with facts found by only one model marked. The point is recall: verification proves what was extracted is real; only a second reader catches what was missed (D-H05).
+- **REQ-H016 Re-import** replaces one document's facts and nothing else. Fact ids are `{docId}:{slug}`, so a fact that keeps its slug is updated in place, keeps its `createdAt` and `trackFrom`, and keeps every handled mark and correction pointing at it. A fact the new extraction no longer contains is **withdrawn**, never deleted, so marks that reference it still validate. User and app facts are never touched by an import.
 - **REQ-H012 User facts** enter through (a) a **"Remember this" confirmation card** the assistant proposes in chat, showing every field that will be written (the SEC-P010 rule), or (b) a form on the Household page. Either way a household member is the gate.
 - **REQ-H013 App facts** are written by deterministic code only — e.g. "marked handled by Jared on 2026-10-19".
 - **REQ-H014** The assistant **never writes a fact without a confirmed card**. Ledger writes are T1 and never T2-eligible.
@@ -149,7 +150,6 @@ Every write passes a human gate or is deterministic code. The gate depends on th
 
 | Question | Note |
 |----------|------|
-| Re-import semantics | When a document is re-imported and its extracted facts change, stable fact ids (`{docId}:{slug}`) keep handled marks attached; a fact that disappears is marked withdrawn, not deleted. Confirm during the build |
 | Scheduler | The backend has no job runner today. The plan proposes an in-process daily runner (single PM2 instance) with an idempotency log; revisit if the deployment ever runs more than one instance |
 | Recall measurement | Extend the golden-set runner with "what is due before X?" questions so missed facts show up as failures |
 

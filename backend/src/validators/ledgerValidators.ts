@@ -31,7 +31,7 @@ export const LEDGER_MAX_FACTS = 5000;
 
 const ledgerDate = z.string().refine(isCalendarDate, 'must be a calendar date (YYYY-MM-DD)');
 
-const offsetSchema = z
+export const ledgerOffsetSchema = z
   .object({
     years: z.number().int().min(-100).max(100).optional(),
     months: z.number().int().min(-1200).max(1200).optional(),
@@ -41,15 +41,15 @@ const offsetSchema = z
 
 const dateSpecSchema = z.union([
   z.object({ date: ledgerDate }).strict(),
-  z.object({ anchor: ledgerDate, offset: offsetSchema }).strict(),
+  z.object({ anchor: ledgerDate, offset: ledgerOffsetSchema }).strict(),
 ]);
 
-const scheduleSchema = z.discriminatedUnion('kind', [
+export const ledgerScheduleSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('note') }).strict(),
   z.object({ kind: z.literal('deadline'), due: dateSpecSchema }).strict(),
   z.object({ kind: z.literal('expiration'), due: dateSpecSchema }).strict(),
   z
-    .object({ kind: z.literal('recurring'), first: dateSpecSchema, every: offsetSchema, until: dateSpecSchema.optional() })
+    .object({ kind: z.literal('recurring'), first: dateSpecSchema, every: ledgerOffsetSchema, until: dateSpecSchema.optional() })
     .strict(),
   z.object({ kind: z.literal('window'), opens: dateSpecSchema, closes: dateSpecSchema }).strict(),
 ]);
@@ -74,7 +74,7 @@ function scheduleProblem(s: LedgerSchedule): string | null {
   }
 }
 
-const quoteSchema = z
+export const ledgerQuoteSchema = z
   .object({
     page: z.number().int().min(1).max(1000),
     text: z.string().min(10).max(600),
@@ -82,7 +82,7 @@ const quoteSchema = z
   .strict();
 
 const sourceSchema = z.discriminatedUnion('kind', [
-  z.object({ kind: z.literal('document'), docId: libraryDocIdSchema, quotes: z.array(quoteSchema).min(1).max(4) }).strict(),
+  z.object({ kind: z.literal('document'), docId: libraryDocIdSchema, quotes: z.array(ledgerQuoteSchema).min(1).max(4) }).strict(),
   z.object({ kind: z.literal('user'), userId: z.string().min(1).max(100), via: z.enum(['card', 'form']) }).strict(),
   z
     .object({
@@ -105,7 +105,7 @@ export const ledgerFactSchema = z
     title: z.string().trim().min(3).max(160),
     detail: z.string().max(2000).optional(),
     amount: z.string().trim().min(1).max(60).optional(),
-    schedule: scheduleSchema,
+    schedule: ledgerScheduleSchema,
     leadDays: z.array(z.number().int().min(0).max(730)).min(1).max(4).optional(),
     handles: z.object({ factId: ledgerFactIdSchema, occurrenceDate: ledgerDate }).strict().optional(),
     overrides: ledgerFactIdSchema.optional(),

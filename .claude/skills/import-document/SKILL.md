@@ -1,6 +1,6 @@
 ---
 name: import-document
-description: Import a family document (a Google Drive link or a local PDF) into the Family Library so the assistant can answer questions from it. Extracts text with page markers, redacts financial identifiers deterministically, validates against the library schema, collects human-verified golden questions, and hands back the gated production push command. Use when the user says "import-document", "add this to the library", or gives a contract, lease, warranty, policy, or service plan to make searchable.
+description: Import a family document (a Google Drive link or a local PDF) into the Family Library so the assistant can answer questions from it. Extracts text with page markers, redacts financial identifiers deterministically, validates against the library schema, collects human-verified golden questions, extracts verified ledger dates (also for documents already in the library), and hands back the gated production push command. Use when the user says "import-document", "add this to the library", or gives a contract, lease, warranty, policy, or service plan to make searchable.
 ---
 
 # /import-document
@@ -15,6 +15,7 @@ Turns one source document into one Family Library entry. Spec: `docs/features/FA
 2. **Raw text never touches the repo.** Write extracted text and metadata only to your scratchpad directory. The raw text contains unredacted SSNs and account numbers. Delete it once `prepare` succeeds.
 3. **You never write golden answers.** You may propose questions. The answers come from the user, or from the cross-check in step 5. If neither happens, skip evals. Never fill them in yourself, or the check becomes circular (BRD REQ-F044).
 4. **You never push.** `push` writes production. Hand the user the `!` command.
+5. **You never compute a date.** Ledger facts carry a printed date, or an anchor plus an offset, and code computes the rest (REQ-H004).
 
 ## Steps
 
@@ -90,16 +91,76 @@ Write `evals.json`:
 cd backend && npm run library -- evals --family <id> --doc <docId> --file <scratch>/evals.json
 ```
 
-### 6. Hand off the push
+### 6. Ledger facts
 
-Give the user the command. Don't run it:
+Extract the dates and terms the household should be reminded of into the Household Ledger. Spec: `docs/features/HOUSEHOLD-LEDGER-BRD.md` §3.2. Do this for every new import. For a document already in the library, start here: the facts mode needs no source file because facts are verified against the stored body.
+
+**Two models, never you alone (REQ-H011).** Launch two subagents on different models (e.g. `sonnet` and `fable`). Give each one:
+
+- the path to the staged entry `backend/data/library_<familyId>_<docId>.json`. It is already redacted, and reading it is allowed here because every quote is checked against that same text;
+- the format below and these rules;
+- a request to return the JSON only.
+
+Rules for the extractors:
+
+- **Which facts to propose:** deadlines, windows (cancellation, refund, opt-out, transfer), expirations of coverage or term, recurring obligations (inspections, audits, payments the household must act on), and undated terms worth remembering (`note`) such as fees or limits. Skip anything that needs no action and won't be asked about.
+- **Dates are never computed by the model.** Use `{"date": "YYYY-MM-DD"}` only for a date printed in the document. Otherwise use `{"anchor": "<a printed date>", "offset": {"days"|"months"|"years": n}}` and let code do the arithmetic. "Through the 6th year" is `{"years": 6, "days": -1}`.
+- **Quotes:**
+  - Every fact needs at least one quote, copied verbatim with its page number.
+  - The first quote is the clause itself.
+  - Every date the schedule uses (each literal date and each anchor) must appear in some quote, so add a second quote for the line that prints the anchor date (for example "Contract Purchase Date: 10/17/2026").
+  - Each quote is at least 10 characters and at most 600.
+- **Slugs:** stable, lowercase-kebab, and descriptive (`full-refund-window`, not `fact-3`), because the slug is the fact's identity across re-imports.
+
+```json
+{ "docId": "<docId>", "facts": [ {
+  "slug": "full-refund-window", "title": "Full refund if cancelled within 60 days",
+  "detail": "optional one or two sentences", "amount": "$2,078.45 (optional, as printed)",
+  "schedule": { "kind": "deadline", "due": { "anchor": "2026-10-17", "offset": { "days": 60 } } },
+  "leadDays": [30, 7],
+  "quotes": [ { "page": 3, "text": "…" }, { "page": 1, "text": "Contract Purchase Date: 10/17/2026" } ]
+} ] }
+```
+
+The schedule kinds are:
+
+- `note`
+- `deadline` with `due`
+- `expiration` with `due`
+- `window` with `opens` and `closes`
+- `recurring` with `first`, `every` and an optional `until`
+
+`leadDays` is optional and replaces the defaults (deadline 30/7, expiration 90/30, window 30, recurring 60).
+
+**Merge the two results.**
+
+1. Union the two results into one `<scratch>/facts.json`.
+2. Add `"foundBy": ["sonnet", "fable"]` to a fact both models proposed (matched by meaning, not slug), or the one model's name otherwise.
+3. Where the models disagree on a date or an offset, keep neither: re-read the page yourself and show the user the disagreement.
+
+Then stage:
+
+```bash
+cd backend && npm run ledger -- stage --family <id> --file <scratch>/facts.json
+```
+
+`stage` verifies every quote verbatim and every date against the stored body and stages nothing if any fact fails. Fix a failing quote by copying the exact text from the body, never by loosening it. Show the user the review list, and walk them through every **⚠ single-model** fact and every computed date. Stage only what the user approves: drop the rest from `facts.json` and re-stage.
+
+Don't record that something was *done*, such as "we sent the opt-out email". That is a user fact, added by a person in the app or through a confirmed chat card, never by import.
+
+### 7. Hand off the push
+
+Give the user the commands. Don't run them:
 
 ```
 ! cd backend && AWS_PROFILE=budget-app-prod npm run library -- push --family <id> --doc <docId>
+! cd backend && AWS_PROFILE=budget-app-prod npm run ledger -- push --family <id> --doc <docId>
 ```
 
-After they run it, confirm with `npm run library -- list --family <id> --prod`.
+Push the library entry before the ledger: the ledger push re-verifies against the production copy of the document. After they run them, confirm with `npm run library -- list --family <id> --prod` and `npm run ledger -- list --family <id> --prod`.
 
 ## Re-importing
 
 When the Drive file has changed, run the same steps with the same `docId`. `prepare` replaces the staged entry, and `push` replaces production. When the source hasn't changed, `prepare` says so and writes nothing.
+
+Re-extract the facts too, keeping the existing slugs for facts that still apply. A fact that keeps its slug also keeps its handled marks and its `trackFrom`. A fact missing from the new extraction is **withdrawn**, never deleted, and `stage` lists it so the user can confirm the withdrawal is intended.
