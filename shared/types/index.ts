@@ -8,7 +8,8 @@ export type NotificationType =
   | 'sync_failure'
   | 'budget_alert'
   | 'large_transaction'
-  | 'bill_reminder';
+  | 'bill_reminder'
+  | 'ledger_reminder';
 
 export interface NotificationPayload {
   type: NotificationType;
@@ -1614,6 +1615,11 @@ export interface Task {
   subTasks: SubTask[];            // checklist items on the task
   snoozedUntil: string | null;    // ISO datetime; null if not snoozed (v2.0)
   sortOrder: number;              // fractional float for manual ordering (v2.0)
+  /**
+   * Set only by the Household Ledger's "make a task" (REQ-H034), never by the
+   * task routes. Completing the task marks this ledger occurrence handled.
+   */
+  ledgerLink?: { factId: string; occurrenceDate: string };
 }
 
 export interface StoredTask extends Task {
@@ -1635,6 +1641,8 @@ export interface CreateTaskDto {
    * new tasks at the user's cursor position.
    */
   sortOrder?: number;
+  /** Server-side only (Household Ledger "make a task"); the route schema does not accept it. */
+  ledgerLink?: { factId: string; occurrenceDate: string };
 }
 
 /**

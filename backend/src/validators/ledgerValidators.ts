@@ -335,3 +335,12 @@ export const ledgerSnoozeSchema = z
   .strict();
 
 export const ledgerMuteSchema = z.object({ subject: z.string().trim().min(2).max(120), muted: z.boolean() }).strict();
+
+/** ledger_sent_{familyId}: warning keys already delivered, per person (REQ-H032 idempotency). */
+export const ledgerSentFileSchema = z
+  .object({
+    formatVersion: z.literal(LEDGER_FORMAT_VERSION),
+    users: z.record(z.string().min(1).max(100), z.array(z.string().min(3).max(260)).max(5000)),
+  })
+  .strict();
+export type LedgerSentFile = z.infer<typeof ledgerSentFileSchema>;

@@ -32,6 +32,7 @@ import { AgentLearningsStore } from './agentLearningsStore';
 import { ActionActivityStore } from './actionActivityStore';
 import { LedgerStore } from './ledgerStore';
 import { LedgerService } from './ledgerService';
+import { LedgerReminderJob } from './ledgerReminderJob';
 import { ProposalStore } from './chatActions/proposalStore';
 import { ActionUndoService } from './actionUndoService';
 import { CategorizationService } from './categorizationService';
@@ -172,6 +173,12 @@ export const accountOwnerMappingService = new AccountOwnerMappingService(dataSer
 export const taskService = new TaskService(dataService, familyService);
 export const taskTemplateService = new TaskTemplateService(dataService);
 export const pushNotificationService = PushNotificationService.getInstance(dataService);
+// Household Ledger reminders (plan L7). Started by index.ts, never in tests.
+// REQ-H034: completing a task made from a Heads-up item marks the occurrence handled.
+taskService.onTaskCompleted(async (task, userId, familyId) => {
+  await ledgerService.markHandledFromTask(familyId, userId, task);
+});
+export const ledgerReminderJob = new LedgerReminderJob(dataService, ledgerStore, familyService, pushNotificationService);
 export const adminService = new AdminService(dataService);
 
 // statementService depends on categoryService — wire after both are initialized

@@ -25,15 +25,32 @@ import {
 import { buildFamilyBadgeContext, computeEarnedBadges } from '../shared/utils/leaderboardBadges';
 import { DataService } from './dataService';
 import { FamilyService } from './familyService';
+import { childLogger } from '../utils/logger';
+
+const log = childLogger('taskService');
 
 /** Number of days after which done tasks are archived from the board */
 const ARCHIVE_AFTER_DAYS = 14;
 
+export type TaskCompletedListener = (task: StoredTask, userId: string, familyId: string) => Promise<void>;
+
 export class TaskService {
+  private readonly completedListeners: TaskCompletedListener[] = [];
+
   constructor(
     private dataService: DataService,
     private familyService: FamilyService
   ) {}
+
+  /**
+   * Run `fn` after a task transitions into done. A listener's failure is logged
+   * and never fails the completion: the task is done whatever a follower does
+   * with that. Used by the Household Ledger (REQ-H034) without making the task
+   * service depend on it.
+   */
+  onTaskCompleted(fn: TaskCompletedListener): void {
+    this.completedListeners.push(fn);
+  }
 
   // ---------------------------------------------------------------------------
   // Private helpers
@@ -157,6 +174,7 @@ export class TaskService {
       })),
       snoozedUntil: null,
       sortOrder,
+      ...(data.ledgerLink ? { ledgerLink: data.ledgerLink } : {}),
     };
 
     tasks.push(task);
@@ -326,6 +344,16 @@ export class TaskService {
 
     tasks[index] = updated;
     await this.saveTasks(tasks, familyId);
+
+    if (newStatus === 'done' && existing.status !== 'done') {
+      for (const listener of this.completedListeners) {
+        try {
+          await listener(updated, userId, familyId);
+        } catch (err) {
+          log.error({ err, taskId, familyId }, 'task-completed listener failed');
+        }
+      }
+    }
 
     return updated;
   }

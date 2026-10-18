@@ -6,6 +6,7 @@ dotenv.config();
 import app from './app';
 import { config } from './config';
 import { logger } from './utils/logger';
+import { ledgerReminderJob } from './services';
 
 const PORT = config.server.port;
 
@@ -19,11 +20,14 @@ const server = app.listen(PORT, () => {
     },
     'backend started',
   );
+  // Single PM2 instance assumed: the reminder job's idempotency log is locked in-process.
+  if (config.server.nodeEnv !== 'test') ledgerReminderJob.start();
 });
 
 // Graceful shutdown
 process.on('SIGTERM', () => {
   logger.info('SIGTERM received: closing HTTP server');
+  ledgerReminderJob.stop();
   server.close(() => {
     logger.info('HTTP server closed');
     process.exit(0);
@@ -32,6 +36,7 @@ process.on('SIGTERM', () => {
 
 process.on('SIGINT', () => {
   logger.info('SIGINT received: closing HTTP server');
+  ledgerReminderJob.stop();
   server.close(() => {
     logger.info('HTTP server closed');
     process.exit(0);

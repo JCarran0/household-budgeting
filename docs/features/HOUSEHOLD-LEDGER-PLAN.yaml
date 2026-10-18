@@ -176,13 +176,27 @@ phase_1_ledger:
 
     - id: L7
       title: Scheduler and push reminders
-      status: not_started
+      status: completed
       description: |
         In-process daily runner (single PM2 instance) that computes warnings
         through ledgerDates and sends push via pushNotificationService.
         Idempotent through ledger_sent_ (fact, occurrence, lead), catches up
         missed warnings, respects per-user snooze and mute, and keeps payloads
         to subject + kind + date (SEC-H004).
+      outcome: |
+        services/ledgerReminderJob.ts, started from index.ts (never in tests),
+        runs hourly and on boot; idempotency makes the frequency irrelevant and
+        a restart catches up. Quiet until 09:00 ET. Families discovered by
+        listing ledger_ keys; business workspaces skipped. Sent log per person,
+        pruned 90 days after an occurrence; a corrupt log stops that family
+        rather than re-sending everything. Payload never includes the fact's
+        title (titles carry amounts, e.g. "Full refund of $4,411.38"). New
+        NotificationType 'ledger_reminder'; NOT gated on the existing
+        billReminders preference — muting is per subject (REQ-H041).
+        Also REQ-H034 backend: POST /ledger/facts/:id/task makes a task with a
+        server-only ledgerLink; TaskService.onTaskCompleted marks the occurrence
+        handled as an app fact (event task_completed). One open task per
+        occurrence.
 
     - id: L8
       title: Assistant integration

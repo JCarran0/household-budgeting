@@ -12,10 +12,11 @@
 
 import { Router, Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
-import { ledgerService } from '../services';
+import { ledgerService, ledgerStore, taskService } from '../services';
+import { assertHandleable } from '../services/ledgerService';
 import { authMiddleware } from '../middleware/authMiddleware';
 import { refuseBusinessWorkspace } from '../middleware/refuseBusinessWorkspace';
-import { AuthorizationError } from '../errors';
+import { AuthorizationError, ConflictError } from '../errors';
 import {
   ledgerFactIdSchema,
   ledgerFactInputSchema,
@@ -88,6 +89,30 @@ router.post('/facts/:id/handled', handle(async (req, res) => {
   const { familyId, userId } = who(req);
   const { occurrenceDate, note } = ledgerMarkHandledSchema.parse(req.body ?? {});
   res.status(201).json(await ledgerService.markHandled(familyId, userId, factId(req), occurrenceDate, note));
+}));
+
+// POST /api/v1/ledger/facts/:id/task — make an ordinary task for one occurrence (REQ-H034).
+// Ownership lives in tasks; completing it marks the occurrence handled.
+router.post('/facts/:id/task', handle(async (req, res) => {
+  const { familyId, userId } = who(req);
+  const id = factId(req);
+  const { occurrenceDate } = ledgerMarkHandledSchema.pick({ occurrenceDate: true }).strict().parse(req.body ?? {});
+  const fact = assertHandleable((await ledgerStore.read(familyId)).facts, id, occurrenceDate);
+  const open = (await taskService.getAllTasks(familyId)).find(
+    t => t.ledgerLink?.factId === id && t.ledgerLink.occurrenceDate === occurrenceDate && t.status !== 'done' && t.status !== 'cancelled',
+  );
+  if (open) throw new ConflictError(`A task already exists for this: "${open.title}"`, 'TASK_EXISTS');
+  const task = await taskService.createTask(
+    {
+      title: fact.title.slice(0, 200),
+      description: `From the Household Ledger (${fact.subject}). Completing this task marks it handled.`,
+      dueDate: occurrenceDate,
+      ledgerLink: { factId: id, occurrenceDate },
+    },
+    userId,
+    familyId,
+  );
+  res.status(201).json(task);
 }));
 
 // DELETE /api/v1/ledger/handled/:id — undo a handled mark (id of the mark)

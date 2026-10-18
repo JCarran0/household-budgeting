@@ -9,7 +9,7 @@
 
 import request from 'supertest';
 import app from '../../app';
-import { authService, dataService, ledgerStore } from '../../services';
+import { authService, dataService, ledgerStore, taskService } from '../../services';
 import { etDateString } from '../../shared/utils/easternTime';
 import { addOffset } from '../../shared/utils/ledgerDates';
 import { registerUser, type AuthenticatedUser } from '../helpers/apiHelper';
@@ -144,6 +144,33 @@ describe('Household Ledger API', () => {
     await ledgerStore.addFact(a.familyId, fact);
     expect((await api(b).get()).body.facts).toEqual([]);
     await api(b).post(`/facts/${fact.id}/handled`, { occurrenceDate: inDays(10) }).expect(404);
+  });
+
+  it('makes one task per occurrence, and completing it marks the occurrence handled (REQ-H034)', async () => {
+    const user = await createUser();
+    const fact = docFact('opt-out', { kind: 'deadline', due: { date: inDays(10) } });
+    await ledgerStore.addFact(user.familyId, fact);
+
+    const task = await api(user).post(`/facts/${fact.id}/task`, { occurrenceDate: inDays(10) }).expect(201);
+    expect(task.body.dueDate).toBe(inDays(10));
+    expect(task.body.ledgerLink).toEqual({ factId: fact.id, occurrenceDate: inDays(10) });
+    await api(user).post(`/facts/${fact.id}/task`, { occurrenceDate: inDays(10) }).expect(409);
+
+    await taskService.updateTaskStatus(task.body.id, 'done', user.userId, user.familyId);
+    const marks = (await ledgerStore.read(user.familyId)).facts.filter(f => f.handles);
+    expect(marks).toHaveLength(1);
+    expect(marks[0].source).toEqual({ kind: 'app', event: 'task_completed', userId: user.userId });
+    expect((await api(user).get()).body.headsUp).toEqual([]);
+  });
+
+  it('cannot set a ledger link through the task routes', async () => {
+    const user = await createUser();
+    const res = await request(app)
+      .post('/api/v1/tasks')
+      .set('Authorization', `Bearer ${user.token}`)
+      .send({ title: 'Sneaky', ledgerLink: { factId: 'rivian-care:x', occurrenceDate: inDays(1) } })
+      .expect(201);
+    expect(res.body.ledgerLink ?? res.body.data?.ledgerLink).toBeUndefined();
   });
 
   it('rejects a malformed fact id in the path', async () => {

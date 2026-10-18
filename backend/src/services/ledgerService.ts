@@ -186,6 +186,7 @@ export class LedgerService {
     factId: string,
     occurrenceDate: string,
     note?: string,
+    event: 'marked_handled' | 'task_completed' = 'marked_handled',
   ): Promise<LedgerFact> {
     const id = newFactId();
     const file = await this.store.update(familyId, facts => {
@@ -199,7 +200,7 @@ export class LedgerService {
           ...(note ? { detail: note } : {}),
           schedule: { kind: 'note' },
           handles: { factId, occurrenceDate },
-          source: { kind: 'app', event: 'marked_handled', userId },
+          source: { kind: 'app', event, userId },
           trackFrom: this.today(),
           status: 'active',
           createdAt: this.nowIso(),
@@ -208,6 +209,21 @@ export class LedgerService {
       ];
     });
     return file.facts.find(f => f.id === id)!;
+  }
+
+  /**
+   * REQ-H034: a task made from a Heads-up item was completed. Best effort — the
+   * occurrence may already be handled, or the fact corrected or withdrawn since
+   * the task was made; none of that should fail a task completion.
+   */
+  async markHandledFromTask(familyId: string, userId: string, task: { title: string; ledgerLink?: { factId: string; occurrenceDate: string } }): Promise<LedgerFact | null> {
+    if (!task.ledgerLink) return null;
+    try {
+      return await this.markHandled(familyId, userId, task.ledgerLink.factId, task.ledgerLink.occurrenceDate, `Task completed: ${clip(task.title, 200)}`, 'task_completed');
+    } catch (err) {
+      if (err instanceof ConflictError || err instanceof NotFoundError || err instanceof ValidationError) return null;
+      throw err;
+    }
   }
 
   /** Undo a handled mark. Withdrawn, not deleted: who marked what stays on record. */
