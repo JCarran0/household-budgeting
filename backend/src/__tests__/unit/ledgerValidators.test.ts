@@ -159,7 +159,7 @@ describe('verifyDocumentFact', () => {
 
   it('knows the usual printed forms of a date', () => {
     expect(printedForms('2026-10-06')).toEqual(
-      expect.arrayContaining(['10/6/2026', '10/06/2026', 'Oct 06, 2026', 'October 6, 2026', '10/06/26']),
+      expect.arrayContaining(['10/6/2026', '10/06/2026', 'Oct 06, 2026', 'October 6, 2026', '10/06/26', '10-06-26', '10-06-2026']),
     );
   });
 });

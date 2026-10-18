@@ -249,6 +249,8 @@ export function printedForms(date: string): string[] {
   const forms = [
     date,
     `${m}/${d}/${y}`, `${mm}/${dd}/${y}`, `${m}/${d}/${yy}`, `${mm}/${dd}/${yy}`,
+    // US month-first with dashes, as insurers print a policy period ("03-29-27").
+    `${mm}-${dd}-${y}`, `${mm}-${dd}-${yy}`,
     `${full} ${d}, ${y}`, `${full} ${dd}, ${y}`, `${short} ${d}, ${y}`, `${short} ${dd}, ${y}`,
     `${short}. ${d}, ${y}`, `${d} ${full} ${y}`,
   ];
