@@ -96,7 +96,7 @@ Phases 2+ are directional; each gets its own refinement pass before build.
 - **REQ-F041** Dollar amounts, dates, deadlines, mileage, and percentages are **quoted verbatim** from the source clause, not paraphrased.
 - **REQ-F042** When the library does not answer the question, the assistant says so and names the documents it checked. It does not fill the gap from general knowledge; any general context is explicitly labeled as not from the family's documents.
 - **REQ-F043** When the answer involves a redacted value, the assistant states what was withheld (type, last 4) and points to the source page, rather than claiming the document is silent.
-- **REQ-F044** Each import collects 2–3 golden questions for that document, with answers supplied by a human from the source — never by the model that extracted it. The set grows with the library and is re-run after each import or prompt change. Golden answers contain real contract figures and live in data storage, never in git.
+- **REQ-F044** Each import collects 2–3 golden questions for that document, with answers that never come from the model that extracted it. Either a human supplies them from the source, or two subagents on *different* models answer independently from the **original PDF** (never the staged transcription, never each other's output) and a human approves the side-by-side comparison, settling any disagreement from the source. The independence is what breaks the circularity: a transcription error cannot appear in both the body and the answer key. The set grows with the library and is re-run after each import or prompt change. Golden answers contain real contract figures and live in data storage, never in git.
 
 ---
 

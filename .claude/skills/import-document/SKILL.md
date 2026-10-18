@@ -13,7 +13,7 @@ Turns one source document into one Family Library entry. Spec: `docs/features/FA
 
 1. **Scope.** Only `vehicle`, `home`, `purchase` and `health_plan` documents (BRD REQ-F020). Refuse tax returns, medical records or claims, IDs and passports, and estate documents (wills, trusts, POA). Say they're out of scope for now, and don't open them to check.
 2. **Raw text never touches the repo.** Write extracted text and metadata only to your scratchpad directory. The raw text contains unredacted SSNs and account numbers. Delete it once `prepare` succeeds.
-3. **You never write golden answers.** You may propose questions. The user supplies the answers from the source. If they decline, skip evals. Never fill them in yourself, or the check becomes circular (BRD REQ-F044).
+3. **You never write golden answers.** You may propose questions. The answers come from the user, or from the cross-check in step 5. If neither happens, skip evals. Never fill them in yourself, or the check becomes circular (BRD REQ-F044).
 4. **You never push.** `push` writes production. Hand the user the `!` command.
 
 ## Steps
@@ -78,7 +78,9 @@ Propose 2 or 3 questions the family would realistically ask of this document:
 - at least one with a figure, date or limit, as `answerable`,
 - one involving a redacted value if the document has any, as `redacted`.
 
-Ask the user to supply each answer and page **from the source**. Write `evals.json`:
+Ask the user to supply each answer and page **from the source**. If the user prefers a model cross-check, launch two subagents on different models (e.g. `sonnet` and `fable`). Give each the Drive fileIds, not your transcription, and forbid reading `backend/data/`. Each downloads into its own scratch directory and deletes the copies afterwards. Each returns `{q, expect, answer, page, confidence, note}` per question. Show the user both sets side by side, flag every disagreement or low-confidence answer, and write evals only after the user approves.
+
+Write `evals.json`:
 
 ```json
 { "questions": [ { "question": "…", "expect": "answerable", "expectedAnswer": "…", "sourcePage": 4 } ] }
