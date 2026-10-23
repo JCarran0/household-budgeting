@@ -10,7 +10,7 @@
  *
  * Usage (from backend/):
  *   npm run library -- families
- *   npm run library -- prepare --family <id> --meta <meta.json> --body <body.md> [--force]
+ *   npm run library -- prepare --family <id> --meta <meta.json> --body <body.md> [--force] [--replaces]
  *   npm run library -- evals   --family <id> --doc <docId> --file <evals.json>
  *   npm run library -- list    --family <id> [--prod]
  *   npm run library -- push    --family <id> --doc <docId>
@@ -78,6 +78,10 @@ function sameSource(a: LibrarySource, b: LibrarySource): boolean {
   return false;
 }
 
+function describeSource(source: LibrarySource): string {
+  return source.kind === 'drive' ? `drive ${source.fileId}` : `${source.filename} (${source.sha256.slice(0, 12)}…)`;
+}
+
 function sourceUnchanged(a: LibrarySource, b: LibrarySource): boolean {
   if (a.kind === 'drive' && b.kind === 'drive') return a.fileId === b.fileId && a.modifiedTime === b.modifiedTime;
   if (a.kind === 'file' && b.kind === 'file') return a.sha256 === b.sha256;
@@ -129,8 +133,14 @@ async function cmdPrepare(args: Args): Promise<void> {
   const duplicate = existing.find(d => d.docId !== meta.docId && sameSource(d.source, meta.source));
   if (duplicate) fail(`this source is already imported as "${duplicate.docId}" — re-import under that docId`);
   const prior = existing.find(d => d.docId === meta.docId);
+  // A local file's only identity is its hash, so an updated copy of the same
+  // document (a policy change, a renewal) always reads as a different source.
+  // `--replaces` says so explicitly; without it a colliding docId is a mistake.
   if (prior && !sameSource(prior.source, meta.source)) {
-    fail(`docId "${meta.docId}" already belongs to a different source — choose another docId`);
+    if (args.replaces !== true) {
+      fail(`docId "${meta.docId}" already belongs to a different source — choose another docId, or pass --replaces if this is a newer version of the same document`);
+    }
+    console.log(`↻ replacing source of "${meta.docId}": ${describeSource(prior.source)} → ${describeSource(meta.source)}`);
   }
   if (prior && sourceUnchanged(prior.source, meta.source) && args.force !== true) {
     console.log(`= "${meta.docId}" is unchanged since ${prior.ingestedAt}; nothing written (--force to re-extract)`);
