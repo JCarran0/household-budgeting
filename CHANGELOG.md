@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.17.0](https://github.com/JCarran0/household-budgeting/compare/v7.16.1...v7.17.0) (2026-10-24)
+
+
+### Features
+
+* **library:** allow re-importing an updated local file under its docId ([4362834](https://github.com/JCarran0/household-budgeting/commit/43628343e509f3886dfcb0e067364119a833bf0f))
+
+
+### Tests
+
+* **auto-categorize:** pin the clock in suggestion tests ([f69f410](https://github.com/JCarran0/household-budgeting/commit/f69f410cadda4475cf181fbc1b43c121af3900d4))
+
 ### [7.16.1](https://github.com/JCarran0/household-budgeting/compare/v7.16.0...v7.16.1) (2026-10-18)
 
 
