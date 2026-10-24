@@ -110,6 +110,11 @@ async function setup(opts: {
 }
 
 describe('AutoCatSuggestionService.getSuggestions', () => {
+  // Fixtures are dated relative to NOW; the service's 180-day lookback reads
+  // Date.now(), so pin it or the fixtures age out of the window.
+  beforeEach(() => jest.spyOn(Date, 'now').mockReturnValue(NOW.getTime()));
+  afterEach(() => jest.restoreAllMocks());
+
   test('empty inputs → empty suggestions', async () => {
     const { service } = await setup({ transactions: [] });
     const result = await service.getSuggestions(FAMILY_ID);
